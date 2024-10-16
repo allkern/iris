@@ -1,35 +1,32 @@
 #ifndef EE_H
 #define EE_H
 
+#include "u128.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <stdint.h>
 
-typedef union {
-    uint64_t u64[2];
-    uint32_t u32[4];
-    uint32_t l32;
-    uint64_t l64;
-} ee_qword;
-
 struct ee_bus {
+    void* udata;
     uint64_t (*read8)(void* udata, uint32_t addr);
     uint64_t (*read16)(void* udata, uint32_t addr);
     uint64_t (*read32)(void* udata, uint32_t addr);
     uint64_t (*read64)(void* udata, uint32_t addr);
-    ee_qword (*read128)(void* udata, uint32_t addr);
+    uint128_t (*read128)(void* udata, uint32_t addr);
     void (*write8)(void* udata, uint32_t addr, uint64_t data);
     void (*write16)(void* udata, uint32_t addr, uint64_t data);
     void (*write32)(void* udata, uint32_t addr, uint64_t data);
     void (*write64)(void* udata, uint32_t addr, uint64_t data);
-    void (*write128)(void* udata, uint32_t addr, ee_qword data);
+    void (*write128)(void* udata, uint32_t addr, uint128_t data);
 };
 
 struct ee_state {
     struct ee_bus bus;
-    ee_qword r[32];
+
+    uint128_t r[32];
     uint32_t pc;
     uint32_t next_pc;
     uint32_t opcode;
@@ -50,6 +47,7 @@ struct ee_state {
             uint32_t context;
             uint32_t pagemask;
             uint32_t wired;
+            uint32_t unused7;
             uint32_t badvaddr;
             uint32_t count;
             uint32_t entryhi;
@@ -80,13 +78,12 @@ struct ee_state {
 };
 
 struct ee_state* ee_create(void);
-void ee_init(struct ee_state* ee);
+void ee_init(struct ee_state* ee, struct ee_bus bus);
 void ee_cycle(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
 
 #ifdef __cplusplus
 }
 #endif
-
 
 #endif

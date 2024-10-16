@@ -1,414 +1,500 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <string.h>
+
 #include "ee.h"
 
-static inline uint64_t bus_read8(struct ee_state* ee, uint32_t addr);
-static inline uint64_t bus_read16(struct ee_state* ee, uint32_t addr);
-static inline uint64_t bus_read32(struct ee_state* ee, uint32_t addr);
-static inline uint64_t bus_read64(struct ee_state* ee, uint32_t addr);
-static inline ee_qword bus_read128(struct ee_state* ee, uint32_t addr);
-static inline void bus_write8(struct ee_state* ee, uint32_t addr, uint64_t data);
-static inline void bus_write16(struct ee_state* ee, uint32_t addr, uint64_t data);
-static inline void bus_write32(struct ee_state* ee, uint32_t addr, uint64_t data);
-static inline void bus_write64(struct ee_state* ee, uint32_t addr, uint64_t data);
-static inline void bus_write128(struct ee_state* ee, uint32_t addr, ee_qword data);
+#define EE_KUSEG 0
+#define EE_KSEG0 1
+#define EE_KSEG1 2
+#define EE_KSSEG 3
+#define EE_KSEG3 4
 
-static inline void ee_i_abss(struct ee_state* ee);
-static inline void ee_i_add(struct ee_state* ee);
-static inline void ee_i_addas(struct ee_state* ee);
-static inline void ee_i_addi(struct ee_state* ee);
-static inline void ee_i_addiu(struct ee_state* ee);
-static inline void ee_i_adds(struct ee_state* ee);
-static inline void ee_i_addu(struct ee_state* ee);
-static inline void ee_i_and(struct ee_state* ee);
-static inline void ee_i_andi(struct ee_state* ee);
-static inline void ee_i_bc0f(struct ee_state* ee);
-static inline void ee_i_bc0fl(struct ee_state* ee);
-static inline void ee_i_bc0t(struct ee_state* ee);
-static inline void ee_i_bc0tl(struct ee_state* ee);
-static inline void ee_i_bc1f(struct ee_state* ee);
-static inline void ee_i_bc1fl(struct ee_state* ee);
-static inline void ee_i_bc1t(struct ee_state* ee);
-static inline void ee_i_bc1tl(struct ee_state* ee);
-static inline void ee_i_bc2f(struct ee_state* ee);
-static inline void ee_i_bc2fl(struct ee_state* ee);
-static inline void ee_i_bc2t(struct ee_state* ee);
-static inline void ee_i_bc2tl(struct ee_state* ee);
-static inline void ee_i_beq(struct ee_state* ee);
-static inline void ee_i_beql(struct ee_state* ee);
-static inline void ee_i_bgez(struct ee_state* ee);
-static inline void ee_i_bgezal(struct ee_state* ee);
-static inline void ee_i_bgezall(struct ee_state* ee);
-static inline void ee_i_bgezl(struct ee_state* ee);
-static inline void ee_i_bgtz(struct ee_state* ee);
-static inline void ee_i_bgtzl(struct ee_state* ee);
-static inline void ee_i_blez(struct ee_state* ee);
-static inline void ee_i_blezl(struct ee_state* ee);
-static inline void ee_i_bltz(struct ee_state* ee);
-static inline void ee_i_bltzal(struct ee_state* ee);
-static inline void ee_i_bltzall(struct ee_state* ee);
-static inline void ee_i_bltzl(struct ee_state* ee);
-static inline void ee_i_bne(struct ee_state* ee);
-static inline void ee_i_bnel(struct ee_state* ee);
-static inline void ee_i_break(struct ee_state* ee);
-static inline void ee_i_cache(struct ee_state* ee);
-static inline void ee_i_callmsr(struct ee_state* ee);
-static inline void ee_i_ceq(struct ee_state* ee);
-static inline void ee_i_cf(struct ee_state* ee);
-static inline void ee_i_cfc1(struct ee_state* ee);
-static inline void ee_i_cfc2(struct ee_state* ee);
-static inline void ee_i_cle(struct ee_state* ee);
-static inline void ee_i_clt(struct ee_state* ee);
-static inline void ee_i_ctc1(struct ee_state* ee);
-static inline void ee_i_ctc2(struct ee_state* ee);
-static inline void ee_i_cvts(struct ee_state* ee);
-static inline void ee_i_cvtw(struct ee_state* ee);
-static inline void ee_i_dadd(struct ee_state* ee);
-static inline void ee_i_daddi(struct ee_state* ee);
-static inline void ee_i_daddiu(struct ee_state* ee);
-static inline void ee_i_daddu(struct ee_state* ee);
-static inline void ee_i_di(struct ee_state* ee);
-static inline void ee_i_div(struct ee_state* ee);
-static inline void ee_i_div1(struct ee_state* ee);
-static inline void ee_i_divs(struct ee_state* ee);
-static inline void ee_i_divu(struct ee_state* ee);
-static inline void ee_i_divu1(struct ee_state* ee);
-static inline void ee_i_dsll(struct ee_state* ee);
-static inline void ee_i_dsll32(struct ee_state* ee);
-static inline void ee_i_dsllv(struct ee_state* ee);
-static inline void ee_i_dsra(struct ee_state* ee);
-static inline void ee_i_dsra32(struct ee_state* ee);
-static inline void ee_i_dsrav(struct ee_state* ee);
-static inline void ee_i_dsrl(struct ee_state* ee);
-static inline void ee_i_dsrl32(struct ee_state* ee);
-static inline void ee_i_dsrlv(struct ee_state* ee);
-static inline void ee_i_dsub(struct ee_state* ee);
-static inline void ee_i_dsubu(struct ee_state* ee);
-static inline void ee_i_ei(struct ee_state* ee);
-static inline void ee_i_eret(struct ee_state* ee);
-static inline void ee_i_j(struct ee_state* ee);
-static inline void ee_i_jal(struct ee_state* ee);
-static inline void ee_i_jalr(struct ee_state* ee);
-static inline void ee_i_jr(struct ee_state* ee);
-static inline void ee_i_lb(struct ee_state* ee);
-static inline void ee_i_lbu(struct ee_state* ee);
-static inline void ee_i_ld(struct ee_state* ee);
-static inline void ee_i_ldl(struct ee_state* ee);
-static inline void ee_i_ldr(struct ee_state* ee);
-static inline void ee_i_lh(struct ee_state* ee);
-static inline void ee_i_lhu(struct ee_state* ee);
-static inline void ee_i_lq(struct ee_state* ee);
-static inline void ee_i_lqc2(struct ee_state* ee);
-static inline void ee_i_lui(struct ee_state* ee);
-static inline void ee_i_lw(struct ee_state* ee);
-static inline void ee_i_lwc1(struct ee_state* ee);
-static inline void ee_i_lwl(struct ee_state* ee);
-static inline void ee_i_lwr(struct ee_state* ee);
-static inline void ee_i_lwu(struct ee_state* ee);
-static inline void ee_i_madd(struct ee_state* ee);
-static inline void ee_i_madd1(struct ee_state* ee);
-static inline void ee_i_maddas(struct ee_state* ee);
-static inline void ee_i_madds(struct ee_state* ee);
-static inline void ee_i_maddu(struct ee_state* ee);
-static inline void ee_i_maddu1(struct ee_state* ee);
-static inline void ee_i_maxs(struct ee_state* ee);
-static inline void ee_i_mfc0(struct ee_state* ee);
-static inline void ee_i_mfc1(struct ee_state* ee);
-static inline void ee_i_mfhi(struct ee_state* ee);
-static inline void ee_i_mfhi1(struct ee_state* ee);
-static inline void ee_i_mflo(struct ee_state* ee);
-static inline void ee_i_mflo1(struct ee_state* ee);
-static inline void ee_i_mfsa(struct ee_state* ee);
-static inline void ee_i_mins(struct ee_state* ee);
-static inline void ee_i_movn(struct ee_state* ee);
-static inline void ee_i_movs(struct ee_state* ee);
-static inline void ee_i_movz(struct ee_state* ee);
-static inline void ee_i_msubas(struct ee_state* ee);
-static inline void ee_i_msubs(struct ee_state* ee);
-static inline void ee_i_mtc0(struct ee_state* ee);
-static inline void ee_i_mtc1(struct ee_state* ee);
-static inline void ee_i_mthi(struct ee_state* ee);
-static inline void ee_i_mthi1(struct ee_state* ee);
-static inline void ee_i_mtlo(struct ee_state* ee);
-static inline void ee_i_mtlo1(struct ee_state* ee);
-static inline void ee_i_mtsa(struct ee_state* ee);
-static inline void ee_i_mtsab(struct ee_state* ee);
-static inline void ee_i_mtsah(struct ee_state* ee);
-static inline void ee_i_mulas(struct ee_state* ee);
-static inline void ee_i_muls(struct ee_state* ee);
-static inline void ee_i_mult(struct ee_state* ee);
-static inline void ee_i_mult1(struct ee_state* ee);
-static inline void ee_i_multu(struct ee_state* ee);
-static inline void ee_i_multu1(struct ee_state* ee);
-static inline void ee_i_negs(struct ee_state* ee);
-static inline void ee_i_nor(struct ee_state* ee);
-static inline void ee_i_or(struct ee_state* ee);
-static inline void ee_i_ori(struct ee_state* ee);
-static inline void ee_i_pabsh(struct ee_state* ee);
-static inline void ee_i_pabsw(struct ee_state* ee);
-static inline void ee_i_paddb(struct ee_state* ee);
-static inline void ee_i_paddh(struct ee_state* ee);
-static inline void ee_i_paddsb(struct ee_state* ee);
-static inline void ee_i_paddsh(struct ee_state* ee);
-static inline void ee_i_paddsw(struct ee_state* ee);
-static inline void ee_i_paddub(struct ee_state* ee);
-static inline void ee_i_padduh(struct ee_state* ee);
-static inline void ee_i_padduw(struct ee_state* ee);
-static inline void ee_i_paddw(struct ee_state* ee);
-static inline void ee_i_padsbh(struct ee_state* ee);
-static inline void ee_i_pand(struct ee_state* ee);
-static inline void ee_i_pceqb(struct ee_state* ee);
-static inline void ee_i_pceqh(struct ee_state* ee);
-static inline void ee_i_pceqw(struct ee_state* ee);
-static inline void ee_i_pcgtb(struct ee_state* ee);
-static inline void ee_i_pcgth(struct ee_state* ee);
-static inline void ee_i_pcgtw(struct ee_state* ee);
-static inline void ee_i_pcpyh(struct ee_state* ee);
-static inline void ee_i_pcpyld(struct ee_state* ee);
-static inline void ee_i_pcpyud(struct ee_state* ee);
-static inline void ee_i_pdivbw(struct ee_state* ee);
-static inline void ee_i_pdivuw(struct ee_state* ee);
-static inline void ee_i_pdivw(struct ee_state* ee);
-static inline void ee_i_pexch(struct ee_state* ee);
-static inline void ee_i_pexcw(struct ee_state* ee);
-static inline void ee_i_pexeh(struct ee_state* ee);
-static inline void ee_i_pexew(struct ee_state* ee);
-static inline void ee_i_pext5(struct ee_state* ee);
-static inline void ee_i_pextlb(struct ee_state* ee);
-static inline void ee_i_pextlh(struct ee_state* ee);
-static inline void ee_i_pextlw(struct ee_state* ee);
-static inline void ee_i_pextub(struct ee_state* ee);
-static inline void ee_i_pextuh(struct ee_state* ee);
-static inline void ee_i_pextuw(struct ee_state* ee);
-static inline void ee_i_phmadh(struct ee_state* ee);
-static inline void ee_i_phmsbh(struct ee_state* ee);
-static inline void ee_i_pinteh(struct ee_state* ee);
-static inline void ee_i_pinth(struct ee_state* ee);
-static inline void ee_i_plzcw(struct ee_state* ee);
-static inline void ee_i_pmaddh(struct ee_state* ee);
-static inline void ee_i_pmadduw(struct ee_state* ee);
-static inline void ee_i_pmaddw(struct ee_state* ee);
-static inline void ee_i_pmaxh(struct ee_state* ee);
-static inline void ee_i_pmaxw(struct ee_state* ee);
-static inline void ee_i_pmfhi(struct ee_state* ee);
-static inline void ee_i_pmfhl(struct ee_state* ee);
-static inline void ee_i_pmflo(struct ee_state* ee);
-static inline void ee_i_pminh(struct ee_state* ee);
-static inline void ee_i_pminw(struct ee_state* ee);
-static inline void ee_i_pmsubh(struct ee_state* ee);
-static inline void ee_i_pmsubw(struct ee_state* ee);
-static inline void ee_i_pmthi(struct ee_state* ee);
-static inline void ee_i_pmthl(struct ee_state* ee);
-static inline void ee_i_pmtlo(struct ee_state* ee);
-static inline void ee_i_pmulth(struct ee_state* ee);
-static inline void ee_i_pmultuw(struct ee_state* ee);
-static inline void ee_i_pmultw(struct ee_state* ee);
-static inline void ee_i_pnor(struct ee_state* ee);
-static inline void ee_i_por(struct ee_state* ee);
-static inline void ee_i_ppac5(struct ee_state* ee);
-static inline void ee_i_ppacb(struct ee_state* ee);
-static inline void ee_i_ppach(struct ee_state* ee);
-static inline void ee_i_ppacw(struct ee_state* ee);
-static inline void ee_i_pref(struct ee_state* ee);
-static inline void ee_i_prevh(struct ee_state* ee);
-static inline void ee_i_prot3w(struct ee_state* ee);
-static inline void ee_i_psllh(struct ee_state* ee);
-static inline void ee_i_psllvw(struct ee_state* ee);
-static inline void ee_i_psllw(struct ee_state* ee);
-static inline void ee_i_psrah(struct ee_state* ee);
-static inline void ee_i_psravw(struct ee_state* ee);
-static inline void ee_i_psraw(struct ee_state* ee);
-static inline void ee_i_psrlh(struct ee_state* ee);
-static inline void ee_i_psrlvw(struct ee_state* ee);
-static inline void ee_i_psrlw(struct ee_state* ee);
-static inline void ee_i_psubb(struct ee_state* ee);
-static inline void ee_i_psubh(struct ee_state* ee);
-static inline void ee_i_psubsb(struct ee_state* ee);
-static inline void ee_i_psubsh(struct ee_state* ee);
-static inline void ee_i_psubsw(struct ee_state* ee);
-static inline void ee_i_psubub(struct ee_state* ee);
-static inline void ee_i_psubuh(struct ee_state* ee);
-static inline void ee_i_psubuw(struct ee_state* ee);
-static inline void ee_i_psubw(struct ee_state* ee);
-static inline void ee_i_pxor(struct ee_state* ee);
-static inline void ee_i_qfsrv(struct ee_state* ee);
-static inline void ee_i_qmfc2(struct ee_state* ee);
-static inline void ee_i_qmtc2(struct ee_state* ee);
-static inline void ee_i_rsqrts(struct ee_state* ee);
-static inline void ee_i_sb(struct ee_state* ee);
-static inline void ee_i_sd(struct ee_state* ee);
-static inline void ee_i_sdl(struct ee_state* ee);
-static inline void ee_i_sdr(struct ee_state* ee);
-static inline void ee_i_sh(struct ee_state* ee);
-static inline void ee_i_sll(struct ee_state* ee);
-static inline void ee_i_sllv(struct ee_state* ee);
-static inline void ee_i_slt(struct ee_state* ee);
-static inline void ee_i_slti(struct ee_state* ee);
-static inline void ee_i_sltiu(struct ee_state* ee);
-static inline void ee_i_sltu(struct ee_state* ee);
-static inline void ee_i_sq(struct ee_state* ee);
-static inline void ee_i_sqc2(struct ee_state* ee);
-static inline void ee_i_sqrts(struct ee_state* ee);
-static inline void ee_i_sra(struct ee_state* ee);
-static inline void ee_i_srav(struct ee_state* ee);
-static inline void ee_i_srl(struct ee_state* ee);
-static inline void ee_i_srlv(struct ee_state* ee);
-static inline void ee_i_sub(struct ee_state* ee);
-static inline void ee_i_subas(struct ee_state* ee);
-static inline void ee_i_subs(struct ee_state* ee);
-static inline void ee_i_subu(struct ee_state* ee);
-static inline void ee_i_sw(struct ee_state* ee);
-static inline void ee_i_swc1(struct ee_state* ee);
-static inline void ee_i_swl(struct ee_state* ee);
-static inline void ee_i_swr(struct ee_state* ee);
-static inline void ee_i_sync(struct ee_state* ee);
-static inline void ee_i_syscall(struct ee_state* ee);
-static inline void ee_i_teq(struct ee_state* ee);
-static inline void ee_i_teqi(struct ee_state* ee);
-static inline void ee_i_tge(struct ee_state* ee);
-static inline void ee_i_tgei(struct ee_state* ee);
-static inline void ee_i_tgeiu(struct ee_state* ee);
-static inline void ee_i_tgeu(struct ee_state* ee);
-static inline void ee_i_tlbp(struct ee_state* ee);
-static inline void ee_i_tlbr(struct ee_state* ee);
-static inline void ee_i_tlbwi(struct ee_state* ee);
-static inline void ee_i_tlbwr(struct ee_state* ee);
-static inline void ee_i_tlt(struct ee_state* ee);
-static inline void ee_i_tlti(struct ee_state* ee);
-static inline void ee_i_tltiu(struct ee_state* ee);
-static inline void ee_i_tltu(struct ee_state* ee);
-static inline void ee_i_tne(struct ee_state* ee);
-static inline void ee_i_tnei(struct ee_state* ee);
-static inline void ee_i_vabs(struct ee_state* ee);
-static inline void ee_i_vadd(struct ee_state* ee);
-static inline void ee_i_vadda(struct ee_state* ee);
-static inline void ee_i_vaddai(struct ee_state* ee);
-static inline void ee_i_vaddaq(struct ee_state* ee);
-static inline void ee_i_vaddaw(struct ee_state* ee);
-static inline void ee_i_vaddax(struct ee_state* ee);
-static inline void ee_i_vadday(struct ee_state* ee);
-static inline void ee_i_vaddaz(struct ee_state* ee);
-static inline void ee_i_vaddi(struct ee_state* ee);
-static inline void ee_i_vaddq(struct ee_state* ee);
-static inline void ee_i_vaddw(struct ee_state* ee);
-static inline void ee_i_vaddx(struct ee_state* ee);
-static inline void ee_i_vaddy(struct ee_state* ee);
-static inline void ee_i_vaddz(struct ee_state* ee);
-static inline void ee_i_vcallms(struct ee_state* ee);
-static inline void ee_i_vclipw(struct ee_state* ee);
-static inline void ee_i_vdiv(struct ee_state* ee);
-static inline void ee_i_vftoi0(struct ee_state* ee);
-static inline void ee_i_vftoi12(struct ee_state* ee);
-static inline void ee_i_vftoi15(struct ee_state* ee);
-static inline void ee_i_vftoi4(struct ee_state* ee);
-static inline void ee_i_viadd(struct ee_state* ee);
-static inline void ee_i_viaddi(struct ee_state* ee);
-static inline void ee_i_viand(struct ee_state* ee);
-static inline void ee_i_vilwr(struct ee_state* ee);
-static inline void ee_i_vior(struct ee_state* ee);
-static inline void ee_i_visub(struct ee_state* ee);
-static inline void ee_i_viswr(struct ee_state* ee);
-static inline void ee_i_vitof0(struct ee_state* ee);
-static inline void ee_i_vitof12(struct ee_state* ee);
-static inline void ee_i_vitof15(struct ee_state* ee);
-static inline void ee_i_vitof4(struct ee_state* ee);
-static inline void ee_i_vlqd(struct ee_state* ee);
-static inline void ee_i_vlqi(struct ee_state* ee);
-static inline void ee_i_vmadd(struct ee_state* ee);
-static inline void ee_i_vmadda(struct ee_state* ee);
-static inline void ee_i_vmaddai(struct ee_state* ee);
-static inline void ee_i_vmaddaq(struct ee_state* ee);
-static inline void ee_i_vmaddaw(struct ee_state* ee);
-static inline void ee_i_vmaddax(struct ee_state* ee);
-static inline void ee_i_vmadday(struct ee_state* ee);
-static inline void ee_i_vmaddaz(struct ee_state* ee);
-static inline void ee_i_vmaddi(struct ee_state* ee);
-static inline void ee_i_vmaddq(struct ee_state* ee);
-static inline void ee_i_vmaddw(struct ee_state* ee);
-static inline void ee_i_vmaddx(struct ee_state* ee);
-static inline void ee_i_vmaddy(struct ee_state* ee);
-static inline void ee_i_vmaddz(struct ee_state* ee);
-static inline void ee_i_vmax(struct ee_state* ee);
-static inline void ee_i_vmaxi(struct ee_state* ee);
-static inline void ee_i_vmaxw(struct ee_state* ee);
-static inline void ee_i_vmaxx(struct ee_state* ee);
-static inline void ee_i_vmaxy(struct ee_state* ee);
-static inline void ee_i_vmaxz(struct ee_state* ee);
-static inline void ee_i_vmfir(struct ee_state* ee);
-static inline void ee_i_vmini(struct ee_state* ee);
-static inline void ee_i_vminii(struct ee_state* ee);
-static inline void ee_i_vminiw(struct ee_state* ee);
-static inline void ee_i_vminix(struct ee_state* ee);
-static inline void ee_i_vminiy(struct ee_state* ee);
-static inline void ee_i_vminiz(struct ee_state* ee);
-static inline void ee_i_vmove(struct ee_state* ee);
-static inline void ee_i_vmr32(struct ee_state* ee);
-static inline void ee_i_vmsub(struct ee_state* ee);
-static inline void ee_i_vmsuba(struct ee_state* ee);
-static inline void ee_i_vmsubai(struct ee_state* ee);
-static inline void ee_i_vmsubaq(struct ee_state* ee);
-static inline void ee_i_vmsubaw(struct ee_state* ee);
-static inline void ee_i_vmsubax(struct ee_state* ee);
-static inline void ee_i_vmsubay(struct ee_state* ee);
-static inline void ee_i_vmsubaz(struct ee_state* ee);
-static inline void ee_i_vmsubi(struct ee_state* ee);
-static inline void ee_i_vmsubq(struct ee_state* ee);
-static inline void ee_i_vmsubw(struct ee_state* ee);
-static inline void ee_i_vmsubx(struct ee_state* ee);
-static inline void ee_i_vmsuby(struct ee_state* ee);
-static inline void ee_i_vmsubz(struct ee_state* ee);
-static inline void ee_i_vmtir(struct ee_state* ee);
-static inline void ee_i_vmul(struct ee_state* ee);
-static inline void ee_i_vmula(struct ee_state* ee);
-static inline void ee_i_vmulai(struct ee_state* ee);
-static inline void ee_i_vmulaq(struct ee_state* ee);
-static inline void ee_i_vmulaw(struct ee_state* ee);
-static inline void ee_i_vmulax(struct ee_state* ee);
-static inline void ee_i_vmulay(struct ee_state* ee);
-static inline void ee_i_vmulaz(struct ee_state* ee);
-static inline void ee_i_vmuli(struct ee_state* ee);
-static inline void ee_i_vmulq(struct ee_state* ee);
-static inline void ee_i_vmulw(struct ee_state* ee);
-static inline void ee_i_vmulx(struct ee_state* ee);
-static inline void ee_i_vmuly(struct ee_state* ee);
-static inline void ee_i_vmulz(struct ee_state* ee);
-static inline void ee_i_vnop(struct ee_state* ee);
-static inline void ee_i_vopmsub(struct ee_state* ee);
-static inline void ee_i_vopmula(struct ee_state* ee);
-static inline void ee_i_vrget(struct ee_state* ee);
-static inline void ee_i_vrinit(struct ee_state* ee);
-static inline void ee_i_vrnext(struct ee_state* ee);
-static inline void ee_i_vrsqrt(struct ee_state* ee);
-static inline void ee_i_vrxor(struct ee_state* ee);
-static inline void ee_i_vsqd(struct ee_state* ee);
-static inline void ee_i_vsqi(struct ee_state* ee);
-static inline void ee_i_vsqrt(struct ee_state* ee);
-static inline void ee_i_vsub(struct ee_state* ee);
-static inline void ee_i_vsuba(struct ee_state* ee);
-static inline void ee_i_vsubai(struct ee_state* ee);
-static inline void ee_i_vsubaq(struct ee_state* ee);
-static inline void ee_i_vsubaw(struct ee_state* ee);
-static inline void ee_i_vsubax(struct ee_state* ee);
-static inline void ee_i_vsubay(struct ee_state* ee);
-static inline void ee_i_vsubaz(struct ee_state* ee);
-static inline void ee_i_vsubi(struct ee_state* ee);
-static inline void ee_i_vsubq(struct ee_state* ee);
-static inline void ee_i_vsubw(struct ee_state* ee);
-static inline void ee_i_vsubx(struct ee_state* ee);
-static inline void ee_i_vsuby(struct ee_state* ee);
-static inline void ee_i_vsubz(struct ee_state* ee);
-static inline void ee_i_vwaitq(struct ee_state* ee);
-static inline void ee_i_xor(struct ee_state* ee);
-static inline void ee_i_xori(struct ee_state* ee);
+#define EE_D_RT ((ee->opcode >> 16) & 0x1f)
+#define EE_D_RD ((ee->opcode >> 11) & 0x1f)
+
+static inline int ee_get_segment(uint32_t virt) {
+    switch (virt & 0xe0000000) {
+        case 0x00000000: return EE_KUSEG;
+        case 0x20000000: return EE_KUSEG;
+        case 0x40000000: return EE_KUSEG;
+        case 0x60000000: return EE_KUSEG;
+        case 0x80000000: return EE_KSEG0;
+        case 0xa0000000: return EE_KSEG1;
+        case 0xc0000000: return EE_KSSEG;
+        case 0xe0000000: return EE_KSEG3;
+    }
+}
+
+static inline int ee_translate_virt(uint32_t virt, uint32_t* phys) {
+    int seg = ee_get_segment(virt);
+
+    if (seg == EE_KSEG0 || seg == EE_KSEG1) {
+        *phys = virt & 0x1fffffff;
+
+        return 0;
+    }
+
+    // To-do: MMU mapping
+    *phys = virt & 0x1fffffff;
+
+    return 0;
+}
+
+#define BUS_READ_FUNC(b)                                                        \
+    static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) {  \
+        uint32_t phys;                                                          \
+        if (ee_translate_virt(addr, &phys)) {                                   \
+            printf("ee: TLB mapping error\n");                                  \
+            exit(1);                                                            \
+        }                                                                       \
+        return ee->bus.read ## b(ee->bus.udata, phys);                          \
+    }
+
+#define BUS_WRITE_FUNC(b)                                                                       \
+    static inline uint64_t bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) {  \
+        uint32_t phys;                                                                          \
+        if (ee_translate_virt(addr, &phys)) {                                                   \
+            printf("ee: TLB mapping error\n");                                                  \
+            exit(1);                                                                            \
+        }                                                                                       \
+        ee->bus.write ## b(ee->bus.udata, phys, data);                                          \
+    }
+
+BUS_READ_FUNC(8);
+BUS_READ_FUNC(16);
+BUS_READ_FUNC(32);
+BUS_READ_FUNC(64);
+
+static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
+    uint32_t phys;
+
+    if (ee_translate_virt(addr, &phys)) {
+        printf("ee: TLB mapping error\n");
+
+        exit(1);
+    }
+
+    return ee->bus.read128(ee->bus.udata, phys);
+}
+
+BUS_WRITE_FUNC(8);
+BUS_WRITE_FUNC(16);
+BUS_WRITE_FUNC(32);
+BUS_WRITE_FUNC(64);
+
+static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
+    uint32_t phys;
+
+    if (ee_translate_virt(addr, &phys)) {
+        printf("ee: TLB mapping error\n");
+
+        exit(1);
+    }
+
+    return ee->bus.write128(ee->bus.udata, phys, data);
+}
+
+static inline void ee_i_abss(struct ee_state* ee) { printf("ee: abss unimplemented\n"); exit(1); }
+static inline void ee_i_add(struct ee_state* ee) { printf("ee: add unimplemented\n"); exit(1); }
+static inline void ee_i_addas(struct ee_state* ee) { printf("ee: addas unimplemented\n"); exit(1); }
+static inline void ee_i_addi(struct ee_state* ee) { printf("ee: addi unimplemented\n"); exit(1); }
+static inline void ee_i_addiu(struct ee_state* ee) { printf("ee: addiu unimplemented\n"); exit(1); }
+static inline void ee_i_adds(struct ee_state* ee) { printf("ee: adds unimplemented\n"); exit(1); }
+static inline void ee_i_addu(struct ee_state* ee) { printf("ee: addu unimplemented\n"); exit(1); }
+static inline void ee_i_and(struct ee_state* ee) { printf("ee: and unimplemented\n"); exit(1); }
+static inline void ee_i_andi(struct ee_state* ee) { printf("ee: andi unimplemented\n"); exit(1); }
+static inline void ee_i_bc0f(struct ee_state* ee) { printf("ee: bc0f unimplemented\n"); exit(1); }
+static inline void ee_i_bc0fl(struct ee_state* ee) { printf("ee: bc0fl unimplemented\n"); exit(1); }
+static inline void ee_i_bc0t(struct ee_state* ee) { printf("ee: bc0t unimplemented\n"); exit(1); }
+static inline void ee_i_bc0tl(struct ee_state* ee) { printf("ee: bc0tl unimplemented\n"); exit(1); }
+static inline void ee_i_bc1f(struct ee_state* ee) { printf("ee: bc1f unimplemented\n"); exit(1); }
+static inline void ee_i_bc1fl(struct ee_state* ee) { printf("ee: bc1fl unimplemented\n"); exit(1); }
+static inline void ee_i_bc1t(struct ee_state* ee) { printf("ee: bc1t unimplemented\n"); exit(1); }
+static inline void ee_i_bc1tl(struct ee_state* ee) { printf("ee: bc1tl unimplemented\n"); exit(1); }
+static inline void ee_i_bc2f(struct ee_state* ee) { printf("ee: bc2f unimplemented\n"); exit(1); }
+static inline void ee_i_bc2fl(struct ee_state* ee) { printf("ee: bc2fl unimplemented\n"); exit(1); }
+static inline void ee_i_bc2t(struct ee_state* ee) { printf("ee: bc2t unimplemented\n"); exit(1); }
+static inline void ee_i_bc2tl(struct ee_state* ee) { printf("ee: bc2tl unimplemented\n"); exit(1); }
+static inline void ee_i_beq(struct ee_state* ee) { printf("ee: beq unimplemented\n"); exit(1); }
+static inline void ee_i_beql(struct ee_state* ee) { printf("ee: beql unimplemented\n"); exit(1); }
+static inline void ee_i_bgez(struct ee_state* ee) { printf("ee: bgez unimplemented\n"); exit(1); }
+static inline void ee_i_bgezal(struct ee_state* ee) { printf("ee: bgezal unimplemented\n"); exit(1); }
+static inline void ee_i_bgezall(struct ee_state* ee) { printf("ee: bgezall unimplemented\n"); exit(1); }
+static inline void ee_i_bgezl(struct ee_state* ee) { printf("ee: bgezl unimplemented\n"); exit(1); }
+static inline void ee_i_bgtz(struct ee_state* ee) { printf("ee: bgtz unimplemented\n"); exit(1); }
+static inline void ee_i_bgtzl(struct ee_state* ee) { printf("ee: bgtzl unimplemented\n"); exit(1); }
+static inline void ee_i_blez(struct ee_state* ee) { printf("ee: blez unimplemented\n"); exit(1); }
+static inline void ee_i_blezl(struct ee_state* ee) { printf("ee: blezl unimplemented\n"); exit(1); }
+static inline void ee_i_bltz(struct ee_state* ee) { printf("ee: bltz unimplemented\n"); exit(1); }
+static inline void ee_i_bltzal(struct ee_state* ee) { printf("ee: bltzal unimplemented\n"); exit(1); }
+static inline void ee_i_bltzall(struct ee_state* ee) { printf("ee: bltzall unimplemented\n"); exit(1); }
+static inline void ee_i_bltzl(struct ee_state* ee) { printf("ee: bltzl unimplemented\n"); exit(1); }
+static inline void ee_i_bne(struct ee_state* ee) { printf("ee: bne unimplemented\n"); exit(1); }
+static inline void ee_i_bnel(struct ee_state* ee) { printf("ee: bnel unimplemented\n"); exit(1); }
+static inline void ee_i_break(struct ee_state* ee) { printf("ee: break unimplemented\n"); exit(1); }
+static inline void ee_i_cache(struct ee_state* ee) { printf("ee: cache unimplemented\n"); exit(1); }
+static inline void ee_i_callmsr(struct ee_state* ee) { printf("ee: callmsr unimplemented\n"); exit(1); }
+static inline void ee_i_ceq(struct ee_state* ee) { printf("ee: ceq unimplemented\n"); exit(1); }
+static inline void ee_i_cf(struct ee_state* ee) { printf("ee: cf unimplemented\n"); exit(1); }
+static inline void ee_i_cfc1(struct ee_state* ee) { printf("ee: cfc1 unimplemented\n"); exit(1); }
+static inline void ee_i_cfc2(struct ee_state* ee) { printf("ee: cfc2 unimplemented\n"); exit(1); }
+static inline void ee_i_cle(struct ee_state* ee) { printf("ee: cle unimplemented\n"); exit(1); }
+static inline void ee_i_clt(struct ee_state* ee) { printf("ee: clt unimplemented\n"); exit(1); }
+static inline void ee_i_ctc1(struct ee_state* ee) { printf("ee: ctc1 unimplemented\n"); exit(1); }
+static inline void ee_i_ctc2(struct ee_state* ee) { printf("ee: ctc2 unimplemented\n"); exit(1); }
+static inline void ee_i_cvts(struct ee_state* ee) { printf("ee: cvts unimplemented\n"); exit(1); }
+static inline void ee_i_cvtw(struct ee_state* ee) { printf("ee: cvtw unimplemented\n"); exit(1); }
+static inline void ee_i_dadd(struct ee_state* ee) { printf("ee: dadd unimplemented\n"); exit(1); }
+static inline void ee_i_daddi(struct ee_state* ee) { printf("ee: daddi unimplemented\n"); exit(1); }
+static inline void ee_i_daddiu(struct ee_state* ee) { printf("ee: daddiu unimplemented\n"); exit(1); }
+static inline void ee_i_daddu(struct ee_state* ee) { printf("ee: daddu unimplemented\n"); exit(1); }
+static inline void ee_i_di(struct ee_state* ee) { printf("ee: di unimplemented\n"); exit(1); }
+static inline void ee_i_div(struct ee_state* ee) { printf("ee: div unimplemented\n"); exit(1); }
+static inline void ee_i_div1(struct ee_state* ee) { printf("ee: div1 unimplemented\n"); exit(1); }
+static inline void ee_i_divs(struct ee_state* ee) { printf("ee: divs unimplemented\n"); exit(1); }
+static inline void ee_i_divu(struct ee_state* ee) { printf("ee: divu unimplemented\n"); exit(1); }
+static inline void ee_i_divu1(struct ee_state* ee) { printf("ee: divu1 unimplemented\n"); exit(1); }
+static inline void ee_i_dsll(struct ee_state* ee) { printf("ee: dsll unimplemented\n"); exit(1); }
+static inline void ee_i_dsll32(struct ee_state* ee) { printf("ee: dsll32 unimplemented\n"); exit(1); }
+static inline void ee_i_dsllv(struct ee_state* ee) { printf("ee: dsllv unimplemented\n"); exit(1); }
+static inline void ee_i_dsra(struct ee_state* ee) { printf("ee: dsra unimplemented\n"); exit(1); }
+static inline void ee_i_dsra32(struct ee_state* ee) { printf("ee: dsra32 unimplemented\n"); exit(1); }
+static inline void ee_i_dsrav(struct ee_state* ee) { printf("ee: dsrav unimplemented\n"); exit(1); }
+static inline void ee_i_dsrl(struct ee_state* ee) { printf("ee: dsrl unimplemented\n"); exit(1); }
+static inline void ee_i_dsrl32(struct ee_state* ee) { printf("ee: dsrl32 unimplemented\n"); exit(1); }
+static inline void ee_i_dsrlv(struct ee_state* ee) { printf("ee: dsrlv unimplemented\n"); exit(1); }
+static inline void ee_i_dsub(struct ee_state* ee) { printf("ee: dsub unimplemented\n"); exit(1); }
+static inline void ee_i_dsubu(struct ee_state* ee) { printf("ee: dsubu unimplemented\n"); exit(1); }
+static inline void ee_i_ei(struct ee_state* ee) { printf("ee: ei unimplemented\n"); exit(1); }
+static inline void ee_i_eret(struct ee_state* ee) { printf("ee: eret unimplemented\n"); exit(1); }
+static inline void ee_i_j(struct ee_state* ee) { printf("ee: j unimplemented\n"); exit(1); }
+static inline void ee_i_jal(struct ee_state* ee) { printf("ee: jal unimplemented\n"); exit(1); }
+static inline void ee_i_jalr(struct ee_state* ee) { printf("ee: jalr unimplemented\n"); exit(1); }
+static inline void ee_i_jr(struct ee_state* ee) { printf("ee: jr unimplemented\n"); exit(1); }
+static inline void ee_i_lb(struct ee_state* ee) { printf("ee: lb unimplemented\n"); exit(1); }
+static inline void ee_i_lbu(struct ee_state* ee) { printf("ee: lbu unimplemented\n"); exit(1); }
+static inline void ee_i_ld(struct ee_state* ee) { printf("ee: ld unimplemented\n"); exit(1); }
+static inline void ee_i_ldl(struct ee_state* ee) { printf("ee: ldl unimplemented\n"); exit(1); }
+static inline void ee_i_ldr(struct ee_state* ee) { printf("ee: ldr unimplemented\n"); exit(1); }
+static inline void ee_i_lh(struct ee_state* ee) { printf("ee: lh unimplemented\n"); exit(1); }
+static inline void ee_i_lhu(struct ee_state* ee) { printf("ee: lhu unimplemented\n"); exit(1); }
+static inline void ee_i_lq(struct ee_state* ee) { printf("ee: lq unimplemented\n"); exit(1); }
+static inline void ee_i_lqc2(struct ee_state* ee) { printf("ee: lqc2 unimplemented\n"); exit(1); }
+static inline void ee_i_lui(struct ee_state* ee) { printf("ee: lui unimplemented\n"); exit(1); }
+static inline void ee_i_lw(struct ee_state* ee) { printf("ee: lw unimplemented\n"); exit(1); }
+static inline void ee_i_lwc1(struct ee_state* ee) { printf("ee: lwc1 unimplemented\n"); exit(1); }
+static inline void ee_i_lwl(struct ee_state* ee) { printf("ee: lwl unimplemented\n"); exit(1); }
+static inline void ee_i_lwr(struct ee_state* ee) { printf("ee: lwr unimplemented\n"); exit(1); }
+static inline void ee_i_lwu(struct ee_state* ee) { printf("ee: lwu unimplemented\n"); exit(1); }
+static inline void ee_i_madd(struct ee_state* ee) { printf("ee: madd unimplemented\n"); exit(1); }
+static inline void ee_i_madd1(struct ee_state* ee) { printf("ee: madd1 unimplemented\n"); exit(1); }
+static inline void ee_i_maddas(struct ee_state* ee) { printf("ee: maddas unimplemented\n"); exit(1); }
+static inline void ee_i_madds(struct ee_state* ee) { printf("ee: madds unimplemented\n"); exit(1); }
+static inline void ee_i_maddu(struct ee_state* ee) { printf("ee: maddu unimplemented\n"); exit(1); }
+static inline void ee_i_maddu1(struct ee_state* ee) { printf("ee: maddu1 unimplemented\n"); exit(1); }
+static inline void ee_i_maxs(struct ee_state* ee) { printf("ee: maxs unimplemented\n"); exit(1); }
+static inline void ee_i_mfc0(struct ee_state* ee) { printf("ee: mfc0 unimplemented\n"); exit(1); }
+static inline void ee_i_mfc1(struct ee_state* ee) { printf("ee: mfc1 unimplemented\n"); exit(1); }
+static inline void ee_i_mfhi(struct ee_state* ee) { printf("ee: mfhi unimplemented\n"); exit(1); }
+static inline void ee_i_mfhi1(struct ee_state* ee) { printf("ee: mfhi1 unimplemented\n"); exit(1); }
+static inline void ee_i_mflo(struct ee_state* ee) { printf("ee: mflo unimplemented\n"); exit(1); }
+static inline void ee_i_mflo1(struct ee_state* ee) { printf("ee: mflo1 unimplemented\n"); exit(1); }
+static inline void ee_i_mfsa(struct ee_state* ee) { printf("ee: mfsa unimplemented\n"); exit(1); }
+static inline void ee_i_mins(struct ee_state* ee) { printf("ee: mins unimplemented\n"); exit(1); }
+static inline void ee_i_movn(struct ee_state* ee) { printf("ee: movn unimplemented\n"); exit(1); }
+static inline void ee_i_movs(struct ee_state* ee) { printf("ee: movs unimplemented\n"); exit(1); }
+static inline void ee_i_movz(struct ee_state* ee) { printf("ee: movz unimplemented\n"); exit(1); }
+static inline void ee_i_msubas(struct ee_state* ee) { printf("ee: msubas unimplemented\n"); exit(1); }
+static inline void ee_i_msubs(struct ee_state* ee) { printf("ee: msubs unimplemented\n"); exit(1); }
+static inline void ee_i_mtc0(struct ee_state* ee) { printf("ee: mtc0 unimplemented\n"); exit(1); }
+static inline void ee_i_mtc1(struct ee_state* ee) { printf("ee: mtc1 unimplemented\n"); exit(1); }
+static inline void ee_i_mthi(struct ee_state* ee) { printf("ee: mthi unimplemented\n"); exit(1); }
+static inline void ee_i_mthi1(struct ee_state* ee) { printf("ee: mthi1 unimplemented\n"); exit(1); }
+static inline void ee_i_mtlo(struct ee_state* ee) { printf("ee: mtlo unimplemented\n"); exit(1); }
+static inline void ee_i_mtlo1(struct ee_state* ee) { printf("ee: mtlo1 unimplemented\n"); exit(1); }
+static inline void ee_i_mtsa(struct ee_state* ee) { printf("ee: mtsa unimplemented\n"); exit(1); }
+static inline void ee_i_mtsab(struct ee_state* ee) { printf("ee: mtsab unimplemented\n"); exit(1); }
+static inline void ee_i_mtsah(struct ee_state* ee) { printf("ee: mtsah unimplemented\n"); exit(1); }
+static inline void ee_i_mulas(struct ee_state* ee) { printf("ee: mulas unimplemented\n"); exit(1); }
+static inline void ee_i_muls(struct ee_state* ee) { printf("ee: muls unimplemented\n"); exit(1); }
+static inline void ee_i_mult(struct ee_state* ee) { printf("ee: mult unimplemented\n"); exit(1); }
+static inline void ee_i_mult1(struct ee_state* ee) { printf("ee: mult1 unimplemented\n"); exit(1); }
+static inline void ee_i_multu(struct ee_state* ee) { printf("ee: multu unimplemented\n"); exit(1); }
+static inline void ee_i_multu1(struct ee_state* ee) { printf("ee: multu1 unimplemented\n"); exit(1); }
+static inline void ee_i_negs(struct ee_state* ee) { printf("ee: negs unimplemented\n"); exit(1); }
+static inline void ee_i_nor(struct ee_state* ee) { printf("ee: nor unimplemented\n"); exit(1); }
+static inline void ee_i_or(struct ee_state* ee) { printf("ee: or unimplemented\n"); exit(1); }
+static inline void ee_i_ori(struct ee_state* ee) { printf("ee: ori unimplemented\n"); exit(1); }
+static inline void ee_i_pabsh(struct ee_state* ee) { printf("ee: pabsh unimplemented\n"); exit(1); }
+static inline void ee_i_pabsw(struct ee_state* ee) { printf("ee: pabsw unimplemented\n"); exit(1); }
+static inline void ee_i_paddb(struct ee_state* ee) { printf("ee: paddb unimplemented\n"); exit(1); }
+static inline void ee_i_paddh(struct ee_state* ee) { printf("ee: paddh unimplemented\n"); exit(1); }
+static inline void ee_i_paddsb(struct ee_state* ee) { printf("ee: paddsb unimplemented\n"); exit(1); }
+static inline void ee_i_paddsh(struct ee_state* ee) { printf("ee: paddsh unimplemented\n"); exit(1); }
+static inline void ee_i_paddsw(struct ee_state* ee) { printf("ee: paddsw unimplemented\n"); exit(1); }
+static inline void ee_i_paddub(struct ee_state* ee) { printf("ee: paddub unimplemented\n"); exit(1); }
+static inline void ee_i_padduh(struct ee_state* ee) { printf("ee: padduh unimplemented\n"); exit(1); }
+static inline void ee_i_padduw(struct ee_state* ee) { printf("ee: padduw unimplemented\n"); exit(1); }
+static inline void ee_i_paddw(struct ee_state* ee) { printf("ee: paddw unimplemented\n"); exit(1); }
+static inline void ee_i_padsbh(struct ee_state* ee) { printf("ee: padsbh unimplemented\n"); exit(1); }
+static inline void ee_i_pand(struct ee_state* ee) { printf("ee: pand unimplemented\n"); exit(1); }
+static inline void ee_i_pceqb(struct ee_state* ee) { printf("ee: pceqb unimplemented\n"); exit(1); }
+static inline void ee_i_pceqh(struct ee_state* ee) { printf("ee: pceqh unimplemented\n"); exit(1); }
+static inline void ee_i_pceqw(struct ee_state* ee) { printf("ee: pceqw unimplemented\n"); exit(1); }
+static inline void ee_i_pcgtb(struct ee_state* ee) { printf("ee: pcgtb unimplemented\n"); exit(1); }
+static inline void ee_i_pcgth(struct ee_state* ee) { printf("ee: pcgth unimplemented\n"); exit(1); }
+static inline void ee_i_pcgtw(struct ee_state* ee) { printf("ee: pcgtw unimplemented\n"); exit(1); }
+static inline void ee_i_pcpyh(struct ee_state* ee) { printf("ee: pcpyh unimplemented\n"); exit(1); }
+static inline void ee_i_pcpyld(struct ee_state* ee) { printf("ee: pcpyld unimplemented\n"); exit(1); }
+static inline void ee_i_pcpyud(struct ee_state* ee) { printf("ee: pcpyud unimplemented\n"); exit(1); }
+static inline void ee_i_pdivbw(struct ee_state* ee) { printf("ee: pdivbw unimplemented\n"); exit(1); }
+static inline void ee_i_pdivuw(struct ee_state* ee) { printf("ee: pdivuw unimplemented\n"); exit(1); }
+static inline void ee_i_pdivw(struct ee_state* ee) { printf("ee: pdivw unimplemented\n"); exit(1); }
+static inline void ee_i_pexch(struct ee_state* ee) { printf("ee: pexch unimplemented\n"); exit(1); }
+static inline void ee_i_pexcw(struct ee_state* ee) { printf("ee: pexcw unimplemented\n"); exit(1); }
+static inline void ee_i_pexeh(struct ee_state* ee) { printf("ee: pexeh unimplemented\n"); exit(1); }
+static inline void ee_i_pexew(struct ee_state* ee) { printf("ee: pexew unimplemented\n"); exit(1); }
+static inline void ee_i_pext5(struct ee_state* ee) { printf("ee: pext5 unimplemented\n"); exit(1); }
+static inline void ee_i_pextlb(struct ee_state* ee) { printf("ee: pextlb unimplemented\n"); exit(1); }
+static inline void ee_i_pextlh(struct ee_state* ee) { printf("ee: pextlh unimplemented\n"); exit(1); }
+static inline void ee_i_pextlw(struct ee_state* ee) { printf("ee: pextlw unimplemented\n"); exit(1); }
+static inline void ee_i_pextub(struct ee_state* ee) { printf("ee: pextub unimplemented\n"); exit(1); }
+static inline void ee_i_pextuh(struct ee_state* ee) { printf("ee: pextuh unimplemented\n"); exit(1); }
+static inline void ee_i_pextuw(struct ee_state* ee) { printf("ee: pextuw unimplemented\n"); exit(1); }
+static inline void ee_i_phmadh(struct ee_state* ee) { printf("ee: phmadh unimplemented\n"); exit(1); }
+static inline void ee_i_phmsbh(struct ee_state* ee) { printf("ee: phmsbh unimplemented\n"); exit(1); }
+static inline void ee_i_pinteh(struct ee_state* ee) { printf("ee: pinteh unimplemented\n"); exit(1); }
+static inline void ee_i_pinth(struct ee_state* ee) { printf("ee: pinth unimplemented\n"); exit(1); }
+static inline void ee_i_plzcw(struct ee_state* ee) { printf("ee: plzcw unimplemented\n"); exit(1); }
+static inline void ee_i_pmaddh(struct ee_state* ee) { printf("ee: pmaddh unimplemented\n"); exit(1); }
+static inline void ee_i_pmadduw(struct ee_state* ee) { printf("ee: pmadduw unimplemented\n"); exit(1); }
+static inline void ee_i_pmaddw(struct ee_state* ee) { printf("ee: pmaddw unimplemented\n"); exit(1); }
+static inline void ee_i_pmaxh(struct ee_state* ee) { printf("ee: pmaxh unimplemented\n"); exit(1); }
+static inline void ee_i_pmaxw(struct ee_state* ee) { printf("ee: pmaxw unimplemented\n"); exit(1); }
+static inline void ee_i_pmfhi(struct ee_state* ee) { printf("ee: pmfhi unimplemented\n"); exit(1); }
+static inline void ee_i_pmfhl(struct ee_state* ee) { printf("ee: pmfhl unimplemented\n"); exit(1); }
+static inline void ee_i_pmflo(struct ee_state* ee) { printf("ee: pmflo unimplemented\n"); exit(1); }
+static inline void ee_i_pminh(struct ee_state* ee) { printf("ee: pminh unimplemented\n"); exit(1); }
+static inline void ee_i_pminw(struct ee_state* ee) { printf("ee: pminw unimplemented\n"); exit(1); }
+static inline void ee_i_pmsubh(struct ee_state* ee) { printf("ee: pmsubh unimplemented\n"); exit(1); }
+static inline void ee_i_pmsubw(struct ee_state* ee) { printf("ee: pmsubw unimplemented\n"); exit(1); }
+static inline void ee_i_pmthi(struct ee_state* ee) { printf("ee: pmthi unimplemented\n"); exit(1); }
+static inline void ee_i_pmthl(struct ee_state* ee) { printf("ee: pmthl unimplemented\n"); exit(1); }
+static inline void ee_i_pmtlo(struct ee_state* ee) { printf("ee: pmtlo unimplemented\n"); exit(1); }
+static inline void ee_i_pmulth(struct ee_state* ee) { printf("ee: pmulth unimplemented\n"); exit(1); }
+static inline void ee_i_pmultuw(struct ee_state* ee) { printf("ee: pmultuw unimplemented\n"); exit(1); }
+static inline void ee_i_pmultw(struct ee_state* ee) { printf("ee: pmultw unimplemented\n"); exit(1); }
+static inline void ee_i_pnor(struct ee_state* ee) { printf("ee: pnor unimplemented\n"); exit(1); }
+static inline void ee_i_por(struct ee_state* ee) { printf("ee: por unimplemented\n"); exit(1); }
+static inline void ee_i_ppac5(struct ee_state* ee) { printf("ee: ppac5 unimplemented\n"); exit(1); }
+static inline void ee_i_ppacb(struct ee_state* ee) { printf("ee: ppacb unimplemented\n"); exit(1); }
+static inline void ee_i_ppach(struct ee_state* ee) { printf("ee: ppach unimplemented\n"); exit(1); }
+static inline void ee_i_ppacw(struct ee_state* ee) { printf("ee: ppacw unimplemented\n"); exit(1); }
+static inline void ee_i_pref(struct ee_state* ee) { printf("ee: pref unimplemented\n"); exit(1); }
+static inline void ee_i_prevh(struct ee_state* ee) { printf("ee: prevh unimplemented\n"); exit(1); }
+static inline void ee_i_prot3w(struct ee_state* ee) { printf("ee: prot3w unimplemented\n"); exit(1); }
+static inline void ee_i_psllh(struct ee_state* ee) { printf("ee: psllh unimplemented\n"); exit(1); }
+static inline void ee_i_psllvw(struct ee_state* ee) { printf("ee: psllvw unimplemented\n"); exit(1); }
+static inline void ee_i_psllw(struct ee_state* ee) { printf("ee: psllw unimplemented\n"); exit(1); }
+static inline void ee_i_psrah(struct ee_state* ee) { printf("ee: psrah unimplemented\n"); exit(1); }
+static inline void ee_i_psravw(struct ee_state* ee) { printf("ee: psravw unimplemented\n"); exit(1); }
+static inline void ee_i_psraw(struct ee_state* ee) { printf("ee: psraw unimplemented\n"); exit(1); }
+static inline void ee_i_psrlh(struct ee_state* ee) { printf("ee: psrlh unimplemented\n"); exit(1); }
+static inline void ee_i_psrlvw(struct ee_state* ee) { printf("ee: psrlvw unimplemented\n"); exit(1); }
+static inline void ee_i_psrlw(struct ee_state* ee) { printf("ee: psrlw unimplemented\n"); exit(1); }
+static inline void ee_i_psubb(struct ee_state* ee) { printf("ee: psubb unimplemented\n"); exit(1); }
+static inline void ee_i_psubh(struct ee_state* ee) { printf("ee: psubh unimplemented\n"); exit(1); }
+static inline void ee_i_psubsb(struct ee_state* ee) { printf("ee: psubsb unimplemented\n"); exit(1); }
+static inline void ee_i_psubsh(struct ee_state* ee) { printf("ee: psubsh unimplemented\n"); exit(1); }
+static inline void ee_i_psubsw(struct ee_state* ee) { printf("ee: psubsw unimplemented\n"); exit(1); }
+static inline void ee_i_psubub(struct ee_state* ee) { printf("ee: psubub unimplemented\n"); exit(1); }
+static inline void ee_i_psubuh(struct ee_state* ee) { printf("ee: psubuh unimplemented\n"); exit(1); }
+static inline void ee_i_psubuw(struct ee_state* ee) { printf("ee: psubuw unimplemented\n"); exit(1); }
+static inline void ee_i_psubw(struct ee_state* ee) { printf("ee: psubw unimplemented\n"); exit(1); }
+static inline void ee_i_pxor(struct ee_state* ee) { printf("ee: pxor unimplemented\n"); exit(1); }
+static inline void ee_i_qfsrv(struct ee_state* ee) { printf("ee: qfsrv unimplemented\n"); exit(1); }
+static inline void ee_i_qmfc2(struct ee_state* ee) { printf("ee: qmfc2 unimplemented\n"); exit(1); }
+static inline void ee_i_qmtc2(struct ee_state* ee) { printf("ee: qmtc2 unimplemented\n"); exit(1); }
+static inline void ee_i_rsqrts(struct ee_state* ee) { printf("ee: rsqrts unimplemented\n"); exit(1); }
+static inline void ee_i_sb(struct ee_state* ee) { printf("ee: sb unimplemented\n"); exit(1); }
+static inline void ee_i_sd(struct ee_state* ee) { printf("ee: sd unimplemented\n"); exit(1); }
+static inline void ee_i_sdl(struct ee_state* ee) { printf("ee: sdl unimplemented\n"); exit(1); }
+static inline void ee_i_sdr(struct ee_state* ee) { printf("ee: sdr unimplemented\n"); exit(1); }
+static inline void ee_i_sh(struct ee_state* ee) { printf("ee: sh unimplemented\n"); exit(1); }
+static inline void ee_i_sll(struct ee_state* ee) { printf("ee: sll unimplemented\n"); exit(1); }
+static inline void ee_i_sllv(struct ee_state* ee) { printf("ee: sllv unimplemented\n"); exit(1); }
+static inline void ee_i_slt(struct ee_state* ee) { printf("ee: slt unimplemented\n"); exit(1); }
+static inline void ee_i_slti(struct ee_state* ee) { printf("ee: slti unimplemented\n"); exit(1); }
+static inline void ee_i_sltiu(struct ee_state* ee) { printf("ee: sltiu unimplemented\n"); exit(1); }
+static inline void ee_i_sltu(struct ee_state* ee) { printf("ee: sltu unimplemented\n"); exit(1); }
+static inline void ee_i_sq(struct ee_state* ee) { printf("ee: sq unimplemented\n"); exit(1); }
+static inline void ee_i_sqc2(struct ee_state* ee) { printf("ee: sqc2 unimplemented\n"); exit(1); }
+static inline void ee_i_sqrts(struct ee_state* ee) { printf("ee: sqrts unimplemented\n"); exit(1); }
+static inline void ee_i_sra(struct ee_state* ee) { printf("ee: sra unimplemented\n"); exit(1); }
+static inline void ee_i_srav(struct ee_state* ee) { printf("ee: srav unimplemented\n"); exit(1); }
+static inline void ee_i_srl(struct ee_state* ee) { printf("ee: srl unimplemented\n"); exit(1); }
+static inline void ee_i_srlv(struct ee_state* ee) { printf("ee: srlv unimplemented\n"); exit(1); }
+static inline void ee_i_sub(struct ee_state* ee) { printf("ee: sub unimplemented\n"); exit(1); }
+static inline void ee_i_subas(struct ee_state* ee) { printf("ee: subas unimplemented\n"); exit(1); }
+static inline void ee_i_subs(struct ee_state* ee) { printf("ee: subs unimplemented\n"); exit(1); }
+static inline void ee_i_subu(struct ee_state* ee) { printf("ee: subu unimplemented\n"); exit(1); }
+static inline void ee_i_sw(struct ee_state* ee) { printf("ee: sw unimplemented\n"); exit(1); }
+static inline void ee_i_swc1(struct ee_state* ee) { printf("ee: swc1 unimplemented\n"); exit(1); }
+static inline void ee_i_swl(struct ee_state* ee) { printf("ee: swl unimplemented\n"); exit(1); }
+static inline void ee_i_swr(struct ee_state* ee) { printf("ee: swr unimplemented\n"); exit(1); }
+static inline void ee_i_sync(struct ee_state* ee) { printf("ee: sync unimplemented\n"); exit(1); }
+static inline void ee_i_syscall(struct ee_state* ee) { printf("ee: syscall unimplemented\n"); exit(1); }
+static inline void ee_i_teq(struct ee_state* ee) { printf("ee: teq unimplemented\n"); exit(1); }
+static inline void ee_i_teqi(struct ee_state* ee) { printf("ee: teqi unimplemented\n"); exit(1); }
+static inline void ee_i_tge(struct ee_state* ee) { printf("ee: tge unimplemented\n"); exit(1); }
+static inline void ee_i_tgei(struct ee_state* ee) { printf("ee: tgei unimplemented\n"); exit(1); }
+static inline void ee_i_tgeiu(struct ee_state* ee) { printf("ee: tgeiu unimplemented\n"); exit(1); }
+static inline void ee_i_tgeu(struct ee_state* ee) { printf("ee: tgeu unimplemented\n"); exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee) { printf("ee: tlbp unimplemented\n"); exit(1); }
+static inline void ee_i_tlbr(struct ee_state* ee) { printf("ee: tlbr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbwi(struct ee_state* ee) { printf("ee: tlbwi unimplemented\n"); exit(1); }
+static inline void ee_i_tlbwr(struct ee_state* ee) { printf("ee: tlbwr unimplemented\n"); exit(1); }
+static inline void ee_i_tlt(struct ee_state* ee) { printf("ee: tlt unimplemented\n"); exit(1); }
+static inline void ee_i_tlti(struct ee_state* ee) { printf("ee: tlti unimplemented\n"); exit(1); }
+static inline void ee_i_tltiu(struct ee_state* ee) { printf("ee: tltiu unimplemented\n"); exit(1); }
+static inline void ee_i_tltu(struct ee_state* ee) { printf("ee: tltu unimplemented\n"); exit(1); }
+static inline void ee_i_tne(struct ee_state* ee) { printf("ee: tne unimplemented\n"); exit(1); }
+static inline void ee_i_tnei(struct ee_state* ee) { printf("ee: tnei unimplemented\n"); exit(1); }
+static inline void ee_i_vabs(struct ee_state* ee) { printf("ee: vabs unimplemented\n"); exit(1); }
+static inline void ee_i_vadd(struct ee_state* ee) { printf("ee: vadd unimplemented\n"); exit(1); }
+static inline void ee_i_vadda(struct ee_state* ee) { printf("ee: vadda unimplemented\n"); exit(1); }
+static inline void ee_i_vaddai(struct ee_state* ee) { printf("ee: vaddai unimplemented\n"); exit(1); }
+static inline void ee_i_vaddaq(struct ee_state* ee) { printf("ee: vaddaq unimplemented\n"); exit(1); }
+static inline void ee_i_vaddaw(struct ee_state* ee) { printf("ee: vaddaw unimplemented\n"); exit(1); }
+static inline void ee_i_vaddax(struct ee_state* ee) { printf("ee: vaddax unimplemented\n"); exit(1); }
+static inline void ee_i_vadday(struct ee_state* ee) { printf("ee: vadday unimplemented\n"); exit(1); }
+static inline void ee_i_vaddaz(struct ee_state* ee) { printf("ee: vaddaz unimplemented\n"); exit(1); }
+static inline void ee_i_vaddi(struct ee_state* ee) { printf("ee: vaddi unimplemented\n"); exit(1); }
+static inline void ee_i_vaddq(struct ee_state* ee) { printf("ee: vaddq unimplemented\n"); exit(1); }
+static inline void ee_i_vaddw(struct ee_state* ee) { printf("ee: vaddw unimplemented\n"); exit(1); }
+static inline void ee_i_vaddx(struct ee_state* ee) { printf("ee: vaddx unimplemented\n"); exit(1); }
+static inline void ee_i_vaddy(struct ee_state* ee) { printf("ee: vaddy unimplemented\n"); exit(1); }
+static inline void ee_i_vaddz(struct ee_state* ee) { printf("ee: vaddz unimplemented\n"); exit(1); }
+static inline void ee_i_vcallms(struct ee_state* ee) { printf("ee: vcallms unimplemented\n"); exit(1); }
+static inline void ee_i_vclipw(struct ee_state* ee) { printf("ee: vclipw unimplemented\n"); exit(1); }
+static inline void ee_i_vdiv(struct ee_state* ee) { printf("ee: vdiv unimplemented\n"); exit(1); }
+static inline void ee_i_vftoi0(struct ee_state* ee) { printf("ee: vftoi0 unimplemented\n"); exit(1); }
+static inline void ee_i_vftoi12(struct ee_state* ee) { printf("ee: vftoi12 unimplemented\n"); exit(1); }
+static inline void ee_i_vftoi15(struct ee_state* ee) { printf("ee: vftoi15 unimplemented\n"); exit(1); }
+static inline void ee_i_vftoi4(struct ee_state* ee) { printf("ee: vftoi4 unimplemented\n"); exit(1); }
+static inline void ee_i_viadd(struct ee_state* ee) { printf("ee: viadd unimplemented\n"); exit(1); }
+static inline void ee_i_viaddi(struct ee_state* ee) { printf("ee: viaddi unimplemented\n"); exit(1); }
+static inline void ee_i_viand(struct ee_state* ee) { printf("ee: viand unimplemented\n"); exit(1); }
+static inline void ee_i_vilwr(struct ee_state* ee) { printf("ee: vilwr unimplemented\n"); exit(1); }
+static inline void ee_i_vior(struct ee_state* ee) { printf("ee: vior unimplemented\n"); exit(1); }
+static inline void ee_i_visub(struct ee_state* ee) { printf("ee: visub unimplemented\n"); exit(1); }
+static inline void ee_i_viswr(struct ee_state* ee) { printf("ee: viswr unimplemented\n"); exit(1); }
+static inline void ee_i_vitof0(struct ee_state* ee) { printf("ee: vitof0 unimplemented\n"); exit(1); }
+static inline void ee_i_vitof12(struct ee_state* ee) { printf("ee: vitof12 unimplemented\n"); exit(1); }
+static inline void ee_i_vitof15(struct ee_state* ee) { printf("ee: vitof15 unimplemented\n"); exit(1); }
+static inline void ee_i_vitof4(struct ee_state* ee) { printf("ee: vitof4 unimplemented\n"); exit(1); }
+static inline void ee_i_vlqd(struct ee_state* ee) { printf("ee: vlqd unimplemented\n"); exit(1); }
+static inline void ee_i_vlqi(struct ee_state* ee) { printf("ee: vlqi unimplemented\n"); exit(1); }
+static inline void ee_i_vmadd(struct ee_state* ee) { printf("ee: vmadd unimplemented\n"); exit(1); }
+static inline void ee_i_vmadda(struct ee_state* ee) { printf("ee: vmadda unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddai(struct ee_state* ee) { printf("ee: vmaddai unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddaq(struct ee_state* ee) { printf("ee: vmaddaq unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddaw(struct ee_state* ee) { printf("ee: vmaddaw unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddax(struct ee_state* ee) { printf("ee: vmaddax unimplemented\n"); exit(1); }
+static inline void ee_i_vmadday(struct ee_state* ee) { printf("ee: vmadday unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddaz(struct ee_state* ee) { printf("ee: vmaddaz unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddi(struct ee_state* ee) { printf("ee: vmaddi unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddq(struct ee_state* ee) { printf("ee: vmaddq unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddw(struct ee_state* ee) { printf("ee: vmaddw unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddx(struct ee_state* ee) { printf("ee: vmaddx unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddy(struct ee_state* ee) { printf("ee: vmaddy unimplemented\n"); exit(1); }
+static inline void ee_i_vmaddz(struct ee_state* ee) { printf("ee: vmaddz unimplemented\n"); exit(1); }
+static inline void ee_i_vmax(struct ee_state* ee) { printf("ee: vmax unimplemented\n"); exit(1); }
+static inline void ee_i_vmaxi(struct ee_state* ee) { printf("ee: vmaxi unimplemented\n"); exit(1); }
+static inline void ee_i_vmaxw(struct ee_state* ee) { printf("ee: vmaxw unimplemented\n"); exit(1); }
+static inline void ee_i_vmaxx(struct ee_state* ee) { printf("ee: vmaxx unimplemented\n"); exit(1); }
+static inline void ee_i_vmaxy(struct ee_state* ee) { printf("ee: vmaxy unimplemented\n"); exit(1); }
+static inline void ee_i_vmaxz(struct ee_state* ee) { printf("ee: vmaxz unimplemented\n"); exit(1); }
+static inline void ee_i_vmfir(struct ee_state* ee) { printf("ee: vmfir unimplemented\n"); exit(1); }
+static inline void ee_i_vmini(struct ee_state* ee) { printf("ee: vmini unimplemented\n"); exit(1); }
+static inline void ee_i_vminii(struct ee_state* ee) { printf("ee: vminii unimplemented\n"); exit(1); }
+static inline void ee_i_vminiw(struct ee_state* ee) { printf("ee: vminiw unimplemented\n"); exit(1); }
+static inline void ee_i_vminix(struct ee_state* ee) { printf("ee: vminix unimplemented\n"); exit(1); }
+static inline void ee_i_vminiy(struct ee_state* ee) { printf("ee: vminiy unimplemented\n"); exit(1); }
+static inline void ee_i_vminiz(struct ee_state* ee) { printf("ee: vminiz unimplemented\n"); exit(1); }
+static inline void ee_i_vmove(struct ee_state* ee) { printf("ee: vmove unimplemented\n"); exit(1); }
+static inline void ee_i_vmr32(struct ee_state* ee) { printf("ee: vmr32 unimplemented\n"); exit(1); }
+static inline void ee_i_vmsub(struct ee_state* ee) { printf("ee: vmsub unimplemented\n"); exit(1); }
+static inline void ee_i_vmsuba(struct ee_state* ee) { printf("ee: vmsuba unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubai(struct ee_state* ee) { printf("ee: vmsubai unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubaq(struct ee_state* ee) { printf("ee: vmsubaq unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubaw(struct ee_state* ee) { printf("ee: vmsubaw unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubax(struct ee_state* ee) { printf("ee: vmsubax unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubay(struct ee_state* ee) { printf("ee: vmsubay unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubaz(struct ee_state* ee) { printf("ee: vmsubaz unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubi(struct ee_state* ee) { printf("ee: vmsubi unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubq(struct ee_state* ee) { printf("ee: vmsubq unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubw(struct ee_state* ee) { printf("ee: vmsubw unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubx(struct ee_state* ee) { printf("ee: vmsubx unimplemented\n"); exit(1); }
+static inline void ee_i_vmsuby(struct ee_state* ee) { printf("ee: vmsuby unimplemented\n"); exit(1); }
+static inline void ee_i_vmsubz(struct ee_state* ee) { printf("ee: vmsubz unimplemented\n"); exit(1); }
+static inline void ee_i_vmtir(struct ee_state* ee) { printf("ee: vmtir unimplemented\n"); exit(1); }
+static inline void ee_i_vmul(struct ee_state* ee) { printf("ee: vmul unimplemented\n"); exit(1); }
+static inline void ee_i_vmula(struct ee_state* ee) { printf("ee: vmula unimplemented\n"); exit(1); }
+static inline void ee_i_vmulai(struct ee_state* ee) { printf("ee: vmulai unimplemented\n"); exit(1); }
+static inline void ee_i_vmulaq(struct ee_state* ee) { printf("ee: vmulaq unimplemented\n"); exit(1); }
+static inline void ee_i_vmulaw(struct ee_state* ee) { printf("ee: vmulaw unimplemented\n"); exit(1); }
+static inline void ee_i_vmulax(struct ee_state* ee) { printf("ee: vmulax unimplemented\n"); exit(1); }
+static inline void ee_i_vmulay(struct ee_state* ee) { printf("ee: vmulay unimplemented\n"); exit(1); }
+static inline void ee_i_vmulaz(struct ee_state* ee) { printf("ee: vmulaz unimplemented\n"); exit(1); }
+static inline void ee_i_vmuli(struct ee_state* ee) { printf("ee: vmuli unimplemented\n"); exit(1); }
+static inline void ee_i_vmulq(struct ee_state* ee) { printf("ee: vmulq unimplemented\n"); exit(1); }
+static inline void ee_i_vmulw(struct ee_state* ee) { printf("ee: vmulw unimplemented\n"); exit(1); }
+static inline void ee_i_vmulx(struct ee_state* ee) { printf("ee: vmulx unimplemented\n"); exit(1); }
+static inline void ee_i_vmuly(struct ee_state* ee) { printf("ee: vmuly unimplemented\n"); exit(1); }
+static inline void ee_i_vmulz(struct ee_state* ee) { printf("ee: vmulz unimplemented\n"); exit(1); }
+static inline void ee_i_vnop(struct ee_state* ee) { printf("ee: vnop unimplemented\n"); exit(1); }
+static inline void ee_i_vopmsub(struct ee_state* ee) { printf("ee: vopmsub unimplemented\n"); exit(1); }
+static inline void ee_i_vopmula(struct ee_state* ee) { printf("ee: vopmula unimplemented\n"); exit(1); }
+static inline void ee_i_vrget(struct ee_state* ee) { printf("ee: vrget unimplemented\n"); exit(1); }
+static inline void ee_i_vrinit(struct ee_state* ee) { printf("ee: vrinit unimplemented\n"); exit(1); }
+static inline void ee_i_vrnext(struct ee_state* ee) { printf("ee: vrnext unimplemented\n"); exit(1); }
+static inline void ee_i_vrsqrt(struct ee_state* ee) { printf("ee: vrsqrt unimplemented\n"); exit(1); }
+static inline void ee_i_vrxor(struct ee_state* ee) { printf("ee: vrxor unimplemented\n"); exit(1); }
+static inline void ee_i_vsqd(struct ee_state* ee) { printf("ee: vsqd unimplemented\n"); exit(1); }
+static inline void ee_i_vsqi(struct ee_state* ee) { printf("ee: vsqi unimplemented\n"); exit(1); }
+static inline void ee_i_vsqrt(struct ee_state* ee) { printf("ee: vsqrt unimplemented\n"); exit(1); }
+static inline void ee_i_vsub(struct ee_state* ee) { printf("ee: vsub unimplemented\n"); exit(1); }
+static inline void ee_i_vsuba(struct ee_state* ee) { printf("ee: vsuba unimplemented\n"); exit(1); }
+static inline void ee_i_vsubai(struct ee_state* ee) { printf("ee: vsubai unimplemented\n"); exit(1); }
+static inline void ee_i_vsubaq(struct ee_state* ee) { printf("ee: vsubaq unimplemented\n"); exit(1); }
+static inline void ee_i_vsubaw(struct ee_state* ee) { printf("ee: vsubaw unimplemented\n"); exit(1); }
+static inline void ee_i_vsubax(struct ee_state* ee) { printf("ee: vsubax unimplemented\n"); exit(1); }
+static inline void ee_i_vsubay(struct ee_state* ee) { printf("ee: vsubay unimplemented\n"); exit(1); }
+static inline void ee_i_vsubaz(struct ee_state* ee) { printf("ee: vsubaz unimplemented\n"); exit(1); }
+static inline void ee_i_vsubi(struct ee_state* ee) { printf("ee: vsubi unimplemented\n"); exit(1); }
+static inline void ee_i_vsubq(struct ee_state* ee) { printf("ee: vsubq unimplemented\n"); exit(1); }
+static inline void ee_i_vsubw(struct ee_state* ee) { printf("ee: vsubw unimplemented\n"); exit(1); }
+static inline void ee_i_vsubx(struct ee_state* ee) { printf("ee: vsubx unimplemented\n"); exit(1); }
+static inline void ee_i_vsuby(struct ee_state* ee) { printf("ee: vsuby unimplemented\n"); exit(1); }
+static inline void ee_i_vsubz(struct ee_state* ee) { printf("ee: vsubz unimplemented\n"); exit(1); }
+static inline void ee_i_vwaitq(struct ee_state* ee) { printf("ee: vwaitq unimplemented\n"); exit(1); }
+static inline void ee_i_xor(struct ee_state* ee) { printf("ee: xor unimplemented\n"); exit(1); }
+static inline void ee_i_xori(struct ee_state* ee) { printf("ee: xori unimplemented\n"); exit(1); }
 
 struct ee_state* ee_create(void) {
     return malloc(sizeof(struct ee_state));
 }
 
-void ee_init(struct ee_state* ee) {
+void ee_init(struct ee_state* ee, struct ee_bus bus) {
     memset(ee, 0, sizeof(struct ee_state));
 
-    ee->prid = 0xdead;
-
-    printf("PRId=%08x\n", ee->cop0_r[15]);
+    ee->prid = 0x2e20;
+    ee->pc = 0xbfc00000;
+    ee->next_pc = 0xbfc00004;
+    ee->bus = bus;
 }
 
 static inline void ee_execute(struct ee_state* ee) {
@@ -903,9 +989,9 @@ void ee_cycle(struct ee_state* ee) {
 
     ee_execute(ee);
 
-    // ee->r[0] = (ee_qword)0;
+    ee->r[0].u128 = 0;
 }
 
 void ee_destroy(struct ee_state* ee) {
-
+    free(ee);
 }
