@@ -25,7 +25,12 @@ int main() {
     struct ee_state* ee = ee_create();
 
     ee_init(ee, cpu_bus);
-    ee_cycle(ee);
+
+    // int c = 1512;
+
+    while (true)
+        ee_cycle(ee);
+
     ee_destroy(ee);
 
     return 0;

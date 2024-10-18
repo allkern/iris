@@ -1,13 +1,14 @@
 #ifndef EE_H
 #define EE_H
 
-#include "u128.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <stdint.h>
+
+#include "u128.h"
+#include "ram.h"
 
 struct ee_bus {
     void* udata;
@@ -35,6 +36,8 @@ struct ee_state {
     uint64_t hi1;
     uint64_t lo1;
     uint32_t sa;
+    int branch, branch_taken, delay_slot;
+    struct ps2_ram* scratchpad;
 
     union {
         uint32_t cop0_r[32];
