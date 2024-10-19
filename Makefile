@@ -7,13 +7,16 @@ OUTPUT_DIR := bin
 
 CXX := c++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) $(shell sdl2-config --cflags --libs)
-CXXFLAGS += -Ofast -flto=auto -Wall -pedantic
+CXXFLAGS += -Ofast -flto=auto -Wall
 # CXXSRC := $(wildcard main.cpp)
 CXXOBJ := $(CXXSRC:.cpp=.o)
 
 CC := gcc
 CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) $(shell sdl2-config --cflags --libs)
 CSRC := $(wildcard src/*.c)
+CSRC += $(wildcard src/ee/*.c)
+CSRC += $(wildcard src/iop/*.c)
+CSRC += $(wildcard src/shared/*.c)
 COBJ := $(CSRC:.c=.o)
 
 all: $(OUTPUT_DIR) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)

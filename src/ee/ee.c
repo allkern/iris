@@ -28,6 +28,23 @@
 #define EE_RD32 ee->r[EE_D_RD].ul32
 #define EE_RS32 ee->r[EE_D_RS].ul32
 
+// MMI stuff
+#define EE_RTH
+#define EE_RTL
+#define EE_RDH
+#define EE_RDL
+#define EE_RSH
+#define EE_RSL
+#define EE_RTH
+#define EE_RTL
+#define EE_RDH
+#define EE_RDL
+#define EE_RSH
+#define EE_RSL
+#define EE_RTQ
+#define EE_RDQ
+#define EE_RSQ
+
 #define BRANCH(cond, offset) if (cond) { \
     ee->next_pc = ee->next_pc + (offset); \
     ee->next_pc = ee->next_pc - 4; \
@@ -145,20 +162,22 @@ static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t da
 
 static inline void ee_i_abss(struct ee_state* ee) { printf("ee: abss unimplemented\n"); exit(1); }
 static inline void ee_i_add(struct ee_state* ee) { printf("ee: add unimplemented\n"); exit(1); }
-static inline void ee_i_addas(struct ee_state* ee) { printf("ee: addas unimplemented\n"); exit(1); }
+static inline void ee_i_addas(struct ee_state* ee) {
+    /* To-do: FPU */
+}
 static inline void ee_i_addi(struct ee_state* ee) { printf("ee: addi unimplemented\n"); exit(1); }
 static inline void ee_i_addiu(struct ee_state* ee) {
-    EE_RT = EE_RS32 + SE3216(EE_D_I16);
+    EE_RT = SE6432(EE_RS + SE6416(EE_D_I16));
 }
 static inline void ee_i_adds(struct ee_state* ee) { printf("ee: adds unimplemented\n"); exit(1); }
 static inline void ee_i_addu(struct ee_state* ee) {
-    EE_RD = SE6432(EE_RS32 + EE_RT32);
+    EE_RD = SE6432(EE_RS + EE_RT);
 }
 static inline void ee_i_and(struct ee_state* ee) {
     EE_RD = EE_RS & EE_RT;
 }
 static inline void ee_i_andi(struct ee_state* ee) {
-    EE_RT &= EE_D_I16;
+    EE_RT = EE_RS & EE_D_I16;
 }
 static inline void ee_i_bc0f(struct ee_state* ee) { printf("ee: bc0f unimplemented\n"); exit(1); }
 static inline void ee_i_bc0fl(struct ee_state* ee) { printf("ee: bc0fl unimplemented\n"); exit(1); }
@@ -179,20 +198,21 @@ static inline void ee_i_beql(struct ee_state* ee) {
     BRANCH_LIKELY(EE_RS == EE_RT, EE_D_SI16);
 }
 static inline void ee_i_bgez(struct ee_state* ee) {
-    BRANCH(EE_RS >= 0, EE_D_SI16);
+    BRANCH((int64_t)EE_RS >= (int64_t)0, EE_D_SI16);
 }
 static inline void ee_i_bgezal(struct ee_state* ee) { printf("ee: bgezal unimplemented\n"); exit(1); }
 static inline void ee_i_bgezall(struct ee_state* ee) { printf("ee: bgezall unimplemented\n"); exit(1); }
 static inline void ee_i_bgezl(struct ee_state* ee) { printf("ee: bgezl unimplemented\n"); exit(1); }
-static inline void ee_i_bgtz(struct ee_state* ee) { printf("ee: bgtz unimplemented\n"); exit(1); }
+static inline void ee_i_bgtz(struct ee_state* ee) {
+    BRANCH((int64_t)EE_RS > (int64_t)0, EE_D_SI16);
+}
 static inline void ee_i_bgtzl(struct ee_state* ee) { printf("ee: bgtzl unimplemented\n"); exit(1); }
 static inline void ee_i_blez(struct ee_state* ee) {
-    BRANCH((int64_t)EE_RS <= 0, EE_D_SI16);
+    BRANCH((int64_t)EE_RS <= (int64_t)0, EE_D_SI16);
 }
 static inline void ee_i_blezl(struct ee_state* ee) { printf("ee: blezl unimplemented\n"); exit(1); }
 static inline void ee_i_bltz(struct ee_state* ee) {
-    printf("bltz rs=%08x\n", EE_RS);
-    BRANCH((int64_t)EE_RS < 0, EE_D_SI16);
+    BRANCH((int64_t)EE_RS < (int64_t)0, EE_D_SI16);
 }
 static inline void ee_i_bltzal(struct ee_state* ee) { printf("ee: bltzal unimplemented\n"); exit(1); }
 static inline void ee_i_bltzall(struct ee_state* ee) { printf("ee: bltzall unimplemented\n"); exit(1); }
@@ -201,45 +221,56 @@ static inline void ee_i_bne(struct ee_state* ee) {
     BRANCH(EE_RS != EE_RT, EE_D_SI16);
 }
 static inline void ee_i_bnel(struct ee_state* ee) {
-    //printf("bnel rs=%08x%08x (%s) rt=%08x%08x (%s)\n", EE_RS >> 32, EE_RS & 0xffffffff, (char*)&ee->r[EE_D_RS], EE_RT >> 32, EE_RT & 0xffffffff, (char*)&ee->r[EE_D_RT]);
     BRANCH_LIKELY(EE_RS != EE_RT, EE_D_SI16);
 }
 static inline void ee_i_break(struct ee_state* ee) { printf("ee: break unimplemented\n"); exit(1); }
-static inline void ee_i_cache(struct ee_state* ee) { printf("ee: cache unimplemented\n"); exit(1); }
+static inline void ee_i_cache(struct ee_state* ee) {
+    /* To-do: Cache emulation */
+}
 static inline void ee_i_callmsr(struct ee_state* ee) { printf("ee: callmsr unimplemented\n"); exit(1); }
 static inline void ee_i_ceq(struct ee_state* ee) { printf("ee: ceq unimplemented\n"); exit(1); }
 static inline void ee_i_cf(struct ee_state* ee) { printf("ee: cf unimplemented\n"); exit(1); }
 static inline void ee_i_cfc1(struct ee_state* ee) { printf("ee: cfc1 unimplemented\n"); exit(1); }
-static inline void ee_i_cfc2(struct ee_state* ee) { printf("ee: cfc2 unimplemented\n"); exit(1); }
+static inline void ee_i_cfc2(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
 static inline void ee_i_cle(struct ee_state* ee) { printf("ee: cle unimplemented\n"); exit(1); }
 static inline void ee_i_clt(struct ee_state* ee) { printf("ee: clt unimplemented\n"); exit(1); }
-static inline void ee_i_ctc1(struct ee_state* ee) { printf("ee: ctc1 unimplemented\n"); exit(1); }
-static inline void ee_i_ctc2(struct ee_state* ee) { printf("ee: ctc2 unimplemented\n"); exit(1); }
+static inline void ee_i_ctc1(struct ee_state* ee) {
+    /* To-do: FPU */
+}
+static inline void ee_i_ctc2(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
 static inline void ee_i_cvts(struct ee_state* ee) { printf("ee: cvts unimplemented\n"); exit(1); }
 static inline void ee_i_cvtw(struct ee_state* ee) { printf("ee: cvtw unimplemented\n"); exit(1); }
 static inline void ee_i_dadd(struct ee_state* ee) { printf("ee: dadd unimplemented\n"); exit(1); }
 static inline void ee_i_daddi(struct ee_state* ee) { printf("ee: daddi unimplemented\n"); exit(1); }
-static inline void ee_i_daddiu(struct ee_state* ee) { printf("ee: daddiu unimplemented\n"); exit(1); }
+static inline void ee_i_daddiu(struct ee_state* ee) {
+    EE_RT = EE_RS + SE6416(EE_D_I16);
+}
 static inline void ee_i_daddu(struct ee_state* ee) {
     EE_RD = EE_RS + EE_RT;
 }
-static inline void ee_i_di(struct ee_state* ee) { printf("ee: di unimplemented\n"); exit(1); }
+static inline void ee_i_di(struct ee_state* ee) {
+    /* To-do: Interrupts */
+}
 static inline void ee_i_div(struct ee_state* ee) {
     int t = EE_D_RT;
     int s = EE_D_RS;
 
-    ee->hi = 0;
-    ee->lo = 0;
+    ee->hi = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
+    ee->lo = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
 
-    // ee->hi = SE6432((int32_t)EE_RT32 % (int32_t)EE_RS32);
-    // ee->lo = SE6432((int32_t)EE_RT32 / (int32_t)EE_RS32);
-
-    // printf("rt=%08x rs=%08x hi=%08x lo=%08x\n",
-    //     EE_RT32, EE_RS32,
-    //     ee->hi, ee->lo
-    // );
+    ee->r[s].ul64 = ee->lo;
 }
-static inline void ee_i_div1(struct ee_state* ee) { printf("ee: div1 unimplemented\n"); exit(1); }
+static inline void ee_i_div1(struct ee_state* ee) {
+    int t = EE_D_RT;
+    int s = EE_D_RS;
+
+    ee->hi1 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
+    ee->lo1 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
+}
 static inline void ee_i_divs(struct ee_state* ee) { printf("ee: divs unimplemented\n"); exit(1); }
 static inline void ee_i_divu(struct ee_state* ee) {
     int t = EE_D_RT;
@@ -254,35 +285,60 @@ static inline void ee_i_divu(struct ee_state* ee) {
     ee->hi = SE6432(ee->r[s].ul32 % ee->r[t].ul32);
     ee->lo = SE6432(ee->r[s].ul32 / ee->r[t].ul32);
 }
-static inline void ee_i_divu1(struct ee_state* ee) { printf("ee: divu1 unimplemented\n"); exit(1); }
-static inline void ee_i_dsll(struct ee_state* ee) { printf("ee: dsll unimplemented\n"); exit(1); }
-static inline void ee_i_dsll32(struct ee_state* ee) { printf("ee: dsll32 unimplemented\n"); exit(1); }
-static inline void ee_i_dsllv(struct ee_state* ee) { printf("ee: dsllv unimplemented\n"); exit(1); }
-static inline void ee_i_dsra(struct ee_state* ee) { printf("ee: dsra unimplemented\n"); exit(1); }
-static inline void ee_i_dsra32(struct ee_state* ee) { printf("ee: dsra32 unimplemented\n"); exit(1); }
-static inline void ee_i_dsrav(struct ee_state* ee) { printf("ee: dsrav unimplemented\n"); exit(1); }
-static inline void ee_i_dsrl(struct ee_state* ee) { printf("ee: dsrl unimplemented\n"); exit(1); }
-static inline void ee_i_dsrl32(struct ee_state* ee) { printf("ee: dsrl32 unimplemented\n"); exit(1); }
+static inline void ee_i_divu1(struct ee_state* ee) {
+    int t = EE_D_RT;
+    int s = EE_D_RS;
+
+    ee->hi1 = SE6432(ee->r[s].ul32 % ee->r[t].ul32);
+    ee->lo1 = SE6432(ee->r[s].ul32 / ee->r[t].ul32);
+}
+static inline void ee_i_dsll(struct ee_state* ee) {
+    EE_RD = EE_RT << EE_D_SA;
+}
+static inline void ee_i_dsll32(struct ee_state* ee) {
+    EE_RD = EE_RT << (EE_D_SA + 32);
+}
+static inline void ee_i_dsllv(struct ee_state* ee) {
+    EE_RD = EE_RT << (EE_RS & 0x3f);
+}
+static inline void ee_i_dsra(struct ee_state* ee) {
+    EE_RD = ((int64_t)EE_RT) >> EE_D_SA;
+}
+static inline void ee_i_dsra32(struct ee_state* ee) {
+    EE_RD = ((int64_t)EE_RT) >> (EE_D_SA + 32);
+}
+static inline void ee_i_dsrav(struct ee_state* ee) {
+    EE_RD = ((int64_t)EE_RT) >> (EE_RS & 0x3f);
+}
+static inline void ee_i_dsrl(struct ee_state* ee) {
+    EE_RD = EE_RT >> EE_D_SA;
+}
+static inline void ee_i_dsrl32(struct ee_state* ee) {
+    EE_RD = EE_RT >> (EE_D_SA + 32);
+}
 static inline void ee_i_dsrlv(struct ee_state* ee) { printf("ee: dsrlv unimplemented\n"); exit(1); }
 static inline void ee_i_dsub(struct ee_state* ee) { printf("ee: dsub unimplemented\n"); exit(1); }
 static inline void ee_i_dsubu(struct ee_state* ee) { printf("ee: dsubu unimplemented\n"); exit(1); }
 static inline void ee_i_ei(struct ee_state* ee) { printf("ee: ei unimplemented\n"); exit(1); }
-static inline void ee_i_eret(struct ee_state* ee) { printf("ee: eret unimplemented\n"); exit(1); }
+static inline void ee_i_eret(struct ee_state* ee) {
+    ee->pc = ee->errorepc;
+    ee->next_pc = ee->pc + 4;
+}
 static inline void ee_i_j(struct ee_state* ee) {
     ee->next_pc = (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2);
 }
 static inline void ee_i_jal(struct ee_state* ee) {
     ee->r[31].ul64 = ee->next_pc;
-    // printf("jal rd=%08x t=%08x\n", ee->r[31].ul64, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
+    // printf("%08x: jal rd=%08x t=%08x\n", ee->pc -4 , ee->r[31].ul64, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
     ee->next_pc = (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2);
 }
 static inline void ee_i_jalr(struct ee_state* ee) {
     EE_RD = ee->next_pc;
-    // printf("jalr rd=%08x rs=%08x\n", EE_RD32, EE_RS32);
+    // printf("%08x: jalr rd=%08x rs=%08x\n", ee->pc, EE_RD32, EE_RS32);
     ee->next_pc = EE_RS32;
 }
 static inline void ee_i_jr(struct ee_state* ee) {
-    // printf("jr rs=%08x v0=%08x\n", EE_RS32, ee->r[2].ul32);
+    // printf("%08x: jr rs=%08x v0=%08x\n", ee->pc, EE_RS32, ee->r[2].ul32);
     ee->next_pc = EE_RS32;
 }
 static inline void ee_i_lb(struct ee_state* ee) {
@@ -294,24 +350,56 @@ static inline void ee_i_lbu(struct ee_state* ee) {
 static inline void ee_i_ld(struct ee_state* ee) {
     EE_RT = bus_read64(ee, EE_RS32 + SE3216(EE_D_I16));
 }
-static inline void ee_i_ldl(struct ee_state* ee) { printf("ee: ldl unimplemented\n"); exit(1); }
-static inline void ee_i_ldr(struct ee_state* ee) { printf("ee: ldr unimplemented\n"); exit(1); }
+static inline void ee_i_ldl(struct ee_state* ee) {
+    static const uint8_t ldl_shift[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
+    static const uint64_t ldl_mask[8] = {
+        0x00ffffffffffffffULL, 0x0000ffffffffffffULL, 0x000000ffffffffffULL, 0x00000000ffffffffULL,
+        0x0000000000ffffffULL, 0x000000000000ffffULL, 0x00000000000000ffULL, 0x0000000000000000ULL
+    };
+
+    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t shift = addr & 7;
+    uint64_t data = bus_read64(ee, addr & ~7);
+
+	EE_RT = (EE_RT & ldl_mask[shift]) | (data << ldl_shift[shift]);
+}
+static inline void ee_i_ldr(struct ee_state* ee) {
+    static const uint8_t ldr_shift[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
+    static const uint64_t ldr_mask[8] = {
+        0x0000000000000000ULL, 0xff00000000000000ULL, 0xffff000000000000ULL, 0xffffff0000000000ULL,
+        0xffffffff00000000ULL, 0xffffffffff000000ULL, 0xffffffffffff0000ULL, 0xffffffffffffff00ULL
+    };
+
+    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t shift = addr & 7;
+    uint64_t data = bus_read64(ee, addr & ~7);
+
+	EE_RT = (EE_RT & ldr_mask[shift]) | (data >> ldr_shift[shift]);
+}
 static inline void ee_i_lh(struct ee_state* ee) {
     EE_RT = SE6416(bus_read16(ee, EE_RS32 + SE3216(EE_D_I16)));
 }
-static inline void ee_i_lhu(struct ee_state* ee) { printf("ee: lhu unimplemented\n"); exit(1); }
-static inline void ee_i_lq(struct ee_state* ee) { printf("ee: lq unimplemented\n"); exit(1); }
+static inline void ee_i_lhu(struct ee_state* ee) {
+    EE_RT = bus_read16(ee, EE_RS32 + SE3216(EE_D_I16));
+}
+static inline void ee_i_lq(struct ee_state* ee) {
+    ee->r[EE_D_RT] = bus_read128(ee, EE_RS32 + SE3216(EE_D_I16));
+}
 static inline void ee_i_lqc2(struct ee_state* ee) { printf("ee: lqc2 unimplemented\n"); exit(1); }
 static inline void ee_i_lui(struct ee_state* ee) {
     EE_RT = SE6432(EE_D_I16 << 16);
 }
 static inline void ee_i_lw(struct ee_state* ee) {
-    EE_RT = SE6432(bus_read32(ee, EE_RS32 + SE3216(EE_D_I16)));
+    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+
+    EE_RT = SE6432(bus_read32(ee, addr));
 }
 static inline void ee_i_lwc1(struct ee_state* ee) { printf("ee: lwc1 unimplemented\n"); exit(1); }
 static inline void ee_i_lwl(struct ee_state* ee) { printf("ee: lwl unimplemented\n"); exit(1); }
 static inline void ee_i_lwr(struct ee_state* ee) { printf("ee: lwr unimplemented\n"); exit(1); }
-static inline void ee_i_lwu(struct ee_state* ee) { printf("ee: lwu unimplemented\n"); exit(1); }
+static inline void ee_i_lwu(struct ee_state* ee) {
+    EE_RT = bus_read32(ee, EE_RS32 + SE3216(EE_D_I16));
+}
 static inline void ee_i_madd(struct ee_state* ee) { printf("ee: madd unimplemented\n"); exit(1); }
 static inline void ee_i_madd1(struct ee_state* ee) { printf("ee: madd1 unimplemented\n"); exit(1); }
 static inline void ee_i_maddas(struct ee_state* ee) { printf("ee: maddas unimplemented\n"); exit(1); }
@@ -326,22 +414,34 @@ static inline void ee_i_mfc1(struct ee_state* ee) { printf("ee: mfc1 unimplement
 static inline void ee_i_mfhi(struct ee_state* ee) {
     EE_RD = ee->hi;
 }
-static inline void ee_i_mfhi1(struct ee_state* ee) { printf("ee: mfhi1 unimplemented\n"); exit(1); }
+static inline void ee_i_mfhi1(struct ee_state* ee) {
+    EE_RD = ee->hi1;
+}
 static inline void ee_i_mflo(struct ee_state* ee) {
     EE_RD = ee->lo;
 }
-static inline void ee_i_mflo1(struct ee_state* ee) { printf("ee: mflo1 unimplemented\n"); exit(1); }
-static inline void ee_i_mfsa(struct ee_state* ee) { printf("ee: mfsa unimplemented\n"); exit(1); }
+static inline void ee_i_mflo1(struct ee_state* ee) {
+    EE_RD = ee->lo1;
+}
+static inline void ee_i_mfsa(struct ee_state* ee) {
+    EE_RD = ee->sa;
+}
 static inline void ee_i_mins(struct ee_state* ee) { printf("ee: mins unimplemented\n"); exit(1); }
-static inline void ee_i_movn(struct ee_state* ee) { printf("ee: movn unimplemented\n"); exit(1); }
+static inline void ee_i_movn(struct ee_state* ee) {
+    if (EE_RT) EE_RD = EE_RS;
+}
 static inline void ee_i_movs(struct ee_state* ee) { printf("ee: movs unimplemented\n"); exit(1); }
-static inline void ee_i_movz(struct ee_state* ee) { printf("ee: movz unimplemented\n"); exit(1); }
+static inline void ee_i_movz(struct ee_state* ee) {
+    if (!EE_RT) EE_RD = EE_RS;
+}
 static inline void ee_i_msubas(struct ee_state* ee) { printf("ee: msubas unimplemented\n"); exit(1); }
 static inline void ee_i_msubs(struct ee_state* ee) { printf("ee: msubs unimplemented\n"); exit(1); }
 static inline void ee_i_mtc0(struct ee_state* ee) {
     ee->cop0_r[EE_D_RD] = EE_RT32;
 }
-static inline void ee_i_mtc1(struct ee_state* ee) { printf("ee: mtc1 unimplemented\n"); exit(1); }
+static inline void ee_i_mtc1(struct ee_state* ee) {
+    /* To-do: FPU */
+}
 static inline void ee_i_mthi(struct ee_state* ee) { printf("ee: mthi unimplemented\n"); exit(1); }
 static inline void ee_i_mthi1(struct ee_state* ee) { printf("ee: mthi1 unimplemented\n"); exit(1); }
 static inline void ee_i_mtlo(struct ee_state* ee) { printf("ee: mtlo unimplemented\n"); exit(1); }
@@ -353,15 +453,26 @@ static inline void ee_i_mulas(struct ee_state* ee) { printf("ee: mulas unimpleme
 static inline void ee_i_muls(struct ee_state* ee) { printf("ee: muls unimplemented\n"); exit(1); }
 static inline void ee_i_mult(struct ee_state* ee) {
     uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
-    EE_RD = r & 0xffffffff;
-    ee->lo =  r & 0xffffffff;
-    ee->hi =  r >> 32;
+
+    ee->lo = SE6432(r & 0xffffffff);
+    ee->hi = SE6432(r >> 32);
+
+    EE_RD = ee->lo;
 }
-static inline void ee_i_mult1(struct ee_state* ee) { printf("ee: mult1 unimplemented\n"); exit(1); }
+static inline void ee_i_mult1(struct ee_state* ee) {
+    uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
+
+    ee->lo1 = SE6432(r & 0xffffffff);
+    ee->hi1 = SE6432(r >> 32);
+
+    EE_RD = ee->lo1;
+}
 static inline void ee_i_multu(struct ee_state* ee) { printf("ee: multu unimplemented\n"); exit(1); }
 static inline void ee_i_multu1(struct ee_state* ee) { printf("ee: multu1 unimplemented\n"); exit(1); }
 static inline void ee_i_negs(struct ee_state* ee) { printf("ee: negs unimplemented\n"); exit(1); }
-static inline void ee_i_nor(struct ee_state* ee) { printf("ee: nor unimplemented\n"); exit(1); }
+static inline void ee_i_nor(struct ee_state* ee) {
+    EE_RD = ~(EE_RS | EE_RT);
+}
 static inline void ee_i_or(struct ee_state* ee) {
     EE_RD = EE_RS | EE_RT;
 }
@@ -377,7 +488,25 @@ static inline void ee_i_paddsh(struct ee_state* ee) { printf("ee: paddsh unimple
 static inline void ee_i_paddsw(struct ee_state* ee) { printf("ee: paddsw unimplemented\n"); exit(1); }
 static inline void ee_i_paddub(struct ee_state* ee) { printf("ee: paddub unimplemented\n"); exit(1); }
 static inline void ee_i_padduh(struct ee_state* ee) { printf("ee: padduh unimplemented\n"); exit(1); }
-static inline void ee_i_padduw(struct ee_state* ee) { printf("ee: padduw unimplemented\n"); exit(1); }
+static inline void ee_i_padduw(struct ee_state* ee) {
+    uint64_t s0 = ee->r[EE_D_RS].u32[0];
+    uint64_t s1 = ee->r[EE_D_RS].u32[1];
+    uint64_t s2 = ee->r[EE_D_RS].u32[2];
+    uint64_t s3 = ee->r[EE_D_RS].u32[3];
+    uint64_t t0 = ee->r[EE_D_RT].u32[0];
+    uint64_t t1 = ee->r[EE_D_RT].u32[1];
+    uint64_t t2 = ee->r[EE_D_RT].u32[2];
+    uint64_t t3 = ee->r[EE_D_RT].u32[3];
+    uint64_t r0 = s0 + t0;
+    uint64_t r1 = s1 + t1;
+    uint64_t r2 = s2 + t2;
+    uint64_t r3 = s3 + t3;
+
+    ee->r[EE_D_RD].u32[0] = (r0 > 0xffffffff) ? 0xffffffff : r0;
+    ee->r[EE_D_RD].u32[1] = (r1 > 0xffffffff) ? 0xffffffff : r1;
+    ee->r[EE_D_RD].u32[2] = (r2 > 0xffffffff) ? 0xffffffff : r2;
+    ee->r[EE_D_RD].u32[3] = (r3 > 0xffffffff) ? 0xffffffff : r3;
+}
 static inline void ee_i_paddw(struct ee_state* ee) { printf("ee: paddw unimplemented\n"); exit(1); }
 static inline void ee_i_padsbh(struct ee_state* ee) { printf("ee: padsbh unimplemented\n"); exit(1); }
 static inline void ee_i_pand(struct ee_state* ee) { printf("ee: pand unimplemented\n"); exit(1); }
@@ -388,8 +517,14 @@ static inline void ee_i_pcgtb(struct ee_state* ee) { printf("ee: pcgtb unimpleme
 static inline void ee_i_pcgth(struct ee_state* ee) { printf("ee: pcgth unimplemented\n"); exit(1); }
 static inline void ee_i_pcgtw(struct ee_state* ee) { printf("ee: pcgtw unimplemented\n"); exit(1); }
 static inline void ee_i_pcpyh(struct ee_state* ee) { printf("ee: pcpyh unimplemented\n"); exit(1); }
-static inline void ee_i_pcpyld(struct ee_state* ee) { printf("ee: pcpyld unimplemented\n"); exit(1); }
-static inline void ee_i_pcpyud(struct ee_state* ee) { printf("ee: pcpyud unimplemented\n"); exit(1); }
+static inline void ee_i_pcpyld(struct ee_state* ee) {
+    ee->r[EE_D_RD].u64[0] = EE_RT;
+    ee->r[EE_D_RD].u64[1] = EE_RS;
+}
+static inline void ee_i_pcpyud(struct ee_state* ee) {
+    ee->r[EE_D_RD].u64[0] = ee->r[EE_D_RT].u64[1];
+    ee->r[EE_D_RD].u64[1] = ee->r[EE_D_RS].u64[1];
+}
 static inline void ee_i_pdivbw(struct ee_state* ee) { printf("ee: pdivbw unimplemented\n"); exit(1); }
 static inline void ee_i_pdivuw(struct ee_state* ee) { printf("ee: pdivuw unimplemented\n"); exit(1); }
 static inline void ee_i_pdivw(struct ee_state* ee) { printf("ee: pdivw unimplemented\n"); exit(1); }
@@ -400,7 +535,15 @@ static inline void ee_i_pexew(struct ee_state* ee) { printf("ee: pexew unimpleme
 static inline void ee_i_pext5(struct ee_state* ee) { printf("ee: pext5 unimplemented\n"); exit(1); }
 static inline void ee_i_pextlb(struct ee_state* ee) { printf("ee: pextlb unimplemented\n"); exit(1); }
 static inline void ee_i_pextlh(struct ee_state* ee) { printf("ee: pextlh unimplemented\n"); exit(1); }
-static inline void ee_i_pextlw(struct ee_state* ee) { printf("ee: pextlw unimplemented\n"); exit(1); }
+static inline void ee_i_pextlw(struct ee_state* ee) {
+    uint64_t s0 = ee->r[EE_D_RS].u32[0];
+    uint64_t s1 = ee->r[EE_D_RS].u32[1];
+    uint64_t t0 = ee->r[EE_D_RT].u32[0];
+    uint64_t t1 = ee->r[EE_D_RT].u32[1];
+
+    ee->r[EE_D_RD].u64[0] = (s0 << 32) | t0;
+    ee->r[EE_D_RD].u64[1] = (s1 << 32) | t1;
+}
 static inline void ee_i_pextub(struct ee_state* ee) { printf("ee: pextub unimplemented\n"); exit(1); }
 static inline void ee_i_pextuh(struct ee_state* ee) { printf("ee: pextuh unimplemented\n"); exit(1); }
 static inline void ee_i_pextuw(struct ee_state* ee) { printf("ee: pextuw unimplemented\n"); exit(1); }
@@ -414,9 +557,13 @@ static inline void ee_i_pmadduw(struct ee_state* ee) { printf("ee: pmadduw unimp
 static inline void ee_i_pmaddw(struct ee_state* ee) { printf("ee: pmaddw unimplemented\n"); exit(1); }
 static inline void ee_i_pmaxh(struct ee_state* ee) { printf("ee: pmaxh unimplemented\n"); exit(1); }
 static inline void ee_i_pmaxw(struct ee_state* ee) { printf("ee: pmaxw unimplemented\n"); exit(1); }
-static inline void ee_i_pmfhi(struct ee_state* ee) { printf("ee: pmfhi unimplemented\n"); exit(1); }
+static inline void ee_i_pmfhi(struct ee_state* ee) {
+    ee->r[EE_D_RD].ul64 = ee->hi;
+}
 static inline void ee_i_pmfhl(struct ee_state* ee) { printf("ee: pmfhl unimplemented\n"); exit(1); }
-static inline void ee_i_pmflo(struct ee_state* ee) { printf("ee: pmflo unimplemented\n"); exit(1); }
+static inline void ee_i_pmflo(struct ee_state* ee) {
+    ee->r[EE_D_RD].ul64 = ee->lo;
+}
 static inline void ee_i_pminh(struct ee_state* ee) { printf("ee: pminh unimplemented\n"); exit(1); }
 static inline void ee_i_pminw(struct ee_state* ee) { printf("ee: pminw unimplemented\n"); exit(1); }
 static inline void ee_i_pmsubh(struct ee_state* ee) { printf("ee: pmsubh unimplemented\n"); exit(1); }
@@ -428,7 +575,9 @@ static inline void ee_i_pmulth(struct ee_state* ee) { printf("ee: pmulth unimple
 static inline void ee_i_pmultuw(struct ee_state* ee) { printf("ee: pmultuw unimplemented\n"); exit(1); }
 static inline void ee_i_pmultw(struct ee_state* ee) { printf("ee: pmultw unimplemented\n"); exit(1); }
 static inline void ee_i_pnor(struct ee_state* ee) { printf("ee: pnor unimplemented\n"); exit(1); }
-static inline void ee_i_por(struct ee_state* ee) { printf("ee: por unimplemented\n"); exit(1); }
+static inline void ee_i_por(struct ee_state* ee) {
+    ee->r[EE_D_RD].u128 = ee->r[EE_D_RS].u128 | ee->r[EE_D_RT].u128;
+}
 static inline void ee_i_ppac5(struct ee_state* ee) { printf("ee: ppac5 unimplemented\n"); exit(1); }
 static inline void ee_i_ppacb(struct ee_state* ee) { printf("ee: ppacb unimplemented\n"); exit(1); }
 static inline void ee_i_ppach(struct ee_state* ee) { printf("ee: ppach unimplemented\n"); exit(1); }
@@ -456,8 +605,12 @@ static inline void ee_i_psubuw(struct ee_state* ee) { printf("ee: psubuw unimple
 static inline void ee_i_psubw(struct ee_state* ee) { printf("ee: psubw unimplemented\n"); exit(1); }
 static inline void ee_i_pxor(struct ee_state* ee) { printf("ee: pxor unimplemented\n"); exit(1); }
 static inline void ee_i_qfsrv(struct ee_state* ee) { printf("ee: qfsrv unimplemented\n"); exit(1); }
-static inline void ee_i_qmfc2(struct ee_state* ee) { printf("ee: qmfc2 unimplemented\n"); exit(1); }
-static inline void ee_i_qmtc2(struct ee_state* ee) { printf("ee: qmtc2 unimplemented\n"); exit(1); }
+static inline void ee_i_qmfc2(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
+static inline void ee_i_qmtc2(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
 static inline void ee_i_rsqrts(struct ee_state* ee) { printf("ee: rsqrts unimplemented\n"); exit(1); }
 static inline void ee_i_sb(struct ee_state* ee) {
     bus_write8(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
@@ -465,13 +618,41 @@ static inline void ee_i_sb(struct ee_state* ee) {
 static inline void ee_i_sd(struct ee_state* ee) {
     bus_write64(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
 }
-static inline void ee_i_sdl(struct ee_state* ee) { printf("ee: sdl unimplemented\n"); exit(1); }
-static inline void ee_i_sdr(struct ee_state* ee) { printf("ee: sdr unimplemented\n"); exit(1); }
-static inline void ee_i_sh(struct ee_state* ee) { printf("ee: sh unimplemented\n"); exit(1); }
-static inline void ee_i_sll(struct ee_state* ee) {
-    EE_RD = SE6432(EE_RT32 << EE_D_SA);
+static inline void ee_i_sdl(struct ee_state* ee) {
+    static const uint8_t sdl_shift[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
+    static const uint64_t sdl_mask[8] = {
+        0xffffffffffffff00ULL, 0xffffffffffff0000ULL, 0xffffffffff000000ULL, 0xffffffff00000000ULL,
+        0xffffff0000000000ULL, 0xffff000000000000ULL, 0xff00000000000000ULL, 0x0000000000000000ULL
+    };
+
+    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t shift = addr & 7;
+    uint64_t data = bus_read64(ee, addr & ~7);
+
+    bus_write64(ee, addr & ~7, (EE_RT >> sdl_shift[shift]) | (data & sdl_mask[shift]));
 }
-static inline void ee_i_sllv(struct ee_state* ee) { printf("ee: sllv unimplemented\n"); exit(1); }
+static inline void ee_i_sdr(struct ee_state* ee) {
+    static const uint8_t sdr_shift[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
+    static const uint64_t sdr_mask[8] = {
+        0x0000000000000000ULL, 0x00000000000000ffULL, 0x000000000000ffffULL, 0x0000000000ffffffULL,
+        0x00000000ffffffffULL, 0x000000ffffffffffULL, 0x0000ffffffffffffULL, 0x00ffffffffffffffULL
+    };
+
+    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t shift = addr & 7;
+    uint64_t data = bus_read64(ee, addr & ~7);
+
+    bus_write64(ee, addr & ~7, (EE_RT << sdr_shift[shift]) | (data & sdr_mask[shift]));
+}
+static inline void ee_i_sh(struct ee_state* ee) {
+    bus_write16(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
+}
+static inline void ee_i_sll(struct ee_state* ee) {
+    EE_RD = SE6432(EE_RT << EE_D_SA);
+}
+static inline void ee_i_sllv(struct ee_state* ee) {
+    EE_RD = SE6432(EE_RT << (EE_RS & 0x1f));
+}
 static inline void ee_i_slt(struct ee_state* ee) {
     EE_RD = (int64_t)EE_RS < (int64_t)EE_RT;
 }
@@ -479,31 +660,40 @@ static inline void ee_i_slti(struct ee_state* ee) {
     EE_RT = ((int64_t)EE_RS) < SE6416(EE_D_I16);
 }
 static inline void ee_i_sltiu(struct ee_state* ee) {
-    EE_RT = EE_RS < (uint64_t)SE6416(EE_D_I16);
+    EE_RT = EE_RS < (uint64_t)(SE6416(EE_D_I16));
 }
 static inline void ee_i_sltu(struct ee_state* ee) {
     EE_RD = EE_RS < EE_RT;
 }
-static inline void ee_i_sq(struct ee_state* ee) { printf("ee: sq unimplemented\n"); exit(1); }
+static inline void ee_i_sq(struct ee_state* ee) {
+    bus_write128(ee, EE_RS32 + SE3216(EE_D_I16), ee->r[EE_D_RT]);
+}
 static inline void ee_i_sqc2(struct ee_state* ee) { printf("ee: sqc2 unimplemented\n"); exit(1); }
 static inline void ee_i_sqrts(struct ee_state* ee) { printf("ee: sqrts unimplemented\n"); exit(1); }
 static inline void ee_i_sra(struct ee_state* ee) {
     EE_RD = SE6432(((int32_t)EE_RT) >> EE_D_SA);
 }
-static inline void ee_i_srav(struct ee_state* ee) { printf("ee: srav unimplemented\n"); exit(1); }
+static inline void ee_i_srav(struct ee_state* ee) {
+    EE_RD = SE6432((int64_t)EE_RT >> (EE_RS & 0x1f));
+}
 static inline void ee_i_srl(struct ee_state* ee) { 
     EE_RD = SE6432(EE_RT >> EE_D_SA);
 }
-static inline void ee_i_srlv(struct ee_state* ee) { printf("ee: srlv unimplemented\n"); exit(1); }
+static inline void ee_i_srlv(struct ee_state* ee) {
+    EE_RD = SE6432(EE_RT >> (EE_RS & 0x1f));
+}
 static inline void ee_i_sub(struct ee_state* ee) { printf("ee: sub unimplemented\n"); exit(1); }
 static inline void ee_i_subas(struct ee_state* ee) { printf("ee: subas unimplemented\n"); exit(1); }
 static inline void ee_i_subs(struct ee_state* ee) { printf("ee: subs unimplemented\n"); exit(1); }
-static inline void ee_i_subu(struct ee_state* ee) { printf("ee: subu unimplemented\n"); exit(1); }
+static inline void ee_i_subu(struct ee_state* ee) {
+    EE_RD = SE6432(EE_RS - EE_RT);
+}
 static inline void ee_i_sw(struct ee_state* ee) {
     bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT32);
 }
 static inline void ee_i_swc1(struct ee_state* ee) {
     /* To-do: SWC1 */
+    bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), 0);
 }
 static inline void ee_i_swl(struct ee_state* ee) { printf("ee: swl unimplemented\n"); exit(1); }
 static inline void ee_i_swr(struct ee_state* ee) { printf("ee: swr unimplemented\n"); exit(1); }
@@ -551,13 +741,17 @@ static inline void ee_i_vftoi0(struct ee_state* ee) { printf("ee: vftoi0 unimple
 static inline void ee_i_vftoi12(struct ee_state* ee) { printf("ee: vftoi12 unimplemented\n"); exit(1); }
 static inline void ee_i_vftoi15(struct ee_state* ee) { printf("ee: vftoi15 unimplemented\n"); exit(1); }
 static inline void ee_i_vftoi4(struct ee_state* ee) { printf("ee: vftoi4 unimplemented\n"); exit(1); }
-static inline void ee_i_viadd(struct ee_state* ee) { printf("ee: viadd unimplemented\n"); exit(1); }
+static inline void ee_i_viadd(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
 static inline void ee_i_viaddi(struct ee_state* ee) { printf("ee: viaddi unimplemented\n"); exit(1); }
 static inline void ee_i_viand(struct ee_state* ee) { printf("ee: viand unimplemented\n"); exit(1); }
 static inline void ee_i_vilwr(struct ee_state* ee) { printf("ee: vilwr unimplemented\n"); exit(1); }
 static inline void ee_i_vior(struct ee_state* ee) { printf("ee: vior unimplemented\n"); exit(1); }
 static inline void ee_i_visub(struct ee_state* ee) { printf("ee: visub unimplemented\n"); exit(1); }
-static inline void ee_i_viswr(struct ee_state* ee) { printf("ee: viswr unimplemented\n"); exit(1); }
+static inline void ee_i_viswr(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
 static inline void ee_i_vitof0(struct ee_state* ee) { printf("ee: vitof0 unimplemented\n"); exit(1); }
 static inline void ee_i_vitof12(struct ee_state* ee) { printf("ee: vitof12 unimplemented\n"); exit(1); }
 static inline void ee_i_vitof15(struct ee_state* ee) { printf("ee: vitof15 unimplemented\n"); exit(1); }
@@ -631,9 +825,13 @@ static inline void ee_i_vrnext(struct ee_state* ee) { printf("ee: vrnext unimple
 static inline void ee_i_vrsqrt(struct ee_state* ee) { printf("ee: vrsqrt unimplemented\n"); exit(1); }
 static inline void ee_i_vrxor(struct ee_state* ee) { printf("ee: vrxor unimplemented\n"); exit(1); }
 static inline void ee_i_vsqd(struct ee_state* ee) { printf("ee: vsqd unimplemented\n"); exit(1); }
-static inline void ee_i_vsqi(struct ee_state* ee) { printf("ee: vsqi unimplemented\n"); exit(1); }
+static inline void ee_i_vsqi(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
 static inline void ee_i_vsqrt(struct ee_state* ee) { printf("ee: vsqrt unimplemented\n"); exit(1); }
-static inline void ee_i_vsub(struct ee_state* ee) { printf("ee: vsub unimplemented\n"); exit(1); }
+static inline void ee_i_vsub(struct ee_state* ee) {
+    /* To-do: VU1 */
+}
 static inline void ee_i_vsuba(struct ee_state* ee) { printf("ee: vsuba unimplemented\n"); exit(1); }
 static inline void ee_i_vsubai(struct ee_state* ee) { printf("ee: vsubai unimplemented\n"); exit(1); }
 static inline void ee_i_vsubaq(struct ee_state* ee) { printf("ee: vsubaq unimplemented\n"); exit(1); }
@@ -649,13 +847,15 @@ static inline void ee_i_vsuby(struct ee_state* ee) { printf("ee: vsuby unimpleme
 static inline void ee_i_vsubz(struct ee_state* ee) { printf("ee: vsubz unimplemented\n"); exit(1); }
 static inline void ee_i_vwaitq(struct ee_state* ee) { printf("ee: vwaitq unimplemented\n"); exit(1); }
 static inline void ee_i_xor(struct ee_state* ee) { printf("ee: xor unimplemented\n"); exit(1); }
-static inline void ee_i_xori(struct ee_state* ee) { printf("ee: xori unimplemented\n"); exit(1); }
+static inline void ee_i_xori(struct ee_state* ee) {
+    EE_RT = EE_RS ^ EE_D_I16;
+}
 
 struct ee_state* ee_create(void) {
     return malloc(sizeof(struct ee_state));
 }
 
-void ee_init(struct ee_state* ee, struct ee_bus bus) {
+void ee_init(struct ee_state* ee, struct ee_bus_s bus) {
     memset(ee, 0, sizeof(struct ee_state));
 
     ee->prid = 0x2e20;
@@ -772,7 +972,7 @@ static inline void ee_execute(struct ee_state* ee) {
                     }
                 } break;
                 case 0x02000000: {
-                    switch (ee->opcode & 0x0000001F) {
+                    switch (ee->opcode & 0x0000003F) {
                         case 0x00000001: ee_i_tlbr(ee); return;
                         case 0x00000002: ee_i_tlbwi(ee); return;
                         case 0x00000006: ee_i_tlbwr(ee); return;
@@ -1150,27 +1350,36 @@ static inline void ee_execute(struct ee_state* ee) {
         case 0xFC000000: ee_i_sd(ee); return;
     }
 
-    printf("ee: Invalid instruction %08x\n", ee->opcode);
+    printf("ee: Invalid instruction %08x @ pc=%08x\n", ee->opcode, ee->pc);
+}
+
+static inline void ee_print_disassembly(struct ee_state* ee) {
+    char buf[128];
+    struct ee_dis_state ds;
+
+    ds.print_address = 1;
+    ds.print_opcode = 1;
+    ds.pc = ee->pc;
+
+    puts(ee_disassemble(buf, ee->opcode, &ds));
 }
 
 void ee_cycle(struct ee_state* ee) {
+    ee->r[0].ul64 = 0;
+
     ee->opcode = bus_read32(ee, ee->pc);
 
-    // char buf[128];
-    // struct ee_dis_state ds;
-
-    // ds.print_address = 1;
-    // ds.print_opcode = 1;
-    // ds.pc = ee->pc;
-
-    // puts(ee_disassemble(buf, ee->opcode, &ds));
+    // ee_print_disassembly(ee);
+    // printf("a3=%08x v1=%08x\n", ee->r[7].ul32, ee->r[3].ul32);
 
     ee->pc = ee->next_pc;
     ee->next_pc += 4;
 
     ee_execute(ee);
 
-    ee->r[0].u128 = 0;
+    ++ee->count;
+
+    ee->r[0].ul64 = 0;
 }
 
 void ee_destroy(struct ee_state* ee) {

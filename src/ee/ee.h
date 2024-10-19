@@ -7,10 +7,11 @@ extern "C" {
 
 #include <stdint.h>
 
-#include "u128.h"
-#include "ram.h"
+#include "shared/ram.h"
 
-struct ee_bus {
+#include "u128.h"
+
+struct ee_bus_s {
     void* udata;
     uint64_t (*read8)(void* udata, uint32_t addr);
     uint64_t (*read16)(void* udata, uint32_t addr);
@@ -25,7 +26,7 @@ struct ee_bus {
 };
 
 struct ee_state {
-    struct ee_bus bus;
+    struct ee_bus_s bus;
 
     uint128_t r[32];
     uint32_t pc;
@@ -81,7 +82,7 @@ struct ee_state {
 };
 
 struct ee_state* ee_create(void);
-void ee_init(struct ee_state* ee, struct ee_bus bus);
+void ee_init(struct ee_state* ee, struct ee_bus_s bus);
 void ee_cycle(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
 

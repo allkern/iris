@@ -24,6 +24,9 @@ static int get_file_size(FILE* file) {
 int ps2_bios_init(struct ps2_bios* bios, const char* path) {
     memset(bios, 0, sizeof(struct ps2_bios));
 
+    if (!path)
+        return 0;
+
     FILE* file = fopen(path, "rb");
 
     if (!file) {
