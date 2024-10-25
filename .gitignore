@@ -1,6 +1,7 @@
 .vscode/
 bin/
 tools/
+*.cue
 *.bin
 *.elf
 *.exe

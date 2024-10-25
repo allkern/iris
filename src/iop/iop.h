@@ -1,5 +1,5 @@
-#ifndef CPU_H
-#define CPU_H
+#ifndef IOP_H
+#define IOP_H
 
 #include <stdint.h>
 #include <stdio.h>
@@ -167,47 +167,5 @@ int iop_execute(struct iop_state* iop);
 #define CAUSE_RI        (0x0a << 2)
 #define CAUSE_CPU       (0x0b << 2)
 #define CAUSE_OV        (0x0c << 2)
-
-/*
-  31   Error Flag (Bit30..23, and 18..13 ORed together) (Read only)
-  30   MAC1 Result positive 44bit overflow (max +7FFFFFFFFFFh) ;\triggered
-  29   MAC2 Result positive 44bit overflow (max +7FFFFFFFFFFh) ; during
-  28   MAC3 Result positive 44bit overflow (max +7FFFFFFFFFFh) ; calculations
-  27   MAC1 Result negative 44bit overflow (min -80000000000h) ;
-  26   MAC2 Result negative 44bit overflow (min -80000000000h) ;
-  25   MAC3 Result negative 44bit overflow (min -80000000000h) ;/
-  24   IR1 saturated to +0000h..+7FFFh (lm=1) or to -8000h..+7FFFh (lm=0)
-  23   IR2 saturated to +0000h..+7FFFh (lm=1) or to -8000h..+7FFFh (lm=0)
-  22   IR3 saturated to +0000h..+7FFFh (lm=1) or to -8000h..+7FFFh (lm=0)
-  21   Color-FIFO-R saturated to +00h..+FFh
-  20   Color-FIFO-G saturated to +00h..+FFh
-  19   Color-FIFO-B saturated to +00h..+FFh
-  18   SZ3 or OTZ saturated to +0000h..+FFFFh
-  17   Divide overflow. RTPS/RTPT division result saturated to max=1FFFFh
-  16   MAC0 Result positive 32bit overflow (max +7FFFFFFFh)    ;\triggered on
-  15   MAC0 Result negative 32bit overflow (min -80000000h)    ;/final result
-  14   SX2 saturated to -0400h..+03FFh
-  13   SY2 saturated to -0400h..+03FFh
-*/
-
-#define GTEF_SY2SAT 0x00002000
-#define GTEF_SX2SAT 0x00004000
-#define GTEF_M0POVF 0x00008000
-#define GTEF_M0NOVF 0x00010000
-#define GTEF_DIVOVF 0x00020000
-#define GTEF_SZ3SAT 0x00040000
-#define GTEF_CFRSAT 0x00080000
-#define GTEF_CFGSAT 0x00100000
-#define GTEF_CFBSAT 0x00200000
-#define GTEF_IR3SAT 0x00400000
-#define GTEF_IR2SAT 0x00800000
-#define GTEF_IR1SAT 0x01000000
-#define GTEF_M3NOVF 0x02000000
-#define GTEF_M2NOVF 0x04000000
-#define GTEF_M1NOVF 0x08000000
-#define GTEF_M3POVF 0x10000000
-#define GTEF_M2POVF 0x20000000
-#define GTEF_M1POVF 0x40000000
-#define GTEF_ERRORF 0x80000000
 
 #endif

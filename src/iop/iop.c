@@ -4,6 +4,8 @@
 #include "iop.h"
 #include "iop_dis.h"
 
+static int p = 0;
+
 static inline uint32_t iop_bus_read8(struct iop_state* iop, uint32_t addr) {
     return iop->bus.read8(iop->bus.udata, addr & 0x1fffffff);
 }
@@ -98,7 +100,7 @@ void iop_init(struct iop_state* iop, struct iop_bus_s bus) {
 
 static inline int iop_check_irq(struct iop_state* iop) {
     return (iop->cop0_r[COP0_SR] & SR_IEC) &&
-           (iop->cop0_r[COP0_SR] & iop->cop0_r[COP0_CAUSE] & 0x00000700);
+           (iop->cop0_r[COP0_SR] & iop->cop0_r[COP0_CAUSE] & 0x00000400);
 }
 
 static inline void iop_exception(struct iop_state* iop, uint32_t cause) {
@@ -150,29 +152,36 @@ void iop_cycle(struct iop_state* iop) {
     iop->opcode = iop_bus_read32(iop, iop->pc);
     iop->last_cycles = 0;
 
-    uint32_t pc = iop->pc - 4;
+    uint32_t pc = iop->next_pc;
 
     if ((pc == 0x12C48) || (pc == 0x1420C) || (pc == 0x1430C)) {
-        uint32_t pointer = iop->r[5];
-        uint32_t text_size = iop->r[6];
+        uint32_t ptr = iop->r[5];
+        uint32_t size = iop->r[6];
 
-        while (text_size) {
-            char c = iop_bus_read8(iop, pointer & 0x1FFFFF) & 0xff;
-
-            putchar(c);
-
-            pointer++;
-            text_size--;
+        while (size--) {
+            putchar(iop_bus_read8(iop, ptr++));
         }
     }
 
-    // iop_print_disassembly(iop);
+    if (p) {
+        iop_print_disassembly(iop);
+
+        --p;
+
+        if (!p)
+            exit(1);
+            //printf("v0=%08x v1=%08x a0=%08x\n", iop->r[2], iop->r[3], iop->r[4]);
+    }
 
     iop->pc = iop->next_pc;
     iop->next_pc += 4;
 
     if (iop_check_irq(iop)) {
         iop->r[0] = 0;
+
+        // p = 1000;
+
+        printf("pc=%08x next_pc=%08x saved_pc=%08x iop handling irq\n", iop->pc, iop->next_pc, iop->saved_pc);
 
         iop_exception(iop, CAUSE_INT);
 

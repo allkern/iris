@@ -7,18 +7,34 @@ extern "C" {
 
 #include "ee/bus.h"
 #include "ee/ee.h"
+#include "ee/gif.h"
+#include "ee/dmac.h"
 #include "iop/bus.h"
+#include "iop/bus_decl.h"
 #include "iop/iop.h"
-
+#include "iop/dma.h"
+#include "iop/intc.h"
 #include "shared/bios.h"
 #include "shared/ram.h"
 #include "shared/sif.h"
 
 struct ps2_state {
+    // CPUs
     struct ee_state* ee;
     struct iop_state* iop;
-    struct iop_bus* iop_bus;
+
+    // EE-only
     struct ee_bus* ee_bus;
+    struct ps2_gif* gif;
+    struct ps2_dmac* ee_dma;
+    struct ps2_ram* ee_ram;
+
+    // IOP-only
+    struct iop_bus* iop_bus;
+    struct ps2_iop_dma* iop_dma;
+    struct ps2_iop_intc* iop_intc;
+
+    // Shared
     struct ps2_ram* iop_ram;
     struct ps2_bios* bios;
     struct ps2_sif* sif;
