@@ -54,7 +54,11 @@ struct iop_state {
     uint32_t load_d, load_v;
     uint32_t last_cycles;
     uint32_t total_cycles;
+    uint32_t biu_config;
     int branch, delay_slot, branch_taken;
+
+    void (*kputchar)(void*, char);
+    void* kputchar_udata;
 
     uint32_t cop0_r[16];
 };
@@ -129,6 +133,7 @@ struct iop_state {
 
 struct iop_state* iop_create(void);
 void iop_init(struct iop_state* iop, struct iop_bus_s bus);
+void iop_init_kputchar(struct iop_state* iop, void (*kputchar)(void*, char), void* udata);
 void iop_destroy(struct iop_state* iop);
 void iop_cycle(struct iop_state* iop);
 void iop_set_irq_pending(struct iop_state* iop);

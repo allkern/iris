@@ -83,7 +83,7 @@ static inline void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
     int irq = !!(tag & 0x40000000);
     int eot = !!(tag & 0x80000000);
 
-    printf("iopdma: sif0 tag at %08x extra=%u addr=%08x size=%08x irq=%d eot=%d\n", dma->sif0.tadr, extra, addr, size, irq, eot);
+    printf("iop: dma sif0 tag at %08x extra=%u addr=%08x size=%08x irq=%d eot=%d\n", dma->sif0.tadr, extra, addr, size, irq, eot);
 
     size += extra * 2;
 
@@ -92,13 +92,10 @@ static inline void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
     if (extra) {
         q.u32[0] = iop_bus_read32(dma->bus, dma->sif0.tadr + 8);
         q.u32[1] = iop_bus_read32(dma->bus, dma->sif0.tadr + 12);
-        q.u32[2] = iop_bus_read32(dma->bus, addr);
-        q.u32[3] = iop_bus_read32(dma->bus, addr + 4);
+        q.u32[2] = 0;
+        q.u32[3] = 0;
 
         ps2_sif_fifo_write(dma->sif, q);
-
-        addr += 8;
-        size -= 4;
     }
 
     while (size) {
@@ -204,8 +201,9 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
                 if (!data)
                     return;
 
-                printf("%s chcr %08lx\n", iop_dma_get_channel_name(addr), data);
                 c->chcr = data;
+
+                printf("iop: dma %s chcr=%08x\n", iop_dma_get_channel_name(addr), data);
 
                 if ((addr & 0xff0) == 0x520) {
                     iop_dma_handle_sif0_transfer(dma);
@@ -235,14 +233,14 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
 
 void ps2_iop_dma_start_sif1_transfer(struct ps2_iop_dma* dma) {
     if (!(dma->sif1.chcr & 0x1000000)) {
-        printf("iopdma: warning: IOP SIF1 channel not active, ignoring incoming EE transfer\n");
+        printf("iop: warning: IOP SIF1 channel not active, ignoring incoming EE transfer\n");
 
         exit(1);
 
         return;
     }
 
-    // printf("iopdma; starting sif1 iop ram transfer chcr=%08x bcr=%08x madr=%08x tadr=%08x\n",
+    // printf("iop: starting sif1 iop ram transfer chcr=%08x bcr=%08x madr=%08x tadr=%08x\n",
     //     dma->sif1.chcr,
     //     dma->sif1.bcr,
     //     dma->sif1.madr,
@@ -276,4 +274,6 @@ void ps2_iop_dma_start_sif1_transfer(struct ps2_iop_dma* dma) {
     iop_dma_check_irq(dma);
 
     ps2_sif_fifo_reset(dma->sif);
+
+    dma->sif1.chcr &= ~0x1000000;
 }

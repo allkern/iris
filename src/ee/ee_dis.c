@@ -130,8 +130,8 @@ static inline void ee_d_dsub(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $
 static inline void ee_d_dsubu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "dsubu", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_ei(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "ei"); }
 static inline void ee_d_eret(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "eret"); }
-static inline void ee_d_j(uint32_t opcode) { ptr += sprintf(ptr, "%-8s %08x", "j", ((s->pc + 4) & 0xf0000000) | (EE_D_I26 << 2)); }
-static inline void ee_d_jal(uint32_t opcode) { ptr += sprintf(ptr, "%-8s %08x", "jal", ((s->pc + 4) & 0xf0000000) | (EE_D_I26 << 2)); }
+static inline void ee_d_j(uint32_t opcode) { ptr += sprintf(ptr, "%-8s 0x%08x", "j", ((s->pc + 4) & 0xf0000000) | (EE_D_I26 << 2)); }
+static inline void ee_d_jal(uint32_t opcode) { ptr += sprintf(ptr, "%-8s 0x%08x", "jal", ((s->pc + 4) & 0xf0000000) | (EE_D_I26 << 2)); }
 static inline void ee_d_jalr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "jalr", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS]); }
 static inline void ee_d_jr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "jr", ee_cc_r[EE_D_RS]); }
 static inline void ee_d_lb(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lb", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
@@ -156,7 +156,7 @@ static inline void ee_d_madds(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d,
 static inline void ee_d_maddu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "maddu", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_maddu1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "maddu1", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_maxs(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d, $f%d", "max.s", EE_D_RD, EE_D_RS, EE_D_RT); }
-static inline void ee_d_mfc0(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, Cop0_%s", "mfc0", ee_cc_r[EE_D_RT], ee_cop0_r[EE_D_RD]); }
+static inline void ee_d_mfc0(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "mfc0", ee_cc_r[EE_D_RT], ee_cop0_r[EE_D_RD]); }
 static inline void ee_d_mfc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $f%d", "mfc1", ee_cc_r[EE_D_RT], EE_D_RS); }
 static inline void ee_d_mfhi(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "mfhi", ee_cc_r[EE_D_RD]); }
 static inline void ee_d_mfhi1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "mfhi1", ee_cc_r[EE_D_RD]); }
@@ -452,10 +452,10 @@ char *ee_disassemble(char *buf, uint32_t opcode, struct ee_dis_state *dis_state)
     ptr = buf;
 
     if (dis_state) if (dis_state->print_address)
-        ptr += sprintf(ptr, "%08x: ", dis_state->pc);
+        ptr += sprintf(ptr, "0x%08x: ", dis_state->pc);
 
     if (dis_state) if (dis_state->print_opcode)
-        ptr += sprintf(ptr, "%08x ", opcode);
+        ptr += sprintf(ptr, "0x%08x ", opcode);
 
     switch (opcode & 0xFC000000) {
         case 0x00000000: { // special

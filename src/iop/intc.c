@@ -13,6 +13,7 @@ void ps2_iop_intc_init(struct ps2_iop_intc* intc, struct iop_state* iop) {
     memset(intc, 0, sizeof(struct ps2_iop_intc));
 
     intc->iop = iop;
+    intc->ctrl = 1;
 }
 
 void ps2_iop_intc_irq(struct ps2_iop_intc* intc, int dev) {
@@ -35,9 +36,7 @@ uint64_t ps2_iop_intc_read32(struct ps2_iop_intc* intc, uint32_t addr) {
     switch (addr) {
         case 0x1f801070: return intc->stat;
         case 0x1f801074: return intc->mask;
-        case 0x1f801078: {
-            // intc->ctrl &= ~1;
-        } break;
+        case 0x1f801078: intc->ctrl = 0; break;
     }
 
     int n = intc->ctrl && (intc->stat & intc->mask);

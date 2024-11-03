@@ -8,7 +8,9 @@ extern "C" {
 #include "ee/bus.h"
 #include "ee/ee.h"
 #include "ee/gif.h"
+#include "ee/gs.h"
 #include "ee/dmac.h"
+#include "ee/intc.h"
 #include "iop/bus.h"
 #include "iop/bus_decl.h"
 #include "iop/iop.h"
@@ -18,6 +20,8 @@ extern "C" {
 #include "shared/ram.h"
 #include "shared/sif.h"
 
+#include "sched.h"
+
 struct ps2_state {
     // CPUs
     struct ee_state* ee;
@@ -26,8 +30,10 @@ struct ps2_state {
     // EE-only
     struct ee_bus* ee_bus;
     struct ps2_gif* gif;
+    struct ps2_gs* gs;
     struct ps2_dmac* ee_dma;
     struct ps2_ram* ee_ram;
+    struct ps2_intc* ee_intc;
 
     // IOP-only
     struct iop_bus* iop_bus;
@@ -38,10 +44,13 @@ struct ps2_state {
     struct ps2_ram* iop_ram;
     struct ps2_bios* bios;
     struct ps2_sif* sif;
+
+    struct sched_state* sched;
 };
 
 struct ps2_state* ps2_create(void);
 void ps2_init(struct ps2_state* ps2);
+void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void*, void (*iop_kputchar)(void*, char), void*);
 void ps2_load_bios(struct ps2_state* ps2, const char* path);
 void ps2_cycle(struct ps2_state* ps2);
 void ps2_destroy(struct ps2_state* ps2);

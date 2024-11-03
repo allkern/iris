@@ -12,13 +12,18 @@ struct ps2_state* ps2_create(void) {
 void ps2_init(struct ps2_state* ps2) {
     memset(ps2, 0, sizeof(struct ps2_state));
 
+    ps2->sched = sched_create();
+    sched_init(ps2->sched);
+
     ps2->ee = ee_create();
     ps2->iop = iop_create();
     ps2->ee_bus = ee_bus_create();
     ps2->iop_bus = iop_bus_create();
     ps2->gif = ps2_gif_create();
+    ps2->gs = ps2_gs_create();
     ps2->ee_dma = ps2_dmac_create();
     ps2->ee_ram = ps2_ram_create();
+    ps2->ee_intc = ps2_intc_create();
     ps2->iop_dma = ps2_iop_dma_create();
     ps2->iop_intc = ps2_iop_intc_create();
     ps2->iop_ram = ps2_ram_create();
@@ -58,9 +63,12 @@ void ps2_init(struct ps2_state* ps2) {
     iop_init(ps2->iop, iop_bus_data);
 
     // Initialize devices
-    ps2_gif_init(ps2->gif);
+    ps2_gif_init(ps2->gif, NULL);
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
+    ps2_gif_init(ps2->gif, ps2->gs);
+    ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->sched);
+    ps2_intc_init(ps2->ee_intc, ps2->ee);
     ps2_ram_init(ps2->iop_ram, RAM_SIZE_2MB);
     ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->ee_dma, ps2->iop_bus);
     ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
@@ -77,8 +85,15 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_iop_ram(ps2->ee_bus, ps2->iop_ram);
     ee_bus_init_sif(ps2->ee_bus, ps2->sif);
     ee_bus_init_dmac(ps2->ee_bus, ps2->ee_dma);
+    ee_bus_init_intc(ps2->ee_bus, ps2->ee_intc);
     ee_bus_init_gif(ps2->ee_bus, ps2->gif);
+    ee_bus_init_gs(ps2->ee_bus, ps2->gs);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
+}
+
+void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void* ee_udata, void (*iop_kputchar)(void*, char), void* iop_udata) {
+    ee_bus_init_kputchar(ps2->ee_bus, ee_kputchar, ee_udata);
+    iop_init_kputchar(ps2->iop, iop_kputchar, iop_udata);
 }
 
 void ps2_load_bios(struct ps2_state* ps2, const char* path) {
@@ -86,18 +101,28 @@ void ps2_load_bios(struct ps2_state* ps2, const char* path) {
 }
 
 void ps2_cycle(struct ps2_state* ps2) {
-    ee_cycle(ps2->ee);
+    // for (int i = 0; i < 8; i++)
+        ee_cycle(ps2->ee);
+
+    iop_cycle(ps2->iop);
     iop_cycle(ps2->iop);
 }
 
 void ps2_destroy(struct ps2_state* ps2) {
-    ps2_bios_destroy(ps2->bios);
-    ps2_ram_destroy(ps2->iop_ram);
-    ps2_sif_destroy(ps2->sif);
-    ee_bus_destroy(ps2->ee_bus);
-    iop_bus_destroy(ps2->iop_bus);
+    sched_destroy(ps2->sched);
     ee_destroy(ps2->ee);
     iop_destroy(ps2->iop);
+    ee_bus_destroy(ps2->ee_bus);
+    iop_bus_destroy(ps2->iop_bus);
+    ps2_gif_destroy(ps2->gif);
+    ps2_dmac_destroy(ps2->ee_dma);
+    ps2_ram_destroy(ps2->ee_ram);
+    ps2_intc_destroy(ps2->ee_intc);
+    ps2_iop_dma_destroy(ps2->iop_dma);
+    ps2_iop_intc_destroy(ps2->iop_intc);
+    ps2_ram_destroy(ps2->iop_ram);
+    ps2_bios_destroy(ps2->bios);
+    ps2_sif_destroy(ps2->sif);
 
     free(ps2);
 }

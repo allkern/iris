@@ -86,7 +86,6 @@ struct ee_state {
     uint32_t next_pc;
     uint32_t opcode;
     uint64_t sa;
-
     int branch, branch_taken, delay_slot;
 
     struct ps2_ram* scratchpad;

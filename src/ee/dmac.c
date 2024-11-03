@@ -76,7 +76,7 @@ uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr) {
 
     switch (addr) {
         case 0x1000E000: return dmac->ctrl;
-        case 0x1000E010: printf("dmac read stat=%08x\n", dmac->stat); return dmac->stat;
+        case 0x1000E010: return dmac->stat;
         case 0x1000E020: return dmac->pcr;
         case 0x1000E030: return dmac->sqwc;
         case 0x1000E040: return dmac->rbsr;
@@ -133,6 +133,8 @@ static inline void dmac_fetch_tag(struct ps2_dmac* dmac, struct dmac_channel* c)
 static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
     dmac->stat |= 1 << ch;
 
+    // printf("dmac: flag=%08x imask=%08x\n", 1 << ch, (dmac->stat >> 16) & 0x3ff);
+
     if ((dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff)) {
         ee_set_int1(dmac->ee);
     }
@@ -169,32 +171,28 @@ static inline void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
 
             ps2_sif_fifo_write(dmac->sif, q);
 
-            // printf("writing %016lx%016lx from %08x to SIF FIFO\n",
-            //     q.u64[1], q.u64[0], c->madr
-            // );
-
             dmac->sif1.madr += 16;
         }
     } while (!dmac->sif1.tag.end);
 
     ps2_iop_dma_start_sif1_transfer(dmac->iop_dma);
 
-    // dmac_set_irq(dmac, DMAC_SIF1);
+    dmac_set_irq(dmac, DMAC_SIF1);
 }
 
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
-    printf("%s start: data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
-        dmac_get_channel_name(dmac, addr),
-        c->chcr,
-        c->chcr & 1,
-        (c->chcr >> 2) & 3,
-        !!(c->chcr & 0x40),
-        c->madr,
-        c->qwc,
-        c->tadr
-    );
+    // printf("%s start: data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
+    //     dmac_get_channel_name(dmac, addr),
+    //     c->chcr,
+    //     c->chcr & 1,
+    //     (c->chcr >> 2) & 3,
+    //     !!(c->chcr & 0x40),
+    //     c->madr,
+    //     c->qwc,
+    //     c->tadr
+    // );
 
     switch (addr & 0xff00) {
         case 0x8000: dmac_handle_vif0_transfer(dmac); return;
@@ -225,8 +223,6 @@ void dmac_write_stat(struct ps2_dmac* dmac, uint32_t data) {
         // Reset INT1
         dmac->ee->cause &= ~EE_CAUSE_IP3;
     }
-
-    printf("dmac->stat=%08x data=%08x\n", dmac->stat, data);
 }
 
 void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
@@ -235,8 +231,6 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
     if (c) {
         switch (addr & 0xff) {
             case 0x00: {
-                // c->chcr = data;
-
                 if (data & 0x100)
                     dmac_handle_channel_start(dmac, addr);
             } return;
@@ -276,15 +270,35 @@ void ps2_dmac_start_sif0_transfer(struct ps2_dmac* dmac) {
     dmac->sif0.tag.mem = TAG_MEM(tag);
     dmac->sif0.tag.data = TAG_DATA(tag);
 
-    printf("eedmac: sif0 tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx tte=%d\n",
-        dmac->sif0.tag.qwc,
-        dmac->sif0.tag.id,
-        dmac->sif0.tag.irq,
-        dmac->sif0.tag.addr,
-        dmac->sif0.tag.mem,
-        dmac->sif0.tag.data,
-        dmac->sif0.chcr
-    );
+    switch (dmac->sif0.tag.id) {
+        case 7:
+            dmac->sif0.tag.end = 1;
+        case 0:
+        case 1:
+            dmac->sif0.madr = dmac->sif0.tag.addr;
+    }
+
+    for (int i = 0; i < dmac->sif0.tag.qwc; i++) {
+        uint128_t q = ps2_sif_fifo_read(dmac->sif);
+
+        printf("writing %016lx %016lx to %08x\n", q.u64[1], q.u64[0], dmac->sif0.madr);
+
+        ee_bus_write128(dmac->bus, dmac->sif0.madr, q);
+
+        dmac->sif0.madr += 16;
+    }
+
+    // printf("eedmac: sif0 tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx tte=%d\n",
+    //     dmac->sif0.tag.qwc,
+    //     dmac->sif0.tag.id,
+    //     dmac->sif0.tag.irq,
+    //     dmac->sif0.tag.addr,
+    //     dmac->sif0.tag.mem,
+    //     dmac->sif0.tag.data,
+    //     dmac->sif0.chcr
+    // );
+
+    ps2_sif_fifo_reset(dmac->sif);
 
     dmac_set_irq(dmac, DMAC_SIF0);
 }

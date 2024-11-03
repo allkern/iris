@@ -66,8 +66,10 @@ struct ps2_gif* ps2_gif_create(void) {
     return malloc(sizeof(struct ps2_gif));
 }
 
-void ps2_gif_init(struct ps2_gif* gif) {
+void ps2_gif_init(struct ps2_gif* gif, struct ps2_gs* gs) {
     memset(gif, 0, sizeof(struct ps2_gif));
+
+    gif->gs = gs;
 }
 
 void ps2_gif_destroy(struct ps2_gif* gif) {
@@ -88,6 +90,7 @@ uint64_t ps2_gif_read32(struct ps2_gif* gif, uint32_t addr) {
 
     return 0;
 }
+
 void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data) {
     switch (addr) {
         case 0x10003000: gif->ctrl = data; return;
@@ -96,6 +99,7 @@ void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data) {
 }
 
 void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
+    // To-do: Implement REGLIST format
     if (gif->state == GIF_STATE_RECV_TAG) {
         gif->tag.nloop = data.u64[0] & 0x7fff;
         gif->tag.prim = (data.u64[0] >> 47) & 0x3ff;
@@ -117,12 +121,12 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
             } break;
         }
 
-        printf("giftag: nloop=%04lx eop=%d prim=%d fmt=%d nregs=%d reg=%016lx\n",
-            gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.fmt, gif->tag.nregs, gif->tag.reg
-        );
+        // printf("giftag: nloop=%04lx eop=%d prim=%d fmt=%d nregs=%d reg=%016lx\n",
+        //     gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.fmt, gif->tag.nregs, gif->tag.reg
+        // );
     
         if (gif->tag.pre) {
-            printf("GS PRIM <- %08x\n", gif->tag.prim);
+            ps2_gs_write_internal(gif->gs, GS_PRIM, gif->tag.prim);
         }
 
         if (gif->tag.remaining) {
@@ -134,9 +138,9 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
 
     if (gif->tag.index != gif->tag.remaining) {
         if (gif->tag.fmt == 2) {
-            // printf("reg=HWREG data=%016lx\n", data.u64[0]);
-            // printf("reg=HWREG data=%016lx\n", data.u64[1]);
-
+            ps2_gs_write_internal(gif->gs, GS_HWREG, data.u64[0]);
+            ps2_gs_write_internal(gif->gs, GS_HWREG, data.u64[1]);
+            
             ++gif->tag.index;
 
             if (gif->tag.index == gif->tag.remaining) {
@@ -150,42 +154,29 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
         int r = (gif->tag.reg >> (index * 4)) & 0xf;
 
         switch (r) {
-            case 0x00: printf("reg=PRIM data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x01: printf("reg=RGBAQ data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x02: printf("reg=ST data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x03: printf("reg=UV data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x04: printf("reg=XYZF2 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x05: printf("reg=XYZ2 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x06: printf("reg=TEX0_1 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x07: printf("reg=TEX0_2 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x08: printf("reg=CLAMP_1 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x09: printf("reg=CLAMP_2 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x0a: printf("reg=FOG data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x0c: printf("reg=XYZF3 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x0d: printf("reg=XYZ3 data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
-            case 0x0e: printf("reg=%s data=%016lx\n", gif_get_reg_name(data.u64[1]), data.u64[0]); break;
-            case 0x0f: printf("reg=NOP data=%016lx%016lx\n", data.u64[1], data.u64[0]); break;
+            // To-do: Implement packing formats
+            case 0x00: ps2_gs_write_internal(gif->gs, GS_PRIM, data.u64[0]); break;
+            case 0x01: ps2_gs_write_internal(gif->gs, GS_RGBAQ, data.u64[0]); break;
+            case 0x02: ps2_gs_write_internal(gif->gs, GS_ST, data.u64[0]); break;
+            case 0x03: ps2_gs_write_internal(gif->gs, GS_UV, data.u64[0]); break;
+            case 0x04: ps2_gs_write_internal(gif->gs, GS_XYZF2, data.u64[0]); break;
+            case 0x05: ps2_gs_write_internal(gif->gs, GS_XYZ2, data.u64[0]); break;
+            case 0x06: ps2_gs_write_internal(gif->gs, GS_TEX0_1, data.u64[0]); break;
+            case 0x07: ps2_gs_write_internal(gif->gs, GS_TEX0_2, data.u64[0]); break;
+            case 0x08: ps2_gs_write_internal(gif->gs, GS_CLAMP_1, data.u64[0]); break;
+            case 0x09: ps2_gs_write_internal(gif->gs, GS_CLAMP_2, data.u64[0]); break;
+            case 0x0a: ps2_gs_write_internal(gif->gs, GS_FOG, data.u64[0]); break;
+            case 0x0c: ps2_gs_write_internal(gif->gs, GS_XYZF3, data.u64[0]); break;
+            case 0x0d: ps2_gs_write_internal(gif->gs, GS_XYZ3, data.u64[0]); break;
+
+            // A+D
+            case 0x0e: ps2_gs_write_internal(gif->gs, data.u64[1], data.u64[0]); break;
+
+            // NOP
+            case 0x0f: break;
         }
 
         if (gif->tag.index == gif->tag.remaining)
             gif->state = GIF_STATE_RECV_TAG;
     }
-
-    /*
-        GIFtag Format
-
-        0-14    NLOOP - Data per register to transfer
-        15      EOP - End of packet
-        16-45   Unused
-        46      Enable PRIM field
-        47-57   Data to be sent to GS PRIM register if GIFtag.46 == 1
-        58-59   Data format
-                0=PACKED
-                1=REGLIST
-                2=IMAGE
-                3=IMAGE
-        60-63   NREGS - Number of registers
-                0=16 registers
-        64-127  Register field, 4 bits each
-    */
 }

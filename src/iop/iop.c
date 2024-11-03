@@ -6,28 +6,33 @@
 
 static int p = 0;
 
+const uint32_t iop_bus_region_mask_table[] = {
+    0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+    0x7fffffff, 0x1fffffff, 0xffffffff, 0xffffffff
+};
+
 static inline uint32_t iop_bus_read8(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read8(iop->bus.udata, addr & 0x1fffffff);
+    return iop->bus.read8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
 }
 
 static inline uint32_t iop_bus_read16(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read16(iop->bus.udata, addr & 0x1fffffff);
+    return iop->bus.read16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
 }
 
 static inline uint32_t iop_bus_read32(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read32(iop->bus.udata, addr & 0x1fffffff);
+    return iop->bus.read32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
 }
 
 static inline void iop_bus_write8(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write8(iop->bus.udata, addr & 0x1fffffff, data);
+    iop->bus.write8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
 }
 
 static inline void iop_bus_write16(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write16(iop->bus.udata, addr & 0x1fffffff, data);
+    iop->bus.write16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
 }
 
 static inline void iop_bus_write32(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write32(iop->bus.udata, addr & 0x1fffffff, data);
+    iop->bus.write32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
 }
 
 static const uint32_t g_iop_cop0_write_mask_table[] = {
@@ -98,6 +103,11 @@ void iop_init(struct iop_state* iop, struct iop_bus_s bus) {
     iop->cop0_r[COP0_PRID] = 0x0000001f;
 }
 
+void iop_init_kputchar(struct iop_state* iop, void (*kputchar)(void*, char), void* udata) {
+    iop->kputchar = kputchar;
+    iop->kputchar_udata = udata;
+}
+
 static inline int iop_check_irq(struct iop_state* iop) {
     return (iop->cop0_r[COP0_SR] & SR_IEC) &&
            (iop->cop0_r[COP0_SR] & iop->cop0_r[COP0_CAUSE] & 0x00000400);
@@ -159,19 +169,15 @@ void iop_cycle(struct iop_state* iop) {
         uint32_t size = iop->r[6];
 
         while (size--) {
-            putchar(iop_bus_read8(iop, ptr++));
+            iop->kputchar(iop->kputchar_udata, iop_bus_read8(iop, ptr++));
         }
     }
 
-    if (p) {
-        iop_print_disassembly(iop);
+    // if (p) {
+    //     iop_print_disassembly(iop);
 
-        --p;
-
-        if (!p)
-            exit(1);
-            //printf("v0=%08x v1=%08x a0=%08x\n", iop->r[2], iop->r[3], iop->r[4]);
-    }
+    //     --p;
+    // }
 
     iop->pc = iop->next_pc;
     iop->next_pc += 4;
@@ -179,9 +185,7 @@ void iop_cycle(struct iop_state* iop) {
     if (iop_check_irq(iop)) {
         iop->r[0] = 0;
 
-        // p = 1000;
-
-        printf("pc=%08x next_pc=%08x saved_pc=%08x iop handling irq\n", iop->pc, iop->next_pc, iop->saved_pc);
+        printf("iop: irq pc=%08x next_pc=%08x saved_pc=%08x\n", iop->pc, iop->next_pc, iop->saved_pc);
 
         iop_exception(iop, CAUSE_INT);
 
@@ -452,6 +456,13 @@ static inline void iop_i_lw(struct iop_state* iop) {
     if (addr & 0x3) {
         iop_exception(iop, CAUSE_ADEL);
     } else {
+        if (addr == 0xfffe0130) {
+            iop->load_v = iop->biu_config;
+            iop->load_d = T;
+
+            return;
+        }
+
         iop->load_d = T;
         iop->load_v = iop_bus_read32(iop, addr);
     }
@@ -575,6 +586,12 @@ static inline void iop_i_sw(struct iop_state* iop) {
     if (addr & 0x3) {
         iop_exception(iop, CAUSE_ADES);
     } else {
+        if (addr == 0xfffe0130) {
+            iop->biu_config = t;
+
+            return;
+        }
+
         iop_bus_write32(iop, addr, t);
     }
 }

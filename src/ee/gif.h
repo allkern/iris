@@ -7,6 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
+#include "gs.h"
 #include "u128.h"
 
 #define GIF_STATE_RECV_TAG 0
@@ -37,12 +38,14 @@ struct ps2_gif {
     uint64_t p3cnt;
     uint64_t p3tag;
 
+    struct ps2_gs* gs;
+
     int state;
     struct gif_tag tag;
 };
 
 struct ps2_gif* ps2_gif_create(void);
-void ps2_gif_init(struct ps2_gif* gif);
+void ps2_gif_init(struct ps2_gif* gif, struct ps2_gs* gs);
 void ps2_gif_destroy(struct ps2_gif* gif);
 uint64_t ps2_gif_read32(struct ps2_gif* gif, uint32_t addr);
 void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data);
