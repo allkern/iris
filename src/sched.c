@@ -23,8 +23,6 @@ int event_compare(const void* a, const void* b) {
 }
 
 void sched_schedule(struct sched_state* sched, struct sched_event event) {
-    printf("sched: Schedule \'%s\'\n", event.name);
-
     if (!sched->nevents) {
         sched->events = malloc(sizeof(struct sched_event) * 32);
         sched->cap = 32;
@@ -61,10 +59,6 @@ void sched_schedule(struct sched_state* sched, struct sched_event event) {
 }
 
 void sched_tick(struct sched_state* sched, int cycles) {
-    // printf("sched->nevents=%d\n", sched->nevents);
-
-    // exit(1);
-
     if (!sched->nevents)
         return;
 

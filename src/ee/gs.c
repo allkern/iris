@@ -23,7 +23,7 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
 
     vblank_event.callback = gs_handle_vblank_in;
     vblank_event.cycles = 4489019;
-    vblank_event.name = "Vblank event";
+    vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
     if (gs->vblank_callback)
@@ -59,8 +59,6 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
-
-    printf("serving vblankin\n");
 
     sched_schedule(gs->sched, vblank_out_event);
 }
