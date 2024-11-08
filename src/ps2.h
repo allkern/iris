@@ -16,6 +16,7 @@ extern "C" {
 #include "iop/iop.h"
 #include "iop/dma.h"
 #include "iop/intc.h"
+#include "iop/timers.h"
 #include "shared/bios.h"
 #include "shared/ram.h"
 #include "shared/sif.h"
@@ -39,6 +40,7 @@ struct ps2_state {
     struct iop_bus* iop_bus;
     struct ps2_iop_dma* iop_dma;
     struct ps2_iop_intc* iop_intc;
+    struct ps2_iop_timers* iop_timers;
 
     // Shared
     struct ps2_ram* iop_ram;
@@ -51,6 +53,7 @@ struct ps2_state {
 struct ps2_state* ps2_create(void);
 void ps2_init(struct ps2_state* ps2);
 void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void*, void (*iop_kputchar)(void*, char), void*);
+void ps2_reset(struct ps2_state* ps2);
 void ps2_load_bios(struct ps2_state* ps2, const char* path);
 void ps2_cycle(struct ps2_state* ps2);
 void ps2_destroy(struct ps2_state* ps2);

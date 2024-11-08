@@ -156,6 +156,7 @@ inline static void iop_dma_check_irq(struct ps2_iop_dma* dma) {
     dma->dicr |= mif ? 0x80000000 : 0;
 
     if (mif) {
+        printf("iop: Sending DMA IRQ\n");
         ps2_iop_intc_irq(dma->intc, IOP_INTC_DMA);
     }
 }
@@ -163,11 +164,13 @@ inline static void iop_dma_check_irq(struct ps2_iop_dma* dma) {
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
     struct iop_dma_channel* c = iop_dma_get_channel(dma, addr);
 
+    const char* name = iop_dma_get_channel_name(addr);
+
     if (c) {
         switch (addr & 0xf) {
             case 0x0: return c->madr;
             case 0x4: return c->bcr;
-            case 0x8: return c->chcr;
+            case 0x8: printf("iop: Reading %s chcr %08x\n", name, c->chcr); return c->chcr;
             case 0xc: return c->tadr;
         }
 
@@ -235,9 +238,9 @@ void ps2_iop_dma_start_sif1_transfer(struct ps2_iop_dma* dma) {
     if (!(dma->sif1.chcr & 0x1000000)) {
         printf("iop: warning: IOP SIF1 channel not active, ignoring incoming EE transfer\n");
 
-        exit(1);
+        // exit(1);
 
-        return;
+        // return;
     }
 
     // printf("iop: starting sif1 iop ram transfer chcr=%08x bcr=%08x madr=%08x tadr=%08x\n",

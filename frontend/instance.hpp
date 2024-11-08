@@ -32,6 +32,8 @@ struct instance {
     ImFont* font_body = nullptr;
     ImFont* font_icons = nullptr;
 
+    const char* elf_path;
+
     bool open = false;
     bool pause = true;
     bool step = false;

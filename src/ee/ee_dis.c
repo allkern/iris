@@ -452,10 +452,10 @@ char *ee_disassemble(char *buf, uint32_t opcode, struct ee_dis_state *dis_state)
     ptr = buf;
 
     if (dis_state) if (dis_state->print_address)
-        ptr += sprintf(ptr, "0x%08x: ", dis_state->pc);
+        ptr += sprintf(ptr, "%08x: ", dis_state->pc);
 
     if (dis_state) if (dis_state->print_opcode)
-        ptr += sprintf(ptr, "0x%08x ", opcode);
+        ptr += sprintf(ptr, "%08x ", opcode);
 
     switch (opcode & 0xFC000000) {
         case 0x00000000: { // special

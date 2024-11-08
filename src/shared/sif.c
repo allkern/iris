@@ -45,22 +45,22 @@ uint64_t ps2_sif_read32(struct ps2_sif* sif, uint32_t addr) {
 void ps2_sif_write32(struct ps2_sif* sif, uint32_t addr, uint64_t data) {
     // IOP write
     switch (addr) {
-        case 0x1d000000: sif->mscom = data; return;
-        case 0x1d000010: sif->smcom = data; return;
-        case 0x1d000020: sif->msflg &= ~data; return;
-        case 0x1d000030: sif->smflg |= data; return;
-        case 0x1d000040: sif->ctrl = data; return;
-        case 0x1d000060: sif->bd6 = data; return;
+        case 0x1d000000: printf("iop: mscom write %08x\n", data); sif->mscom = data; return;
+        case 0x1d000010: printf("iop: smcom write %08x\n", data); sif->smcom = data; return;
+        case 0x1d000020: printf("iop: msflg write %08x\n", data); sif->msflg &= ~data; return;
+        case 0x1d000030: printf("iop: smflg write %08x\n", data); sif->smflg |= data; return;
+        case 0x1d000040: printf("iop: ctrl write %08x\n", data); sif->ctrl = data; return;
+        case 0x1d000060: printf("iop: bd6 write %08x\n", data); sif->bd6 = data; return;
     }
 
     // EE write
     switch (addr) {
-        case 0x1000f200: sif->mscom = data; return;
-        case 0x1000f210: sif->smcom = data; return;
-        case 0x1000f220: sif->msflg |= data; return;
-        case 0x1000f230: sif->smflg &= ~data; return;
-        case 0x1000f240: sif->ctrl = data; return;
-        case 0x1000f260: sif->bd6 = data; return;
+        case 0x1000f200: printf("ee: mscom write %08x\n", data); sif->mscom = data; return;
+        case 0x1000f210: printf("ee: smcom write %08x\n", data); sif->smcom = data; return;
+        case 0x1000f220: printf("ee: msflg write %08x\n", data); sif->msflg |= data; return;
+        case 0x1000f230: printf("ee: smflg write %08x\n", data); sif->smflg &= ~data; return;
+        case 0x1000f240: printf("ee: ctrl write %08x\n", data); sif->ctrl = data; return;
+        case 0x1000f260: printf("ee: bd6 write %08x\n", data); sif->bd6 = data; return;
     }
 }
 

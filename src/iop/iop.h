@@ -136,6 +136,7 @@ void iop_init(struct iop_state* iop, struct iop_bus_s bus);
 void iop_init_kputchar(struct iop_state* iop, void (*kputchar)(void*, char), void* udata);
 void iop_destroy(struct iop_state* iop);
 void iop_cycle(struct iop_state* iop);
+void iop_reset(struct iop_state* iop);
 void iop_set_irq_pending(struct iop_state* iop);
 void iop_fetch(struct iop_state* iop);
 int iop_execute(struct iop_state* iop);

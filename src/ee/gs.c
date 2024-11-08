@@ -4,46 +4,98 @@
 #include <stdio.h>
 
 #include "gs.h"
+#include "intc.h"
+#include "iop/intc.h"
+
+#include "gs_software.h"
+#include "gs_opengl.h"
 
 struct ps2_gs* ps2_gs_create(void) {
     return malloc(sizeof(struct ps2_gs));
 }
 
-void gs_handle_vblank(void* udata, int overshoot) {
+void gs_handle_vblank_in(void* udata, int overshoot);
+
+void gs_handle_vblank_out(void* udata, int overshoot) {
     struct ps2_gs* gs = (struct ps2_gs*)udata;
 
     struct sched_event vblank_event;
 
-    vblank_event.callback = gs_handle_vblank;
-    vblank_event.cycles = ((294912000 / 60) / 32) + overshoot;
+    vblank_event.callback = gs_handle_vblank_in;
+    vblank_event.cycles = 4489019;
     vblank_event.name = "Vblank event";
     vblank_event.udata = gs;
 
     if (gs->vblank_callback)
         gs->vblank_callback(gs->vblank_udata);
 
+    // Tell backend to render scene
+    gs->backend.render(gs, gs->backend.udata);
+
     // Set Vblank flag?
-    gs->csr |= 8;
+    gs->csr &= !8;
+    gs->csr ^= 1 << 13;
+
+    // Send Vblank IRQ through INTC
+    ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
+    ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_OUT);
 
     sched_schedule(gs->sched, vblank_event);
 }
 
-void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* intc, struct sched_state* sched) {
+void gs_handle_vblank_in(void* udata, int overshoot) {
+    struct ps2_gs* gs = (struct ps2_gs*)udata;
+
+    struct sched_event vblank_out_event;
+
+    vblank_out_event.callback = gs_handle_vblank_out;
+    vblank_out_event.cycles = 431096; 
+    vblank_out_event.name = "Vblank out event";
+    vblank_out_event.udata = gs;
+
+    // Set Vblank flag?
+    gs->csr |= 8;
+
+    // Send Vblank IRQ through INTC
+    ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
+    ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
+
+    printf("serving vblankin\n");
+
+    sched_schedule(gs->sched, vblank_out_event);
+}
+
+void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct sched_state* sched) {
     memset(gs, 0, sizeof(struct ps2_gs));
 
     gs->sched = sched;
-    gs->intc = intc;
+    gs->ee_intc = ee_intc;
+    gs->iop_intc = iop_intc;
     gs->vram = malloc(0x400000); // 4 MB
 
     // Schedule Vblank event
     struct sched_event vblank_event;
 
-    vblank_event.callback = gs_handle_vblank;
-    vblank_event.cycles = (294912000 / 60) / 32;
-    vblank_event.name = "Vblank event";
+    vblank_event.callback = gs_handle_vblank_in;
+    vblank_event.cycles = 4489019;
+    vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
     sched_schedule(gs->sched, vblank_event);
+
+    struct gsr_opengl* opengl_ctx = malloc(sizeof(struct gsr_opengl));
+
+    gs->backend.render_point = gsr_sw_render_point;
+    gs->backend.render_line = gsr_sw_render_line;
+    gs->backend.render_line_strip = gsr_sw_render_line_strip;
+    gs->backend.render_triangle = gsr_sw_render_triangle;
+    gs->backend.render_triangle_strip = gsr_sw_render_triangle_strip;
+    gs->backend.render_triangle_fan = gsr_sw_render_triangle_fan;
+    gs->backend.render_sprite = gsr_sw_render_sprite;
+    gs->backend.render = gsr_sw_render;
+    gs->backend.udata = &opengl_ctx;
+
+    gsr_gl_init(&opengl_ctx);
 }
 
 void ps2_gs_destroy(struct ps2_gs* gs) {
@@ -65,36 +117,6 @@ static inline void gs_vram_blit(struct ps2_gs* gs) {
         
         memcpy(gs->vram + dst, gs->vram + src, gs->rrw * sizeof(uint32_t));
     }
-
-    // while (1) {
-    //     uint32_t saddr = gs->sbp + gs->ssax + (gs->ssay * gs->sbw);
-    //     uint32_t daddr = gs->dbp + gs->dsax + (gs->dsay * gs->dbw);
-
-    //     saddr += gs->sx + (gs->sy * gs->sbw);
-    //     daddr += gs->dx + (gs->dy * gs->dbw);
-
-    //     gs->vram[daddr + 0] = gs->vram[saddr + 0];
-    //     gs->vram[daddr + 1] = gs->vram[saddr + 1];
-
-    //     gs->dx += 2;
-    //     gs->sx += 2;
-
-    //     if (gs->dx >= gs->rrw) {
-    //         gs->dx = 0;
-    //         ++gs->dy;
-        
-    //         if (gs->dy >= gs->rrh)
-    //             return;
-    //     }
-
-    //     if (gs->sx >= gs->rrw) {
-    //         gs->sx = 0;
-    //         ++gs->sy;
-
-    //         if (gs->sy >= gs->rrh)
-    //             return;
-    //     }
-    // }
 }
 
 void gs_start_transfer(struct ps2_gs* gs) {
@@ -138,30 +160,26 @@ void gs_transfer_write(struct ps2_gs* gs) {
     }
 }
 
-void gs_draw_point(struct ps2_gs* gs) {}
-void gs_draw_line(struct ps2_gs* gs) {}
-void gs_draw_line_strip(struct ps2_gs* gs) {}
-void gs_draw_triangle(struct ps2_gs* gs) {}
-void gs_draw_triangle_strip(struct ps2_gs* gs) {}
-void gs_draw_triangle_fan(struct ps2_gs* gs) {}
-void gs_draw_sprite(struct ps2_gs* gs) {}
+void gs_draw_point(struct ps2_gs* gs) {
+
+}
 
 void gs_start_primitive(struct ps2_gs* gs) {
     gs->vqi = 0;
 }
 
-void gs_write_vertex(struct ps2_gs* gs) {
-    gs->vq[gs->vqi].xyz2  = gs->xyz2;
+void gs_write_vertex(struct ps2_gs* gs, uint64_t data) {
+    gs->vq[gs->vqi].xyz2 = data;
     gs->vq[gs->vqi++].rgbaq = gs->rgbaq;
 
-    switch (gs->prim) {
-        // case 0: if (gs->vqi == 1) { gs_draw_point(gs); gs->vqi = 0; } break; 
-        // case 1: if (gs->vqi == 2) { gs_draw_line(gs); gs->vqi = 0; } break; 
-        // case 2: if (gs->vqi == 2) { gs_draw_line_strip(gs); gs->vqi = 0; } break; 
-        // case 3: if (gs->vqi == 3) { gs_draw_triangle(gs); gs->vqi = 0; } break; 
-        // case 4: if (gs->vqi == 3) { gs_draw_triangle_strip(gs); gs->vqi = 0; } break; 
-        // case 5: if (gs->vqi == 3) { gs_draw_triangle_fan(gs); gs->vqi = 0; } break; 
-        case 6: if (gs->vqi == 2) { gs_draw_sprite(gs); gs->vqi = 0; } break; 
+    switch (gs->prim & 7) {
+        case 0: if (gs->vqi == 1) { gs->backend.render_point(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 1: if (gs->vqi == 2) { gs->backend.render_line(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 2: if (gs->vqi == 2) { gs->backend.render_line_strip(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 3: if (gs->vqi == 3) { gs->backend.render_triangle(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 4: if (gs->vqi == 3) { gs->backend.render_triangle_strip(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 5: if (gs->vqi == 3) { gs->backend.render_triangle_fan(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 6: if (gs->vqi == 2) { gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
     }
 }
 
@@ -217,19 +235,19 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
 
 void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
     switch (reg) {
-        case 0x00: gs->prim = data; return;
+        case 0x00: gs->prim = data; gs_start_primitive(gs); return;
         case 0x01: gs->rgbaq = data; return;
         case 0x02: gs->st = data; return;
         case 0x03: gs->uv = data; return;
-        case 0x04: gs->xyzf2 = data; return;
-        case 0x05: gs->xyz2 = data; return;
+        case 0x04: gs->xyzf2 = data; gs_write_vertex(gs, gs->xyzf2); return;
+        case 0x05: gs->xyz2 = data; gs_write_vertex(gs, gs->xyz2); return;
         case 0x06: gs->tex0_1 = data; return;
         case 0x07: gs->tex0_2 = data; return;
         case 0x08: gs->clamp_1 = data; return;
         case 0x09: gs->clamp_2 = data; return;
         case 0x0A: gs->fog = data; return;
         case 0x0C: gs->xyzf3 = data; return;
-        case 0x0D: gs->xyz3 = data; return;
+        case 0x0D: gs->xyz3 = data; gs_write_vertex(gs, gs->xyz3); return;
         case 0x14: gs->tex1_1 = data; return;
         case 0x15: gs->tex1_2 = data; return;
         case 0x16: gs->tex2_1 = data; return;

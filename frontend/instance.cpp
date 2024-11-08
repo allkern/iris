@@ -10,6 +10,8 @@
 #include "ee/ee_dis.h"
 #include "iop/iop_dis.h"
 
+#include "ps2_elf.h"
+
 namespace lunar {
 
 void kputchar_stub(void* udata, char c) {
@@ -163,6 +165,13 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     ps2_load_bios(lunar->ps2, argv[1]);
     ps2_init_kputchar(lunar->ps2, kputchar_stub, NULL, kputchar_stub, NULL);
     ps2_gs_init_vblank_callback(lunar->ps2->gs, (void (*)(void*))update_window, lunar);
+
+    if (argv[2]) {
+        lunar->elf_path = argv[2];
+        lunar->pause = 0;
+
+        ps2_elf_load(lunar->ps2, lunar->elf_path);
+    }
 }
 
 void print_highlighted(const char* buf) {
@@ -411,21 +420,9 @@ static void show_iop_disassembly_view(lunar::instance* lunar) {
 
 void destroy(lunar::instance* lunar);
 
-int ee_ticks = 8;
+int ee_ticks = 7;
 
 static void tick_ee(lunar::instance* lunar) {
-    if (lunar->ps2->ee->pc == 0x00082000) {
-        FILE* file = fopen("3stars.elf", "rb");
-
-        fseek(file, 0x1000, SEEK_SET);
-        fread(lunar->ps2->ee_bus->ee_ram->buf + 0x400000, 1, 0x2a200, file);
-
-        lunar->ps2->ee->pc = 0x400000;
-        lunar->ps2->ee->next_pc = lunar->ps2->ee->pc + 4;
-
-        fclose(file);
-    }
-
     sched_tick(lunar->ps2->sched, 1);
     ee_cycle(lunar->ps2->ee);
 
@@ -433,8 +430,9 @@ static void tick_ee(lunar::instance* lunar) {
 
     if (!ee_ticks) {
         iop_cycle(lunar->ps2->iop);
+        ps2_iop_timers_tick(lunar->ps2->iop_timers);
 
-        ee_ticks = 8;
+        ee_ticks = 7;
     }
 }
 
@@ -552,15 +550,28 @@ void update_window(lunar::instance* lunar) {
 
     Render();
 
+    // SDL_GL_SwapWindow(lunar->window);
+
     SDL_RenderSetScale(lunar->renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 
     SDL_SetRenderDrawColor(lunar->renderer, 0, 0, 0, 0xff);
     SDL_RenderClear(lunar->renderer);
 
-    int stride = ((lunar->ps2->gs->frame_1 >> 16) & 0x3f) * 64;
+    int width = ((lunar->ps2->gs->display2 >> 32) & 0xfff) + 1;
+    width /= ((lunar->ps2->gs->display2 >> 23) & 0xf) + 1;
+    int height = ((lunar->ps2->gs->display2 >> 44) & 0x7ff) + 1;
+    // int stride = ((lunar->ps2->gs->frame_1 >> 16) & 0x3f) * 64;
     uint64_t base = ((lunar->ps2->gs->frame_1 & 0x1f) * 2048);
 
-    SDL_UpdateTexture(lunar->texture, NULL, lunar->ps2->gs->vram + base, stride * 4);
+    SDL_DestroyTexture(lunar->texture);
+    lunar->texture = SDL_CreateTexture(
+        lunar->renderer,
+        SDL_PIXELFORMAT_ABGR8888,
+        SDL_TEXTUREACCESS_STREAMING,
+        width, height
+    );
+    SDL_SetTextureScaleMode(lunar->texture, SDL_ScaleModeLinear);
+    SDL_UpdateTexture(lunar->texture, NULL, lunar->ps2->gs->vram + base, width * 4);
     SDL_RenderCopy(lunar->renderer, lunar->texture, NULL, NULL);
 
     ImGui_ImplSDLRenderer2_RenderDrawData(GetDrawData(), lunar->renderer);

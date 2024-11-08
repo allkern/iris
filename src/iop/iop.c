@@ -92,6 +92,11 @@ void iop_destroy(struct iop_state* iop) {
     free(iop);
 }
 
+// static FILE* file;
+
+// int qty = 1000000;
+// int loop = 0;
+
 void iop_init(struct iop_state* iop, struct iop_bus_s bus) {
     memset(iop, 0, sizeof(struct iop_state));
 
@@ -162,6 +167,26 @@ void iop_cycle(struct iop_state* iop) {
     iop->opcode = iop_bus_read32(iop, iop->pc);
     iop->last_cycles = 0;
 
+    // if (!qty) {
+    //     qty = 1000000;
+
+    //     if (loop == 1) {
+    //         fclose(file);
+    //         exit(1);
+    //     }
+
+    //     ++loop;
+    // }
+
+    // --qty;
+
+    // if (loop == 1) {
+    //     fprintf(file, "%08x %08x ", iop->pc, iop->opcode);
+
+    //     for (int i = 0; i < 32; i++)
+    //         fprintf(file, (i < 31) ? "%08x " : "%08x\n", iop->r[i]);
+    // }
+
     uint32_t pc = iop->next_pc;
 
     if ((pc == 0x12C48) || (pc == 0x1420C) || (pc == 0x1430C)) {
@@ -204,6 +229,32 @@ void iop_cycle(struct iop_state* iop) {
     iop->total_cycles += iop->last_cycles;
 
     iop->r[0] = 0;
+}
+
+void iop_reset(struct iop_state* iop) {
+    for (int i = 0; i < 32; i++)
+        iop->r[i] = 0;
+
+    for (int i = 0; i < 16; i++)
+        iop->cop0_r[i] = 0;
+
+    iop->pc = 0xbfc00000;
+    iop->next_pc = iop->pc + 4;
+
+    iop->cop0_r[COP0_SR] = 0x10900000;
+    iop->cop0_r[COP0_PRID] = 0x0000001f;
+
+    iop->opcode = 0;
+    iop->hi = 0;
+    iop->lo = 0;
+    iop->load_d = 0;
+    iop->load_v = 0;
+    iop->last_cycles = 0;
+    iop->total_cycles = 0;
+    iop->biu_config = 0;
+    iop->branch = 0;
+    iop->delay_slot = 0;
+    iop->branch_taken = 0;
 }
 
 void iop_set_irq_pending(struct iop_state* iop) {
@@ -262,6 +313,20 @@ static inline void iop_i_j(struct iop_state* iop) {
     DO_PENDING_LOAD;
 
     iop->next_pc = (iop->next_pc & 0xf0000000) | (IMM26 << 2);
+
+    if ((iop->next_pc & 0xFFFF) == 0x1EC8 || (iop->next_pc & 0xFFFF) == 0x1F64) {
+        uint32_t ptr = iop->r[4];
+        uint16_t version = iop_bus_read16(iop, ptr + 8);
+
+        char name[9];
+
+        for (int i = 0; i < 8; i++)
+            name[i] = iop_bus_read8(iop, ptr + 12 + i);
+
+        name[8] = 0;
+
+        printf("iop: Register library %s version %d.0%d\n", name, version >> 8, version & 0xff);
+    }
 }
 
 static inline void iop_i_jal(struct iop_state* iop) {
@@ -457,7 +522,7 @@ static inline void iop_i_lw(struct iop_state* iop) {
         iop_exception(iop, CAUSE_ADEL);
     } else {
         if (addr == 0xfffe0130) {
-            iop->load_v = iop->biu_config;
+            iop->load_v = 0xffffffff;
             iop->load_d = T;
 
             return;

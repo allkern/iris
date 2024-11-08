@@ -58,6 +58,8 @@ static inline const char* dmac_get_channel_name(struct ps2_dmac* dmac, uint32_t 
 uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
+    const char* name = dmac_get_channel_name(dmac, addr);
+
     if (c) {
         switch (addr & 0xff) {
             case 0x00: return c->chcr;
@@ -99,6 +101,14 @@ static inline void dmac_fetch_tag(struct ps2_dmac* dmac, struct dmac_channel* c)
     c->tag.mem = TAG_MEM(tag);
     c->tag.data = TAG_DATA(tag);
 
+    // printf("ee: DMAC tag %016lx%016lx qwc=%08x id=%d addr=%08x data=%016lx",
+    //     tag.u64[1], tag.u64[0],
+    //     c->tag.qwc,
+    //     c->tag.id,
+    //     c->tag.addr,
+    //     c->tag.data
+    // );
+
     c->tag.end = 0;
 
     switch (c->tag.id) {
@@ -128,6 +138,10 @@ static inline void dmac_fetch_tag(struct ps2_dmac* dmac, struct dmac_channel* c)
             c->tag.end = 1;
         break;
     }
+
+    // If TIE is set, then end transfer
+    if ((c->chcr & 0x80) && c->tag.irq)
+        c->tag.end = 1;
 }
 
 static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
@@ -137,19 +151,51 @@ static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
 
     if ((dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff)) {
         ee_set_int1(dmac->ee);
+    } else {
+        // Reset INT1
+        dmac->ee->cause &= ~EE_CAUSE_IP3;
     }
 }
 
 static inline void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {}
 static inline void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {}
 static inline void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
-    for (int i = 0; i < dmac->gif.qwc; i++) {
-        uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+    if (((dmac->gif.chcr >> 2) & 7) != 1) {
+        for (int i = 0; i < dmac->gif.qwc; i++) {
+            uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
 
-        // GIF FIFO address
-        ee_bus_write128(dmac->bus, 0x10006000, q);
+            // GIF FIFO address
+            ee_bus_write128(dmac->bus, 0x10006000, q);
 
-        dmac->gif.madr += 16;
+            dmac->gif.madr += 16;
+        }
+    } else {
+        while (dmac->gif.qwc) {
+            uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+
+            ee_bus_write128(dmac->bus, 0x10006000, q);
+
+            dmac->gif.madr += 16;
+            --dmac->gif.qwc;
+        }
+
+        do {
+            dmac_fetch_tag(dmac, &dmac->gif);
+
+            // printf("ee: qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
+
+            for (int i = 0; i < dmac->gif.tag.qwc; i++) {
+                uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+
+                ee_bus_write128(dmac->bus, 0x10006000, q);
+
+                dmac->gif.madr += 16;
+            }
+
+            if (dmac->gif.tag.id == 1) {
+                dmac->gif.tadr = dmac->gif.madr;
+            }
+        } while (!dmac->gif.tag.end);
     }
 
     dmac_set_irq(dmac, DMAC_GIF);
@@ -228,9 +274,14 @@ void dmac_write_stat(struct ps2_dmac* dmac, uint32_t data) {
 void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
+    const char* name = dmac_get_channel_name(dmac, addr);
+
     if (c) {
         switch (addr & 0xff) {
             case 0x00: {
+                c->chcr = data;
+
+                printf("ee: Set %s chcr <- %08x %08x\n", name, data, dmac->sif1.chcr);
                 if (data & 0x100)
                     dmac_handle_channel_start(dmac, addr);
             } return;

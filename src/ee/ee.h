@@ -76,6 +76,11 @@ struct ee_bus_s {
 #define EE_VEC_COMMON  0x00000180
 #define EE_VEC_IRQ     0x00000200
 
+union ee_fpu_reg {
+    uint32_t u32;
+    float f;
+};
+
 struct ee_state {
     struct ee_bus_s bus;
 
@@ -129,11 +134,17 @@ struct ee_state {
             uint32_t unused31;
         };
     };
+
+    union ee_fpu_reg f[32];
+    union ee_fpu_reg a;
+
+    uint32_t fcr;
 };
 
 struct ee_state* ee_create(void);
 void ee_init(struct ee_state* ee, struct ee_bus_s bus);
 void ee_cycle(struct ee_state* ee);
+void ee_reset(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
 void ee_set_int0(struct ee_state* ee);
 void ee_set_int1(struct ee_state* ee);

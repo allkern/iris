@@ -2,7 +2,7 @@
 
 EXEC := eegs
 
-INCLUDE_DIRS := src imgui imgui/backends frontend
+INCLUDE_DIRS := src imgui imgui/backends frontend gl3w/include
 OUTPUT_DIR := bin
 
 CXX := c++
@@ -21,6 +21,7 @@ CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
 CSRC += $(wildcard src/iop/*.c)
 CSRC += $(wildcard src/shared/*.c)
+CSRC += $(wildcard gl3w/src/*.c)
 COBJ := $(CSRC:.c=.o)
 
 all: $(OUTPUT_DIR) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)

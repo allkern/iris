@@ -65,12 +65,28 @@ extern "C" {
 #define GS_FINISH     0x61
 #define GS_LABEL      0x62
 
+struct ps2_gs;
+
+struct gs_renderer {
+    void (*render_point)(struct ps2_gs*, void*);
+    void (*render_line)(struct ps2_gs*, void*);
+    void (*render_line_strip)(struct ps2_gs*, void*);
+    void (*render_triangle)(struct ps2_gs*, void*);
+    void (*render_triangle_strip)(struct ps2_gs*, void*);
+    void (*render_triangle_fan)(struct ps2_gs*, void*);
+    void (*render_sprite)(struct ps2_gs*, void*);
+    void (*render)(struct ps2_gs*, void*);
+    void* udata;
+};
+
 struct gs_vertex {
     uint64_t rgbaq;
     uint64_t xyz2;
 };
 
 struct ps2_gs {
+    struct gs_renderer backend;
+
     uint32_t* vram;
 
     uint64_t pmode;
@@ -167,11 +183,13 @@ struct ps2_gs {
     void* vblank_udata;
 
     struct sched_state* sched;
-    struct ps2_intc* intc;
+    struct ps2_intc* ee_intc;
+    struct ps2_iop_intc* iop_intc;
 };
 
 struct ps2_gs* ps2_gs_create(void);
-void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* intc, struct sched_state* sched);
+void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct sched_state* sched);
+void ps2_gs_init_renderer(struct ps2_gs* gs, struct gs_renderer renderer);
 void ps2_gs_destroy(struct ps2_gs* gs);
 uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr);
 void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data);

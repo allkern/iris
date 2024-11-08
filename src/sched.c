@@ -23,8 +23,10 @@ int event_compare(const void* a, const void* b) {
 }
 
 void sched_schedule(struct sched_state* sched, struct sched_event event) {
+    printf("sched: Schedule \'%s\'\n", event.name);
+
     if (!sched->nevents) {
-        sched->events = malloc(sizeof(struct sched_event) * 2);
+        sched->events = malloc(sizeof(struct sched_event) * 32);
         sched->cap = 32;
         sched->nevents = 1;
 
@@ -59,6 +61,10 @@ void sched_schedule(struct sched_state* sched, struct sched_event event) {
 }
 
 void sched_tick(struct sched_state* sched, int cycles) {
+    // printf("sched->nevents=%d\n", sched->nevents);
+
+    // exit(1);
+
     if (!sched->nevents)
         return;
 
@@ -68,17 +74,17 @@ void sched_tick(struct sched_state* sched, int cycles) {
     if (sched->events[0].cycles > 0)
         return;
 
-    // Provide callback with overshot cycles
-    sched->events[0].callback(sched->events[0].udata, sched->events[0].cycles);
+    --sched->nevents;
 
-    for (int i = 0; i < sched->nevents - 1; i++) {
+    for (int i = 0; i < sched->nevents; i++) {
         sched->events[i] = sched->events[i + 1];
         sched->events[i].cycles -= sched->offset;
     }
 
-    sched->offset = 0;
+    // Provide callback with overshot cycles
+    sched->events[0].callback(sched->events[0].udata, sched->events[0].cycles);
 
-    --sched->nevents;
+    sched->offset = 0;
 }
 
 const struct sched_event* sched_next_event(struct sched_state* sched) {

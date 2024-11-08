@@ -26,6 +26,7 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->ee_intc = ps2_intc_create();
     ps2->iop_dma = ps2_iop_dma_create();
     ps2->iop_intc = ps2_iop_intc_create();
+    ps2->iop_timers = ps2_iop_timers_create();
     ps2->iop_ram = ps2_ram_create();
     ps2->bios = ps2_bios_create();
     ps2->sif = ps2_sif_create();
@@ -67,11 +68,12 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
     ps2_gif_init(ps2->gif, ps2->gs);
-    ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->sched);
+    ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_intc_init(ps2->ee_intc, ps2->ee);
     ps2_ram_init(ps2->iop_ram, RAM_SIZE_2MB);
     ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->ee_dma, ps2->iop_bus);
     ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
+    ps2_iop_timers_init(ps2->iop_timers, ps2->iop_intc, ps2->sched);
     ps2_bios_init(ps2->bios, NULL);
     ps2_sif_init(ps2->sif);
 
@@ -81,6 +83,7 @@ void ps2_init(struct ps2_state* ps2) {
     iop_bus_init_sif(ps2->iop_bus, ps2->sif);
     iop_bus_init_dma(ps2->iop_bus, ps2->iop_dma);
     iop_bus_init_intc(ps2->iop_bus, ps2->iop_intc);
+    iop_bus_init_timers(ps2->iop_bus, ps2->iop_timers);
     ee_bus_init_bios(ps2->ee_bus, ps2->bios);
     ee_bus_init_iop_ram(ps2->ee_bus, ps2->iop_ram);
     ee_bus_init_sif(ps2->ee_bus, ps2->sif);
@@ -98,6 +101,11 @@ void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), 
 
 void ps2_load_bios(struct ps2_state* ps2, const char* path) {
     ps2_bios_init(ps2->bios, path);
+}
+
+void ps2_reset(struct ps2_state* ps2) {
+    ee_reset(ps2->ee);
+    iop_reset(ps2->iop);
 }
 
 void ps2_cycle(struct ps2_state* ps2) {
@@ -120,6 +128,7 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_intc_destroy(ps2->ee_intc);
     ps2_iop_dma_destroy(ps2->iop_dma);
     ps2_iop_intc_destroy(ps2->iop_intc);
+    ps2_iop_timers_destroy(ps2->iop_timers);
     ps2_ram_destroy(ps2->iop_ram);
     ps2_bios_destroy(ps2->bios);
     ps2_sif_destroy(ps2->sif);
