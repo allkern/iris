@@ -95,7 +95,7 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     gs->backend.render = gsr_sw_render;
     gs->backend.udata = &opengl_ctx;
 
-    gsr_gl_init(&opengl_ctx);
+    gsr_gl_init(opengl_ctx);
 }
 
 void ps2_gs_destroy(struct ps2_gs* gs) {
