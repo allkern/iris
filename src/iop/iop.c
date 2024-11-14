@@ -167,26 +167,6 @@ void iop_cycle(struct iop_state* iop) {
     iop->opcode = iop_bus_read32(iop, iop->pc);
     iop->last_cycles = 0;
 
-    // if (!qty) {
-    //     qty = 1000000;
-
-    //     if (loop == 1) {
-    //         fclose(file);
-    //         exit(1);
-    //     }
-
-    //     ++loop;
-    // }
-
-    // --qty;
-
-    // if (loop == 1) {
-    //     fprintf(file, "%08x %08x ", iop->pc, iop->opcode);
-
-    //     for (int i = 0; i < 32; i++)
-    //         fprintf(file, (i < 31) ? "%08x " : "%08x\n", iop->r[i]);
-    // }
-
     uint32_t pc = iop->next_pc;
 
     if ((pc == 0x12C48) || (pc == 0x1420C) || (pc == 0x1430C)) {
@@ -198,11 +178,11 @@ void iop_cycle(struct iop_state* iop) {
         }
     }
 
-    // if (p) {
-    //     iop_print_disassembly(iop);
+    if (iop->p) {
+        iop_print_disassembly(iop);
 
-    //     --p;
-    // }
+        --iop->p;
+    }
 
     iop->pc = iop->next_pc;
     iop->next_pc += 4;
@@ -210,7 +190,7 @@ void iop_cycle(struct iop_state* iop) {
     if (iop_check_irq(iop)) {
         iop->r[0] = 0;
 
-        printf("iop: irq pc=%08x next_pc=%08x saved_pc=%08x\n", iop->pc, iop->next_pc, iop->saved_pc);
+        // printf("iop: irq pc=%08x next_pc=%08x saved_pc=%08x\n", iop->pc, iop->next_pc, iop->saved_pc);
 
         iop_exception(iop, CAUSE_INT);
 

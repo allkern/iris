@@ -8,10 +8,14 @@
 #include "iop/intc.h"
 
 #include "gs_software.h"
-#include "gs_opengl.h"
 
 struct ps2_gs* ps2_gs_create(void) {
     return malloc(sizeof(struct ps2_gs));
+}
+
+static inline void gs_invoke_event_handler(struct ps2_gs* gs, int event) {
+    if (gs->events[event].func)
+        gs->events[event].func(gs->events[event].udata);
 }
 
 void gs_handle_vblank_in(void* udata, int overshoot);
@@ -26,14 +30,14 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
-    if (gs->vblank_callback)
-        gs->vblank_callback(gs->vblank_udata);
-
     // Tell backend to render scene
-    gs->backend.render(gs, gs->backend.udata);
+    if (gs->backend.render)
+        gs->backend.render(gs, gs->backend.udata);
+
+    gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
 
     // Set Vblank flag?
-    gs->csr &= !8;
+    gs->csr ^= 8;
     gs->csr ^= 1 << 13;
 
     // Send Vblank IRQ through INTC
@@ -54,7 +58,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     vblank_out_event.udata = gs;
 
     // Set Vblank flag?
-    gs->csr |= 8;
+    gs->csr ^= 8;
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
@@ -81,19 +85,19 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
 
     sched_schedule(gs->sched, vblank_event);
 
-    struct gsr_opengl* opengl_ctx = malloc(sizeof(struct gsr_opengl));
+    // struct gsr_opengl* opengl_ctx = malloc(sizeof(struct gsr_opengl));
 
-    gs->backend.render_point = gsr_sw_render_point;
-    gs->backend.render_line = gsr_sw_render_line;
-    gs->backend.render_line_strip = gsr_sw_render_line_strip;
-    gs->backend.render_triangle = gsr_sw_render_triangle;
-    gs->backend.render_triangle_strip = gsr_sw_render_triangle_strip;
-    gs->backend.render_triangle_fan = gsr_sw_render_triangle_fan;
-    gs->backend.render_sprite = gsr_sw_render_sprite;
-    gs->backend.render = gsr_sw_render;
-    gs->backend.udata = &opengl_ctx;
+    // gs->backend.render_point = gsr_sw_render_point;
+    // gs->backend.render_line = gsr_sw_render_line;
+    // gs->backend.render_line_strip = gsr_sw_render_line_strip;
+    // gs->backend.render_triangle = gsr_sw_render_triangle;
+    // gs->backend.render_triangle_strip = gsr_sw_render_triangle_strip;
+    // gs->backend.render_triangle_fan = gsr_sw_render_triangle_fan;
+    // gs->backend.render_sprite = gsr_sw_render_sprite;
+    // gs->backend.render = gsr_sw_render;
+    // gs->backend.udata = &opengl_ctx;
 
-    gsr_gl_init(opengl_ctx);
+    // gsr_gl_init(opengl_ctx);
 }
 
 void ps2_gs_destroy(struct ps2_gs* gs) {
@@ -101,6 +105,7 @@ void ps2_gs_destroy(struct ps2_gs* gs) {
 }
 
 static inline void gs_vram_blit(struct ps2_gs* gs) {
+    // printf("vram blit sbp=%x dbp=%x rrw=%x\n", gs->sbp, gs->dbp, gs->rrw);
     for (int y = 0; y < gs->rrh; y++) {
         uint32_t src = gs->sbp + gs->ssax + (gs->ssay * gs->sbw) + (y * gs->sbw);
         uint32_t dst = gs->dbp + gs->dsax + (gs->dsay * gs->dbw) + (y * gs->dbw);
@@ -158,10 +163,6 @@ void gs_transfer_write(struct ps2_gs* gs) {
     }
 }
 
-void gs_draw_point(struct ps2_gs* gs) {
-
-}
-
 void gs_start_primitive(struct ps2_gs* gs) {
     gs->vqi = 0;
 }
@@ -173,10 +174,44 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data) {
     switch (gs->prim & 7) {
         case 0: if (gs->vqi == 1) { gs->backend.render_point(gs, gs->backend.udata); gs->vqi = 0; } break;
         case 1: if (gs->vqi == 2) { gs->backend.render_line(gs, gs->backend.udata); gs->vqi = 0; } break;
-        case 2: if (gs->vqi == 2) { gs->backend.render_line_strip(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 2: {
+            if (gs->vqi == 2) {
+                gs->backend.render_line(gs, gs->backend.udata);
+            } else if (gs->vqi == 3) {
+                gs->vq[0] = gs->vq[1];
+                gs->vq[1] = gs->vq[2];
+
+                gs->backend.render_line(gs, gs->backend.udata);
+
+                gs->vqi = 2;
+            }
+        } break;
         case 3: if (gs->vqi == 3) { gs->backend.render_triangle(gs, gs->backend.udata); gs->vqi = 0; } break;
-        case 4: if (gs->vqi == 3) { gs->backend.render_triangle_strip(gs, gs->backend.udata); gs->vqi = 0; } break;
-        case 5: if (gs->vqi == 3) { gs->backend.render_triangle_fan(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 4: {
+            if (gs->vqi == 3) {
+                gs->backend.render_triangle(gs, gs->backend.udata);
+            } else if (gs->vqi == 4) {
+                gs->vq[0] = gs->vq[1];
+                gs->vq[1] = gs->vq[2];
+                gs->vq[2] = gs->vq[3];
+
+                gs->backend.render_triangle(gs, gs->backend.udata);
+
+                gs->vqi = 3;
+            }
+        } break;
+        case 5: {
+            if (gs->vqi == 3) {
+                gs->backend.render_triangle(gs, gs->backend.udata);
+            } else if (gs->vqi == 4) {
+                gs->vq[1] = gs->vq[2];
+                gs->vq[2] = gs->vq[3];
+
+                gs->backend.render_triangle(gs, gs->backend.udata);
+
+                gs->vqi = 3;
+            }
+        } break;
         case 6: if (gs->vqi == 2) { gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
     }
 }
@@ -245,7 +280,7 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x09: gs->clamp_2 = data; return;
         case 0x0A: gs->fog = data; return;
         case 0x0C: gs->xyzf3 = data; return;
-        case 0x0D: gs->xyz3 = data; gs_write_vertex(gs, gs->xyz3); return;
+        case 0x0D: gs->xyz3 = data; return;
         case 0x14: gs->tex1_1 = data; return;
         case 0x15: gs->tex1_2 = data; return;
         case 0x16: gs->tex2_1 = data; return;
@@ -263,7 +298,7 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x3B: gs->texa = data; return;
         case 0x3D: gs->fogcol = data; return;
         case 0x3F: gs->texflush = data; return;
-        case 0x40: gs->scissor_1 = data; return;
+        case 0x40: gs->scissor_1 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x41: gs->scissor_2 = data; return;
         case 0x42: gs->alpha_1 = data; return;
         case 0x43: gs->alpha_2 = data; return;
@@ -351,7 +386,7 @@ uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg) {
     return 0;
 }
 
-void ps2_gs_init_vblank_callback(struct ps2_gs* gs, void (*vblank_callback)(void*), void* udata) {
-    gs->vblank_callback = vblank_callback;
-    gs->vblank_udata = udata;
+void ps2_gs_init_callback(struct ps2_gs* gs, int event, void (*func)(void*), void* udata) {
+    gs->events[event].func = func;
+    gs->events[event].udata = udata;
 }

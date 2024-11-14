@@ -42,6 +42,9 @@ struct ps2_gif {
 
     int state;
     struct gif_tag tag;
+
+    // From ST(Q) to RGBA(Q)
+    uint64_t q;
 };
 
 struct ps2_gif* ps2_gif_create(void);

@@ -95,7 +95,7 @@ static inline void ee_d_bltzl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, 
 static inline void ee_d_bne(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, 0x%x", "bne", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT], s->pc + 4 + EE_D_SI16); }
 static inline void ee_d_bnel(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, 0x%x", "bnel", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT], s->pc + 4 + EE_D_SI16); }
 static inline void ee_d_break(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "break"); }
-static inline void ee_d_cache(uint32_t opcode) { ptr += sprintf(ptr, "%-8s 0x%02x, %d($%s)", "cache", EE_D_RT, EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_cache(uint32_t opcode) { ptr += sprintf(ptr, "%-8s 0x%02x, %d($%s)", "cache", EE_D_RT, (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
 static inline void ee_d_callmsr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "callmsr"); }
 static inline void ee_d_ceq(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d", "c.eq.s", EE_D_RS, EE_D_RT); }
 static inline void ee_d_cfc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $f%d", "cfc1", ee_cc_r[EE_D_RT], EE_D_RS); }
@@ -134,21 +134,21 @@ static inline void ee_d_j(uint32_t opcode) { ptr += sprintf(ptr, "%-8s 0x%08x", 
 static inline void ee_d_jal(uint32_t opcode) { ptr += sprintf(ptr, "%-8s 0x%08x", "jal", ((s->pc + 4) & 0xf0000000) | (EE_D_I26 << 2)); }
 static inline void ee_d_jalr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "jalr", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS]); }
 static inline void ee_d_jr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "jr", ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lb(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lb", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lbu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lbu", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_ld(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "ld", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_ldl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "ldl", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_ldr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "ldr", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lh", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lhu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lhu", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lq(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lq", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lb(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lb", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lbu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lbu", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_ld(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "ld", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_ldl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "ldl", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_ldr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "ldr", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lh", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lhu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lhu", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lq(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lq", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
 static inline void ee_d_lqc2(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "lqc2"); }
 static inline void ee_d_lui(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d", "lui", ee_cc_r[EE_D_RT], EE_D_I16); }
-static inline void ee_d_lw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lw", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lwc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, %d($%s)", "lwc1", EE_D_RT, EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lwl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lwl", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lwr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lwr", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_lwu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lwu", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lw", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lwc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, %d($%s)", "lwc1", EE_D_RT, (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lwl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lwl", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lwr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lwr", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_lwu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "lwu", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
 static inline void ee_d_madd(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "madd", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_madd1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "madd1", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_maddas(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d", "madda.s", EE_D_RS, EE_D_RT); }
@@ -235,7 +235,11 @@ static inline void ee_d_pmaddw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s,
 static inline void ee_d_pmaxh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "pmaxh", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_pmaxw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "pmaxw", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_pmfhi(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmfhi", ee_cc_r[EE_D_RD]); }
-static inline void ee_d_pmfhl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmfhl", ee_cc_r[EE_D_RS]); }
+static inline void ee_d_pmfhllw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmfhl.lw", ee_cc_r[EE_D_RD]); }
+static inline void ee_d_pmfhluw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmfhl.uw", ee_cc_r[EE_D_RD]); }
+static inline void ee_d_pmfhlslw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmfhl.slw", ee_cc_r[EE_D_RD]); }
+static inline void ee_d_pmfhllh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmfhl.lh", ee_cc_r[EE_D_RD]); }
+static inline void ee_d_pmfhlsh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmfhl.sh", ee_cc_r[EE_D_RD]); }
 static inline void ee_d_pmflo(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "pmflo", ee_cc_r[EE_D_RD]); }
 static inline void ee_d_pminh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "pminh", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_pminw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "pminw", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
@@ -253,7 +257,7 @@ static inline void ee_d_ppac5(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, 
 static inline void ee_d_ppacb(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "ppacb", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_ppach(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "ppach", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_ppacw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "ppacw", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
-static inline void ee_d_pref(uint32_t opcode) { ptr += sprintf(ptr, "%-8s %d($%s)", "pref", EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_pref(uint32_t opcode) { ptr += sprintf(ptr, "%-8s %d($%s)", "pref", (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
 static inline void ee_d_prevh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "prevh", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_prot3w(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "prot3w", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_psllh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "psllh", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RT], EE_D_SA); }
@@ -279,18 +283,18 @@ static inline void ee_d_qfsrv(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, 
 static inline void ee_d_qmfc2(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "qmfc2"); }
 static inline void ee_d_qmtc2(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "qmtc2"); }
 static inline void ee_d_rsqrts(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d, $f%d", "rsqrt.s", EE_D_RD, EE_D_RS, EE_D_RT); }
-static inline void ee_d_sb(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sb", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_sd(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sd", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_sdl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sdl", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_sdr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sdr", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_sh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sh", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_sb(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sb", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_sd(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sd", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_sdl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sdl", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_sdr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sdr", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_sh(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sh", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
 static inline void ee_d_sll(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "sll", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RT], EE_D_SA); }
 static inline void ee_d_sllv(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "sllv", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS]); }
 static inline void ee_d_slt(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "slt", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_slti(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "slti", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
 static inline void ee_d_sltiu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "sltiu", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
 static inline void ee_d_sltu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "sltu", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
-static inline void ee_d_sq(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sq", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_sq(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sq", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
 static inline void ee_d_sqc2(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "sqc2"); }
 static inline void ee_d_sqrts(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d", "sqrt.s", EE_D_RD, EE_D_RT); }
 static inline void ee_d_sra(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "sra", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RT], EE_D_SA); }
@@ -301,10 +305,10 @@ static inline void ee_d_sub(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%
 static inline void ee_d_subas(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d", "suba.s", EE_D_RS, EE_D_RT); }
 static inline void ee_d_subs(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d, $f%d", "sub.s", EE_D_RD, EE_D_RS, EE_D_RT); }
 static inline void ee_d_subu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "subu", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
-static inline void ee_d_sw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sw", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_swc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, %d($%s)", "swc1", EE_D_RT, EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_swl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "swl", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
-static inline void ee_d_swr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "swr", ee_cc_r[EE_D_RT], EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_sw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "sw", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_swc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, %d($%s)", "swc1", EE_D_RT, (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_swl(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "swl", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
+static inline void ee_d_swr(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, %d($%s)", "swr", ee_cc_r[EE_D_RT], (int16_t)EE_D_I16, ee_cc_r[EE_D_RS]); }
 static inline void ee_d_sync(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "sync"); }
 static inline void ee_d_syscall(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "syscall"); }
 static inline void ee_d_teq(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "teq", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
@@ -903,7 +907,15 @@ char *ee_disassemble(char *buf, uint32_t opcode, struct ee_dis_state *dis_state)
                         case 0x00000780: ee_d_pexcw(opcode); return buf;
                     }
                 } break;
-                case 0x00000030: ee_d_pmfhl(opcode); return buf;
+                case 0x00000030: {
+                    switch (opcode & 0x000007C0) {
+                        case 0x00000000: ee_d_pmfhllw(opcode); return buf;
+                        case 0x00000040: ee_d_pmfhluw(opcode); return buf;
+                        case 0x00000080: ee_d_pmfhlslw(opcode); return buf;
+                        case 0x000000c0: ee_d_pmfhllh(opcode); return buf;
+                        case 0x00000100: ee_d_pmfhlsh(opcode); return buf;
+                    }
+                } break;
                 case 0x00000031: ee_d_pmthl(opcode); return buf;
                 case 0x00000034: ee_d_psllh(opcode); return buf;
                 case 0x00000036: ee_d_psrlh(opcode); return buf;

@@ -24,12 +24,14 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->ee_dma = ps2_dmac_create();
     ps2->ee_ram = ps2_ram_create();
     ps2->ee_intc = ps2_intc_create();
+    ps2->ee_timers = ps2_ee_timers_create();
     ps2->iop_dma = ps2_iop_dma_create();
     ps2->iop_intc = ps2_iop_intc_create();
     ps2->iop_timers = ps2_iop_timers_create();
     ps2->iop_ram = ps2_ram_create();
     ps2->bios = ps2_bios_create();
     ps2->sif = ps2_sif_create();
+    ps2->cdvd = ps2_cdvd_create();
 
     // Initialize EE
     ee_bus_init(ps2->ee_bus, NULL);
@@ -70,10 +72,12 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_gif_init(ps2->gif, ps2->gs);
     ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_intc_init(ps2->ee_intc, ps2->ee);
+    ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
     ps2_ram_init(ps2->iop_ram, RAM_SIZE_2MB);
     ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->ee_dma, ps2->iop_bus);
     ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
     ps2_iop_timers_init(ps2->iop_timers, ps2->iop_intc, ps2->sched);
+    ps2_cdvd_init(ps2->cdvd);
     ps2_bios_init(ps2->bios, NULL);
     ps2_sif_init(ps2->sif);
 
@@ -84,14 +88,18 @@ void ps2_init(struct ps2_state* ps2) {
     iop_bus_init_dma(ps2->iop_bus, ps2->iop_dma);
     iop_bus_init_intc(ps2->iop_bus, ps2->iop_intc);
     iop_bus_init_timers(ps2->iop_bus, ps2->iop_timers);
+    iop_bus_init_cdvd(ps2->iop_bus, ps2->cdvd);
     ee_bus_init_bios(ps2->ee_bus, ps2->bios);
     ee_bus_init_iop_ram(ps2->ee_bus, ps2->iop_ram);
     ee_bus_init_sif(ps2->ee_bus, ps2->sif);
     ee_bus_init_dmac(ps2->ee_bus, ps2->ee_dma);
     ee_bus_init_intc(ps2->ee_bus, ps2->ee_intc);
+    ee_bus_init_timers(ps2->ee_bus, ps2->ee_timers);
     ee_bus_init_gif(ps2->ee_bus, ps2->gif);
     ee_bus_init_gs(ps2->ee_bus, ps2->gs);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
+
+    ps2->ee_cycles = 7;
 }
 
 void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void* ee_udata, void (*iop_kputchar)(void*, char), void* iop_udata) {
@@ -108,15 +116,57 @@ void ps2_reset(struct ps2_state* ps2) {
     iop_reset(ps2->iop);
 }
 
+#define EE_IOP_DIFF (294912000 / 36864000)
+
 void ps2_cycle(struct ps2_state* ps2) {
-    // for (int i = 0; i < 8; i++)
+    // for (int i = 0; i < ps2->nfuncs; i++) {
+    //     if (ps2->ee->pc == ps2->func[i].addr) {
+    //         printf("trace: %s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
+
+    //         if (ps2->func[i].addr == 0x119e98)
+    //             printf("fname=%s\n", ps2->ee_ram->buf + ps2->ee->r[4].ul32);
+    //         if (ps2->func[i].addr == 0x115ef0)
+    //             printf("reg=%08x\n", ps2->ee->r[4].ul32);
+    //         if (ps2->func[i].addr == 0x108a70)
+    //             exit(1);
+
+    //         break;
+    //     }
+    // }
+
+    sched_tick(ps2->sched, 1);
+    ee_cycle(ps2->ee);
+    ps2_ee_timers_tick(ps2->ee_timers);
+
+    --ps2->ee_cycles;
+
+    if (!ps2->ee_cycles) {
+        iop_cycle(ps2->iop);
+        ps2_iop_timers_tick(ps2->iop_timers);
+
+        ps2->ee_cycles = 7;
+    }
+}
+
+void ps2_iop_cycle(struct ps2_state* ps2) {
+    while (ps2->ee_cycles) {
+        sched_tick(ps2->sched, 1);
         ee_cycle(ps2->ee);
+        ps2_ee_timers_tick(ps2->ee_timers);
+
+        --ps2->ee_cycles;
+    }
 
     iop_cycle(ps2->iop);
-    iop_cycle(ps2->iop);
+    ps2_iop_timers_tick(ps2->iop_timers);
+
+    ps2->ee_cycles = 7;
 }
 
 void ps2_destroy(struct ps2_state* ps2) {
+    free(ps2->strtab);
+    free(ps2->func);
+
     sched_destroy(ps2->sched);
     ee_destroy(ps2->ee);
     iop_destroy(ps2->iop);
@@ -126,6 +176,7 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_dmac_destroy(ps2->ee_dma);
     ps2_ram_destroy(ps2->ee_ram);
     ps2_intc_destroy(ps2->ee_intc);
+    ps2_ee_timers_destroy(ps2->ee_timers);
     ps2_iop_dma_destroy(ps2->iop_dma);
     ps2_iop_intc_destroy(ps2->iop_intc);
     ps2_iop_timers_destroy(ps2->iop_timers);

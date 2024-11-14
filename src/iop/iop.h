@@ -61,6 +61,8 @@ struct iop_state {
     void* kputchar_udata;
 
     uint32_t cop0_r[16];
+
+    int p;
 };
 
 /*

@@ -84,6 +84,14 @@ struct gs_vertex {
     uint64_t xyz2;
 };
 
+struct gs_callback {
+    void (*func)(void*);
+    void* udata;
+};
+
+#define GS_EVENT_VBLANK 0
+#define GS_EVENT_SCISSOR 1
+
 struct ps2_gs {
     struct gs_renderer backend;
 
@@ -179,8 +187,7 @@ struct ps2_gs {
     struct gs_vertex vq[4];
     unsigned int vqi;
 
-    void (*vblank_callback)(void*);
-    void* vblank_udata;
+    struct gs_callback events[2];
 
     struct sched_state* sched;
     struct ps2_intc* ee_intc;
@@ -195,7 +202,9 @@ uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr);
 void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data);
 void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data);
 uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg);
-void ps2_gs_init_vblank_callback(struct ps2_gs* gs, void (*vblank_callback)(void*), void* udata);
+void ps2_gs_init_callback(struct ps2_gs* gs, int event, void (*func)(void*), void* udata);
+
+void gs_write_vertex(struct ps2_gs* gs, uint64_t data);
 
 #ifdef __cplusplus
 }

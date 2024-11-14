@@ -45,6 +45,10 @@ void ee_bus_init_gs(struct ee_bus* bus, struct ps2_gs* gs) {
     bus->gs = gs;
 }
 
+void ee_bus_init_timers(struct ee_bus* bus, struct ps2_ee_timers* timers) {
+    bus->timers = timers;
+}
+
 void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), void* udata) {
     bus->kputchar = kputchar;
     bus->kputchar_udata = udata;
@@ -106,6 +110,7 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x10003000, 0x100037FF, gif, gif);
     MAP_REG_READ(32, 0x1000F000, 0x1000F01F, intc, intc);
     MAP_REG_READ(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
+    MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers);
 
     switch (addr) {
         // SCPH-39001 won't boot if the timer updates too fast
@@ -138,7 +143,7 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
         } break;
     }
 
-    // printf("bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    printf("bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -196,14 +201,15 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
     MAP_MEM_WRITE(32, 0x00000000, 0x01FFFFFF, ram, ee_ram);
+    MAP_REG_WRITE(32, 0x10000000, 0x10001FFF, ee_timers, timers);
+    MAP_REG_WRITE(32, 0x10003000, 0x100037FF, gif, gif);
+    MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
+    MAP_REG_WRITE(32, 0x1000F000, 0x1000F01F, intc, intc);
+    MAP_REG_WRITE(32, 0x1000F200, 0x1000F26F, sif, sif);
+    MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
+    MAP_REG_WRITE(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
     MAP_MEM_WRITE(32, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_WRITE(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
-    MAP_REG_WRITE(32, 0x1000F200, 0x1000F26F, sif, sif);
-    MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
-    MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
-    MAP_REG_WRITE(32, 0x10003000, 0x100037FF, gif, gif);
-    MAP_REG_WRITE(32, 0x1000F000, 0x1000F01F, intc, intc);
-    MAP_REG_WRITE(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
 
     switch (addr) {
         case 0x1000f430: {
@@ -220,7 +226,7 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
         } return;
     }
 
-    // printf("bus: Unhandled 32-bit write to physical address 0x%08x (0x%08lx)\n", addr, data);
+    printf("bus: Unhandled 32-bit write to physical address 0x%08x (0x%08lx)\n", addr, data);
 }
 
 void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {

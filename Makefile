@@ -12,6 +12,7 @@ CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdlrenderer2.cpp)
 CXXSRC += $(wildcard frontend/*.cpp)
+CXXSRC += $(wildcard frontend/renderer/*.cpp)
 CXXOBJ := $(CXXSRC:.cpp=.o)
 
 CC := gcc

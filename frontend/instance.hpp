@@ -9,6 +9,7 @@
 #include <SDL.h>
 
 #include "ps2.h"
+#include "renderer/opengl.hpp"
 
 namespace lunar {
 
@@ -37,6 +38,8 @@ struct instance {
     bool open = false;
     bool pause = true;
     bool step = false;
+
+    opengl_state* renderer_state;
 };
 
 lunar::instance* create();

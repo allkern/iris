@@ -35,6 +35,7 @@ struct iop_dma_channel {
     uint32_t bcr;
     uint32_t chcr;
     uint32_t tadr;
+    int transfer_pending;
 };
 
 struct ps2_iop_dma {
@@ -71,7 +72,19 @@ void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct
 void ps2_iop_dma_destroy(struct ps2_iop_dma* dma);
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr);
 void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data);
-void ps2_iop_dma_start_sif1_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_mdec_in_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_mdec_out_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_sif2_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_otc_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma);
+void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma);
 
 #ifdef __cplusplus
 }

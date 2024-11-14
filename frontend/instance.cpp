@@ -12,6 +12,8 @@
 
 #include "ps2_elf.h"
 
+#include "renderer/opengl.hpp"
+
 namespace lunar {
 
 void kputchar_stub(void* udata, char c) {
@@ -23,7 +25,30 @@ struct iop_dis_state g_iop_dis_state;
 
 static const ImWchar icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
+void handle_scissor_event(void* udata) {
+    lunar::instance* lunar = (lunar::instance*)udata;
+
+    int scax0 = lunar->ps2->gs->scissor_1 & 0x3ff;
+    int scay0 = (lunar->ps2->gs->scissor_1 >> 32) & 0x3ff;
+    int scax1 = (lunar->ps2->gs->scissor_1 >> 16) & 0x3ff;
+    int scay1 = (lunar->ps2->gs->scissor_1 >> 48) & 0x3ff;
+
+    // printf("sca0=(%d,%d) sca1=(%d,%d) frame_1=%x\n",
+    //     scax0, scay0,
+    //     scax1, scay1,
+    //     lunar->ps2->gs->frame_1
+    // );
+    
+    int width = scax1 - scax0;
+    int height = scay1 - scay0;
+
+    opengl_set_size(lunar->renderer_state, width, height, 1.5);
+
+    // SDL_SetWindowSize(lunar->window, width, height);
+}
+
 lunar::instance* create();
+
 void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->window = SDL_CreateWindow(
         "eegs 0.1",
@@ -164,11 +189,77 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     ps2_init(lunar->ps2);
     ps2_load_bios(lunar->ps2, argv[1]);
     ps2_init_kputchar(lunar->ps2, kputchar_stub, NULL, kputchar_stub, NULL);
-    ps2_gs_init_vblank_callback(lunar->ps2->gs, (void (*)(void*))update_window, lunar);
+    ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, (void (*)(void*))update_window, lunar);
+    ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_SCISSOR, handle_scissor_event, lunar);
+
+    // Initialize hardware renderer
+    lunar->renderer_state = new opengl_state;
+
+    lunar->ps2->gs->backend.render_point = opengl_render_point;
+    lunar->ps2->gs->backend.render_line = opengl_render_line;
+    lunar->ps2->gs->backend.render_line_strip = opengl_render_line_strip;
+    lunar->ps2->gs->backend.render_triangle = opengl_render_triangle;
+    lunar->ps2->gs->backend.render_triangle_strip = opengl_render_triangle_strip;
+    lunar->ps2->gs->backend.render_triangle_fan = opengl_render_triangle_fan;
+    lunar->ps2->gs->backend.render_sprite = opengl_render_sprite;
+    lunar->ps2->gs->backend.render = opengl_render;
+    lunar->ps2->gs->backend.udata = lunar->renderer_state;
+
+    opengl_init(lunar->renderer_state);
+
+    lunar->ps2->gs->vqi = 0;
+    lunar->ps2->gs->prim = 5;
+
+    int cx = 640 / 2;
+    int cy = 480 / 2;
+    int r = 200;
+    float p = 0.25f * M_PI;
+
+    lunar->ps2->gs->rgbaq = 0xff0000; gs_write_vertex(lunar->ps2->gs, (320 << 4) | (240 << 20));
+
+    int m = 8;
+
+    for (int i = 0; i < m; i++) {
+        uint64_t px = (r * sin(p + (float)i * (0.1f * M_PI))) + cx;
+        uint64_t py = (r * cos(p + (float)i * (0.1f * M_PI))) + cy;
+
+        uint32_t r = i * (255 / m);
+        uint32_t g = 0;
+        uint32_t b = 0xff - (i * (255 / m));
+
+        lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
+
+        gs_write_vertex(lunar->ps2->gs, (px << 4) | (py << 20));
+    }
+
+    lunar->ps2->gs->vqi = 0;
+    lunar->ps2->gs->prim = 4;
+
+    int sx = 50;
+    int sy = 240;
+
+    int dx = 25;
+    int dy = 50;
+
+    int q = 9;
+
+    for (int i = 0; i < q; i++) {
+        uint32_t r = i * (255 / m);
+        uint32_t g = 0;
+        uint32_t b = 0xff - (i * (255 / m));
+
+        lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
+
+        gs_write_vertex(lunar->ps2->gs, (sx << 4) | (sy << 20));
+
+        sx += dx;
+        sy += (i & 1) ? -dy : dy;
+    }
+    
+    lunar->pause = 0;
 
     if (argv[2]) {
         lunar->elf_path = argv[2];
-        lunar->pause = 0;
 
         ps2_elf_load(lunar->ps2, lunar->elf_path);
     }
@@ -420,64 +511,9 @@ static void show_iop_disassembly_view(lunar::instance* lunar) {
 
 void destroy(lunar::instance* lunar);
 
-int ee_ticks = 7;
-
-static void tick_ee(lunar::instance* lunar) {
-    sched_tick(lunar->ps2->sched, 1);
-    ee_cycle(lunar->ps2->ee);
-
-    --ee_ticks;
-
-    if (!ee_ticks) {
-        iop_cycle(lunar->ps2->iop);
-        ps2_iop_timers_tick(lunar->ps2->iop_timers);
-
-        ee_ticks = 7;
-    }
-}
-
-static void tick_iop(lunar::instance* lunar) {
-    while (ee_ticks) {
-        sched_tick(lunar->ps2->sched, 1);
-        ee_cycle(lunar->ps2->ee);
-
-        --ee_ticks;
-    }
-
-    iop_cycle(lunar->ps2->iop);
-
-    ee_ticks = 8;
-}
-
-// int iop_ticks = 2;
-
-// static void tick_ee(lunar::instance* lunar) {
-//     iop_cycle(lunar->ps2->iop);
-
-//     --iop_ticks;
-
-//     if (!iop_ticks) {
-//         ee_cycle(lunar->ps2->ee);
-
-//         iop_ticks = 2;
-//     }
-// }
-
-// static void tick_iop(lunar::instance* lunar) {
-//     while (iop_ticks) {
-//         iop_cycle(lunar->ps2->iop);
-
-//         --iop_ticks;
-//     }
-
-//     ee_cycle(lunar->ps2->ee);
-
-//     iop_ticks = 2;
-// }
-
 void update(lunar::instance* lunar) {
     if (!lunar->pause) {
-        tick_ee(lunar);
+        ps2_cycle(lunar->ps2);
     } else {
         update_window(lunar);
     }
@@ -486,97 +522,99 @@ void update(lunar::instance* lunar) {
 void update_window(lunar::instance* lunar) {
     using namespace ImGui;
 
-    ImGuiIO& io = ImGui::GetIO();
+    // ImGuiIO& io = ImGui::GetIO();
 
-    ImGui_ImplSDLRenderer2_NewFrame();
-    ImGui_ImplSDL2_NewFrame();
-    NewFrame();
+    // ImGui_ImplSDLRenderer2_NewFrame();
+    // ImGui_ImplSDL2_NewFrame();
+    // NewFrame();
 
-    DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+    // DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-    PushFont(lunar->font_body);
+    // PushFont(lunar->font_body);
 
-    if (Begin("Logs")) {
-        if (BeginTabBar("logs_tabs")) {
-            if (BeginTabItem("EE")) {
-                Text("EE logs");
+    // if (Begin("Logs")) {
+    //     if (BeginTabBar("logs_tabs")) {
+    //         if (BeginTabItem("EE")) {
+    //             Text("EE logs");
 
-                EndTabItem();
-            }
+    //             EndTabItem();
+    //         }
 
-            if (BeginTabItem("IOP")) {
-                Text("IOP logs");
+    //         if (BeginTabItem("IOP")) {
+    //             Text("IOP logs");
 
-                EndTabItem();
-            }
+    //             EndTabItem();
+    //         }
 
-            EndTabBar();
-        }
-    } End();
+    //         EndTabBar();
+    //     }
+    // } End();
 
-    if (Begin("EE control")) {
-        if (Button(ICON_MS_STEP)) {
-            if (!lunar->pause) {
-                lunar->pause = true;
-            } else {
-                tick_ee(lunar);
-            }
-        } SameLine();
+    // if (Begin("EE control")) {
+    //     if (Button(ICON_MS_STEP)) {
+    //         if (!lunar->pause) {
+    //             lunar->pause = true;
+    //         } else {
+    //             tick_ee(lunar);
+    //         }
+    //     } SameLine();
 
-        if (Button(lunar->pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE)) {
-            lunar->pause = !lunar->pause;
-        }
-    } End();
+    //     if (Button(lunar->pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE)) {
+    //         lunar->pause = !lunar->pause;
+    //     }
+    // } End();
 
-    if (Begin("IOP control")) {
-        if (Button(ICON_MS_STEP)) {
-            if (!lunar->pause) {
-                lunar->pause = true;
-            } else {
-                tick_iop(lunar);
-            }
-        }
-    } End();
+    // if (Begin("IOP control")) {
+    //     if (Button(ICON_MS_STEP)) {
+    //         if (!lunar->pause) {
+    //             lunar->pause = true;
+    //         } else {
+    //             tick_iop(lunar);
+    //         }
+    //     }
+    // } End();
 
-    if (Begin("EE disassembly")) {
-        show_ee_disassembly_view(lunar);
-    } End();
+    // if (Begin("EE disassembly")) {
+    //     show_ee_disassembly_view(lunar);
+    // } End();
 
-    if (Begin("IOP disassembly")) {
-        show_iop_disassembly_view(lunar);
-    } End();
+    // if (Begin("IOP disassembly")) {
+    //     show_iop_disassembly_view(lunar);
+    // } End();
 
-    PopFont();
+    // PopFont();
 
-    Render();
+    // Render();
 
-    // SDL_GL_SwapWindow(lunar->window);
+    // // SDL_GL_SwapWindow(lunar->window);
 
-    SDL_RenderSetScale(lunar->renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
+    // SDL_RenderSetScale(lunar->renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 
-    SDL_SetRenderDrawColor(lunar->renderer, 0, 0, 0, 0xff);
-    SDL_RenderClear(lunar->renderer);
+    // SDL_SetRenderDrawColor(lunar->renderer, 0, 0, 0, 0xff);
+    // SDL_RenderClear(lunar->renderer);
 
-    int width = ((lunar->ps2->gs->display2 >> 32) & 0xfff) + 1;
-    width /= ((lunar->ps2->gs->display2 >> 23) & 0xf) + 1;
-    int height = ((lunar->ps2->gs->display2 >> 44) & 0x7ff) + 1;
-    // int stride = ((lunar->ps2->gs->frame_1 >> 16) & 0x3f) * 64;
-    uint64_t base = ((lunar->ps2->gs->frame_1 & 0x1f) * 2048);
+    // int width = ((lunar->ps2->gs->display2 >> 32) & 0xfff) + 1;
+    // width /= ((lunar->ps2->gs->display2 >> 23) & 0xf) + 1;
+    // int height = ((lunar->ps2->gs->display2 >> 44) & 0x7ff) + 1;
+    // // int stride = ((lunar->ps2->gs->frame_1 >> 16) & 0x3f) * 64;
+    // uint64_t base = ((lunar->ps2->gs->frame_1 & 0x1f) * 2048);
 
-    SDL_DestroyTexture(lunar->texture);
-    lunar->texture = SDL_CreateTexture(
-        lunar->renderer,
-        SDL_PIXELFORMAT_ABGR8888,
-        SDL_TEXTUREACCESS_STREAMING,
-        width, height
-    );
-    SDL_SetTextureScaleMode(lunar->texture, SDL_ScaleModeLinear);
-    SDL_UpdateTexture(lunar->texture, NULL, lunar->ps2->gs->vram + base, width * 4);
-    SDL_RenderCopy(lunar->renderer, lunar->texture, NULL, NULL);
+    // SDL_DestroyTexture(lunar->texture);
+    // lunar->texture = SDL_CreateTexture(
+    //     lunar->renderer,
+    //     SDL_PIXELFORMAT_ABGR8888,
+    //     SDL_TEXTUREACCESS_STREAMING,
+    //     width, height
+    // );
+    // SDL_SetTextureScaleMode(lunar->texture, SDL_ScaleModeLinear);
+    // SDL_UpdateTexture(lunar->texture, NULL, lunar->ps2->gs->vram + base, width * 4);
+    // SDL_RenderCopy(lunar->renderer, lunar->texture, NULL, NULL);
 
-    ImGui_ImplSDLRenderer2_RenderDrawData(GetDrawData(), lunar->renderer);
+    // ImGui_ImplSDLRenderer2_RenderDrawData(GetDrawData(), lunar->renderer);
 
-    SDL_RenderPresent(lunar->renderer);
+    // SDL_RenderPresent(lunar->renderer);
+
+    SDL_GL_SwapWindow(lunar->window);
 
     SDL_Event event;
 
