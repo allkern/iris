@@ -23,6 +23,7 @@ struct ps2_cdvd {
     int n_param_index;
     int s_param_index;
     int s_fifo_index;
+    int s_fifo_size;
 };
 
 struct ps2_cdvd* ps2_cdvd_create(void);

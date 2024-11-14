@@ -24,7 +24,7 @@ struct iop_bus {
     struct ps2_iop_dma* dma;
     struct ps2_iop_intc* intc;
     struct ps2_iop_timers* timers;
-    struct ps2_iop_cdvd* cdvd;
+    struct ps2_cdvd* cdvd;
 };
 
 void iop_bus_init_bios(struct iop_bus* bus, struct ps2_bios* bios);

@@ -37,6 +37,10 @@ void iop_bus_init_timers(struct iop_bus* bus, struct ps2_iop_timers* timers) {
     bus->timers = timers;
 }
 
+void iop_bus_init_cdvd(struct iop_bus* bus, struct ps2_cdvd* cdvd) {
+    bus->cdvd = cdvd;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }

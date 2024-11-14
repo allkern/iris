@@ -169,9 +169,9 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
             } break;
         }
 
-        printf("giftag: nloop=%04lx eop=%d prim=%d fmt=%d nregs=%d reg=%016lx\n",
-            gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.fmt, gif->tag.nregs, gif->tag.reg
-        );
+        // printf("giftag: nloop=%04lx eop=%d prim=%d fmt=%d nregs=%d reg=%016lx\n",
+        //     gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.fmt, gif->tag.nregs, gif->tag.reg
+        // );
     
         if (gif->tag.pre) {
             ps2_gs_write_internal(gif->gs, GS_PRIM, gif->tag.prim);
