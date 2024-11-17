@@ -90,9 +90,7 @@ uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr) {
     return 0;
 }
 
-static inline void dmac_fetch_tag(struct ps2_dmac* dmac, struct dmac_channel* c) {
-    uint128_t tag = ee_bus_read128(dmac->bus, c->tadr);
-
+static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_channel* c, uint128_t tag) {
     c->tag.qwc = TAG_QWC(tag);
     c->tag.pct = TAG_PCT(tag);
     c->tag.id = TAG_ID(tag);
@@ -101,10 +99,12 @@ static inline void dmac_fetch_tag(struct ps2_dmac* dmac, struct dmac_channel* c)
     c->tag.mem = TAG_MEM(tag);
     c->tag.data = TAG_DATA(tag);
 
-    // printf("ee: dmac tag qwc=%08x id=%d addr=%08x data=%016lx\n",
+    // printf("ee: dmac tag qwc=%08x id=%d irq=%d addr=%08x mem=%d data=%016lx\n",
     //     c->tag.qwc,
     //     c->tag.id,
+    //     c->tag.irq,
     //     c->tag.addr,
+    //     c->tag.mem,
     //     c->tag.data
     // );
 
@@ -143,6 +143,26 @@ static inline void dmac_fetch_tag(struct ps2_dmac* dmac, struct dmac_channel* c)
         c->tag.end = 1;
 }
 
+static inline void dmac_process_dest_tag(struct ps2_dmac* dmac, struct dmac_channel* c, uint128_t tag) {
+    c->tag.qwc = TAG_QWC(tag);
+    c->tag.pct = TAG_PCT(tag);
+    c->tag.id = TAG_ID(tag);
+    c->tag.irq = TAG_IRQ(tag);
+    c->tag.addr = TAG_ADDR(tag);
+    c->tag.mem = TAG_MEM(tag);
+    c->tag.data = TAG_DATA(tag);
+
+    c->tag.end = dmac->sif0.tag.irq && (dmac->sif0.chcr & 0x80);
+
+    switch (c->tag.id) {
+        case 7:
+            c->tag.end = 1;
+        case 0:
+        case 1:
+            c->madr = c->tag.addr;
+    }
+}
+
 static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
     dmac->stat |= 1 << ch;
 
@@ -156,21 +176,36 @@ static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
     }
 }
 
-static inline void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {}
-static inline void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {}
-static inline void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
+void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
+    dmac_set_irq(dmac, DMAC_GIF);
+
+    dmac->gif.chcr &= ~0x100;
+
     // printf("dmac: GIF transfer mode=%d madr=%08x qwc=%d\n", (dmac->gif.chcr >> 2) & 7, dmac->gif.madr, dmac->gif.qwc);
-    if (((dmac->gif.chcr >> 2) & 7) != 1) {
-        for (int i = 0; i < dmac->gif.qwc; i++) {
-            uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+    for (int i = 0; i < dmac->gif.qwc; i++) {
+        uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
 
-            // GIF FIFO address
-            ee_bus_write128(dmac->bus, 0x10006000, q);
+        // GIF FIFO address
+        ee_bus_write128(dmac->bus, 0x10006000, q);
 
-            dmac->gif.madr += 16;
-        }
-    } else {
-        while (dmac->gif.qwc) {
+        dmac->gif.madr += 16;
+    }
+
+    if (((dmac->gif.chcr >> 2) & 7) != 1)
+        return;
+
+    // Chain mode
+
+    do {
+        uint128_t tag = ee_bus_read128(dmac->bus, dmac->gif.tadr);
+
+        dmac_process_source_tag(dmac, &dmac->gif, tag);
+
+        // printf("ee: gif qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
+
+        for (int i = 0; i < dmac->gif.tag.qwc; i++) {
             uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
 
             // printf("ee: Sending %016lx%016lx from %08x to GIF FIFO\n",
@@ -181,48 +216,68 @@ static inline void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
             ee_bus_write128(dmac->bus, 0x10006000, q);
 
             dmac->gif.madr += 16;
-            --dmac->gif.qwc;
         }
 
-        do {
-            dmac_fetch_tag(dmac, &dmac->gif);
-
-            // printf("ee: gif qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
-
-            for (int i = 0; i < dmac->gif.tag.qwc; i++) {
-                uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
-
-                // printf("ee: Sending %016lx%016lx from %08x to GIF FIFO\n",
-                //     q.u64[1], q.u64[0],
-                //     dmac->gif.madr
-                // );
-
-                ee_bus_write128(dmac->bus, 0x10006000, q);
-
-                dmac->gif.madr += 16;
-            }
-
-            if (dmac->gif.tag.id == 1) {
-                dmac->gif.tadr = dmac->gif.madr;
-            }
-        } while (!dmac->gif.tag.end);
-    }
-
-    dmac_set_irq(dmac, DMAC_GIF);
-
-    dmac->gif.chcr &= ~0x100;
+        if (dmac->gif.tag.id == 1) {
+            dmac->gif.tadr = dmac->gif.madr;
+        }
+    } while (!dmac->gif.tag.end);
 }
 
-static inline void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {}
-static inline void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {}
-static inline void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {}
-static inline void dmac_handle_sif2_transfer(struct ps2_dmac* dmac) {}
-static inline void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {}
-static inline void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
+    // SIF FIFO is empty, keep waiting
+    if (ps2_sif_fifo_is_empty(dmac->sif)) {
+        return;
+    }
 
-static inline void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
+    // Data ready but channel isn't ready yet, keep waiting
+    if (!(dmac->sif0.chcr & 0x100)) {
+        return;
+    }
+
+    while (!ps2_sif_fifo_is_empty(dmac->sif)) {
+        uint128_t tag = ps2_sif_fifo_read(dmac->sif);
+
+        dmac_process_dest_tag(dmac, &dmac->sif0, tag);
+
+        // printf("ee: sif0 tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx tte=%d\n",
+        //     dmac->sif0.tag.qwc,
+        //     dmac->sif0.tag.id,
+        //     dmac->sif0.tag.irq,
+        //     dmac->sif0.tag.addr,
+        //     dmac->sif0.tag.mem,
+        //     dmac->sif0.tag.data,
+        //     dmac->sif0.chcr
+        // );
+
+        for (int i = 0; i < dmac->sif0.tag.qwc; i++) {
+            uint128_t q = ps2_sif_fifo_read(dmac->sif);
+
+            // printf("ee: Writing %016lx %016lx to %08x\n", q.u64[1], q.u64[0], dmac->sif0.madr);
+
+            ee_bus_write128(dmac->bus, dmac->sif0.madr, q);
+
+            dmac->sif0.madr += 16;
+        }
+
+        if (dmac->sif0.tag.end) {
+            dmac->sif0.chcr &= ~0x100;
+
+            dmac_set_irq(dmac, DMAC_SIF0);
+
+            ps2_sif_fifo_reset(dmac->sif);
+
+            break;
+        }
+    }
+}
+void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
     do {
-        dmac_fetch_tag(dmac, &dmac->sif1);
+        uint128_t tag = ee_bus_read128(dmac->bus, dmac->sif1.tadr);
+
+        dmac_process_source_tag(dmac, &dmac->sif1, tag);
 
         for (int i = 0; i < dmac->sif1.tag.qwc; i++) {
             uint128_t q = ee_bus_read128(dmac->bus, dmac->sif1.madr);
@@ -236,7 +291,16 @@ static inline void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
     iop_dma_handle_sif1_transfer(dmac->iop_dma);
 
     dmac_set_irq(dmac, DMAC_SIF1);
+
+    dmac->sif1.chcr &= ~0x100;
 }
+void dmac_handle_sif2_transfer(struct ps2_dmac* dmac) {
+    printf("ee: SIF2 transfer\n");
+
+    exit(1);
+}
+void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {}
 
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
@@ -321,48 +385,4 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
         case 0x1000F520: dmac->enabler = data; return;
         case 0x1000F590: dmac->enablew = data; return;
     }
-}
-
-void ps2_dmac_start_sif0_transfer(struct ps2_dmac* dmac) {
-    uint128_t tag = ps2_sif_fifo_read(dmac->sif);
-
-    dmac->sif0.tag.qwc = TAG_QWC(tag);
-    dmac->sif0.tag.pct = TAG_PCT(tag);
-    dmac->sif0.tag.id = TAG_ID(tag);
-    dmac->sif0.tag.irq = TAG_IRQ(tag);
-    dmac->sif0.tag.addr = TAG_ADDR(tag);
-    dmac->sif0.tag.mem = TAG_MEM(tag);
-    dmac->sif0.tag.data = TAG_DATA(tag);
-
-    switch (dmac->sif0.tag.id) {
-        case 7:
-            dmac->sif0.tag.end = 1;
-        case 0:
-        case 1:
-            dmac->sif0.madr = dmac->sif0.tag.addr;
-    }
-
-    for (int i = 0; i < dmac->sif0.tag.qwc; i++) {
-        uint128_t q = ps2_sif_fifo_read(dmac->sif);
-
-        // printf("writing %016lx %016lx to %08x\n", q.u64[1], q.u64[0], dmac->sif0.madr);
-
-        ee_bus_write128(dmac->bus, dmac->sif0.madr, q);
-
-        dmac->sif0.madr += 16;
-    }
-
-    // printf("eedmac: sif0 tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx tte=%d\n",
-    //     dmac->sif0.tag.qwc,
-    //     dmac->sif0.tag.id,
-    //     dmac->sif0.tag.irq,
-    //     dmac->sif0.tag.addr,
-    //     dmac->sif0.tag.mem,
-    //     dmac->sif0.tag.data,
-    //     dmac->sif0.chcr
-    // );
-
-    ps2_sif_fifo_reset(dmac->sif);
-
-    dmac_set_irq(dmac, DMAC_SIF0);
 }

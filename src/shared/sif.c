@@ -67,6 +67,23 @@ void ps2_sif_write32(struct ps2_sif* sif, uint32_t addr, uint64_t data) {
 void ps2_sif_fifo_write(struct ps2_sif* sif, uint128_t data) {
     // printf("writing %016lx %016lx to SIF FIFO\n", data.u64[1], data.u64[0]);
 
+    if (!sif->fifo.capacity) {
+        sif->fifo.capacity = 4;
+        sif->fifo.data = malloc(sizeof(uint128_t) * 4);
+    } else if (sif->fifo.write_index == sif->fifo.capacity) {
+        sif->fifo.capacity *= 2;
+
+        uint128_t* ptr = realloc(sif->fifo.data, sizeof(uint128_t) * sif->fifo.capacity);
+        
+        if (!ptr) {
+            printf("sif: Couldn't resize SIF FIFO buffer\n");
+
+            exit(1);
+        }
+
+        sif->fifo.data = ptr;
+    }
+
     sif->fifo.data[sif->fifo.write_index++] = data;
 }
 

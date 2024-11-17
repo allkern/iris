@@ -55,7 +55,8 @@ static const char *ee_cc_r[] = {
     "r0", "at", "v0", "v1", "a0", "a1", "a2", "a3",
     "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
     "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
-    "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"};
+    "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
+};
 
 static inline void ee_d_abss(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d", "abs.s", EE_D_RD, EE_D_RS); }
 static inline void ee_d_add(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "add", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }

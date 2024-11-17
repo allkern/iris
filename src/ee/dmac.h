@@ -92,7 +92,16 @@ void ps2_dmac_destroy(struct ps2_dmac* dmac);
 uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr);
 void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data);
 
-void ps2_dmac_start_sif0_transfer(struct ps2_dmac* dmac);
+void dmac_handle_vif0_transfer(struct ps2_dmac* dmac);
+void dmac_handle_vif1_transfer(struct ps2_dmac* dmac);
+void dmac_handle_gif_transfer(struct ps2_dmac* dmac);
+void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac);
+void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac);
+void dmac_handle_sif0_transfer(struct ps2_dmac* dmac);
+void dmac_handle_sif1_transfer(struct ps2_dmac* dmac);
+void dmac_handle_sif2_transfer(struct ps2_dmac* dmac);
+void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac);
+void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac);
 
 #ifdef __cplusplus
 }

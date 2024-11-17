@@ -36,6 +36,14 @@ struct iop_dma_channel {
     uint32_t chcr;
     uint32_t tadr;
     int transfer_pending;
+
+    // Tag
+    uint64_t tag;
+    uint32_t addr;
+    uint32_t size;
+    int irq;
+    int eot;
+    int extra;
 };
 
 struct ps2_iop_dma {

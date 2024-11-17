@@ -29,7 +29,8 @@ void ps2_ee_timers_destroy(struct ps2_ee_timers* timers) {
 uint64_t ps2_ee_timers_read32(struct ps2_ee_timers* timers, uint32_t addr) {
     int t = (addr >> 11) & 3;
 
-    printf("ee: timer %d read %08x\n", t, addr & 0xff);
+    // printf("ee: timer %d read %08x\n", t, addr & 0xff);
+
     switch (addr & 0xff) {
         case 0x00: return timers->timer[t].counter;
         case 0x10: return timers->timer[t].mode;
@@ -40,16 +41,22 @@ uint64_t ps2_ee_timers_read32(struct ps2_ee_timers* timers, uint32_t addr) {
     return 0;
 }
 
+static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, uint32_t data, int t) {
+    timers->timer[t].mode &= 0xc00;
+    timers->timer[t].mode |= data & (~0xc00);
+    timers->timer[t].mode &= ~(data & 0xc00);
+}
+
 void ps2_ee_timers_write32(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data) {
     int t = (addr >> 11) & 3;
 
     printf("ee: timer %d write %08x to %02x\n", t, data, addr & 0xff);
 
     switch (addr & 0xff) {
-        case 0x00: timers->timer[t].counter = data; return;
+        case 0x00: timers->timer[t].counter = data & 0xffff; return;
         case 0x10: timers->timer[t].mode = data; return;
-        case 0x20: timers->timer[t].compare = data; return;
-        case 0x30: timers->timer[t].hold = data; return;
+        case 0x20: ee_timers_write_mode(timers, data & 0xffff, t); return;
+        case 0x30: timers->timer[t].hold = data & 0xffff; return;
     }
 }
 
@@ -69,8 +76,7 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->mode |= 0x400;
 
         if (t->mode & 0x100) {
-            // printf("ee: Sending compare IRQ\n");
-            ps2_intc_irq(timers->intc, EE_INTC_TIMER0 << timer);
+            // ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
 
         if (t->mode & 0x40) {
@@ -83,7 +89,7 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->counter -= 0xffff;
 
         if (t->mode & 0x200) {
-            ps2_intc_irq(timers->intc, EE_INTC_TIMER0 << timer);
+            // ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
     }
 

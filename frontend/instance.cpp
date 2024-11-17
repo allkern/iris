@@ -14,6 +14,8 @@
 
 #include "renderer/opengl.hpp"
 
+#include <csignal>
+
 namespace lunar {
 
 void kputchar_stub(void* udata, char c) {
@@ -49,7 +51,84 @@ void handle_scissor_event(void* udata) {
 
 lunar::instance* create();
 
+lunar::instance* g_lunar = nullptr;
+
+static const char *ee_cc_r2[] = {
+    "r0", "at", "v0", "v1", "a0", "a1", "a2", "a3",
+    "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
+    "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+    "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
+};
+
+void sigint_handler(int signal) {
+    char buf[128];
+    struct ee_dis_state ds;
+
+    ds.print_address = 1;
+    ds.print_opcode = 1;
+
+    struct ee_state* ee = g_lunar->ps2->ee;
+
+    FILE* file = fopen("ram.dump", "wb");
+
+    fwrite(g_lunar->ps2->ee_ram->buf, 1, RAM_SIZE_32MB, file);
+    fclose(file);
+
+    for (int i = 0; i < 32; i++) {
+        printf("%s: %08x %08x %08x %08x\n",
+            ee_cc_r2[i],
+            ee->r[i].u32[3],
+            ee->r[i].u32[2],
+            ee->r[i].u32[1],
+            ee->r[i].u32[0]
+        );
+    }
+
+    printf("hi: %08x %08x %08x %08x\n",
+        ee->hi.u32[3],
+        ee->hi.u32[2],
+        ee->hi.u32[1],
+        ee->hi.u32[0]
+    );
+    printf("lo: %08x %08x %08x %08x\n",
+        ee->hi.u32[3],
+        ee->hi.u32[2],
+        ee->hi.u32[1],
+        ee->hi.u32[0]
+    );
+    printf("pc: %08x\n", ee->pc);
+
+    for (int i = -8; i <= 8; i++) {
+        ds.pc = ee->pc + (i * 4);
+
+        if (ee->pc == ds.pc) {
+            printf("--> ");
+        } else {
+            printf("    ");
+        }
+
+        puts(ee_disassemble(buf, ee_bus_read32(ee->bus.udata, ds.pc & 0x1fffffff), &ds));
+    }
+
+    printf("intc: stat=%08x mask=%08x\n",
+        g_lunar->ps2->ee_intc->stat,
+        g_lunar->ps2->ee_intc->mask
+    );
+
+    printf("dmac: stat=%08x mask=%08x\n",
+        g_lunar->ps2->ee_dma->stat & 0x3ff,
+        (g_lunar->ps2->ee_dma->stat >> 16) & 0x3ff
+    );
+
+    printf("epc: %08x\n", ee->epc);
+
+    exit(1);
+}
+
 void init(lunar::instance* lunar, int argc, const char* argv[]) {
+    g_lunar = lunar;
+    std::signal(SIGINT, sigint_handler);
+
     lunar->window = SDL_CreateWindow(
         "eegs 0.1",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
@@ -182,7 +261,6 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 
     lunar->open = true;
-    lunar->texture_buf = (uint32_t*)malloc((640 * 480) * sizeof(uint32_t));
 
     lunar->ps2 = ps2_create();
 

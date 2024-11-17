@@ -105,9 +105,28 @@ static inline const char* iop_dma_get_channel_name(uint32_t addr) {
 
     return NULL;
 }
+
+static inline void dma_fetch_tag(struct ps2_iop_dma* dma, struct iop_dma_channel* c) {
+    c->tag = iop_bus_read32(dma->bus, c->tadr);
+    c->tag |= (uint64_t)iop_bus_read32(dma->bus, c->tadr + 4) << 32;
+
+    c->addr = c->tag & 0x7fffff;
+    c->size = (c->tag >> 32) & 0xffffff;
+    c->irq = !!(c->tag & 0x40000000);
+    c->eot = !!(c->tag & 0x80000000);
+    c->extra = !!(c->chcr & 0x100);
+
+    // Round to 8 words
+    c->size = (c->size + 3) & ~3;
+}
+
 void iop_dma_handle_mdec_in_transfer(struct ps2_iop_dma* dma) {}
 void iop_dma_handle_mdec_out_transfer(struct ps2_iop_dma* dma) {}
-void iop_dma_handle_sif2_transfer(struct ps2_iop_dma* dma) {}
+void iop_dma_handle_sif2_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: Started SIF2 transfer\n");
+
+    exit(1);
+}
 void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {}
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {}
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {}
@@ -117,46 +136,47 @@ void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {}
 void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
     ps2_sif_fifo_reset(dma->sif);
 
-    int extra = !!(dma->sif0.chcr & 0x100);
+    dma->sif0.eot = 0;
 
-    uint64_t tag = iop_bus_read32(dma->bus, dma->sif0.tadr);
-    tag |= (uint64_t)iop_bus_read32(dma->bus, dma->sif0.tadr + 4) << 32;
+    do {
+        dma_fetch_tag(dma, &dma->sif0);
 
-    uint32_t addr = tag & 0x7fffff;
-    uint32_t size = (tag >> 32) & 0xffffff;
-    int irq = !!(tag & 0x40000000);
-    int eot = !!(tag & 0x80000000);
+        // printf("iop: SIF0 tag at %08x extra=%u addr=%08x size=%08x irq=%d eot=%d\n",
+        //     dma->sif0.tadr, dma->sif0.extra, dma->sif0.addr, dma->sif0.size, dma->sif0.irq, dma->sif0.eot
+        // );
 
-    // printf("iop: SIF0 tag at %08x extra=%u addr=%08x size=%08x irq=%d eot=%d\n", dma->sif0.tadr, extra, addr, size, irq, eot);
+        uint128_t q;
 
-    size += extra * 2;
-    size = (size + 3) & ~3;
+        if (dma->sif0.extra) {
+            q.u32[0] = iop_bus_read32(dma->bus, dma->sif0.tadr + 8);
+            q.u32[1] = iop_bus_read32(dma->bus, dma->sif0.tadr + 12);
+            q.u32[2] = 0;
+            q.u32[3] = 0;
 
-    uint128_t q;
+            ps2_sif_fifo_write(dma->sif, q);
+        }
 
-    if (extra) {
-        q.u32[0] = iop_bus_read32(dma->bus, dma->sif0.tadr + 8);
-        q.u32[1] = iop_bus_read32(dma->bus, dma->sif0.tadr + 12);
-        q.u32[2] = 0;
-        q.u32[3] = 0;
+        while (dma->sif0.size) {
+            q.u32[0] = iop_bus_read32(dma->bus, dma->sif0.addr);
+            q.u32[1] = iop_bus_read32(dma->bus, dma->sif0.addr + 4);
+            q.u32[2] = iop_bus_read32(dma->bus, dma->sif0.addr + 8);
+            q.u32[3] = iop_bus_read32(dma->bus, dma->sif0.addr + 12);
 
-        ps2_sif_fifo_write(dma->sif, q);
-    }
+            ps2_sif_fifo_write(dma->sif, q);
 
-    while (size) {
-        q.u32[0] = iop_bus_read32(dma->bus, addr);
-        q.u32[1] = iop_bus_read32(dma->bus, addr + 4);
-        q.u32[2] = iop_bus_read32(dma->bus, addr + 8);
-        q.u32[3] = iop_bus_read32(dma->bus, addr + 12);
+            dma->sif0.addr += 16;
+            dma->sif0.size -= 4;
+        }
 
-        ps2_sif_fifo_write(dma->sif, q);
+        dma->sif0.tadr += (dma->sif0.extra ? 4 : 2) * 4;
+    } while (!dma->sif0.eot);
 
-        addr += 16;
-        size -= 4;
-    }
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SIF0);
+    iop_dma_check_irq(dma);
 
-    ps2_dmac_start_sif0_transfer(dma->ee_dma);
+    dmac_handle_sif0_transfer(dma->ee_dma);
 
+    dma->sif0.tadr += dma->sif0.extra ? 4 : 2;
     dma->sif0.chcr &= ~0x1000000;
 }
 
@@ -172,32 +192,35 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
         return;
 
     // Data ready and channel is started, do transfer
-    uint128_t q = ps2_sif_fifo_read(dma->sif);
+    int eot;
 
-    uint64_t tag = q.u64[0];
+    do {
+        uint128_t q = ps2_sif_fifo_read(dma->sif);
 
-    uint32_t addr = tag & 0x7fffff;
-    uint32_t size = (tag >> 32) & 0xffffff;
-    int irq = !!(tag & 0x40000000);
-    int eot = !!(tag & 0x80000000);
+        uint64_t tag = q.u64[0];
 
-    // printf("iop: SIF1 tag addr=%08x size=%08x irq=%d eot=%d\n", addr, size, irq, eot);
+        uint32_t addr = tag & 0x7fffff;
+        int size = (tag >> 32) & 0xffffff;
+        int irq = !!(tag & 0x40000000);
+        eot = !!(tag & 0x80000000);
 
-    uint32_t* ptr = (uint32_t*)&dma->sif->fifo.data;
+        // printf("iop: SIF1 tag addr=%08x size=%08x irq=%d eot=%d\n", addr, size, irq, eot);
 
-    ptr += 4;
+        char buf[128];
 
-    char buf[128];
+        // puts(rpc_decode_packet(buf, ((void*)dma->sif->fifo.data) + (dma->sif->fifo.read_index * 16)));
 
-    puts(rpc_decode_packet(buf, ptr));
+        while (size) {
+            uint128_t q = ps2_sif_fifo_read(dma->sif);
 
-    while (size) {
-        // printf("writing %08x to %08x\n", *ptr, addr);
-        iop_bus_write32(dma->bus, addr, *ptr++);
+            for (int i = 0; i < 4; i++) {
+                iop_bus_write32(dma->bus, addr, q.u32[i]);
 
-        addr += 4;
-        --size;
-    }
+                addr += 4;
+                --size;
+            }
+        }
+    } while (!eot);
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIF1);
     iop_dma_check_irq(dma);

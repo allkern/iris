@@ -18,8 +18,6 @@ static inline void cdvd_init_s_fifo(struct ps2_cdvd* cdvd, int size) {
 static inline void cdvd_s_mechacon_version(struct ps2_cdvd* cdvd) {}
 static inline void cdvd_s_update_sticky_flags(struct ps2_cdvd* cdvd) {}
 static inline void cdvd_s_read_rtc(struct ps2_cdvd* cdvd) {
-    printf("cdvd: ReadRTC\n");
-
     cdvd_init_s_fifo(cdvd, 8);
 
     cdvd->s_fifo[0] = 0;
@@ -96,8 +94,6 @@ static inline uint8_t cdvd_read_s_response(struct ps2_cdvd* cdvd) {
     }
 
     uint8_t data = cdvd->s_fifo[cdvd->s_fifo_index++];
-
-    printf("cdvd: S response %02x\n", data);
 
     if (cdvd->s_fifo_index == cdvd->s_fifo_size)
         cdvd->s_stat |= 0x40;

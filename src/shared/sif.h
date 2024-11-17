@@ -16,7 +16,8 @@ struct sif_fifo {
     int read_index;
     int write_index;
     int ready;
-    uint128_t data[128];
+    uint128_t* data;
+    int capacity;
 };
 
 struct ps2_sif {

@@ -90,8 +90,8 @@ static inline opengl_vertex get_vertex_from_vq(struct ps2_gs* gs, int i) {
     v.g = (gs->vq[i].rgbaq >> 8) & 0xff;
     v.b = (gs->vq[i].rgbaq >> 16) & 0xff;
 
-    v.x += (gs->xyoffset_1 & 0xffff) >> 4;
-    v.y += (gs->xyoffset_1 & 0xffff0000) >> 20;
+    // v.x += (gs->xyoffset_1 & 0xffff) >> 4;
+    // v.y += (gs->xyoffset_1 & 0xffff0000) >> 20;
 
     return v;
 }

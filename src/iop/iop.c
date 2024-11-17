@@ -294,19 +294,19 @@ static inline void iop_i_j(struct iop_state* iop) {
 
     iop->next_pc = (iop->next_pc & 0xf0000000) | (IMM26 << 2);
 
-    if ((iop->next_pc & 0xFFFF) == 0x1EC8 || (iop->next_pc & 0xFFFF) == 0x1F64) {
-        uint32_t ptr = iop->r[4];
-        uint16_t version = iop_bus_read16(iop, ptr + 8);
+    // if ((iop->next_pc & 0xFFFF) == 0x1EC8 || (iop->next_pc & 0xFFFF) == 0x1F64) {
+    //     uint32_t ptr = iop->r[4];
+    //     uint16_t version = iop_bus_read16(iop, ptr + 8);
 
-        char name[9];
+    //     char name[9];
 
-        for (int i = 0; i < 8; i++)
-            name[i] = iop_bus_read8(iop, ptr + 12 + i);
+    //     for (int i = 0; i < 8; i++)
+    //         name[i] = iop_bus_read8(iop, ptr + 12 + i);
 
-        name[8] = 0;
+    //     name[8] = 0;
 
-        printf("iop: Register library %s version %d.0%d\n", name, version >> 8, version & 0xff);
-    }
+    //     printf("iop: Register library %s version %d.0%d\n", name, version >> 8, version & 0xff);
+    // }
 }
 
 static inline void iop_i_jal(struct iop_state* iop) {

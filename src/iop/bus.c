@@ -131,7 +131,7 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_MEM_WRITE(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
-    printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
+    // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
 }
 
 void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
