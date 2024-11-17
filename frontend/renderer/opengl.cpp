@@ -4,34 +4,6 @@
 #include "opengl.hpp"
 #include "ee/gs.h"
 
-const char* vert_shader_src =
-    "#version 330 core\n"
-    "layout (location = 0) in vec3 pos;\n"
-    "layout (location = 1) in vec3 col;\n"
-    "uniform vec2 screen_size;\n"
-    "out vec3 VertColor;\n"
-    "out vec2 FragCoord;\n"
-    "void main() {\n"
-    "    VertColor = col / 255.0;\n"
-    "    vec2 p = pos.xy;\n"
-    "    p.x = ((pos.x * 2.0) - screen_size.x) / screen_size.x;\n"
-    "    p.y = (screen_size.y - (pos.y * 2.0)) / screen_size.y;\n"
-    "    FragCoord = p;\n"
-    "    gl_Position = vec4(p, 0.0, 1.0);\n"
-    "}";
-
-const char* frag_shader_src =
-    "#version 330 core\n"
-    "in vec3 VertColor;\n"
-    "in vec2 FragCoord;\n"
-    "out vec4 FragColor;\n"
-    "uniform sampler2D vram;\n"
-    "void main() {\n"
-    "   vec2 c = vec2(FragCoord.x, FragCoord.y / 4.0);\n"
-    "   vec4 v = texture(vram, c);\n"
-    "   FragColor = vec4(v.xyz, 1.0f);\n"
-    "}";
-
 static void opengl_push_primitive(opengl_state* ctx, int type, int verts) {
     opengl_primitive p;
 
@@ -119,11 +91,11 @@ char* opengl_read_file(const char* path) {
 void opengl_init(opengl_state* ctx) {
     gl3wInit();
 
-    char* vert_shader_src1 = opengl_read_file("shaders/default.vert");
-    char* frag_shader_src1 = opengl_read_file("shaders/default.frag");
+    char* vert_shader_src = opengl_read_file("shaders/default.vert");
+    char* frag_shader_src = opengl_read_file("shaders/default.frag");
 
-    int vert_shader = compile_shader(vert_shader_src1, GL_VERTEX_SHADER);
-    int frag_shader = compile_shader(frag_shader_src1, GL_FRAGMENT_SHADER);
+    int vert_shader = compile_shader(vert_shader_src, GL_VERTEX_SHADER);
+    int frag_shader = compile_shader(frag_shader_src, GL_FRAGMENT_SHADER);
 
     char infolog[512];
     int success;
