@@ -7,8 +7,6 @@
 #include "intc.h"
 #include "iop/intc.h"
 
-#include "gs_software.h"
-
 struct ps2_gs* ps2_gs_create(void) {
     return malloc(sizeof(struct ps2_gs));
 }
@@ -30,6 +28,8 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
+    sched_schedule(gs->sched, vblank_event);
+
     // Tell backend to render scene
     if (gs->backend.render)
         gs->backend.render(gs, gs->backend.udata);
@@ -43,8 +43,6 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_OUT);
-
-    sched_schedule(gs->sched, vblank_event);
 }
 
 void gs_handle_vblank_in(void* udata, int overshoot) {
@@ -53,7 +51,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event vblank_out_event;
 
     vblank_out_event.callback = gs_handle_vblank_out;
-    vblank_out_event.cycles = 431096; 
+    vblank_out_event.cycles = 4310; 
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
@@ -84,20 +82,6 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     vblank_event.udata = gs;
 
     sched_schedule(gs->sched, vblank_event);
-
-    // struct gsr_opengl* opengl_ctx = malloc(sizeof(struct gsr_opengl));
-
-    // gs->backend.render_point = gsr_sw_render_point;
-    // gs->backend.render_line = gsr_sw_render_line;
-    // gs->backend.render_line_strip = gsr_sw_render_line_strip;
-    // gs->backend.render_triangle = gsr_sw_render_triangle;
-    // gs->backend.render_triangle_strip = gsr_sw_render_triangle_strip;
-    // gs->backend.render_triangle_fan = gsr_sw_render_triangle_fan;
-    // gs->backend.render_sprite = gsr_sw_render_sprite;
-    // gs->backend.render = gsr_sw_render;
-    // gs->backend.udata = &opengl_ctx;
-
-    // gsr_gl_init(opengl_ctx);
 }
 
 void ps2_gs_destroy(struct ps2_gs* gs) {
@@ -137,11 +121,17 @@ void gs_start_transfer(struct ps2_gs* gs) {
     gs->rrw = (gs->trxreg >> 0) & 0xfff;
     gs->rrh = (gs->trxreg >> 32) & 0xfff;
     gs->xdir = gs->trxdir & 3;
+    gs->dx = 0;
+    gs->dy = 0;
+    gs->sx = 0;
+    gs->sy = 0;
 
     gs->dbp <<= 6;
     gs->dbw <<= 6;
     gs->sbp <<= 6;
     gs->sbw <<= 6;
+
+    // printf("xdir=%d dbp=%08x dbw=%08x dsax=%08x dsay=%08x rrw=%d rrh=%d\n", gs->xdir, gs->dbp, gs->dbw, gs->dsax, gs->dsay, gs->rrw, gs->rrh);
 
     if (gs->xdir == 2)
         gs_vram_blit(gs);
@@ -151,6 +141,8 @@ void gs_transfer_write(struct ps2_gs* gs) {
     uint32_t addr = gs->dbp + gs->dsax + (gs->dsay * gs->dbw);
 
     addr += gs->dx + (gs->dy * gs->dbw);
+
+    // printf("addr=%08x data=%08x %08x d=(%d,%d)\n", addr, gs->hwreg & 0xffffffff, gs->hwreg >> 32, gs->dx, gs->dy);
 
     gs->vram[addr + 0] = gs->hwreg & 0xffffffff;
     gs->vram[addr + 1] = gs->hwreg >> 32;
@@ -167,7 +159,7 @@ void gs_start_primitive(struct ps2_gs* gs) {
     gs->vqi = 0;
 }
 
-void gs_write_vertex(struct ps2_gs* gs, uint64_t data) {
+void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
     gs->vq[gs->vqi].xyz2 = data;
     gs->vq[gs->vqi++].rgbaq = gs->rgbaq;
 
@@ -176,43 +168,49 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data) {
         case 1: if (gs->vqi == 2) { gs->backend.render_line(gs, gs->backend.udata); gs->vqi = 0; } break;
         case 2: {
             if (gs->vqi == 2) {
-                gs->backend.render_line(gs, gs->backend.udata);
+                if (!discard)
+                    gs->backend.render_line(gs, gs->backend.udata);
             } else if (gs->vqi == 3) {
                 gs->vq[0] = gs->vq[1];
                 gs->vq[1] = gs->vq[2];
 
-                gs->backend.render_line(gs, gs->backend.udata);
+                if (!discard)
+                    gs->backend.render_line(gs, gs->backend.udata);
 
                 gs->vqi = 2;
             }
         } break;
-        case 3: if (gs->vqi == 3) { gs->backend.render_triangle(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 3: if (gs->vqi == 3) { if (!discard) gs->backend.render_triangle(gs, gs->backend.udata); gs->vqi = 0; } break;
         case 4: {
             if (gs->vqi == 3) {
-                gs->backend.render_triangle(gs, gs->backend.udata);
+                if (!discard) gs->backend.render_triangle(gs, gs->backend.udata);
             } else if (gs->vqi == 4) {
                 gs->vq[0] = gs->vq[1];
                 gs->vq[1] = gs->vq[2];
                 gs->vq[2] = gs->vq[3];
 
-                gs->backend.render_triangle(gs, gs->backend.udata);
+                if (!discard) gs->backend.render_triangle(gs, gs->backend.udata);
 
                 gs->vqi = 3;
             }
         } break;
         case 5: {
             if (gs->vqi == 3) {
-                gs->backend.render_triangle(gs, gs->backend.udata);
+                if (!discard) gs->backend.render_triangle(gs, gs->backend.udata);
             } else if (gs->vqi == 4) {
                 gs->vq[1] = gs->vq[2];
                 gs->vq[2] = gs->vq[3];
 
-                gs->backend.render_triangle(gs, gs->backend.udata);
+                if (!discard) gs->backend.render_triangle(gs, gs->backend.udata);
 
                 gs->vqi = 3;
             }
         } break;
-        case 6: if (gs->vqi == 2) { gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 6: if (gs->vqi == 2) { if (!discard) gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
+        default: {
+            printf("gs: Reserved primitive %d\n", gs->prim & 7);
+            exit(1);
+        } break;
     }
 }
 
@@ -272,15 +270,15 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x01: gs->rgbaq = data; return;
         case 0x02: gs->st = data; return;
         case 0x03: gs->uv = data; return;
-        case 0x04: gs->xyzf2 = data; gs_write_vertex(gs, gs->xyzf2); return;
-        case 0x05: gs->xyz2 = data; gs_write_vertex(gs, gs->xyz2); return;
+        case 0x04: gs->xyzf2 = data; gs_write_vertex(gs, gs->xyzf2, 0); return;
+        case 0x05: gs->xyz2 = data; gs_write_vertex(gs, gs->xyz2, 0); return;
         case 0x06: gs->tex0_1 = data; return;
         case 0x07: gs->tex0_2 = data; return;
         case 0x08: gs->clamp_1 = data; return;
         case 0x09: gs->clamp_2 = data; return;
         case 0x0A: gs->fog = data; return;
-        case 0x0C: gs->xyzf3 = data; return;
-        case 0x0D: gs->xyz3 = data; return;
+        case 0x0C: gs->xyzf3 = data; gs_write_vertex(gs, gs->xyzf3, 1); return;
+        case 0x0D: gs->xyz3 = data; gs_write_vertex(gs, gs->xyz3, 1); return;
         case 0x14: gs->tex1_1 = data; return;
         case 0x15: gs->tex1_2 = data; return;
         case 0x16: gs->tex2_1 = data; return;

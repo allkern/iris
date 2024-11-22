@@ -58,12 +58,19 @@ static inline opengl_vertex get_vertex_from_vq(struct ps2_gs* gs, int i) {
     v.x = (gs->vq[i].xyz2 & 0xffff) >> 4;
     v.y = (gs->vq[i].xyz2 & 0xffff0000) >> 20;
     v.z = gs->vq[i].xyz2 >> 32;
+    v.z = 0.0;
     v.r = gs->vq[i].rgbaq & 0xff;
     v.g = (gs->vq[i].rgbaq >> 8) & 0xff;
     v.b = (gs->vq[i].rgbaq >> 16) & 0xff;
 
-    // v.x += (gs->xyoffset_1 & 0xffff) >> 4;
-    // v.y += (gs->xyoffset_1 & 0xffff0000) >> 20;
+    int offsetx = (gs->xyoffset_1 & 0xffff) >> 4;
+    int offsety = ((gs->xyoffset_1 >> 32) & 0xffff) >> 4;
+
+    // v.x -= offsetx;
+    v.y -= offsety;
+    v.y *= 0.5;
+
+    // printf("vertex: (%f,%f) (%f,%f,%f)\n", v.x, v.y, v.r, v.g, v.b);
 
     return v;
 }
@@ -166,7 +173,7 @@ extern "C" void opengl_render_triangle(struct ps2_gs* gs, void* udata) {
     opengl_vertex v1 = get_vertex_from_vq(gs, 1);
     opengl_vertex v2 = get_vertex_from_vq(gs, 2);
 
-    // printf("v0=(%f,%f,%f) v1=(%f,%f,%f) v2=(%f,%f,%f)\n",
+    // printf("triangle: v0=(%f,%f,%f) v1=(%f,%f,%f) v2=(%f,%f,%f)\n",
     //     v0.x, v0.y, v0.z,
     //     v1.x, v1.y, v1.z,
     //     v2.x, v2.y, v2.z
@@ -194,10 +201,10 @@ extern "C" void opengl_render_sprite(struct ps2_gs* gs, void* udata) {
     opengl_vertex v0 = get_vertex_from_vq(gs, 0);
     opengl_vertex v1 = get_vertex_from_vq(gs, 1);
 
-    printf("opengl: Sprite at v0=(%f,%f,%f) v1=(%f,%f,%f)\n",
-        v0.x, v0.y, v0.z,
-        v1.x, v1.y, v1.z
-    );
+    // printf("opengl: Sprite at v0=(%f,%f,%f) v1=(%f,%f,%f)\n",
+    //     v0.x, v0.y, v0.z,
+    //     v1.x, v1.y, v1.z
+    // );
 
     ctx->verts.push_back({ v0.x, v0.y, 0.0f, v0.r, v0.g, v0.b });
     ctx->verts.push_back({ v1.x, v0.y, 0.0f, v0.r, v0.g, v0.b });
@@ -214,8 +221,8 @@ extern "C" void opengl_render(struct ps2_gs* gs, void* udata) {
     // glClear(GL_COLOR_BUFFER_BIT);
 
     // Send VRAM
-    glBindTexture(GL_TEXTURE_2D, ctx->texture);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1024, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, gs->vram);
+    // glBindTexture(GL_TEXTURE_2D, ctx->texture);
+    // glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1024, 1024, 0, GL_RGBA, GL_UNSIGNED_BYTE, gs->vram);
 
     glBindVertexArray(ctx->vao);
     glBindBuffer(GL_ARRAY_BUFFER, ctx->vbo);
@@ -238,18 +245,13 @@ extern "C" void opengl_render(struct ps2_gs* gs, void* udata) {
         glDrawArrays(p.type, p.offset, p.count);
     }
 
-    ctx->primitives.clear();
-    ctx->verts.clear();
+    // ctx->primitives.clear();
+    // ctx->verts.clear();
 
     // opengl_push_primitive(ctx, GL_TRIANGLES, 6);
 
-    opengl_vertex v0 = { 0.0, 0.0, 0.0 };
-    opengl_vertex v1 = { 639.0, 479.0, 0.0 };
-
-    // printf("opengl: Sprite at v0=(%f,%f,%f) v1=(%f,%f,%f)\n",
-    //     v0.x, v0.y, v0.z,
-    //     v1.x, v1.y, v1.z
-    // );
+    // opengl_vertex v0 = { 0.0, 0.0, 0.0 };
+    // opengl_vertex v1 = { 639.0, 479.0, 0.0 };
 
     // ctx->verts.push_back({ v0.x, v0.y, 0.0f, v0.r, v0.g, v0.b });
     // ctx->verts.push_back({ v1.x, v0.y, 0.0f, v0.r, v0.g, v0.b });

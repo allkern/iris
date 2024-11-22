@@ -70,6 +70,7 @@ struct ps2_state {
 struct ps2_state* ps2_create(void);
 void ps2_init(struct ps2_state* ps2);
 void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void*, void (*iop_kputchar)(void*, char), void*);
+void ps2_boot_file(struct ps2_state* ps2, const char* path);
 void ps2_reset(struct ps2_state* ps2);
 void ps2_load_bios(struct ps2_state* ps2, const char* path);
 void ps2_cycle(struct ps2_state* ps2);

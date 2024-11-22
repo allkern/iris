@@ -34,6 +34,8 @@ struct instance {
     ImFont* font_icons = nullptr;
 
     const char* elf_path;
+    const char* boot_path;
+    const char* bios_path;
 
     bool open = false;
     bool pause = true;

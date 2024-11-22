@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <string.h>
+#include <stdio.h>
 
 #include "sched.h"
 
@@ -24,7 +25,14 @@ int event_compare(const void* a, const void* b) {
 
 void sched_schedule(struct sched_state* sched, struct sched_event event) {
     if (!sched->nevents) {
-        sched->events = malloc(sizeof(struct sched_event) * 32);
+        sched->events = realloc(sched->events, sizeof(struct sched_event) * 32);
+
+        if (!sched->events) {
+            printf("sched: Failed to allocate new event\n");
+
+            exit(1);
+        }
+
         sched->cap = 32;
         sched->nevents = 1;
 
@@ -37,6 +45,11 @@ void sched_schedule(struct sched_state* sched, struct sched_event event) {
             sched->events[1] = event;
         }
 
+        // Clear offset, if there were more events in the
+        // queue, then we should subtract the offset from all of
+        // those.
+        sched->offset = 0;
+
         sched->nevents = 2;
     } else {
         if (sched->nevents == sched->cap) {
@@ -44,7 +57,15 @@ void sched_schedule(struct sched_state* sched, struct sched_event event) {
             sched->events = realloc(sched->events, sizeof(struct sched_event) * sched->cap);
         }
 
-        for (int i = 0; i < sched->nevents - 1; i++) {
+        // Need to sync events
+        // Don't apply offset to the current nearest event (offset is applied by ticking)
+        for (int i = 1; i < sched->nevents; i++) {
+            sched->events[i].cycles -= sched->offset;
+        }
+
+        sched->offset = 0;
+
+        for (int i = 0; i < sched->nevents; i++) {
             sched->events[sched->nevents - i] = sched->events[sched->nevents - i - 1];
         }
 
@@ -52,7 +73,7 @@ void sched_schedule(struct sched_state* sched, struct sched_event event) {
 
         sched->events[0] = event;
 
-        if (event.cycles > sched->events[1].cycles) {
+        if (sched->events[0].cycles > sched->events[1].cycles) {
             qsort(sched->events, sched->nevents, sizeof(struct sched_event), event_compare);
         }
     }
@@ -70,13 +91,15 @@ void sched_tick(struct sched_state* sched, int cycles) {
 
     --sched->nevents;
 
+    struct sched_event event = sched->events[0];
+
     for (int i = 0; i < sched->nevents; i++) {
         sched->events[i] = sched->events[i + 1];
         sched->events[i].cycles -= sched->offset;
     }
 
     // Provide callback with overshot cycles
-    sched->events[0].callback(sched->events[0].udata, sched->events[0].cycles);
+    event.callback(event.udata, event.cycles);
 
     sched->offset = 0;
 }

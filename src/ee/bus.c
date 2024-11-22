@@ -161,6 +161,9 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     }
 
     printf("bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    
+    if ((addr & 0xffff0000) == 0xfffe0000)
+        exit(1);
 
     return 0;
 }
@@ -185,8 +188,6 @@ uint64_t ee_bus_read64(void* udata, uint32_t addr) {
 uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
-    addr &= 0x1fffffff;
-
     MAP_MEM_READ(128, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(128, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_READ(128, 0x30100000, 0x31FFFFFF, ram, ee_ram);
@@ -200,8 +201,6 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
 
 void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
     struct ee_bus* bus = (struct ee_bus*)udata;
-
-    addr &= 0x1fffffff;
 
     MAP_MEM_WRITE(8, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);

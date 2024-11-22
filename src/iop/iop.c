@@ -118,6 +118,17 @@ static inline int iop_check_irq(struct iop_state* iop) {
            (iop->cop0_r[COP0_SR] & iop->cop0_r[COP0_CAUSE] & 0x00000400);
 }
 
+static inline void iop_print_disassembly(struct iop_state* iop) {
+    char buf[128];
+    struct iop_dis_state state;
+
+    state.print_address = 1;
+    state.print_opcode = 1;
+    state.addr = iop->pc;
+
+    puts(iop_disassemble(buf, iop->opcode, &state));
+}
+
 static inline void iop_exception(struct iop_state* iop, uint32_t cause) {
     // Set excode and clear 3 LSBs
     iop->cop0_r[COP0_CAUSE] &= 0xffffff80;
@@ -140,17 +151,6 @@ static inline void iop_exception(struct iop_state* iop, uint32_t cause) {
     iop->pc = (iop->cop0_r[COP0_SR] & SR_BEV) ? 0xbfc00180 : 0x80000080;
 
     iop->next_pc = iop->pc + 4;
-}
-
-static inline void iop_print_disassembly(struct iop_state* iop) {
-    char buf[128];
-    struct iop_dis_state state;
-
-    state.print_address = 1;
-    state.print_opcode = 1;
-    state.addr = iop->pc;
-
-    puts(iop_disassemble(buf, iop->opcode, &state));
 }
 
 void iop_cycle(struct iop_state* iop) {
@@ -190,7 +190,7 @@ void iop_cycle(struct iop_state* iop) {
     if (iop_check_irq(iop)) {
         iop->r[0] = 0;
 
-        // printf("iop: irq pc=%08x next_pc=%08x saved_pc=%08x\n", iop->pc, iop->next_pc, iop->saved_pc);
+        printf("iop: irq pc=%08x next_pc=%08x saved_pc=%08x\n", iop->pc, iop->next_pc, iop->saved_pc);
 
         iop_exception(iop, CAUSE_INT);
 

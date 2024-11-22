@@ -8,7 +8,7 @@ extern "C" {
 #include <stdint.h>
 
 struct sched_event {
-    int cycles;
+    long cycles;
     void (*callback)(void*, int);
     const char* name;
     void* udata;

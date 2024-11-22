@@ -7,12 +7,6 @@ extern "C" {
 
 #include "u128.h"
 
-#include "dmac.h"
-
-#include "shared/ram.h"
-#include "shared/sif.h"
-#include "shared/bios.h"
-
 struct ee_bus;
 
 struct ee_bus* ee_bus_create(void);

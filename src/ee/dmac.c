@@ -185,7 +185,13 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 
     // printf("dmac: GIF transfer mode=%d madr=%08x qwc=%d\n", (dmac->gif.chcr >> 2) & 7, dmac->gif.madr, dmac->gif.qwc);
     for (int i = 0; i < dmac->gif.qwc; i++) {
-        uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+        uint128_t q;
+
+        if (dmac->gif.madr & 0x80000000) {
+            q = ps2_ram_read128(dmac->ee->scratchpad, dmac->gif.madr & 0x3fff);
+        } else {
+            q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+        }
 
         // GIF FIFO address
         ee_bus_write128(dmac->bus, 0x10006000, q);
@@ -206,7 +212,13 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
         // printf("ee: gif qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
 
         for (int i = 0; i < dmac->gif.tag.qwc; i++) {
-            uint128_t q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+            uint128_t q;
+
+            if (dmac->gif.madr & 0x80000000) {
+                q = ps2_ram_read128(dmac->ee->scratchpad, dmac->gif.madr & 0x3fff);
+            } else {
+                q = ee_bus_read128(dmac->bus, dmac->gif.madr);
+            }
 
             // printf("ee: Sending %016lx%016lx from %08x to GIF FIFO\n",
             //     q.u64[1], q.u64[0],
@@ -278,6 +290,8 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
         uint128_t tag = ee_bus_read128(dmac->bus, dmac->sif1.tadr);
 
         dmac_process_source_tag(dmac, &dmac->sif1, tag);
+
+        printf("ee: SIF1 tag madr=%08x\n", dmac->sif1.madr);
 
         for (int i = 0; i < dmac->sif1.tag.qwc; i++) {
             uint128_t q = ee_bus_read128(dmac->bus, dmac->sif1.madr);

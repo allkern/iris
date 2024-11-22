@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
 
 #include "dma.h"
 
@@ -53,12 +54,13 @@ struct ps2_iop_dma* ps2_iop_dma_create(void) {
     return malloc(sizeof(struct ps2_iop_dma));
 }
 
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_dmac* ee_dma, struct iop_bus* bus) {
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct iop_bus* bus) {
     memset(dma, 0, sizeof(struct ps2_iop_dma));
 
     dma->intc = intc;
     dma->bus = bus;
     dma->sif = sif;
+    dma->drive = cdvd;
     dma->ee_dma = ee_dma;
 }
 
@@ -127,7 +129,57 @@ void iop_dma_handle_sif2_transfer(struct ps2_iop_dma* dma) {
 
     exit(1);
 }
-void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {}
+void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
+    // No data in CDVD buffer yet
+    if (!dma->drive->buf_size)
+        return;
+
+    // Channel not yet started
+    if (!(dma->cdvd.chcr & 0x1000000)) {
+        printf("iop: CDVD transfer incoming, channel not yet started\n");
+
+        exit(1);
+
+        return;
+    }
+
+    printf("iop: Writing %d bytes of sector data to %08x\n", dma->drive->buf_size, dma->cdvd.madr);
+
+    uint32_t addr = dma->cdvd.madr;
+
+    for (int i = 0; i < dma->drive->buf_size; i++)
+        iop_bus_write8(dma->bus, dma->cdvd.madr++, dma->drive->buf[i]);
+
+    // int size = dma->drive->buf_size;
+
+    // while (size > 0) {
+    //     printf("%08x: ", addr);
+
+    //     for (int i = 0; i < 16; i++) {
+    //         printf("%02x ", iop_bus_read8(dma->bus, addr + i));
+    //     }
+
+    //     putchar('|');
+
+    //     for (int i = 0; i < 16; i++) {
+    //         uint8_t b = iop_bus_read8(dma->bus, addr + i);
+
+    //         printf("%c", isprint(b) ? b : '.');
+    //     }
+
+    //     puts("|");
+
+    //     addr += 16;
+    //     size -= 16;
+    // }
+
+    dma->drive->buf_size = 0;
+
+    // iop_dma_set_dicr_flag(dma, IOP_DMA_CDVD);
+    // iop_dma_check_irq(dma);
+
+    // dma->cdvd.chcr &= ~0x1000000;
+}
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {}
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {}
 void iop_dma_handle_otc_transfer(struct ps2_iop_dma* dma) {}

@@ -6,4 +6,5 @@ tools/
 *.bin
 *.elf
 *.exe
+*.iso
 *.o

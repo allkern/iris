@@ -74,10 +74,10 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_intc_init(ps2->ee_intc, ps2->ee);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
     ps2_ram_init(ps2->iop_ram, RAM_SIZE_2MB);
-    ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->ee_dma, ps2->iop_bus);
+    ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->iop_bus);
     ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
     ps2_iop_timers_init(ps2->iop_timers, ps2->iop_intc, ps2->sched);
-    ps2_cdvd_init(ps2->cdvd);
+    ps2_cdvd_init(ps2->cdvd, ps2->iop_dma, ps2->iop_intc, ps2->sched);
     ps2_bios_init(ps2->bios, NULL);
     ps2_sif_init(ps2->sif);
 
@@ -107,6 +107,15 @@ void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), 
     iop_init_kputchar(ps2->iop, iop_kputchar, iop_udata);
 }
 
+void ps2_boot_file(struct ps2_state* ps2, const char* path) {
+    ps2_reset(ps2);
+
+    while (ps2->ee->pc != 0x00082000)
+        ps2_cycle(ps2);
+
+    sprintf(ps2->ee_ram->buf + 0x89580, path);
+}
+
 void ps2_load_bios(struct ps2_state* ps2, const char* path) {
     ps2_bios_init(ps2->bios, path);
 }
@@ -117,13 +126,13 @@ void ps2_reset(struct ps2_state* ps2) {
 }
 
 void ps2_cycle(struct ps2_state* ps2) {
-    for (int i = 0; i < ps2->nfuncs; i++) {
-        if (ps2->ee->pc == ps2->func[i].addr) {
-            printf("trace: %s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
+    // for (int i = 0; i < ps2->nfuncs; i++) {
+    //     if (ps2->ee->pc == ps2->func[i].addr) {
+    //         printf("trace: %s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
 
-            break;
-        }
-    }
+    //         break;
+    //     }
+    // }
 
     sched_tick(ps2->sched, 1);
     ee_cycle(ps2->ee);

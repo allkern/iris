@@ -41,8 +41,8 @@ void handle_scissor_event(void* udata) {
     //     lunar->ps2->gs->frame_1
     // );
     
-    int width = scax1 - scax0;
-    int height = scay1 - scay0;
+    int width = (scax1 - scax0) + 1;
+    int height = (scay1 - scay0) + 1;
 
     opengl_set_size(lunar->renderer_state, width, height, 1.5);
 
@@ -265,7 +265,6 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->ps2 = ps2_create();
 
     ps2_init(lunar->ps2);
-    ps2_load_bios(lunar->ps2, argv[1]);
     ps2_init_kputchar(lunar->ps2, kputchar_stub, NULL, kputchar_stub, NULL);
     ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, (void (*)(void*))update_window, lunar);
     ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_SCISSOR, handle_scissor_event, lunar);
@@ -293,7 +292,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     int r = 200;
     float p = 0.25f * M_PI;
 
-    lunar->ps2->gs->rgbaq = 0xff0000; gs_write_vertex(lunar->ps2->gs, (320 << 4) | (240 << 20));
+    lunar->ps2->gs->rgbaq = 0xff0000; gs_write_vertex(lunar->ps2->gs, (320 << 4) | (240 << 20), 0);
 
     int m = 8;
 
@@ -307,7 +306,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
         lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
 
-        gs_write_vertex(lunar->ps2->gs, (px << 4) | (py << 20));
+        gs_write_vertex(lunar->ps2->gs, (px << 4) | (py << 20), 0);
     }
 
     lunar->ps2->gs->vqi = 0;
@@ -328,7 +327,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
         lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
 
-        gs_write_vertex(lunar->ps2->gs, (sx << 4) | (sy << 20));
+        gs_write_vertex(lunar->ps2->gs, (sx << 4) | (sy << 20), 0);
 
         sx += dx;
         sy += (i & 1) ? -dy : dy;
@@ -336,10 +335,46 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     
     lunar->pause = 0;
 
-    if (argv[2]) {
-        lunar->elf_path = argv[2];
+    lunar->elf_path = NULL;
+    lunar->boot_path = NULL;
+    lunar->bios_path = NULL;
 
+    for (int i = 1; i < argc; i++) {
+        std::string a = argv[i];
+
+        if (a == "-x") {
+            lunar->elf_path = argv[i+1];
+
+            ++i;
+        }
+
+        if (a == "-d") {
+            lunar->boot_path = argv[i+1];
+
+            ++i;
+        }
+
+        if (a == "-b") {
+            lunar->bios_path = argv[i+1];
+
+            ++i;
+        }
+    }
+
+    if (!lunar->bios_path) {
+        printf("lunar: Please specify a PS2 BIOS file\n");
+
+        exit(1);
+    }
+
+    ps2_load_bios(lunar->ps2, lunar->bios_path);
+
+    if (lunar->elf_path) {
         ps2_elf_load(lunar->ps2, lunar->elf_path);
+    }
+
+    if (lunar->boot_path) {
+        ps2_boot_file(lunar->ps2, lunar->boot_path);
     }
 }
 
