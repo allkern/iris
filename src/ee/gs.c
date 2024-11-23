@@ -84,75 +84,12 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     sched_schedule(gs->sched, vblank_event);
 }
 
+void gs_switch_context(struct ps2_gs* gs, int c) {
+    gs->ctx = &gs->context[c];
+}
+
 void ps2_gs_destroy(struct ps2_gs* gs) {
     free(gs);
-}
-
-static inline void gs_vram_blit(struct ps2_gs* gs) {
-    // printf("vram blit sbp=%x dbp=%x rrw=%x\n", gs->sbp, gs->dbp, gs->rrw);
-    for (int y = 0; y < gs->rrh; y++) {
-        uint32_t src = gs->sbp + gs->ssax + (gs->ssay * gs->sbw) + (y * gs->sbw);
-        uint32_t dst = gs->dbp + gs->dsax + (gs->dsay * gs->dbw) + (y * gs->dbw);
-
-        // printf("gs: ssa=(%d, %d) -> dsa=(%d, %d) rr=(%d, %d) sbw=%d dbw=%d sbp=%08x dbp=%08x\n",
-        //     gs->ssax, gs->ssay,
-        //     gs->dsax, gs->dsay,
-        //     gs->rrw, gs->rrh,
-        //     gs->sbw, gs->dbw,
-        //     gs->sbp, gs->dbp
-        // );
-        
-        memcpy(gs->vram + dst, gs->vram + src, gs->rrw * sizeof(uint32_t));
-    }
-}
-
-void gs_start_transfer(struct ps2_gs* gs) {
-    gs->dbp = (gs->bitbltbuf >> 32) & 0x3fff;
-    gs->dbw = (gs->bitbltbuf >> 48) & 0x3f;
-    gs->dpsm = (gs->bitbltbuf >> 56) & 0x3f;
-    gs->sbp = (gs->bitbltbuf >> 0) & 0x3fff;
-    gs->sbw = (gs->bitbltbuf >> 16) & 0x3f;
-    gs->spsm = (gs->bitbltbuf >> 24) & 0x3f;
-    gs->dsax = (gs->trxpos >> 32) & 0x7ff;
-    gs->dsay = (gs->trxpos >> 48) & 0x7ff;
-    gs->ssax = (gs->trxpos >> 0) & 0x7ff;
-    gs->ssay = (gs->trxpos >> 16) & 0x7ff;
-    gs->dir = (gs->trxpos >> 59) & 3;
-    gs->rrw = (gs->trxreg >> 0) & 0xfff;
-    gs->rrh = (gs->trxreg >> 32) & 0xfff;
-    gs->xdir = gs->trxdir & 3;
-    gs->dx = 0;
-    gs->dy = 0;
-    gs->sx = 0;
-    gs->sy = 0;
-
-    gs->dbp <<= 6;
-    gs->dbw <<= 6;
-    gs->sbp <<= 6;
-    gs->sbw <<= 6;
-
-    // printf("xdir=%d dbp=%08x dbw=%08x dsax=%08x dsay=%08x rrw=%d rrh=%d\n", gs->xdir, gs->dbp, gs->dbw, gs->dsax, gs->dsay, gs->rrw, gs->rrh);
-
-    if (gs->xdir == 2)
-        gs_vram_blit(gs);
-}
-
-void gs_transfer_write(struct ps2_gs* gs) {
-    uint32_t addr = gs->dbp + gs->dsax + (gs->dsay * gs->dbw);
-
-    addr += gs->dx + (gs->dy * gs->dbw);
-
-    // printf("addr=%08x data=%08x %08x d=(%d,%d)\n", addr, gs->hwreg & 0xffffffff, gs->hwreg >> 32, gs->dx, gs->dy);
-
-    gs->vram[addr + 0] = gs->hwreg & 0xffffffff;
-    gs->vram[addr + 1] = gs->hwreg >> 32;
-
-    gs->dx += 2;
-
-    if (gs->dx >= gs->rrw) {
-        gs->dx = 0;
-        ++gs->dy;
-    }
 }
 
 void gs_start_primitive(struct ps2_gs* gs) {
@@ -160,8 +97,14 @@ void gs_start_primitive(struct ps2_gs* gs) {
 }
 
 void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
-    gs->vq[gs->vqi].xyz2 = data;
+    gs->vq[gs->vqi].xyz = data;
+    gs->vq[gs->vqi].fog = gs->fog;
+    gs->vq[gs->vqi].st = gs->st;
+    gs->vq[gs->vqi].uv = gs->uv;
     gs->vq[gs->vqi++].rgbaq = gs->rgbaq;
+    gs->attr = (gs->prmodecont & 1) ? gs->prmode : gs->prim;
+
+    gs_switch_context(gs, (gs->attr & ATTR_CTXT) ? 1 : 0);
 
     switch (gs->prim & 7) {
         case 0: if (gs->vqi == 1) { gs->backend.render_point(gs, gs->backend.udata); gs->vqi = 0; } break;
@@ -272,51 +215,51 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x03: gs->uv = data; return;
         case 0x04: gs->xyzf2 = data; gs_write_vertex(gs, gs->xyzf2, 0); return;
         case 0x05: gs->xyz2 = data; gs_write_vertex(gs, gs->xyz2, 0); return;
-        case 0x06: gs->tex0_1 = data; return;
-        case 0x07: gs->tex0_2 = data; return;
-        case 0x08: gs->clamp_1 = data; return;
-        case 0x09: gs->clamp_2 = data; return;
+        case 0x06: gs->context[0].tex0 = data; return;
+        case 0x07: gs->context[1].tex0 = data; return;
+        case 0x08: gs->context[0].clamp = data; return;
+        case 0x09: gs->context[1].clamp = data; return;
         case 0x0A: gs->fog = data; return;
         case 0x0C: gs->xyzf3 = data; gs_write_vertex(gs, gs->xyzf3, 1); return;
         case 0x0D: gs->xyz3 = data; gs_write_vertex(gs, gs->xyz3, 1); return;
-        case 0x14: gs->tex1_1 = data; return;
-        case 0x15: gs->tex1_2 = data; return;
-        case 0x16: gs->tex2_1 = data; return;
-        case 0x17: gs->tex2_2 = data; return;
-        case 0x18: gs->xyoffset_1 = data; return;
-        case 0x19: gs->xyoffset_2 = data; return;
+        case 0x14: gs->context[0].tex1 = data; return;
+        case 0x15: gs->context[1].tex1 = data; return;
+        case 0x16: gs->context[0].tex2 = data; return;
+        case 0x17: gs->context[1].tex2 = data; return;
+        case 0x18: gs->context[0].xyoffset = data; return;
+        case 0x19: gs->context[1].xyoffset = data; return;
         case 0x1A: gs->prmodecont = data; return;
         case 0x1B: gs->prmode = data; return;
         case 0x1C: gs->texclut = data; return;
         case 0x22: gs->scanmsk = data; return;
-        case 0x34: gs->miptbp1_1 = data; return;
-        case 0x35: gs->miptbp1_2 = data; return;
-        case 0x36: gs->miptbp2_1 = data; return;
-        case 0x37: gs->miptbp2_2 = data; return;
+        case 0x34: gs->context[0].miptbp1 = data; return;
+        case 0x35: gs->context[1].miptbp1 = data; return;
+        case 0x36: gs->context[0].miptbp2 = data; return;
+        case 0x37: gs->context[1].miptbp2 = data; return;
         case 0x3B: gs->texa = data; return;
         case 0x3D: gs->fogcol = data; return;
         case 0x3F: gs->texflush = data; return;
-        case 0x40: gs->scissor_1 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
-        case 0x41: gs->scissor_2 = data; return;
-        case 0x42: gs->alpha_1 = data; return;
-        case 0x43: gs->alpha_2 = data; return;
+        case 0x40: gs->context[0].scissor = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
+        case 0x41: gs->context[1].scissor = data; return;
+        case 0x42: gs->context[0].alpha = data; return;
+        case 0x43: gs->context[1].alpha = data; return;
         case 0x44: gs->dimx = data; return;
         case 0x45: gs->dthe = data; return;
         case 0x46: gs->colclamp = data; return;
-        case 0x47: gs->test_1 = data; return;
-        case 0x48: gs->test_2 = data; return;
+        case 0x47: gs->context[0].test = data; return;
+        case 0x48: gs->context[1].test = data; return;
         case 0x49: gs->pabe = data; return;
-        case 0x4A: gs->fba_1 = data; return;
-        case 0x4B: gs->fba_2 = data; return;
-        case 0x4C: gs->frame_1 = data; return;
-        case 0x4D: gs->frame_2 = data; return;
-        case 0x4E: gs->zbuf_1 = data; return;
-        case 0x4F: gs->zbuf_2 = data; return;
+        case 0x4A: gs->context[0].fba = data; return;
+        case 0x4B: gs->context[1].fba = data; return;
+        case 0x4C: gs->context[0].frame = data; return;
+        case 0x4D: gs->context[1].frame = data; return;
+        case 0x4E: gs->context[0].zbuf = data; return;
+        case 0x4F: gs->context[1].zbuf = data; return;
         case 0x50: gs->bitbltbuf = data; return;
         case 0x51: gs->trxpos = data; return;
         case 0x52: gs->trxreg = data; return;
-        case 0x53: gs->trxdir = data; gs_start_transfer(gs); return;
-        case 0x54: gs->hwreg = data; gs_transfer_write(gs); return;
+        case 0x53: gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return; // gs_start_transfer(gs); return;
+        case 0x54: gs->hwreg = data; gs->backend.transfer_write(gs, gs->backend.udata); return; // gs_transfer_write(gs); return;
         case 0x60: gs->signal = data; return;
         case 0x61: gs->finish = data; return;
         case 0x62: gs->label = data; return;
@@ -331,51 +274,51 @@ uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg) {
         case 0x03: return gs->uv;
         case 0x04: return gs->xyzf2;
         case 0x05: return gs->xyz2;
-        case 0x06: return gs->tex0_1;
-        case 0x07: return gs->tex0_2;
-        case 0x08: return gs->clamp_1;
-        case 0x09: return gs->clamp_2;
+        case 0x06: return gs->context[0].tex0;
+        case 0x07: return gs->context[1].tex0;
+        case 0x08: return gs->context[0].clamp;
+        case 0x09: return gs->context[1].clamp;
         case 0x0A: return gs->fog;
         case 0x0C: return gs->xyzf3;
         case 0x0D: return gs->xyz3;
-        case 0x14: return gs->tex1_1;
-        case 0x15: return gs->tex1_2;
-        case 0x16: return gs->tex2_1;
-        case 0x17: return gs->tex2_2;
-        case 0x18: return gs->xyoffset_1;
-        case 0x19: return gs->xyoffset_2;
+        case 0x14: return gs->context[0].tex1;
+        case 0x15: return gs->context[1].tex1;
+        case 0x16: return gs->context[0].tex2;
+        case 0x17: return gs->context[1].tex2;
+        case 0x18: return gs->context[0].xyoffset;
+        case 0x19: return gs->context[1].xyoffset;
         case 0x1A: return gs->prmodecont;
         case 0x1B: return gs->prmode;
         case 0x1C: return gs->texclut;
         case 0x22: return gs->scanmsk;
-        case 0x34: return gs->miptbp1_1;
-        case 0x35: return gs->miptbp1_2;
-        case 0x36: return gs->miptbp2_1;
-        case 0x37: return gs->miptbp2_2;
+        case 0x34: return gs->context[0].miptbp1;
+        case 0x35: return gs->context[1].miptbp1;
+        case 0x36: return gs->context[0].miptbp2;
+        case 0x37: return gs->context[1].miptbp2;
         case 0x3B: return gs->texa;
         case 0x3D: return gs->fogcol;
         case 0x3F: return gs->texflush;
-        case 0x40: return gs->scissor_1;
-        case 0x41: return gs->scissor_2;
-        case 0x42: return gs->alpha_1;
-        case 0x43: return gs->alpha_2;
+        case 0x40: return gs->context[0].scissor;
+        case 0x41: return gs->context[1].scissor;
+        case 0x42: return gs->context[0].alpha;
+        case 0x43: return gs->context[1].alpha;
         case 0x44: return gs->dimx;
         case 0x45: return gs->dthe;
         case 0x46: return gs->colclamp;
-        case 0x47: return gs->test_1;
-        case 0x48: return gs->test_2;
+        case 0x47: return gs->context[0].test;
+        case 0x48: return gs->context[1].test;
         case 0x49: return gs->pabe;
-        case 0x4A: return gs->fba_1;
-        case 0x4B: return gs->fba_2;
-        case 0x4C: return gs->frame_1;
-        case 0x4D: return gs->frame_2;
-        case 0x4E: return gs->zbuf_1;
-        case 0x4F: return gs->zbuf_2;
+        case 0x4A: return gs->context[0].fba;
+        case 0x4B: return gs->context[1].fba;
+        case 0x4C: return gs->context[0].frame;
+        case 0x4D: return gs->context[1].frame;
+        case 0x4E: return gs->context[0].zbuf;
+        case 0x4F: return gs->context[1].zbuf;
         case 0x50: return gs->bitbltbuf;
         case 0x51: return gs->trxpos;
         case 0x52: return gs->trxreg;
         case 0x53: return gs->trxdir;
-        case 0x54: return gs->hwreg;
+        case 0x54: gs->backend.transfer_read(gs, gs->backend.udata); return gs->hwreg;
         case 0x60: return gs->signal;
         case 0x61: return gs->finish;
         case 0x62: return gs->label;

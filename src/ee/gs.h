@@ -65,6 +65,15 @@ extern "C" {
 #define GS_FINISH     0x61
 #define GS_LABEL      0x62
 
+#define ATTR_IIP (1 << 3) // int0:1:0 Shading Method
+#define ATTR_TME (1 << 4) // int0:1:0 Texture Mapping
+#define ATTR_FGE (1 << 5) // int0:1:0 Fogging
+#define ATTR_ABE (1 << 6) // int0:1:0 Alpha Blending
+#define ATTR_AA1 (1 << 7) // int0:1:0 1 Pass Antialiasing (*1)
+#define ATTR_FST (1 << 8) // int0:1:0 Method of Specifying Texture Coordinates (*2)
+#define ATTR_CTXT (1 << 9) // int0:1:0 Context
+#define ATTR_FIX (1 << 10) // int0:1:0 Fragment Value Control (RGBAFSTQ Change by DDA)
+
 struct ps2_gs;
 
 struct gs_renderer {
@@ -76,20 +85,39 @@ struct gs_renderer {
     void (*render_triangle_fan)(struct ps2_gs*, void*);
     void (*render_sprite)(struct ps2_gs*, void*);
     void (*render)(struct ps2_gs*, void*);
-    // void (*transfer_start)(struct ps2_gs*, void*);
-    // void (*transfer_write)(struct ps2_gs*, void*);
-    // void (*transfer_read)(struct ps2_gs*, void*);
+    void (*transfer_start)(struct ps2_gs*, void*);
+    void (*transfer_write)(struct ps2_gs*, void*);
+    void (*transfer_read)(struct ps2_gs*, void*);
     void* udata;
 };
 
 struct gs_vertex {
     uint64_t rgbaq;
-    uint64_t xyz2;
+    uint64_t xyz;
+    uint64_t st;
+    uint64_t uv;
+    uint64_t fog;
 };
 
 struct gs_callback {
     void (*func)(void*);
     void* udata;
+};
+
+struct gs_context {
+    uint64_t frame; // (FRAME_1, FRAME_2)
+    uint64_t zbuf; // (ZBUF_1, ZBUF_2)
+    uint64_t tex0; // (TEX0_1, TEX0_2)
+    uint64_t tex1; // (TEX1_1, TEX1_2)
+    uint64_t tex2; // (TEX2_1, TEX2_2)
+    uint64_t miptbp1; // (MIPTBP1_1, MIPTBP1_2)
+    uint64_t miptbp2; // (MIPTBP2_1, MIPTBP2_2)
+    uint64_t clamp; // (CLAMP_1, CLAMP_2)
+    uint64_t test; // (TEST_1, TEST_2)
+    uint64_t alpha; // (ALPHA_1, ALPHA_2)
+    uint64_t xyoffset; // (XYOFFSET_1, XYOFFSET_2)
+    uint64_t scissor; // (SCISSOR_1, SCISSOR_2)
+    uint64_t fba; // (FBA_1, FBA_2)
 };
 
 #define GS_EVENT_VBLANK 0
@@ -99,6 +127,10 @@ struct ps2_gs {
     struct gs_renderer backend;
 
     uint32_t* vram;
+
+    uint32_t attr;
+    struct gs_context context[2];
+    struct gs_context* ctx;
 
     uint64_t pmode;
     uint64_t smode1;
@@ -175,16 +207,6 @@ struct ps2_gs {
     uint64_t signal;
     uint64_t finish;
     uint64_t label;
-
-    // Ongoing transfer
-    unsigned int sbp, dbp;
-    unsigned int sbw, dbw;
-    unsigned int spsm, dpsm;
-    unsigned int ssax, ssay, dsax, dsay;
-    unsigned int rrh, rrw;
-    unsigned int dir, xdir;
-    unsigned int sx, sy;
-    unsigned int dx, dy;
 
     // Drawing data
     struct gs_vertex vq[4];
