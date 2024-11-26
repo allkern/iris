@@ -39,4 +39,7 @@ void opengl_render_triangle_strip(struct ps2_gs* gs, void* udata);
 void opengl_render_triangle_fan(struct ps2_gs* gs, void* udata);
 void opengl_render_sprite(struct ps2_gs* gs, void* udata);
 void opengl_render(struct ps2_gs* gs, void* udata);
+void opengl_transfer_start(struct ps2_gs* gs, void* udata);
+void opengl_transfer_write(struct ps2_gs* gs, void* udata);
+void opengl_transfer_read(struct ps2_gs* gs, void* udata);
 }

@@ -55,20 +55,20 @@ int compile_shader(const char* src, GLint type) {
 static inline opengl_vertex get_vertex_from_vq(struct ps2_gs* gs, int i) {
     opengl_vertex v;
 
-    v.x = (gs->vq[i].xyz2 & 0xffff) >> 4;
-    v.y = (gs->vq[i].xyz2 & 0xffff0000) >> 20;
-    v.z = gs->vq[i].xyz2 >> 32;
-    v.z = 0.0;
-    v.r = gs->vq[i].rgbaq & 0xff;
-    v.g = (gs->vq[i].rgbaq >> 8) & 0xff;
-    v.b = (gs->vq[i].rgbaq >> 16) & 0xff;
+    // v.x = (gs->vq[i].xyz2 & 0xffff) >> 4;
+    // v.y = (gs->vq[i].xyz2 & 0xffff0000) >> 20;
+    // v.z = gs->vq[i].xyz2 >> 32;
+    // v.z = 0.0;
+    // v.r = gs->vq[i].rgbaq & 0xff;
+    // v.g = (gs->vq[i].rgbaq >> 8) & 0xff;
+    // v.b = (gs->vq[i].rgbaq >> 16) & 0xff;
 
-    int offsetx = (gs->xyoffset_1 & 0xffff) >> 4;
-    int offsety = ((gs->xyoffset_1 >> 32) & 0xffff) >> 4;
+    // int offsetx = (gs->xyoffset_1 & 0xffff) >> 4;
+    // int offsety = ((gs->xyoffset_1 >> 32) & 0xffff) >> 4;
 
-    // v.x -= offsetx;
-    v.y -= offsety;
-    v.y *= 0.5;
+    // // v.x -= offsetx;
+    // v.y -= offsety;
+    // v.y *= 0.5;
 
     // printf("vertex: (%f,%f) (%f,%f,%f)\n", v.x, v.y, v.r, v.g, v.b);
 
@@ -162,10 +162,6 @@ extern "C" void opengl_render_line(struct ps2_gs* gs, void* udata) {
     ctx->verts.push_back(get_vertex_from_vq(gs, 1));
 }
 
-extern "C" void opengl_render_line_strip(struct ps2_gs* gs, void* udata) {
-
-}
-
 extern "C" void opengl_render_triangle(struct ps2_gs* gs, void* udata) {
     opengl_state* ctx = (opengl_state*)udata;
 
@@ -184,13 +180,6 @@ extern "C" void opengl_render_triangle(struct ps2_gs* gs, void* udata) {
     ctx->verts.push_back(v0);
     ctx->verts.push_back(v1);
     ctx->verts.push_back(v2);
-}
-
-extern "C" void opengl_render_triangle_strip(struct ps2_gs* gs, void* udata) {
-}
-
-extern "C" void opengl_render_triangle_fan(struct ps2_gs* gs, void* udata) {
-
 }
 
 extern "C" void opengl_render_sprite(struct ps2_gs* gs, void* udata) {
@@ -260,3 +249,7 @@ extern "C" void opengl_render(struct ps2_gs* gs, void* udata) {
     // ctx->verts.push_back({ v1.x, v1.y, 0.0f, v1.r, v1.g, v1.b });
     // ctx->verts.push_back({ v0.x, v1.y, 0.0f, v1.r, v1.g, v1.b });
 }
+
+void opengl_transfer_start(struct ps2_gs* gs, void* udata) {}
+void opengl_transfer_write(struct ps2_gs* gs, void* udata) {}
+void opengl_transfer_read(struct ps2_gs* gs, void* udata) {}

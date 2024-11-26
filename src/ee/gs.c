@@ -51,7 +51,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event vblank_out_event;
 
     vblank_out_event.callback = gs_handle_vblank_out;
-    vblank_out_event.cycles = 4310; 
+    vblank_out_event.cycles = 431096; 
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
@@ -102,7 +102,29 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
     gs->vq[gs->vqi].st = gs->st;
     gs->vq[gs->vqi].uv = gs->uv;
     gs->vq[gs->vqi++].rgbaq = gs->rgbaq;
-    gs->attr = (gs->prmodecont & 1) ? gs->prmode : gs->prim;
+    gs->attr = (gs->prmodecont & 1) ? gs->prim : gs->prmode;
+
+    // for (int c = 0; c < 2; c++) {
+    //     uint32_t fbp = (gs->context[c].frame & 0x1ff) << 11;
+    //     uint32_t fbw = ((gs->context[c].frame >> 16) & 0x3f) << 6;
+    //     uint32_t xoff = (gs->context[c].xyoffset & 0xffff) >> 4;
+    //     uint32_t yoff = ((gs->context[c].xyoffset >> 32) & 0xffff) >> 4;
+    //     int scax0 = gs->context[c].scissor & 0x3ff;
+    //     int scay0 = (gs->context[c].scissor >> 32) & 0x3ff;
+    //     int scax1 = (gs->context[c].scissor >> 16) & 0x3ff;
+    //     int scay1 = (gs->context[c].scissor >> 48) & 0x3ff;
+
+    //     printf("context %d: fbp=%08x fbw=%d xyoffset=(%d,%d) scissor=(%d,%d-%d,%d) prmodecont=%016lx prmode=%016lx prim=%016lx\n",
+    //         c,
+    //         fbp, fbw,
+    //         xoff, yoff,
+    //         scax0, scay0,
+    //         scax1, scay1,
+    //         gs->prmodecont,
+    //         gs->prmode,
+    //         gs->prim
+    //     );
+    // }
 
     gs_switch_context(gs, (gs->attr & ATTR_CTXT) ? 1 : 0);
 
@@ -228,8 +250,8 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x17: gs->context[1].tex2 = data; return;
         case 0x18: gs->context[0].xyoffset = data; return;
         case 0x19: gs->context[1].xyoffset = data; return;
-        case 0x1A: gs->prmodecont = data; return;
-        case 0x1B: gs->prmode = data; return;
+        case 0x1A: printf("prmodecont=%016lx\n", data); gs->prmodecont = data; return;
+        case 0x1B: printf("prmode=%016lx\n", data); gs->prmode = data; return;
         case 0x1C: gs->texclut = data; return;
         case 0x22: gs->scanmsk = data; return;
         case 0x34: gs->context[0].miptbp1 = data; return;
@@ -263,6 +285,11 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x60: gs->signal = data; return;
         case 0x61: gs->finish = data; return;
         case 0x62: gs->label = data; return;
+        default: {
+            printf("gs: Invalid privileged register %02x write %016lx\n", reg, data);
+
+            exit(1);
+        }
     }
 }
 
@@ -322,6 +349,11 @@ uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg) {
         case 0x60: return gs->signal;
         case 0x61: return gs->finish;
         case 0x62: return gs->label;
+        default: {
+            printf("gs: Invalid privileged register %02x read\n", reg);
+
+            exit(1);
+        }
     }
 
     return 0;

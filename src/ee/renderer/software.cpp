@@ -5,6 +5,11 @@
 #include "ee/gs.h"
 #include "software.hpp"
 
+void software_init(software_state* ctx, SDL_Window* window, SDL_Renderer* renderer) {
+    ctx->window = window;
+    ctx->renderer = renderer;
+}
+
 static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
     for (int y = 0; y < ctx->rrh; y++) {
         uint32_t src = ctx->sbp + ctx->ssax + (ctx->ssay * ctx->sbw) + (y * ctx->sbw);
@@ -36,6 +41,14 @@ extern "C" void software_render_point(struct ps2_gs* gs, void* udata) {
 
     uint32_t x = (v.xyz & 0xffff) >> 4;
     uint32_t y = (v.xyz & 0xffff0000) >> 20;
+
+    printf("fbp=%08x fbw=%d xyoffset=(%d,%d) scissor=(%d,%d-%d,%d), xy=(%d,%d)\n",
+        fbp, fbw,
+        xoff, yoff,
+        scax0, scay0,
+        scax1, scay1,
+        x, y
+    );
 
     int wx = x - xoff;
     int wy = y - yoff;
@@ -106,7 +119,33 @@ extern "C" void software_render_line(struct ps2_gs* gs, void* udata) {
 }
 
 extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
+    struct gs_vertex v = gs->vq[0];
 
+    // All of these only change on writes to their respective 
+    // registers, so we should definitely cache the fields
+
+    // Base FB
+    uint32_t fbp = (gs->ctx->frame & 0x1ff) << 11;
+    uint32_t fbw = ((gs->ctx->frame >> 16) & 0x3f) << 6;
+
+    // Window
+    uint32_t xoff = (gs->ctx->xyoffset & 0xffff) >> 4;
+    uint32_t yoff = ((gs->ctx->xyoffset >> 32) & 0xffff) >> 4;
+    int scax0 = gs->ctx->scissor & 0x3ff;
+    int scay0 = (gs->ctx->scissor >> 32) & 0x3ff;
+    int scax1 = (gs->ctx->scissor >> 16) & 0x3ff;
+    int scay1 = (gs->ctx->scissor >> 48) & 0x3ff;
+
+    uint32_t x = (v.xyz & 0xffff) >> 4;
+    uint32_t y = (v.xyz & 0xffff0000) >> 20;
+
+    // printf("fbp=%08x fbw=%d xyoffset=(%d,%d) scissor=(%d,%d-%d,%d), xy=(%d,%d)\n",
+    //     fbp, fbw,
+    //     xoff, yoff,
+    //     scax0, scay0,
+    //     scax1, scay1,
+    //     x, y
+    // );
 }
 
 extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
@@ -117,7 +156,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
 }
 
-extern "C" void transfer_start(struct ps2_gs* gs, void* udata) {
+extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
     software_state* ctx = (software_state*)udata;
 
     ctx->dbp = (gs->bitbltbuf >> 32) & 0x3fff;
@@ -149,7 +188,7 @@ extern "C" void transfer_start(struct ps2_gs* gs, void* udata) {
     }
 }
 
-extern "C" void transfer_write(struct ps2_gs* gs, void* udata) {
+extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
     software_state* ctx = (software_state*)udata;
 
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
@@ -168,6 +207,6 @@ extern "C" void transfer_write(struct ps2_gs* gs, void* udata) {
     }
 }
 
-extern "C" void transfer_read(struct ps2_gs* gs, void* udata) {
+extern "C" void software_transfer_read(struct ps2_gs* gs, void* udata) {
     gs->hwreg = 0;
 }

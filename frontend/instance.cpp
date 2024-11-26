@@ -12,7 +12,8 @@
 
 #include "ps2_elf.h"
 
-#include "renderer/opengl.hpp"
+#include "ee/renderer/opengl.hpp"
+#include "ee/renderer/software.hpp"
 
 #include <csignal>
 
@@ -44,7 +45,7 @@ void handle_scissor_event(void* udata) {
     int width = (scax1 - scax0) + 1;
     int height = (scay1 - scay0) + 1;
 
-    opengl_set_size(lunar->renderer_state, width, height, 1.5);
+    // opengl_set_size(lunar->renderer_state, width, height, 1.5);
 
     // SDL_SetWindowSize(lunar->window, width, height);
 }
@@ -270,68 +271,80 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_SCISSOR, handle_scissor_event, lunar);
 
     // Initialize hardware renderer
-    lunar->renderer_state = new opengl_state;
+    // lunar->renderer_state = new opengl_state;
 
-    lunar->ps2->gs->backend.render_point = opengl_render_point;
-    lunar->ps2->gs->backend.render_line = opengl_render_line;
-    lunar->ps2->gs->backend.render_line_strip = opengl_render_line_strip;
-    lunar->ps2->gs->backend.render_triangle = opengl_render_triangle;
-    lunar->ps2->gs->backend.render_triangle_strip = opengl_render_triangle_strip;
-    lunar->ps2->gs->backend.render_triangle_fan = opengl_render_triangle_fan;
-    lunar->ps2->gs->backend.render_sprite = opengl_render_sprite;
-    lunar->ps2->gs->backend.render = opengl_render;
-    lunar->ps2->gs->backend.udata = lunar->renderer_state;
+    // lunar->ps2->gs->backend.render_point = opengl_render_point;
+    // lunar->ps2->gs->backend.render_line = opengl_render_line;
+    // lunar->ps2->gs->backend.render_line_strip = opengl_render_line_strip;
+    // lunar->ps2->gs->backend.render_triangle = opengl_render_triangle;
+    // lunar->ps2->gs->backend.render_triangle_strip = opengl_render_triangle_strip;
+    // lunar->ps2->gs->backend.render_triangle_fan = opengl_render_triangle_fan;
+    // lunar->ps2->gs->backend.render_sprite = opengl_render_sprite;
+    // lunar->ps2->gs->backend.render = opengl_render;
+    // lunar->ps2->gs->backend.udata = lunar->renderer_state;
 
-    opengl_init(lunar->renderer_state);
+    // opengl_init(lunar->renderer_state);
 
-    lunar->ps2->gs->vqi = 0;
-    lunar->ps2->gs->prim = 5;
+    lunar->ps2->gs->backend.udata = new software_state;
+    lunar->ps2->gs->backend.render_point = software_render_point;
+    lunar->ps2->gs->backend.render_line = software_render_line;
+    lunar->ps2->gs->backend.render_triangle = software_render_triangle;
+    lunar->ps2->gs->backend.render_sprite = software_render_sprite;
+    lunar->ps2->gs->backend.render = software_render;
+    lunar->ps2->gs->backend.transfer_start = software_transfer_start;
+    lunar->ps2->gs->backend.transfer_write = software_transfer_write;
+    lunar->ps2->gs->backend.transfer_read = software_transfer_read;
 
-    int cx = 640 / 2;
-    int cy = 480 / 2;
-    int r = 200;
-    float p = 0.25f * M_PI;
+    software_init((software_state*)lunar->ps2->gs->backend.udata, lunar->window, lunar->renderer);
 
-    lunar->ps2->gs->rgbaq = 0xff0000; gs_write_vertex(lunar->ps2->gs, (320 << 4) | (240 << 20), 0);
+    // lunar->ps2->gs->vqi = 0;
+    // lunar->ps2->gs->prim = 5;
 
-    int m = 8;
+    // int cx = 640 / 2;
+    // int cy = 480 / 2;
+    // int r = 200;
+    // float p = 0.25f * M_PI;
 
-    for (int i = 0; i < m; i++) {
-        uint64_t px = (r * sin(p + (float)i * (0.1f * M_PI))) + cx;
-        uint64_t py = (r * cos(p + (float)i * (0.1f * M_PI))) + cy;
+    // lunar->ps2->gs->rgbaq = 0xff0000; gs_write_vertex(lunar->ps2->gs, (320 << 4) | (240 << 20), 0);
 
-        uint32_t r = i * (255 / m);
-        uint32_t g = 0;
-        uint32_t b = 0xff - (i * (255 / m));
+    // int m = 8;
 
-        lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
+    // for (int i = 0; i < m; i++) {
+    //     uint64_t px = (r * sin(p + (float)i * (0.1f * M_PI))) + cx;
+    //     uint64_t py = (r * cos(p + (float)i * (0.1f * M_PI))) + cy;
 
-        gs_write_vertex(lunar->ps2->gs, (px << 4) | (py << 20), 0);
-    }
+    //     uint32_t r = i * (255 / m);
+    //     uint32_t g = 0;
+    //     uint32_t b = 0xff - (i * (255 / m));
 
-    lunar->ps2->gs->vqi = 0;
-    lunar->ps2->gs->prim = 4;
+    //     lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
 
-    int sx = 50;
-    int sy = 240;
+    //     gs_write_vertex(lunar->ps2->gs, (px << 4) | (py << 20), 0);
+    // }
 
-    int dx = 25;
-    int dy = 50;
+    // lunar->ps2->gs->vqi = 0;
+    // lunar->ps2->gs->prim = 4;
 
-    int q = 9;
+    // int sx = 50;
+    // int sy = 240;
 
-    for (int i = 0; i < q; i++) {
-        uint32_t r = i * (255 / m);
-        uint32_t g = 0;
-        uint32_t b = 0xff - (i * (255 / m));
+    // int dx = 25;
+    // int dy = 50;
 
-        lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
+    // int q = 9;
 
-        gs_write_vertex(lunar->ps2->gs, (sx << 4) | (sy << 20), 0);
+    // for (int i = 0; i < q; i++) {
+    //     uint32_t r = i * (255 / m);
+    //     uint32_t g = 0;
+    //     uint32_t b = 0xff - (i * (255 / m));
 
-        sx += dx;
-        sy += (i & 1) ? -dy : dy;
-    }
+    //     lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
+
+    //     gs_write_vertex(lunar->ps2->gs, (sx << 4) | (sy << 20), 0);
+
+    //     sx += dx;
+    //     sy += (i & 1) ? -dy : dy;
+    // }
     
     lunar->pause = 0;
 

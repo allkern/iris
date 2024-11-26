@@ -79,10 +79,7 @@ struct ps2_gs;
 struct gs_renderer {
     void (*render_point)(struct ps2_gs*, void*);
     void (*render_line)(struct ps2_gs*, void*);
-    void (*render_line_strip)(struct ps2_gs*, void*);
     void (*render_triangle)(struct ps2_gs*, void*);
-    void (*render_triangle_strip)(struct ps2_gs*, void*);
-    void (*render_triangle_fan)(struct ps2_gs*, void*);
     void (*render_sprite)(struct ps2_gs*, void*);
     void (*render)(struct ps2_gs*, void*);
     void (*transfer_start)(struct ps2_gs*, void*);

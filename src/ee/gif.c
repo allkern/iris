@@ -224,7 +224,12 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
             case 0x0d: ps2_gs_write_internal(gif->gs, GS_XYZ3, data.u64[0]); break;
 
             // A+D
-            case 0x0e: ps2_gs_write_internal(gif->gs, data.u64[1], data.u64[0]); break;
+            case 0x0e: {
+                printf("reg=%02x data=%016lx\n", data.u64[1], data.u64[0]);
+                if (data.u64[1] == 0x1b)
+                    exit(1);
+                ps2_gs_write_internal(gif->gs, data.u64[1], data.u64[0]); 
+            } break;
 
             // NOP
             case 0x0f: break;
