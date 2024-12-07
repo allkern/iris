@@ -20,6 +20,7 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->ee_bus = ee_bus_create();
     ps2->iop_bus = iop_bus_create();
     ps2->gif = ps2_gif_create();
+    ps2->vif = ps2_vif_create();
     ps2->gs = ps2_gs_create();
     ps2->ee_dma = ps2_dmac_create();
     ps2->ee_ram = ps2_ram_create();
@@ -66,10 +67,10 @@ void ps2_init(struct ps2_state* ps2) {
     iop_init(ps2->iop, iop_bus_data);
 
     // Initialize devices
-    ps2_gif_init(ps2->gif, NULL);
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
     ps2_gif_init(ps2->gif, ps2->gs);
+    ps2_vif_init(ps2->vif, ps2->ee_bus);
     ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_intc_init(ps2->ee_intc, ps2->ee);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
@@ -96,6 +97,7 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_intc(ps2->ee_bus, ps2->ee_intc);
     ee_bus_init_timers(ps2->ee_bus, ps2->ee_timers);
     ee_bus_init_gif(ps2->ee_bus, ps2->gif);
+    ee_bus_init_vif(ps2->ee_bus, ps2->vif);
     ee_bus_init_gs(ps2->ee_bus, ps2->gs);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
 
@@ -125,7 +127,25 @@ void ps2_reset(struct ps2_state* ps2) {
     iop_reset(ps2->iop);
 }
 
+static const char *ee_cc_r3[] = {
+    "r0", "at", "v0", "v1", "a0", "a1", "a2", "a3",
+    "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
+    "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+    "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
+};
+
 void ps2_cycle(struct ps2_state* ps2) {
+    if (ps2->ee->pc == 0x0101e8a4) {
+        for (int i = 0; i < 32; i++) {
+            printf("%s: %08x %08x %08x %08x\n",
+                ee_cc_r3[i],
+                ps2->ee->r[i].u32[3],
+                ps2->ee->r[i].u32[2],
+                ps2->ee->r[i].u32[1],
+                ps2->ee->r[i].u32[0]
+            );
+        }
+    }
     // for (int i = 0; i < ps2->nfuncs; i++) {
     //     if (ps2->ee->pc == ps2->func[i].addr) {
     //         printf("trace: %s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
@@ -173,6 +193,7 @@ void ps2_destroy(struct ps2_state* ps2) {
     ee_bus_destroy(ps2->ee_bus);
     iop_bus_destroy(ps2->iop_bus);
     ps2_gif_destroy(ps2->gif);
+    ps2_vif_destroy(ps2->vif);
     ps2_dmac_destroy(ps2->ee_dma);
     ps2_ram_destroy(ps2->ee_ram);
     ps2_intc_destroy(ps2->ee_intc);

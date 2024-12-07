@@ -281,8 +281,12 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
 
     dma->sif1.chcr &= ~0x1000000;
 }
-void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {}
-void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {}
+void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: SIO2 in channel unsupported\n");
+}
+void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: SIO2 out channel unsupported\n");
+}
 
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
     struct iop_dma_channel* c = iop_dma_get_channel(dma, addr);
@@ -297,7 +301,7 @@ uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
             case 0xc: return c->tadr;
         }
 
-        printf("iop_dma: Unknown channel register %08x\n", addr);
+        printf("iop_dma: Unknown channel register read %08x\n", addr);
 
         return 0;
     }
@@ -311,7 +315,7 @@ uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
         case 0x1f80157c: return dma->dmacinten;
     }
 
-    printf("iop_dma: Unknown DMA register %08x\n", addr);
+    printf("iop_dma: Unknown DMA register read %08x\n", addr);
 
     return 0;
 }
@@ -352,7 +356,7 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
             case 0xc: c->tadr = data; return;
         }
 
-        printf("iop_dma: Unknown channel register %08x\n", addr);
+        printf("iop_dma: Unknown channel register write %08x %08x\n", addr, data);
 
         return;
     }
@@ -366,5 +370,5 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
         case 0x1f80157c: dma->dmacinten = data; return;
     }
 
-    printf("iop_dma: Unknown DMA register %08x\n", addr);
+    printf("iop_dma: Unknown DMA register write %08x %08x\n", addr, data);
 }

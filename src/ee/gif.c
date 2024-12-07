@@ -209,25 +209,23 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
 
         switch (r) {
             // To-do: Implement packing formats
-            case 0x00: ps2_gs_write_internal(gif->gs, GS_PRIM, data.u64[0] & 0x3ff); break;
-            case 0x01: gif_write_rgbaq(gif, data); break;
-            case 0x02: gif_write_stq(gif, data); break;
-            case 0x03: gif_write_uv(gif, data); break;
-            case 0x04: gif_write_xyzf23(gif, data); break;
-            case 0x05: gif_write_xyz23(gif, data); break;
-            case 0x06: ps2_gs_write_internal(gif->gs, GS_TEX0_1, data.u64[0]); break;
-            case 0x07: ps2_gs_write_internal(gif->gs, GS_TEX0_2, data.u64[0]); break;
-            case 0x08: ps2_gs_write_internal(gif->gs, GS_CLAMP_1, data.u64[0]); break;
-            case 0x09: ps2_gs_write_internal(gif->gs, GS_CLAMP_2, data.u64[0]); break;
-            case 0x0a: gif_write_fog(gif, data); break;
-            case 0x0c: ps2_gs_write_internal(gif->gs, GS_XYZF3, data.u64[0]); break;
-            case 0x0d: ps2_gs_write_internal(gif->gs, GS_XYZ3, data.u64[0]); break;
+            case 0x00: /* printf("gif: PRIM <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_PRIM, data.u64[0] & 0x3ff); break;
+            case 0x01: /* printf("gif: RGBAQ <- %016lx\n", data.u64[0]); */ gif_write_rgbaq(gif, data); break;
+            case 0x02: /* printf("gif: STQ <- %016lx\n", data.u64[0]); */ gif_write_stq(gif, data); break;
+            case 0x03: /* printf("gif: UV <- %016lx\n", data.u64[0]); */ gif_write_uv(gif, data); break;
+            case 0x04: /* printf("gif: XYZF23 <- %016lx\n", data.u64[0]); */ gif_write_xyzf23(gif, data); break;
+            case 0x05: /* printf("gif: XYZ23 <- %016lx\n", data.u64[0]); */ gif_write_xyz23(gif, data); break;
+            case 0x06: /* printf("gif: TEX0_1 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_TEX0_1, data.u64[0]); break;
+            case 0x07: /* printf("gif: TEX0_2 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_TEX0_2, data.u64[0]); break;
+            case 0x08: /* printf("gif: CLAMP_1 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_CLAMP_1, data.u64[0]); break;
+            case 0x09: /* printf("gif: CLAMP_2 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_CLAMP_2, data.u64[0]); break;
+            case 0x0a: /* printf("gif: FOG <- %016lx\n", data.u64[0]); */ gif_write_fog(gif, data); break;
+            case 0x0c: /* printf("gif: XYZF3 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_XYZF3, data.u64[0]); break;
+            case 0x0d: /* printf("gif: XYZ3 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_XYZ3, data.u64[0]); break;
 
             // A+D
             case 0x0e: {
-                printf("reg=%02x data=%016lx\n", data.u64[1], data.u64[0]);
-                if (data.u64[1] == 0x1b)
-                    exit(1);
+                // printf("gif: write %s (A+D)\n", gif_get_reg_name(data.u64[1]));
                 ps2_gs_write_internal(gif->gs, data.u64[1], data.u64[0]); 
             } break;
 

@@ -24,7 +24,7 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     struct sched_event vblank_event;
 
     vblank_event.callback = gs_handle_vblank_in;
-    vblank_event.cycles = 4489019;
+    vblank_event.cycles = 4489; // 019;
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
@@ -81,6 +81,8 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
+    gs->ctx = &gs->context[0];
+
     sched_schedule(gs->sched, vblank_event);
 }
 
@@ -96,13 +98,54 @@ void gs_start_primitive(struct ps2_gs* gs) {
     gs->vqi = 0;
 }
 
+static inline void gs_unpack_vertex(struct ps2_gs* gs, struct gs_vertex* v) {
+    v->x = (v->xyz & 0xffff) >> 4;
+    v->y = ((v->xyz >> 16) & 0xffff) >> 4;
+    v->z = v->xyz >> 32;
+    v->r = v->rgbaq & 0xff;
+    v->g = (v->rgbaq >> 8) & 0xff;
+    v->b = (v->rgbaq >> 16) & 0xff;
+    v->a = (v->rgbaq >> 24) & 0xff;
+
+    uint32_t s = v->st & 0xffffffff;
+    uint32_t t = v->st >> 32;
+    uint32_t q = v->rgbaq >> 32;
+
+    v->s = *(float*)(&s);
+    v->t = *(float*)(&t);
+    v->q = *(float*)(&q);
+    v->u = (v->uv & 0x3fff) >> 4;
+    v->v = ((v->uv >> 16) & 0x3fff) >> 4;
+}
+
 void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
-    gs->vq[gs->vqi].xyz = data;
     gs->vq[gs->vqi].fog = gs->fog;
+
+    if (discard) {
+        gs->vq[gs->vqi].fog = data >> 56;
+
+        data &= 0xffffff;
+    }
+
+    gs->vq[gs->vqi].xyz = data;
     gs->vq[gs->vqi].st = gs->st;
     gs->vq[gs->vqi].uv = gs->uv;
-    gs->vq[gs->vqi++].rgbaq = gs->rgbaq;
+    gs->vq[gs->vqi].rgbaq = gs->rgbaq;
     gs->attr = (gs->prmodecont & 1) ? gs->prim : gs->prmode;
+
+    // Cache PRIM/PRMODE fields
+    gs->iip = (gs->attr >> 3) & 1;
+    gs->tme = (gs->attr >> 4) & 1;
+    gs->fge = (gs->attr >> 5) & 1;
+    gs->abe = (gs->attr >> 6) & 1;
+    gs->aa1 = (gs->attr >> 7) & 1;
+    gs->fst = (gs->attr >> 8) & 1;
+    gs->ctxt = (gs->attr >> 9) & 1;
+    gs->fix = (gs->attr >> 10) & 1;
+
+    gs_unpack_vertex(gs, &gs->vq[gs->vqi]);
+
+    gs->vqi++;
 
     // for (int c = 0; c < 2; c++) {
     //     uint32_t fbp = (gs->context[c].frame & 0x1ff) << 11;
@@ -126,7 +169,7 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
     //     );
     // }
 
-    gs_switch_context(gs, (gs->attr & ATTR_CTXT) ? 1 : 0);
+    gs_switch_context(gs, (gs->attr & GS_CTXT) ? 1 : 0);
 
     switch (gs->prim & 7) {
         case 0: if (gs->vqi == 1) { gs->backend.render_point(gs, gs->backend.udata); gs->vqi = 0; } break;
@@ -229,62 +272,175 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
     }
 }
 
+static inline void gs_unpack_tex0(struct ps2_gs* gs, int i) {
+    gs->context[i].tbp0 = (gs->context[i].tex0 & 0x3fff) << 6;
+    gs->context[i].tbw = ((gs->context[i].tex0 >> 14) & 0x3f) << 6;
+    gs->context[i].tbpsm = (gs->context[i].tex0 >> 20) & 0x3f;
+    gs->context[i].usize = 1 << ((gs->context[i].tex0 >> 26) & 0x3f); // tw
+    gs->context[i].vsize = 1 << ((gs->context[i].tex0 >> 30) & 0x3f); // th
+    gs->context[i].tcc = (gs->context[i].tex0 >> 34) & 1;
+    gs->context[i].tfx = (gs->context[i].tex0 >> 35) & 3;
+    gs->context[i].cbp = ((gs->context[i].tex0 >> 37) & 0x3fff) << 6;
+    gs->context[i].cbpsm = (gs->context[i].tex0 >> 51) & 0xf;
+    gs->context[i].csm = (gs->context[i].tex0 >> 55) & 1;
+    gs->context[i].csa = (gs->context[i].tex0 >> 56) & 0x1f;
+    gs->context[i].cld = (gs->context[i].tex0 >> 61) & 7;
+}
+
+static inline void gs_unpack_clamp(struct ps2_gs* gs, int i) {
+    gs->context[i].wms = gs->context[i].clamp & 3;
+    gs->context[i].wmt = (gs->context[i].clamp >> 2) & 3;
+    gs->context[i].minu = (gs->context[i].clamp >> 4) & 0x3ff;
+    gs->context[i].maxu = (gs->context[i].clamp >> 14) & 0x3ff;
+    gs->context[i].minv = (gs->context[i].clamp >> 24) & 0x3ff;
+    gs->context[i].maxv = (gs->context[i].clamp >> 34) & 0x3ff;
+}
+
+static inline void gs_unpack_tex1(struct ps2_gs* gs, int i) {
+    gs->context[i].lcm = gs->context[i].tex1 & 1;
+    gs->context[i].mxl = (gs->context[i].tex1 >> 2) & 7;
+    gs->context[i].mmag = (gs->context[i].tex1 >> 5) & 1;
+    gs->context[i].mmin = (gs->context[i].tex1 >> 6) & 7;
+    gs->context[i].mtba = (gs->context[i].tex1 >> 9) & 1;
+    gs->context[i].l = (gs->context[i].tex1 >> 19) & 3;
+    gs->context[i].k = gs->context[i].tex1 >> 32;
+}
+
+static inline void gs_unpack_tex2(struct ps2_gs* gs, int i) {
+    gs->context[i].tbpsm = (gs->context[i].tex2 >> 20) & 0x3f;
+    gs->context[i].cbp = ((gs->context[i].tex2 >> 37) & 0x3fff) << 6;
+    gs->context[i].cbpsm = (gs->context[i].tex2 >> 51) & 0xf;
+    gs->context[i].csm = (gs->context[i].tex2 >> 55) & 1;
+    gs->context[i].csa = (gs->context[i].tex2 >> 56) & 0x1f;
+    gs->context[i].cld = (gs->context[i].tex2 >> 61) & 7;
+}
+
+static inline void gs_unpack_xyoffset(struct ps2_gs* gs, int i) {
+    gs->context[i].ofx = (gs->context[i].xyoffset & 0xffff) >> 4;
+    gs->context[i].ofy = ((gs->context[i].xyoffset >> 32) & 0xffff) >> 4;
+}
+
+static inline void gs_unpack_miptbp1(struct ps2_gs* gs, int i) {
+    gs->context[i].mmtbp[0] = (gs->context[i].miptbp1 & 0x3fff) << 6;
+    gs->context[i].mmtbw[0] = ((gs->context[i].miptbp1 >> 14) & 0x3f) << 6;
+    gs->context[i].mmtbp[1] = ((gs->context[i].miptbp1 >> 20) & 0x3fff) << 6;
+    gs->context[i].mmtbw[1] = ((gs->context[i].miptbp1 >> 34) & 0x3f) << 6;
+    gs->context[i].mmtbp[2] = ((gs->context[i].miptbp1 >> 40) & 0x3fff) << 6;
+    gs->context[i].mmtbw[2] = ((gs->context[i].miptbp1 >> 54) & 0x3f) << 6;
+}
+
+static inline void gs_unpack_miptbp2(struct ps2_gs* gs, int i) {
+    gs->context[i].mmtbp[3] = (gs->context[i].miptbp2 & 0x3fff) << 6;
+    gs->context[i].mmtbw[3] = ((gs->context[i].miptbp2 >> 14) & 0x3f) << 6;
+    gs->context[i].mmtbp[4] = ((gs->context[i].miptbp2 >> 20) & 0x3fff) << 6;
+    gs->context[i].mmtbw[4] = ((gs->context[i].miptbp2 >> 34) & 0x3f) << 6;
+    gs->context[i].mmtbp[5] = ((gs->context[i].miptbp2 >> 40) & 0x3fff) << 6;
+    gs->context[i].mmtbw[5] = ((gs->context[i].miptbp2 >> 54) & 0x3f) << 6;
+}
+
+static inline void gs_unpack_scissor(struct ps2_gs* gs, int i) {
+    gs->context[i].scax0 = gs->context[i].scissor & 0x3ff;
+    gs->context[i].scay0 = (gs->context[i].scissor >> 32) & 0x3ff;
+    gs->context[i].scax1 = (gs->context[i].scissor >> 16) & 0x3ff;
+    gs->context[i].scay1 = (gs->context[i].scissor >> 48) & 0x3ff;
+}
+
+static inline void gs_unpack_alpha(struct ps2_gs* gs, int i) {
+    gs->context[i].a = gs->context[i].alpha & 3;
+    gs->context[i].b = (gs->context[i].alpha >> 2) & 3;
+    gs->context[i].c = (gs->context[i].alpha >> 4) & 3;
+    gs->context[i].d = (gs->context[i].alpha >> 6) & 3;
+    gs->context[i].fix = (gs->context[i].alpha >> 32) & 0xff;
+}
+
+static inline void gs_unpack_test(struct ps2_gs* gs, int i) {
+    gs->context[i].ate = gs->context[i].test & 1;
+    gs->context[i].atst = (gs->context[i].test >> 1) & 7;
+    gs->context[i].aref = (gs->context[i].test >> 4) & 0xff;
+    gs->context[i].afail = (gs->context[i].test >> 12) & 3;
+    gs->context[i].date = (gs->context[i].test >> 14) & 1;
+    gs->context[i].datm = (gs->context[i].test >> 15) & 1;
+    gs->context[i].zte = (gs->context[i].test >> 16) & 1;
+    gs->context[i].ztst = (gs->context[i].test >> 17) & 3;
+}
+
+static inline void gs_unpack_frame(struct ps2_gs* gs, int i) {
+    gs->context[i].fbp = (gs->context[i].frame & 0x1ff) << 11;
+    gs->context[i].fbw = ((gs->context[i].frame >> 16) & 0x3f) << 6;
+    gs->context[i].fbpsm = (gs->context[i].frame >> 24) & 0x3f;
+    gs->context[i].fbmsk = gs->context[i].frame >> 32;
+}
+
+static inline void gs_unpack_zbuf(struct ps2_gs* gs, int i) {
+    gs->context[i].zbp = (gs->context[i].frame & 0x1ff) << 11;
+    gs->context[i].zbpsm = (gs->context[i].frame >> 24) & 0xf;
+    gs->context[i].zbmsk = (gs->context[i].frame >> 32) & 1;
+}
+
+static int loo = 0;
+
+static inline void gs_unpack_texclut(struct ps2_gs* gs) {
+    gs->cbw = (gs->texclut & 0x3f) << 6;
+    gs->cou = ((gs->texclut >> 6) & 0x3f) << 4;
+    gs->cov = (gs->texclut >> 12) & 0x3ff;
+}
+
 void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
     switch (reg) {
-        case 0x00: gs->prim = data; gs_start_primitive(gs); return;
-        case 0x01: gs->rgbaq = data; return;
-        case 0x02: gs->st = data; return;
-        case 0x03: gs->uv = data; return;
-        case 0x04: gs->xyzf2 = data; gs_write_vertex(gs, gs->xyzf2, 0); return;
-        case 0x05: gs->xyz2 = data; gs_write_vertex(gs, gs->xyz2, 0); return;
-        case 0x06: gs->context[0].tex0 = data; return;
-        case 0x07: gs->context[1].tex0 = data; return;
-        case 0x08: gs->context[0].clamp = data; return;
-        case 0x09: gs->context[1].clamp = data; return;
-        case 0x0A: gs->fog = data; return;
-        case 0x0C: gs->xyzf3 = data; gs_write_vertex(gs, gs->xyzf3, 1); return;
-        case 0x0D: gs->xyz3 = data; gs_write_vertex(gs, gs->xyz3, 1); return;
-        case 0x14: gs->context[0].tex1 = data; return;
-        case 0x15: gs->context[1].tex1 = data; return;
-        case 0x16: gs->context[0].tex2 = data; return;
-        case 0x17: gs->context[1].tex2 = data; return;
-        case 0x18: gs->context[0].xyoffset = data; return;
-        case 0x19: gs->context[1].xyoffset = data; return;
-        case 0x1A: printf("prmodecont=%016lx\n", data); gs->prmodecont = data; return;
-        case 0x1B: printf("prmode=%016lx\n", data); gs->prmode = data; return;
-        case 0x1C: gs->texclut = data; return;
-        case 0x22: gs->scanmsk = data; return;
-        case 0x34: gs->context[0].miptbp1 = data; return;
-        case 0x35: gs->context[1].miptbp1 = data; return;
-        case 0x36: gs->context[0].miptbp2 = data; return;
-        case 0x37: gs->context[1].miptbp2 = data; return;
-        case 0x3B: gs->texa = data; return;
-        case 0x3D: gs->fogcol = data; return;
-        case 0x3F: gs->texflush = data; return;
-        case 0x40: gs->context[0].scissor = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
-        case 0x41: gs->context[1].scissor = data; return;
-        case 0x42: gs->context[0].alpha = data; return;
-        case 0x43: gs->context[1].alpha = data; return;
-        case 0x44: gs->dimx = data; return;
-        case 0x45: gs->dthe = data; return;
-        case 0x46: gs->colclamp = data; return;
-        case 0x47: gs->context[0].test = data; return;
-        case 0x48: gs->context[1].test = data; return;
-        case 0x49: gs->pabe = data; return;
-        case 0x4A: gs->context[0].fba = data; return;
-        case 0x4B: gs->context[1].fba = data; return;
-        case 0x4C: gs->context[0].frame = data; return;
-        case 0x4D: gs->context[1].frame = data; return;
-        case 0x4E: gs->context[0].zbuf = data; return;
-        case 0x4F: gs->context[1].zbuf = data; return;
-        case 0x50: gs->bitbltbuf = data; return;
-        case 0x51: gs->trxpos = data; return;
-        case 0x52: gs->trxreg = data; return;
-        case 0x53: gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return; // gs_start_transfer(gs); return;
+        case 0x00: /* printf("gs: PRIM <- %016lx\n", data); */ gs->prim = data; gs_start_primitive(gs); return;
+        case 0x01: /* printf("gs: RGBAQ <- %016lx\n", data); */ gs->rgbaq = data; return;
+        case 0x02: /* printf("gs: ST <- %016lx\n", data); */ gs->st = data; return;
+        case 0x03: /* printf("gs: UV <- %016lx\n", data); */ gs->uv = data; return;
+        case 0x04: /* printf("gs: XYZF2 <- %016lx\n", data); */ gs->xyzf2 = data; gs_write_vertex(gs, gs->xyzf2, 0); return;
+        case 0x05: /* printf("gs: XYZ2 <- %016lx\n", data); */ gs->xyz2 = data; gs_write_vertex(gs, gs->xyz2, 0); return;
+        case 0x06: /* printf("gs: TEX0_1 <- %016lx\n", data); */ gs->context[0].tex0 = data; gs_unpack_tex0(gs, 0); return;
+        case 0x07: /* printf("gs: TEX0_2 <- %016lx\n", data); */ gs->context[1].tex0 = data; gs_unpack_tex0(gs, 1); return;
+        case 0x08: /* printf("gs: CLAMP_1 <- %016lx\n", data); */ gs->context[0].clamp = data; gs_unpack_clamp(gs, 0); return;
+        case 0x09: /* printf("gs: CLAMP_2 <- %016lx\n", data); */ gs->context[1].clamp = data; gs_unpack_clamp(gs, 1); return;
+        case 0x0A: /* printf("gs: FOG <- %016lx\n", data); */ gs->fog = data; return;
+        case 0x0C: /* printf("gs: XYZF3 <- %016lx\n", data); */ gs->xyzf3 = data; gs_write_vertex(gs, gs->xyzf3, 1); return;
+        case 0x0D: /* printf("gs: XYZ3 <- %016lx\n", data); */ gs->xyz3 = data; gs_write_vertex(gs, gs->xyz3, 1); return;
+        case 0x14: /* printf("gs: TEX1_1 <- %016lx\n", data); */ gs->context[0].tex1 = data; gs_unpack_tex1(gs, 0); return;
+        case 0x15: /* printf("gs: TEX1_2 <- %016lx\n", data); */ gs->context[1].tex1 = data; gs_unpack_tex1(gs, 1); return;
+        case 0x16: /* printf("gs: TEX2_1 <- %016lx\n", data); */ gs->context[0].tex2 = data; gs_unpack_tex2(gs, 0); return;
+        case 0x17: /* printf("gs: TEX2_2 <- %016lx\n", data); */ gs->context[1].tex2 = data; gs_unpack_tex2(gs, 1); return;
+        case 0x18: /* printf("gs: XYOFFSET_1 <- %016lx\n", data); */ gs->context[0].xyoffset = data; gs_unpack_xyoffset(gs, 0); return;
+        case 0x19: /* printf("gs: XYOFFSET_2 <- %016lx\n", data); */ gs->context[1].xyoffset = data; gs_unpack_xyoffset(gs, 1); return;
+        case 0x1A: /* printf("gs: PRMODECONT <- %016lx\n", data); */ gs->prmodecont = data; return;
+        case 0x1B: /* printf("gs: PRMODE <- %016lx\n", data); */ gs->prmode = data; return;
+        case 0x1C: /* printf("gs: TEXCLUT <- %016lx\n", data); */ gs->texclut = data; gs_unpack_texclut(gs); return;
+        case 0x22: /* printf("gs: SCANMSK <- %016lx\n", data); */ gs->scanmsk = data; return;
+        case 0x34: /* printf("gs: MIPTBP1_1 <- %016lx\n", data); */ gs->context[0].miptbp1 = data; gs_unpack_miptbp1(gs, 0); return;
+        case 0x35: /* printf("gs: MIPTBP1_2 <- %016lx\n", data); */ gs->context[1].miptbp1 = data; gs_unpack_miptbp1(gs, 1); return;
+        case 0x36: /* printf("gs: MIPTBP2_1 <- %016lx\n", data); */ gs->context[0].miptbp2 = data; gs_unpack_miptbp2(gs, 0); return;
+        case 0x37: /* printf("gs: MIPTBP2_2 <- %016lx\n", data); */ gs->context[1].miptbp2 = data; gs_unpack_miptbp2(gs, 1); return;
+        case 0x3B: /* printf("gs: TEXA <- %016lx\n", data); */ gs->texa = data; return;
+        case 0x3D: /* printf("gs: FOGCOL <- %016lx\n", data); */ gs->fogcol = data; return;
+        case 0x3F: /* printf("gs: TEXFLUSH <- %016lx\n", data); */ gs->texflush = data; return;
+        case 0x40: /* printf("gs: SCISSOR_1 <- %016lx\n", data); */ gs->context[0].scissor = data; gs_unpack_scissor(gs, 0); gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
+        case 0x41: /* printf("gs: SCISSOR_2 <- %016lx\n", data); */ gs->context[1].scissor = data; gs_unpack_scissor(gs, 1); return;
+        case 0x42: /* printf("gs: ALPHA_1 <- %016lx\n", data); */ gs->context[0].alpha = data; gs_unpack_alpha(gs, 0); return;
+        case 0x43: /* printf("gs: ALPHA_2 <- %016lx\n", data); */ gs->context[1].alpha = data; gs_unpack_alpha(gs, 1); return;
+        case 0x44: /* printf("gs: DIMX <- %016lx\n", data); */ gs->dimx = data; return;
+        case 0x45: /* printf("gs: DTHE <- %016lx\n", data); */ gs->dthe = data; return;
+        case 0x46: /* printf("gs: COLCLAMP <- %016lx\n", data); */ gs->colclamp = data; return;
+        case 0x47: /* printf("gs: TEST_1 <- %016lx\n", data); */ gs->context[0].test = data; gs_unpack_test(gs, 0); return;
+        case 0x48: /* printf("gs: TEST_2 <- %016lx\n", data); */ gs->context[1].test = data; gs_unpack_test(gs, 1); return;
+        case 0x49: /* printf("gs: PABE <- %016lx\n", data); */ gs->pabe = data; return;
+        case 0x4A: /* printf("gs: FBA_1 <- %016lx\n", data); */ gs->context[0].fba = data; return;
+        case 0x4B: /* printf("gs: FBA_2 <- %016lx\n", data); */ gs->context[1].fba = data; return;
+        case 0x4C: /* printf("gs: FRAME_1 <- %016lx\n", data); */ gs->context[0].frame = data; gs_unpack_frame(gs, 0); return;
+        case 0x4D: /* printf("gs: FRAME_2 <- %016lx\n", data); */ gs->context[1].frame = data; gs_unpack_frame(gs, 1); return;
+        case 0x4E: /* printf("gs: ZBUF_1 <- %016lx\n", data); */ gs->context[0].zbuf = data; gs_unpack_zbuf(gs, 0); return;
+        case 0x4F: /* printf("gs: ZBUF_2 <- %016lx\n", data); */ gs->context[1].zbuf = data; gs_unpack_zbuf(gs, 1); return;
+        case 0x50: /* printf("gs: BITBLTBUF <- %016lx\n", data); */ gs->bitbltbuf = data; return;
+        case 0x51: /* printf("gs: TRXPOS <- %016lx\n", data); */ gs->trxpos = data; return;
+        case 0x52: /* printf("gs: TRXREG <- %016lx\n", data); */ gs->trxreg = data; return;
+        case 0x53: /* printf("gs: TRXDIR <- %016lx\n", data); */ gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return; // gs_start_transfer(gs); return;
         case 0x54: gs->hwreg = data; gs->backend.transfer_write(gs, gs->backend.udata); return; // gs_transfer_write(gs); return;
-        case 0x60: gs->signal = data; return;
-        case 0x61: gs->finish = data; return;
-        case 0x62: gs->label = data; return;
+        case 0x60: /* printf("gs: SIGNAL <- %016lx\n", data); */ gs->signal = data; return;
+        case 0x61: /* printf("gs: FINISH <- %016lx\n", data); */ gs->finish = data; return;
+        case 0x62: /* printf("gs: LABEL <- %016lx\n", data); */ gs->label = data; return;
         default: {
             printf("gs: Invalid privileged register %02x write %016lx\n", reg, data);
 

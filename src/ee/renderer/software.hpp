@@ -15,12 +15,14 @@ struct software_state {
     unsigned int sx, sy;
     unsigned int dx, dy;
 
-    SDL_Window* window;
-    SDL_Renderer* renderer;
-    SDL_Texture* texture;
+    SDL_Window* window = nullptr;
+    SDL_Renderer* renderer = nullptr;
+    SDL_Texture* texture = nullptr;
+    struct ps2_gs* gs;
 };
 
-void software_init(software_state* ctx, SDL_Window* window, SDL_Renderer* renderer);
+void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_Renderer* renderer);
+void software_set_size(software_state* ctx, int width, int height);
 
 extern "C" {
 void software_render_point(struct ps2_gs* gs, void* udata);

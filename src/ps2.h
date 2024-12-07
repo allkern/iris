@@ -8,6 +8,7 @@ extern "C" {
 #include "ee/bus.h"
 #include "ee/ee.h"
 #include "ee/gif.h"
+#include "ee/vif.h"
 #include "ee/gs.h"
 #include "ee/dmac.h"
 #include "ee/intc.h"
@@ -38,6 +39,7 @@ struct ps2_state {
     // EE-only
     struct ee_bus* ee_bus;
     struct ps2_gif* gif;
+    struct ps2_vif* vif;
     struct ps2_gs* gs;
     struct ps2_dmac* ee_dma;
     struct ps2_ram* ee_ram;

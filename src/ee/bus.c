@@ -41,6 +41,10 @@ void ee_bus_init_gif(struct ee_bus* bus, struct ps2_gif* gif) {
     bus->gif = gif;
 }
 
+void ee_bus_init_vif(struct ee_bus* bus, struct ps2_vif* vif) {
+    bus->vif = vif;
+}
+
 void ee_bus_init_gs(struct ee_bus* bus, struct ps2_gs* gs) {
     bus->gs = gs;
 }
@@ -120,6 +124,7 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_READ(32, 0x10003000, 0x100037FF, gif, gif);
+    MAP_REG_READ(32, 0x10003800, 0x10005FFF, vif, vif);
     MAP_REG_READ(32, 0x1000F000, 0x1000F01F, intc, intc);
     MAP_REG_READ(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
     MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers);
@@ -193,6 +198,7 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     MAP_MEM_READ(128, 0x30100000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_READ(128, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_READ(128, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_REG_READ(128, 0x10004000, 0x10005FFF, vif, vif);
 
     printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr);
 
@@ -206,7 +212,6 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x30100000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
-    // MAP_MEM_WRITE(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     if (addr == 0x1000f180) { bus->kputchar(bus->kputchar_udata, data & 0xff); return; }
 
@@ -226,6 +231,7 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
         case 0x1f801470:
         case 0x1f801472: return;
     }
+
     printf("bus: Unhandled 16-bit write to physical address 0x%08x (0x%04lx)\n", addr, data); exit(1);
 }
 
@@ -240,10 +246,10 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_WRITE(32, 0x1000F000, 0x1000F01F, intc, intc);
     MAP_REG_WRITE(32, 0x1000F200, 0x1000F26F, sif, sif);
+    MAP_REG_WRITE(32, 0x10003800, 0x10005FFF, vif, vif);
     MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_WRITE(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
     MAP_MEM_WRITE(32, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
-    // MAP_MEM_WRITE(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     switch (addr) {
         case 0x1000f430: {
@@ -283,12 +289,11 @@ void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(64, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(64, 0x30100000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(64, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
-    // MAP_MEM_WRITE(64, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_REG_WRITE(64, 0x12000000, 0x12002000, gs, gs);
     MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
 
-    printf("bus: Unhandled 64-bit write to physical address 0x%08x (0x%08lx%08lx)\n", addr, data >> 32, data & 0xffffffff);
+    // printf("bus: Unhandled 64-bit write to physical address 0x%08x (0x%08lx%08lx)\n", addr, data >> 32, data & 0xffffffff);
 }
 
 void ee_bus_write128(void* udata, uint32_t addr, uint128_t data) {
@@ -298,8 +303,8 @@ void ee_bus_write128(void* udata, uint32_t addr, uint128_t data) {
     MAP_MEM_WRITE(128, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(128, 0x30100000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(128, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
-    // MAP_MEM_WRITE(128, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_REG_WRITE(128, 0x10006000, 0x10006FFF, gif, gif);
+    MAP_REG_WRITE(128, 0x10004000, 0x10005FFF, vif, vif);
 
-    printf("bus: Unhandled 128-bit write to physical address 0x%08x (0x%08x%08x%08x%08x)\n", addr, data.u32[3], data.u32[2], data.u32[1], data.u32[0]);
+    // printf("bus: Unhandled 128-bit write to physical address 0x%08x (0x%08x%08x%08x%08x)\n", addr, data.u32[3], data.u32[2], data.u32[1], data.u32[0]);
 }

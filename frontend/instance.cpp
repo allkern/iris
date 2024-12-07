@@ -31,19 +31,21 @@ static const ImWchar icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 void handle_scissor_event(void* udata) {
     lunar::instance* lunar = (lunar::instance*)udata;
 
-    int scax0 = lunar->ps2->gs->scissor_1 & 0x3ff;
-    int scay0 = (lunar->ps2->gs->scissor_1 >> 32) & 0x3ff;
-    int scax1 = (lunar->ps2->gs->scissor_1 >> 16) & 0x3ff;
-    int scay1 = (lunar->ps2->gs->scissor_1 >> 48) & 0x3ff;
+    // int scax0 = lunar->ps2->gs->scissor_1 & 0x3ff;
+    // int scay0 = (lunar->ps2->gs->scissor_1 >> 32) & 0x3ff;
+    // int scax1 = (lunar->ps2->gs->scissor_1 >> 16) & 0x3ff;
+    // int scay1 = (lunar->ps2->gs->scissor_1 >> 48) & 0x3ff;
 
-    // printf("sca0=(%d,%d) sca1=(%d,%d) frame_1=%x\n",
-    //     scax0, scay0,
-    //     scax1, scay1,
-    //     lunar->ps2->gs->frame_1
-    // );
+    // // printf("sca0=(%d,%d) sca1=(%d,%d) frame_1=%x\n",
+    // //     scax0, scay0,
+    // //     scax1, scay1,
+    // //     lunar->ps2->gs->frame_1
+    // // );
     
-    int width = (scax1 - scax0) + 1;
-    int height = (scay1 - scay0) + 1;
+    // int width = (scax1 - scax0) + 1;
+    // int height = (scay1 - scay0) + 1;
+
+    software_set_size((software_state*)lunar->ps2->gs->backend.udata, 0, 0);
 
     // opengl_set_size(lunar->renderer_state, width, height, 1.5);
 
@@ -295,7 +297,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->ps2->gs->backend.transfer_write = software_transfer_write;
     lunar->ps2->gs->backend.transfer_read = software_transfer_read;
 
-    software_init((software_state*)lunar->ps2->gs->backend.udata, lunar->window, lunar->renderer);
+    software_init((software_state*)lunar->ps2->gs->backend.udata, lunar->ps2->gs, lunar->window, lunar->renderer);
 
     // lunar->ps2->gs->vqi = 0;
     // lunar->ps2->gs->prim = 5;
@@ -740,7 +742,7 @@ void update_window(lunar::instance* lunar) {
 
     // SDL_RenderPresent(lunar->renderer);
 
-    SDL_GL_SwapWindow(lunar->window);
+    software_render(lunar->ps2->gs, lunar->ps2->gs->backend.udata);
 
     SDL_Event event;
 
@@ -769,6 +771,8 @@ void close(lunar::instance* lunar) {
     SDL_DestroyRenderer(lunar->renderer);
     SDL_DestroyWindow(lunar->window);
     SDL_Quit();
+
+    ps2_destroy(lunar->ps2);
 }
 
 }

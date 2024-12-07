@@ -80,6 +80,12 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
         return 0;
     }
 
+    if (!symtab.sh_entsize) {
+        fclose(file);
+
+        return 0;
+    }
+
     size_t nsyms = symtab.sh_size / symtab.sh_entsize;
 
     // Read symbol table

@@ -65,14 +65,39 @@ extern "C" {
 #define GS_FINISH     0x61
 #define GS_LABEL      0x62
 
-#define ATTR_IIP (1 << 3) // int0:1:0 Shading Method
-#define ATTR_TME (1 << 4) // int0:1:0 Texture Mapping
-#define ATTR_FGE (1 << 5) // int0:1:0 Fogging
-#define ATTR_ABE (1 << 6) // int0:1:0 Alpha Blending
-#define ATTR_AA1 (1 << 7) // int0:1:0 1 Pass Antialiasing (*1)
-#define ATTR_FST (1 << 8) // int0:1:0 Method of Specifying Texture Coordinates (*2)
-#define ATTR_CTXT (1 << 9) // int0:1:0 Context
-#define ATTR_FIX (1 << 10) // int0:1:0 Fragment Value Control (RGBAFSTQ Change by DDA)
+// TCC
+#define GS_RGB 0
+#define GS_RGBA 1
+
+#define GS_IIP (1 << 3) // int0:1:0 Shading Method
+#define GS_TME (1 << 4) // int0:1:0 Texture Mapping
+#define GS_FGE (1 << 5) // int0:1:0 Fogging
+#define GS_ABE (1 << 6) // int0:1:0 Alpha Blending
+#define GS_AA1 (1 << 7) // int0:1:0 1 Pass Antialiasing (*1)
+#define GS_FST (1 << 8) // int0:1:0 Method of Specifying Texture Coordinates (*2)
+#define GS_CTXT (1 << 9) // int0:1:0 Context
+#define GS_FIX (1 << 10) // int0:1:0 Fragment Value Control (RGBAFSTQ Change by DDA)
+
+// Pixel/Z formats
+#define GS_PSMCT32 0x00
+#define GS_PSMCT24 0x01
+#define GS_PSMCT16 0x02
+#define GS_PSMCT16S 0x0a
+#define GS_PSMZ32 0x30
+#define GS_PSMZ24 0x31
+#define GS_PSMZ16 0x32
+#define GS_PSMZ16S 0x3a
+#define GS_PSMT8 0x13
+#define GS_PSMT4 0x14
+#define GS_PSMT8H 0x1b
+#define GS_PSMT4HL 0x24
+#define GS_PSMT4HH 0x2c
+
+// Texture function
+#define GS_MODULATE 0
+#define GS_DECAL 1
+#define GS_HIGHLIGHT 2
+#define GS_HIGHLIGHT2 3
 
 struct ps2_gs;
 
@@ -94,6 +119,20 @@ struct gs_vertex {
     uint64_t st;
     uint64_t uv;
     uint64_t fog;
+
+    // Cached fields
+    uint32_t r;
+    uint32_t g;
+    uint32_t b;
+    uint32_t a;
+    int16_t x;
+    int16_t y;
+    uint32_t z;
+    uint32_t u;
+    uint32_t v;
+    float s;
+    float t;
+    float q;
 };
 
 struct gs_callback {
@@ -115,6 +154,80 @@ struct gs_context {
     uint64_t xyoffset; // (XYOFFSET_1, XYOFFSET_2)
     uint64_t scissor; // (SCISSOR_1, SCISSOR_2)
     uint64_t fba; // (FBA_1, FBA_2)
+
+    // Cached fields
+    // FRAME
+    uint32_t fbp;
+    uint32_t fbw;
+    uint32_t fbpsm;
+    uint32_t fbmsk;
+
+    // ZBUF
+    uint32_t zbp;
+    uint32_t zbpsm;
+    uint32_t zbmsk;
+
+    // TEX0
+    uint32_t tbp0;
+    uint32_t tbw;
+    uint32_t tbpsm;
+    uint32_t usize;
+    uint32_t vsize;
+    uint32_t tcc;
+    uint32_t tfx;
+    uint32_t cbp;
+    uint32_t cbpsm;
+    uint32_t csm;
+    uint32_t csa;
+    uint32_t cld;
+
+    // TEX1
+    uint32_t lcm;
+    uint32_t mxl;
+    uint32_t mmag;
+    uint32_t mmin;
+    uint32_t mtba;
+    uint32_t l;
+    uint32_t k;
+
+    // MIPTBP1/2
+    uint32_t mmtbp[6];
+    uint32_t mmtbw[6];
+
+    // CLAMP
+    uint32_t wms;
+    uint32_t wmt;
+    uint32_t minu;
+    uint32_t maxu;
+    uint32_t minv;
+    uint32_t maxv;
+
+    // TEST
+    uint32_t ate;
+    uint32_t atst;
+    uint32_t aref;
+    uint32_t afail;
+    uint32_t date;
+    uint32_t datm;
+    uint32_t zte;
+    uint32_t ztst;
+
+    // ALPHA
+    uint32_t a;
+    uint32_t b;
+    uint32_t c;
+    uint32_t d;
+    uint32_t fix;
+
+    // XYOFFSET
+    uint32_t ofx;
+    uint32_t ofy;
+
+    // SCISSOR
+    uint32_t scax0;
+    uint32_t scax1;
+    uint32_t scay0;
+    uint32_t scay1;
 };
 
 #define GS_EVENT_VBLANK 0
@@ -129,6 +242,7 @@ struct ps2_gs {
     struct gs_context context[2];
     struct gs_context* ctx;
 
+    // Privileged registers
     uint64_t pmode;
     uint64_t smode1;
     uint64_t smode2;
@@ -156,46 +270,20 @@ struct ps2_gs {
     uint64_t uv;
     uint64_t xyzf2;
     uint64_t xyz2;
-    uint64_t tex0_1;
-    uint64_t tex0_2;
-    uint64_t clamp_1;
-    uint64_t clamp_2;
     uint64_t fog;
     uint64_t xyzf3;
     uint64_t xyz3;
-    uint64_t tex1_1;
-    uint64_t tex1_2;
-    uint64_t tex2_1;
-    uint64_t tex2_2;
-    uint64_t xyoffset_1;
-    uint64_t xyoffset_2;
     uint64_t prmodecont;
     uint64_t prmode;
     uint64_t texclut;
     uint64_t scanmsk;
-    uint64_t miptbp1_1;
-    uint64_t miptbp1_2;
-    uint64_t miptbp2_1;
-    uint64_t miptbp2_2;
     uint64_t texa;
     uint64_t fogcol;
     uint64_t texflush;
-    uint64_t scissor_1;
-    uint64_t scissor_2;
-    uint64_t alpha_1;
-    uint64_t alpha_2;
     uint64_t dimx;
     uint64_t dthe;
     uint64_t colclamp;
-    uint64_t test_1;
-    uint64_t test_2;
     uint64_t pabe;
-    uint64_t fba_1;
-    uint64_t fba_2;
-    uint64_t frame_1;
-    uint64_t frame_2;
-    uint64_t zbuf_1;
-    uint64_t zbuf_2;
     uint64_t bitbltbuf;
     uint64_t trxpos;
     uint64_t trxreg;
@@ -208,6 +296,21 @@ struct ps2_gs {
     // Drawing data
     struct gs_vertex vq[4];
     unsigned int vqi;
+
+    // Cached fields
+    int iip;
+    int tme;
+    int fge;
+    int abe;
+    int aa1;
+    int fst;
+    int ctxt;
+    int fix;
+
+    // TEXCLUT
+    uint32_t cbw;
+    uint32_t cou;
+    uint32_t cov;
 
     struct gs_callback events[2];
 

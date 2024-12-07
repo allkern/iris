@@ -190,7 +190,7 @@ void iop_cycle(struct iop_state* iop) {
     if (iop_check_irq(iop)) {
         iop->r[0] = 0;
 
-        printf("iop: irq pc=%08x next_pc=%08x saved_pc=%08x\n", iop->pc, iop->next_pc, iop->saved_pc);
+        // printf("iop: irq pc=%08x next_pc=%08x saved_pc=%08x\n", iop->pc, iop->next_pc, iop->saved_pc);
 
         iop_exception(iop, CAUSE_INT);
 

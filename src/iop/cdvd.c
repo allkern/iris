@@ -418,7 +418,7 @@ void ps2_cdvd_close(struct ps2_cdvd* cdvd) {
 }
 
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
-    printf("cdvd: read %08x\n", addr);
+    // printf("cdvd: read %08x\n", addr);
 
     switch (addr) {
         case 0x1F402004: return cdvd->n_cmd;

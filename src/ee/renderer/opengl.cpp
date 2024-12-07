@@ -136,6 +136,9 @@ void opengl_init(opengl_state* ctx) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+
+    free(vert_shader_src);
+    free(frag_shader_src);
 }
 
 void opengl_set_size(opengl_state* ctx, int width, int height, float scale) {
