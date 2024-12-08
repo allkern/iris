@@ -38,12 +38,18 @@ void software_set_size(software_state* ctx, int width, int height) {
         break;
     }
 
+    uint64_t display = ctx->gs->display1 ? ctx->gs->display1 : ctx->gs->display2;
+
+    int sw = (ctx->gs->ctx->scax1 - ctx->gs->ctx->scax0) + 1;
+    int sh = (ctx->gs->ctx->scay1 - ctx->gs->ctx->scay0) + 1;
+    int dh = (display >> 44) & 0x7ff;
+
     ctx->texture = SDL_CreateTexture(
         ctx->renderer,
         format,
         SDL_TEXTUREACCESS_STREAMING,
-        (ctx->gs->ctx->scax1 - ctx->gs->ctx->scax0) + 1,
-        (ctx->gs->ctx->scay1 - ctx->gs->ctx->scay0) + 1
+        sw,
+        (sh > dh) ? sh : dh
     );
 
     SDL_SetTextureScaleMode(ctx->texture, SDL_ScaleModeLinear);
@@ -56,6 +62,53 @@ void software_set_size(software_state* ctx, int width, int height) {
 }
 
 #define CLAMP(v, l, u) (((v) > (u)) ? (u) : (((v) < (l)) ? (l) : (v)))
+
+static inline uint32_t gs_apply_function(struct ps2_gs* gs, uint32_t t, uint32_t f) {
+    uint32_t pr, pg, pb, pa;
+    uint32_t tr = t & 0xff;
+    uint32_t tg = (t >> 8) & 0xff;
+    uint32_t tb = (t >> 16) & 0xff;
+    uint32_t ta = (t >> 24) & 0xff;
+    uint32_t fr = f & 0xff;
+    uint32_t fg = (f >> 8) & 0xff;
+    uint32_t fb = (f >> 16) & 0xff;
+    uint32_t fa = (f >> 24) & 0xff;
+
+    switch (gs->ctx->tfx) {
+        case GS_MODULATE: {
+            pr = CLAMP((tr * fr) >> 7, 0, 255);
+            pg = CLAMP((tg * fg) >> 7, 0, 255);
+            pb = CLAMP((tb * fb) >> 7, 0, 255);
+            pa = ta;
+
+            // if (gs->ctx->tcc) {
+            //     pa = CLAMP((ta * fa) >> 7, 0, 255);
+            // } else {
+            //     pa = fa;
+            // }
+        } break;
+        case GS_DECAL: {
+            pr = tr;
+            pg = tg;
+            pb = tb;
+            pa = ta;
+        } break;
+        case GS_HIGHLIGHT: {
+            pa = (f >> 24) & 0xff;
+            pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
+            pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
+            pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
+        } break;
+        case GS_HIGHLIGHT2: {
+            pa = (f >> 24) & 0xff;
+            pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
+            pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
+            pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
+        } break;
+    }
+
+    return pr | (pg << 8) | (pb << 16) | (pa << 24);
+}
 
 enum : int {
     TR_FAIL,
@@ -439,92 +492,170 @@ extern "C" void software_render_line(struct ps2_gs* gs, void* udata) {
 
 }
 
+#define EDGE(a, b, c) ((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x))
+#define MIN2(a, b) (((a) < (b)) ? (a) : (b))
+#define MIN3(a, b, c) (MIN2(MIN2(a, b), c))
+#define MAX2(a, b) (((a) > (b)) ? (a) : (b))
+#define MAX3(a, b, c) (MAX2(MAX2(a, b), c))
+
+#define IS_TOPLEFT(a, b) ((b.y > a.y) || ((a.y == b.y) && (b.x < a.x)))
+
 extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
-    struct gs_vertex v = gs->vq[0];
+    struct gs_vertex v0 = gs->vq[0];
+    struct gs_vertex v1 = gs->vq[1];
+    struct gs_vertex v2 = gs->vq[2];
 
-    // All of these only change on writes to their respective
-    // registers, so we should definitely cache the fields
-
-    // Base FB
-    uint32_t fbp = (gs->ctx->frame & 0x1ff) << 11;
-    uint32_t fbw = ((gs->ctx->frame >> 16) & 0x3f) << 6;
-
-    // Window
-    uint32_t xoff = (gs->ctx->xyoffset & 0xffff) >> 4;
-    uint32_t yoff = ((gs->ctx->xyoffset >> 32) & 0xffff) >> 4;
-    int scax0 = gs->ctx->scissor & 0x3ff;
-    int scay0 = (gs->ctx->scissor >> 32) & 0x3ff;
-    int scax1 = (gs->ctx->scissor >> 16) & 0x3ff;
-    int scay1 = (gs->ctx->scissor >> 48) & 0x3ff;
-
-    uint32_t x = (v.xyz & 0xffff) >> 4;
-    uint32_t y = (v.xyz & 0xffff0000) >> 20;
-
-    // printf("fbp=%08x fbw=%d xyoffset=(%d,%d) scissor=(%d,%d-%d,%d), xy=(%d,%d)\n",
-    //     fbp, fbw,
-    //     xoff, yoff,
-    //     scax0, scay0,
-    //     scax1, scay1,
-    //     x, y
-    // );
-
-    // exit(1);
-}
-
-static inline uint32_t gs_apply_function(struct ps2_gs* gs, uint32_t t, uint32_t f) {
-    uint32_t pr, pg, pb, pa;
-    uint32_t tr = t & 0xff;
-    uint32_t tg = (t >> 8) & 0xff;
-    uint32_t tb = (t >> 16) & 0xff;
-    uint32_t ta = (t >> 24) & 0xff;
-    uint32_t fr = f & 0xff;
-    uint32_t fg = (f >> 8) & 0xff;
-    uint32_t fb = (f >> 16) & 0xff;
-    uint32_t fa = (f >> 24) & 0xff;
-
-    switch (gs->ctx->tfx) {
-        case GS_MODULATE: {
-            pr = CLAMP((tr * fr) >> 7, 0, 255);
-            pg = CLAMP((tg * fg) >> 7, 0, 255);
-            pb = CLAMP((tb * fb) >> 7, 0, 255);
-
-            if (gs->ctx->tcc) {
-                pa = CLAMP((ta * fa) >> 7, 0, 255);
-            } else {
-                pa = fa;
-            }
-        } break;
-        case GS_DECAL: {
-            pr = tr;
-            pg = tg;
-            pb = tb;
-            pa = ta;
-        } break;
-        case GS_HIGHLIGHT: {
-            pa = (f >> 24) & 0xff;
-            pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
-            pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
-            pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
-        } break;
-        case GS_HIGHLIGHT2: {
-            pa = (f >> 24) & 0xff;
-            pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
-            pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
-            pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
-        } break;
+    if (EDGE(v0, v1, v2) < 0) {
+        v1 = gs->vq[2];
+        v2 = gs->vq[1];
     }
 
-    pr &= 0xff;
-    pg &= 0xff;
-    pb &= 0xff;
-    pa &= 0xff;
+    v0.x -= gs->ctx->ofx;
+    v1.x -= gs->ctx->ofx;
+    v2.x -= gs->ctx->ofx;
+    v0.y -= gs->ctx->ofy;
+    v1.y -= gs->ctx->ofy;
+    v2.y -= gs->ctx->ofy;
 
-    uint32_t p = pr | (pg << 8) | (pb << 16) | (pa << 24);
+    int xmin = MIN3(v0.x, v1.x, v2.x);
+    int ymin = MIN3(v0.y, v1.y, v2.y);
+    int xmax = MAX3(v0.x, v1.x, v2.x);
+    int ymax = MAX3(v0.y, v1.y, v2.y);
 
-    return p;
+    xmin = MAX2(xmin, gs->ctx->scax0);
+    ymin = MAX2(ymin, gs->ctx->scay0);
+    xmax = MIN2(xmax, gs->ctx->scax1);
+    ymax = MIN2(ymax, gs->ctx->scay1);
+
+    int a01 = (int)v0.y - (int)v1.y, b01 = (int)v1.x - (int)v0.x;
+    int a12 = (int)v1.y - (int)v2.y, b12 = (int)v2.x - (int)v1.x;
+    int a20 = (int)v2.y - (int)v0.y, b20 = (int)v0.x - (int)v2.x;
+
+    struct gs_vertex p;
+    p.x = xmin;
+    p.y = ymin;
+
+    int bias0 = IS_TOPLEFT(v1, v2) ? 0 : -1;
+    int bias1 = IS_TOPLEFT(v2, v0) ? 0 : -1;
+    int bias2 = IS_TOPLEFT(v0, v1) ? 0 : -1;
+    int w0_row = EDGE(v1, v2, p) + bias0;
+    int w1_row = EDGE(v2, v0, p) + bias1;
+    int w2_row = EDGE(v0, v1, p) + bias2;
+
+    // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) iip=%d tme=%d fst=%d abe=%d tfx=%d tcc=%d zte=%d\n",
+    //     v0.x, v0.y, v0.z,
+    //     v1.x, v1.y, v1.z,
+    //     v2.x, v2.y, v2.z,
+    //     gs->iip,
+    //     gs->tme,
+    //     gs->fst,
+    //     gs->abe,
+    //     gs->ctx->tfx,
+    //     gs->ctx->tcc,
+    //     gs->ctx->zte
+    // );
+
+    int area = EDGE(v0, v1, v2);
+
+    for (p.y = ymin; p.y <= ymax; p.y++) {
+        // Barycentric coordinates at start of row
+        int w0 = w0_row;
+        int w1 = w1_row;
+        int w2 = w2_row;
+
+        for (p.x = xmin; p.x <= xmax; p.x++) {
+            // If p is on or inside all edges, render pixel.
+            if ((w0 | w1 | w2) < 0) {
+                w0 += a12;
+                w1 += a20;
+                w2 += a01;
+
+                continue;
+            }
+
+            // Calculate interpolation weights
+            float iw0 = (float)w0 / (float)area;
+            float iw1 = (float)w1 / (float)area;
+            float iw2 = (float)w2 / (float)area;
+
+            uint32_t fr, fg, fb, fa;
+
+            if (gs->iip) {
+                fr = v0.r * iw0 + v1.r * iw1 + v2.r * iw2;
+                fg = v0.g * iw0 + v1.g * iw1 + v2.g * iw2;
+                fb = v0.b * iw0 + v1.b * iw1 + v2.b * iw2;
+                fa = v0.a * iw0 + v1.a * iw1 + v2.a * iw2;
+            } else {
+                fr = v2.r;
+                fg = v2.g;
+                fb = v2.b;
+                fa = v2.a;
+            }
+
+            if (gs->tme) {
+                float u, v;
+
+                if (gs->fst) {
+                    u = v0.u * iw0 + v1.u * iw1 + v2.u * iw2;
+                    v = v0.v * iw0 + v1.v * iw1 + v2.v * iw2;
+                } else {
+                    float s = v0.s * iw0 + v1.s * iw1 + v2.s * iw2;
+                    float t = v0.t * iw0 + v1.t * iw1 + v2.t * iw2;
+                    float q = v0.q * iw0 + v1.q * iw1 + v2.q * iw2;
+
+                    u = (s / q) * gs->ctx->usize;
+                    v = (t / q) * gs->ctx->vsize;
+                }
+
+                uint32_t f = fr | (fg << 8) | (fb << 16);
+                uint32_t t = gs_read_tb(gs, u, v);
+                t = gs_to_rgba32(gs, t, gs->ctx->tbpsm);
+                t = gs_apply_function(gs, t, f);
+
+                fr = t & 0xff;
+                fg = (t >> 8) & 0xff;
+                fb = (t >> 16) & 0xff;
+                fa = t >> 24;
+            }
+
+            uint32_t fz = v0.z * iw0 + v1.z * iw1 + v2.z * iw2;
+
+            int tr = gs_test_pixel(gs, p.x, p.y, fz, fa);
+
+            if (tr == TR_FAIL) {
+                w0 += a12;
+                w1 += a20;
+                w2 += a01;
+
+                continue;
+            }
+
+            uint32_t fc = fr | (fg << 8) | (fb << 16) | (fa << 24);
+
+            fc = gs_from_rgba32(gs, fc, gs->ctx->fbpsm);
+
+            switch (tr) {
+                case TR_FB_ONLY: gs_write_fb(gs, p.x, p.y, fc); break;
+                case TR_ZB_ONLY: gs_write_zb(gs, p.x, p.y, fz); break;
+                // To-do: case TR_RGB_ONLY: gs_write_fb(gs, x, y, c); break;
+                case TR_PASS: {
+                    gs_write_fb(gs, p.x, p.y, fc);
+                    gs_write_zb(gs, p.x, p.y, fz);
+                } break;
+            }
+
+            // One step to the right
+            w0 += a12;
+            w1 += a20;
+            w2 += a01;
+        }
+
+        // One row step
+        w0_row += b12;
+        w1_row += b20;
+        w2_row += b01;
+    }
 }
-
-int loop = 0;
 
 extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     struct gs_vertex v0 = gs->vq[0];
