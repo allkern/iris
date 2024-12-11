@@ -193,6 +193,7 @@ void ps2_destroy(struct ps2_state* ps2) {
     ee_bus_destroy(ps2->ee_bus);
     iop_bus_destroy(ps2->iop_bus);
     ps2_gif_destroy(ps2->gif);
+    ps2_gs_destroy(ps2->gs);
     ps2_vif_destroy(ps2->vif);
     ps2_dmac_destroy(ps2->ee_dma);
     ps2_ram_destroy(ps2->ee_ram);
@@ -202,6 +203,7 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_iop_intc_destroy(ps2->iop_intc);
     ps2_iop_timers_destroy(ps2->iop_timers);
     ps2_ram_destroy(ps2->iop_ram);
+    ps2_cdvd_destroy(ps2->cdvd);
     ps2_bios_destroy(ps2->bios);
     ps2_sif_destroy(ps2->sif);
 

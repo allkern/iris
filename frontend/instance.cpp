@@ -65,10 +65,13 @@ static const char *ee_cc_r2[] = {
 
 void sigint_handler(int signal) {
     char buf[128];
-    struct ee_dis_state ds;
+    struct ee_dis_state ee_ds;
+    struct iop_dis_state iop_ds;
 
-    ds.print_address = 1;
-    ds.print_opcode = 1;
+    ee_ds.print_address = 1;
+    ee_ds.print_opcode = 1;
+    iop_ds.print_address = 1;
+    iop_ds.print_opcode = 1;
 
     struct ee_state* ee = g_lunar->ps2->ee;
 
@@ -102,15 +105,15 @@ void sigint_handler(int signal) {
     printf("pc: %08x\n", ee->pc);
 
     for (int i = -8; i <= 8; i++) {
-        ds.pc = ee->pc + (i * 4);
+        ee_ds.pc = ee->pc + (i * 4);
 
-        if (ee->pc == ds.pc) {
+        if (ee->pc == ee_ds.pc) {
             printf("--> ");
         } else {
             printf("    ");
         }
 
-        puts(ee_disassemble(buf, ee_bus_read32(ee->bus.udata, ds.pc & 0x1fffffff), &ds));
+        puts(ee_disassemble(buf, ee_bus_read32(ee->bus.udata, ee_ds.pc & 0x1fffffff), &ee_ds));
     }
 
     printf("intc: stat=%08x mask=%08x\n",
@@ -124,6 +127,38 @@ void sigint_handler(int signal) {
     );
 
     printf("epc: %08x\n", ee->epc);
+
+    printf("IOP:\n");
+
+    struct iop_state* iop = g_lunar->ps2->iop;
+
+    printf("r0=%08x at=%08x v0=%08x v1=%08x\n", iop->r[0] , iop->r[1] , iop->r[2] , iop->r[3] );
+    printf("a0=%08x a1=%08x a2=%08x a3=%08x\n", iop->r[4] , iop->r[5] , iop->r[6] , iop->r[7] );
+    printf("t0=%08x t1=%08x t2=%08x t3=%08x\n", iop->r[8] , iop->r[9] , iop->r[10], iop->r[11]);
+    printf("t4=%08x t5=%08x t6=%08x t7=%08x\n", iop->r[12], iop->r[13], iop->r[14], iop->r[15]);
+    printf("s0=%08x s1=%08x s2=%08x s3=%08x\n", iop->r[16], iop->r[17], iop->r[18], iop->r[19]);
+    printf("s4=%08x s5=%08x s6=%08x s7=%08x\n", iop->r[20], iop->r[21], iop->r[22], iop->r[23]);
+    printf("t8=%08x t9=%08x k0=%08x k1=%08x\n", iop->r[24], iop->r[25], iop->r[26], iop->r[27]);
+    printf("gp=%08x sp=%08x fp=%08x ra=%08x\n", iop->r[28], iop->r[29], iop->r[30], iop->r[31]);
+    printf("pc=%08x hi=%08x lo=%08x ep=%08x\n", iop->pc, iop->hi, iop->lo, iop->cop0_r[COP0_EPC]);
+
+    for (int i = -8; i <= 8; i++) {
+        iop_ds.addr = iop->pc + (i * 4);
+
+        if (iop->pc == iop_ds.addr) {
+            printf("--> ");
+        } else {
+            printf("    ");
+        }
+
+        puts(iop_disassemble(buf, iop_bus_read32(iop->bus.udata, iop_ds.addr & 0x1fffffff), &iop_ds));
+    }
+
+    printf("intc: stat=%08x mask=%08x ctrl=%08x\n",
+        g_lunar->ps2->iop_intc->stat,
+        g_lunar->ps2->iop_intc->mask,
+        g_lunar->ps2->iop_intc->ctrl
+    );
 
     exit(1);
 }
@@ -287,6 +322,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
     // opengl_init(lunar->renderer_state);
 
+    // To-do: Implement backend constructor and destructor
     lunar->ps2->gs->backend.udata = new software_state;
     lunar->ps2->gs->backend.render_point = software_render_point;
     lunar->ps2->gs->backend.render_line = software_render_line;

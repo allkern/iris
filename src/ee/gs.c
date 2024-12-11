@@ -91,6 +91,7 @@ void gs_switch_context(struct ps2_gs* gs, int c) {
 }
 
 void ps2_gs_destroy(struct ps2_gs* gs) {
+    free(gs->vram);
     free(gs);
 }
 

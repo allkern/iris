@@ -1905,5 +1905,7 @@ void ee_reset(struct ee_state* ee) {
 }
 
 void ee_destroy(struct ee_state* ee) {
+    ps2_ram_destroy(ee->scratchpad);
+
     free(ee);
 }

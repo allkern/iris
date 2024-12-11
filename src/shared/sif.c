@@ -15,6 +15,7 @@ void ps2_sif_init(struct ps2_sif* sif) {
 }
 
 void ps2_sif_destroy(struct ps2_sif* sif) {
+    free(sif->fifo.data);
     free(sif);
 }
 
