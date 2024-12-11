@@ -211,12 +211,12 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     config.GlyphMinAdvanceX = 13.0f;
     config.GlyphOffset = ImVec2(0.0f, 4.0f);
 
-    lunar->font_small_code = io.Fonts->AddFontFromFileTTF("FiraCode-Regular.ttf", 12.0f);
-    lunar->font_code    = io.Fonts->AddFontFromFileTTF("FiraCode-Regular.ttf", 16.0f);
-    lunar->font_small   = io.Fonts->AddFontFromFileTTF("Roboto-Regular.ttf", 12.0f);
-    lunar->font_heading = io.Fonts->AddFontFromFileTTF("Roboto-Regular.ttf", 18.0f);
-    lunar->font_body    = io.Fonts->AddFontFromFileTTF("Roboto-Regular.ttf", 14.0f);
-    lunar->font_icons   = io.Fonts->AddFontFromFileTTF(FONT_ICON_FILE_NAME_MSR, 20.0f, &config, icon_range);
+    lunar->font_small_code = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 12.0f);
+    lunar->font_code    = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 16.0f);
+    lunar->font_small   = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 12.0f);
+    lunar->font_heading = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 18.0f);
+    lunar->font_body    = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 14.0f);
+    lunar->font_icons   = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 20.0f, &config, icon_range);
 
     io.FontDefault = lunar->font_body;
 
