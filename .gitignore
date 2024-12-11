@@ -5,6 +5,9 @@ tools/
 *.cue
 *.bin
 *.elf
+*.ELF
 *.exe
 *.iso
+*.mec
+*.nvm
 *.o

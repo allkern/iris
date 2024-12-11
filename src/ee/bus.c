@@ -59,8 +59,6 @@ void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), voi
 }
 
 void ee_bus_destroy(struct ee_bus* bus) {
-    ps2_ram_destroy(bus->ee_ram);
-
     free(bus);
 }
 

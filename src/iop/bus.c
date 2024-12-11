@@ -41,6 +41,10 @@ void iop_bus_init_cdvd(struct iop_bus* bus, struct ps2_cdvd* cdvd) {
     bus->cdvd = cdvd;
 }
 
+void iop_bus_init_sio2(struct iop_bus* bus, struct ps2_sio2* sio2) {
+    bus->sio2 = sio2;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }

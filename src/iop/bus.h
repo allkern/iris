@@ -15,6 +15,7 @@ extern "C" {
 #include "intc.h"
 #include "timers.h"
 #include "cdvd.h"
+#include "sio2.h"
 
 struct iop_bus {
     // EE/IOP
@@ -25,6 +26,7 @@ struct iop_bus {
     struct ps2_iop_intc* intc;
     struct ps2_iop_timers* timers;
     struct ps2_cdvd* cdvd;
+    struct ps2_sio2* sio2;
 };
 
 void iop_bus_init_bios(struct iop_bus* bus, struct ps2_bios* bios);
@@ -34,6 +36,7 @@ void iop_bus_init_dma(struct iop_bus* bus, struct ps2_iop_dma* dma);
 void iop_bus_init_intc(struct iop_bus* bus, struct ps2_iop_intc* intc);
 void iop_bus_init_timers(struct iop_bus* bus, struct ps2_iop_timers* timers);
 void iop_bus_init_cdvd(struct iop_bus* bus, struct ps2_cdvd* cdvd);
+void iop_bus_init_sio2(struct iop_bus* bus, struct ps2_sio2* sio2);
 
 #ifdef __cplusplus
 }
