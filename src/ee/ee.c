@@ -1192,8 +1192,8 @@ static inline void ee_i_tge(struct ee_state* ee) { printf("ee: tge unimplemented
 static inline void ee_i_tgei(struct ee_state* ee) { printf("ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee) { printf("ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee) { printf("ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee) { return; printf("ee: tlbp unimplemented\n"); exit(1); }
-static inline void ee_i_tlbr(struct ee_state* ee) { return; printf("ee: tlbr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee) { printf("ee: tlbp unimplemented\n"); exit(1); }
+static inline void ee_i_tlbr(struct ee_state* ee) { printf("ee: tlbr unimplemented\n"); exit(1); }
 static inline void ee_i_tlbwi(struct ee_state* ee) {
     /* To-do: MMU */
 }

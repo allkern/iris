@@ -186,9 +186,40 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
 
     if (gif->tag.index != gif->tag.remaining) {
         if (gif->tag.fmt == 1) {
-            printf("gif: REGLIST mode unimplemented\n");
+            for (int i = 0; i < 2; i++) {
+                int index = (gif->tag.index++) % gif->tag.nregs;
+                int r = (gif->tag.reg >> (index * 4)) & 0xf;
 
-            exit(1);
+                switch (r) {
+                    // To-do: Implement packing formats
+                    case 0x00: ps2_gs_write_internal(gif->gs, GS_PRIM, data.u64[0]); break;
+                    case 0x01: ps2_gs_write_internal(gif->gs, GS_RGBAQ, data.u64[0]); break;
+                    case 0x02: ps2_gs_write_internal(gif->gs, GS_ST, data.u64[0]); break;
+                    case 0x03: ps2_gs_write_internal(gif->gs, GS_UV, data.u64[0]); break;
+                    case 0x04: ps2_gs_write_internal(gif->gs, GS_XYZF2, data.u64[0]); break;
+                    case 0x05: ps2_gs_write_internal(gif->gs, GS_XYZ2, data.u64[0]); break;
+                    case 0x06: ps2_gs_write_internal(gif->gs, GS_TEX0_1, data.u64[0]); break;
+                    case 0x07: ps2_gs_write_internal(gif->gs, GS_TEX0_2, data.u64[0]); break;
+                    case 0x08: ps2_gs_write_internal(gif->gs, GS_CLAMP_1, data.u64[0]); break;
+                    case 0x09: ps2_gs_write_internal(gif->gs, GS_CLAMP_2, data.u64[0]); break;
+                    case 0x0a: ps2_gs_write_internal(gif->gs, GS_FOG, data.u64[0]); break;
+                    case 0x0c: ps2_gs_write_internal(gif->gs, GS_XYZF3, data.u64[0]); break;
+                    case 0x0d: ps2_gs_write_internal(gif->gs, GS_XYZ3, data.u64[0]); break;
+
+                    // A+D
+                    // NOP
+                    case 0x0e:
+                    case 0x0f: break;
+
+                    default: printf("gif: REGLIST format for reg %d unimplemented\n", r); exit(1); break;
+                }
+            }
+
+            if (gif->tag.index == gif->tag.remaining) {
+                gif->state = GIF_STATE_RECV_TAG;
+            }
+
+            return;
         }
 
         if (gif->tag.fmt == 2) {
