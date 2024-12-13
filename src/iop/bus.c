@@ -86,6 +86,9 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
+    // Stub SPU2 status reg?
+    if (addr == 0x1F900744) return 0x80;
+
     // printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
 
     return 0;

@@ -122,12 +122,14 @@ static inline void dma_fetch_tag(struct ps2_iop_dma* dma, struct iop_dma_channel
     c->size = (c->size + 3) & ~3;
 }
 
-void iop_dma_handle_mdec_in_transfer(struct ps2_iop_dma* dma) {}
-void iop_dma_handle_mdec_out_transfer(struct ps2_iop_dma* dma) {}
+void iop_dma_handle_mdec_in_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: MDEC in channel unimplemented\n"); exit(1);
+}
+void iop_dma_handle_mdec_out_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: MDEC out channel unimplemented\n"); exit(1);
+}
 void iop_dma_handle_sif2_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: Started SIF2 transfer\n");
-
-    exit(1);
+    printf("iop: SIF2 channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     // No data in CDVD buffer yet
@@ -180,11 +182,29 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
 
     // dma->cdvd.chcr &= ~0x1000000;
 }
-void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {}
-void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {}
-void iop_dma_handle_otc_transfer(struct ps2_iop_dma* dma) {}
-void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {}
-void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {}
+void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
+    // Stub
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
+    iop_dma_check_irq(dma);
+
+    dma->spu1.chcr &= ~0x1000000;
+}
+void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: PIO channel unimplemented\n"); exit(1);
+}
+void iop_dma_handle_otc_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: OTC channel unimplemented\n"); exit(1);
+}
+void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
+    // Stub
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
+    iop_dma_check_irq(dma);
+
+    dma->spu2.chcr &= ~0x1000000;
+}
+void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
+    printf("iop: DEV9 channel unimplemented\n"); exit(1);
+}
 void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
     ps2_sif_fifo_reset(dma->sif);
 
@@ -256,6 +276,8 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
         int irq = !!(tag & 0x40000000);
         eot = !!(tag & 0x80000000);
 
+        uint32_t ia = addr;
+
         // printf("iop: SIF1 tag addr=%08x size=%08x irq=%d eot=%d\n", addr, size, irq, eot);
 
         char buf[128];
@@ -290,10 +312,10 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
     dma->sif1.chcr &= ~0x1000000;
 }
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: SIO2 in channel unsupported\n");
+    printf("iop: SIO2 in channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: SIO2 out channel unsupported\n");
+    printf("iop: SIO2 out channel unimplemented\n"); exit(1);
 }
 
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {

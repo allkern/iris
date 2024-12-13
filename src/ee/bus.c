@@ -77,11 +77,9 @@ void ee_bus_destroy(struct ee_bus* bus) {
 uint64_t ee_bus_read8(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
-    addr &= 0x1fffffff;
-
     MAP_MEM_READ(8, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
-    MAP_MEM_READ(8, 0x30100000, 0x31FFFFFF, ram, ee_ram);
+    MAP_MEM_READ(8, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_READ(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
@@ -115,7 +113,7 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
 
     MAP_MEM_READ(32, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(32, 0x20000000, 0x21FFFFFF, ram, ee_ram);
-    MAP_MEM_READ(32, 0x30100000, 0x31FFFFFF, ram, ee_ram);
+    MAP_MEM_READ(32, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_READ(32, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_READ(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_REG_READ(32, 0x1000F200, 0x1000F26F, sif, sif);

@@ -40,7 +40,8 @@ static inline void sio2_handle_ctrl_write(struct ps2_sio2* sio2, uint8_t data) {
 
         // printf("sio2: Sending command %02x to port %d\n", sio2->in->buf[1], n);
 
-        sio2->port[n].handle_command(sio2, sio2->port[n].udata);
+        if (!n)
+            sio2->port[n].handle_command(sio2, sio2->port[n].udata);
 
         ps2_iop_intc_irq(sio2->intc, IOP_INTC_SIO2);
     }

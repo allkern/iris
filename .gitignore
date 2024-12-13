@@ -1,6 +1,7 @@
 .vscode/
 bin/
 tools/
+elf/
 main2.cpp
 *.dump
 *.cue
