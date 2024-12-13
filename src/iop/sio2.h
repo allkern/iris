@@ -10,7 +10,16 @@ extern "C" {
 #include "queue.h"
 #include "intc.h"
 
+struct ps2_sio2;
+
+struct sio2_device {
+    void (*handle_command)(struct ps2_sio2*, void*);
+    void* udata;
+};
+
 struct ps2_sio2 {
+    struct sio2_device port[4];
+
     uint32_t ctrl;
     uint32_t send3[16];
     uint32_t send1[8];
@@ -32,6 +41,8 @@ uint64_t ps2_sio2_read8(struct ps2_sio2* sio2, uint32_t addr);
 uint64_t ps2_sio2_read32(struct ps2_sio2* sio2, uint32_t addr);
 void ps2_sio2_write8(struct ps2_sio2* sio2, uint32_t addr, uint64_t data);
 void ps2_sio2_write32(struct ps2_sio2* sio2, uint32_t addr, uint64_t data);
+void ps2_sio2_attach_device(struct ps2_sio2* sio2, struct sio2_device dev, int port);
+void ps2_sio2_detach_device(struct ps2_sio2* sio2, int port);
 
 #ifdef __cplusplus
 }

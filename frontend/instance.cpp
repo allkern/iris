@@ -19,6 +19,27 @@
 
 namespace lunar {
 
+uint32_t map_button(SDL_Keycode k) {
+    if (k == SDLK_x     ) return DS_BT_CROSS;
+    if (k == SDLK_a     ) return DS_BT_SQUARE;
+    if (k == SDLK_w     ) return DS_BT_TRIANGLE;
+    if (k == SDLK_d     ) return DS_BT_CIRCLE;
+    if (k == SDLK_RETURN) return DS_BT_START;
+    if (k == SDLK_s     ) return DS_BT_SELECT;
+    if (k == SDLK_UP    ) return DS_BT_UP;
+    if (k == SDLK_DOWN  ) return DS_BT_DOWN;
+    if (k == SDLK_LEFT  ) return DS_BT_LEFT;
+    if (k == SDLK_RIGHT ) return DS_BT_RIGHT;
+    if (k == SDLK_q     ) return DS_BT_L1;
+    if (k == SDLK_e     ) return DS_BT_R1;
+    if (k == SDLK_1     ) return DS_BT_L2;
+    if (k == SDLK_3     ) return DS_BT_R2;
+    if (k == SDLK_z     ) return DS_BT_L3;
+    if (k == SDLK_c     ) return DS_BT_R3;
+
+    return 0;
+}
+
 void kputchar_stub(void* udata, char c) {
     putchar(c);
 }
@@ -306,6 +327,8 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     ps2_init_kputchar(lunar->ps2, kputchar_stub, NULL, kputchar_stub, NULL);
     ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, (void (*)(void*))update_window, lunar);
     ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_SCISSOR, handle_scissor_event, lunar);
+
+    lunar->ds = ds_sio2_attach(lunar->ps2->sio2, 0);
 
     // Initialize hardware renderer
     // lunar->renderer_state = new opengl_state;
@@ -789,6 +812,19 @@ void update_window(lunar::instance* lunar) {
             case SDL_QUIT: {
                 lunar->open = false;
             } break;
+
+            case SDL_KEYDOWN: {
+                uint16_t mask = map_button(event.key.keysym.sym);
+
+                ds_button_press(lunar->ds, mask);
+            } break;
+
+            case SDL_KEYUP: {
+                uint16_t mask = map_button(event.key.keysym.sym);
+
+                ds_button_release(lunar->ds, mask);
+            } break;
+            
         }
     }
 }

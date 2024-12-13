@@ -39,6 +39,8 @@ struct instance {
     bool open = false;
     bool pause = true;
     bool step = false;
+
+    struct ds_state* ds;
 };
 
 lunar::instance* create();

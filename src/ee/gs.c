@@ -57,6 +57,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
 
     // Set Vblank flag?
     gs->csr ^= 8;
+    gs->csr ^= 2;
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);

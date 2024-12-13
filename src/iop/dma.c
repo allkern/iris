@@ -272,7 +272,15 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
                 --size;
             }
         }
+
+        if (ps2_sif_fifo_is_empty(dma->sif))
+            break;
     } while (!eot);
+
+    // if (!eot) {
+    //     printf("iop: SIF1 waiting for transfer with EOT bit set\n");
+    //     return;
+    // }
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIF1);
     iop_dma_check_irq(dma);

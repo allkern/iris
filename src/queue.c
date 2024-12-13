@@ -12,7 +12,6 @@ struct queue_state* queue_create(void) {
 void queue_init(struct queue_state* queue) {
     memset(queue, 0, sizeof(struct queue_state));
 
-    queue->buf = NULL;
     queue->cap = 2;
     queue->buf = malloc(queue->cap * sizeof(uint32_t));
 }

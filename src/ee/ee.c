@@ -642,7 +642,17 @@ static inline void ee_i_madd(struct ee_state* ee) {
 
     EE_RD = EE_LO0;
 }
-static inline void ee_i_madd1(struct ee_state* ee) { printf("ee: madd1 unimplemented\n"); exit(1); }
+static inline void ee_i_madd1(struct ee_state* ee) {
+    uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
+    uint64_t d = (EE_LO1 & 0xffffffff) | (EE_HI1 << 32);
+
+    d += r;
+
+    EE_LO1 = SE6432(d & 0xffffffff);
+    EE_HI1 = SE6432(d >> 32);
+
+    EE_RD = EE_LO1;
+}
 static inline void ee_i_maddas(struct ee_state* ee) { printf("ee: maddas unimplemented\n"); exit(1); }
 static inline void ee_i_madds(struct ee_state* ee) {
     EE_FD = ee->a.f + EE_FS * EE_FT;

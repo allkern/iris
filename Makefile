@@ -22,6 +22,7 @@ CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
 CSRC += $(wildcard src/iop/*.c)
 CSRC += $(wildcard src/shared/*.c)
+CSRC += $(wildcard src/dev/*.c)
 CSRC += $(wildcard gl3w/src/*.c)
 COBJ := $(CSRC:.c=.o)
 
