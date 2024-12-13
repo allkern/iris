@@ -746,7 +746,14 @@ static inline void ee_i_multu(struct ee_state* ee) {
 
     EE_RD = EE_LO0;
 }
-static inline void ee_i_multu1(struct ee_state* ee) { printf("ee: multu1 unimplemented\n"); exit(1); }
+static inline void ee_i_multu1(struct ee_state* ee) {
+    uint64_t r = EE_RS32 * EE_RT32;
+
+    EE_LO1 = SE6432(r & 0xffffffff);
+    EE_HI1 = SE6432(r >> 32);
+
+    EE_RD = EE_LO1;
+}
 static inline void ee_i_negs(struct ee_state* ee) {
     EE_FD = -EE_FS;
 }
@@ -1018,7 +1025,16 @@ static inline void ee_i_psubsw(struct ee_state* ee) { printf("ee: psubsw unimple
 static inline void ee_i_psubub(struct ee_state* ee) { printf("ee: psubub unimplemented\n"); exit(1); }
 static inline void ee_i_psubuh(struct ee_state* ee) { printf("ee: psubuh unimplemented\n"); exit(1); }
 static inline void ee_i_psubuw(struct ee_state* ee) { printf("ee: psubuw unimplemented\n"); exit(1); }
-static inline void ee_i_psubw(struct ee_state* ee) { printf("ee: psubw unimplemented\n"); exit(1); }
+static inline void ee_i_psubw(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->r[d].u32[0] = ee->r[s].u32[0] - ee->r[t].u32[0];
+    ee->r[d].u32[1] = ee->r[s].u32[1] - ee->r[t].u32[1];
+    ee->r[d].u32[2] = ee->r[s].u32[2] - ee->r[t].u32[2];
+    ee->r[d].u32[3] = ee->r[s].u32[3] - ee->r[t].u32[3];
+}
 static inline void ee_i_pxor(struct ee_state* ee) {
     int d = EE_D_RD;
     int s = EE_D_RS;
@@ -1176,8 +1192,8 @@ static inline void ee_i_tge(struct ee_state* ee) { printf("ee: tge unimplemented
 static inline void ee_i_tgei(struct ee_state* ee) { printf("ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee) { printf("ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee) { printf("ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee) { printf("ee: tlbp unimplemented\n"); exit(1); }
-static inline void ee_i_tlbr(struct ee_state* ee) { printf("ee: tlbr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee) { return; printf("ee: tlbp unimplemented\n"); exit(1); }
+static inline void ee_i_tlbr(struct ee_state* ee) { return; printf("ee: tlbr unimplemented\n"); exit(1); }
 static inline void ee_i_tlbwi(struct ee_state* ee) {
     /* To-do: MMU */
 }

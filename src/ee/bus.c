@@ -274,10 +274,11 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
         case 0x1000f480:
         case 0x1000f490:
         case 0x1000f500:
+        case 0x1000f510:
         case 0x1f80141c: return;
     }
 
-    printf("bus: Unhandled 32-bit write to physical address 0x%08x (0x%08lx)\n", addr, data);
+    printf("bus: Unhandled 32-bit write to physical address 0x%08x (0x%08lx)\n", addr, data); if ((addr & 0xff000000) == 0x02000000) exit(1);
 }
 
 void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
