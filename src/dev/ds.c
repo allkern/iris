@@ -124,7 +124,17 @@ static inline void ds_cmd_query_mode(struct ps2_sio2* sio2, struct ds_state* ds)
     queue_push(sio2->out, 0x00);
 }
 static inline void ds_cmd_vibration_toggle(struct ps2_sio2* sio2, struct ds_state* ds) {
-    printf("ds: ds_cmd_vibration_toggle unimplemented\n"); exit(1);
+    // printf("ds: ds_cmd_vibration_toggle\n");
+
+    queue_push(sio2->out, 0xff);
+    queue_push(sio2->out, 0xf3);
+    queue_push(sio2->out, 0x5a);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
 }
 
 void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
