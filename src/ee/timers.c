@@ -68,7 +68,35 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
 
     uint32_t prev = t->counter;
 
-    t->counter += 1;
+    switch (t->mode & 3) {
+        case 0: {
+            ++t->counter;
+        } break;
+        case 1: {
+            if (t->internal >= 16) {
+                ++t->counter;
+                t->internal = 0;
+            } else {
+                ++t->internal;
+            }
+        } break;
+        case 2: {
+            if (t->internal >= 256) {
+                ++t->counter;
+                t->internal = 0;
+            } else {
+                ++t->internal;
+            }
+        } break;
+        case 3: {
+            if (t->internal >= 9370) {
+                ++t->counter;
+                t->internal = 0;
+            } else {
+                ++t->internal;
+            }
+        } break;
+    }
 
     // printf("ee: timer %d counter=%08x\n", timer, t->counter);
 
@@ -76,6 +104,8 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->mode |= 0x400;
 
         if (t->mode & 0x100) {
+            printf("ee: timer %d compare IRQ\n", timer);
+
             // ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
 
@@ -89,6 +119,8 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->counter -= 0xffff;
 
         if (t->mode & 0x200) {
+            printf("ee: timer %d overflow IRQ\n", timer);
+
             // ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
     }

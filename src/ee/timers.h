@@ -15,6 +15,7 @@ struct ee_timer {
     uint16_t mode;
     uint32_t compare;
     uint16_t hold;
+    uint32_t internal;
 };
 
 struct ps2_ee_timers {
