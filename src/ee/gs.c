@@ -379,8 +379,6 @@ static inline void gs_unpack_zbuf(struct ps2_gs* gs, int i) {
     gs->context[i].zbmsk = (gs->context[i].frame >> 32) & 1;
 }
 
-static int loo = 0;
-
 static inline void gs_unpack_texclut(struct ps2_gs* gs) {
     gs->cbw = (gs->texclut & 0x3f) << 6;
     gs->cou = ((gs->texclut >> 6) & 0x3f) << 4;
