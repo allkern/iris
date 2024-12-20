@@ -24,6 +24,8 @@ void ps2_iop_intc_irq(struct ps2_iop_intc* intc, int dev) {
 
     if (intc->ctrl && (intc->stat & intc->mask)) {
         iop_set_irq_pending(intc->iop);
+    } else {
+        intc->iop->cop0_r[COP0_CAUSE] &= ~SR_IM2;
     }
 }
 
