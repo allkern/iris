@@ -312,10 +312,20 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
     dma->sif1.chcr &= ~0x1000000;
 }
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: SIO2 in channel unimplemented\n"); exit(1);
+    printf("iop: SIO2 in channel unimplemented\n");
+
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_IN);
+    iop_dma_check_irq(dma);
+
+    dma->sio2_in.chcr &= ~0x1000000;
 }
 void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: SIO2 out channel unimplemented\n"); exit(1);
+    printf("iop: SIO2 out channel unimplemented\n");
+
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
+    iop_dma_check_irq(dma);
+
+    dma->sio2_out.chcr &= ~0x1000000;
 }
 
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
