@@ -8,7 +8,7 @@ extern "C" {
 #include <stdint.h>
 
 struct iop_timer {
-    uint64_t counter;
+    int64_t counter;
 
     union {
         uint32_t mode;
@@ -33,6 +33,7 @@ struct iop_timer {
     };
 
     uint32_t target;
+    int64_t internal;
 };
 
 struct ps2_iop_timers {
