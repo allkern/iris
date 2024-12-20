@@ -55,7 +55,20 @@ static inline void cdvd_init_s_fifo(struct ps2_cdvd* cdvd, int size) {
     cdvd->s_stat &= ~0x40;
 }
 
-static inline void cdvd_s_mechacon_version(struct ps2_cdvd* cdvd) {}
+static inline void cdvd_s_mechacon_version(struct ps2_cdvd* cdvd) {
+    if (cdvd->s_params[0] != 0) {
+        printf("cdvd: Unknown S subcommand %02x\n", cdvd->s_params);
+
+        exit(1);
+    }
+
+    cdvd_init_s_fifo(cdvd, 4);
+
+    cdvd->s_fifo[0] = 0x03;
+    cdvd->s_fifo[1] = 0x06;
+    cdvd->s_fifo[2] = 0x02;
+    cdvd->s_fifo[3] = 0x00;
+}
 static inline void cdvd_s_update_sticky_flags(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
 
@@ -75,34 +88,38 @@ static inline void cdvd_s_read_rtc(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[6] = 6;
     cdvd->s_fifo[7] = 7;
 }
-static inline void cdvd_s_write_rtc(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_s_forbid_dvd(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_s_open_config(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_s_read_config(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_s_close_config(struct ps2_cdvd* cdvd) {}
+static inline void cdvd_s_write_rtc(struct ps2_cdvd* cdvd) {
+    printf("cdvd: write_rtc\n");
+
+    exit(1);
+}
+static inline void cdvd_s_forbid_dvd(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 5;
+}
+static inline void cdvd_s_open_config(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_read_config(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 16);
+
+    for (int i = 0; i < 16; i++)
+        cdvd->s_fifo[i] = 0;
+}
+static inline void cdvd_s_close_config(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 
 void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
-    // Handle MechaconVersion command
-    if (cdvd->s_cmd == 3) {
-        if (cmd != 0) {
-            printf("cdvd: Unknown S command 03h:%02xh\n", cmd);
-
-            exit(1);
-        }
-
-        cdvd_s_mechacon_version(cdvd);
-
-        cdvd->s_cmd = 0;
-        cdvd->s_param_index = 0;
-
-        return;
-    }
-
     cdvd->s_cmd = cmd;
 
     switch (cmd) {
-        // 03h: Subcommand
-        case 0x03: return;
+        case 0x03: cdvd_s_mechacon_version(cdvd); return;
         case 0x05: cdvd_s_update_sticky_flags(cdvd); break;
         case 0x08: cdvd_s_read_rtc(cdvd); break;
         case 0x09: cdvd_s_write_rtc(cdvd); break;
@@ -219,17 +236,27 @@ void cdvd_do_cd_read(void* udata, int overshoot) {
     // Send IRQ to IOP
     ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
 
-    // cdvd->intc->iop->p = 1000;
-
     printf("cdvd: Read done\n");
 }
 
-static inline void cdvd_n_nop(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_n_nop_sync(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_n_standby(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_n_stop(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_n_pause(struct ps2_cdvd* cdvd) {}
-static inline void cdvd_n_seek(struct ps2_cdvd* cdvd) {}
+static inline void cdvd_n_nop(struct ps2_cdvd* cdvd) {
+    printf("cdvd: nop\n"); exit(1);
+}
+static inline void cdvd_n_nop_sync(struct ps2_cdvd* cdvd) {
+    printf("cdvd: nop_sync\n"); exit(1);
+}
+static inline void cdvd_n_standby(struct ps2_cdvd* cdvd) {
+    printf("cdvd: standby\n"); exit(1);
+}
+static inline void cdvd_n_stop(struct ps2_cdvd* cdvd) {
+    printf("cdvd: stop\n"); exit(1);
+}
+static inline void cdvd_n_pause(struct ps2_cdvd* cdvd) {
+    printf("cdvd: pause\n"); exit(1);
+}
+static inline void cdvd_n_seek(struct ps2_cdvd* cdvd) {
+    printf("cdvd: seek\n"); exit(1);
+}
 static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
     /*  Params:
         0-3   Sector position
@@ -289,7 +316,9 @@ static inline void cdvd_n_read_dvd(struct ps2_cdvd* cdvd) {
     exit(1);
 
 }
-static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {}
+static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {
+    printf("cdvd: get_toc\n"); exit(1);
+}
 
 static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->n_cmd = cmd;
