@@ -38,26 +38,33 @@ void software_set_size(software_state* ctx, int width, int height) {
         break;
     }
 
-    uint64_t display = ctx->gs->display1 ? ctx->gs->display1 : ctx->gs->display2;
+    int en1 = ctx->gs->pmode & 1;
+    int en2 = (ctx->gs->pmode >> 1) & 1;
+
+    uint64_t display = en1 ? ctx->gs->display1 : ctx->gs->display2;
+    uint64_t dispfb = en1 ? ctx->gs->dispfb1 : ctx->gs->dispfb2;
 
     int sw = (ctx->gs->ctx->scax1 - ctx->gs->ctx->scax0) + 1;
     int sh = (ctx->gs->ctx->scay1 - ctx->gs->ctx->scay0) + 1;
-    int dh = (display >> 44) & 0x7ff;
+    int magh = ((display >> 23) & 7) + 1;
+    int magv = ((display >> 27) & 3) + 1;
+    int dw = ((display >> 32) & 0xfff) / magh; // ((dispfb >> 9) & 0x3f) << 6;
+    int dh = ((display >> 44) & 0x7ff) / magv;
 
     ctx->texture = SDL_CreateTexture(
         ctx->renderer,
         format,
         SDL_TEXTUREACCESS_STREAMING,
-        sw,
-        (sh > dh) ? sh : dh
+        dw,
+        dh
     );
 
     SDL_SetTextureScaleMode(ctx->texture, SDL_ScaleModeLinear);
 
-    // printf("software: width=%d height=%d format=%d\n",
-    //     (ctx->gs->ctx->scax1 - ctx->gs->ctx->scax0) + 1,
-    //     (ctx->gs->ctx->scay1 - ctx->gs->ctx->scay0) + 1,
-    //     format
+    // printf("software: width=%d height=%d format=%d display=%08x\n",
+    //     dw,
+    //     dh,
+    //     format, display
     // );
 }
 
@@ -219,9 +226,9 @@ static inline uint32_t gs_from_rgba32(struct ps2_gs* gs, uint32_t c, int fmt) {
         case GS_PSMCT16:
         case GS_PSMCT16S: {
             // To-do: Use TEXA
-            return ((c & 0x0000ff) >> 3) |
-                   ((c & 0x00ff00) >> 6) |
-                   ((c & 0xff0000) >> 9) |
+            return ((c & 0x0000f8) >> 3) |
+                   ((c & 0x00f800) >> 6) |
+                   ((c & 0xf80000) >> 9) |
                    ((c & 0x80000000) ? 0x8000 : 0);
         } break;
         case GS_PSMT8:
@@ -302,12 +309,9 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
         } break;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
-            int shift = (x & 1) << 4;
-            uint32_t mask = 0xffff << shift;
-            uint32_t addr = gs->ctx->fbp + (x >> 1) + (y * (gs->ctx->fbw >> 1));
-            uint32_t data = gs->vram[addr] & ~mask;
+            uint16_t* ptr = (uint16_t*)&gs->vram[gs->ctx->fbp] + x + (y * gs->ctx->fbw);
 
-            gs->vram[addr] = (f & mask) | data;
+            *ptr = f;
         } break;
     }
 }
@@ -493,9 +497,9 @@ extern "C" void software_render_line(struct ps2_gs* gs, void* udata) {
 }
 
 #define EDGE(a, b, c) ((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x))
-#define MIN2(a, b) (((a) < (b)) ? (a) : (b))
+#define MIN2(a, b) ((((int)a) < ((int)b)) ? ((int)a) : ((int)b))
 #define MIN3(a, b, c) (MIN2(MIN2(a, b), c))
-#define MAX2(a, b) (((a) > (b)) ? (a) : (b))
+#define MAX2(a, b) ((((int)a) > ((int)b)) ? ((int)a) : ((int)b))
 #define MAX3(a, b, c) (MAX2(MAX2(a, b), c))
 
 #define IS_TOPLEFT(a, b) ((b.y > a.y) || ((a.y == b.y) && (b.x < a.x)))
@@ -553,6 +557,16 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
     //     gs->ctx->tfx,
     //     gs->ctx->tcc,
     //     gs->ctx->zte
+    // );
+
+    // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) min=(%d,%d) max=(%d,%d) sca0=(%d,%d) sca1=(%d,%d)\n",
+    //     v0.x, v0.y, v0.z,
+    //     v1.x, v1.y, v1.z,
+    //     v2.x, v2.y, v2.z,
+    //     xmin, ymin,
+    //     xmax, ymax,
+    //     gs->ctx->scax0, gs->ctx->scay0,
+    //     gs->ctx->scax1, gs->ctx->scay1
     // );
 
     int area = EDGE(v0, v1, v2);
@@ -632,8 +646,6 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
 
             uint32_t fc = fr | (fg << 8) | (fb << 16) | (fa << 24);
 
-            fc = gs_from_rgba32(gs, fc, gs->ctx->fbpsm);
-
             switch (tr) {
                 case TR_FB_ONLY: gs_write_fb(gs, p.x, p.y, fc); break;
                 case TR_ZB_ONLY: gs_write_zb(gs, p.x, p.y, fz); break;
@@ -679,16 +691,17 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     //     v1.rgbaq & 0xffffffff
     // );
 
-    // printf("gs: TB format=%d tbp=%x fbw=%d CB format=%d cbp=%x csa=%d tfx=%d rgba=%08x abe=%d\n",
+    // printf("gs: TB format=%d tbp=%x tbw=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d\n",
     //     gs->ctx->tbpsm,
     //     gs->ctx->tbp0,
     //     gs->ctx->tbw,
     //     gs->ctx->cbpsm,
     //     gs->ctx->cbp,
-    //     gs->ctx->csa,
+    //     gs->ctx->csm,
     //     gs->ctx->tfx,
     //     v1.rgbaq & 0xffffffff,
-    //     gs->abe
+    //     gs->abe,
+    //     gs->ctx->fbpsm
     // );
     int z = v1.z;
     int a = v1.a;
@@ -765,10 +778,14 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     int stride;
 
-    uint32_t dispfb = ctx->gs->dispfb2 ? ctx->gs->dispfb2 : ctx->gs->dispfb2;
+    int en1 = ctx->gs->pmode & 1;
+    int en2 = (ctx->gs->pmode >> 1) & 1;
 
+    uint64_t display = en1 ? ctx->gs->display1 : ctx->gs->display2;
+    uint64_t dispfb = en1 ? ctx->gs->dispfb1 : ctx->gs->dispfb2;
+
+    int dy = (display >> 12) & 0x7ff;
     uint32_t dfbp = (dispfb & 0x1ff) << 11;
-    uint32_t* ptr = &gs->vram[dfbp];
     uint32_t dfbw = ((dispfb >> 9) & 0x3f) << 6;
     uint32_t dfbpsm = (dispfb >> 15) & 0x1f;
 
@@ -780,6 +797,10 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
             stride = dfbw * 2;
         break;
     }
+
+    uint32_t* ptr = &gs->vram[dfbp];
+
+    // printf("fbp=%x fbw=%d fbpsm=%d stride=%d dy=%d\n", dfbp, dfbw, dfbpsm, stride, dy);
 
     if (!ctx->texture) {
         SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
