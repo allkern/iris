@@ -215,9 +215,7 @@ static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
 }
 
 void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {
-    printf("ee: DMA VIF0 transfer\n");
-
-    exit(1);
+    printf("ee: VIF0 channel unimplemented\n"); exit(1);
 }
 void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     printf("ee: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
@@ -357,8 +355,12 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
     } while (!dmac->gif.tag.end);
 }
 
-void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {}
-void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
+    printf("ee: IPU from channel unimplemented\n"); exit(1);
+}
+void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
+    printf("ee: IPU to channel unimplemented\n"); exit(1);
+}
 void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
     // SIF FIFO is empty, keep waiting
     if (ps2_sif_fifo_is_empty(dmac->sif)) {
@@ -407,6 +409,10 @@ void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
     }
 }
 void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
+    // printf("ee: SIF1 qwc=%d mode=%d\n",
+    //     dmac->sif1.qwc,
+    //     (dmac->sif1.chcr >> 2) & 3
+    // );
     do {
         uint128_t tag = ee_bus_read128(dmac->bus, dmac->sif1.tadr);
 
@@ -416,6 +422,18 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
 
         for (int i = 0; i < dmac->sif1.tag.qwc; i++) {
             uint128_t q = ee_bus_read128(dmac->bus, dmac->sif1.madr);
+
+            // for (int i = 0; i < 16; i++) {
+            //     printf("%02x ", q.u8[i]);
+            // }
+
+            // putchar('|');
+
+            // for (int i = 0; i < 16; i++) {
+            //     printf("%c", isprint(q.u8[i]) ? q.u8[i] : '.');
+            // }
+
+            // puts("|");
 
             ps2_sif_fifo_write(dmac->sif, q);
 
@@ -430,12 +448,14 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
     dmac->sif1.chcr &= ~0x100;
 }
 void dmac_handle_sif2_transfer(struct ps2_dmac* dmac) {
-    printf("ee: SIF2 transfer\n");
-
-    exit(1);
+    printf("ee: SIF2 channel unimplemented\n"); exit(1);
 }
-void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {}
-void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {}
+void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
+    printf("ee: SPR from channel unimplemented\n"); exit(1);
+}
+void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
+    printf("ee: SPR to channel unimplemented\n"); exit(1);
+}
 
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
