@@ -78,7 +78,7 @@ extern "C" {
 #define GS_CTXT (1 << 9) // int0:1:0 Context
 #define GS_FIX (1 << 10) // int0:1:0 Fragment Value Control (RGBAFSTQ Change by DDA)
 
-// Pixel/Z formats
+// Framebuffer/Pixel formats
 #define GS_PSMCT32 0x00
 #define GS_PSMCT24 0x01
 #define GS_PSMCT16 0x02
@@ -92,6 +92,12 @@ extern "C" {
 #define GS_PSMT8H 0x1b
 #define GS_PSMT4HL 0x24
 #define GS_PSMT4HH 0x2c
+
+// Z buffer formats
+#define GS_ZSMZ32 0x00
+#define GS_ZSMZ24 0x01
+#define GS_ZSMZ16 0x02
+#define GS_ZSMZ16S 0x0a
 
 // Texture function
 #define GS_MODULATE 0

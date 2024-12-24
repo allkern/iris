@@ -36,9 +36,10 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
 
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
 
-    // Set Vblank flag?
-    gs->csr ^= 8;
-    gs->csr ^= 1 << 13;
+    // gs->csr &= ~(8);
+    // gs->csr &= ~(2);
+    // gs->csr &= ~(1 << 12);
+    // gs->csr &= ~(1 << 13);
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
@@ -56,11 +57,14 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     vblank_out_event.udata = gs;
 
     // Set Vblank flag?
-    gs->csr ^= 8;
-    gs->csr ^= 2;
+    gs->csr |= 8;
+    gs->csr |= 2;
+    gs->csr |= 1 << 12;
+    gs->csr |= 1 << 13;
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
+    ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
 
     sched_schedule(gs->sched, vblank_out_event);
@@ -219,7 +223,6 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
         case 6: if (gs->vqi == 2) { if (!discard) gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
         default: {
             printf("gs: Reserved primitive %d\n", gs->prim & 7);
-            exit(1);
         } break;
     }
 }
@@ -374,9 +377,9 @@ static inline void gs_unpack_frame(struct ps2_gs* gs, int i) {
 }
 
 static inline void gs_unpack_zbuf(struct ps2_gs* gs, int i) {
-    gs->context[i].zbp = (gs->context[i].frame & 0x1ff) << 11;
-    gs->context[i].zbpsm = (gs->context[i].frame >> 24) & 0xf;
-    gs->context[i].zbmsk = (gs->context[i].frame >> 32) & 1;
+    gs->context[i].zbp = (gs->context[i].zbuf & 0x1ff) << 11;
+    gs->context[i].zbpsm = (gs->context[i].zbuf >> 24) & 0xf;
+    gs->context[i].zbmsk = (gs->context[i].zbuf >> 32) & 1;
 }
 
 static inline void gs_unpack_texclut(struct ps2_gs* gs) {
