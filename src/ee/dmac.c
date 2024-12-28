@@ -15,6 +15,9 @@ void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dm
     dmac->sif = sif;
     dmac->iop_dma = iop_dma;
     dmac->ee = ee;
+
+    // v2+ BIOSes need this value on boot (smh...)
+    dmac->enabler = 0x1201;
 }
 
 void ps2_dmac_destroy(struct ps2_dmac* dmac) {
@@ -507,6 +510,17 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 
     const char* name = dmac_get_channel_name(dmac, addr);
 
+    switch (addr) {
+        case 0x1000E000: dmac->ctrl = data; return;
+        case 0x1000E010: dmac_write_stat(dmac, data); return;
+        case 0x1000E020: dmac->pcr = data; return;
+        case 0x1000E030: dmac->sqwc = data; return;
+        case 0x1000E040: dmac->rbsr = data; return;
+        case 0x1000E050: dmac->rbor = data; return;
+        case 0x1000F520: dmac->enabler = data; return;
+        case 0x1000F590: dmac->enablew = data; return;
+    }
+
     if (c) {
         switch (addr & 0xff) {
             case 0x00: {
@@ -528,16 +542,5 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
         printf("dmac: Unknown channel register %02x\n", addr & 0xff);
 
         return;
-    }
-
-    switch (addr) {
-        case 0x1000E000: dmac->ctrl = data; return;
-        case 0x1000E010: dmac_write_stat(dmac, data); return;
-        case 0x1000E020: dmac->pcr = data; return;
-        case 0x1000E030: dmac->sqwc = data; return;
-        case 0x1000E040: dmac->rbsr = data; return;
-        case 0x1000E050: dmac->rbor = data; return;
-        case 0x1000F520: dmac->enabler = data; return;
-        case 0x1000F590: dmac->enablew = data; return;
     }
 }

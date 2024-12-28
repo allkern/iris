@@ -99,14 +99,15 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
 
     switch (addr) {
         case 0x1f803800: return 0;
+
+        // SCPH-39001 stub
+        case 0x1a000006: return 1;
     }
 
     printf("bus: Unhandled 16-bit read from physical address 0x%08x\n", addr); // exit(1);
 
     return 0;
 }
-
-static int timer0 = 0;
 
 uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
@@ -126,8 +127,6 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers);
 
     switch (addr) {
-        // SCPH-39001 won't boot if the timer updates too fast
-        // case 0x10000000: timer0 += 1; return timer0 >> 11;
         case 0x1000F440: {
             uint8_t sop = (bus->mch_ricm >> 6) & 0xF;
             uint8_t sa = (bus->mch_ricm >> 16) & 0xFFF;
