@@ -69,7 +69,7 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     MAP_REG_READ(8, 0x1F808200, 0x1F808280, sio2, sio2);
     MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
-    printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -107,7 +107,7 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
         }
     }
 
-    printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -129,7 +129,7 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
 
     if (addr == 0x1f801450) return 0;
 
-    printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -143,7 +143,7 @@ void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(8, 0x1F808200, 0x1F808280, sio2, sio2);
     MAP_MEM_WRITE(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
-    printf("iop_bus: Unhandled 8-bit write to physical address 0x%08x (0x%02x)\n", addr, data);
+    // printf("iop_bus: Unhandled 8-bit write to physical address 0x%08x (0x%02x)\n", addr, data);
 }
 
 void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {

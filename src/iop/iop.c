@@ -335,7 +335,7 @@ static inline void iop_i_j(struct iop_state* iop) {
                                 break;
                         }
 
-                        printf("ioman_open(\"%s\", %x, %x)\n", buf, iop->r[5], iop->r[6]);
+                        // printf("ioman_open(\"%s\", %x, %x)\n", buf, iop->r[5], iop->r[6]);
 
                         // if (file)
                         //     break;
@@ -355,7 +355,7 @@ static inline void iop_i_j(struct iop_state* iop) {
 
                         return;
                     } break;
-                    case IOMAN_CLOSE: printf("ioman_close()\n"); break;
+                    // case IOMAN_CLOSE: printf("ioman_close()\n"); break;
                     case IOMAN_READ: {
                         if (iop->r[4] != 0x100)
                             break;
@@ -363,7 +363,7 @@ static inline void iop_i_j(struct iop_state* iop) {
                         uint32_t ptr = iop->r[5];
                         uint32_t size = iop->r[6];
 
-                        printf("ioman_read(%d, %x, %x)\n", iop->r[4], ptr, size);
+                        // printf("ioman_read(%d, %x, %x)\n", iop->r[4], ptr, size);
 
                         uint8_t* buf = malloc(size);
 
@@ -381,30 +381,30 @@ static inline void iop_i_j(struct iop_state* iop) {
                         return;
                     } break;
                     case IOMAN_WRITE: break; // printf("ioman_write()\n"); break;
-                    case IOMAN_LSEEK: printf("ioman_lseek()\n"); break;
-                    case IOMAN_IOCTL: printf("ioman_ioctl()\n"); break;
-                    case IOMAN_REMOVE: printf("ioman_remove()\n"); break;
-                    case IOMAN_MKDIR: printf("ioman_mkdir()\n"); break;
-                    case IOMAN_RMDIR: printf("ioman_rmdir()\n"); break;
-                    case IOMAN_DOPEN: printf("ioman_dopen()\n"); break;
-                    case IOMAN_DCLOSE: printf("ioman_dclose()\n"); break;
-                    case IOMAN_DREAD: printf("ioman_dread()\n"); break;
-                    case IOMAN_GETSTAT: printf("ioman_getstat()\n"); break;
-                    case IOMAN_CHSTAT: printf("ioman_chstat()\n"); break;
-                    case IOMAN_FORMAT: printf("ioman_format()\n"); break;
-                    case IOMAN_ADDDRV: printf("ioman_adddrv()\n"); break;
-                    case IOMAN_DELDRV: printf("ioman_deldrv()\n"); break;
-                    case IOMAN_STDIOINIT: printf("ioman_stdioinit()\n"); break;
-                    case IOMAN_RENAME: printf("ioman_rename()\n"); break;
-                    case IOMAN_CHDIR: printf("ioman_chdir()\n"); break;
-                    case IOMAN_SYNC: printf("ioman_sync()\n"); break;
-                    case IOMAN_MOUNT: printf("ioman_mount()\n"); break;
-                    case IOMAN_UMOUNT: printf("ioman_umount()\n"); break;
-                    case IOMAN_LSEEK64: printf("ioman_lseek64()\n"); break;
-                    case IOMAN_DEVCTL: printf("ioman_devctl()\n"); break;
-                    case IOMAN_SYMLINK: printf("ioman_symlink()\n"); break;
-                    case IOMAN_READLINK: printf("ioman_readlink()\n"); break;
-                    case IOMAN_IOCTL2: printf("ioman_ioctl2()\n"); break;
+                    // case IOMAN_LSEEK: printf("ioman_lseek()\n"); break;
+                    // case IOMAN_IOCTL: printf("ioman_ioctl()\n"); break;
+                    // case IOMAN_REMOVE: printf("ioman_remove()\n"); break;
+                    // case IOMAN_MKDIR: printf("ioman_mkdir()\n"); break;
+                    // case IOMAN_RMDIR: printf("ioman_rmdir()\n"); break;
+                    // case IOMAN_DOPEN: printf("ioman_dopen()\n"); break;
+                    // case IOMAN_DCLOSE: printf("ioman_dclose()\n"); break;
+                    // case IOMAN_DREAD: printf("ioman_dread()\n"); break;
+                    // case IOMAN_GETSTAT: printf("ioman_getstat()\n"); break;
+                    // case IOMAN_CHSTAT: printf("ioman_chstat()\n"); break;
+                    // case IOMAN_FORMAT: printf("ioman_format()\n"); break;
+                    // case IOMAN_ADDDRV: printf("ioman_adddrv()\n"); break;
+                    // case IOMAN_DELDRV: printf("ioman_deldrv()\n"); break;
+                    // case IOMAN_STDIOINIT: printf("ioman_stdioinit()\n"); break;
+                    // case IOMAN_RENAME: printf("ioman_rename()\n"); break;
+                    // case IOMAN_CHDIR: printf("ioman_chdir()\n"); break;
+                    // case IOMAN_SYNC: printf("ioman_sync()\n"); break;
+                    // case IOMAN_MOUNT: printf("ioman_mount()\n"); break;
+                    // case IOMAN_UMOUNT: printf("ioman_umount()\n"); break;
+                    // case IOMAN_LSEEK64: printf("ioman_lseek64()\n"); break;
+                    // case IOMAN_DEVCTL: printf("ioman_devctl()\n"); break;
+                    // case IOMAN_SYMLINK: printf("ioman_symlink()\n"); break;
+                    // case IOMAN_READLINK: printf("ioman_readlink()\n"); break;
+                    // case IOMAN_IOCTL2: printf("ioman_ioctl2()\n"); break;
                 }
             }
 
