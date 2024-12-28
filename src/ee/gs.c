@@ -17,6 +17,7 @@ static inline void gs_invoke_event_handler(struct ps2_gs* gs, int event) {
 }
 
 void gs_handle_vblank_in(void* udata, int overshoot);
+void gs_handle_hblank(void* udata, int overshoot);
 
 void gs_handle_vblank_out(void* udata, int overshoot) {
     struct ps2_gs* gs = (struct ps2_gs*)udata;
@@ -24,7 +25,7 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     struct sched_event vblank_event;
 
     vblank_event.callback = gs_handle_vblank_in;
-    vblank_event.cycles = 4489; // 019;
+    vblank_event.cycles = GS_FRAME_NTSC;
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
@@ -52,7 +53,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event vblank_out_event;
 
     vblank_out_event.callback = gs_handle_vblank_out;
-    vblank_out_event.cycles = 431096; 
+    vblank_out_event.cycles = GS_VBLANK_NTSC; 
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
@@ -70,25 +71,47 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     sched_schedule(gs->sched, vblank_out_event);
 }
 
-void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct sched_state* sched) {
+void gs_handle_hblank(void* udata, int overshoot) {
+    struct ps2_gs* gs = (struct ps2_gs*)udata;
+
+    struct sched_event hblank_event;
+
+    hblank_event.callback = gs_handle_hblank;
+    hblank_event.cycles = GS_SCANLINE_NTSC;
+    hblank_event.name = "Hblank event";
+    hblank_event.udata = gs;
+
+    sched_schedule(gs->sched, hblank_event);
+}
+
+void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct ps2_ee_timers* ee_timers, struct ps2_iop_timers* iop_timers, struct sched_state* sched) {
     memset(gs, 0, sizeof(struct ps2_gs));
 
     gs->sched = sched;
     gs->ee_intc = ee_intc;
     gs->iop_intc = iop_intc;
+    gs->ee_timers = ee_timers;
+    gs->iop_timers = iop_timers;
     gs->vram = malloc(0x400000); // 4 MB
 
     // Schedule Vblank event
     struct sched_event vblank_event;
+    struct sched_event hblank_event;
 
     vblank_event.callback = gs_handle_vblank_in;
-    vblank_event.cycles = 4489019;
+    vblank_event.cycles = GS_FRAME_NTSC;
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
+
+    // hblank_event.callback = gs_handle_hblank;
+    // hblank_event.cycles = GS_SCANLINE_NTSC;
+    // hblank_event.name = "Hblank event";
+    // hblank_event.udata = gs;
 
     gs->ctx = &gs->context[0];
 
     sched_schedule(gs->sched, vblank_event);
+    // sched_schedule(gs->sched, hblank_event);
 }
 
 void gs_switch_context(struct ps2_gs* gs, int c) {

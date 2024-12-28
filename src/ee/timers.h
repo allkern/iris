@@ -31,6 +31,9 @@ void ps2_ee_timers_destroy(struct ps2_ee_timers* timers);
 uint64_t ps2_ee_timers_read32(struct ps2_ee_timers* timers, uint32_t addr);
 void ps2_ee_timers_write32(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data);
 void ps2_ee_timers_tick(struct ps2_ee_timers* timers);
+void ps2_ee_timers_handle_hblank(struct ps2_ee_timers* timers);
+void ps2_ee_timers_handle_vblank_in(struct ps2_ee_timers* timers);
+void ps2_ee_timers_handle_vblank_out(struct ps2_ee_timers* timers);
 
 #ifdef __cplusplus
 }

@@ -7,6 +7,7 @@
 #include "ee.h"
 #include "ee_dis.h"
 
+static FILE* file;
 static int p = 0;
 
 static inline int fast_abs(int a) {
@@ -2011,7 +2012,6 @@ static inline void ee_execute(struct ee_state* ee) {
 }
 
 int loop = 0;
-static FILE* file;
 
 void ee_cycle(struct ee_state* ee) {
     ee->delay_slot = ee->branch;
@@ -2038,22 +2038,49 @@ void ee_cycle(struct ee_state* ee) {
         ee_exception_level1(ee, CAUSE_EXC1_INT);
     }
 
-    // if (ee->pc == 0x1000d8) {
-    //     p = 510000;
+	// if (ee->pc == 0x9fc4141c) {
+	// 	p = 50000;
 
-    //     file = fopen("eegs.dump", "w");
+    //     file = fopen("eegs.dump", "wb");
+    // }
+
+    // // //if (ee->pc == 0x9fc411d8) {
+    // if (ee->pc == 0x9fc41430) {
+    //     printf("ee: out\n");
+
+    //     fclose(file);
+
+    //     exit(1);
+
+    //     // p = 510000;
     // }
 
     ee->opcode = bus_read32(ee, ee->pc);
+    uint32_t pc = ee->pc;
 
     // if (p) {
+    //     // fwrite(&ee->pc, 4, 1, file);
+    //     // fwrite(&ee->opcode, 4, 1, file);
     //     fprintf(file, "%08x %08x ", ee->pc, ee->opcode);
 
-    //     for (int i = 0; i < 32; i++) {
+    //     for (int i = 1; i < 32; i++) {
+    //         // fwrite(&ee->r[i].ul32, 4, 1, file);
     //         fprintf(file, "%08x ", ee->r[i].ul32);
     //     }
 
     //     fputc('\n', file);
+    //     // --p;
+
+    //     if (!p) {
+    //         if (file) fclose(file);
+
+    //         exit(1);
+    //     }
+    // }
+
+    // if (p) {
+    //     ee_print_disassembly(ee);
+
     //     --p;
 
     //     if (!p) {

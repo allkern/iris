@@ -9,6 +9,8 @@ extern "C" {
 
 #include "u128.h"
 #include "sched.h"
+#include "ee/timers.h"
+#include "iop/timers.h"
 
 #define GS_PRIM       0x00
 #define GS_RGBAQ      0x01
@@ -104,6 +106,19 @@ extern "C" {
 #define GS_DECAL 1
 #define GS_HIGHLIGHT 2
 #define GS_HIGHLIGHT2 3
+
+// Timings
+#define GS_FRAME_SCANS_NTSC 240
+#define GS_VBLANK_SCANS_NTSC 22
+#define GS_SCANLINE_NTSC 9370
+#define GS_FRAME_SCANS_PAL 286
+#define GS_VBLANK_SCANS_PAL 26
+#define GS_SCANLINE_PAL 9476
+
+#define GS_FRAME_NTSC (240 * 9370)
+#define GS_VBLANK_NTSC (22 * 9370)
+#define GS_FRAME_PAL (286 * 9476)
+#define GS_VBLANK_PAL (26 * 9476)
 
 struct ps2_gs;
 
@@ -323,10 +338,12 @@ struct ps2_gs {
     struct sched_state* sched;
     struct ps2_intc* ee_intc;
     struct ps2_iop_intc* iop_intc;
+    struct ps2_ee_timers* ee_timers;
+    struct ps2_iop_timers* iop_timers;
 };
 
 struct ps2_gs* ps2_gs_create(void);
-void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct sched_state* sched);
+void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct ps2_ee_timers* ee_timers, struct ps2_iop_timers* iop_timers, struct sched_state* sched);
 void ps2_gs_init_renderer(struct ps2_gs* gs, struct gs_renderer renderer);
 void ps2_gs_destroy(struct ps2_gs* gs);
 uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr);
