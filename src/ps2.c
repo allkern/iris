@@ -72,7 +72,7 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
     ps2_gif_init(ps2->gif, ps2->gs);
     ps2_vif_init(ps2->vif, ps2->ee_bus);
-    ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->sched);
+    ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->ee_timers, ps2->iop_timers, ps2->sched);
     ps2_intc_init(ps2->ee_intc, ps2->ee);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
     ps2_ram_init(ps2->iop_ram, RAM_SIZE_2MB);
