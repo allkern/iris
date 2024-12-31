@@ -3,6 +3,9 @@ bin/
 tools/
 elf/
 main2.cpp
+compare
+compare.cpp
+*.expected
 *.dump
 *.cue
 *.bin

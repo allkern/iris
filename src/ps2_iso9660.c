@@ -1,0 +1,138 @@
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <ctype.h>
+
+#include "ps2_iso9660.h"
+
+struct iso9660_state* iso9660_open(const char* path) {
+    FILE* file = fopen(path, "rb");
+
+    if (!file)
+        return NULL;
+
+    struct iso9660_state* iso = malloc(sizeof(struct iso9660_state));
+
+    memset(iso, 0, sizeof(struct iso9660_state));
+
+    iso->file = file;
+
+    return iso;
+}
+
+
+
+char* iso9660_get_boot_path(struct iso9660_state* iso) {
+    // Cache the PVD (Primary Volume Descriptor)
+    fseek(iso->file, 16 * 0x800, SEEK_SET);
+    fread(&iso->pvd, sizeof(struct iso9660_pvd), 1, iso->file);
+
+    if (strncmp(iso->pvd.id, "\1CD001\1", 8)) {
+        printf("iso: Unknown format disc %d\n", iso->pvd.id[0]);
+
+        return NULL;
+    }
+
+    struct iso9660_rootdir* root = (struct iso9660_rootdir*)iso->pvd.root;
+
+    fseek(iso->file, root->lba_le * 0x800, SEEK_SET);
+    fread(iso->buf, 0x800, 1, iso->file);
+
+    struct iso9660_rootdir* dir = (struct iso9660_rootdir*)iso->buf;
+
+    while (dir->dr_len) {
+        // printf("Entry: lba=%d len=%d size=%d name_len=%d name=\"", dir->lba_le, dir->dr_len, dir->size_le, dir->id_len);
+
+        // if (dir->id == '\0') {
+        //     putchar('.');
+        // } else if (dir->id == '\1') {
+        //     putchar('.');
+        //     putchar('.');
+        // } else {
+        //     for (int j = 0; j < dir->id_len; j++) {
+        //         putchar(*(((char*)&dir->id) + j));
+        //     }
+        // }
+
+        // puts("\"");
+
+        if (dir->id_len == 12) {
+            if (!strcmp((char*)&dir->id, "SYSTEM.CNF;1")) {
+                break;
+            }
+        }
+
+        uint8_t* ptr = dir;
+
+        dir = (struct iso9660_rootdir*)(ptr + dir->dr_len);
+    }
+
+    if (!dir->dr_len) {
+        printf("SYSTEM.CNF not found! (non-PlayStation disc?)\n");
+
+        return NULL;
+    }
+
+    fseek(iso->file, dir->lba_le * 0x800, SEEK_SET);
+    fread(iso->buf, 0x800, 1, iso->file);
+
+    // Parse SYSTEM.CNF
+    char* p = iso->buf;
+    char key[64];
+    
+    while (*p) {
+        char* kptr = key;
+
+        while (isspace(*p))
+            ++p;
+
+        while (isalnum(*p))
+            *kptr++ = *p++;
+
+        *kptr = '\0';
+
+        // printf("key: %s\n", key);
+
+        if (!strncmp(key, "BOOT2", 64)) {
+            while (isspace(*p)) ++p;
+
+            if (*p != '=') {
+                printf("cnf: Expected =\n");
+
+                return NULL;
+            }
+
+            ++p;
+
+            while (isspace(*p)) ++p;
+
+            int i;
+
+            for (i = 0; i < 255; i++) {
+                if (*p == '\n' || *p == '\r')
+                    break;
+
+                iso->boot_file[i] = *p++;
+            }
+
+            iso->boot_file[i] = '\0';
+
+            return iso->boot_file;
+        } else {
+            while ((*p != '\n') && (*p != '\0') && (*p != '\r')) ++p;
+            while ((*p == '\n') || (*p == '\r')) ++p;
+        }
+    }
+
+    printf("Couldn't find BOOT2 entry in SYSTEM.CNF (PlayStation disc?)\n");
+
+    return NULL;
+}
+// void iso9660_load_boot_elf(struct iso9660_state* iso, char* buf);
+void iso9660_close(struct iso9660_state* iso) {
+    if (iso->file)
+        fclose(iso->file);
+
+    free(iso);
+}

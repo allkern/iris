@@ -35,6 +35,7 @@ struct instance {
     const char* elf_path;
     const char* boot_path;
     const char* bios_path;
+    const char* disc_path;
 
     bool open = false;
     bool pause = true;

@@ -11,6 +11,7 @@
 #include "iop/iop_dis.h"
 
 #include "ps2_elf.h"
+#include "ps2_iso9660.h"
 
 #include "ee/renderer/opengl.hpp"
 #include "ee/renderer/software.hpp"
@@ -412,6 +413,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->elf_path = NULL;
     lunar->boot_path = NULL;
     lunar->bios_path = NULL;
+    lunar->disc_path = NULL;
 
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
@@ -420,18 +422,20 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
             lunar->elf_path = argv[i+1];
 
             ++i;
-        }
-
-        if (a == "-d") {
+        } else if (a == "-d") {
             lunar->boot_path = argv[i+1];
 
             ++i;
-        }
-
-        if (a == "-b") {
+        } else if (a == "-b") {
             lunar->bios_path = argv[i+1];
 
             ++i;
+        } else if (a == "-i") {
+            lunar->disc_path = argv[i+1];
+
+            ++i;
+        } else {
+            lunar->disc_path = argv[i];
         }
     }
 
@@ -449,6 +453,26 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
     if (lunar->boot_path) {
         ps2_boot_file(lunar->ps2, lunar->boot_path);
+    }
+
+    if (lunar->disc_path) {
+        struct iso9660_state* iso = iso9660_open(lunar->disc_path);
+
+        if (!iso) {
+            printf("lunar: Couldn't open disc image \"%s\"\n", lunar->disc_path);
+
+            exit(1);
+
+            return;
+        }
+
+        char* boot_file = iso9660_get_boot_path(iso);
+
+        if (!boot_file)
+            return;
+
+        ps2_boot_file(lunar->ps2, boot_file);
+        ps2_cdvd_open(lunar->ps2->cdvd, lunar->disc_path);
     }
 }
 
