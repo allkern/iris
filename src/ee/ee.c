@@ -642,15 +642,7 @@ static inline void ee_i_lhu(struct ee_state* ee) {
     EE_RT = bus_read16(ee, EE_RS32 + SE3216(EE_D_I16));
 }
 static inline void ee_i_lq(struct ee_state* ee) {
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
-    ee->r[EE_D_RT] = bus_read128(ee, addr & ~0xf);
-
-    // if (q.u64[1] == 0xc0dec0debeefdeadull)
-    // printf("lq: data=%016lx %016lx reg=%016lx %016lx\n",
-    //     q.u64[1], q.u64[0],
-    //     ee->r[EE_D_RT].u64[1],
-    //     ee->r[EE_D_RT].u64[0]
-    // );
+    ee->r[EE_D_RT] = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
 }
 static inline void ee_i_lqc2(struct ee_state* ee) { printf("ee: lqc2 unimplemented\n"); exit(1); }
 static inline void ee_i_lui(struct ee_state* ee) {
