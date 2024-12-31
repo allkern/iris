@@ -145,14 +145,14 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
         return;
     }
 
-    printf("iop: Writing %d bytes of sector data to %08x\n", dma->drive->buf_size, dma->cdvd.madr);
+    // printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->drive->buf_size, dma->cdvd.madr, dma->cdvd.bcr);
 
     uint32_t addr = dma->cdvd.madr;
 
     for (int i = 0; i < dma->drive->buf_size; i++)
         iop_bus_write8(dma->bus, dma->cdvd.madr++, dma->drive->buf[i]);
 
-    // int size = dma->drive->buf_size;
+    int size = dma->drive->buf_size;
 
     // while (size > 0) {
     //     printf("%08x: ", addr);
@@ -177,10 +177,15 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
 
     dma->drive->buf_size = 0;
 
-    // iop_dma_set_dicr_flag(dma, IOP_DMA_CDVD);
-    // iop_dma_check_irq(dma);
+    // Only end the transfer when there aren't any
+    // sectors left to copy
+    if (dma->drive->read_count)
+        return;
 
-    // dma->cdvd.chcr &= ~0x1000000;
+    iop_dma_set_dicr_flag(dma, IOP_DMA_CDVD);
+    iop_dma_check_irq(dma);
+
+    dma->cdvd.chcr &= ~0x1000000;
 }
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
     // Stub
