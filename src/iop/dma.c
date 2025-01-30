@@ -147,12 +147,12 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
 
     // printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->drive->buf_size, dma->cdvd.madr, dma->cdvd.bcr);
 
-    uint32_t addr = dma->cdvd.madr;
+    // uint32_t addr = dma->cdvd.madr;
 
     for (int i = 0; i < dma->drive->buf_size; i++)
         iop_bus_write8(dma->bus, dma->cdvd.madr++, dma->drive->buf[i]);
 
-    int size = dma->drive->buf_size;
+    // int size = dma->drive->buf_size;
 
     // while (size > 0) {
     //     printf("%08x: ", addr);
@@ -186,13 +186,14 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     iop_dma_check_irq(dma);
 
     dma->cdvd.chcr &= ~0x1000000;
+    dma->cdvd.bcr = 0;
 }
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
     // Stub
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
     iop_dma_check_irq(dma);
 
-    dma->spu1.chcr &= ~0x1000000;
+    // dma->spu1.chcr &= ~0x1000000;
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
     printf("iop: PIO channel unimplemented\n"); exit(1);
@@ -265,8 +266,9 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
         return;
 
     // Data ready but channel isn't ready yet, keep waiting
-    if (!(dma->sif1.chcr & 0x1000000))
+    if (!(dma->sif1.chcr & 0x1000000)) {
         return;
+    }
 
     // Data ready and channel is started, do transfer
     int eot;
@@ -285,7 +287,7 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
 
         // printf("iop: SIF1 tag addr=%08x size=%08x irq=%d eot=%d\n", addr, size, irq, eot);
 
-        char buf[128];
+        // char buf[128];
 
         // puts(rpc_decode_packet(buf, ((void*)dma->sif->fifo.data) + (dma->sif->fifo.read_index * 16)));
 
@@ -319,6 +321,23 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
     printf("iop: SIO2 in channel unimplemented\n");
 
+    // uint32_t size = (dma->sio2_in.bcr & 0xffff) * (dma->sio2_in.bcr >> 16);
+
+    // for (int i = 0; i < size; i++) {
+    //     uint32_t w = iop_bus_read32(dma->bus, dma->sio2_in.madr);
+
+    //     printf("w=%08x\n", w);
+    //     // iop_bus_write32(dma->bus, 0x)
+    //     dma->sio2_in.madr += 4;
+    // }
+
+    // printf("chcr=%08x madr=%08x bcr=%08x tadr=%08x\n",
+    //     dma->sio2_in.chcr,
+    //     dma->sio2_in.madr,
+    //     dma->sio2_in.bcr,
+    //     dma->sio2_in.tadr
+    // );
+
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_IN);
     iop_dma_check_irq(dma);
 
@@ -329,6 +348,15 @@ void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
     iop_dma_check_irq(dma);
+
+    // Clear memory
+    for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
+        for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
+            iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0xff);
+        }
+    }
+
+    printf("chcr=%08x madr=%08x bcr=%08x tadr=%08x\n", dma->sio2_out.chcr, dma->sio2_out.madr, dma->sio2_out.bcr, dma->sio2_out.tadr);
 
     dma->sio2_out.chcr &= ~0x1000000;
 }
