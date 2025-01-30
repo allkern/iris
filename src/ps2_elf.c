@@ -52,6 +52,8 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
     // Read symbol table header
     Elf32_Shdr symtab;
 
+    memset(&symtab, 0, sizeof(Elf32_Shdr));
+
     char* buf;
 
     for (int i = 0; i < ehdr.e_shnum; i++) {
@@ -86,6 +88,14 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
         return 0;
     }
 
+    if (!symtab.sh_size) {
+        fclose(file);
+
+        return 0;
+    }
+
+    printf("Got symbol table\n");
+
     size_t nsyms = symtab.sh_size / symtab.sh_entsize;
 
     // Read symbol table
@@ -117,6 +127,8 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
     }
  
     fclose(file);
+
+    printf("Entry: 0x%08x\n", ehdr.e_entry);
 
     return 0;
 }
