@@ -7,17 +7,19 @@ OUTPUT_DIR := bin
 
 CXX := c++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) $(shell sdl2-config --cflags --libs)
-CXXFLAGS += -Ofast -flto=auto -Wall -g
+CXXFLAGS += -O3 -ffast-math -march=native -mtune=native -flto=auto -Wall -g
 CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdlrenderer2.cpp)
 CXXSRC += $(wildcard frontend/*.cpp)
+CXXSRC += $(wildcard frontend/ui/*.cpp)
 CXXSRC += $(wildcard src/ee/renderer/*.cpp)
 CXXOBJ := $(CXXSRC:.cpp=.o)
 
 CC := gcc
 CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) $(shell sdl2-config --cflags --libs)
-CFLAGS += -Ofast -flto=auto -Wall
+CFLAGS += -O3 -ffast-math -march=native -mtune=native 
+CFLAGS += -flto=auto -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS
 CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
 CSRC += $(wildcard src/iop/*.c)
