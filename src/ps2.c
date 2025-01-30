@@ -104,7 +104,7 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_gs(ps2->ee_bus, ps2->gs);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
 
-    ps2->ee_cycles = 8;
+    ps2->ee_cycles = 7;
 }
 
 void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void* ee_udata, void (*iop_kputchar)(void*, char), void* iop_udata) {
@@ -137,25 +137,48 @@ static const char *ee_cc_r3[] = {
     "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
 };
 
+static int trace = 0;
+static int depth = 0;
+
 void ps2_cycle(struct ps2_state* ps2) {
-    if (ps2->ee->pc == 0x0101e8a4) {
-        for (int i = 0; i < 32; i++) {
-            printf("%s: %08x %08x %08x %08x\n",
-                ee_cc_r3[i],
-                ps2->ee->r[i].u32[3],
-                ps2->ee->r[i].u32[2],
-                ps2->ee->r[i].u32[1],
-                ps2->ee->r[i].u32[0]
-            );
-        }
-    }
+    // if (ps2->ee->pc == 0x0101e8a4) {
+    //     for (int i = 0; i < 32; i++) {
+    //         printf("%s: %08x %08x %08x %08x\n",
+    //             ee_cc_r3[i],
+    //             ps2->ee->r[i].u32[3],
+    //             ps2->ee->r[i].u32[2],
+    //             ps2->ee->r[i].u32[1],
+    //             ps2->ee->r[i].u32[0]
+    //         );
+    //     }
+    // }
+
     // for (int i = 0; i < ps2->nfuncs; i++) {
+    //     // _sceSifLoadModule
+    //     if ((ps2->ee->pc == 0x1c1490) || trace)
+    //         trace = 1;
+    //     else
+    //         break;
+
     //     if (ps2->ee->pc == ps2->func[i].addr) {
-    //         printf("trace: %s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
+    //         if (ps2->ee->pc == 0x1bed90)
+    //             break;
+
+    //         printf("trace: ");
+
+    //         for (int i = 0; i < depth; i++)
+    //             putchar(' ');
+
+    //         printf("%s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
+
+    //         ++depth;
 
     //         break;
     //     }
     // }
+
+    // if (ps2->ee->opcode == 0x03e00008)
+    //     if (depth > 0) --depth;
 
     sched_tick(ps2->sched, 1);
     ee_cycle(ps2->ee);
@@ -167,7 +190,7 @@ void ps2_cycle(struct ps2_state* ps2) {
         iop_cycle(ps2->iop);
         ps2_iop_timers_tick(ps2->iop_timers);
 
-        ps2->ee_cycles = 8;
+        ps2->ee_cycles = 7;
     }
 }
 
