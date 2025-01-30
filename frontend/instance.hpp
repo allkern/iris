@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <string>
+#include <vector>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -41,6 +43,17 @@ struct instance {
     bool pause = true;
     bool step = false;
 
+    bool show_ee_control = false;
+    bool show_ee_state = false;
+    bool show_ee_logs = false;
+    bool show_iop_control = false;
+    bool show_iop_state = false;
+    bool show_iop_logs = false;
+    bool show_gs_debugger = false;
+
+    std::vector <std::string> ee_log = { "" };
+    std::vector <std::string> iop_log = { "" };
+
     struct ds_state* ds;
 };
 
@@ -52,5 +65,14 @@ bool is_open(lunar::instance* lunar);
 
 void update(lunar::instance* lunar);
 void update_window(lunar::instance* lunar);
+
+void show_main_menubar(lunar::instance* lunar);
+void show_ee_control(lunar::instance* lunar);
+void show_ee_state(lunar::instance* lunar);
+void show_ee_logs(lunar::instance* lunar);
+void show_iop_control(lunar::instance* lunar);
+void show_iop_state(lunar::instance* lunar);
+void show_iop_logs(lunar::instance* lunar);
+void show_gs_debugger(lunar::instance* lunar);
 
 }

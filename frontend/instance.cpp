@@ -1,17 +1,15 @@
 #include <string>
 #include <vector>
 
-#define IM_RGB(r, g, b) ImVec4(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), 1.0)
-
 #include "instance.hpp"
 
-#include "res/IconsMaterialSymbols.h"
+#include "ps2_elf.h"
+#include "ps2_iso9660.h"
 
 #include "ee/ee_dis.h"
 #include "iop/iop_dis.h"
 
-#include "ps2_elf.h"
-#include "ps2_iso9660.h"
+#include "res/IconsMaterialSymbols.h"
 
 #include "ee/renderer/opengl.hpp"
 #include "ee/renderer/software.hpp"
@@ -45,8 +43,31 @@ void kputchar_stub(void* udata, char c) {
     putchar(c);
 }
 
-struct ee_dis_state g_ee_dis_state;
-struct iop_dis_state g_iop_dis_state;
+void ee_kputchar(void* udata, char c) {
+    lunar::instance* lunar = (lunar::instance*)udata;
+    
+    if (c == '\r')
+        return;
+
+    if (c == '\n') {
+        lunar->ee_log.push_back("");
+    } else {
+        lunar->ee_log.back().push_back(c);
+    }
+}
+
+void iop_kputchar(void* udata, char c) {
+    lunar::instance* lunar = (lunar::instance*)udata;
+    
+    if (c == '\r')
+        return;
+
+    if (c == '\n') {
+        lunar->iop_log.push_back("");
+    } else {
+        lunar->iop_log.back().push_back(c);
+    }
+}
 
 static const ImWchar icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
@@ -193,7 +214,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
         "eegs 0.1",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         960, 720,
-        SDL_WINDOW_OPENGL
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
     );
 
     lunar->renderer = SDL_CreateRenderer(
@@ -243,24 +264,25 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     io.FontDefault = lunar->font_body;
 
     ImGuiStyle& style = ImGui::GetStyle();
-    style.WindowPadding         = ImVec2(8.0, 8.0);
-    style.FramePadding          = ImVec2(5.0, 5.0);
-    style.ItemSpacing           = ImVec2(8.0, 4.0);
-    style.WindowBorderSize      = 0;
-    style.ChildBorderSize       = 0;
-    style.FrameBorderSize       = 0;
-    style.PopupBorderSize       = 0;
-    style.TabBorderSize         = 0;
-    style.TabBarBorderSize      = 0;
-    style.WindowRounding        = 4;
-    style.ChildRounding         = 4;
-    style.FrameRounding         = 4;
-    style.PopupRounding         = 4;
-    style.ScrollbarRounding     = 9;
-    style.GrabRounding          = 2;
-    style.TabRounding           = 4;
-    style.WindowTitleAlign      = ImVec2(0.5, 0.5);
-    style.DockingSeparatorSize  = 0;
+    style.WindowPadding           = ImVec2(8.0, 8.0);
+    style.FramePadding            = ImVec2(5.0, 5.0);
+    style.ItemSpacing             = ImVec2(8.0, 4.0);
+    style.WindowBorderSize        = 0;
+    style.ChildBorderSize         = 0;
+    style.FrameBorderSize         = 0;
+    style.PopupBorderSize         = 0;
+    style.TabBorderSize           = 0;
+    style.TabBarBorderSize        = 0;
+    style.WindowRounding          = 6;
+    style.ChildRounding           = 4;
+    style.FrameRounding           = 4;
+    style.PopupRounding           = 4;
+    style.ScrollbarRounding       = 9;
+    style.GrabRounding            = 2;
+    style.TabRounding             = 4;
+    style.WindowTitleAlign        = ImVec2(0.5, 0.5);
+    style.DockingSeparatorSize    = 0;
+    style.SeparatorTextBorderSize = 1;
 
     // Init theme
     ImVec4* colors = style.Colors;
@@ -325,7 +347,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->ps2 = ps2_create();
 
     ps2_init(lunar->ps2);
-    ps2_init_kputchar(lunar->ps2, kputchar_stub, NULL, kputchar_stub, NULL);
+    ps2_init_kputchar(lunar->ps2, ee_kputchar, lunar, iop_kputchar, lunar);
     ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, (void (*)(void*))update_window, lunar);
     ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_SCISSOR, handle_scissor_event, lunar);
 
@@ -408,7 +430,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     //     sy += (i & 1) ? -dy : dy;
     // }
     
-    lunar->pause = 0;
+    lunar->pause = true;
 
     lunar->elf_path = NULL;
     lunar->boot_path = NULL;
@@ -476,256 +498,18 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     }
 }
 
-void print_highlighted(const char* buf) {
-    using namespace ImGui;
-
-    std::vector <std::string> tokens;
-
-    std::string text;
-
-    while (*buf) {
-        text.clear();        
-
-        if (isalpha(*buf)) {
-            while (isalpha(*buf) || isdigit(*buf))
-                text.push_back(*buf++);
-        } else if (isxdigit(*buf) || (*buf == '-')) {
-            while (isxdigit(*buf) || (*buf == 'x') || (*buf == '-'))
-                text.push_back(*buf++);
-        } else if (*buf == '$') {
-            while (*buf == '$' || isdigit(*buf) || isalpha(*buf) || *buf == '_')
-                text.push_back(*buf++);
-        } else if (*buf == ',') {
-            while (*buf == ',')
-                text.push_back(*buf++);
-        } else if (*buf == '(') {
-            while (*buf == '(')
-                text.push_back(*buf++);
-        } else if (*buf == ')') {
-            while (*buf == ')')
-                text.push_back(*buf++);
-        } else if (*buf == '<') {
-            while (*buf != '>')
-                text.push_back(*buf++);
-
-            text.push_back(*buf++);
-        } else if (*buf == '_') {
-            text.push_back(*buf++);
-        } else if (*buf == '.') {
-            text.push_back(*buf++);
-        } else {
-            printf("unhandled char %c (%d) \"%s\"\n", *buf, *buf, buf);
-
-            exit(1);
-        }
-
-        while (isspace(*buf))
-            text.push_back(*buf++);
-
-        tokens.push_back(text);
-    }
-
-    for (const std::string& t : tokens) {
-        if (isalpha(t[0])) {
-            TextColored(IM_RGB(211, 167, 30), t.c_str());
-        } else if (isdigit(t[0]) || t[0] == '-') {
-            TextColored(IM_RGB(138, 143, 226), t.c_str());
-        } else if (t[0] == '$') {
-            TextColored(IM_RGB(68, 169, 240), t.c_str());
-        } else if (t[0] == '<') {
-            TextColored(IM_RGB(89, 89, 89), t.c_str());
-        } else {
-            Text(t.c_str());
-        }
-
-        SameLine(0.0f, 0.0f);
-    }
-
-    NewLine();
-}
-
-static void show_ee_disassembly_view(lunar::instance* lunar) {
-    using namespace ImGui;
-
-    PushFont(lunar->font_code);
-
-    if (BeginTable("table1", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
-        TableSetupColumn("a", ImGuiTableColumnFlags_NoResize, 15.0f);
-        TableSetupColumn("b", ImGuiTableColumnFlags_NoResize, 15.0f);
-        TableSetupColumn("c", ImGuiTableColumnFlags_NoResize);
-
-        for (int row = -64; row < 64; row++) {
-            g_ee_dis_state.pc = lunar->ps2->ee->pc + (row * 4);
-
-            TableNextRow();
-            TableSetColumnIndex(0);
-
-            PushFont(lunar->font_icons);
-
-            TableSetColumnIndex(1);
-
-            if (g_ee_dis_state.pc == lunar->ps2->ee->pc)
-                Text(ICON_MS_CHEVRON_RIGHT " ");
-
-            PopFont();
-
-            TableSetColumnIndex(2);
-
-            uint32_t opcode = ee_bus_read32(lunar->ps2->ee_bus, g_ee_dis_state.pc & 0x1fffffff);
-
-            char buf[128];
-
-            char addr_str[9]; sprintf(addr_str, "%08x", g_ee_dis_state.pc);
-            char opcode_str[9]; sprintf(opcode_str, "%08x", opcode);
-            char* disassembly = ee_disassemble(buf, opcode, &g_ee_dis_state);
-
-            Text("%s ", addr_str); SameLine();
-            TextDisabled("%s ", opcode_str); SameLine();
-
-            char id[16];
-
-            sprintf(id, "##%d", row);
-
-            if (Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns)) {
-            } SameLine();
-
-            if (BeginPopupContextItem()) {
-                PushFont(lunar->font_small_code);
-                TextDisabled("0x%08x", g_ee_dis_state.pc);
-                PopFont();
-
-                PushFont(lunar->font_body);
-
-                if (BeginMenu(ICON_MS_CONTENT_COPY "  Copy")) {
-                    if (Selectable(ICON_MS_SORT "  Address")) {
-                        SDL_SetClipboardText(addr_str);
-                    }
-
-                    if (Selectable(ICON_MS_SORT "  Opcode")) {
-                        SDL_SetClipboardText(opcode_str);
-                    }
-
-                    if (Selectable(ICON_MS_SORT "  Disassembly")) {
-                        SDL_SetClipboardText(disassembly);
-                    }
-
-                    ImGui::EndMenu();
-                }
-
-                PopFont();
-                EndPopup();
-            }
-
-            if (true) {
-                print_highlighted(disassembly);
-            } else {
-                Text(disassembly);
-            }
-
-            if (g_ee_dis_state.pc == lunar->ps2->ee->pc)
-                SetScrollHereY(0.5f);
-        }
-
-        EndTable();
-    }
-
-    PopFont();
-}
-
-static void show_iop_disassembly_view(lunar::instance* lunar) {
-    using namespace ImGui;
-
-    PushFont(lunar->font_code);
-
-    if (BeginTable("table2", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
-        TableSetupColumn("a", ImGuiTableColumnFlags_NoResize, 15.0f);
-        TableSetupColumn("b", ImGuiTableColumnFlags_NoResize, 15.0f);
-        TableSetupColumn("c", ImGuiTableColumnFlags_NoResize);
-
-        for (int row = -64; row < 64; row++) {
-            g_iop_dis_state.addr = lunar->ps2->iop->pc + (row * 4);
-
-            TableNextRow();
-            TableSetColumnIndex(0);
-
-            PushFont(lunar->font_icons);
-
-            TableSetColumnIndex(1);
-
-            if (g_iop_dis_state.addr == lunar->ps2->iop->pc)
-                Text(ICON_MS_CHEVRON_RIGHT " ");
-
-            PopFont();
-
-            TableSetColumnIndex(2);
-
-            uint32_t opcode = iop_bus_read32(lunar->ps2->iop_bus, g_iop_dis_state.addr & 0x1fffffff);
-
-            char buf[128];
-
-            char addr_str[9]; sprintf(addr_str, "%08x", g_iop_dis_state.addr);
-            char opcode_str[9]; sprintf(opcode_str, "%08x", opcode);
-            char* disassembly = iop_disassemble(buf, opcode, &g_iop_dis_state);
-
-            Text("%s ", addr_str); SameLine();
-            TextDisabled("%s ", opcode_str); SameLine();
-
-            char id[16];
-
-            sprintf(id, "##%d", row);
-
-            if (Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns)) {
-            } SameLine();
-
-            if (BeginPopupContextItem()) {
-                PushFont(lunar->font_small_code);
-                TextDisabled("0x%08x", g_iop_dis_state.addr);
-                PopFont();
-
-                PushFont(lunar->font_body);
-
-                if (BeginMenu(ICON_MS_CONTENT_COPY "  Copy")) {
-                    if (Selectable(ICON_MS_SORT "  Address")) {
-                        SDL_SetClipboardText(addr_str);
-                    }
-
-                    if (Selectable(ICON_MS_SORT "  Opcode")) {
-                        SDL_SetClipboardText(opcode_str);
-                    }
-
-                    if (Selectable(ICON_MS_SORT "  Disassembly")) {
-                        SDL_SetClipboardText(disassembly);
-                    }
-
-                    ImGui::EndMenu();
-                }
-
-                PopFont();
-                EndPopup();
-            }
-
-            if (true) {
-                print_highlighted(disassembly);
-            } else {
-                Text(disassembly);
-            }
-
-            if (g_iop_dis_state.addr == lunar->ps2->iop->pc)
-                SetScrollHereY(0.5f);
-        }
-
-        EndTable();
-    }
-
-    PopFont();
-}
-
 void destroy(lunar::instance* lunar);
 
 void update(lunar::instance* lunar) {
     if (!lunar->pause) {
         ps2_cycle(lunar->ps2);
     } else {
+        if (lunar->step) {
+            ps2_cycle(lunar->ps2);
+
+            lunar->step = false;
+        }
+
         update_window(lunar);
     }
 }
@@ -733,99 +517,36 @@ void update(lunar::instance* lunar) {
 void update_window(lunar::instance* lunar) {
     using namespace ImGui;
 
-    // ImGuiIO& io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
 
-    // ImGui_ImplSDLRenderer2_NewFrame();
-    // ImGui_ImplSDL2_NewFrame();
-    // NewFrame();
+    ImGui_ImplSDLRenderer2_NewFrame();
+    ImGui_ImplSDL2_NewFrame();
+    NewFrame();
 
-    // DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+    show_main_menubar(lunar);
 
-    // PushFont(lunar->font_body);
+    DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-    // if (Begin("Logs")) {
-    //     if (BeginTabBar("logs_tabs")) {
-    //         if (BeginTabItem("EE")) {
-    //             Text("EE logs");
+    if (lunar->show_ee_control) show_ee_control(lunar);
+    if (lunar->show_ee_state) show_ee_state(lunar);
+    if (lunar->show_ee_logs) show_ee_logs(lunar);
+    if (lunar->show_iop_control) show_iop_control(lunar);
+    if (lunar->show_iop_state) show_iop_state(lunar);
+    if (lunar->show_iop_logs) show_iop_logs(lunar);
+    if (lunar->show_gs_debugger) show_gs_debugger(lunar);
 
-    //             EndTabItem();
-    //         }
+    Render();
 
-    //         if (BeginTabItem("IOP")) {
-    //             Text("IOP logs");
+    SDL_RenderSetScale(lunar->renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
 
-    //             EndTabItem();
-    //         }
-
-    //         EndTabBar();
-    //     }
-    // } End();
-
-    // if (Begin("EE control")) {
-    //     if (Button(ICON_MS_STEP)) {
-    //         if (!lunar->pause) {
-    //             lunar->pause = true;
-    //         } else {
-    //             tick_ee(lunar);
-    //         }
-    //     } SameLine();
-
-    //     if (Button(lunar->pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE)) {
-    //         lunar->pause = !lunar->pause;
-    //     }
-    // } End();
-
-    // if (Begin("IOP control")) {
-    //     if (Button(ICON_MS_STEP)) {
-    //         if (!lunar->pause) {
-    //             lunar->pause = true;
-    //         } else {
-    //             tick_iop(lunar);
-    //         }
-    //     }
-    // } End();
-
-    // if (Begin("EE disassembly")) {
-    //     show_ee_disassembly_view(lunar);
-    // } End();
-
-    // if (Begin("IOP disassembly")) {
-    //     show_iop_disassembly_view(lunar);
-    // } End();
-
-    // PopFont();
-
-    // Render();
-
-    // // SDL_GL_SwapWindow(lunar->window);
-
-    // SDL_RenderSetScale(lunar->renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-
-    // SDL_SetRenderDrawColor(lunar->renderer, 0, 0, 0, 0xff);
-    // SDL_RenderClear(lunar->renderer);
-
-    // int width = ((lunar->ps2->gs->display2 >> 32) & 0xfff) + 1;
-    // width /= ((lunar->ps2->gs->display2 >> 23) & 0xf) + 1;
-    // int height = ((lunar->ps2->gs->display2 >> 44) & 0x7ff) + 1;
-    // // int stride = ((lunar->ps2->gs->frame_1 >> 16) & 0x3f) * 64;
-    // uint64_t base = ((lunar->ps2->gs->frame_1 & 0x1f) * 2048);
-
-    // SDL_DestroyTexture(lunar->texture);
-    // lunar->texture = SDL_CreateTexture(
-    //     lunar->renderer,
-    //     SDL_PIXELFORMAT_ABGR8888,
-    //     SDL_TEXTUREACCESS_STREAMING,
-    //     width, height
-    // );
-    // SDL_SetTextureScaleMode(lunar->texture, SDL_ScaleModeLinear);
-    // SDL_UpdateTexture(lunar->texture, NULL, lunar->ps2->gs->vram + base, width * 4);
-    // SDL_RenderCopy(lunar->renderer, lunar->texture, NULL, NULL);
-
-    // ImGui_ImplSDLRenderer2_RenderDrawData(GetDrawData(), lunar->renderer);
-
-    // SDL_RenderPresent(lunar->renderer);
+    SDL_SetRenderDrawColor(lunar->renderer, 0x18, 0x18, 0x18, 0xff);
+    SDL_RenderClear(lunar->renderer);
 
     software_render(lunar->ps2->gs, lunar->ps2->gs->backend.udata);
+
+    ImGui_ImplSDLRenderer2_RenderDrawData(GetDrawData(), lunar->renderer);
+    
+    SDL_RenderPresent(lunar->renderer);
 
     SDL_Event event;
 
@@ -838,6 +559,11 @@ void update_window(lunar::instance* lunar) {
             } break;
 
             case SDL_KEYDOWN: {
+                if (event.key.keysym.sym == SDLK_0) {
+                    ps2_iop_intc_irq(lunar->ps2->iop_intc, IOP_INTC_SPU2);
+
+                    break;
+                }
                 uint16_t mask = map_button(event.key.keysym.sym);
 
                 ds_button_press(lunar->ds, mask);
