@@ -25,7 +25,8 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     struct sched_event vblank_event;
 
     vblank_event.callback = gs_handle_vblank_in;
-    vblank_event.cycles = GS_FRAME_NTSC;
+    vblank_event.cycles = 4489;
+    //vblank_event.cycles = 4410000; // GS_FRAME_NTSC;
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
@@ -41,6 +42,10 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     // gs->csr &= ~(2);
     // gs->csr &= ~(1 << 12);
     // gs->csr &= ~(1 << 13);
+    // gs->csr ^= 8;
+    // gs->csr ^= 1 << 13;
+    gs->csr ^= 8;
+    gs->csr ^= 1 << 13;
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
@@ -53,15 +58,16 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event vblank_out_event;
 
     vblank_out_event.callback = gs_handle_vblank_out;
-    vblank_out_event.cycles = GS_VBLANK_NTSC; 
+    vblank_out_event.cycles = 431096;
+    // vblank_out_event.cycles = GS_VBLANK_NTSC; 
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
     // Set Vblank flag?
-    gs->csr |= 8;
-    gs->csr |= 2;
-    gs->csr |= 1 << 12;
-    gs->csr |= 1 << 13;
+    gs->csr ^= 8;
+    gs->csr ^= 2;
+
+    // gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
