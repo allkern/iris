@@ -3,6 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <signal.h>
+
+#ifdef _EE_USE_INTRINSICS
+#include <tmmintrin.h>
+#include <emmintrin.h>
+#include <smmintrin.h>
+#endif
 
 #include "ee.h"
 #include "ee_dis.h"
@@ -10,10 +17,48 @@
 static FILE* file;
 static int p = 0;
 
-static inline int fast_abs(int a) {
+static inline int fast_abs32(int a) {
     uint32_t m = a >> 31;
 
     return (a ^ m) + (m & 1);
+}
+
+static inline int16_t fast_abs16(int16_t a) {
+    uint16_t m = a >> 15;
+
+    return (a ^ m) + (m & 1);
+}
+
+#ifdef _EE_USE_INTRINSICS
+static inline __m128i _mm_adds_epi32(__m128i a, __m128i b) {
+    const __m128i m = _mm_set1_epi32(0x7fffffff);
+    __m128i r = _mm_add_epi32(a, b);
+    __m128i sb = _mm_srli_epi32(a, 31);
+    __m128i sat = _mm_add_epi32(m, sb);
+    __m128i sx = _mm_xor_si128(a, b);
+    __m128i o = _mm_andnot_si128(sx, _mm_xor_si128(a, r));
+
+    // To-do: Use SSE3 version when SSE4.1 isn't available
+    return _mm_castps_si128(_mm_blendv_ps(_mm_castsi128_ps(r),
+                                          _mm_castsi128_ps(sat),
+                                          _mm_castsi128_ps(o)));
+}
+
+static inline __m128i _mm_adds_epu32(__m128i a, __m128i b) {
+    const __m128i m = _mm_set1_epi32(0xffffffff);
+
+    __m128i x = _mm_xor_si128(a, m);
+    __m128i c = _mm_min_epu32(b, x);
+
+    return _mm_add_epi32(a, c);
+}
+#endif
+
+static inline uint32_t unpack_5551_8888(uint32_t v) {
+    return ((v & 0x001f) << 3) |
+           ((v & 0x03e0) << 6) |
+           ((v & 0x7c00) << 9) |
+           ((v & 0x8000) << 16);
 }
 
 #define EE_KUSEG 0
@@ -283,8 +328,10 @@ void ee_set_int0(struct ee_state* ee) {
 void ee_set_int1(struct ee_state* ee) {
     ee->cause |= EE_CAUSE_IP3;
 }
-
-static inline void ee_i_abss(struct ee_state* ee) { printf("ee: abss unimplemented\n"); exit(1); }
+static inline void ee_i_abss(struct ee_state* ee) {
+    // printf("%08x: abs f%d = abs(f%d)\n", ee->pc, EE_D_FD, EE_D_FS);
+    EE_FD = fabsf(EE_FS);
+}
 static inline void ee_i_add(struct ee_state* ee) {
     int32_t s = EE_RS;
     int32_t t = EE_RT;
@@ -419,7 +466,7 @@ static inline void ee_i_ceq(struct ee_state* ee) {
 }
 static inline void ee_i_cf(struct ee_state* ee) { printf("ee: cf unimplemented\n"); exit(1); }
 static inline void ee_i_cfc1(struct ee_state* ee) {
-    EE_RT = EE_D_RD ? 0x2e00 : ee->fcr;
+    EE_RT = EE_D_FS ? ee->fcr : 0x2e00;
 }
 static inline void ee_i_cfc2(struct ee_state* ee) {
     EE_RT = 0;
@@ -520,6 +567,13 @@ static inline void ee_i_divu1(struct ee_state* ee) {
     int t = EE_D_RT;
     int s = EE_D_RS;
 
+    if (!ee->r[t].ul32) {
+        EE_LO1 = -1;
+        EE_HI1 = SE6432(ee->r[s].ul32);
+
+        return;
+    }
+
     EE_HI1 = SE6432(ee->r[s].ul32 % ee->r[t].ul32);
     EE_LO1 = SE6432(ee->r[s].ul32 / ee->r[t].ul32);
 }
@@ -550,7 +604,7 @@ static inline void ee_i_dsrl32(struct ee_state* ee) {
 static inline void ee_i_dsrlv(struct ee_state* ee) {
     EE_RD = EE_RT >> (EE_RS & 0x3f);
 }
-static inline void ee_i_dsub(struct ee_state* ee) { printf("ee: dsub unimplemented\n"); exit(1);
+static inline void ee_i_dsub(struct ee_state* ee) {// printf("ee: dsub unimplemented\n"); exit(1);
     int64_t r;
 
     if (__builtin_ssubl_overflow((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
@@ -668,7 +722,7 @@ static inline void ee_i_lwl(struct ee_state* ee) { // printf("ee: lwl unimplemen
     // ensure the compiler does correct sign extension into 64 bits by using s32
     EE_RT = (int32_t)((EE_RT32 & LWL_MASK[shift]) | (mem << LWL_SHIFT[shift]));
 
-    // printf("lwl mem=%08x %08x %08x %08x reg=%016lx addr=%08x shift=%d rs=%08x i16=%04x\n", mem, ee->r[EE_D_RT].u64[0], addr, shift, EE_RS32, EE_D_I16);
+    // printf("lwl mem=%08x reg=%016lx addr=%08x shift=%d rs=%08x i16=%04x\n", mem, ee->r[EE_D_RT].u64[0], addr, shift, EE_RS32, EE_D_I16);
 }
 
 static inline void ee_i_lwr(struct ee_state* ee) { // printf("ee: lwr unimplemented\n"); exit(1);
@@ -715,12 +769,14 @@ static inline void ee_i_madd1(struct ee_state* ee) {
 
     EE_RD = EE_LO1;
 }
-static inline void ee_i_maddas(struct ee_state* ee) { printf("ee: maddas unimplemented\n"); exit(1); }
+static inline void ee_i_maddas(struct ee_state* ee) {
+    ee->a.f += EE_FS * EE_FT;
+}
 static inline void ee_i_madds(struct ee_state* ee) {
     EE_FD = ee->a.f + EE_FS * EE_FT;
 }
 static inline void ee_i_maddu(struct ee_state* ee) {
-    uint64_t r = EE_RS32 * EE_RT32;
+    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
     uint64_t d = (uint64_t)ee->lo.u32[0] | (ee->hi.u64[0] << 32);
 
     d += r;
@@ -731,7 +787,7 @@ static inline void ee_i_maddu(struct ee_state* ee) {
     EE_RD = EE_LO0;
 }
 static inline void ee_i_maddu1(struct ee_state* ee) {
-    uint64_t r = EE_RS32 * EE_RT32;
+    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
     uint64_t d = (uint64_t)ee->lo.u32[2] | (ee->hi.u64[1] << 32);
 
     d += r;
@@ -773,12 +829,17 @@ static inline void ee_i_movs(struct ee_state* ee) {
 static inline void ee_i_movz(struct ee_state* ee) {
     if (!EE_RT) EE_RD = EE_RS;
 }
-static inline void ee_i_msubas(struct ee_state* ee) { printf("ee: msubas unimplemented\n"); exit(1); }
-static inline void ee_i_msubs(struct ee_state* ee) { printf("ee: msubs unimplemented\n"); exit(1); }
+static inline void ee_i_msubas(struct ee_state* ee) {
+    ee->a.f -= EE_FS * EE_FT;
+}
+static inline void ee_i_msubs(struct ee_state* ee) {
+    EE_FD = ee->a.f - (EE_FS * EE_FT);
+}
 static inline void ee_i_mtc0(struct ee_state* ee) {
     ee->cop0_r[EE_D_RD] = EE_RT32;
 }
 static inline void ee_i_mtc1(struct ee_state* ee) {
+    // printf("mtc1 f%d <- %08x\n", EE_D_FS, EE_RT32);
     EE_FS32 = EE_RT32;
 }
 static inline void ee_i_mthi(struct ee_state* ee) {
@@ -794,13 +855,15 @@ static inline void ee_i_mtlo1(struct ee_state* ee) {
     EE_LO1 = EE_RS;
 }
 static inline void ee_i_mtsa(struct ee_state* ee) {
-    ee->sa = EE_RS;
+    ee->sa = (uint32_t)EE_RS;
 }
 static inline void ee_i_mtsab(struct ee_state* ee) { printf("ee: mtsab unimplemented\n"); exit(1); }
 static inline void ee_i_mtsah(struct ee_state* ee) {
     ee->sa = ((EE_RS ^ EE_D_I16) & 7) << 1;
 }
-static inline void ee_i_mulas(struct ee_state* ee) { printf("ee: mulas unimplemented\n"); exit(1); }
+static inline void ee_i_mulas(struct ee_state* ee) {
+    ee->a.f = EE_FS * EE_FT;
+}
 static inline void ee_i_muls(struct ee_state* ee) {
     EE_FD = EE_FS * EE_FT;
 }
@@ -821,7 +884,7 @@ static inline void ee_i_mult1(struct ee_state* ee) {
     EE_RD = EE_LO1;
 }
 static inline void ee_i_multu(struct ee_state* ee) {
-    uint64_t r = EE_RS32 * EE_RT32;
+    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
 
     EE_LO0 = SE6432(r & 0xffffffff);
     EE_HI0 = SE6432(r >> 32);
@@ -829,7 +892,7 @@ static inline void ee_i_multu(struct ee_state* ee) {
     EE_RD = EE_LO0;
 }
 static inline void ee_i_multu1(struct ee_state* ee) {
-    uint64_t r = EE_RS32 * EE_RT32;
+    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
 
     EE_LO1 = SE6432(r & 0xffffffff);
     EE_HI1 = SE6432(r >> 32);
@@ -849,187 +912,570 @@ static inline void ee_i_ori(struct ee_state* ee) {
     EE_RT = EE_RS | EE_D_I16;
 }
 static inline void ee_i_pabsh(struct ee_state* ee) {
-    int d = EE_D_RD;
-    int t = EE_D_RT;
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* t = &ee->r[EE_D_RT];
 
-    ee->r[d].u16[0] = (ee->r[t].u16[0] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[0]);
-    ee->r[d].u16[1] = (ee->r[t].u16[1] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[1]);
-    ee->r[d].u16[2] = (ee->r[t].u16[2] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[2]);
-    ee->r[d].u16[3] = (ee->r[t].u16[3] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[3]);
-    ee->r[d].u16[4] = (ee->r[t].u16[4] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[4]);
-    ee->r[d].u16[5] = (ee->r[t].u16[5] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[5]);
-    ee->r[d].u16[6] = (ee->r[t].u16[6] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[6]);
-    ee->r[d].u16[7] = (ee->r[t].u16[7] == 0x8000) ? 0x7fff : fast_abs((int16_t)ee->r[t].u16[7]);
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 8; i++) {
+        d->u16[i] = (t->u16[i] == 0x8000) ? 0x7fff : fast_abs16(t->u16[i]);
+    }
+#else
+    __m128i b = _mm_set1_epi16(0x8000);
+    __m128i a = _mm_load_si128((void*)t);
+    __m128i f = _mm_cmpeq_epi16(a, b);
+    __m128i r = _mm_add_epi16(_mm_abs_epi16(a), f);
+
+    _mm_store_si128((void*)d, r);
+#endif
 }
 static inline void ee_i_pabsw(struct ee_state* ee) {
-    int d = EE_D_RD;
-    int t = EE_D_RT;
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* t = &ee->r[EE_D_RT];
 
-    ee->r[d].u32[0] = (ee->r[t].u32[0] == 0x80000000) ? 0x7fffffff : fast_abs((int32_t)ee->r[t].u32[0]);
-    ee->r[d].u32[1] = (ee->r[t].u32[1] == 0x80000000) ? 0x7fffffff : fast_abs((int32_t)ee->r[t].u32[1]);
-    ee->r[d].u32[2] = (ee->r[t].u32[2] == 0x80000000) ? 0x7fffffff : fast_abs((int32_t)ee->r[t].u32[2]);
-    ee->r[d].u32[3] = (ee->r[t].u32[3] == 0x80000000) ? 0x7fffffff : fast_abs((int32_t)ee->r[t].u32[3]);
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 4; i++) {
+        d->u32[i] = (t->u32[i] == 0x80000000) ? 0x7fffffff : fast_abs32(t->u32[i]);
+    }
+#else
+    __m128i b = _mm_set1_epi32(0x80000000);
+    __m128i a = _mm_load_si128((void*)t);
+    __m128i f = _mm_cmpeq_epi32(a, b);
+    __m128i r = _mm_add_epi32(_mm_abs_epi32(a), f);
+
+    _mm_store_si128((void*)d, r);
+#endif
 }
-static inline void ee_i_paddb(struct ee_state* ee) { printf("ee: paddb unimplemented\n"); exit(1); }
-static inline void ee_i_paddh(struct ee_state* ee) { printf("ee: paddh unimplemented\n"); exit(1); }
-static inline void ee_i_paddsb(struct ee_state* ee) { printf("ee: paddsb unimplemented\n"); exit(1); }
-static inline void ee_i_paddsh(struct ee_state* ee) { printf("ee: paddsh unimplemented\n"); exit(1); }
-static inline void ee_i_paddsw(struct ee_state* ee) { printf("ee: paddsw unimplemented\n"); exit(1); }
+static inline void ee_i_paddb(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 16; i++) {
+        d->u8[i] = s->u8[i] + t->u8[i];
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_add_epi8(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_paddh(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 8; i++) {
+        d->u16[i] = s->u16[i] + t->u16[i];
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_add_epi16(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_paddsb(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 16; i++) {
+        int32_t r = ((int32_t)(int8_t)s->u8[i]) + ((int32_t)(int8_t)t->u8[i]);
+        d->u8[i] = (r > 0x7f) ? 0x7f : ((r < -128) ? 0x80 : r);
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_adds_epi8(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_paddsh(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 8; i++) {
+        int32_t r = (SE3216(s->u16[i])) + (SE3216(t->u16[i]));
+        d->u16[i] = (r > 0x7fff) ? 0x7fff : ((r < -0x8000) ? 0x8000 : r);
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_adds_epi16(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_paddsw(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 4; i++) {
+        int64_t r = (SE6432(s->u32[i])) + (SE6432(t->u32[i]));
+        d->u32[i] = (r >= 0x7fffffff) ? 0x7fffffff : ((r < (int32_t)0x80000000) ? 0x80000000 : r);
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_adds_epi32(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
 static inline void ee_i_paddub(struct ee_state* ee) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
 
-    uint32_t r0  = ee->r[s].u8[0 ] + ee->r[t].u8[0 ];
-    uint32_t r1  = ee->r[s].u8[1 ] + ee->r[t].u8[1 ];
-    uint32_t r2  = ee->r[s].u8[2 ] + ee->r[t].u8[2 ];
-    uint32_t r3  = ee->r[s].u8[3 ] + ee->r[t].u8[3 ];
-    uint32_t r4  = ee->r[s].u8[4 ] + ee->r[t].u8[4 ];
-    uint32_t r5  = ee->r[s].u8[5 ] + ee->r[t].u8[5 ];
-    uint32_t r6  = ee->r[s].u8[6 ] + ee->r[t].u8[6 ];
-    uint32_t r7  = ee->r[s].u8[7 ] + ee->r[t].u8[7 ];
-    uint32_t r8  = ee->r[s].u8[8 ] + ee->r[t].u8[8 ];
-    uint32_t r9  = ee->r[s].u8[9 ] + ee->r[t].u8[9 ];
-    uint32_t r10 = ee->r[s].u8[10] + ee->r[t].u8[10];
-    uint32_t r11 = ee->r[s].u8[11] + ee->r[t].u8[11];
-    uint32_t r12 = ee->r[s].u8[12] + ee->r[t].u8[12];
-    uint32_t r13 = ee->r[s].u8[13] + ee->r[t].u8[13];
-    uint32_t r14 = ee->r[s].u8[14] + ee->r[t].u8[14];
-    uint32_t r15 = ee->r[s].u8[15] + ee->r[t].u8[15];
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 16; i++) {
+        uint32_t r = (uint32_t)s->u8[i] + (uint32_t)t->u8[i];
+        d->u8[i] = (r > 0xff) ? 0xff : r;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_adds_epu8(a, b);
 
-    ee->r[d].u8[0 ] = (r0 > 0xff) ? 0xff : r0;
-    ee->r[d].u8[1 ] = (r1 > 0xff) ? 0xff : r1;
-    ee->r[d].u8[2 ] = (r2 > 0xff) ? 0xff : r2;
-    ee->r[d].u8[3 ] = (r3 > 0xff) ? 0xff : r3;
-    ee->r[d].u8[4 ] = (r4 > 0xff) ? 0xff : r4;
-    ee->r[d].u8[5 ] = (r5 > 0xff) ? 0xff : r5;
-    ee->r[d].u8[6 ] = (r6 > 0xff) ? 0xff : r6;
-    ee->r[d].u8[7 ] = (r7 > 0xff) ? 0xff : r7;
-    ee->r[d].u8[8 ] = (r8 > 0xff) ? 0xff : r8;
-    ee->r[d].u8[9 ] = (r9 > 0xff) ? 0xff : r9;
-    ee->r[d].u8[10] = (r10 > 0xff) ? 0xff : r10;
-    ee->r[d].u8[11] = (r11 > 0xff) ? 0xff : r11;
-    ee->r[d].u8[12] = (r12 > 0xff) ? 0xff : r12;
-    ee->r[d].u8[13] = (r13 > 0xff) ? 0xff : r13;
-    ee->r[d].u8[14] = (r14 > 0xff) ? 0xff : r14;
-    ee->r[d].u8[15] = (r15 > 0xff) ? 0xff : r15;
+    _mm_store_si128((void*)d, r);
+#endif
 }
-static inline void ee_i_padduh(struct ee_state* ee) { printf("ee: padduh unimplemented\n"); exit(1); }
+static inline void ee_i_padduh(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 8; i++) {
+        uint32_t r = (uint32_t)s->u16[i] + (uint32_t)t->u16[i];
+        d->u16[i] = (r > 0xffff) ? 0xffff : r;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_adds_epu16(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
 static inline void ee_i_padduw(struct ee_state* ee) {
-    uint64_t s0 = ee->r[EE_D_RS].u32[0];
-    uint64_t s1 = ee->r[EE_D_RS].u32[1];
-    uint64_t s2 = ee->r[EE_D_RS].u32[2];
-    uint64_t s3 = ee->r[EE_D_RS].u32[3];
-    uint64_t t0 = ee->r[EE_D_RT].u32[0];
-    uint64_t t1 = ee->r[EE_D_RT].u32[1];
-    uint64_t t2 = ee->r[EE_D_RT].u32[2];
-    uint64_t t3 = ee->r[EE_D_RT].u32[3];
-    uint64_t r0 = s0 + t0;
-    uint64_t r1 = s1 + t1;
-    uint64_t r2 = s2 + t2;
-    uint64_t r3 = s3 + t3;
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
 
-    ee->r[EE_D_RD].u32[0] = (r0 > 0xffffffff) ? 0xffffffff : r0;
-    ee->r[EE_D_RD].u32[1] = (r1 > 0xffffffff) ? 0xffffffff : r1;
-    ee->r[EE_D_RD].u32[2] = (r2 > 0xffffffff) ? 0xffffffff : r2;
-    ee->r[EE_D_RD].u32[3] = (r3 > 0xffffffff) ? 0xffffffff : r3;
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 4; i++) {
+        uint64_t r = (uint64_t)s->u32[i] + (uint64_t)t->u32[i];
+        d->u32[i] = (r > 0xffffffff) ? 0xffffffff : r;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_adds_epu32(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
 }
-static inline void ee_i_paddw(struct ee_state* ee) { printf("ee: paddw unimplemented\n"); exit(1); }
-static inline void ee_i_padsbh(struct ee_state* ee) { printf("ee: padsbh unimplemented\n"); exit(1); }
-static inline void ee_i_pand(struct ee_state* ee) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void ee_i_paddw(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
 
-    ee->r[d].u64[0] = ee->r[s].u64[0] & ee->r[t].u64[0];
-    ee->r[d].u64[1] = ee->r[s].u64[1] & ee->r[t].u64[1];
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 4; i++) {
+        d->u32[i] = s->u32[i] + t->u32[i];
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_add_epi32(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_padsbh(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    d->u16[0] = s->u16[0] - t->u16[0];
+    d->u16[1] = s->u16[1] - t->u16[1];
+    d->u16[2] = s->u16[2] - t->u16[2];
+    d->u16[3] = s->u16[3] - t->u16[3];
+    d->u16[4] = s->u16[4] + t->u16[4];
+    d->u16[5] = s->u16[5] + t->u16[5];
+    d->u16[6] = s->u16[6] + t->u16[6];
+    d->u16[7] = s->u16[7] + t->u16[7];
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i x = _mm_sub_epi16(a, b);
+    __m128i y = _mm_add_epi16(a, b);
+    __m128i r = _mm_blend_epi16(x, y, 15);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_pand(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    d->u64[0] = s->u64[0] & t->u64[0];
+    d->u64[1] = s->u64[1] & t->u64[1];
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_and_si128(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
 }
 static inline void ee_i_pceqb(struct ee_state* ee) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
 
-    ee->r[d].u8[0 ] = (ee->r[s].u8[0 ] == ee->r[t].u8[0 ]) ? 0xff : 0;
-    ee->r[d].u8[1 ] = (ee->r[s].u8[1 ] == ee->r[t].u8[1 ]) ? 0xff : 0;
-    ee->r[d].u8[2 ] = (ee->r[s].u8[2 ] == ee->r[t].u8[2 ]) ? 0xff : 0;
-    ee->r[d].u8[3 ] = (ee->r[s].u8[3 ] == ee->r[t].u8[3 ]) ? 0xff : 0;
-    ee->r[d].u8[4 ] = (ee->r[s].u8[4 ] == ee->r[t].u8[4 ]) ? 0xff : 0;
-    ee->r[d].u8[5 ] = (ee->r[s].u8[5 ] == ee->r[t].u8[5 ]) ? 0xff : 0;
-    ee->r[d].u8[6 ] = (ee->r[s].u8[6 ] == ee->r[t].u8[6 ]) ? 0xff : 0;
-    ee->r[d].u8[7 ] = (ee->r[s].u8[7 ] == ee->r[t].u8[7 ]) ? 0xff : 0;
-    ee->r[d].u8[8 ] = (ee->r[s].u8[8 ] == ee->r[t].u8[8 ]) ? 0xff : 0;
-    ee->r[d].u8[9 ] = (ee->r[s].u8[9 ] == ee->r[t].u8[9 ]) ? 0xff : 0;
-    ee->r[d].u8[10] = (ee->r[s].u8[10] == ee->r[t].u8[10]) ? 0xff : 0;
-    ee->r[d].u8[11] = (ee->r[s].u8[11] == ee->r[t].u8[11]) ? 0xff : 0;
-    ee->r[d].u8[12] = (ee->r[s].u8[12] == ee->r[t].u8[12]) ? 0xff : 0;
-    ee->r[d].u8[13] = (ee->r[s].u8[13] == ee->r[t].u8[13]) ? 0xff : 0;
-    ee->r[d].u8[14] = (ee->r[s].u8[14] == ee->r[t].u8[14]) ? 0xff : 0;
-    ee->r[d].u8[15] = (ee->r[s].u8[15] == ee->r[t].u8[15]) ? 0xff : 0;
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 16; i++) {
+        d->u8[i] = (s->u8[i] == t->u8[i]) ? 0xff : 0;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_cmpeq_epi8(a, b);
 
-    printf("rs=%016lx %016lx rt=%016lx %016lx rd=%016lx %016lx\n",
-        ee->r[s].u64[1], ee->r[s].u64[0],
-        ee->r[t].u64[1], ee->r[t].u64[0],
-        ee->r[d].u64[1], ee->r[d].u64[0]
-    );
+    _mm_store_si128((void*)d, r);
+#endif
 }
-static inline void ee_i_pceqh(struct ee_state* ee) { printf("ee: pceqh unimplemented\n"); exit(1); }
-static inline void ee_i_pceqw(struct ee_state* ee) { printf("ee: pceqw unimplemented\n"); exit(1); }
-static inline void ee_i_pcgtb(struct ee_state* ee) { printf("ee: pcgtb unimplemented\n"); exit(1); }
-static inline void ee_i_pcgth(struct ee_state* ee) { printf("ee: pcgth unimplemented\n"); exit(1); }
-static inline void ee_i_pcgtw(struct ee_state* ee) { printf("ee: pcgtw unimplemented\n"); exit(1); }
+static inline void ee_i_pceqh(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 8; i++) {
+        d->u16[i] = (s->u16[i] == t->u16[i]) ? 0xffff : 0;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_cmpeq_epi16(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_pceqw(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 4; i++) {
+        d->u32[i] = (s->u32[i] == t->u32[i]) ? 0xffffffff : 0;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_cmpeq_epi32(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_pcgtb(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 16; i++) {
+        d->u8[i] = ((int8_t)s->u8[i] > (int8_t)t->u8[i]) ? 0xff : 0;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_cmpgt_epi8(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_pcgth(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 8; i++) {
+        d->u16[i] = ((int16_t)s->u16[i] > (int16_t)t->u16[i]) ? 0xffff : 0;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_cmpgt_epi16(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
+static inline void ee_i_pcgtw(struct ee_state* ee) {
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* s = &ee->r[EE_D_RS];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    for (int i = 0; i < 4; i++) {
+        d->u32[i] = ((int32_t)s->u32[i] > (int32_t)t->u32[i]) ? 0xffffffff : 0;
+    }
+#else
+    __m128i a = _mm_load_si128((void*)s);
+    __m128i b = _mm_load_si128((void*)t);
+    __m128i r = _mm_cmpgt_epi32(a, b);
+
+    _mm_store_si128((void*)d, r);
+#endif
+}
 static inline void ee_i_pcpyh(struct ee_state* ee) {
-    ee->r[EE_D_RD].u16[0] = ee->r[EE_D_RT].u16[0];
-    ee->r[EE_D_RD].u16[1] = ee->r[EE_D_RT].u16[0];
-    ee->r[EE_D_RD].u16[2] = ee->r[EE_D_RT].u16[0];
-    ee->r[EE_D_RD].u16[3] = ee->r[EE_D_RT].u16[0];
-    ee->r[EE_D_RD].u16[4] = ee->r[EE_D_RT].u16[1];
-    ee->r[EE_D_RD].u16[5] = ee->r[EE_D_RT].u16[1];
-    ee->r[EE_D_RD].u16[6] = ee->r[EE_D_RT].u16[1];
-    ee->r[EE_D_RD].u16[7] = ee->r[EE_D_RT].u16[1];
+    uint128_t* d = &ee->r[EE_D_RD];
+    uint128_t* t = &ee->r[EE_D_RT];
+
+#ifndef _EE_USE_INTRINSICS
+    uint128_t tc = *t;
+
+    d->u16[0] = tc.u16[0];
+    d->u16[1] = tc.u16[0];
+    d->u16[2] = tc.u16[0];
+    d->u16[3] = tc.u16[0];
+    d->u16[4] = tc.u16[4];
+    d->u16[5] = tc.u16[4];
+    d->u16[6] = tc.u16[4];
+    d->u16[7] = tc.u16[4];
+#else
+    static const uint64_t mask[] = {
+        0x0100010001000100,
+        0x0908090809080908
+    };
+
+    __m128i m = _mm_load_si128((void*)mask);
+    __m128i a = _mm_load_si128((void*)t);
+    __m128i r = _mm_shuffle_epi8(a, m);
+
+    _mm_store_si128((void*)d, r);
+#endif
 }
 static inline void ee_i_pcpyld(struct ee_state* ee) {
-    ee->r[EE_D_RD].u64[0] = EE_RT;
-    ee->r[EE_D_RD].u64[1] = EE_RS;
+#ifndef _EE_USE_INTRINSICS
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u64[0] = rt.u64[0];
+    ee->r[d].u64[1] = rs.u64[0];
+#else
+    __m128i a = _mm_load_si128((void*)&ee->r[EE_D_RT]);
+    __m128i b = _mm_load_si128((void*)&ee->r[EE_D_RS]);
+    __m128i r = _mm_unpacklo_epi64(a, b);
+
+    _mm_store_si128((void*)&ee->r[EE_D_RD], r);
+#endif
 }
 static inline void ee_i_pcpyud(struct ee_state* ee) {
-    ee->r[EE_D_RD].u64[0] = ee->r[EE_D_RS].u64[1];
-    ee->r[EE_D_RD].u64[1] = ee->r[EE_D_RT].u64[1];
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u64[0] = rs.u64[1];
+    ee->r[d].u64[1] = rt.u64[1];
 }
 static inline void ee_i_pdivbw(struct ee_state* ee) { printf("ee: pdivbw unimplemented\n"); exit(1); }
 static inline void ee_i_pdivuw(struct ee_state* ee) { printf("ee: pdivuw unimplemented\n"); exit(1); }
 static inline void ee_i_pdivw(struct ee_state* ee) { printf("ee: pdivw unimplemented\n"); exit(1); }
-static inline void ee_i_pexch(struct ee_state* ee) { printf("ee: pexch unimplemented\n"); exit(1); }
-static inline void ee_i_pexcw(struct ee_state* ee) { printf("ee: pexcw unimplemented\n"); exit(1); }
-static inline void ee_i_pexeh(struct ee_state* ee) { printf("ee: pexeh unimplemented\n"); exit(1); }
-static inline void ee_i_pexew(struct ee_state* ee) { printf("ee: pexew unimplemented\n"); exit(1); }
-static inline void ee_i_pext5(struct ee_state* ee) { printf("ee: pext5 unimplemented\n"); exit(1); }
-static inline void ee_i_pextlb(struct ee_state* ee) { printf("ee: pextlb unimplemented\n"); exit(1); }
-static inline void ee_i_pextlh(struct ee_state* ee) { printf("ee: pextlh unimplemented\n"); exit(1); }
-static inline void ee_i_pextlw(struct ee_state* ee) {
-    uint64_t s0 = ee->r[EE_D_RS].u32[0];
-    uint64_t s1 = ee->r[EE_D_RS].u32[1];
-    uint64_t t0 = ee->r[EE_D_RT].u32[0];
-    uint64_t t1 = ee->r[EE_D_RT].u32[1];
-
-    ee->r[EE_D_RD].u64[0] = (s0 << 32) | t0;
-    ee->r[EE_D_RD].u64[1] = (s1 << 32) | t1;
-}
-static inline void ee_i_pextub(struct ee_state* ee) { printf("ee: pextub unimplemented\n"); exit(1); }
-static inline void ee_i_pextuh(struct ee_state* ee) { printf("ee: pextuh unimplemented\n"); exit(1); }
-static inline void ee_i_pextuw(struct ee_state* ee) {
+static inline void ee_i_pexch(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
     int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
 
-    ee->r[d].u32[0] = ee->r[t].u32[2];
-    ee->r[d].u32[1] = ee->r[s].u32[2];
-    ee->r[d].u32[2] = ee->r[t].u32[3];
-    ee->r[d].u32[3] = ee->r[s].u32[3];
+    ee->r[d].u16[0] = rt.u16[0];
+    ee->r[d].u16[1] = rt.u16[2];
+    ee->r[d].u16[2] = rt.u16[1];
+    ee->r[d].u16[3] = rt.u16[3];
+    ee->r[d].u16[4] = rt.u16[4];
+    ee->r[d].u16[5] = rt.u16[6];
+    ee->r[d].u16[6] = rt.u16[5];
+    ee->r[d].u16[7] = rt.u16[7];
+}
+static inline void ee_i_pexcw(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = rt.u32[0];
+    ee->r[d].u32[1] = rt.u32[2];
+    ee->r[d].u32[2] = rt.u32[1];
+    ee->r[d].u32[3] = rt.u32[3];
+}
+static inline void ee_i_pexeh(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = rt.u16[2];
+    ee->r[d].u16[1] = rt.u16[1];
+    ee->r[d].u16[2] = rt.u16[0];
+    ee->r[d].u16[3] = rt.u16[3];
+    ee->r[d].u16[4] = rt.u16[6];
+    ee->r[d].u16[5] = rt.u16[5];
+    ee->r[d].u16[6] = rt.u16[4];
+    ee->r[d].u16[7] = rt.u16[7];
+}
+static inline void ee_i_pexew(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = rt.u32[2];
+    ee->r[d].u32[1] = rt.u32[1];
+    ee->r[d].u32[2] = rt.u32[0];
+    ee->r[d].u32[3] = rt.u32[3];
+}
+static inline void ee_i_pext5(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = unpack_5551_8888(rt.u32[0]);
+    ee->r[d].u32[1] = unpack_5551_8888(rt.u32[1]);
+    ee->r[d].u32[2] = unpack_5551_8888(rt.u32[2]);
+    ee->r[d].u32[3] = unpack_5551_8888(rt.u32[3]);
+}
+static inline void ee_i_pextlb(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u8[ 0] = rt.u8[0];
+    ee->r[d].u8[ 1] = rs.u8[0];
+    ee->r[d].u8[ 2] = rt.u8[1];
+    ee->r[d].u8[ 3] = rs.u8[1];
+    ee->r[d].u8[ 4] = rt.u8[2];
+    ee->r[d].u8[ 5] = rs.u8[2];
+    ee->r[d].u8[ 6] = rt.u8[3];
+    ee->r[d].u8[ 7] = rs.u8[3];
+    ee->r[d].u8[ 8] = rt.u8[4];
+    ee->r[d].u8[ 9] = rs.u8[4];
+    ee->r[d].u8[10] = rt.u8[5];
+    ee->r[d].u8[11] = rs.u8[5];
+    ee->r[d].u8[12] = rt.u8[6];
+    ee->r[d].u8[13] = rs.u8[6];
+    ee->r[d].u8[14] = rt.u8[7];
+    ee->r[d].u8[15] = rs.u8[7];
+}
+static inline void ee_i_pextlh(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = rt.u16[0];
+    ee->r[d].u16[1] = rs.u16[0];
+    ee->r[d].u16[2] = rt.u16[1];
+    ee->r[d].u16[3] = rs.u16[1];
+    ee->r[d].u16[4] = rt.u16[2];
+    ee->r[d].u16[5] = rs.u16[2];
+    ee->r[d].u16[6] = rt.u16[3];
+    ee->r[d].u16[7] = rs.u16[3];
+}
+static inline void ee_i_pextlw(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = rt.u32[0];
+    ee->r[d].u32[1] = rs.u32[0];
+    ee->r[d].u32[2] = rt.u32[1];
+    ee->r[d].u32[3] = rs.u32[1];
+}
+static inline void ee_i_pextub(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u8[ 0] = rt.u8[ 8];
+    ee->r[d].u8[ 1] = rs.u8[ 8];
+    ee->r[d].u8[ 2] = rt.u8[ 9];
+    ee->r[d].u8[ 3] = rs.u8[ 9];
+    ee->r[d].u8[ 4] = rt.u8[10];
+    ee->r[d].u8[ 5] = rs.u8[10];
+    ee->r[d].u8[ 6] = rt.u8[11];
+    ee->r[d].u8[ 7] = rs.u8[11];
+    ee->r[d].u8[ 8] = rt.u8[12];
+    ee->r[d].u8[ 9] = rs.u8[12];
+    ee->r[d].u8[10] = rt.u8[13];
+    ee->r[d].u8[11] = rs.u8[13];
+    ee->r[d].u8[12] = rt.u8[14];
+    ee->r[d].u8[13] = rs.u8[14];
+    ee->r[d].u8[14] = rt.u8[15];
+    ee->r[d].u8[15] = rs.u8[15];
+}
+static inline void ee_i_pextuh(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = rt.u16[4];
+    ee->r[d].u16[1] = rs.u16[4];
+    ee->r[d].u16[2] = rt.u16[5];
+    ee->r[d].u16[3] = rs.u16[5];
+    ee->r[d].u16[4] = rt.u16[6];
+    ee->r[d].u16[5] = rs.u16[6];
+    ee->r[d].u16[6] = rt.u16[7];
+    ee->r[d].u16[7] = rs.u16[7];
+}
+static inline void ee_i_pextuw(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = rt.u32[2];
+    ee->r[d].u32[1] = rs.u32[2];
+    ee->r[d].u32[2] = rt.u32[3];
+    ee->r[d].u32[3] = rs.u32[3];
 }
 static inline void ee_i_phmadh(struct ee_state* ee) { printf("ee: phmadh unimplemented\n"); exit(1); }
 static inline void ee_i_phmsbh(struct ee_state* ee) { printf("ee: phmsbh unimplemented\n"); exit(1); }
-static inline void ee_i_pinteh(struct ee_state* ee) { printf("ee: pinteh unimplemented\n"); exit(1); }
-static inline void ee_i_pinth(struct ee_state* ee) { printf("ee: pinth unimplemented\n"); exit(1); }
+static inline void ee_i_pinteh(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = rt.u16[0];
+    ee->r[d].u16[1] = rs.u16[0];
+    ee->r[d].u16[2] = rt.u16[2];
+    ee->r[d].u16[3] = rs.u16[2];
+    ee->r[d].u16[4] = rt.u16[4];
+    ee->r[d].u16[5] = rs.u16[4];
+    ee->r[d].u16[6] = rt.u16[6];
+    ee->r[d].u16[7] = rs.u16[6];
+}
+static inline void ee_i_pinth(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = rt.u16[0];
+    ee->r[d].u16[1] = rs.u16[4];
+    ee->r[d].u16[2] = rt.u16[1];
+    ee->r[d].u16[3] = rs.u16[5];
+    ee->r[d].u16[4] = rt.u16[2];
+    ee->r[d].u16[5] = rs.u16[6];
+    ee->r[d].u16[6] = rt.u16[3];
+    ee->r[d].u16[7] = rs.u16[7];
+}
 static inline void ee_i_plzcw(struct ee_state* ee) { 
     for (int i = 0; i < 2; i++) {
         uint32_t word = ee->r[EE_D_RS].u32[i];
@@ -1044,8 +1490,30 @@ static inline void ee_i_plzcw(struct ee_state* ee) {
 static inline void ee_i_pmaddh(struct ee_state* ee) { printf("ee: pmaddh unimplemented\n"); exit(1); }
 static inline void ee_i_pmadduw(struct ee_state* ee) { printf("ee: pmadduw unimplemented\n"); exit(1); }
 static inline void ee_i_pmaddw(struct ee_state* ee) { printf("ee: pmaddw unimplemented\n"); exit(1); }
-static inline void ee_i_pmaxh(struct ee_state* ee) { printf("ee: pmaxh unimplemented\n"); exit(1); }
-static inline void ee_i_pmaxw(struct ee_state* ee) { printf("ee: pmaxw unimplemented\n"); exit(1); }
+static inline void ee_i_pmaxh(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->r[d].u16[0] = ((int16_t)ee->r[s].u16[0] > (int16_t)ee->r[t].u16[0]) ? ee->r[s].u16[0] : ee->r[t].u16[0];
+    ee->r[d].u16[1] = ((int16_t)ee->r[s].u16[1] > (int16_t)ee->r[t].u16[1]) ? ee->r[s].u16[1] : ee->r[t].u16[1];
+    ee->r[d].u16[2] = ((int16_t)ee->r[s].u16[2] > (int16_t)ee->r[t].u16[2]) ? ee->r[s].u16[2] : ee->r[t].u16[2];
+    ee->r[d].u16[3] = ((int16_t)ee->r[s].u16[3] > (int16_t)ee->r[t].u16[3]) ? ee->r[s].u16[3] : ee->r[t].u16[3];
+    ee->r[d].u16[4] = ((int16_t)ee->r[s].u16[4] > (int16_t)ee->r[t].u16[4]) ? ee->r[s].u16[4] : ee->r[t].u16[4];
+    ee->r[d].u16[5] = ((int16_t)ee->r[s].u16[5] > (int16_t)ee->r[t].u16[5]) ? ee->r[s].u16[5] : ee->r[t].u16[5];
+    ee->r[d].u16[6] = ((int16_t)ee->r[s].u16[6] > (int16_t)ee->r[t].u16[6]) ? ee->r[s].u16[6] : ee->r[t].u16[6];
+    ee->r[d].u16[7] = ((int16_t)ee->r[s].u16[7] > (int16_t)ee->r[t].u16[7]) ? ee->r[s].u16[7] : ee->r[t].u16[7];
+}
+static inline void ee_i_pmaxw(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->r[d].u32[0] = ((int32_t)ee->r[s].u32[0] > (int32_t)ee->r[t].u32[0]) ? ee->r[s].u32[0] : ee->r[t].u32[0];
+    ee->r[d].u32[1] = ((int32_t)ee->r[s].u32[1] > (int32_t)ee->r[t].u32[1]) ? ee->r[s].u32[1] : ee->r[t].u32[1];
+    ee->r[d].u32[2] = ((int32_t)ee->r[s].u32[2] > (int32_t)ee->r[t].u32[2]) ? ee->r[s].u32[2] : ee->r[t].u32[2];
+    ee->r[d].u32[3] = ((int32_t)ee->r[s].u32[3] > (int32_t)ee->r[t].u32[3]) ? ee->r[s].u32[3] : ee->r[t].u32[3];
+}
 static inline void ee_i_pmfhi(struct ee_state* ee) {
     ee->r[EE_D_RD] = ee->hi;
 }
@@ -1054,8 +1522,8 @@ static inline void ee_i_pmfhllw(struct ee_state* ee) {
 
     ee->r[d].u32[0] = ee->lo.u32[0];
     ee->r[d].u32[1] = ee->hi.u32[0];
-    ee->r[d].u32[2] = ee->lo.u32[1];
-    ee->r[d].u32[3] = ee->hi.u32[1];
+    ee->r[d].u32[2] = ee->lo.u32[2];
+    ee->r[d].u32[3] = ee->hi.u32[2];
 }
 static inline void ee_i_pmfhluw(struct ee_state* ee) { printf("ee: pmfhluw unimplemented\n"); exit(1); }
 static inline void ee_i_pmfhlslw(struct ee_state* ee) { printf("ee: pmfhlslw unimplemented\n"); exit(1); }
@@ -1064,8 +1532,30 @@ static inline void ee_i_pmfhlsh(struct ee_state* ee) { printf("ee: pmfhlsh unimp
 static inline void ee_i_pmflo(struct ee_state* ee) {
     ee->r[EE_D_RD] = ee->lo;
 }
-static inline void ee_i_pminh(struct ee_state* ee) { printf("ee: pminh unimplemented\n"); exit(1); }
-static inline void ee_i_pminw(struct ee_state* ee) { printf("ee: pminw unimplemented\n"); exit(1); }
+static inline void ee_i_pminh(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->r[d].u16[0] = ((int16_t)ee->r[s].u16[0] < (int16_t)ee->r[t].u16[0]) ? ee->r[s].u16[0] : ee->r[t].u16[0];
+    ee->r[d].u16[1] = ((int16_t)ee->r[s].u16[1] < (int16_t)ee->r[t].u16[1]) ? ee->r[s].u16[1] : ee->r[t].u16[1];
+    ee->r[d].u16[2] = ((int16_t)ee->r[s].u16[2] < (int16_t)ee->r[t].u16[2]) ? ee->r[s].u16[2] : ee->r[t].u16[2];
+    ee->r[d].u16[3] = ((int16_t)ee->r[s].u16[3] < (int16_t)ee->r[t].u16[3]) ? ee->r[s].u16[3] : ee->r[t].u16[3];
+    ee->r[d].u16[4] = ((int16_t)ee->r[s].u16[4] < (int16_t)ee->r[t].u16[4]) ? ee->r[s].u16[4] : ee->r[t].u16[4];
+    ee->r[d].u16[5] = ((int16_t)ee->r[s].u16[5] < (int16_t)ee->r[t].u16[5]) ? ee->r[s].u16[5] : ee->r[t].u16[5];
+    ee->r[d].u16[6] = ((int16_t)ee->r[s].u16[6] < (int16_t)ee->r[t].u16[6]) ? ee->r[s].u16[6] : ee->r[t].u16[6];
+    ee->r[d].u16[7] = ((int16_t)ee->r[s].u16[7] < (int16_t)ee->r[t].u16[7]) ? ee->r[s].u16[7] : ee->r[t].u16[7];
+}
+static inline void ee_i_pminw(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->r[d].u32[0] = ((int32_t)ee->r[s].u32[0] < (int32_t)ee->r[t].u32[0]) ? ee->r[s].u32[0] : ee->r[t].u32[0];
+    ee->r[d].u32[1] = ((int32_t)ee->r[s].u32[1] < (int32_t)ee->r[t].u32[1]) ? ee->r[s].u32[1] : ee->r[t].u32[1];
+    ee->r[d].u32[2] = ((int32_t)ee->r[s].u32[2] < (int32_t)ee->r[t].u32[2]) ? ee->r[s].u32[2] : ee->r[t].u32[2];
+    ee->r[d].u32[3] = ((int32_t)ee->r[s].u32[3] < (int32_t)ee->r[t].u32[3]) ? ee->r[s].u32[3] : ee->r[t].u32[3];
+}
 static inline void ee_i_pmsubh(struct ee_state* ee) { printf("ee: pmsubh unimplemented\n"); exit(1); }
 static inline void ee_i_pmsubw(struct ee_state* ee) { printf("ee: pmsubw unimplemented\n"); exit(1); }
 static inline void ee_i_pmthi(struct ee_state* ee) {
@@ -1079,65 +1569,113 @@ static inline void ee_i_pmulth(struct ee_state* ee) { printf("ee: pmulth unimple
 static inline void ee_i_pmultuw(struct ee_state* ee) { printf("ee: pmultuw unimplemented\n"); exit(1); }
 static inline void ee_i_pmultw(struct ee_state* ee) { printf("ee: pmultw unimplemented\n"); exit(1); }
 static inline void ee_i_pnor(struct ee_state* ee) {
+    uint128_t rs = ee->r[EE_D_RS];
+    uint128_t rt = ee->r[EE_D_RT];
     int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
 
-    ee->r[d].u64[0] = ~(ee->r[s].u64[0] | ee->r[t].u64[0]);
-    ee->r[d].u64[1] = ~(ee->r[s].u64[1] | ee->r[t].u64[1]);
+    ee->r[d].u64[0] = ~(rs.u64[0] | rt.u64[0]);
+    ee->r[d].u64[1] = ~(rs.u64[1] | rt.u64[1]);
 }
 static inline void ee_i_por(struct ee_state* ee) {
+    uint128_t rs = ee->r[EE_D_RS];
+    uint128_t rt = ee->r[EE_D_RT];
     int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
 
-    ee->r[d].u64[0] = ee->r[s].u64[0] | ee->r[t].u64[0];
-    ee->r[d].u64[1] = ee->r[s].u64[1] | ee->r[t].u64[1];
-
-    // ee->r[EE_D_RD].u128 = ee->r[EE_D_RS].u128 | ee->r[EE_D_RT].u128;
+    ee->r[d].u64[0] = rs.u64[0] | rt.u64[0];
+    ee->r[d].u64[1] = rs.u64[1] | rt.u64[1];
 }
 static inline void ee_i_ppac5(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
     int d = EE_D_RD;
-    int t = EE_D_RT;
 
-    ee->r[d].u32[0] = ((ee->r[t].u32[0] & 0x000000f8) >> 3) |
-                      ((ee->r[t].u32[0] & 0x0000f800) >> 6) |
-                      ((ee->r[t].u32[0] & 0x00f80000) >> 9) |
-                      ((ee->r[t].u32[0] & 0x80000000) >> 16);
-    ee->r[d].u32[1] = ((ee->r[t].u32[1] & 0x000000f8) >> 3) |
-                      ((ee->r[t].u32[1] & 0x0000f800) >> 6) |
-                      ((ee->r[t].u32[1] & 0x00f80000) >> 9) |
-                      ((ee->r[t].u32[1] & 0x80000000) >> 16);
-    ee->r[d].u32[2] = ((ee->r[t].u32[2] & 0x000000f8) >> 3) |
-                      ((ee->r[t].u32[2] & 0x0000f800) >> 6) |
-                      ((ee->r[t].u32[2] & 0x00f80000) >> 9) |
-                      ((ee->r[t].u32[2] & 0x80000000) >> 16);
-    ee->r[d].u32[3] = ((ee->r[t].u32[3] & 0x000000f8) >> 3) |
-                      ((ee->r[t].u32[3] & 0x0000f800) >> 6) |
-                      ((ee->r[t].u32[3] & 0x00f80000) >> 9) |
-                      ((ee->r[t].u32[3] & 0x80000000) >> 16);
+    ee->r[d].u32[0] = ((rt.u32[0] & 0x000000f8) >> 3) |
+                      ((rt.u32[0] & 0x0000f800) >> 6) |
+                      ((rt.u32[0] & 0x00f80000) >> 9) |
+                      ((rt.u32[0] & 0x80000000) >> 16);
+    ee->r[d].u32[1] = ((rt.u32[1] & 0x000000f8) >> 3) |
+                      ((rt.u32[1] & 0x0000f800) >> 6) |
+                      ((rt.u32[1] & 0x00f80000) >> 9) |
+                      ((rt.u32[1] & 0x80000000) >> 16);
+    ee->r[d].u32[2] = ((rt.u32[2] & 0x000000f8) >> 3) |
+                      ((rt.u32[2] & 0x0000f800) >> 6) |
+                      ((rt.u32[2] & 0x00f80000) >> 9) |
+                      ((rt.u32[2] & 0x80000000) >> 16);
+    ee->r[d].u32[3] = ((rt.u32[3] & 0x000000f8) >> 3) |
+                      ((rt.u32[3] & 0x0000f800) >> 6) |
+                      ((rt.u32[3] & 0x00f80000) >> 9) |
+                      ((rt.u32[3] & 0x80000000) >> 16);
 }
-static inline void ee_i_ppacb(struct ee_state* ee) { printf("ee: ppacb unimplemented\n"); exit(1); }
+static inline void ee_i_ppacb(struct ee_state* ee) {
+    uint128_t rs = ee->r[EE_D_RS];
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u8[0 ] = rt.u8[ 0];
+    ee->r[d].u8[1 ] = rt.u8[ 2];
+    ee->r[d].u8[2 ] = rt.u8[ 4];
+    ee->r[d].u8[3 ] = rt.u8[ 6];
+    ee->r[d].u8[4 ] = rt.u8[ 8];
+    ee->r[d].u8[5 ] = rt.u8[10];
+    ee->r[d].u8[6 ] = rt.u8[12];
+    ee->r[d].u8[7 ] = rt.u8[14];
+    ee->r[d].u8[8 ] = rs.u8[ 0];
+    ee->r[d].u8[9 ] = rs.u8[ 2];
+    ee->r[d].u8[10] = rs.u8[ 4];
+    ee->r[d].u8[11] = rs.u8[ 6];
+    ee->r[d].u8[12] = rs.u8[ 8];
+    ee->r[d].u8[13] = rs.u8[10];
+    ee->r[d].u8[14] = rs.u8[12];
+    ee->r[d].u8[15] = rs.u8[14];
+}
 static inline void ee_i_ppach(struct ee_state* ee) {
+    uint128_t rs = ee->r[EE_D_RS];
+    uint128_t rt = ee->r[EE_D_RT];
     int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
 
-    ee->r[d].u16[0] = ee->r[t].u16[0];
-    ee->r[d].u16[1] = ee->r[t].u16[2];
-    ee->r[d].u16[2] = ee->r[t].u16[4];
-    ee->r[d].u16[3] = ee->r[t].u16[6];
-    ee->r[d].u16[4] = ee->r[s].u16[0];
-    ee->r[d].u16[5] = ee->r[s].u16[2];
-    ee->r[d].u16[6] = ee->r[s].u16[4];
-    ee->r[d].u16[7] = ee->r[s].u16[6];
+    ee->r[d].u16[0] = rt.u16[0];
+    ee->r[d].u16[1] = rt.u16[2];
+    ee->r[d].u16[2] = rt.u16[4];
+    ee->r[d].u16[3] = rt.u16[6];
+    ee->r[d].u16[4] = rs.u16[0];
+    ee->r[d].u16[5] = rs.u16[2];
+    ee->r[d].u16[6] = rs.u16[4];
+    ee->r[d].u16[7] = rs.u16[6];
 }
-static inline void ee_i_ppacw(struct ee_state* ee) { printf("ee: ppacw unimplemented\n"); exit(1); }
+static inline void ee_i_ppacw(struct ee_state* ee) {
+    uint128_t rs = ee->r[EE_D_RS];
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = rt.u32[0];
+    ee->r[d].u32[1] = rt.u32[2];
+    ee->r[d].u32[2] = rs.u32[0];
+    ee->r[d].u32[3] = rs.u32[2];
+}
 static inline void ee_i_pref(struct ee_state* ee) {
     // Does nothing
 }
-static inline void ee_i_prevh(struct ee_state* ee) { printf("ee: prevh unimplemented\n"); exit(1); }
-static inline void ee_i_prot3w(struct ee_state* ee) { printf("ee: prot3w unimplemented\n"); exit(1); }
+static inline void ee_i_prevh(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = rt.u16[3];
+    ee->r[d].u16[1] = rt.u16[2];
+    ee->r[d].u16[2] = rt.u16[1];
+    ee->r[d].u16[3] = rt.u16[0];
+    ee->r[d].u16[4] = rt.u16[7];
+    ee->r[d].u16[5] = rt.u16[6];
+    ee->r[d].u16[6] = rt.u16[5];
+    ee->r[d].u16[7] = rt.u16[4];
+}
+static inline void ee_i_prot3w(struct ee_state* ee) {
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = rt.u32[1];
+    ee->r[d].u32[1] = rt.u32[2];
+    ee->r[d].u32[2] = rt.u32[0];
+    ee->r[d].u32[3] = rt.u32[3];
+}
 static inline void ee_i_psllh(struct ee_state* ee) { printf("ee: psllh unimplemented\n"); exit(1); }
 static inline void ee_i_psllvw(struct ee_state* ee) { printf("ee: psllvw unimplemented\n"); exit(1); }
 static inline void ee_i_psllw(struct ee_state* ee) { printf("ee: psllw unimplemented\n"); exit(1); }
@@ -1169,13 +1707,174 @@ static inline void ee_i_psubb(struct ee_state* ee) {
     ee->r[d].u8[14] = ee->r[s].u8[14] - ee->r[t].u8[14];
     ee->r[d].u8[15] = ee->r[s].u8[15] - ee->r[t].u8[15];
 }
-static inline void ee_i_psubh(struct ee_state* ee) { printf("ee: psubh unimplemented\n"); exit(1); }
-static inline void ee_i_psubsb(struct ee_state* ee) { printf("ee: psubsb unimplemented\n"); exit(1); }
-static inline void ee_i_psubsh(struct ee_state* ee) { printf("ee: psubsh unimplemented\n"); exit(1); }
-static inline void ee_i_psubsw(struct ee_state* ee) { printf("ee: psubsw unimplemented\n"); exit(1); }
-static inline void ee_i_psubub(struct ee_state* ee) { printf("ee: psubub unimplemented\n"); exit(1); }
-static inline void ee_i_psubuh(struct ee_state* ee) { printf("ee: psubuh unimplemented\n"); exit(1); }
-static inline void ee_i_psubuw(struct ee_state* ee) { printf("ee: psubuw unimplemented\n"); exit(1); }
+static inline void ee_i_psubh(struct ee_state* ee) {
+    int t = EE_D_RT;
+    int s = EE_D_RS;
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = ee->r[s].u16[0] - ee->r[t].u16[0];
+    ee->r[d].u16[1] = ee->r[s].u16[1] - ee->r[t].u16[1];
+    ee->r[d].u16[2] = ee->r[s].u16[2] - ee->r[t].u16[2];
+    ee->r[d].u16[3] = ee->r[s].u16[3] - ee->r[t].u16[3];
+    ee->r[d].u16[4] = ee->r[s].u16[4] - ee->r[t].u16[4];
+    ee->r[d].u16[5] = ee->r[s].u16[5] - ee->r[t].u16[5];
+    ee->r[d].u16[6] = ee->r[s].u16[6] - ee->r[t].u16[6];
+    ee->r[d].u16[7] = ee->r[s].u16[7] - ee->r[t].u16[7];
+}
+static inline void ee_i_psubsb(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    int32_t r0  = ((int32_t)(int8_t)ee->r[s].u8[0 ]) - ((int32_t)(int8_t)ee->r[t].u8[0 ]);
+    int32_t r1  = ((int32_t)(int8_t)ee->r[s].u8[1 ]) - ((int32_t)(int8_t)ee->r[t].u8[1 ]);
+    int32_t r2  = ((int32_t)(int8_t)ee->r[s].u8[2 ]) - ((int32_t)(int8_t)ee->r[t].u8[2 ]);
+    int32_t r3  = ((int32_t)(int8_t)ee->r[s].u8[3 ]) - ((int32_t)(int8_t)ee->r[t].u8[3 ]);
+    int32_t r4  = ((int32_t)(int8_t)ee->r[s].u8[4 ]) - ((int32_t)(int8_t)ee->r[t].u8[4 ]);
+    int32_t r5  = ((int32_t)(int8_t)ee->r[s].u8[5 ]) - ((int32_t)(int8_t)ee->r[t].u8[5 ]);
+    int32_t r6  = ((int32_t)(int8_t)ee->r[s].u8[6 ]) - ((int32_t)(int8_t)ee->r[t].u8[6 ]);
+    int32_t r7  = ((int32_t)(int8_t)ee->r[s].u8[7 ]) - ((int32_t)(int8_t)ee->r[t].u8[7 ]);
+    int32_t r8  = ((int32_t)(int8_t)ee->r[s].u8[8 ]) - ((int32_t)(int8_t)ee->r[t].u8[8 ]);
+    int32_t r9  = ((int32_t)(int8_t)ee->r[s].u8[9 ]) - ((int32_t)(int8_t)ee->r[t].u8[9 ]);
+    int32_t r10 = ((int32_t)(int8_t)ee->r[s].u8[10]) - ((int32_t)(int8_t)ee->r[t].u8[10]);
+    int32_t r11 = ((int32_t)(int8_t)ee->r[s].u8[11]) - ((int32_t)(int8_t)ee->r[t].u8[11]);
+    int32_t r12 = ((int32_t)(int8_t)ee->r[s].u8[12]) - ((int32_t)(int8_t)ee->r[t].u8[12]);
+    int32_t r13 = ((int32_t)(int8_t)ee->r[s].u8[13]) - ((int32_t)(int8_t)ee->r[t].u8[13]);
+    int32_t r14 = ((int32_t)(int8_t)ee->r[s].u8[14]) - ((int32_t)(int8_t)ee->r[t].u8[14]);
+    int32_t r15 = ((int32_t)(int8_t)ee->r[s].u8[15]) - ((int32_t)(int8_t)ee->r[t].u8[15]);
+
+    ee->r[d].u8[0 ] = (r0 >= 0x7f) ? 0x7f : ((r0 < -0x80) ? 0x80 : r0);
+    ee->r[d].u8[1 ] = (r1 >= 0x7f) ? 0x7f : ((r1 < -0x80) ? 0x80 : r1);
+    ee->r[d].u8[2 ] = (r2 >= 0x7f) ? 0x7f : ((r2 < -0x80) ? 0x80 : r2);
+    ee->r[d].u8[3 ] = (r3 >= 0x7f) ? 0x7f : ((r3 < -0x80) ? 0x80 : r3);
+    ee->r[d].u8[4 ] = (r4 >= 0x7f) ? 0x7f : ((r4 < -0x80) ? 0x80 : r4);
+    ee->r[d].u8[5 ] = (r5 >= 0x7f) ? 0x7f : ((r5 < -0x80) ? 0x80 : r5);
+    ee->r[d].u8[6 ] = (r6 >= 0x7f) ? 0x7f : ((r6 < -0x80) ? 0x80 : r6);
+    ee->r[d].u8[7 ] = (r7 >= 0x7f) ? 0x7f : ((r7 < -0x80) ? 0x80 : r7);
+    ee->r[d].u8[8 ] = (r8 >= 0x7f) ? 0x7f : ((r8 < -0x80) ? 0x80 : r8);
+    ee->r[d].u8[9 ] = (r9 >= 0x7f) ? 0x7f : ((r9 < -0x80) ? 0x80 : r9);
+    ee->r[d].u8[10] = (r10 >= 0x7f) ? 0x7f : ((r10 < -0x80) ? 0x80 : r10);
+    ee->r[d].u8[11] = (r11 >= 0x7f) ? 0x7f : ((r11 < -0x80) ? 0x80 : r11);
+    ee->r[d].u8[12] = (r12 >= 0x7f) ? 0x7f : ((r12 < -0x80) ? 0x80 : r12);
+    ee->r[d].u8[13] = (r13 >= 0x7f) ? 0x7f : ((r13 < -0x80) ? 0x80 : r13);
+    ee->r[d].u8[14] = (r14 >= 0x7f) ? 0x7f : ((r14 < -0x80) ? 0x80 : r14);
+    ee->r[d].u8[15] = (r15 >= 0x7f) ? 0x7f : ((r15 < -0x80) ? 0x80 : r15);
+}
+static inline void ee_i_psubsh(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    int32_t r0 = SE3216(ee->r[s].u16[0]) - SE3216(ee->r[t].u16[0]);
+    int32_t r1 = SE3216(ee->r[s].u16[1]) - SE3216(ee->r[t].u16[1]);
+    int32_t r2 = SE3216(ee->r[s].u16[2]) - SE3216(ee->r[t].u16[2]);
+    int32_t r3 = SE3216(ee->r[s].u16[3]) - SE3216(ee->r[t].u16[3]);
+    int32_t r4 = SE3216(ee->r[s].u16[4]) - SE3216(ee->r[t].u16[4]);
+    int32_t r5 = SE3216(ee->r[s].u16[5]) - SE3216(ee->r[t].u16[5]);
+    int32_t r6 = SE3216(ee->r[s].u16[6]) - SE3216(ee->r[t].u16[6]);
+    int32_t r7 = SE3216(ee->r[s].u16[7]) - SE3216(ee->r[t].u16[7]);
+
+    ee->r[d].u16[0] = (r0 >= 0x7fff) ? 0x7fff : ((r0 < -0x8000) ? 0x8000 : r0);
+    ee->r[d].u16[1] = (r1 >= 0x7fff) ? 0x7fff : ((r1 < -0x8000) ? 0x8000 : r1);
+    ee->r[d].u16[2] = (r2 >= 0x7fff) ? 0x7fff : ((r2 < -0x8000) ? 0x8000 : r2);
+    ee->r[d].u16[3] = (r3 >= 0x7fff) ? 0x7fff : ((r3 < -0x8000) ? 0x8000 : r3);
+    ee->r[d].u16[4] = (r4 >= 0x7fff) ? 0x7fff : ((r4 < -0x8000) ? 0x8000 : r4);
+    ee->r[d].u16[5] = (r5 >= 0x7fff) ? 0x7fff : ((r5 < -0x8000) ? 0x8000 : r5);
+    ee->r[d].u16[6] = (r6 >= 0x7fff) ? 0x7fff : ((r6 < -0x8000) ? 0x8000 : r6);
+    ee->r[d].u16[7] = (r7 >= 0x7fff) ? 0x7fff : ((r7 < -0x8000) ? 0x8000 : r7);
+}
+static inline void ee_i_psubsw(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    int64_t r0 = SE6432(ee->r[s].u32[0]) - SE6432(ee->r[t].u32[0]);
+    int64_t r1 = SE6432(ee->r[s].u32[1]) - SE6432(ee->r[t].u32[1]);
+    int64_t r2 = SE6432(ee->r[s].u32[2]) - SE6432(ee->r[t].u32[2]);
+    int64_t r3 = SE6432(ee->r[s].u32[3]) - SE6432(ee->r[t].u32[3]);
+
+    ee->r[d].u32[0] = (r0 >= 0x7fffffff) ? 0x7fffffff : ((r0 < (int32_t)0x80000000) ? 0x80000000 : r0);
+    ee->r[d].u32[1] = (r1 >= 0x7fffffff) ? 0x7fffffff : ((r1 < (int32_t)0x80000000) ? 0x80000000 : r1);
+    ee->r[d].u32[2] = (r2 >= 0x7fffffff) ? 0x7fffffff : ((r2 < (int32_t)0x80000000) ? 0x80000000 : r2);
+    ee->r[d].u32[3] = (r3 >= 0x7fffffff) ? 0x7fffffff : ((r3 < (int32_t)0x80000000) ? 0x80000000 : r3);
+}
+static inline void ee_i_psubub(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    int32_t r0  = ((int32_t)ee->r[s].u8[0 ]) - ((int32_t)ee->r[t].u8[0 ]);
+    int32_t r1  = ((int32_t)ee->r[s].u8[1 ]) - ((int32_t)ee->r[t].u8[1 ]);
+    int32_t r2  = ((int32_t)ee->r[s].u8[2 ]) - ((int32_t)ee->r[t].u8[2 ]);
+    int32_t r3  = ((int32_t)ee->r[s].u8[3 ]) - ((int32_t)ee->r[t].u8[3 ]);
+    int32_t r4  = ((int32_t)ee->r[s].u8[4 ]) - ((int32_t)ee->r[t].u8[4 ]);
+    int32_t r5  = ((int32_t)ee->r[s].u8[5 ]) - ((int32_t)ee->r[t].u8[5 ]);
+    int32_t r6  = ((int32_t)ee->r[s].u8[6 ]) - ((int32_t)ee->r[t].u8[6 ]);
+    int32_t r7  = ((int32_t)ee->r[s].u8[7 ]) - ((int32_t)ee->r[t].u8[7 ]);
+    int32_t r8  = ((int32_t)ee->r[s].u8[8 ]) - ((int32_t)ee->r[t].u8[8 ]);
+    int32_t r9  = ((int32_t)ee->r[s].u8[9 ]) - ((int32_t)ee->r[t].u8[9 ]);
+    int32_t r10 = ((int32_t)ee->r[s].u8[10]) - ((int32_t)ee->r[t].u8[10]);
+    int32_t r11 = ((int32_t)ee->r[s].u8[11]) - ((int32_t)ee->r[t].u8[11]);
+    int32_t r12 = ((int32_t)ee->r[s].u8[12]) - ((int32_t)ee->r[t].u8[12]);
+    int32_t r13 = ((int32_t)ee->r[s].u8[13]) - ((int32_t)ee->r[t].u8[13]);
+    int32_t r14 = ((int32_t)ee->r[s].u8[14]) - ((int32_t)ee->r[t].u8[14]);
+    int32_t r15 = ((int32_t)ee->r[s].u8[15]) - ((int32_t)ee->r[t].u8[15]);
+
+    ee->r[d].u8[0 ] = (r0 < 0) ? 0 : r0;
+    ee->r[d].u8[1 ] = (r1 < 0) ? 0 : r1;
+    ee->r[d].u8[2 ] = (r2 < 0) ? 0 : r2;
+    ee->r[d].u8[3 ] = (r3 < 0) ? 0 : r3;
+    ee->r[d].u8[4 ] = (r4 < 0) ? 0 : r4;
+    ee->r[d].u8[5 ] = (r5 < 0) ? 0 : r5;
+    ee->r[d].u8[6 ] = (r6 < 0) ? 0 : r6;
+    ee->r[d].u8[7 ] = (r7 < 0) ? 0 : r7;
+    ee->r[d].u8[8 ] = (r8 < 0) ? 0 : r8;
+    ee->r[d].u8[9 ] = (r9 < 0) ? 0 : r9;
+    ee->r[d].u8[10] = (r10 < 0) ? 0 : r10;
+    ee->r[d].u8[11] = (r11 < 0) ? 0 : r11;
+    ee->r[d].u8[12] = (r12 < 0) ? 0 : r12;
+    ee->r[d].u8[13] = (r13 < 0) ? 0 : r13;
+    ee->r[d].u8[14] = (r14 < 0) ? 0 : r14;
+    ee->r[d].u8[15] = (r15 < 0) ? 0 : r15;
+}
+static inline void ee_i_psubuh(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    int32_t r0 = (int32_t)(ee->r[s].u16[0]) - (int32_t)(ee->r[t].u16[0]);
+    int32_t r1 = (int32_t)(ee->r[s].u16[1]) - (int32_t)(ee->r[t].u16[1]);
+    int32_t r2 = (int32_t)(ee->r[s].u16[2]) - (int32_t)(ee->r[t].u16[2]);
+    int32_t r3 = (int32_t)(ee->r[s].u16[3]) - (int32_t)(ee->r[t].u16[3]);
+    int32_t r4 = (int32_t)(ee->r[s].u16[4]) - (int32_t)(ee->r[t].u16[4]);
+    int32_t r5 = (int32_t)(ee->r[s].u16[5]) - (int32_t)(ee->r[t].u16[5]);
+    int32_t r6 = (int32_t)(ee->r[s].u16[6]) - (int32_t)(ee->r[t].u16[6]);
+    int32_t r7 = (int32_t)(ee->r[s].u16[7]) - (int32_t)(ee->r[t].u16[7]);
+
+    ee->r[d].u16[0] = (r0 < 0) ? 0 : r0;
+    ee->r[d].u16[1] = (r1 < 0) ? 0 : r1;
+    ee->r[d].u16[2] = (r2 < 0) ? 0 : r2;
+    ee->r[d].u16[3] = (r3 < 0) ? 0 : r3;
+    ee->r[d].u16[4] = (r4 < 0) ? 0 : r4;
+    ee->r[d].u16[5] = (r5 < 0) ? 0 : r5;
+    ee->r[d].u16[6] = (r6 < 0) ? 0 : r6;
+    ee->r[d].u16[7] = (r7 < 0) ? 0 : r7;
+}
+static inline void ee_i_psubuw(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    int64_t r0 = (int64_t)ee->r[s].u32[0] - (int64_t)ee->r[t].u32[0];
+    int64_t r1 = (int64_t)ee->r[s].u32[1] - (int64_t)ee->r[t].u32[1];
+    int64_t r2 = (int64_t)ee->r[s].u32[2] - (int64_t)ee->r[t].u32[2];
+    int64_t r3 = (int64_t)ee->r[s].u32[3] - (int64_t)ee->r[t].u32[3];
+
+    ee->r[d].u32[0] = (r0 < 0) ? 0 : r0;
+    ee->r[d].u32[1] = (r1 < 0) ? 0 : r1;
+    ee->r[d].u32[2] = (r2 < 0) ? 0 : r2;
+    ee->r[d].u32[3] = (r3 < 0) ? 0 : r3;
+}
 static inline void ee_i_psubw(struct ee_state* ee) {
     int d = EE_D_RD;
     int s = EE_D_RS;
@@ -1187,12 +1886,12 @@ static inline void ee_i_psubw(struct ee_state* ee) {
     ee->r[d].u32[3] = ee->r[s].u32[3] - ee->r[t].u32[3];
 }
 static inline void ee_i_pxor(struct ee_state* ee) {
+    uint128_t rs = ee->r[EE_D_RS];
+    uint128_t rt = ee->r[EE_D_RT];
     int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
 
-    ee->r[d].u64[0] = ee->r[s].u64[0] ^ ee->r[t].u64[0];
-    ee->r[d].u64[1] = ee->r[s].u64[1] ^ ee->r[t].u64[1];    
+    ee->r[d].u64[0] = rs.u64[0] ^ rt.u64[0];
+    ee->r[d].u64[1] = rs.u64[1] ^ rt.u64[1];
 }
 static inline void ee_i_qfsrv(struct ee_state* ee) { printf("ee: qfsrv unimplemented\n"); exit(1); }
 static inline void ee_i_qmfc2(struct ee_state* ee) {
@@ -1203,6 +1902,12 @@ static inline void ee_i_qmtc2(struct ee_state* ee) {
 }
 static inline void ee_i_rsqrts(struct ee_state* ee) { printf("ee: rsqrts unimplemented\n"); exit(1); }
 static inline void ee_i_sb(struct ee_state* ee) {
+    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+
+    // if (addr >= 0x12c658 && addr < 0x12d658) {
+    //     printf("ee: %08x <- %02x (%c)\n", addr, EE_RT, EE_RT);
+    // }
+
     bus_write8(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
 }
 static inline void ee_i_sd(struct ee_state* ee) {
@@ -1296,6 +2001,7 @@ static inline void ee_i_sw(struct ee_state* ee) {
     bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT32);
 }
 static inline void ee_i_swc1(struct ee_state* ee) {
+    // printf("swc1 %08x+%08x=%08x %08x (%f)\n", EE_RS32, SE3216(EE_D_I16), EE_RS32 + SE3216(EE_D_I16), ee->f[EE_D_RT].u32, ee->f[EE_D_RT].f);
     bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), EE_FT32);
 }
 static inline void ee_i_swl(struct ee_state* ee) {
@@ -1306,7 +2012,9 @@ static inline void ee_i_swl(struct ee_state* ee) {
     int shift = addr & 3;
     uint32_t mem = bus_read32(ee, addr & ~3);
 
-    bus_write32(ee, addr & ~3, (EE_RS32 >> swl_shift[shift] | (mem & swl_mask[shift])));
+    bus_write32(ee, addr & ~3, (EE_RT32 >> swl_shift[shift] | (mem & swl_mask[shift])));
+
+    // printf("swl mem=%08x reg=%016lx addr=%08x shift=%d rs=%08x i16=%04x\n", mem, ee->r[EE_D_RT].u64[0], addr, shift, EE_RS32, EE_D_I16);
 }
 static inline void ee_i_swr(struct ee_state* ee) {
     static const uint32_t swr_mask[4] = { 0x00000000, 0x000000ff, 0x0000ffff, 0x00ffffff };
@@ -1316,7 +2024,9 @@ static inline void ee_i_swr(struct ee_state* ee) {
     int shift = addr & 3;
     uint32_t mem = bus_read32(ee, addr & ~3);
 
-    bus_write32(ee, addr & ~3, (EE_RS32 << swr_shift[shift]) | (mem & swr_mask[shift]));
+    bus_write32(ee, addr & ~3, (EE_RT32 << swr_shift[shift]) | (mem & swr_mask[shift]));
+
+    // printf("swl mem=%08x reg=%016lx addr=%08x shift=%d rs=%08x i16=%04x\n", mem, ee->r[EE_D_RT].u64[0], addr, shift, EE_RS32, EE_D_I16);
 }
 static inline void ee_i_sync(struct ee_state* ee) {
     /* Do nothing */
@@ -1343,12 +2053,12 @@ static inline void ee_i_tge(struct ee_state* ee) { printf("ee: tge unimplemented
 static inline void ee_i_tgei(struct ee_state* ee) { printf("ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee) { printf("ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee) { printf("ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee) { printf("ee: tlbp unimplemented\n"); exit(1); }
-static inline void ee_i_tlbr(struct ee_state* ee) { printf("ee: tlbr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee) { return; printf("ee: tlbp unimplemented\n"); exit(1); }
+static inline void ee_i_tlbr(struct ee_state* ee) { return; printf("ee: tlbr unimplemented\n"); exit(1); }
 static inline void ee_i_tlbwi(struct ee_state* ee) {
     /* To-do: MMU */
 }
-static inline void ee_i_tlbwr(struct ee_state* ee) { printf("ee: tlbwr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbwr(struct ee_state* ee) { return; printf("ee: tlbwr unimplemented\n"); exit(1); }
 static inline void ee_i_tlt(struct ee_state* ee) { printf("ee: tlt unimplemented\n"); exit(1); }
 static inline void ee_i_tlti(struct ee_state* ee) { printf("ee: tlti unimplemented\n"); exit(1); }
 static inline void ee_i_tltiu(struct ee_state* ee) { printf("ee: tltiu unimplemented\n"); exit(1); }
@@ -2030,8 +2740,39 @@ void ee_cycle(struct ee_state* ee) {
         ee_exception_level1(ee, CAUSE_EXC1_INT);
     }
 
-	// if (ee->pc == 0x9fc4141c) {
-	// 	p = 50000;
+    // if (ee->pc == 0x102528) {
+    //     printf("Strm_Init()\n");
+
+    //     exit(1);
+    // }
+
+    // if (ee->pc == 0x1c14bc) {
+    //     p = 100;
+    //     printf("got here\n");
+    // }
+
+    // if (ee->pc == 0x1c1200) {
+    //     file = fopen("eegs.dump", "wb");
+
+    //     p = 100;
+    // }
+    // if (ee->pc == 0x17e240) {
+    //     file = fopen("eegs.dump", "wb");
+
+    //     p = 5000;
+    // }
+
+    // if (ee->pc == 0x17e2e4) {
+    //     if (ee->r[17].ul32 == 0x10000) {
+    //         file = fopen("eegs.dump", "w");
+
+    //         p = 5000;
+    //     }
+    //     /// printf("s1=%08x s4=%08x\n", ee->r[17].ul32, ee->r[20].ul32);
+    // }
+
+	// if (ee->pc == 0x1000d8) {
+	// 	p = 200000;
 
     //     file = fopen("eegs.dump", "wb");
     // }
@@ -2047,28 +2788,48 @@ void ee_cycle(struct ee_state* ee) {
     //     // p = 510000;
     // }
 
-    ee->opcode = bus_read32(ee, ee->pc);
-    uint32_t pc = ee->pc;
+    // vxprintf
+    // if (ee->pc == 0x00106a20) {
+    //     if (loop == 1) {
+    //         printf("logging\n");
+    //         file = fopen("eegs.dump", "w");
 
-    // if (p) {
-    //     // fwrite(&ee->pc, 4, 1, file);
-    //     // fwrite(&ee->opcode, 4, 1, file);
-    //     fprintf(file, "%08x %08x ", ee->pc, ee->opcode);
-
-    //     for (int i = 1; i < 32; i++) {
-    //         // fwrite(&ee->r[i].ul32, 4, 1, file);
-    //         fprintf(file, "%08x ", ee->r[i].ul32);
+    //         p = 5000;
+    //     } else {
+    //         ++loop;
     //     }
+    // }
 
-    //     fputc('\n', file);
-    //     // --p;
-
-    //     if (!p) {
+    // loop
+    // if (ee->pc == 0x0010907c) {
+    //     if (p) {
     //         if (file) fclose(file);
 
     //         exit(1);
     //     }
     // }
+
+    ee->opcode = bus_read32(ee, ee->pc);
+
+    if (p) {
+        // fwrite(&ee->pc, 4, 1, file);
+        // fwrite(&ee->opcode, 4, 1, file);
+        fprintf(file, "%08x %08x ", ee->pc, ee->opcode);
+
+        for (int i = 1; i < 32; i++) {
+            // fwrite(&ee->r[i].ul32, 4, 1, file);
+            fprintf(file, "%08x ", ee->r[i].ul32);
+        }
+
+        fputc('\n', file);
+        --p;
+
+        if (!p) {
+            if (file) fclose(file);
+
+            exit(1);
+        }
+    }
 
     // if (p) {
     //     ee_print_disassembly(ee);
