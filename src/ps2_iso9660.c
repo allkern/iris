@@ -21,8 +21,6 @@ struct iso9660_state* iso9660_open(const char* path) {
     return iso;
 }
 
-
-
 char* iso9660_get_boot_path(struct iso9660_state* iso) {
     // Cache the PVD (Primary Volume Descriptor)
     fseek(iso->file, 16 * 0x800, SEEK_SET);
@@ -63,13 +61,11 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
             }
         }
 
-        uint8_t* ptr = dir;
-
-        dir = (struct iso9660_rootdir*)(ptr + dir->dr_len);
+        dir = (uint8_t*)dir + dir->dr_len;
     }
 
     if (!dir->dr_len) {
-        printf("SYSTEM.CNF not found! (non-PlayStation disc?)\n");
+        printf("iso: SYSTEM.CNF not found! (non-PlayStation disc?)\n");
 
         return NULL;
     }
@@ -98,7 +94,7 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
             while (isspace(*p)) ++p;
 
             if (*p != '=') {
-                printf("cnf: Expected =\n");
+                printf("iso: Expected =\n");
 
                 return NULL;
             }
@@ -125,11 +121,13 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
         }
     }
 
-    printf("Couldn't find BOOT2 entry in SYSTEM.CNF (PlayStation disc?)\n");
+    printf("iso: Couldn't find BOOT2 entry in SYSTEM.CNF (PlayStation disc?)\n");
 
     return NULL;
 }
+
 // void iso9660_load_boot_elf(struct iso9660_state* iso, char* buf);
+
 void iso9660_close(struct iso9660_state* iso) {
     if (iso->file)
         fclose(iso->file);
