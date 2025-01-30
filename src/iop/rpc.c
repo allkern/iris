@@ -52,7 +52,11 @@ char* rpc_decode_packet(char* buf, uint32_t* data) {
 
             ptr += sprintf(ptr, "Bind (%s)", server); break;
         } break;
-        case 0x8000000A: ptr += sprintf(ptr, "Call: "); break;
+        case 0x8000000A: {
+            struct sif_rpc_call_pkt* call = (struct sif_rpc_call_pkt*)data;
+
+            ptr += sprintf(ptr, "Call: %08x", call->rpc_number);
+        } break;
         case 0x8000000C: ptr += sprintf(ptr, "GetOtherData: "); break;    
     }
 
