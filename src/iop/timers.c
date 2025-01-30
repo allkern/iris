@@ -39,23 +39,24 @@ void iop_timer_tick(struct ps2_iop_timers* timers, int i) {
 
     uint32_t prev = t->counter;
 
-    // if (i == 1) {
-    //     if (t->use_ext) {
-    //         if (t->internal != 90) {
-    //             ++t->internal;
-    //         } else {
-    //             ++t->counter;
-    //             t->internal = 0;
-    //         }
-    //     } else {
-    //         ++t->counter;
-    //     }
-    // } else {
-
-    ++t->counter;
+    // To-do: Breaks Crazy Taxi (USA)
+    if (i == 1) {
+        if (t->use_ext) {
+            if (t->internal != 90) {
+                ++t->internal;
+            } else {
+                ++t->counter;
+                t->internal = 0;
+            }
+        } else {
+            ++t->counter;
+        }
+    } else {
+        ++t->counter;
+    }
 
     if (t->counter >= t->target && prev < t->target) {
-        printf("iop: Timer 5 reached target %08x <= %08x\n", t->counter, t->target);
+        // printf("iop: Timer 5 reached target %08x <= %08x\n", t->counter, t->target);
 
         t->cmp_irq_set = 1;
 
@@ -74,27 +75,29 @@ void iop_timer_tick(struct ps2_iop_timers* timers, int i) {
                 t->counter = 0;
             }
 
-            printf("iop: Timer %d compare IRQ cnt=%d tgt=%d rep=%d levl=%d irq_en=%d irq_reset=%d\n", i,
-                t->counter,
-                t->target,
-                t->rep_irq,
-                t->levl,
-                t->irq_en,
-                t->irq_reset
-            );
+            // printf("iop: Timer %d compare IRQ cnt=%d tgt=%d rep=%d levl=%d irq_en=%d irq_reset=%d\n", i,
+            //     t->counter,
+            //     t->target,
+            //     t->rep_irq,
+            //     t->levl,
+            //     t->irq_en,
+            //     t->irq_reset
+            // );
         }
     }
 
-    if (t->counter > 0xffffffff) {
+    uint64_t ovf = (i < 3) ? 0xffff : 0xffffffff;
+
+    if (t->counter > ovf) {
         t->ovf_irq_set = 1;
 
         if (t->ovf_irq && t->irq_en) {
-            printf("iop: Timer %d overflow IRQ rep=%d levl=%d irq_en=%d irq_reset=%d\n", i,
-                t->rep_irq,
-                t->levl,
-                t->irq_en,
-                t->irq_reset
-            );
+            // printf("iop: Timer %d overflow IRQ rep=%d levl=%d irq_en=%d irq_reset=%d\n", i,
+            //     t->rep_irq,
+            //     t->levl,
+            //     t->irq_en,
+            //     t->irq_reset
+            // );
 
             ps2_iop_intc_irq(timers->intc, timer_get_irq_mask(i));
 
@@ -111,16 +114,14 @@ void iop_timer_tick(struct ps2_iop_timers* timers, int i) {
             }
         }
 
-        t->counter -= 0xffffffff;
+        t->counter -= ovf;
     }
-
-    t->counter &= 0xffffffff;
 }
 
 void ps2_iop_timers_tick(struct ps2_iop_timers* timers) {
-    // for (int i = 0; i < 6; i++) {
-        iop_timer_tick(timers, 5);
-    // }
+    for (int i = 0; i < 6; i++) {
+        iop_timer_tick(timers, i);
+    }
 }
 
 uint32_t iop_timer_handle_mode_read(struct ps2_iop_timers* timers, int i) {
@@ -130,8 +131,8 @@ uint32_t iop_timer_handle_mode_read(struct ps2_iop_timers* timers, int i) {
     timers->timer[i].ovf_irq_set = 0;
     timers->timer[i].irq_en = 1;
 
-    if (i == 5)
-    printf("iop: Timer %d mode read %08x -> %08x\n", i, r, timers->timer[i].mode);
+    // if (i == 5)
+    // printf("iop: Timer %d mode read %08x -> %08x\n", i, r, timers->timer[i].mode);
 
     return r;
 }
