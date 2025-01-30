@@ -69,7 +69,7 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     MAP_REG_READ(8, 0x1F808200, 0x1F808280, sio2, sio2);
     MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
-    // printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
+    printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -89,6 +89,9 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
+    // if (addr == 0x1f9001b0) {
+    //     return 0xffff;
+    // }
     // Stub SPU2 status reg?
     if (addr == 0x1F900744) {
         if (r744) {
@@ -128,6 +131,8 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     MAP_MEM_READ(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     if (addr == 0x1f801450) return 0;
+    // if (addr == 0x1f801560) return 1;
+    if ((addr & 0xff000000) == 0x1e000000) return 0;
 
     // printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
 
@@ -140,10 +145,14 @@ void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
     MAP_MEM_WRITE(8, 0x00000000, 0x001FFFFF, ram, iop_ram);
     MAP_REG_WRITE(8, 0x1F402004, 0x1F402018, cdvd, cdvd);
     MAP_REG_WRITE(32, 0x1F801070, 0x1F80107B, iop_intc, intc);
+    MAP_REG_WRITE(32, 0x1F801080, 0x1F8010EF, iop_dma, dma);
+    MAP_REG_WRITE(32, 0x1F801500, 0x1F80155F, iop_dma, dma);
+    MAP_REG_WRITE(32, 0x1F801570, 0x1F80157F, iop_dma, dma);
+    MAP_REG_WRITE(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_REG_WRITE(8, 0x1F808200, 0x1F808280, sio2, sio2);
     MAP_MEM_WRITE(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
-    // printf("iop_bus: Unhandled 8-bit write to physical address 0x%08x (0x%02x)\n", addr, data);
+    printf("iop_bus: Unhandled 8-bit write to physical address 0x%08x (0x%02x)\n", addr, data);
 }
 
 void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {

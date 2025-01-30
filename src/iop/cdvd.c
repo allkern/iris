@@ -1,7 +1,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <stdio.h>
+#include <time.h>
 
 #include "cdvd.h"
 
@@ -51,6 +53,7 @@ static inline void cdvd_set_ready(struct ps2_cdvd* cdvd) {
 }
 
 void cdvd_read_sector(struct ps2_cdvd* cdvd, int lba, int offset) {
+    // printf("cdvd: Read lba=%d (%x)\n", lba, lba);
     fseek(cdvd->file, lba * 0x800, SEEK_SET);
     fread(cdvd->buf + offset, 1, 0x800, cdvd->file);
 }
@@ -66,18 +69,30 @@ static inline void cdvd_init_s_fifo(struct ps2_cdvd* cdvd, int size) {
 }
 
 static inline void cdvd_s_mechacon_version(struct ps2_cdvd* cdvd) {
-    if (cdvd->s_params[0] != 0) {
-        printf("cdvd: Unknown S subcommand %02x\n", cdvd->s_params);
+    switch (cdvd->s_params[0]) {
+        case 0x00: {
+            cdvd_init_s_fifo(cdvd, 4);
 
-        exit(1);
+            cdvd->s_fifo[0] = 0x03;
+            cdvd->s_fifo[1] = 0x06;
+            cdvd->s_fifo[2] = 0x02;
+            cdvd->s_fifo[3] = 0x00;
+        } break;
+
+        case 0xef: {
+            cdvd_init_s_fifo(cdvd, 3);
+
+            cdvd->s_fifo[0] = 0x00;
+            cdvd->s_fifo[1] = 0x0f;
+            cdvd->s_fifo[2] = 0x05;
+        } break;
+
+        default: {
+            printf("cdvd: Unknown S subcommand %02x\n", cdvd->s_params[0]);
+
+            exit(1);
+        } break;
     }
-
-    cdvd_init_s_fifo(cdvd, 4);
-
-    cdvd->s_fifo[0] = 0x03;
-    cdvd->s_fifo[1] = 0x06;
-    cdvd->s_fifo[2] = 0x02;
-    cdvd->s_fifo[3] = 0x00;
 }
 static inline void cdvd_s_update_sticky_flags(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
@@ -89,14 +104,17 @@ static inline void cdvd_s_update_sticky_flags(struct ps2_cdvd* cdvd) {
 static inline void cdvd_s_read_rtc(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 8);
 
+    time_t t = time(NULL);
+    struct tm tm = *localtime(&t);
+
     cdvd->s_fifo[0] = 0;
-    cdvd->s_fifo[1] = 1;
-    cdvd->s_fifo[2] = 2;
-    cdvd->s_fifo[3] = 3;
+    cdvd->s_fifo[1] = itob_table[tm.tm_sec];
+    cdvd->s_fifo[2] = itob_table[tm.tm_min];
+    cdvd->s_fifo[3] = itob_table[tm.tm_hour];
     cdvd->s_fifo[4] = 0;
-    cdvd->s_fifo[5] = 5;
-    cdvd->s_fifo[6] = 6;
-    cdvd->s_fifo[7] = 7;
+    cdvd->s_fifo[5] = itob_table[tm.tm_mday];
+    cdvd->s_fifo[6] = itob_table[tm.tm_mon + 1];
+    cdvd->s_fifo[7] = itob_table[tm.tm_year - 100];
 }
 static inline void cdvd_s_write_rtc(struct ps2_cdvd* cdvd) {
     printf("cdvd: write_rtc\n");
@@ -155,10 +173,8 @@ static inline void cdvd_s_close_config(struct ps2_cdvd* cdvd) {
 void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->s_cmd = cmd;
 
-    printf("cdvd: S command %02x\n", cmd);
-
     switch (cmd) {
-        case 0x03: cdvd_s_mechacon_version(cdvd); return;
+        case 0x03: cdvd_s_mechacon_version(cdvd); break;
         case 0x05: cdvd_s_update_sticky_flags(cdvd); break;
         case 0x08: cdvd_s_read_rtc(cdvd); break;
         case 0x09: cdvd_s_write_rtc(cdvd); break;
@@ -179,7 +195,15 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         } break;
     }
 
-    cdvd->s_cmd = 0;
+    // printf("cdvd: S command %02x response: ", cmd);
+
+    // for (int i = 0; i < cdvd->s_fifo_size; i++) {
+    //     printf("%02x ", cdvd->s_fifo[i]);
+    // }
+
+    // putchar('\n');
+
+    // cdvd->s_cmd = 0;
     cdvd->s_param_index = 0;
 }
 
@@ -198,8 +222,6 @@ static inline uint8_t cdvd_read_s_response(struct ps2_cdvd* cdvd) {
         printf("cdvd: S response FIFO overflow\n");
 
         return 0;
-
-        exit(1);
     }
 
     uint8_t data = cdvd->s_fifo[cdvd->s_fifo_index++];
@@ -214,6 +236,9 @@ static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
     long block_timing = (36864000L * cdvd->read_size) / (24 * 153600);
     long delta = cdvd->read_lba - from;
     long contiguous_cycles = block_timing * cdvd->read_count;
+
+    if (!delta)
+        return 0;
 
     if (delta < 0) {
         delta = -delta;
@@ -238,6 +263,10 @@ static inline void cdvd_set_status_bits(struct ps2_cdvd* cdvd, uint8_t data) {
 
 void cdvd_do_cd_read(void* udata, int overshoot) {
     struct ps2_cdvd* cdvd = (struct ps2_cdvd*)udata;
+
+    assert(cdvd->read_size == 2048);
+
+    // printf("cdvd: Reading %d sector(s) from lba=%x (%d)\n", cdvd->read_count, cdvd->read_lba, cdvd->read_lba);
 
     // Do read
     int sector_count = cdvd->read_count;
@@ -265,7 +294,7 @@ void cdvd_do_cd_read(void* udata, int overshoot) {
         cdvd->buf[15] = 1;
 
         // Write raw data at offset 12
-        cdvd_read_sector(cdvd, cdvd->read_lba + i, 0);
+        cdvd_read_sector(cdvd, cdvd->read_lba++, 0);
 
         cdvd->buf_size = cdvd->read_size;
         cdvd->read_count--;
@@ -274,10 +303,10 @@ void cdvd_do_cd_read(void* udata, int overshoot) {
     }
 
     // Raise both bit 0 and 1 of I_STAT
-    cdvd->i_stat |= 3;
+    cdvd->i_stat |= 1;
 
     // Clear status
-    cdvd->status &= ~CDVD_STATUS_READING;
+    cdvd->status &= ~(CDVD_STATUS_READING | CDVD_STATUS_SEEKING | CDVD_STATUS_SPINNING);
 
     cdvd_set_ready(cdvd);
     cdvd_set_status_bits(cdvd, CDVD_STATUS_PAUSED);
@@ -298,10 +327,26 @@ static inline void cdvd_n_standby(struct ps2_cdvd* cdvd) {
     printf("cdvd: standby\n"); exit(1);
 }
 static inline void cdvd_n_stop(struct ps2_cdvd* cdvd) {
-    printf("cdvd: stop\n"); exit(1);
+    printf("cdvd: stop\n");
+
+    cdvd_set_ready(cdvd);
+    cdvd_set_status_bits(cdvd, CDVD_STATUS_PAUSED);
+
+    cdvd->status &= ~(CDVD_STATUS_READING | CDVD_STATUS_SEEKING | CDVD_STATUS_SPINNING);
+
+    // Send IRQ to IOP
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
 }
 static inline void cdvd_n_pause(struct ps2_cdvd* cdvd) {
-    printf("cdvd: pause\n"); exit(1);
+    printf("cdvd: pause\n");
+
+    cdvd_set_ready(cdvd);
+    cdvd_set_status_bits(cdvd, CDVD_STATUS_PAUSED);
+
+    cdvd->status &= ~(CDVD_STATUS_READING | CDVD_STATUS_SEEKING | CDVD_STATUS_SPINNING);
+
+    // Send IRQ to IOP
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
 }
 static inline void cdvd_n_seek(struct ps2_cdvd* cdvd) {
     printf("cdvd: seek\n"); exit(1);
@@ -333,7 +378,11 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
     event.callback = cdvd_do_cd_read;
     event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
 
-    cdvd_set_status_bits(cdvd, CDVD_STATUS_READING);
+    cdvd_set_status_bits(cdvd,
+        CDVD_STATUS_READING |
+        CDVD_STATUS_SPINNING |
+        CDVD_STATUS_SEEKING
+    );
 
     // printf("cdvd: ReadCd lba=%08x count=%08x size=%d cycles=%ld\n",
     //     cdvd->read_lba,
@@ -366,7 +415,27 @@ static inline void cdvd_n_read_dvd(struct ps2_cdvd* cdvd) {
 
 }
 static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {
-    printf("cdvd: get_toc\n"); exit(1);
+    printf("cdvd: get_toc\n");
+
+    memset(cdvd->buf, 0, 2064);
+
+    cdvd->buf[0] = 0x04;
+    cdvd->buf[1] = 0x02;
+    cdvd->buf[2] = 0xF2;
+    cdvd->buf[3] = 0x00;
+    cdvd->buf[4] = 0x86;
+    cdvd->buf[5] = 0x72;
+    cdvd->buf[17] = 0x03;
+
+    cdvd->buf_size = 2064;
+
+    iop_dma_handle_cdvd_transfer(cdvd->dma);
+
+    cdvd_set_ready(cdvd);
+    cdvd_set_status_bits(cdvd, CDVD_STATUS_PAUSED);
+
+    // Send IRQ to IOP
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
 }
 
 static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
@@ -410,11 +479,9 @@ void ps2_cdvd_init(struct ps2_cdvd* cdvd, struct ps2_iop_dma* dma, struct ps2_io
     // 00:02:00
     cdvd->read_lba = 0x150;
 
-    cdvd->n_stat = CDVD_N_STATUS_READY;
+    cdvd->n_stat = 0x4c;
     cdvd->s_stat = CDVD_S_STATUS_NO_DATA;
-    
-    cdvd_set_status_bits(cdvd, CDVD_STATUS_PAUSED);
-
+    cdvd->sticky_status = 0x1e;
     cdvd->sched = sched;
     cdvd->dma = dma;
     cdvd->intc = intc;
@@ -496,11 +563,17 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
         case CDVD_EXT_CUE: cdvd->disc_type = CDVD_DISC_PS2_CD; break;
     }
 
+    cdvd->status &= ~CDVD_STATUS_TRAY_OPEN;
+
     return 1;
 }
 
 void ps2_cdvd_close(struct ps2_cdvd* cdvd) {
-    fclose(cdvd->file);
+    if (cdvd->file) {
+        fclose(cdvd->file);
+    }
+
+    cdvd_set_status_bits(cdvd, CDVD_STATUS_TRAY_OPEN);
 }
 
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
@@ -514,12 +587,15 @@ uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
         // case 0x1F402007: (W)
         case 0x1F402008: /* printf("cdvd: read i_stat %x\n", cdvd->i_stat); */ return cdvd->i_stat;
         case 0x1F40200A: /* printf("cdvd: read status %x\n", cdvd->status); */ return cdvd->status;
+        case 0x1F40200B: /* printf("cdvd: read sticky status %x\n", cdvd->sticky_status); */ return cdvd->sticky_status;
         case 0x1F40200F: /* printf("cdvd: read disc_type %x\n", cdvd->disc_type); */ return cdvd->disc_type;
         case 0x1F402016: /* printf("cdvd: read s_cmd %x\n", cdvd->s_cmd); */ return cdvd->s_cmd;
-        case 0x1F402017: printf("cdvd: read s_stat %x\n", cdvd->s_stat); return cdvd->s_stat;
+        case 0x1F402017: /* printf("cdvd: read s_stat %x\n", cdvd->s_stat); */ return cdvd->s_stat;
         // case 0x1F402017: (W);
-        case 0x1F402018: uint8_t r = cdvd_read_s_response(cdvd); printf("cdvd: read s_response %x\n", r); return r;
+        case 0x1F402018: uint8_t r = cdvd_read_s_response(cdvd); /* printf("cdvd: read s_response %x\n", r); */ return r;
     }
+
+    printf("cdvd: unknown read %08x\n", addr);
     
     return 0;
 }
@@ -531,7 +607,7 @@ void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data) {
         case 0x1F402004: cdvd_handle_n_command(cdvd, data); return;
         case 0x1F402005: cdvd_handle_n_param(cdvd, data); return;
         case 0x1F402006: /* Read-only */ return;
-        case 0x1F402007: /* To-do: BREAK */ return;
+        case 0x1F402007: printf("cdvd: break\n"); exit(1); /* To-do: BREAK */ return;
         case 0x1F402008: cdvd->i_stat &= ~data; return;
         case 0x1F40200A: return;
         case 0x1F40200F: return;
