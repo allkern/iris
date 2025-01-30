@@ -167,16 +167,32 @@ void iop_cycle(struct iop_state* iop) {
     iop->opcode = iop_bus_read32(iop, iop->pc);
     iop->last_cycles = 0;
 
-    uint32_t pc = iop->next_pc;
+    // uint32_t pc = iop->next_pc;
 
-    if ((pc == 0x12C48) || (pc == 0x1420C) || (pc == 0x1430C)) {
-        uint32_t ptr = iop->r[5];
-        uint32_t size = iop->r[6];
+    // if ((pc == 0x12C48) || (pc == 0x1420C) || (pc == 0x1430C)) {
+    //     uint32_t ptr = iop->r[5];
+    //     uint32_t size = iop->r[6];
 
-        while (size--) {
-            iop->kputchar(iop->kputchar_udata, iop_bus_read8(iop, ptr++));
-        }
-    }
+    //     if (size >= 0x1000) {
+    //         goto skip_ioman;
+    //         char c = iop_bus_read8(iop, ptr++);
+
+    //         while (c) {
+    //             iop->kputchar(iop->kputchar_udata, c);
+
+    //             fflush(stdout);
+
+    //             c = iop_bus_read8(iop, ptr++);
+    //         }
+    //     }
+
+    //     while (size--) {
+    //         iop->kputchar(iop->kputchar_udata, iop_bus_read8(iop, ptr++));
+    //         fflush(stdout);
+    //     }
+    // }
+
+    skip_ioman:;
 
     if (iop->p) {
         iop_print_disassembly(iop);
@@ -380,7 +396,31 @@ static inline void iop_i_j(struct iop_state* iop) {
 
                         return;
                     } break;
-                    case IOMAN_WRITE: break; // printf("ioman_write()\n"); break;
+                    case IOMAN_WRITE: {
+                        uint32_t fd = iop->r[4];
+                        uint32_t ptr = iop->r[5];
+                        uint32_t size = iop->r[6] & 0xfff;
+
+                        if (fd != 1)
+                            break;
+
+                        char c = iop_bus_read8(iop, ptr++);
+                        int cnt = 0;
+
+                        while (c && ((cnt++) != size)) {
+                            iop->kputchar(iop->kputchar_udata, c);
+
+                            fflush(stdout);
+
+                            c = iop_bus_read8(iop, ptr++);
+                        }
+
+                        iop->pc = iop->r[31];
+                        iop->next_pc = iop->pc + 4;
+                        iop->r[2] = size;
+
+                        return;
+                    } break;
                     // case IOMAN_LSEEK: printf("ioman_lseek()\n"); break;
                     // case IOMAN_IOCTL: printf("ioman_ioctl()\n"); break;
                     // case IOMAN_REMOVE: printf("ioman_remove()\n"); break;

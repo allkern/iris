@@ -19,9 +19,6 @@ void ps2_iop_intc_init(struct ps2_iop_intc* intc, struct iop_state* iop) {
 void ps2_iop_intc_irq(struct ps2_iop_intc* intc, int dev) {
     intc->stat |= dev;
 
-    // if ((intc->stat & intc->mask) & IOP_INTC_DMA)
-    //     intc->iop->p = 100;
-
     if (intc->ctrl && (intc->stat & intc->mask)) {
         iop_set_irq_pending(intc->iop);
     } else {
