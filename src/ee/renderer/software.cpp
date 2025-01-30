@@ -48,15 +48,15 @@ void software_set_size(software_state* ctx, int width, int height) {
     int sh = (ctx->gs->ctx->scay1 - ctx->gs->ctx->scay0) + 1;
     int magh = ((display >> 23) & 7) + 1;
     int magv = ((display >> 27) & 3) + 1;
-    int dw = ((display >> 32) & 0xfff) / magh; // ((dispfb >> 9) & 0x3f) << 6;
-    int dh = ((display >> 44) & 0x7ff) / magv;
+    ctx->tex_w = ((display >> 32) & 0xfff) / magh; // ((dispfb >> 9) & 0x3f) << 6;
+    ctx->tex_h = ((display >> 44) & 0x7ff) / magv;
 
     ctx->texture = SDL_CreateTexture(
         ctx->renderer,
         format,
         SDL_TEXTUREACCESS_STREAMING,
-        dw,
-        dh
+        ctx->tex_w,
+        ctx->tex_h
     );
 
     SDL_SetTextureScaleMode(ctx->texture, SDL_ScaleModeLinear);
@@ -146,12 +146,12 @@ static inline uint32_t gs_read_fb(struct ps2_gs* gs, int x, int y) {
 
 static inline uint32_t gs_read_zb(struct ps2_gs* gs, int x, int y) {
     switch (gs->ctx->zbpsm) {
-        case GS_ZSMZ32:
+        case GS_PSMZ32:
             return gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)];
-        case GS_ZSMZ24:
+        case GS_PSMZ24:
             return gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)] & 0xffffff;
-        case GS_ZSMZ16:
-        case GS_ZSMZ16S: {
+        case GS_PSMZ16:
+        case GS_PSMZ16S: {
             int shift = (x & 1) << 4;
             uint32_t mask = 0xffff << shift;
             uint32_t data = gs->vram[gs->ctx->zbp + (x >> 1) + (y * (gs->ctx->fbw >> 1))];
@@ -324,8 +324,14 @@ static int gs_psmt4_unswizzle_sh[] = {
 
 static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
     switch (gs->ctx->tbpsm) {
-        case GS_PSMCT32:
+        case GS_PSMCT32: {
+            uint32_t addr = gs->ctx->tbp0 + u + (v * gs->ctx->tbw);
+
+            if (addr >= 0x100000)
+                break;
+
             return gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)];
+        }
         case GS_PSMCT24:
             return gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)] & 0xffffff;
         case GS_PSMCT16:
@@ -337,15 +343,30 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
             return (data & (0xffff << shift)) >> shift;
         } break;
         case GS_PSMT8: {
-            int entry = (u & 15) + ((v & 3) * 16);
+            // 1 page = 128x64px block = 16x16px
+            // 1 block = 256 bytes = 64 words
+            // tbp = 0
+            // <------------- 128 ------------->
+            // +---+---+---+---+---+---+---+---+ ^
+            // | 0 | 1 | 4 | 5 |16 |17 |20 |21 | |
+            // +---+---+---+---+---+---+---+---+ |
+            // | 2 | 3 | 6 | 7 |18 |19 |22 |23 | |
+            // +---+---+---+---+---+---+---+---+ 64
+            // | 8 | 9 |10 |11 |24 |25 |28 |29 | |
+            // +---+---+---+---+---+---+---+---+ |
+            // |12 |13 |14 |15 |26 |27 |30 |31 | |
+            // +---+---+---+---+---+---+---+---+ v
+            // tbp offset = unswizzle_block(u, v) * 64 words
+            // blk offset = unswizzle_column(u, v)
+            // addr = tbp + tbp offset + blk offset
+            uint32_t addr = gs->ctx->tbp0 + (u >> 2) + (v * (gs->ctx->tbw >> 2));
 
-            int off = gs_psmt8_c02_unswizzle_off[entry];
-            int shift = gs_psmt8_c02_unswizzle_sh[entry];
-
-            shift = (u & 3) << 3;
+            if (addr >= 0x100000)
+                break;
 
             uint32_t data = gs->vram[gs->ctx->tbp0 + (u >> 2) + (v * (gs->ctx->tbw >> 2))];
 
+            int shift = (u & 3) << 3;
             int index = (data & (0xff << shift)) >> shift;
 
             return gs_read_cb(gs, index);
@@ -356,14 +377,14 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
             return gs_read_cb(gs, data >> 24);
         } break;
         case GS_PSMT4: {
-            int col = v & 1;
-            int entry = (u & 31);// + ((v & 3) * 32);
-            int off = col ? gs_psmt4_c13_unswizzle_off[entry] : gs_psmt4_c02_unswizzle_off[entry];
-            int shift = gs_psmt4_unswizzle_sh[entry];
+            int shift = (u & 7) << 2;
 
-            shift = (u & 7) << 2;
+            uint32_t addr = gs->ctx->tbp0 + (u >> 3) + (v * (gs->ctx->tbw >> 3));
 
-            uint32_t data = gs->vram[gs->ctx->tbp0 + (u >> 3) + (v * (gs->ctx->tbw >> 3))];
+            if (addr >= 0x100000)
+                break;
+
+            uint32_t data = gs->vram[addr];
 
             int index = (data & (0xf << shift)) >> shift;
 
@@ -582,6 +603,7 @@ void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window, S
     ctx->window = window;
     ctx->renderer = renderer;
     ctx->gs = gs;
+    ctx->scale = 1.5f;
 }
 
 static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
@@ -601,12 +623,15 @@ extern "C" void software_render_point(struct ps2_gs* gs, void* udata) {
     vert.x -= gs->ctx->ofx;
     vert.y -= gs->ctx->ofy;
 
+    if (!gs_test_scissor(gs, vert.x, vert.y))
+        return;
+
     int tr = gs_test_pixel(gs, vert.x, vert.y, vert.z, vert.a);
 
     if (tr == TR_FAIL)
         return;
 
-    // gs_write_fb(gs, vert.x, vert.y, vert.rgbaq & 0xffffffff);
+    gs_write_fb(gs, vert.x, vert.y, vert.rgbaq & 0xffffffff);
 
     return;
 
@@ -875,10 +900,13 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     //     v1.rgbaq & 0xffffffff
     // );
 
-    // printf("gs: TB format=%d tbp=%x tbw=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d\n",
+    // printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d\n",
+    //     gs->ctx->tbpsm,
     //     gs->ctx->tbpsm,
     //     gs->ctx->tbp0,
     //     gs->ctx->tbw,
+    //     gs->ctx->usize,
+    //     gs->ctx->vsize,
     //     gs->ctx->cbpsm,
     //     gs->ctx->cbp,
     //     gs->ctx->csm,
@@ -976,6 +1004,13 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     uint64_t display = en1 ? ctx->gs->display1 : ctx->gs->display2;
     uint64_t dispfb = en1 ? ctx->gs->dispfb1 : ctx->gs->dispfb2;
 
+    // if ((gs->csr & 0x2000) && en2) {
+    //     display = ctx->gs->display2;
+    //     dispfb = ctx->gs->dispfb2;
+    // }
+
+    // gs->csr ^= 0x2000;
+
     int dy = (display >> 12) & 0x7ff;
     uint32_t dfbp = (dispfb & 0x1ff) << 11;
     uint32_t dfbw = ((dispfb >> 9) & 0x3f) << 6;
@@ -994,15 +1029,40 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     // printf("fbp=%x fbw=%d fbpsm=%d stride=%d dy=%d\n", dfbp, dfbw, dfbpsm, stride, dy);
 
-    if (!ctx->texture) {
-        SDL_SetRenderDrawColor(ctx->renderer, 0, 0, 0, 255);
-        SDL_RenderClear(ctx->renderer);
-    } else {
-        SDL_UpdateTexture(ctx->texture, NULL, ptr, stride);
-        SDL_RenderCopy(ctx->renderer, ctx->texture, NULL, NULL);
-    }
+    if (!ctx->texture)
+        return;
 
-    SDL_RenderPresent(ctx->renderer);
+    SDL_Rect size, rect;
+
+    SDL_GetWindowSize(ctx->window, &size.w, &size.h);
+    SDL_QueryTexture(ctx->texture, NULL, NULL, &rect.w, &rect.h);
+
+    rect.w *= ctx->scale;
+    rect.h *= ctx->scale;
+    rect.x = (size.w / 2) - (rect.w / 2);
+    rect.y = (size.h / 2) - (rect.h / 2);
+
+    SDL_UpdateTexture(ctx->texture, NULL, ptr, stride);
+    SDL_RenderCopy(ctx->renderer, ctx->texture, NULL, &rect);
+}
+
+static inline int gs_pixels_to_size(int fmt, int px) {
+    switch (fmt) {
+        case GS_PSMCT32:
+        case GS_PSMCT24:
+        case GS_PSMT8H:
+        case GS_PSMT4HL:
+        case GS_PSMT4HH:
+            return px;
+        case GS_PSMCT16:
+        case GS_PSMCT16S:
+            return px >> 1;
+        case GS_PSMT8:
+            return px >> 2;
+        case GS_PSMT4:
+            return px >> 3;
+    }
+    return px;
 }
 
 extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
@@ -1026,33 +1086,165 @@ extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
     ctx->dy = 0;
     ctx->sx = 0;
     ctx->sy = 0;
+    ctx->px = 0;
 
     ctx->dbp <<= 6;
     ctx->dbw <<= 6;
     ctx->sbp <<= 6;
     ctx->sbw <<= 6;
 
+    ctx->dbw = gs_pixels_to_size(ctx->dpsm, ctx->dbw);
+    ctx->sbw = gs_pixels_to_size(ctx->spsm, ctx->sbw);
+
+    ctx->psmct24_data = 0;
+    ctx->psmct24_shift = 0;
+
+    printf("dbp=%x dbw=%d dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
+        ctx->dbp,
+        ctx->dbw,
+        ctx->dpsm,
+        ctx->dsax,
+        ctx->dsay,
+        ctx->rrw,
+        ctx->rrh
+    );
+
     if (ctx->xdir == 2) {
         software_vram_blit(gs, ctx);
+    }
+}
+
+static inline void gs_write_psmt4(struct ps2_gs* gs, software_state* ctx, uint32_t index) {
+    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+
+    addr += (ctx->dx >> 3) + (ctx->dy * ctx->dbw);
+    
+    uint32_t mask = 0xf << ((ctx->dx & 7) * 4);
+    uint32_t data = gs->vram[addr] & ~mask;
+
+    gs->vram[addr] = data | (index << ((ctx->dx & 7) * 4));
+
+    ctx->dx++;
+
+    if (ctx->dx == ctx->rrw) {
+        ctx->dx = 0;
+        ctx->dy++;
+    }
+}
+
+static inline void gs_write_psmt8(struct ps2_gs* gs, software_state* ctx, uint32_t index) {
+    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+
+    addr += (ctx->dx >> 2) + (ctx->dy * ctx->dbw);
+    
+    uint32_t mask = 0xff << ((ctx->dx & 3) * 8);
+    uint32_t data = gs->vram[addr] & ~mask;
+
+    gs->vram[addr] = data | (index << ((ctx->dx & 3) * 8));
+
+    ctx->dx++;
+
+    if (ctx->dx == ctx->rrw) {
+        ctx->dx = 0;
+        ctx->dy++;
+    }
+}
+
+static inline void gs_store_hwreg_psmt4(struct ps2_gs* gs, software_state* ctx) {
+    for (int i = 0; i < 16; i++) {
+        uint64_t index = (gs->hwreg >> (i * 4)) & 0xf;
+
+        gs_write_psmt4(gs, ctx, index);
+    }
+}
+
+static inline void gs_store_hwreg_psmt8(struct ps2_gs* gs, software_state* ctx) {
+    for (int i = 0; i < 8; i++) {
+        uint64_t index = (gs->hwreg >> (i * 8)) & 0xff;
+
+        gs_write_psmt8(gs, ctx, index);
+    }
+}
+
+static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_state* ctx) {
+    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+
+    uint32_t data[2] = {
+        gs->hwreg & 0xffffffff,
+        gs->hwreg >> 32
+    };
+
+    for (int i = 0; i < 2; i++) {
+        gs->vram[addr + ctx->dx++ + (ctx->dy * ctx->dbw)] = data[i];
+
+        if (ctx->dx == ctx->rrw) {
+            ctx->dx = 0;
+            ctx->dy++;
+        }
+    }
+}
+
+static inline void gs_psmct24_write(struct ps2_gs* gs, software_state* ctx, uint32_t data) {
+    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+
+    gs->vram[addr + (ctx->dx++) + (ctx->dy * ctx->dbw)] = data;
+
+    if (ctx->dx == ctx->rrw) {
+        ctx->dx = 0;
+        ++ctx->dy;
+    }
+}
+
+static inline void gs_store_hwreg_psmct24(struct ps2_gs* gs, software_state* ctx) {
+    switch (ctx->psmct24_shift++) {
+        case 0: {
+            gs_psmct24_write(gs, ctx, gs->hwreg & 0xffffff);
+            gs_psmct24_write(gs, ctx, (gs->hwreg >> 24) & 0xffffff);
+            
+            ctx->psmct24_data = gs->hwreg >> 48;
+        } break;
+
+        case 1: {
+            gs_psmct24_write(gs, ctx, ctx->psmct24_data | ((gs->hwreg & 0xff) << 16));
+            gs_psmct24_write(gs, ctx, (gs->hwreg >> 8) & 0xffffff);
+            gs_psmct24_write(gs, ctx, (gs->hwreg >> 32) & 0xffffff);
+
+            ctx->psmct24_data = gs->hwreg >> 56;
+        } break;
+
+        case 2: {
+            gs_psmct24_write(gs, ctx, ctx->psmct24_data | ((gs->hwreg & 0xffff) << 8));
+            gs_psmct24_write(gs, ctx, (gs->hwreg >> 16) & 0xffffff);
+            gs_psmct24_write(gs, ctx, (gs->hwreg >> 40) & 0xffffff);
+
+            ctx->psmct24_shift = 0;
+        } break;
     }
 }
 
 extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
     software_state* ctx = (software_state*)udata;
 
-    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+    switch (ctx->dpsm) {
+        case GS_PSMCT32: {
+            gs_store_hwreg_psmct32(gs, ctx);
+        } break;
 
-    addr += ctx->dx + (ctx->dy * ctx->dbw);
+        case GS_PSMCT24: {
+            gs_store_hwreg_psmct24(gs, ctx);
+        } break;
 
-    gs->vram[addr + 0] = gs->hwreg & 0xffffffff;
-    gs->vram[addr + 1] = gs->hwreg >> 32;
+        case GS_PSMT8: {
+            gs_store_hwreg_psmt8(gs, ctx);
+        } break;
 
-    ctx->dx += 2;
+        case GS_PSMT4: {
+            gs_store_hwreg_psmt4(gs, ctx);
+        } break;
 
-    if (ctx->dx >= ctx->rrw) {
-        ctx->dx = 0;
-
-        ++ctx->dy;
+        default: {
+            gs_store_hwreg_psmct32(gs, ctx);
+        } break;
     }
 }
 

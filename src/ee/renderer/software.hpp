@@ -13,12 +13,21 @@ struct software_state {
     unsigned int rrh, rrw;
     unsigned int dir, xdir;
     unsigned int sx, sy;
-    unsigned int dx, dy;
+    unsigned int dx, dy, px;
+
+    uint32_t psmct24_data;
+    uint32_t psmct24_shift;
 
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* texture = nullptr;
     struct ps2_gs* gs;
+
+    int tex_w = 0;
+    int tex_h = 0;
+    bool keep_aspect_ratio = true;
+    bool integer_scaling = true;
+    float scale = 1.5;
 };
 
 void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_Renderer* renderer);
