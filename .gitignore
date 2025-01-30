@@ -2,9 +2,11 @@
 bin/
 tools/
 elf/
+roms/
 main2.cpp
 compare
 compare.cpp
+imgui.ini
 *.expected
 *.dump
 *.cue
