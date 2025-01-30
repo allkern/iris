@@ -50,7 +50,7 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, uint32_t d
 void ps2_ee_timers_write32(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data) {
     int t = (addr >> 11) & 3;
 
-    printf("ee: timer %d write %08x to %02x\n", t, data, addr & 0xff);
+    // printf("ee: timer %d write %08x to %02x\n", t, data, addr & 0xff);
 
     switch (addr & 0xff) {
         case 0x00: timers->timer[t].counter = data & 0xffff; return;
@@ -104,9 +104,9 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->mode |= 0x400;
 
         if (t->mode & 0x100) {
-            printf("ee: timer %d compare IRQ\n", timer);
+            // printf("ee: timer %d compare IRQ\n", timer);
 
-            // ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
+            ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
 
         if (t->mode & 0x40) {
@@ -119,7 +119,7 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->counter -= 0xffff;
 
         if (t->mode & 0x200) {
-            printf("ee: timer %d overflow IRQ\n", timer);
+            // printf("ee: timer %d overflow IRQ\n", timer);
 
             // ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
