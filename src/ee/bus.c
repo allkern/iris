@@ -81,6 +81,8 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
     MAP_MEM_READ(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_READ(8, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_READ(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
+    MAP_REG_READ(32, 0x10008000, 0x1000EFFF, dmac, dmac);
+    MAP_REG_READ(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     printf("bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
@@ -96,6 +98,8 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
     MAP_MEM_READ(16, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_READ(16, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+
+    if (addr == 0x1a000010) return 0xffff;
 
     switch (addr) {
         case 0x1f803800: return 0;
@@ -179,8 +183,9 @@ uint64_t ee_bus_read64(void* udata, uint32_t addr) {
     MAP_REG_READ(64, 0x12000000, 0x12001FFF, gs, gs);
     MAP_REG_READ(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
+    MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers); // Reuse 32-bit function
 
-    printf("bus: Unhandled 64-bit read from physical address 0x%08x\n", addr); exit(1);
+    printf("bus: Unhandled 64-bit read from physical address 0x%08x\n", addr); // exit(1);
 
     return 0;
 }
@@ -207,6 +212,8 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
+    MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
+    MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
 
     if (addr == 0x1000f180) { bus->kputchar(bus->kputchar_udata, data & 0xff); return; }
 
