@@ -58,7 +58,7 @@ This console is significantly more complex compared to the PS1, here's a rough l
 - 🟢 INTC
 - 🟡 Timers
 - 🟡 CDVD
-- 🔴 SIO2 (controllers and Memory Cards)
+- 🟡 SIO2 (controllers and Memory Cards)
 - 🔴 SPU2
 - 🔴 DEV9
 - 🔴 USB/FireWire?
