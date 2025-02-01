@@ -351,14 +351,12 @@ static inline void ee_i_addas(struct ee_state* ee) {
 static inline void ee_i_addi(struct ee_state* ee) {
     int32_t s = EE_RS;
     int32_t t = SE3216(EE_D_I16);
+    int32_t r;
 
-    int32_t r = s + t;
-    uint32_t o = (s ^ r) & (t ^ r);
-
-    if (o & 0x80000000) {
+    if (__builtin_sadd_overflow(s, t, &r)) {
         ee_exception_level1(ee, CAUSE_EXC1_OV);
     } else {
-        EE_RD = SE6432(r);
+        EE_RT = SE6432(r);
     }
 }
 static inline void ee_i_addiu(struct ee_state* ee) {
@@ -797,7 +795,9 @@ static inline void ee_i_maddu1(struct ee_state* ee) {
 
     EE_RD = EE_LO1;
 }
-static inline void ee_i_maxs(struct ee_state* ee) { printf("ee: maxs unimplemented\n"); exit(1); }
+static inline void ee_i_maxs(struct ee_state* ee) {
+    EE_FD = fmaxf(EE_FS, EE_FT);
+}
 static inline void ee_i_mfc0(struct ee_state* ee) {
     EE_RT32 = ee->cop0_r[EE_D_RD];
 }
@@ -819,7 +819,9 @@ static inline void ee_i_mflo1(struct ee_state* ee) {
 static inline void ee_i_mfsa(struct ee_state* ee) {
     EE_RD = ee->sa;
 }
-static inline void ee_i_mins(struct ee_state* ee) { printf("ee: mins unimplemented\n"); exit(1); }
+static inline void ee_i_mins(struct ee_state* ee) {
+    EE_FD = fminf(EE_FS, EE_FT);
+}
 static inline void ee_i_movn(struct ee_state* ee) {
     if (EE_RT) EE_RD = EE_RS;
 }
