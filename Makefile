@@ -26,6 +26,7 @@ CSRC += $(wildcard src/iop/*.c)
 CSRC += $(wildcard src/shared/*.c)
 CSRC += $(wildcard src/dev/*.c)
 CSRC += $(wildcard gl3w/src/*.c)
+CSRC += $(wildcard frontend/tfd/*.c)
 COBJ := $(CSRC:.c=.o)
 
 all: $(OUTPUT_DIR) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)
