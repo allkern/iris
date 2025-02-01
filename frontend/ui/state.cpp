@@ -618,7 +618,7 @@ void show_ee_state(lunar::instance* lunar) {
 void show_iop_state(lunar::instance* lunar) {
     using namespace ImGui;
 
-    if (Begin("IOP state", &lunar->show_ee_state, ImGuiWindowFlags_MenuBar)) {
+    if (Begin("IOP state", &lunar->show_iop_state, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {
