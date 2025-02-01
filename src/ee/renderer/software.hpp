@@ -5,6 +5,21 @@
 
 #include <SDL.h>
 
+enum : int {
+    // Keeps aspect ratio by native resolution
+    SOFTWARE_ASPECT_NATIVE,
+    // Stretch to window (disregard aspect, disregard scale)
+    SOFTWARE_ASPECT_STRETCH,
+    // Stretch to window (keep aspect, disregard scale)
+    SOFTWARE_ASPECT_STRETCH_KEEP,
+    // Force 4:3
+    SOFTWARE_ASPECT_4_3,
+    // Force 16:9
+    SOFTWARE_ASPECT_16_9,
+    // Use NVRAM settings (same as SOFTWARE_ASPECT_STRETCH_KEEP for now)
+    SOFTWARE_ASPECT_AUTO
+};
+
 struct software_state {
     unsigned int sbp, dbp;
     unsigned int sbw, dbw;
@@ -25,13 +40,25 @@ struct software_state {
 
     int tex_w = 0;
     int tex_h = 0;
-    bool keep_aspect_ratio = true;
-    bool integer_scaling = true;
+    int disp_w = 0;
+    int disp_h = 0;
+    int disp_fmt = 0;
+    int aspect_mode = 0; // Native
+    bool integer_scaling = false;
     float scale = 1.5;
+    bool bilinear = true;
 };
 
 void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_Renderer* renderer);
 void software_set_size(software_state* ctx, int width, int height);
+void software_set_scale(software_state* ctx, float scale);
+void software_set_aspect_mode(software_state* ctx, int aspect_mode);
+void software_set_integer_scaling(software_state* ctx, bool integer_scaling);
+void software_set_bilinear(software_state* ctx, bool bilinear);
+void software_get_viewport_size(software_state* ctx, int* w, int* h);
+void software_get_display_size(software_state* ctx, int* w, int* h);
+void software_get_display_format(software_state* ctx, int* fmt);
+const char* software_get_name(software_state* ctx);
 
 extern "C" {
 void software_render_point(struct ps2_gs* gs, void* udata);

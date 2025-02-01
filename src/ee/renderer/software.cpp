@@ -29,6 +29,8 @@ void software_set_size(software_state* ctx, int width, int height) {
     uint32_t dfbw1 = ((ctx->gs->dispfb1 >> 9) & 0x3f) << 6;
     uint32_t dfbpsm1 = (ctx->gs->dispfb1 >> 15) & 0x1f;
 
+    ctx->disp_fmt = dfbpsm1;
+
     switch (dfbpsm1) {
         case GS_PSMCT32: format = SDL_PIXELFORMAT_ABGR8888; break;
         case GS_PSMCT24: format = SDL_PIXELFORMAT_ABGR8888; break;
@@ -48,8 +50,15 @@ void software_set_size(software_state* ctx, int width, int height) {
     int sh = (ctx->gs->ctx->scay1 - ctx->gs->ctx->scay0) + 1;
     int magh = ((display >> 23) & 7) + 1;
     int magv = ((display >> 27) & 3) + 1;
-    ctx->tex_w = ((display >> 32) & 0xfff) / magh; // ((dispfb >> 9) & 0x3f) << 6;
-    ctx->tex_h = ((display >> 44) & 0x7ff) / magv;
+    ctx->tex_w = (((display >> 32) & 0xfff) / magh) + 1;
+    ctx->tex_h = (((display >> 44) & 0x7ff) / magv) + 1;
+
+    if (((display >> 32) & 0xfff) == 0) {
+        ctx->tex_w = 0;
+        ctx->tex_h = 0;
+
+        return;
+    }
 
     ctx->texture = SDL_CreateTexture(
         ctx->renderer,
@@ -59,13 +68,45 @@ void software_set_size(software_state* ctx, int width, int height) {
         ctx->tex_h
     );
 
-    SDL_SetTextureScaleMode(ctx->texture, SDL_ScaleModeLinear);
-
     // printf("software: width=%d height=%d format=%d display=%08x\n",
-    //     dw,
-    //     dh,
+    //     ((display >> 32) & 0xfff),
+    //     ((display >> 44) & 0x7ff),
     //     format, display
     // );
+}
+
+void software_set_scale(software_state* ctx, float scale) {
+    ctx->scale = scale;
+}
+
+void software_set_aspect_mode(software_state* ctx, int aspect_mode) {
+    ctx->aspect_mode = aspect_mode;
+}
+
+void software_set_integer_scaling(software_state* ctx, bool integer_scaling) {
+    ctx->integer_scaling = integer_scaling;
+}
+
+void software_set_bilinear(software_state* ctx, bool bilinear) {
+    ctx->bilinear = bilinear;
+}
+
+void software_get_viewport_size(software_state* ctx, int* w, int* h) {
+    *w = ctx->tex_w;
+    *h = ctx->tex_h;
+}
+
+void software_get_display_size(software_state* ctx, int* w, int* h) {
+    *w = ctx->disp_w;
+    *h = ctx->disp_h;
+}
+
+void software_get_display_format(software_state* ctx, int* fmt) {
+    *fmt = ctx->disp_fmt;
+}
+
+const char* software_get_name(software_state* ctx) {
+    return "Software";
 }
 
 #define CLAMP(v, l, u) (((v) > (u)) ? (u) : (((v) < (l)) ? (l) : (v)))
@@ -146,12 +187,12 @@ static inline uint32_t gs_read_fb(struct ps2_gs* gs, int x, int y) {
 
 static inline uint32_t gs_read_zb(struct ps2_gs* gs, int x, int y) {
     switch (gs->ctx->zbpsm) {
-        case GS_PSMZ32:
+        case GS_ZSMZ32:
             return gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)];
-        case GS_PSMZ24:
+        case GS_ZSMZ24:
             return gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)] & 0xffffff;
-        case GS_PSMZ16:
-        case GS_PSMZ16S: {
+        case GS_ZSMZ16:
+        case GS_ZSMZ16S: {
             int shift = (x & 1) << 4;
             uint32_t mask = 0xffff << shift;
             uint32_t data = gs->vram[gs->ctx->zbp + (x >> 1) + (y * (gs->ctx->fbw >> 1))];
@@ -743,10 +784,12 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
     int w1_row = EDGE(v2, v0, p) + bias1;
     int w2_row = EDGE(v0, v1, p) + bias2;
 
-    // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) iip=%d tme=%d fst=%d abe=%d tfx=%d tcc=%d zte=%d\n",
+    // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) min=(%d,%d) max=(%d,%d) iip=%d tme=%d fst=%d abe=%d tfx=%d tcc=%d zte=%d\n",
     //     v0.x, v0.y, v0.z,
     //     v1.x, v1.y, v1.z,
     //     v2.x, v2.y, v2.z,
+    //     xmin, ymin,
+    //     xmax, ymax,
     //     gs->iip,
     //     gs->tme,
     //     gs->fst,
@@ -1037,10 +1080,43 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     SDL_GetWindowSize(ctx->window, &size.w, &size.h);
     SDL_QueryTexture(ctx->texture, NULL, NULL, &rect.w, &rect.h);
 
-    rect.w *= ctx->scale;
-    rect.h *= ctx->scale;
+    float scale = ctx->integer_scaling ? floorf(ctx->scale) : ctx->scale;
+
+    switch (ctx->aspect_mode) {
+        case SOFTWARE_ASPECT_NATIVE: {
+            rect.w *= scale;
+            rect.h *= scale;
+        } break;
+
+        case SOFTWARE_ASPECT_4_3: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (3.0f / 4.0f);
+        } break;
+
+        case SOFTWARE_ASPECT_16_9: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (9.0f / 16.0f);
+        } break;
+
+        case SOFTWARE_ASPECT_STRETCH: {
+            rect.w = size.w;
+            rect.h = size.h;
+        } break;
+
+        case SOFTWARE_ASPECT_AUTO:
+        case SOFTWARE_ASPECT_STRETCH_KEEP: {
+            rect.h = size.h;
+            rect.w = (float)rect.h * (4.0f / 3.0f);
+        } break;
+    }
+
+    ctx->disp_w = rect.w;
+    ctx->disp_h = rect.h;
+
     rect.x = (size.w / 2) - (rect.w / 2);
     rect.y = (size.h / 2) - (rect.h / 2);
+
+    SDL_SetTextureScaleMode(ctx->texture, ctx->bilinear ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
 
     SDL_UpdateTexture(ctx->texture, NULL, ptr, stride);
     SDL_RenderCopy(ctx->renderer, ctx->texture, NULL, &rect);
