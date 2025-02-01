@@ -8,6 +8,9 @@
 
 namespace lunar {
 
+bool ee_follow = true;
+bool iop_follow = true;
+
 void show_logs(lunar::instance* lunar, const std::vector <std::string>& logs) {
     using namespace ImGui;
 
@@ -30,6 +33,10 @@ void show_logs(lunar::instance* lunar, const std::vector <std::string>& logs) {
             } SameLine(0.0, 0.0);
 
             Text(logs[i].c_str());
+        }
+
+        if (iop_follow) {
+            SetScrollHereY(1.0f);
         }
 
         EndTable();
@@ -66,7 +73,19 @@ void show_ee_logs(lunar::instance* lunar) {
 void show_iop_logs(lunar::instance* lunar) {
     using namespace ImGui;
 
-    if (Begin("IOP logs", &lunar->show_iop_logs)) {
+    if (Begin("IOP logs", &lunar->show_iop_logs, ImGuiWindowFlags_MenuBar)) {
+        if (BeginMenuBar()) {
+            if (BeginMenu("Settings")) {
+                if (MenuItem(iop_follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
+                    iop_follow = !iop_follow;
+                }
+
+                EndMenu();
+            }
+
+            EndMenuBar();
+        }
+
         if (Button(ICON_MS_DELETE)) {
             lunar->iop_log.clear();
         } SameLine();
