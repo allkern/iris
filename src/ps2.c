@@ -180,7 +180,7 @@ void ps2_cycle(struct ps2_state* ps2) {
     // if (ps2->ee->opcode == 0x03e00008)
     //     if (depth > 0) --depth;
 
-    sched_tick(ps2->sched, 1);
+    sched_tick(ps2->sched, 8);
     ee_cycle(ps2->ee);
     ps2_ee_timers_tick(ps2->ee_timers);
 
