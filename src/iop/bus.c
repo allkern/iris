@@ -93,24 +93,24 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     //     return 0xffff;
     // }
     // Stub SPU2 status reg?
-    if (addr == 0x1F900744) {
-        if (r744) {
-            return 0x80;
-        } else {
-            r744 = 1;
-            return 0;
-        }
-    }
-    if (addr == 0x1F900344) {
-        if (r344) {
-            return 0x80;
-        } else {
-            r344 = 1;
-            return 0;
-        }
-    }
+    // if (addr == 0x1F900744) {
+    //     if (r744) {
+    //         return 0x80;
+    //     } else {
+    //         r744 = 1;
+    //         return 0;
+    //     }
+    // }
+    // if (addr == 0x1F900344) {
+    //     if (r344) {
+    //         return 0x80;
+    //     } else {
+    //         r344 = 1;
+    //         return 0;
+    //     }
+    // }
 
-    // printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
+    printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
