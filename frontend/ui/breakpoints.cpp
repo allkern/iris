@@ -1,0 +1,200 @@
+#include <vector>
+#include <string>
+#include <cctype>
+
+#include "instance.hpp"
+
+#include "res/IconsMaterialSymbols.h"
+
+namespace lunar {
+
+const char* cpu_names[] = {
+    "EE",
+    "IOP"
+};
+
+static breakpoint* selected = nullptr;
+static breakpoint editable;
+
+void show_breakpoints_table(lunar::instance* lunar) {
+    using namespace ImGui;
+
+    if (BeginTable("##breakpoints", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable)) {
+        PushFont(lunar->font_small_code);
+        TableSetupColumn("Address");
+        TableSetupColumn("CPU");
+        TableSetupColumn("Flags");
+        TableSetupColumn("Size");
+        TableSetupColumn("Actions");
+        TableHeadersRow();
+        PopFont();
+
+        TableNextRow();
+
+        int i = 0;
+
+        for (breakpoint& b : lunar->breakpoints) {
+            TableSetColumnIndex(0);
+
+            char buf[16]; sprintf(buf, "##d%x", i);
+
+            if (Selectable(buf, &b == selected, ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_SpanAllColumns)) {
+                selected = &b;
+            } SameLine(0.0, 0.0);
+
+            PushFont(lunar->font_code);
+
+            Text("%08x", b.addr);
+
+            PopFont();
+
+            TableSetColumnIndex(1);
+
+            Text(b.cpu == BKPT_CPU_EE ? "EE" : "IOP");
+
+            TableSetColumnIndex(2);
+
+            PushFont(lunar->font_code);
+
+            Text("%c%c%c",
+                b.cond_r ? 'R' : '.',
+                b.cond_w ? 'W' : '.',
+                b.cond_x ? 'X' : '.'
+            );
+
+            PopFont();
+
+            TableSetColumnIndex(3);
+
+            Text("%d", b.size);
+
+            TableSetColumnIndex(4);
+
+            sprintf(buf, b.enabled ? ICON_MS_CHECK "##%x" : "##%x", i);
+
+            if (Selectable(buf, false, 0, ImVec2(20, 0))) {
+                b.enabled = !b.enabled;
+            } SameLine();
+
+            sprintf(buf, ICON_MS_DELETE "##%x", i);
+
+            if (Selectable(buf, false, 0, ImVec2(20, 0))) {
+                selected = nullptr;
+
+                lunar->breakpoints.erase(lunar->breakpoints.begin() + i);
+            }
+
+            i++;
+
+            TableNextRow();
+        }
+
+        EndTable();
+    }
+}
+
+void show_breakpoint_editor(lunar::instance* lunar) {
+    using namespace ImGui;
+
+    if (BeginCombo("CPU", cpu_names[editable.cpu], ImGuiComboFlags_HeightSmall)) {
+        for (int i = 0; i < 2; i++) {
+            if (Selectable(cpu_names[i], editable.cpu == i)) {
+                editable.cpu = i;
+            }
+        }
+
+        EndCombo();
+    }
+
+    static char buf[32];
+
+    PushFont(lunar->font_code);
+
+    if (InputText("##address", buf, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (buf[0]) {
+            editable.addr = strtoul(buf, NULL, 16);
+        }
+    } SameLine();
+
+    PopFont();
+
+    Text("Address");
+
+    Checkbox("##enabled", &editable.enabled); SameLine();
+    Checkbox("##r", &editable.cond_r); SameLine();
+    Checkbox("##w", &editable.cond_w); SameLine();
+    Checkbox("Flags", &editable.cond_x);
+
+    BeginDisabled(!selected);
+
+    if (Button("Edit breakpoint")) {
+        editable.addr = strtoul(buf, NULL, 16);
+
+        *selected = editable;
+    } SameLine();
+
+    EndDisabled();
+
+    if (Button("New breakpoint")) {
+        editable.addr = strtoul(buf, NULL, 16);
+
+        lunar->breakpoints.push_back(editable);
+        selected = &lunar->breakpoints.back();
+    }
+}
+
+void show_breakpoints(lunar::instance* lunar) {
+    using namespace ImGui;
+
+    if (Begin("Breakpoints", &lunar->show_breakpoints, ImGuiWindowFlags_MenuBar)) {
+        if (BeginMenuBar()) {
+            MenuItem("Settings");
+
+            EndMenuBar();
+        }
+
+        if (Button(ICON_MS_DELETE, ImVec2(50, 0))) {
+            selected = nullptr;
+
+            lunar->breakpoints.clear();
+        } SameLine();
+
+        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+            SetTooltip("Clear all");
+        }
+
+        if (Button(ICON_MS_REMOVE_SELECTION)) {
+            for (breakpoint& b : lunar->breakpoints) {
+                b.enabled = false;
+            }
+        } SameLine();
+
+        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+            SetTooltip("Disable all");
+        }
+
+        if (Button(ICON_MS_SELECT)) {
+            for (breakpoint& b : lunar->breakpoints) {
+                b.enabled = true;
+            }
+        }
+
+        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+            SetTooltip("Enable all");
+        }
+
+        Separator();
+
+        if (BeginChild("##tablechild", ImVec2(0, GetContentRegionAvail().y / 2.0f))) {
+            show_breakpoints_table(lunar);
+        } EndChild();
+
+        SeparatorText("Add breakpoint");
+
+        if (BeginChild("##tablechild2")) {
+            show_breakpoint_editor(lunar);
+        } EndChild();
+    } End();
+}
+
+}

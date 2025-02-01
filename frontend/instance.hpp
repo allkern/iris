@@ -11,8 +11,22 @@
 #include <SDL.h>
 
 #include "ps2.h"
+#include "ee/renderer/software.hpp"
 
 namespace lunar {
+
+enum : int {
+    BKPT_CPU_EE,
+    BKPT_CPU_IOP
+};
+
+struct breakpoint {
+    uint32_t addr;
+    int cpu;
+    bool cond_r, cond_w, cond_x;
+    int size;
+    bool enabled;
+};
 
 struct instance {
     SDL_Window* window = nullptr;
@@ -26,6 +40,8 @@ struct instance {
     unsigned int texture_width;
     unsigned int texture_height;
     uint32_t* texture_buf = nullptr;
+
+    software_state* ctx = nullptr;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
@@ -50,9 +66,17 @@ struct instance {
     bool show_iop_state = false;
     bool show_iop_logs = false;
     bool show_gs_debugger = false;
+    bool show_memory_viewer = false;
+    bool show_status_bar = true;
+    bool show_breakpoints = false;
+    bool fullscreen = false;
+
+    int menubar_height;
 
     std::vector <std::string> ee_log = { "" };
     std::vector <std::string> iop_log = { "" };
+
+    std::vector <breakpoint> breakpoints;
 
     struct ds_state* ds;
 };
@@ -74,5 +98,8 @@ void show_iop_control(lunar::instance* lunar);
 void show_iop_state(lunar::instance* lunar);
 void show_iop_logs(lunar::instance* lunar);
 void show_gs_debugger(lunar::instance* lunar);
+void show_memory_viewer(lunar::instance* lunar);
+void show_status_bar(lunar::instance* lunar);
+void show_breakpoints(lunar::instance* lunar);
 
 }

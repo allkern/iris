@@ -16,6 +16,8 @@
 
 #include <csignal>
 
+#include "imgui_internal.h"
+
 namespace lunar {
 
 uint32_t map_button(SDL_Keycode k) {
@@ -74,25 +76,7 @@ static const ImWchar icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 void handle_scissor_event(void* udata) {
     lunar::instance* lunar = (lunar::instance*)udata;
 
-    // int scax0 = lunar->ps2->gs->scissor_1 & 0x3ff;
-    // int scay0 = (lunar->ps2->gs->scissor_1 >> 32) & 0x3ff;
-    // int scax1 = (lunar->ps2->gs->scissor_1 >> 16) & 0x3ff;
-    // int scay1 = (lunar->ps2->gs->scissor_1 >> 48) & 0x3ff;
-
-    // // printf("sca0=(%d,%d) sca1=(%d,%d) frame_1=%x\n",
-    // //     scax0, scay0,
-    // //     scax1, scay1,
-    // //     lunar->ps2->gs->frame_1
-    // // );
-    
-    // int width = (scax1 - scax0) + 1;
-    // int height = (scay1 - scay0) + 1;
-
-    software_set_size((software_state*)lunar->ps2->gs->backend.udata, 0, 0);
-
-    // opengl_set_size(lunar->renderer_state, width, height, 1.5);
-
-    // SDL_SetWindowSize(lunar->window, width, height);
+    software_set_size(lunar->ctx, 0, 0);
 }
 
 lunar::instance* create();
@@ -223,15 +207,6 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
         SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED
     );
 
-    lunar->texture = SDL_CreateTexture(
-        lunar->renderer,
-        SDL_PIXELFORMAT_ABGR8888,
-        SDL_TEXTUREACCESS_STREAMING,
-        640, 480
-    );
-
-    SDL_SetTextureScaleMode(lunar->texture, SDL_ScaleModeLinear);
-
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
@@ -240,7 +215,6 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
     ImGui::StyleColorsDark();
-    //ImGui::StyleColorsLight();
 
     // Setup Platform/Renderer backends
     ImGui_ImplSDL2_InitForSDLRenderer(lunar->window, lunar->renderer);
@@ -255,11 +229,11 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     config.GlyphOffset = ImVec2(0.0f, 4.0f);
 
     lunar->font_small_code = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 12.0f);
-    lunar->font_code    = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 16.0f);
-    lunar->font_small   = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 12.0f);
-    lunar->font_heading = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 18.0f);
-    lunar->font_body    = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 14.0f);
-    lunar->font_icons   = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 20.0f, &config, icon_range);
+    lunar->font_code       = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 16.0f);
+    lunar->font_small      = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 12.0f);
+    lunar->font_heading    = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 18.0f);
+    lunar->font_body       = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 16.0f);
+    lunar->font_icons      = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 20.0f, &config, icon_range);
 
     io.FontDefault = lunar->font_body;
 
@@ -353,23 +327,9 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
     lunar->ds = ds_sio2_attach(lunar->ps2->sio2, 0);
 
-    // Initialize hardware renderer
-    // lunar->renderer_state = new opengl_state;
-
-    // lunar->ps2->gs->backend.render_point = opengl_render_point;
-    // lunar->ps2->gs->backend.render_line = opengl_render_line;
-    // lunar->ps2->gs->backend.render_line_strip = opengl_render_line_strip;
-    // lunar->ps2->gs->backend.render_triangle = opengl_render_triangle;
-    // lunar->ps2->gs->backend.render_triangle_strip = opengl_render_triangle_strip;
-    // lunar->ps2->gs->backend.render_triangle_fan = opengl_render_triangle_fan;
-    // lunar->ps2->gs->backend.render_sprite = opengl_render_sprite;
-    // lunar->ps2->gs->backend.render = opengl_render;
-    // lunar->ps2->gs->backend.udata = lunar->renderer_state;
-
-    // opengl_init(lunar->renderer_state);
-
     // To-do: Implement backend constructor and destructor
-    lunar->ps2->gs->backend.udata = new software_state;
+    lunar->ctx = new software_state;
+    lunar->ps2->gs->backend.udata = lunar->ctx;
     lunar->ps2->gs->backend.render_point = software_render_point;
     lunar->ps2->gs->backend.render_line = software_render_line;
     lunar->ps2->gs->backend.render_triangle = software_render_triangle;
@@ -379,59 +339,9 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->ps2->gs->backend.transfer_write = software_transfer_write;
     lunar->ps2->gs->backend.transfer_read = software_transfer_read;
 
-    software_init((software_state*)lunar->ps2->gs->backend.udata, lunar->ps2->gs, lunar->window, lunar->renderer);
-
-    // lunar->ps2->gs->vqi = 0;
-    // lunar->ps2->gs->prim = 5;
-
-    // int cx = 640 / 2;
-    // int cy = 480 / 2;
-    // int r = 200;
-    // float p = 0.25f * M_PI;
-
-    // lunar->ps2->gs->rgbaq = 0xff0000; gs_write_vertex(lunar->ps2->gs, (320 << 4) | (240 << 20), 0);
-
-    // int m = 8;
-
-    // for (int i = 0; i < m; i++) {
-    //     uint64_t px = (r * sin(p + (float)i * (0.1f * M_PI))) + cx;
-    //     uint64_t py = (r * cos(p + (float)i * (0.1f * M_PI))) + cy;
-
-    //     uint32_t r = i * (255 / m);
-    //     uint32_t g = 0;
-    //     uint32_t b = 0xff - (i * (255 / m));
-
-    //     lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
-
-    //     gs_write_vertex(lunar->ps2->gs, (px << 4) | (py << 20), 0);
-    // }
-
-    // lunar->ps2->gs->vqi = 0;
-    // lunar->ps2->gs->prim = 4;
-
-    // int sx = 50;
-    // int sy = 240;
-
-    // int dx = 25;
-    // int dy = 50;
-
-    // int q = 9;
-
-    // for (int i = 0; i < q; i++) {
-    //     uint32_t r = i * (255 / m);
-    //     uint32_t g = 0;
-    //     uint32_t b = 0xff - (i * (255 / m));
-
-    //     lunar->ps2->gs->rgbaq = (r & 0xff) | (g << 8) | (b << 16);
-
-    //     gs_write_vertex(lunar->ps2->gs, (sx << 4) | (sy << 20), 0);
-
-    //     sx += dx;
-    //     sy += (i & 1) ? -dy : dy;
-    // }
+    software_init(lunar->ctx, lunar->ps2->gs, lunar->window, lunar->renderer);
     
     lunar->pause = true;
-
     lunar->elf_path = NULL;
     lunar->boot_path = NULL;
     lunar->bios_path = NULL;
@@ -503,6 +413,11 @@ void destroy(lunar::instance* lunar);
 void update(lunar::instance* lunar) {
     if (!lunar->pause) {
         ps2_cycle(lunar->ps2);
+
+        for (const breakpoint& b : lunar->breakpoints) {
+            if (lunar->ps2->ee->pc == b.addr)
+                lunar->pause = true;
+        }
     } else {
         if (lunar->step) {
             ps2_cycle(lunar->ps2);
@@ -534,6 +449,26 @@ void update_window(lunar::instance* lunar) {
     if (lunar->show_iop_state) show_iop_state(lunar);
     if (lunar->show_iop_logs) show_iop_logs(lunar);
     if (lunar->show_gs_debugger) show_gs_debugger(lunar);
+    if (lunar->show_memory_viewer) show_memory_viewer(lunar);
+    if (lunar->show_status_bar) show_status_bar(lunar);
+    if (lunar->show_breakpoints) show_breakpoints(lunar);
+
+    if (lunar->pause) {
+        int width, height;
+
+        SDL_GetWindowSize(lunar->window, &width, &height);
+
+        auto ts = CalcTextSize(ICON_MS_PAUSE);
+
+        GetBackgroundDrawList()->AddText(
+            ImVec2(
+                width - ts.x * 1.5f,
+                lunar->menubar_height + ts.x * 0.5f
+            ),
+            0xffffffff,
+            ICON_MS_PAUSE
+        );
+    }
 
     Render();
 
@@ -559,6 +494,10 @@ void update_window(lunar::instance* lunar) {
             } break;
 
             case SDL_KEYDOWN: {
+                if (event.key.keysym.sym == SDLK_SPACE) {
+                    lunar->pause = !lunar->pause;
+                }
+
                 if (event.key.keysym.sym == SDLK_0) {
                     ps2_iop_intc_irq(lunar->ps2->iop_intc, IOP_INTC_SPU2);
 
@@ -574,7 +513,6 @@ void update_window(lunar::instance* lunar) {
 
                 ds_button_release(lunar->ds, mask);
             } break;
-            
         }
     }
 }
