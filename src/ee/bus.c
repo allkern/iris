@@ -105,7 +105,7 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
         case 0x1f803800: return 0;
 
         // SCPH-39001 stub
-        case 0x1a000006: return 1;
+        case 0x1a000006: return 2;
     }
 
     printf("bus: Unhandled 16-bit read from physical address 0x%08x\n", addr); // exit(1);
