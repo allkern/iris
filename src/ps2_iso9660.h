@@ -28,7 +28,7 @@ struct __attribute__((packed)) iso9660_pvd {
 	char copyright_file_id[37], abstract_file_id[37], bibliographical_file_id[37];
 };
 
-struct __attribute__((packed)) iso9660_rootdir {
+struct __attribute__((packed)) iso9660_dirent {
     uint8_t dr_len;
     uint8_t ext_dr_len;
     uint32_t lba_le, lba_be;

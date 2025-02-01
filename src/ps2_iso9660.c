@@ -32,12 +32,12 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
         return NULL;
     }
 
-    struct iso9660_rootdir* root = (struct iso9660_rootdir*)iso->pvd.root;
+    struct iso9660_dirent* root = (struct iso9660_dirent*)iso->pvd.root;
 
     fseek(iso->file, root->lba_le * 0x800, SEEK_SET);
     fread(iso->buf, 0x800, 1, iso->file);
 
-    struct iso9660_rootdir* dir = (struct iso9660_rootdir*)iso->buf;
+    struct iso9660_dirent* dir = (struct iso9660_dirent*)iso->buf;
 
     while (dir->dr_len) {
         // printf("Entry: lba=%d len=%d size=%d name_len=%d name=\"", dir->lba_le, dir->dr_len, dir->size_le, dir->id_len);
@@ -61,7 +61,9 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
             }
         }
 
-        dir = (uint8_t*)dir + dir->dr_len;
+        uint8_t* ptr = (uint8_t*)dir;
+
+        dir = (struct iso9660_dirent*)(ptr + dir->dr_len);
     }
 
     if (!dir->dr_len) {
