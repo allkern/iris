@@ -126,6 +126,8 @@ struct ps2_cdvd {
     uint32_t read_count;
     uint32_t read_size;
 
+    uint8_t nvram[1024];
+
     struct ps2_iop_dma* dma;
     struct ps2_iop_intc* intc;
     struct sched_state* sched;

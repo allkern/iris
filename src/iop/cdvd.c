@@ -102,10 +102,10 @@ static inline void cdvd_s_update_sticky_flags(struct ps2_cdvd* cdvd) {
     cdvd->sticky_status = cdvd->status;
 }
 static inline void cdvd_s_read_rtc(struct ps2_cdvd* cdvd) {
-    cdvd_init_s_fifo(cdvd, 8);
-
     time_t t = time(NULL);
     struct tm tm = *localtime(&t);
+
+    cdvd_init_s_fifo(cdvd, 8);
 
     cdvd->s_fifo[0] = 0;
     cdvd->s_fifo[1] = itob_table[tm.tm_sec];
@@ -117,6 +117,19 @@ static inline void cdvd_s_read_rtc(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[7] = itob_table[tm.tm_year - 100];
 }
 static inline void cdvd_s_write_rtc(struct ps2_cdvd* cdvd) {
+    printf("cdvd: write_rtc\n");
+
+    exit(1);
+}
+static inline void cdvd_s_read_nvram(struct ps2_cdvd* cdvd) {
+    uint16_t addr = *(uint16_t*)&cdvd->s_params[0];
+
+    cdvd_init_s_fifo(cdvd, 2);
+
+    cdvd->s_fifo[0] = cdvd->nvram[(addr << 1) + 0];
+    cdvd->s_fifo[1] = cdvd->nvram[(addr << 1) + 1];
+}
+static inline void cdvd_s_write_nvram(struct ps2_cdvd* cdvd) {
     printf("cdvd: write_rtc\n");
 
     exit(1);
@@ -178,6 +191,8 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x05: cdvd_s_update_sticky_flags(cdvd); break;
         case 0x08: cdvd_s_read_rtc(cdvd); break;
         case 0x09: cdvd_s_write_rtc(cdvd); break;
+        case 0x0a: cdvd_s_read_nvram(cdvd); break;
+        case 0x0b: cdvd_s_write_nvram(cdvd); break;
         case 0x15: cdvd_s_forbid_dvd(cdvd); break;
         case 0x17: cdvd_s_read_ilink_model(cdvd); break;
         case 0x1a: cdvd_s_certify_boot(cdvd); break;
@@ -527,6 +542,8 @@ int cdvd_get_extension(const char* path) {
 
 // To-do: Disc images
 int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
+    ps2_cdvd_close(cdvd);
+
     int ext = cdvd_get_extension(path);
 
     cdvd->file = fopen(path, "rb");
@@ -572,6 +589,8 @@ void ps2_cdvd_close(struct ps2_cdvd* cdvd) {
     if (cdvd->file) {
         fclose(cdvd->file);
     }
+
+    cdvd->file = NULL;
 
     cdvd_set_status_bits(cdvd, CDVD_STATUS_TRAY_OPEN);
 }
