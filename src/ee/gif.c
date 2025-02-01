@@ -126,6 +126,8 @@ void gif_write_xyzf23(struct ps2_gif* gif, uint128_t data) {
     uint64_t v = x | (y << 16) | (z << 32) | (f << 56);
     uint64_t adc = data.u64[1] & 0x800000000000ul;
 
+    // printf("gif: xyzf2/3 x=%04x y=%04x z=%06x f=%04x v=%016lx adc=%d\n", x, y, z, f, v, adc);
+
     ps2_gs_write_internal(gif->gs, adc ? GS_XYZF3 : GS_XYZF2, v);
 }
 
@@ -238,7 +240,6 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
         int r = (gif->tag.reg >> (index * 4)) & 0xf;
 
         switch (r) {
-            // To-do: Implement packing formats
             case 0x00: /* printf("gif: PRIM <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_PRIM, data.u64[0] & 0x3ff); break;
             case 0x01: /* printf("gif: RGBAQ <- %016lx\n", data.u64[0]); */ gif_write_rgbaq(gif, data); break;
             case 0x02: /* printf("gif: STQ <- %016lx\n", data.u64[0]); */ gif_write_stq(gif, data); break;

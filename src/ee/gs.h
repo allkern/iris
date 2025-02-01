@@ -351,6 +351,8 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data);
 void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data);
 uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg);
 void ps2_gs_init_callback(struct ps2_gs* gs, int event, void (*func)(void*), void* udata);
+struct gs_callback* ps2_gs_get_callback(struct ps2_gs* gs, int event);
+void ps2_gs_remove_callback(struct ps2_gs* gs, int event);
 
 void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard);
 

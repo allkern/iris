@@ -12,7 +12,7 @@ struct ps2_gs* ps2_gs_create(void) {
 }
 
 static inline void gs_invoke_event_handler(struct ps2_gs* gs, int event) {
-    if (gs->events[event].func)
+    if (gs->events[event].func) [[likely]]
         gs->events[event].func(gs->events[event].udata);
 }
 
@@ -22,21 +22,15 @@ void gs_handle_hblank(void* udata, int overshoot);
 void gs_handle_vblank_out(void* udata, int overshoot) {
     struct ps2_gs* gs = (struct ps2_gs*)udata;
 
-    struct sched_event vblank_event;
+    struct sched_event vblank_in_event;
 
-    vblank_event.callback = gs_handle_vblank_in;
-    vblank_event.cycles = 4489;
-    //vblank_event.cycles = 4410000; // GS_FRAME_NTSC;
-    vblank_event.name = "Vblank in event";
-    vblank_event.udata = gs;
+    vblank_in_event.callback = gs_handle_vblank_in;
+    vblank_in_event.cycles = 4489;
+    vblank_in_event.cycles = GS_FRAME_NTSC;
+    vblank_in_event.name = "Vblank in event";
+    vblank_in_event.udata = gs;
 
-    sched_schedule(gs->sched, vblank_event);
-
-    // Tell backend to render scene
-    if (gs->backend.render)
-        gs->backend.render(gs, gs->backend.udata);
-
-    gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
+    sched_schedule(gs->sched, vblank_in_event);
 
     // gs->csr &= ~(8);
     // gs->csr &= ~(2);
@@ -45,6 +39,7 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     // gs->csr ^= 8;
     // gs->csr ^= 1 << 13;
     gs->csr ^= 8;
+    gs->csr ^= 2;
     gs->csr ^= 1 << 13;
 
     // Send Vblank IRQ through INTC
@@ -59,7 +54,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
 
     vblank_out_event.callback = gs_handle_vblank_out;
     vblank_out_event.cycles = 431096;
-    // vblank_out_event.cycles = GS_VBLANK_NTSC; 
+    vblank_out_event.cycles = GS_VBLANK_NTSC; 
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
@@ -67,11 +62,12 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     gs->csr ^= 8;
     gs->csr ^= 2;
 
-    // gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
+    // Tell backend to render scene
+    gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
-    ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+    // ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
 
     sched_schedule(gs->sched, vblank_out_event);
@@ -299,7 +295,7 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
         case 0x120000C0: gs->extdata = data; return;
         case 0x120000D0: gs->extwrite = data; return;
         case 0x120000E0: gs->bgcolor = data; return;
-        case 0x12001000: gs->csr = data; return;
+        // case 0x12001000: gs->csr = data; return;
         case 0x12001010: gs->imr = data; return;
         case 0x12001040: gs->busdir = data; return;
         case 0x12001080: gs->siglblid = data; return;
@@ -550,4 +546,12 @@ uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg) {
 void ps2_gs_init_callback(struct ps2_gs* gs, int event, void (*func)(void*), void* udata) {
     gs->events[event].func = func;
     gs->events[event].udata = udata;
+}
+
+struct gs_callback* ps2_gs_get_callback(struct ps2_gs* gs, int event) {
+    return &gs->events[event];
+}
+
+void ps2_gs_remove_callback(struct ps2_gs* gs, int event) {
+    gs->events[event].func = NULL;
 }
