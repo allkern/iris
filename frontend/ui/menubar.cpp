@@ -1,8 +1,23 @@
 #include "instance.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "tfd/tinyfiledialogs.h"
+
+#include "ps2_elf.h"
 
 namespace lunar {
+
+const char* aspect_mode_names[] = {
+    "Native",
+    "Stretch",
+    "Stretch (Keep aspect ratio)",
+    "Force 4:3",
+    "Force 16:9",
+    "Auto"
+};
+
+int aspect_mode = 0;
+bool bilinear = true;
 
 void show_main_menubar(lunar::instance* lunar) {
     using namespace ImGui;
@@ -11,18 +26,126 @@ void show_main_menubar(lunar::instance* lunar) {
     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 7.0));
 
     if (BeginMainMenuBar()) {
+        ImVec2 size = GetWindowSize();
+
+        lunar->menubar_height = size.y;
+
         if (BeginMenu("Lunar")) {
-            // Load disc
-            // Load executable
-            // Change disc
-            // Pause
-            MenuItem(ICON_MS_DRIVE_FILE_MOVE " Load disc...");
-            MenuItem(ICON_MS_DRAFT " Load executable...");
-            MenuItem(ICON_MS_FOLDER " Change disc...");
+            if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Load disc...")) {
+                const char* patterns[3] = { "*.iso", "*.bin", "*.cue" };
+
+                const char* file = tinyfd_openFileDialog(
+                    "Select CD/DVD image",
+                    "",
+                    3,
+                    patterns,
+                    "Disc images",
+                    0
+                );
+
+                ps2_reset(lunar->ps2);
+                ps2_cdvd_open(lunar->ps2->cdvd, file);
+            }
+
+            if (MenuItem(ICON_MS_DRAFT " Load executable...")) {
+                const char* patterns[3] = { "*.elf" };
+
+                const char* file = tinyfd_openFileDialog(
+                    "Select ELF executable",
+                    "",
+                    1,
+                    patterns,
+                    "ELF executables",
+                    0
+                );
+
+                // Temporarily disable window updates
+                struct gs_callback cb = *ps2_gs_get_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+
+                ps2_gs_remove_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+
+                ps2_elf_load(lunar->ps2, file);
+
+                // Re-enable window updates
+                ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+            }
+
+            Separator();
+
+            if (MenuItem(lunar->pause ? ICON_MS_PLAY_ARROW " Run" : ICON_MS_PAUSE " Pause", "Space")) {
+                lunar->pause = !lunar->pause;
+            }
+
+            if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
+                const char* patterns[3] = { "*.iso", "*.bin", "*.cue" };
+
+                const char* file = tinyfd_openFileDialog(
+                    "Select CD/DVD image",
+                    "",
+                    3,
+                    patterns,
+                    "Disc images",
+                    0
+                );
+
+                ps2_cdvd_open(lunar->ps2->cdvd, file);
+            }
 
             EndMenu();
         }
         if (BeginMenu("Settings")) {
+            if (BeginMenu(ICON_MS_MONITOR " Display")) {
+                if (BeginMenu("Scale")) {
+                    for (int i = 2; i <= 6; i++) {
+                        char buf[16]; sprintf(buf, "%.1fx", (float)i * 0.5f);
+
+                        if (Selectable(buf)) {
+                            software_set_scale(lunar->ctx, (float)i * 0.5f);
+                        }
+                    }
+
+                    EndMenu();
+                }
+
+                if (BeginMenu("Aspect mode")) {
+                    for (int i = 0; i < 6; i++) {
+                        if (Selectable(aspect_mode_names[i], aspect_mode == i)) {
+                            aspect_mode = i;
+
+                            software_set_aspect_mode(lunar->ctx, i);
+                        }
+                    }
+
+                    EndMenu();
+                }
+
+                if (BeginMenu("Scaling filter")) {
+                    if (Selectable("Nearest", !bilinear)) {
+                        bilinear = false;
+
+                        software_set_bilinear(lunar->ctx, false);
+                    }
+
+                    if (Selectable("Bilinear", bilinear)) {
+                        bilinear = true;
+
+                        software_set_bilinear(lunar->ctx, true);
+                    }
+
+                    EndMenu();
+                }
+
+                MenuItem("Integer scaling", nullptr, &lunar->ctx->integer_scaling);
+
+                if (MenuItem("Fullscreen", nullptr, &lunar->fullscreen)) {
+                    SDL_SetWindowFullscreen(lunar->window, lunar->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+                }
+
+                EndMenu();
+            }
+
+            MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &lunar->show_status_bar);
+
             EndMenu();
         }
         if (BeginMenu("Debug")) {
@@ -42,7 +165,12 @@ void show_main_menubar(lunar::instance* lunar) {
                 EndMenu();
             }
 
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Breakpoints", NULL, &lunar->show_breakpoints));
+
+            Separator();
+
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &lunar->show_gs_debugger));
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &lunar->show_memory_viewer));
             
             EndMenu();
         }
