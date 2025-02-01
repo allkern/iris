@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <vector>
 #include <string>
 #include <cctype>
@@ -27,7 +28,7 @@ void print_highlighted(const char* buf) {
         text.clear();        
 
         if (isalpha(*buf)) {
-            while (isalpha(*buf) || isdigit(*buf))
+            while (isalpha(*buf) || isdigit(*buf) || (*buf == '.'))
                 text.push_back(*buf++);
         } else if (isxdigit(*buf) || (*buf == '-')) {
             while (isxdigit(*buf) || (*buf == 'x') || (*buf == '-'))
@@ -102,6 +103,14 @@ static void show_ee_disassembly_view(lunar::instance* lunar) {
 
             PushFont(lunar->font_icons);
 
+            auto v = std::find_if(lunar->breakpoints.begin(), lunar->breakpoints.end(), [](breakpoint& a) {
+                return a.addr == g_ee_dis_state.pc;
+            });
+
+            if (v != lunar->breakpoints.end()) {
+                Text(" " ICON_MS_FIBER_MANUAL_RECORD " ");
+            }
+
             TableSetColumnIndex(1);
 
             if (g_ee_dis_state.pc == lunar->ps2->ee->pc)
@@ -127,6 +136,15 @@ static void show_ee_disassembly_view(lunar::instance* lunar) {
             sprintf(id, "##%d", row);
 
             if (Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns)) {
+                breakpoint b;
+
+                b.addr = g_ee_dis_state.pc;
+                b.cond_r = false;
+                b.cond_w = false;
+                b.cond_x = true;
+                b.cpu = BKPT_CPU_EE;
+                b.size = 4;
+                b.enabled = true;
             } SameLine();
 
             if (BeginPopupContextItem()) {
@@ -150,6 +168,30 @@ static void show_ee_disassembly_view(lunar::instance* lunar) {
                     }
 
                     ImGui::EndMenu();
+                }
+
+                auto addr = std::find_if(lunar->breakpoints.begin(), lunar->breakpoints.end(), [](breakpoint& a) {
+                    return a.addr == g_ee_dis_state.pc && a.cpu == BKPT_CPU_EE;
+                });
+
+                if (addr != lunar->breakpoints.end()) {
+                    if (MenuItem(ICON_MS_CANCEL "  Remove this breakpoint")) {
+                        lunar->breakpoints.erase(addr);
+                    }
+                } else {
+                    if (MenuItem(ICON_MS_ADD_CIRCLE "  Add breakpoint here")) {
+                        breakpoint b;
+
+                        b.addr = g_ee_dis_state.pc;
+                        b.cond_r = false;
+                        b.cond_w = false;
+                        b.cond_x = true;
+                        b.cpu = BKPT_CPU_EE;
+                        b.size = 4;
+                        b.enabled = true;
+
+                        lunar->breakpoints.push_back(b);
+                    }
                 }
 
                 PopFont();
@@ -215,6 +257,15 @@ static void show_iop_disassembly_view(lunar::instance* lunar) {
             sprintf(id, "##%d", row);
 
             if (Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns)) {
+                breakpoint b;
+
+                b.addr = g_iop_dis_state.addr;
+                b.cond_r = false;
+                b.cond_w = false;
+                b.cond_x = true;
+                b.cpu = BKPT_CPU_IOP;
+                b.size = 4;
+                b.enabled = true;
             } SameLine();
 
             if (BeginPopupContextItem()) {
@@ -238,6 +289,30 @@ static void show_iop_disassembly_view(lunar::instance* lunar) {
                     }
 
                     ImGui::EndMenu();
+                }
+
+                auto addr = std::find_if(lunar->breakpoints.begin(), lunar->breakpoints.end(), [](breakpoint& a) {
+                    return a.addr == g_iop_dis_state.addr && a.cpu == BKPT_CPU_IOP;
+                });
+
+                if (addr != lunar->breakpoints.end()) {
+                    if (MenuItem(ICON_MS_CANCEL "  Remove this breakpoint")) {
+                        lunar->breakpoints.erase(addr);
+                    }
+                } else {
+                    if (MenuItem(ICON_MS_ADD_CIRCLE "  Add breakpoint here")) {
+                        breakpoint b;
+
+                        b.addr = g_iop_dis_state.addr;
+                        b.cond_r = false;
+                        b.cond_w = false;
+                        b.cond_x = true;
+                        b.cpu = BKPT_CPU_IOP;
+                        b.size = 4;
+                        b.enabled = true;
+
+                        lunar->breakpoints.push_back(b);
+                    }
                 }
 
                 PopFont();
