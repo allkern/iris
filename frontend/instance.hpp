@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <string>
 #include <vector>
+#include <chrono>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -32,6 +33,7 @@ struct instance {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* texture = nullptr;
+    SDL_GLContext gl_context;
 
     struct ps2_state* ps2 = nullptr;
 
@@ -62,16 +64,26 @@ struct instance {
     bool show_ee_control = false;
     bool show_ee_state = false;
     bool show_ee_logs = false;
+    bool show_ee_interrupts = false;
+    bool show_ee_dmac = false;
     bool show_iop_control = false;
     bool show_iop_state = false;
     bool show_iop_logs = false;
+    bool show_iop_interrupts = false;
+    bool show_iop_dma = false;
     bool show_gs_debugger = false;
     bool show_memory_viewer = false;
     bool show_status_bar = true;
     bool show_breakpoints = false;
+    bool show_imgui_demo = false;
     bool fullscreen = false;
 
+    int frames;
+    float fps = 0.0f;
+    unsigned int ticks = 0;
     int menubar_height;
+
+    const char* loaded = NULL;
 
     std::vector <std::string> ee_log = { "" };
     std::vector <std::string> iop_log = { "" };
@@ -94,9 +106,13 @@ void show_main_menubar(lunar::instance* lunar);
 void show_ee_control(lunar::instance* lunar);
 void show_ee_state(lunar::instance* lunar);
 void show_ee_logs(lunar::instance* lunar);
+void show_ee_interrupts(lunar::instance* lunar);
+void show_ee_dmac(lunar::instance* lunar);
 void show_iop_control(lunar::instance* lunar);
 void show_iop_state(lunar::instance* lunar);
 void show_iop_logs(lunar::instance* lunar);
+void show_iop_interrupts(lunar::instance* lunar);
+void show_iop_dma(lunar::instance* lunar);
 void show_gs_debugger(lunar::instance* lunar);
 void show_memory_viewer(lunar::instance* lunar);
 void show_status_bar(lunar::instance* lunar);

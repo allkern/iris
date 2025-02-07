@@ -69,11 +69,12 @@ void show_status_bar(lunar::instance* lunar) {
         software_get_display_format(lunar->ctx, &disp_fmt);
 
         if (vp_w) {
-            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %dbpp",
+            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %dbpp | %.1f fps",
                 software_get_name(lunar->ctx),
                 disp_w, disp_h,
                 vp_w, vp_h,
-                get_format_bpp(disp_fmt)
+                get_format_bpp(disp_fmt),
+                lunar->fps * 2.0f
             );
         } else {
             Text(ICON_MS_MONITOR " %s | No image",
