@@ -43,8 +43,12 @@ void show_main_menubar(lunar::instance* lunar) {
                     0
                 );
 
-                ps2_reset(lunar->ps2);
-                ps2_cdvd_open(lunar->ps2->cdvd, file);
+                if (file) {
+                    ps2_reset(lunar->ps2);
+                    ps2_cdvd_open(lunar->ps2->cdvd, file);
+
+                    lunar->loaded = file;
+                }
             }
 
             if (MenuItem(ICON_MS_DRAFT " Load executable...")) {
@@ -59,15 +63,19 @@ void show_main_menubar(lunar::instance* lunar) {
                     0
                 );
 
-                // Temporarily disable window updates
-                struct gs_callback cb = *ps2_gs_get_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+                if (file) {
+                    // Temporarily disable window updates
+                    struct gs_callback cb = *ps2_gs_get_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
 
-                ps2_gs_remove_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+                    ps2_gs_remove_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
 
-                ps2_elf_load(lunar->ps2, file);
+                    ps2_elf_load(lunar->ps2, file);
 
-                // Re-enable window updates
-                ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+                    // Re-enable window updates
+                    ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
+                    lunar->loaded = file;
+                }
             }
 
             Separator();
@@ -88,7 +96,11 @@ void show_main_menubar(lunar::instance* lunar) {
                     0
                 );
 
-                ps2_cdvd_open(lunar->ps2->cdvd, file);
+                if (file) {
+                    ps2_cdvd_open(lunar->ps2->cdvd, file);
+
+                    lunar->loaded = file;
+                }
             }
 
             EndMenu();
@@ -148,27 +160,35 @@ void show_main_menubar(lunar::instance* lunar) {
 
             EndMenu();
         }
+        if (BeginMenu("Tools")) {
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " ImGui Demo", NULL, &lunar->show_imgui_demo));
+
+            EndMenu();
+        }
         if (BeginMenu("Debug")) {
-            if (BeginMenu(ICON_MS_BUG_REPORT " EE")) {
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control", NULL, &lunar->show_ee_control));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State", NULL, &lunar->show_ee_state));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs", NULL, &lunar->show_ee_logs));
+            SeparatorText("EE");
+            // if (BeginMenu(ICON_MS_BUG_REPORT " EE")) {
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##ee", NULL, &lunar->show_ee_control));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##ee", NULL, &lunar->show_ee_state));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##ee", NULL, &lunar->show_ee_logs));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##ee", NULL, &lunar->show_ee_interrupts));
 
-                EndMenu();
-            }
+                // EndMenu();
+            // }
 
-            if (BeginMenu(ICON_MS_BUG_REPORT " IOP")) {
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control", NULL, &lunar->show_iop_control));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State", NULL, &lunar->show_iop_state));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs", NULL, &lunar->show_iop_logs));
+            SeparatorText("IOP");
+            // if (BeginMenu(ICON_MS_BUG_REPORT " IOP")) {
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##iop", NULL, &lunar->show_iop_control));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##iop", NULL, &lunar->show_iop_state));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##iop", NULL, &lunar->show_iop_logs));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##iop", NULL, &lunar->show_iop_interrupts));
 
-                EndMenu();
-            }
-
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Breakpoints", NULL, &lunar->show_breakpoints));
+            //     EndMenu();
+            // }
 
             Separator();
 
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Breakpoints", NULL, &lunar->show_breakpoints));
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &lunar->show_gs_debugger));
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &lunar->show_memory_viewer));
             
