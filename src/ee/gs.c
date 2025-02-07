@@ -32,15 +32,15 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
 
     sched_schedule(gs->sched, vblank_in_event);
 
+    // gs->csr ^= 1 << 13;
+    // gs->csr ^= 1 << 12;
+
     // gs->csr &= ~(8);
     // gs->csr &= ~(2);
     // gs->csr &= ~(1 << 12);
     // gs->csr &= ~(1 << 13);
     // gs->csr ^= 8;
     // gs->csr ^= 1 << 13;
-    gs->csr ^= 8;
-    gs->csr ^= 2;
-    gs->csr ^= 1 << 13;
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
@@ -59,15 +59,18 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     vblank_out_event.udata = gs;
 
     // Set Vblank flag?
-    gs->csr ^= 8;
-    gs->csr ^= 2;
+    gs->csr |= 0xf;
 
     // Tell backend to render scene
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
-    // ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+
+    if (gs->csr & (gs->imr >> 8)) {
+        ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+    }
+
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
 
     sched_schedule(gs->sched, vblank_out_event);
@@ -280,22 +283,22 @@ uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
 
 void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x12000000: gs->pmode = data; return;
+        case 0x12000000: gs->pmode = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x12000010: gs->smode1 = data; return;
         case 0x12000020: gs->smode2 = data; return;
         case 0x12000030: gs->srfsh = data; return;
         case 0x12000040: gs->synch1 = data; return;
         case 0x12000050: gs->synch2 = data; return;
         case 0x12000060: gs->syncv = data; return;
-        case 0x12000070: gs->dispfb1 = data; return;
-        case 0x12000080: gs->display1 = data; return;
-        case 0x12000090: gs->dispfb2 = data; return;
-        case 0x120000A0: gs->display2 = data; return;
+        case 0x12000070: gs->dispfb1 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
+        case 0x12000080: gs->display1 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
+        case 0x12000090: gs->dispfb2 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
+        case 0x120000A0: gs->display2 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x120000B0: gs->extbuf = data; return;
         case 0x120000C0: gs->extdata = data; return;
         case 0x120000D0: gs->extwrite = data; return;
         case 0x120000E0: gs->bgcolor = data; return;
-        // case 0x12001000: gs->csr = data; return;
+        case 0x12001000: gs->csr &= ~(data & 0xf); return;
         case 0x12001010: gs->imr = data; return;
         case 0x12001040: gs->busdir = data; return;
         case 0x12001080: gs->siglblid = data; return;
@@ -446,7 +449,7 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x3D: /* printf("gs: FOGCOL <- %016lx\n", data); */ gs->fogcol = data; return;
         case 0x3F: /* printf("gs: TEXFLUSH <- %016lx\n", data); */ gs->texflush = data; return;
         case 0x40: /* printf("gs: SCISSOR_1 <- %016lx\n", data); */ gs->context[0].scissor = data; gs_unpack_scissor(gs, 0); gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
-        case 0x41: /* printf("gs: SCISSOR_2 <- %016lx\n", data); */ gs->context[1].scissor = data; gs_unpack_scissor(gs, 1); return;
+        case 0x41: /* printf("gs: SCISSOR_2 <- %016lx\n", data); */ gs->context[1].scissor = data; gs_unpack_scissor(gs, 1); gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x42: /* printf("gs: ALPHA_1 <- %016lx\n", data); */ gs->context[0].alpha = data; gs_unpack_alpha(gs, 0); return;
         case 0x43: /* printf("gs: ALPHA_2 <- %016lx\n", data); */ gs->context[1].alpha = data; gs_unpack_alpha(gs, 1); return;
         case 0x44: /* printf("gs: DIMX <- %016lx\n", data); */ gs->dimx = data; return;
@@ -470,7 +473,9 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x61: /* printf("gs: FINISH <- %016lx\n", data); */ gs->finish = data; return;
         case 0x62: /* printf("gs: LABEL <- %016lx\n", data); */ gs->label = data; return;
         default: {
-            printf("gs: Invalid privileged register %02x write %016lx\n", reg, data);
+            // printf("gs: Invalid privileged register %02x write %016lx\n", reg, data);
+
+            return;
 
             exit(1);
         }

@@ -61,6 +61,8 @@ static inline const char* gif_get_reg_name(uint8_t r) {
         case 0x61: return "FINISH";
         case 0x62: return "LABEL";
     }
+
+    return "<unknown>";
 }
 struct ps2_gif* ps2_gif_create(void) {
     return malloc(sizeof(struct ps2_gif));
@@ -125,8 +127,6 @@ void gif_write_xyzf23(struct ps2_gif* gif, uint128_t data) {
     uint64_t f = (data.u64[1] >> 36) & 0xff;
     uint64_t v = x | (y << 16) | (z << 32) | (f << 56);
     uint64_t adc = data.u64[1] & 0x800000000000ul;
-
-    // printf("gif: xyzf2/3 x=%04x y=%04x z=%06x f=%04x v=%016lx adc=%d\n", x, y, z, f, v, adc);
 
     ps2_gs_write_internal(gif->gs, adc ? GS_XYZF3 : GS_XYZF2, v);
 }
