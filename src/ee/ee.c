@@ -374,7 +374,7 @@ static inline void ee_i_and(struct ee_state* ee) {
 static inline void ee_i_andi(struct ee_state* ee) {
     EE_RT = EE_RS & EE_D_I16;
 }
-static inline void ee_i_bc0f(struct ee_state* ee) { printf("ee: bc0f unimplemented\n"); exit(1); }
+static inline void ee_i_bc0f(struct ee_state* ee) { return; printf("ee: bc0f unimplemented\n"); exit(1); }
 static inline void ee_i_bc0fl(struct ee_state* ee) { printf("ee: bc0fl unimplemented\n"); exit(1); }
 static inline void ee_i_bc0t(struct ee_state* ee) { // printf("ee: bc0t unimplemented\n"); exit(1);
     BRANCH(1, EE_D_SI16);
@@ -696,7 +696,7 @@ static inline void ee_i_lhu(struct ee_state* ee) {
 static inline void ee_i_lq(struct ee_state* ee) {
     ee->r[EE_D_RT] = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
 }
-static inline void ee_i_lqc2(struct ee_state* ee) { printf("ee: lqc2 unimplemented\n"); exit(1); }
+static inline void ee_i_lqc2(struct ee_state* ee) { return; printf("ee: lqc2 unimplemented\n"); exit(1); }
 static inline void ee_i_lui(struct ee_state* ee) {
     EE_RT = SE6432(EE_D_I16 << 16);
 }
@@ -1529,7 +1529,19 @@ static inline void ee_i_pmfhllw(struct ee_state* ee) {
 }
 static inline void ee_i_pmfhluw(struct ee_state* ee) { printf("ee: pmfhluw unimplemented\n"); exit(1); }
 static inline void ee_i_pmfhlslw(struct ee_state* ee) { printf("ee: pmfhlslw unimplemented\n"); exit(1); }
-static inline void ee_i_pmfhllh(struct ee_state* ee) { printf("ee: pmfhllh unimplemented\n"); exit(1); }
+static inline void ee_i_pmfhllh(struct ee_state* ee) {
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = ee->lo.u16[0];
+    ee->r[d].u16[1] = ee->lo.u16[2];
+    ee->r[d].u16[2] = ee->hi.u16[0];
+    ee->r[d].u16[3] = ee->hi.u16[2];
+    ee->r[d].u16[4] = ee->lo.u16[4];
+    ee->r[d].u16[5] = ee->lo.u16[6];
+    ee->r[d].u16[6] = ee->hi.u16[4];
+    ee->r[d].u16[7] = ee->hi.u16[6];
+    
+}
 static inline void ee_i_pmfhlsh(struct ee_state* ee) { printf("ee: pmfhlsh unimplemented\n"); exit(1); }
 static inline void ee_i_pmflo(struct ee_state* ee) {
     ee->r[EE_D_RD] = ee->lo;
@@ -2220,8 +2232,8 @@ void ee_init(struct ee_state* ee, struct ee_bus_s bus) {
 }
 
 static inline void ee_execute(struct ee_state* ee) {
-    switch (ee->opcode & 0xFC000000) {
-        case 0x00000000: { // special
+    switch ((ee->opcode & 0xFC000000) >> 26) {
+        case 0x00000000 >> 26: { // special
             switch (ee->opcode & 0x0000003F) {
                 case 0x00000000: ee_i_sll(ee); return;
                 case 0x00000002: ee_i_srl(ee); return;
@@ -2277,53 +2289,53 @@ static inline void ee_execute(struct ee_state* ee) {
                 case 0x0000003F: ee_i_dsra32(ee); return;
             }
         } break;
-        case 0x04000000: { // regimm
-            switch (ee->opcode & 0x001F0000) {
-                case 0x00000000: ee_i_bltz(ee); return;
-                case 0x00010000: ee_i_bgez(ee); return;
-                case 0x00020000: ee_i_bltzl(ee); return;
-                case 0x00030000: ee_i_bgezl(ee); return;
-                case 0x00080000: ee_i_tgei(ee); return;
-                case 0x00090000: ee_i_tgeiu(ee); return;
-                case 0x000A0000: ee_i_tlti(ee); return;
-                case 0x000B0000: ee_i_tltiu(ee); return;
-                case 0x000C0000: ee_i_teqi(ee); return;
-                case 0x000E0000: ee_i_tnei(ee); return;
-                case 0x00100000: ee_i_bltzal(ee); return;
-                case 0x00110000: ee_i_bgezal(ee); return;
-                case 0x00120000: ee_i_bltzall(ee); return;
-                case 0x00130000: ee_i_bgezall(ee); return;
-                case 0x00180000: ee_i_mtsab(ee); return;
-                case 0x00190000: ee_i_mtsah(ee); return;
+        case 0x04000000 >> 26: { // regimm
+            switch ((ee->opcode & 0x001F0000) >> 16) {
+                case 0x00000000 >> 16: ee_i_bltz(ee); return;
+                case 0x00010000 >> 16: ee_i_bgez(ee); return;
+                case 0x00020000 >> 16: ee_i_bltzl(ee); return;
+                case 0x00030000 >> 16: ee_i_bgezl(ee); return;
+                case 0x00080000 >> 16: ee_i_tgei(ee); return;
+                case 0x00090000 >> 16: ee_i_tgeiu(ee); return;
+                case 0x000A0000 >> 16: ee_i_tlti(ee); return;
+                case 0x000B0000 >> 16: ee_i_tltiu(ee); return;
+                case 0x000C0000 >> 16: ee_i_teqi(ee); return;
+                case 0x000E0000 >> 16: ee_i_tnei(ee); return;
+                case 0x00100000 >> 16: ee_i_bltzal(ee); return;
+                case 0x00110000 >> 16: ee_i_bgezal(ee); return;
+                case 0x00120000 >> 16: ee_i_bltzall(ee); return;
+                case 0x00130000 >> 16: ee_i_bgezall(ee); return;
+                case 0x00180000 >> 16: ee_i_mtsab(ee); return;
+                case 0x00190000 >> 16: ee_i_mtsah(ee); return;
             }
         } break;
-        case 0x08000000: ee_i_j(ee); return;
-        case 0x0C000000: ee_i_jal(ee); return;
-        case 0x10000000: ee_i_beq(ee); return;
-        case 0x14000000: ee_i_bne(ee); return;
-        case 0x18000000: ee_i_blez(ee); return;
-        case 0x1C000000: ee_i_bgtz(ee); return;
-        case 0x20000000: ee_i_addi(ee); return;
-        case 0x24000000: ee_i_addiu(ee); return;
-        case 0x28000000: ee_i_slti(ee); return;
-        case 0x2C000000: ee_i_sltiu(ee); return;
-        case 0x30000000: ee_i_andi(ee); return;
-        case 0x34000000: ee_i_ori(ee); return;
-        case 0x38000000: ee_i_xori(ee); return;
-        case 0x3C000000: ee_i_lui(ee); return;
-        case 0x40000000: { // cop0
-            switch (ee->opcode & 0x03E00000) {
-                case 0x00000000: ee_i_mfc0(ee); return;
-                case 0x00800000: ee_i_mtc0(ee); return;
-                case 0x01000000: {
-                    switch (ee->opcode & 0x001F0000) {
-                        case 0x00000000: ee_i_bc0f(ee); return;
-                        case 0x00010000: ee_i_bc0t(ee); return;
-                        case 0x00020000: ee_i_bc0fl(ee); return;
-                        case 0x00030000: ee_i_bc0tl(ee); return;
+        case 0x08000000 >> 26: ee_i_j(ee); return;
+        case 0x0C000000 >> 26: ee_i_jal(ee); return;
+        case 0x10000000 >> 26: ee_i_beq(ee); return;
+        case 0x14000000 >> 26: ee_i_bne(ee); return;
+        case 0x18000000 >> 26: ee_i_blez(ee); return;
+        case 0x1C000000 >> 26: ee_i_bgtz(ee); return;
+        case 0x20000000 >> 26: ee_i_addi(ee); return;
+        case 0x24000000 >> 26: ee_i_addiu(ee); return;
+        case 0x28000000 >> 26: ee_i_slti(ee); return;
+        case 0x2C000000 >> 26: ee_i_sltiu(ee); return;
+        case 0x30000000 >> 26: ee_i_andi(ee); return;
+        case 0x34000000 >> 26: ee_i_ori(ee); return;
+        case 0x38000000 >> 26: ee_i_xori(ee); return;
+        case 0x3C000000 >> 26: ee_i_lui(ee); return;
+        case 0x40000000 >> 26: { // cop0
+            switch ((ee->opcode & 0x03E00000) >> 21) {
+                case 0x00000000 >> 21: ee_i_mfc0(ee); return;
+                case 0x00800000 >> 21: ee_i_mtc0(ee); return;
+                case 0x01000000 >> 21: {
+                    switch ((ee->opcode & 0x001F0000) >> 16) {
+                        case 0x00000000 >> 16: ee_i_bc0f(ee); return;
+                        case 0x00010000 >> 16: ee_i_bc0t(ee); return;
+                        case 0x00020000 >> 16: ee_i_bc0fl(ee); return;
+                        case 0x00030000 >> 16: ee_i_bc0tl(ee); return;
                     }
                 } break;
-                case 0x02000000: {
+                case 0x02000000 >> 21: {
                     switch (ee->opcode & 0x0000003F) {
                         case 0x00000001: ee_i_tlbr(ee); return;
                         case 0x00000002: ee_i_tlbwi(ee); return;
@@ -2336,21 +2348,21 @@ static inline void ee_execute(struct ee_state* ee) {
                 } break;
             }
         } break;
-        case 0x44000000: { // cop1
-            switch (ee->opcode & 0x03E00000) {
-                case 0x00000000: ee_i_mfc1(ee); return;
-                case 0x00400000: ee_i_cfc1(ee); return;
-                case 0x00800000: ee_i_mtc1(ee); return;
-                case 0x00C00000: ee_i_ctc1(ee); return;
-                case 0x01000000: {
-                    switch (ee->opcode & 0x001F0000) {
-                        case 0x00000000: ee_i_bc1f(ee); return;
-                        case 0x00010000: ee_i_bc1t(ee); return;
-                        case 0x00020000: ee_i_bc1fl(ee); return;
-                        case 0x00030000: ee_i_bc1tl(ee); return;
+        case 0x44000000 >> 26: { // cop1
+            switch ((ee->opcode & 0x03E00000) >> 21) {
+                case 0x00000000 >> 21: ee_i_mfc1(ee); return;
+                case 0x00400000 >> 21: ee_i_cfc1(ee); return;
+                case 0x00800000 >> 21: ee_i_mtc1(ee); return;
+                case 0x00C00000 >> 21: ee_i_ctc1(ee); return;
+                case 0x01000000 >> 21: {
+                    switch ((ee->opcode & 0x001F0000) >> 16) {
+                        case 0x00000000 >> 16: ee_i_bc1f(ee); return;
+                        case 0x00010000 >> 16: ee_i_bc1t(ee); return;
+                        case 0x00020000 >> 16: ee_i_bc1fl(ee); return;
+                        case 0x00030000 >> 16: ee_i_bc1tl(ee); return;
                     }
                 } break;
-                case 0x02000000: {
+                case 0x02000000 >> 21: {
                     switch (ee->opcode & 0x0000003F) {
                         case 0x00000000: ee_i_adds(ee); return;
                         case 0x00000001: ee_i_subs(ee); return;
@@ -2377,98 +2389,98 @@ static inline void ee_execute(struct ee_state* ee) {
                         case 0x00000036: ee_i_cle(ee); return;
                     }
                 } break;
-                case 0x02800000: {
+                case 0x02800000 >> 21: {
                     switch (ee->opcode & 0x0000003F) {
                         case 0x00000020: ee_i_cvts(ee); return;
                     }
                 } break;
             }
         } break;
-        case 0x48000000: { // cop2
-            switch (ee->opcode & 0x03E00000) {
-                case 0x00200000: ee_i_qmfc2(ee); return;
-                case 0x00400000: ee_i_cfc2(ee); return;
-                case 0x00A00000: ee_i_qmtc2(ee); return;
-                case 0x00C00000: ee_i_ctc2(ee); return;
-                case 0x01000000: {
-                    switch (ee->opcode & 0x001F0000) {
-                        case 0x00000000: ee_i_bc2f(ee); return;
-                        case 0x00010000: ee_i_bc2t(ee); return;
-                        case 0x00020000: ee_i_bc2fl(ee); return;
-                        case 0x00030000: ee_i_bc2tl(ee); return;
+        case 0x48000000 >> 26: { // cop2
+            switch ((ee->opcode & 0x03E00000) >> 21) {
+                case 0x00200000 >> 21: ee_i_qmfc2(ee); return;
+                case 0x00400000 >> 21: ee_i_cfc2(ee); return;
+                case 0x00A00000 >> 21: ee_i_qmtc2(ee); return;
+                case 0x00C00000 >> 21: ee_i_ctc2(ee); return;
+                case 0x01000000 >> 21: {
+                    switch ((ee->opcode & 0x001F0000) >> 16) {
+                        case 0x00000000 >> 16: ee_i_bc2f(ee); return;
+                        case 0x00010000 >> 16: ee_i_bc2t(ee); return;
+                        case 0x00020000 >> 16: ee_i_bc2fl(ee); return;
+                        case 0x00030000 >> 16: ee_i_bc2tl(ee); return;
                     }
                 } break;
-                case 0x02000000:
-                case 0x02200000:
-                case 0x02400000:
-                case 0x02600000:
-                case 0x02800000:
-                case 0x02A00000:
-                case 0x02C00000:
-                case 0x02E00000:
-                case 0x03000000:
-                case 0x03200000:
-                case 0x03400000:
-                case 0x03600000:
-                case 0x03800000:
-                case 0x03A00000:
-                case 0x03C00000:
-                case 0x03E00000: {
+                case 0x02000000 >> 21:
+                case 0x02200000 >> 21:
+                case 0x02400000 >> 21:
+                case 0x02600000 >> 21:
+                case 0x02800000 >> 21:
+                case 0x02A00000 >> 21:
+                case 0x02C00000 >> 21:
+                case 0x02E00000 >> 21:
+                case 0x03000000 >> 21:
+                case 0x03200000 >> 21:
+                case 0x03400000 >> 21:
+                case 0x03600000 >> 21:
+                case 0x03800000 >> 21:
+                case 0x03A00000 >> 21:
+                case 0x03C00000 >> 21:
+                case 0x03E00000 >> 21: {
                     switch (ee->opcode & 0x0000003F) {
-                        case 0x00000000: ee_i_vaddx(ee); return;
-                        case 0x00000001: ee_i_vaddy(ee); return;
-                        case 0x00000002: ee_i_vaddz(ee); return;
-                        case 0x00000003: ee_i_vaddw(ee); return;
-                        case 0x00000004: ee_i_vsubx(ee); return;
-                        case 0x00000005: ee_i_vsuby(ee); return;
-                        case 0x00000006: ee_i_vsubz(ee); return;
-                        case 0x00000007: ee_i_vsubw(ee); return;
-                        case 0x00000008: ee_i_vmaddx(ee); return;
-                        case 0x00000009: ee_i_vmaddy(ee); return;
-                        case 0x0000000A: ee_i_vmaddz(ee); return;
-                        case 0x0000000B: ee_i_vmaddw(ee); return;
-                        case 0x0000000C: ee_i_vmsubx(ee); return;
-                        case 0x0000000D: ee_i_vmsuby(ee); return;
-                        case 0x0000000E: ee_i_vmsubz(ee); return;
-                        case 0x0000000F: ee_i_vmsubw(ee); return;
-                        case 0x00000010: ee_i_vmaxx(ee); return;
-                        case 0x00000011: ee_i_vmaxy(ee); return;
-                        case 0x00000012: ee_i_vmaxz(ee); return;
-                        case 0x00000013: ee_i_vmaxw(ee); return;
-                        case 0x00000014: ee_i_vminix(ee); return;
-                        case 0x00000015: ee_i_vminiy(ee); return;
-                        case 0x00000016: ee_i_vminiz(ee); return;
-                        case 0x00000017: ee_i_vminiw(ee); return;
-                        case 0x00000018: ee_i_vmulx(ee); return;
-                        case 0x00000019: ee_i_vmuly(ee); return;
-                        case 0x0000001A: ee_i_vmulz(ee); return;
-                        case 0x0000001B: ee_i_vmulw(ee); return;
-                        case 0x0000001C: ee_i_vmulq(ee); return;
-                        case 0x0000001D: ee_i_vmaxi(ee); return;
-                        case 0x0000001E: ee_i_vmuli(ee); return;
-                        case 0x0000001F: ee_i_vminii(ee); return;
-                        case 0x00000020: ee_i_vaddq(ee); return;
-                        case 0x00000021: ee_i_vmaddq(ee); return;
-                        case 0x00000022: ee_i_vaddi(ee); return;
-                        case 0x00000023: ee_i_vmaddi(ee); return;
-                        case 0x00000024: ee_i_vsubq(ee); return;
-                        case 0x00000025: ee_i_vmsubq(ee); return;
-                        case 0x00000026: ee_i_vsubi(ee); return;
-                        case 0x00000027: ee_i_vmsubi(ee); return;
-                        case 0x00000028: ee_i_vadd(ee); return;
-                        case 0x00000029: ee_i_vmadd(ee); return;
-                        case 0x0000002A: ee_i_vmul(ee); return;
-                        case 0x0000002B: ee_i_vmax(ee); return;
-                        case 0x0000002C: ee_i_vsub(ee); return;
-                        case 0x0000002D: ee_i_vmsub(ee); return;
-                        case 0x0000002E: ee_i_vopmsub(ee); return;
-                        case 0x0000002F: ee_i_vmini(ee); return;
-                        case 0x00000030: ee_i_viadd(ee); return;
-                        case 0x00000031: ee_i_visub(ee); return;
-                        case 0x00000032: ee_i_viaddi(ee); return;
-                        case 0x00000034: ee_i_viand(ee); return;
-                        case 0x00000035: ee_i_vior(ee); return;
-                        case 0x00000038: ee_i_vcallms(ee); return;
+                        case 0x00000000: return; ee_i_vaddx(ee); return;
+                        case 0x00000001: return; ee_i_vaddy(ee); return;
+                        case 0x00000002: return; ee_i_vaddz(ee); return;
+                        case 0x00000003: return; ee_i_vaddw(ee); return;
+                        case 0x00000004: return; ee_i_vsubx(ee); return;
+                        case 0x00000005: return; ee_i_vsuby(ee); return;
+                        case 0x00000006: return; ee_i_vsubz(ee); return;
+                        case 0x00000007: return; ee_i_vsubw(ee); return;
+                        case 0x00000008: return; ee_i_vmaddx(ee); return;
+                        case 0x00000009: return; ee_i_vmaddy(ee); return;
+                        case 0x0000000A: return; ee_i_vmaddz(ee); return;
+                        case 0x0000000B: return; ee_i_vmaddw(ee); return;
+                        case 0x0000000C: return; ee_i_vmsubx(ee); return;
+                        case 0x0000000D: return; ee_i_vmsuby(ee); return;
+                        case 0x0000000E: return; ee_i_vmsubz(ee); return;
+                        case 0x0000000F: return; ee_i_vmsubw(ee); return;
+                        case 0x00000010: return; ee_i_vmaxx(ee); return;
+                        case 0x00000011: return; ee_i_vmaxy(ee); return;
+                        case 0x00000012: return; ee_i_vmaxz(ee); return;
+                        case 0x00000013: return; ee_i_vmaxw(ee); return;
+                        case 0x00000014: return; ee_i_vminix(ee); return;
+                        case 0x00000015: return; ee_i_vminiy(ee); return;
+                        case 0x00000016: return; ee_i_vminiz(ee); return;
+                        case 0x00000017: return; ee_i_vminiw(ee); return;
+                        case 0x00000018: return; ee_i_vmulx(ee); return;
+                        case 0x00000019: return; ee_i_vmuly(ee); return;
+                        case 0x0000001A: return; ee_i_vmulz(ee); return;
+                        case 0x0000001B: return; ee_i_vmulw(ee); return;
+                        case 0x0000001C: return; ee_i_vmulq(ee); return;
+                        case 0x0000001D: return; ee_i_vmaxi(ee); return;
+                        case 0x0000001E: return; ee_i_vmuli(ee); return;
+                        case 0x0000001F: return; ee_i_vminii(ee); return;
+                        case 0x00000020: return; ee_i_vaddq(ee); return;
+                        case 0x00000021: return; ee_i_vmaddq(ee); return;
+                        case 0x00000022: return; ee_i_vaddi(ee); return;
+                        case 0x00000023: return; ee_i_vmaddi(ee); return;
+                        case 0x00000024: return; ee_i_vsubq(ee); return;
+                        case 0x00000025: return; ee_i_vmsubq(ee); return;
+                        case 0x00000026: return; ee_i_vsubi(ee); return;
+                        case 0x00000027: return; ee_i_vmsubi(ee); return;
+                        case 0x00000028: return; ee_i_vadd(ee); return;
+                        case 0x00000029: return; ee_i_vmadd(ee); return;
+                        case 0x0000002A: return; ee_i_vmul(ee); return;
+                        case 0x0000002B: return; ee_i_vmax(ee); return;
+                        case 0x0000002C: return; ee_i_vsub(ee); return;
+                        case 0x0000002D: return; ee_i_vmsub(ee); return;
+                        case 0x0000002E: return; ee_i_vopmsub(ee); return;
+                        case 0x0000002F: return; ee_i_vmini(ee); return;
+                        case 0x00000030: return; ee_i_viadd(ee); return;
+                        case 0x00000031: return; ee_i_visub(ee); return;
+                        case 0x00000032: return; ee_i_viaddi(ee); return;
+                        case 0x00000034: return; ee_i_viand(ee); return;
+                        case 0x00000035: return; ee_i_vior(ee); return;
+                        case 0x00000038: return; ee_i_vcallms(ee); return;
                         case 0x00000039: ee_i_callmsr(ee); return;
                         case 0x0000003C:
                         case 0x0000003D:
@@ -2477,143 +2489,143 @@ static inline void ee_execute(struct ee_state* ee) {
                             uint32_t func = (ee->opcode & 3) | ((ee->opcode & 0x7c0) >> 4);
 
                             switch (func) {
-                                case 0x00000000: ee_i_vaddax(ee); return;
-                                case 0x00000001: ee_i_vadday(ee); return;
-                                case 0x00000002: ee_i_vaddaz(ee); return;
-                                case 0x00000003: ee_i_vaddaw(ee); return;
-                                case 0x00000004: ee_i_vsubax(ee); return;
-                                case 0x00000005: ee_i_vsubay(ee); return;
-                                case 0x00000006: ee_i_vsubaz(ee); return;
-                                case 0x00000007: ee_i_vsubaw(ee); return;
-                                case 0x00000008: ee_i_vmaddax(ee); return;
-                                case 0x00000009: ee_i_vmadday(ee); return;
-                                case 0x0000000A: ee_i_vmaddaz(ee); return;
-                                case 0x0000000B: ee_i_vmaddaw(ee); return;
-                                case 0x0000000C: ee_i_vmsubax(ee); return;
-                                case 0x0000000D: ee_i_vmsubay(ee); return;
-                                case 0x0000000E: ee_i_vmsubaz(ee); return;
-                                case 0x0000000F: ee_i_vmsubaw(ee); return;
-                                case 0x00000010: ee_i_vitof0(ee); return;
-                                case 0x00000011: ee_i_vitof4(ee); return;
-                                case 0x00000012: ee_i_vitof12(ee); return;
-                                case 0x00000013: ee_i_vitof15(ee); return;
-                                case 0x00000014: ee_i_vftoi0(ee); return;
-                                case 0x00000015: ee_i_vftoi4(ee); return;
-                                case 0x00000016: ee_i_vftoi12(ee); return;
-                                case 0x00000017: ee_i_vftoi15(ee); return;
-                                case 0x00000018: ee_i_vmulax(ee); return;
-                                case 0x00000019: ee_i_vmulay(ee); return;
-                                case 0x0000001A: ee_i_vmulaz(ee); return;
-                                case 0x0000001B: ee_i_vmulaw(ee); return;
-                                case 0x0000001C: ee_i_vmulaq(ee); return;
-                                case 0x0000001D: ee_i_vabs(ee); return;
-                                case 0x0000001E: ee_i_vmulai(ee); return;
-                                case 0x0000001F: ee_i_vclipw(ee); return;
-                                case 0x00000020: ee_i_vaddaq(ee); return;
-                                case 0x00000021: ee_i_vmaddaq(ee); return;
-                                case 0x00000022: ee_i_vaddai(ee); return;
-                                case 0x00000023: ee_i_vmaddai(ee); return;
-                                case 0x00000024: ee_i_vsubaq(ee); return;
-                                case 0x00000025: ee_i_vmsubaq(ee); return;
-                                case 0x00000026: ee_i_vsubai(ee); return;
-                                case 0x00000027: ee_i_vmsubai(ee); return;
-                                case 0x00000028: ee_i_vadda(ee); return;
-                                case 0x00000029: ee_i_vmadda(ee); return;
-                                case 0x0000002A: ee_i_vmula(ee); return;
-                                case 0x0000002C: ee_i_vsuba(ee); return;
-                                case 0x0000002D: ee_i_vmsuba(ee); return;
-                                case 0x0000002E: ee_i_vopmula(ee); return;
-                                case 0x0000002F: ee_i_vnop(ee); return;
-                                case 0x00000030: ee_i_vmove(ee); return;
-                                case 0x00000031: ee_i_vmr32(ee); return;
-                                case 0x00000034: ee_i_vlqi(ee); return;
-                                case 0x00000035: ee_i_vsqi(ee); return;
-                                case 0x00000036: ee_i_vlqd(ee); return;
-                                case 0x00000037: ee_i_vsqd(ee); return;
-                                case 0x00000038: ee_i_vdiv(ee); return;
-                                case 0x00000039: ee_i_vsqrt(ee); return;
-                                case 0x0000003A: ee_i_vrsqrt(ee); return;
-                                case 0x0000003B: ee_i_vwaitq(ee); return;
-                                case 0x0000003C: ee_i_vmtir(ee); return;
-                                case 0x0000003D: ee_i_vmfir(ee); return;
-                                case 0x0000003E: ee_i_vilwr(ee); return;
-                                case 0x0000003F: ee_i_viswr(ee); return;
-                                case 0x00000040: ee_i_vrnext(ee); return;
-                                case 0x00000041: ee_i_vrget(ee); return;
-                                case 0x00000042: ee_i_vrinit(ee); return;
-                                case 0x00000043: ee_i_vrxor(ee); return;
+                                case 0x00000000: return; ee_i_vaddax(ee); return;
+                                case 0x00000001: return; ee_i_vadday(ee); return;
+                                case 0x00000002: return; ee_i_vaddaz(ee); return;
+                                case 0x00000003: return; ee_i_vaddaw(ee); return;
+                                case 0x00000004: return; ee_i_vsubax(ee); return;
+                                case 0x00000005: return; ee_i_vsubay(ee); return;
+                                case 0x00000006: return; ee_i_vsubaz(ee); return;
+                                case 0x00000007: return; ee_i_vsubaw(ee); return;
+                                case 0x00000008: return; ee_i_vmaddax(ee); return;
+                                case 0x00000009: return; ee_i_vmadday(ee); return;
+                                case 0x0000000A: return; ee_i_vmaddaz(ee); return;
+                                case 0x0000000B: return; ee_i_vmaddaw(ee); return;
+                                case 0x0000000C: return; ee_i_vmsubax(ee); return;
+                                case 0x0000000D: return; ee_i_vmsubay(ee); return;
+                                case 0x0000000E: return; ee_i_vmsubaz(ee); return;
+                                case 0x0000000F: return; ee_i_vmsubaw(ee); return;
+                                case 0x00000010: return; ee_i_vitof0(ee); return;
+                                case 0x00000011: return; ee_i_vitof4(ee); return;
+                                case 0x00000012: return; ee_i_vitof12(ee); return;
+                                case 0x00000013: return; ee_i_vitof15(ee); return;
+                                case 0x00000014: return; ee_i_vftoi0(ee); return;
+                                case 0x00000015: return; ee_i_vftoi4(ee); return;
+                                case 0x00000016: return; ee_i_vftoi12(ee); return;
+                                case 0x00000017: return; ee_i_vftoi15(ee); return;
+                                case 0x00000018: return; ee_i_vmulax(ee); return;
+                                case 0x00000019: return; ee_i_vmulay(ee); return;
+                                case 0x0000001A: return; ee_i_vmulaz(ee); return;
+                                case 0x0000001B: return; ee_i_vmulaw(ee); return;
+                                case 0x0000001C: return; ee_i_vmulaq(ee); return;
+                                case 0x0000001D: return; ee_i_vabs(ee); return;
+                                case 0x0000001E: return; ee_i_vmulai(ee); return;
+                                case 0x0000001F: return; ee_i_vclipw(ee); return;
+                                case 0x00000020: return; ee_i_vaddaq(ee); return;
+                                case 0x00000021: return; ee_i_vmaddaq(ee); return;
+                                case 0x00000022: return; ee_i_vaddai(ee); return;
+                                case 0x00000023: return; ee_i_vmaddai(ee); return;
+                                case 0x00000024: return; ee_i_vsubaq(ee); return;
+                                case 0x00000025: return; ee_i_vmsubaq(ee); return;
+                                case 0x00000026: return; ee_i_vsubai(ee); return;
+                                case 0x00000027: return; ee_i_vmsubai(ee); return;
+                                case 0x00000028: return; ee_i_vadda(ee); return;
+                                case 0x00000029: return; ee_i_vmadda(ee); return;
+                                case 0x0000002A: return; ee_i_vmula(ee); return;
+                                case 0x0000002C: return; ee_i_vsuba(ee); return;
+                                case 0x0000002D: return; ee_i_vmsuba(ee); return;
+                                case 0x0000002E: return; ee_i_vopmula(ee); return;
+                                case 0x0000002F: return; ee_i_vnop(ee); return;
+                                case 0x00000030: return; ee_i_vmove(ee); return;
+                                case 0x00000031: return; ee_i_vmr32(ee); return;
+                                case 0x00000034: return; ee_i_vlqi(ee); return;
+                                case 0x00000035: return; ee_i_vsqi(ee); return;
+                                case 0x00000036: return; ee_i_vlqd(ee); return;
+                                case 0x00000037: return; ee_i_vsqd(ee); return;
+                                case 0x00000038: return; ee_i_vdiv(ee); return;
+                                case 0x00000039: return; ee_i_vsqrt(ee); return;
+                                case 0x0000003A: return; ee_i_vrsqrt(ee); return;
+                                case 0x0000003B: return; ee_i_vwaitq(ee); return;
+                                case 0x0000003C: return; ee_i_vmtir(ee); return;
+                                case 0x0000003D: return; ee_i_vmfir(ee); return;
+                                case 0x0000003E: return; ee_i_vilwr(ee); return;
+                                case 0x0000003F: return; ee_i_viswr(ee); return;
+                                case 0x00000040: return; ee_i_vrnext(ee); return;
+                                case 0x00000041: return; ee_i_vrget(ee); return;
+                                case 0x00000042: return; ee_i_vrinit(ee); return;
+                                case 0x00000043: return; ee_i_vrxor(ee); return;
                             }
                         } break;
                     }
                 } break;
             }
         } break;
-        case 0x50000000: ee_i_beql(ee); return;
-        case 0x54000000: ee_i_bnel(ee); return;
-        case 0x58000000: ee_i_blezl(ee); return;
-        case 0x5C000000: ee_i_bgtzl(ee); return;
-        case 0x60000000: ee_i_daddi(ee); return;
-        case 0x64000000: ee_i_daddiu(ee); return;
-        case 0x68000000: ee_i_ldl(ee); return;
-        case 0x6C000000: ee_i_ldr(ee); return;
-        case 0x70000000: { // mmi
+        case 0x50000000 >> 26: ee_i_beql(ee); return;
+        case 0x54000000 >> 26: ee_i_bnel(ee); return;
+        case 0x58000000 >> 26: ee_i_blezl(ee); return;
+        case 0x5C000000 >> 26: ee_i_bgtzl(ee); return;
+        case 0x60000000 >> 26: ee_i_daddi(ee); return;
+        case 0x64000000 >> 26: ee_i_daddiu(ee); return;
+        case 0x68000000 >> 26: ee_i_ldl(ee); return;
+        case 0x6C000000 >> 26: ee_i_ldr(ee); return;
+        case 0x70000000 >> 26: { // mmi
             switch (ee->opcode & 0x0000003F) {
                 case 0x00000000: ee_i_madd(ee); return;
                 case 0x00000001: ee_i_maddu(ee); return;
                 case 0x00000004: ee_i_plzcw(ee); return;
                 case 0x00000008: {
-                    switch (ee->opcode & 0x000007C0) {
-                        case 0x00000000: ee_i_paddw(ee); return;
-                        case 0x00000040: ee_i_psubw(ee); return;
-                        case 0x00000080: ee_i_pcgtw(ee); return;
-                        case 0x000000C0: ee_i_pmaxw(ee); return;
-                        case 0x00000100: ee_i_paddh(ee); return;
-                        case 0x00000140: ee_i_psubh(ee); return;
-                        case 0x00000180: ee_i_pcgth(ee); return;
-                        case 0x000001C0: ee_i_pmaxh(ee); return;
-                        case 0x00000200: ee_i_paddb(ee); return;
-                        case 0x00000240: ee_i_psubb(ee); return;
-                        case 0x00000280: ee_i_pcgtb(ee); return;
-                        case 0x00000400: ee_i_paddsw(ee); return;
-                        case 0x00000440: ee_i_psubsw(ee); return;
-                        case 0x00000480: ee_i_pextlw(ee); return;
-                        case 0x000004C0: ee_i_ppacw(ee); return;
-                        case 0x00000500: ee_i_paddsh(ee); return;
-                        case 0x00000540: ee_i_psubsh(ee); return;
-                        case 0x00000580: ee_i_pextlh(ee); return;
-                        case 0x000005C0: ee_i_ppach(ee); return;
-                        case 0x00000600: ee_i_paddsb(ee); return;
-                        case 0x00000640: ee_i_psubsb(ee); return;
-                        case 0x00000680: ee_i_pextlb(ee); return;
-                        case 0x000006C0: ee_i_ppacb(ee); return;
-                        case 0x00000780: ee_i_pext5(ee); return;
-                        case 0x000007C0: ee_i_ppac5(ee); return;
+                    switch ((ee->opcode & 0x000007C0) >> 6) {
+                        case 0x00000000 >> 6: ee_i_paddw(ee); return;
+                        case 0x00000040 >> 6: ee_i_psubw(ee); return;
+                        case 0x00000080 >> 6: ee_i_pcgtw(ee); return;
+                        case 0x000000C0 >> 6: ee_i_pmaxw(ee); return;
+                        case 0x00000100 >> 6: ee_i_paddh(ee); return;
+                        case 0x00000140 >> 6: ee_i_psubh(ee); return;
+                        case 0x00000180 >> 6: ee_i_pcgth(ee); return;
+                        case 0x000001C0 >> 6: ee_i_pmaxh(ee); return;
+                        case 0x00000200 >> 6: ee_i_paddb(ee); return;
+                        case 0x00000240 >> 6: ee_i_psubb(ee); return;
+                        case 0x00000280 >> 6: ee_i_pcgtb(ee); return;
+                        case 0x00000400 >> 6: ee_i_paddsw(ee); return;
+                        case 0x00000440 >> 6: ee_i_psubsw(ee); return;
+                        case 0x00000480 >> 6: ee_i_pextlw(ee); return;
+                        case 0x000004C0 >> 6: ee_i_ppacw(ee); return;
+                        case 0x00000500 >> 6: ee_i_paddsh(ee); return;
+                        case 0x00000540 >> 6: ee_i_psubsh(ee); return;
+                        case 0x00000580 >> 6: ee_i_pextlh(ee); return;
+                        case 0x000005C0 >> 6: ee_i_ppach(ee); return;
+                        case 0x00000600 >> 6: ee_i_paddsb(ee); return;
+                        case 0x00000640 >> 6: ee_i_psubsb(ee); return;
+                        case 0x00000680 >> 6: ee_i_pextlb(ee); return;
+                        case 0x000006C0 >> 6: ee_i_ppacb(ee); return;
+                        case 0x00000780 >> 6: ee_i_pext5(ee); return;
+                        case 0x000007C0 >> 6: ee_i_ppac5(ee); return;
                     }
                 } break;
                 case 0x00000009: {
-                    switch (ee->opcode & 0x000007C0) {
-                        case 0x00000000: ee_i_pmaddw(ee); return;
-                        case 0x00000080: ee_i_psllvw(ee); return;
-                        case 0x000000C0: ee_i_psrlvw(ee); return;
-                        case 0x00000100: ee_i_pmsubw(ee); return;
-                        case 0x00000200: ee_i_pmfhi(ee); return;
-                        case 0x00000240: ee_i_pmflo(ee); return;
-                        case 0x00000280: ee_i_pinth(ee); return;
-                        case 0x00000300: ee_i_pmultw(ee); return;
-                        case 0x00000340: ee_i_pdivw(ee); return;
-                        case 0x00000380: ee_i_pcpyld(ee); return;
-                        case 0x00000400: ee_i_pmaddh(ee); return;
-                        case 0x00000440: ee_i_phmadh(ee); return;
-                        case 0x00000480: ee_i_pand(ee); return;
-                        case 0x000004C0: ee_i_pxor(ee); return;
-                        case 0x00000500: ee_i_pmsubh(ee); return;
-                        case 0x00000540: ee_i_phmsbh(ee); return;
-                        case 0x00000680: ee_i_pexeh(ee); return;
-                        case 0x000006C0: ee_i_prevh(ee); return;
-                        case 0x00000700: ee_i_pmulth(ee); return;
-                        case 0x00000740: ee_i_pdivbw(ee); return;
-                        case 0x00000780: ee_i_pexew(ee); return;
-                        case 0x000007C0: ee_i_prot3w(ee); return;
+                    switch ((ee->opcode & 0x000007C0) >> 6) {
+                        case 0x00000000 >> 6: ee_i_pmaddw(ee); return;
+                        case 0x00000080 >> 6: ee_i_psllvw(ee); return;
+                        case 0x000000C0 >> 6: ee_i_psrlvw(ee); return;
+                        case 0x00000100 >> 6: ee_i_pmsubw(ee); return;
+                        case 0x00000200 >> 6: ee_i_pmfhi(ee); return;
+                        case 0x00000240 >> 6: ee_i_pmflo(ee); return;
+                        case 0x00000280 >> 6: ee_i_pinth(ee); return;
+                        case 0x00000300 >> 6: ee_i_pmultw(ee); return;
+                        case 0x00000340 >> 6: ee_i_pdivw(ee); return;
+                        case 0x00000380 >> 6: ee_i_pcpyld(ee); return;
+                        case 0x00000400 >> 6: ee_i_pmaddh(ee); return;
+                        case 0x00000440 >> 6: ee_i_phmadh(ee); return;
+                        case 0x00000480 >> 6: ee_i_pand(ee); return;
+                        case 0x000004C0 >> 6: ee_i_pxor(ee); return;
+                        case 0x00000500 >> 6: ee_i_pmsubh(ee); return;
+                        case 0x00000540 >> 6: ee_i_phmsbh(ee); return;
+                        case 0x00000680 >> 6: ee_i_pexeh(ee); return;
+                        case 0x000006C0 >> 6: ee_i_prevh(ee); return;
+                        case 0x00000700 >> 6: ee_i_pmulth(ee); return;
+                        case 0x00000740 >> 6: ee_i_pdivbw(ee); return;
+                        case 0x00000780 >> 6: ee_i_pexew(ee); return;
+                        case 0x000007C0 >> 6: ee_i_prot3w(ee); return;
                     }
                 } break;
                 case 0x00000010: ee_i_mfhi1(ee); return;
@@ -2627,51 +2639,51 @@ static inline void ee_execute(struct ee_state* ee) {
                 case 0x00000020: ee_i_madd1(ee); return;
                 case 0x00000021: ee_i_maddu1(ee); return;
                 case 0x00000028: {
-                    switch (ee->opcode & 0x000007C0) {
-                        case 0x00000040: ee_i_pabsw(ee); return;
-                        case 0x00000080: ee_i_pceqw(ee); return;
-                        case 0x000000C0: ee_i_pminw(ee); return;
-                        case 0x00000100: ee_i_padsbh(ee); return;
-                        case 0x00000140: ee_i_pabsh(ee); return;
-                        case 0x00000180: ee_i_pceqh(ee); return;
-                        case 0x000001C0: ee_i_pminh(ee); return;
-                        case 0x00000280: ee_i_pceqb(ee); return;
-                        case 0x00000400: ee_i_padduw(ee); return;
-                        case 0x00000440: ee_i_psubuw(ee); return;
-                        case 0x00000480: ee_i_pextuw(ee); return;
-                        case 0x00000500: ee_i_padduh(ee); return;
-                        case 0x00000540: ee_i_psubuh(ee); return;
-                        case 0x00000580: ee_i_pextuh(ee); return;
-                        case 0x00000600: ee_i_paddub(ee); return;
-                        case 0x00000640: ee_i_psubub(ee); return;
-                        case 0x00000680: ee_i_pextub(ee); return;
-                        case 0x000006C0: ee_i_qfsrv(ee); return;
+                    switch ((ee->opcode & 0x000007C0) >> 6) {
+                        case 0x00000040 >> 6: ee_i_pabsw(ee); return;
+                        case 0x00000080 >> 6: ee_i_pceqw(ee); return;
+                        case 0x000000C0 >> 6: ee_i_pminw(ee); return;
+                        case 0x00000100 >> 6: ee_i_padsbh(ee); return;
+                        case 0x00000140 >> 6: ee_i_pabsh(ee); return;
+                        case 0x00000180 >> 6: ee_i_pceqh(ee); return;
+                        case 0x000001C0 >> 6: ee_i_pminh(ee); return;
+                        case 0x00000280 >> 6: ee_i_pceqb(ee); return;
+                        case 0x00000400 >> 6: ee_i_padduw(ee); return;
+                        case 0x00000440 >> 6: ee_i_psubuw(ee); return;
+                        case 0x00000480 >> 6: ee_i_pextuw(ee); return;
+                        case 0x00000500 >> 6: ee_i_padduh(ee); return;
+                        case 0x00000540 >> 6: ee_i_psubuh(ee); return;
+                        case 0x00000580 >> 6: ee_i_pextuh(ee); return;
+                        case 0x00000600 >> 6: ee_i_paddub(ee); return;
+                        case 0x00000640 >> 6: ee_i_psubub(ee); return;
+                        case 0x00000680 >> 6: ee_i_pextub(ee); return;
+                        case 0x000006C0 >> 6: ee_i_qfsrv(ee); return;
                     }
                 } break;
                 case 0x00000029: {
-                    switch (ee->opcode & 0x000007C0) {
-                        case 0x00000000: ee_i_pmadduw(ee); return;
-                        case 0x000000C0: ee_i_psravw(ee); return;
-                        case 0x00000200: ee_i_pmthi(ee); return;
-                        case 0x00000240: ee_i_pmtlo(ee); return;
-                        case 0x00000280: ee_i_pinteh(ee); return;
-                        case 0x00000300: ee_i_pmultuw(ee); return;
-                        case 0x00000340: ee_i_pdivuw(ee); return;
-                        case 0x00000380: ee_i_pcpyud(ee); return;
-                        case 0x00000480: ee_i_por(ee); return;
-                        case 0x000004C0: ee_i_pnor(ee); return;
-                        case 0x00000680: ee_i_pexch(ee); return;
-                        case 0x000006C0: ee_i_pcpyh(ee); return;
-                        case 0x00000780: ee_i_pexcw(ee); return;
+                    switch ((ee->opcode & 0x000007C0) >> 6) {
+                        case 0x00000000 >> 6: ee_i_pmadduw(ee); return;
+                        case 0x000000C0 >> 6: ee_i_psravw(ee); return;
+                        case 0x00000200 >> 6: ee_i_pmthi(ee); return;
+                        case 0x00000240 >> 6: ee_i_pmtlo(ee); return;
+                        case 0x00000280 >> 6: ee_i_pinteh(ee); return;
+                        case 0x00000300 >> 6: ee_i_pmultuw(ee); return;
+                        case 0x00000340 >> 6: ee_i_pdivuw(ee); return;
+                        case 0x00000380 >> 6: ee_i_pcpyud(ee); return;
+                        case 0x00000480 >> 6: ee_i_por(ee); return;
+                        case 0x000004C0 >> 6: ee_i_pnor(ee); return;
+                        case 0x00000680 >> 6: ee_i_pexch(ee); return;
+                        case 0x000006C0 >> 6: ee_i_pcpyh(ee); return;
+                        case 0x00000780 >> 6: ee_i_pexcw(ee); return;
                     }
                 } break;
                 case 0x00000030: {
-                    switch (ee->opcode & 0x000007C0) {
-                        case 0x00000000: ee_i_pmfhllw(ee); return;
-                        case 0x00000040: ee_i_pmfhluw(ee); return;
-                        case 0x00000080: ee_i_pmfhlslw(ee); return;
-                        case 0x000000c0: ee_i_pmfhllh(ee); return;
-                        case 0x00000100: ee_i_pmfhlsh(ee); return;
+                    switch ((ee->opcode & 0x000007C0) >> 6) {
+                        case 0x00000000 >> 6: ee_i_pmfhllw(ee); return;
+                        case 0x00000040 >> 6: ee_i_pmfhluw(ee); return;
+                        case 0x00000080 >> 6: ee_i_pmfhlslw(ee); return;
+                        case 0x000000c0 >> 6: ee_i_pmfhllh(ee); return;
+                        case 0x00000100 >> 6: ee_i_pmfhlsh(ee); return;
                     }
                 } break;
                 case 0x00000031: ee_i_pmthl(ee); return;
@@ -2683,31 +2695,31 @@ static inline void ee_execute(struct ee_state* ee) {
                 case 0x0000003F: ee_i_psraw(ee); return;
             }
         } break;
-        case 0x78000000: ee_i_lq(ee); return;
-        case 0x7C000000: ee_i_sq(ee); return;
-        case 0x80000000: ee_i_lb(ee); return;
-        case 0x84000000: ee_i_lh(ee); return;
-        case 0x88000000: ee_i_lwl(ee); return;
-        case 0x8C000000: ee_i_lw(ee); return;
-        case 0x90000000: ee_i_lbu(ee); return;
-        case 0x94000000: ee_i_lhu(ee); return;
-        case 0x98000000: ee_i_lwr(ee); return;
-        case 0x9C000000: ee_i_lwu(ee); return;
-        case 0xA0000000: ee_i_sb(ee); return;
-        case 0xA4000000: ee_i_sh(ee); return;
-        case 0xA8000000: ee_i_swl(ee); return;
-        case 0xAC000000: ee_i_sw(ee); return;
-        case 0xB0000000: ee_i_sdl(ee); return;
-        case 0xB4000000: ee_i_sdr(ee); return;
-        case 0xB8000000: ee_i_swr(ee); return;
-        case 0xBC000000: ee_i_cache(ee); return;
-        case 0xC4000000: ee_i_lwc1(ee); return;
-        case 0xCC000000: ee_i_pref(ee); return;
-        case 0xD8000000: ee_i_lqc2(ee); return;
-        case 0xDC000000: ee_i_ld(ee); return;
-        case 0xE4000000: ee_i_swc1(ee); return;
-        case 0xF8000000: ee_i_sqc2(ee); return;
-        case 0xFC000000: ee_i_sd(ee); return;
+        case 0x78000000 >> 26: ee_i_lq(ee); return;
+        case 0x7C000000 >> 26: ee_i_sq(ee); return;
+        case 0x80000000 >> 26: ee_i_lb(ee); return;
+        case 0x84000000 >> 26: ee_i_lh(ee); return;
+        case 0x88000000 >> 26: ee_i_lwl(ee); return;
+        case 0x8C000000 >> 26: ee_i_lw(ee); return;
+        case 0x90000000 >> 26: ee_i_lbu(ee); return;
+        case 0x94000000 >> 26: ee_i_lhu(ee); return;
+        case 0x98000000 >> 26: ee_i_lwr(ee); return;
+        case 0x9C000000 >> 26: ee_i_lwu(ee); return;
+        case 0xA0000000 >> 26: ee_i_sb(ee); return;
+        case 0xA4000000 >> 26: ee_i_sh(ee); return;
+        case 0xA8000000 >> 26: ee_i_swl(ee); return;
+        case 0xAC000000 >> 26: ee_i_sw(ee); return;
+        case 0xB0000000 >> 26: ee_i_sdl(ee); return;
+        case 0xB4000000 >> 26: ee_i_sdr(ee); return;
+        case 0xB8000000 >> 26: ee_i_swr(ee); return;
+        case 0xBC000000 >> 26: ee_i_cache(ee); return;
+        case 0xC4000000 >> 26: ee_i_lwc1(ee); return;
+        case 0xCC000000 >> 26: ee_i_pref(ee); return;
+        case 0xD8000000 >> 26: ee_i_lqc2(ee); return;
+        case 0xDC000000 >> 26: ee_i_ld(ee); return;
+        case 0xE4000000 >> 26: ee_i_swc1(ee); return;
+        case 0xF8000000 >> 26: return; ee_i_sqc2(ee); return;
+        case 0xFC000000 >> 26: ee_i_sd(ee); return;
     }
 
     printf("ee: Invalid instruction %08x @ pc=%08x\n", ee->opcode, ee->pc);
