@@ -353,13 +353,18 @@ static inline void iop_i_j(struct iop_state* iop) {
 
                         // printf("ioman_open(\"%s\", %x, %x)\n", buf, iop->r[5], iop->r[6]);
 
-                        // if (file)
-                        //     break;
-
                         if (strncmp(buf, "host:", 5))
                             break;
 
-                        file = fopen(buf + 5, "rb");
+                        if (file) {
+                            fclose(file);
+                        }
+
+                        if (buf[5] == '/') {
+                            file = fopen(buf + 6, "rb");
+                        } else {
+                            file = fopen(buf + 5, "rb");
+                        }
 
                         if (!file)
                             break;
@@ -384,10 +389,6 @@ static inline void iop_i_j(struct iop_state* iop) {
                         uint8_t* buf = malloc(size);
 
                         iop->r[2] = fread(buf, 1, size, file);
-
-                        for (int i = 0; i < size; i++) {
-                            iop_bus_write8(iop, ptr + i, buf[i]);
-                        }
 
                         free(buf);
 
