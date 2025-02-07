@@ -182,6 +182,11 @@ static inline void cdvd_s_close_config(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_mg_write_hdr_start(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 
 void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->s_cmd = cmd;
@@ -202,6 +207,7 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x40: cdvd_s_open_config(cdvd); break;
         case 0x41: cdvd_s_read_config(cdvd); break;
         case 0x43: cdvd_s_close_config(cdvd); break;
+        case 0x90: cdvd_s_mg_write_hdr_start(cdvd); break;
 
         default: {
             printf("cdvd: Unknown S command %02xh\n", cmd);
@@ -276,12 +282,10 @@ static inline void cdvd_set_status_bits(struct ps2_cdvd* cdvd, uint8_t data) {
     cdvd->sticky_status |= data;
 }
 
-void cdvd_do_cd_read(void* udata, int overshoot) {
+void cdvd_do_read(void* udata, int overshoot) {
     struct ps2_cdvd* cdvd = (struct ps2_cdvd*)udata;
 
-    assert(cdvd->read_size == 2048);
-
-    // printf("cdvd: Reading %d sector(s) from lba=%x (%d)\n", cdvd->read_count, cdvd->read_lba, cdvd->read_lba);
+    printf("cdvd: Reading %d %d byte sector(s) from lba=%x (%d)\n", cdvd->read_count, cdvd->read_size, cdvd->read_lba, cdvd->read_lba);
 
     // Do read
     int sector_count = cdvd->read_count;
@@ -289,27 +293,35 @@ void cdvd_do_cd_read(void* udata, int overshoot) {
     for (int i = 0; i < sector_count; i++) {
         memset(cdvd->buf, 0, 2340);
 
-        // LBA -> MSF
-        uint64_t a = (cdvd->read_lba + i) + 150;
-        uint32_t m = a / 4500;
+        switch (cdvd->read_size) {
+            case CDVD_CD_SS_2048:
+            case CDVD_CD_SS_2328: {
+                cdvd_read_sector(cdvd, cdvd->read_lba++, 0);
+            } break;
+            case CDVD_CD_SS_2340: {
+                // LBA -> MSF
+                uint64_t a = (cdvd->read_lba + i) + 150;
+                uint32_t m = a / 4500;
 
-        a -= m * 4500;
+                a -= m * 4500;
 
-        uint32_t s = a / 75;
-        uint32_t f = a - (s * 75);
+                uint32_t s = a / 75;
+                uint32_t f = a - (s * 75);
 
-        // // Write sync data
-        // for (int i = 0x1; i < 0xb; i++)
-        //     buf[i] = 0xff;
+                // Fill in header
+                cdvd->buf[0] = itob_table[m];
+                cdvd->buf[1] = itob_table[s];
+                cdvd->buf[2] = itob_table[f];
+                cdvd->buf[3] = 1;
 
-        // Fill in header
-        cdvd->buf[12] = itob_table[m];
-        cdvd->buf[13] = itob_table[s];
-        cdvd->buf[14] = itob_table[f];
-        cdvd->buf[15] = 1;
-
-        // Write raw data at offset 12
-        cdvd_read_sector(cdvd, cdvd->read_lba++, 0);
+                // Write raw data at offset 12
+                cdvd_read_sector(cdvd, cdvd->read_lba++, 12);
+            } break;
+            case CDVD_DVD_SS: {
+                // To-do: DVD header data
+                cdvd_read_sector(cdvd, cdvd->read_lba++, 12);
+            } break;
+        }
 
         cdvd->buf_size = cdvd->read_size;
         cdvd->read_count--;
@@ -379,18 +391,19 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
 
     cdvd->read_lba = *(uint32_t*)(cdvd->n_params);
     cdvd->read_count = *(uint32_t*)(cdvd->n_params + 4);
-    cdvd->read_size = 2048;
+    cdvd->read_speed = cdvd->n_params[9];
+    cdvd->read_size = CDVD_CD_SS_2048;
 
     switch (cdvd->n_params[10]) {
-        case 1: cdvd->read_size = 2328; break;
-        case 2: cdvd->read_size = 2340; break;
+        case 1: cdvd->read_size = CDVD_CD_SS_2328; break;
+        case 2: cdvd->read_size = CDVD_CD_SS_2340; break;
     }
 
     struct sched_event event;
 
     event.name = "CDVD ReadCd";
     event.udata = cdvd;
-    event.callback = cdvd_do_cd_read;
+    event.callback = cdvd_do_read;
     event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
 
     cdvd_set_status_bits(cdvd,
@@ -399,11 +412,12 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
         CDVD_STATUS_SEEKING
     );
 
-    // printf("cdvd: ReadCd lba=%08x count=%08x size=%d cycles=%ld\n",
+    // printf("cdvd: ReadCd lba=%08x count=%08x size=%d cycles=%ld speed=%02x\n",
     //     cdvd->read_lba,
     //     cdvd->read_count,
     //     cdvd->read_size,
-    //     event.cycles
+    //     event.cycles,
+    //     cdvd->n_params[9]
     // );
 
     sched_schedule(cdvd->sched, event);
@@ -421,13 +435,29 @@ static inline void cdvd_n_read_dvd(struct ps2_cdvd* cdvd) {
         2060 4    ? (all zeroes)
     */
 
-    uint32_t lba = *(uint32_t*)(cdvd->n_params);
-    uint32_t count = *(uint32_t*)(cdvd->n_params + 4);
+    int prev_lba = cdvd->read_lba;
 
-    printf("cdvd: ReadDvd lba=%08x count=%08x\n", lba, count);
+    cdvd->read_lba = *(uint32_t*)(cdvd->n_params);
+    cdvd->read_count = *(uint32_t*)(cdvd->n_params + 4);
+    cdvd->read_speed = cdvd->n_params[9];
+    cdvd->read_size = CDVD_DVD_SS;
 
-    exit(1);
+    printf("cdvd: ReadDvd lba=%08x count=%08x\n", cdvd->read_lba, cdvd->read_count);
 
+    struct sched_event event;
+
+    event.name = "CDVD ReadDvd";
+    event.udata = cdvd;
+    event.callback = cdvd_do_read;
+    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
+
+    cdvd_set_status_bits(cdvd,
+        CDVD_STATUS_READING |
+        CDVD_STATUS_SPINNING |
+        CDVD_STATUS_SEEKING
+    );
+
+    sched_schedule(cdvd->sched, event);
 }
 static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {
     printf("cdvd: get_toc\n");
@@ -608,6 +638,7 @@ uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
         case 0x1F40200A: /* printf("cdvd: read status %x\n", cdvd->status); */ return cdvd->status;
         case 0x1F40200B: /* printf("cdvd: read sticky status %x\n", cdvd->sticky_status); */ return cdvd->sticky_status;
         case 0x1F40200F: /* printf("cdvd: read disc_type %x\n", cdvd->disc_type); */ return cdvd->disc_type;
+        case 0x1F402013: /* printf("cdvd: read speed %x\n", cdvd->disc_type); */ return cdvd->read_speed;
         case 0x1F402016: /* printf("cdvd: read s_cmd %x\n", cdvd->s_cmd); */ return cdvd->s_cmd;
         case 0x1F402017: /* printf("cdvd: read s_stat %x\n", cdvd->s_stat); */ return cdvd->s_stat;
         // case 0x1F402017: (W);

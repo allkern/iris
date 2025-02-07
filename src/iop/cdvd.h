@@ -99,6 +99,11 @@ extern "C" {
 #define CDVD_S_STATUS_NO_DATA 64
 #define CDVD_S_STATUS_BUSY    128
 
+#define CDVD_CD_SS_2328 2328
+#define CDVD_CD_SS_2340 2340
+#define CDVD_CD_SS_2048 2048
+#define CDVD_DVD_SS 2064
+
 struct ps2_cdvd {
     uint8_t n_cmd;
     uint8_t n_stat;
@@ -125,6 +130,7 @@ struct ps2_cdvd {
     uint32_t read_lba;
     uint32_t read_count;
     uint32_t read_size;
+    uint8_t read_speed;
 
     uint8_t nvram[1024];
 
