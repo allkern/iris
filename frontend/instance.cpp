@@ -1,3 +1,5 @@
+#include <csignal>
+#include <chrono>
 #include <string>
 #include <vector>
 
@@ -14,9 +16,22 @@
 #include "ee/renderer/opengl.hpp"
 #include "ee/renderer/software.hpp"
 
-#include <csignal>
-
+#include "imgui.h"
+#include "imgui_impl_sdl2.h"
+#include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
+#include <stdio.h>
+#include <SDL.h>
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+#include <SDL_opengles2.h>
+#else
+#include <SDL_opengl.h>
+#endif
+
+// This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
+#ifdef __EMSCRIPTEN__
+#include "../libs/emscripten/emscripten_mainloop_stub.h"
+#endif
 
 namespace lunar {
 
@@ -190,22 +205,68 @@ void sigint_handler(int signal) {
     exit(1);
 }
 
+void update_title(lunar::instance* lunar) {
+    char buf[128];
+
+    const char* base = lunar->loaded ? basename(lunar->loaded) : NULL;
+
+    sprintf(buf, base ? "Iris (eegs 0.1) | %s" : "Iris (eegs 0.1)",
+        base
+    );
+
+    SDL_SetWindowTitle(lunar->window, buf);
+}
+
 void init(lunar::instance* lunar, int argc, const char* argv[]) {
     g_lunar = lunar;
     std::signal(SIGINT, sigint_handler);
 
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS);
+
+    // Decide GL+GLSL versions
+#if defined(IMGUI_IMPL_OPENGL_ES2)
+    // GL ES 2.0 + GLSL 100
+    const char* glsl_version = "#version 100";
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#elif defined(__APPLE__)
+    // GL 3.2 Core + GLSL 150
+    const char* glsl_version = "#version 150";
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, SDL_GL_CONTEXT_FORWARD_COMPATIBLE_FLAG); // Always required on Mac
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+#else
+    // GL 3.0 + GLSL 130
+    const char* glsl_version = "#version 130";
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_FLAGS, 0);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+    SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
+
+    // From 2.0.18: Enable native IME.
+#ifdef SDL_HINT_IME_SHOW_UI
+    SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
+#endif
+
+    // Create window with graphics context
+    SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+    SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
+    SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 8);
+
     lunar->window = SDL_CreateWindow(
-        "eegs 0.1",
+        "Iris (eegs 0.1)",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         960, 720,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
     );
 
-    lunar->renderer = SDL_CreateRenderer(
-        lunar->window,
-        -1,
-        SDL_RENDERER_PRESENTVSYNC | SDL_RENDERER_ACCELERATED
-    );
+    lunar->gl_context = SDL_GL_CreateContext(lunar->window);
+    SDL_GL_MakeCurrent(lunar->window, lunar->gl_context);
+    SDL_GL_SetSwapInterval(0);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -217,8 +278,8 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     ImGui::StyleColorsDark();
 
     // Setup Platform/Renderer backends
-    ImGui_ImplSDL2_InitForSDLRenderer(lunar->window, lunar->renderer);
-    ImGui_ImplSDLRenderer2_Init(lunar->renderer);
+    ImGui_ImplSDL2_InitForOpenGL(lunar->window, lunar->gl_context);
+    ImGui_ImplOpenGL3_Init(glsl_version);
 
     // Init fonts
     io.Fonts->AddFontDefault();
@@ -257,6 +318,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     style.WindowTitleAlign        = ImVec2(0.5, 0.5);
     style.DockingSeparatorSize    = 0;
     style.SeparatorTextBorderSize = 1;
+    style.SeparatorTextPadding    = ImVec2(20, 0);
 
     // Init theme
     ImVec4* colors = style.Colors;
@@ -317,7 +379,6 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
 
     lunar->open = true;
-
     lunar->ps2 = ps2_create();
 
     ps2_init(lunar->ps2);
@@ -339,8 +400,10 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->ps2->gs->backend.transfer_write = software_transfer_write;
     lunar->ps2->gs->backend.transfer_read = software_transfer_read;
 
-    software_init(lunar->ctx, lunar->ps2->gs, lunar->window, lunar->renderer);
-    
+    software_init(lunar->ctx, lunar->ps2->gs, lunar->window);
+
+    lunar->ticks = SDL_GetTicks();
+
     lunar->pause = true;
     lunar->elf_path = NULL;
     lunar->boot_path = NULL;
@@ -381,10 +444,14 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
     if (lunar->elf_path) {
         ps2_elf_load(lunar->ps2, lunar->elf_path);
+
+        lunar->loaded = lunar->elf_path;
     }
 
     if (lunar->boot_path) {
         ps2_boot_file(lunar->ps2, lunar->boot_path);
+
+        lunar->loaded = lunar->boot_path;
     }
 
     if (lunar->disc_path) {
@@ -405,6 +472,8 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
         ps2_boot_file(lunar->ps2, boot_file);
         ps2_cdvd_open(lunar->ps2->cdvd, lunar->disc_path);
+
+        lunar->loaded = lunar->disc_path;
     }
 }
 
@@ -429,12 +498,33 @@ void update(lunar::instance* lunar) {
     }
 }
 
+void update_time(lunar::instance* lunar) {
+    int t = SDL_GetTicks() - lunar->ticks;
+
+    if (t < 500)
+        return;
+
+    if (lunar->fps == 0.0f) {
+        lunar->fps = (float)lunar->frames;
+    } else {
+        lunar->fps += (float)lunar->frames;
+        lunar->fps /= 2.0f;
+    }
+
+    lunar->ticks = SDL_GetTicks();
+    lunar->frames = 0;
+}
+
 void update_window(lunar::instance* lunar) {
     using namespace ImGui;
 
+    update_title(lunar);
+    update_time(lunar);
+
     ImGuiIO& io = ImGui::GetIO();
 
-    ImGui_ImplSDLRenderer2_NewFrame();
+    // Start the Dear ImGui frame
+    ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplSDL2_NewFrame();
     NewFrame();
 
@@ -445,13 +535,18 @@ void update_window(lunar::instance* lunar) {
     if (lunar->show_ee_control) show_ee_control(lunar);
     if (lunar->show_ee_state) show_ee_state(lunar);
     if (lunar->show_ee_logs) show_ee_logs(lunar);
+    if (lunar->show_ee_interrupts) show_ee_interrupts(lunar);
+    if (lunar->show_ee_dmac) show_ee_dmac(lunar);
     if (lunar->show_iop_control) show_iop_control(lunar);
     if (lunar->show_iop_state) show_iop_state(lunar);
     if (lunar->show_iop_logs) show_iop_logs(lunar);
+    if (lunar->show_iop_interrupts) show_iop_interrupts(lunar);
+    if (lunar->show_iop_dma) show_iop_dma(lunar);
     if (lunar->show_gs_debugger) show_gs_debugger(lunar);
     if (lunar->show_memory_viewer) show_memory_viewer(lunar);
     if (lunar->show_status_bar) show_status_bar(lunar);
     if (lunar->show_breakpoints) show_breakpoints(lunar);
+    if (lunar->show_imgui_demo) ShowDemoWindow(&lunar->show_imgui_demo);
 
     if (lunar->pause) {
         int width, height;
@@ -470,18 +565,32 @@ void update_window(lunar::instance* lunar) {
         );
     }
 
-    Render();
+    // Rendering
+    ImGui::Render();
+    glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+    glClearColor(0.11, 0.11, 0.11, 1.0);
+    glClear(GL_COLOR_BUFFER_BIT);
 
-    SDL_RenderSetScale(lunar->renderer, io.DisplayFramebufferScale.x, io.DisplayFramebufferScale.y);
-
-    SDL_SetRenderDrawColor(lunar->renderer, 0x18, 0x18, 0x18, 0xff);
-    SDL_RenderClear(lunar->renderer);
-
+    // Render display texture
     software_render(lunar->ps2->gs, lunar->ps2->gs->backend.udata);
 
-    ImGui_ImplSDLRenderer2_RenderDrawData(GetDrawData(), lunar->renderer);
-    
-    SDL_RenderPresent(lunar->renderer);
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+    // Update and Render additional Platform Windows
+    // (Platform functions may change the current OpenGL context, so we save/restore it to make it easier to paste this code elsewhere.
+    //  For this specific demo app we could also call SDL_GL_MakeCurrent(window, gl_context) directly)
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+    {
+        SDL_Window* backup_current_window = SDL_GL_GetCurrentWindow();
+        SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+        SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+    }
+
+    SDL_GL_SwapWindow(lunar->window);
+
+    lunar->frames++;
 
     SDL_Event event;
 
@@ -524,11 +633,11 @@ bool is_open(lunar::instance* lunar) {
 void close(lunar::instance* lunar) {
     using namespace ImGui;
 
-    ImGui_ImplSDLRenderer2_Shutdown();
+    ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
-    DestroyContext();
+    ImGui::DestroyContext();
 
-    SDL_DestroyRenderer(lunar->renderer);
+    SDL_GL_DeleteContext(lunar->gl_context);
     SDL_DestroyWindow(lunar->window);
     SDL_Quit();
 
