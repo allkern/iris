@@ -21,6 +21,7 @@ extern "C" {
 #include "iop/timers.h"
 #include "iop/cdvd.h"
 #include "iop/sio2.h"
+#include "iop/spu2.h"
 #include "shared/bios.h"
 #include "shared/ram.h"
 #include "shared/sif.h"
@@ -57,6 +58,7 @@ struct ps2_state {
     struct ps2_iop_timers* iop_timers;
     struct ps2_cdvd* cdvd;
     struct ps2_sio2* sio2;
+    struct ps2_spu2* spu2;
 
     // Shared
     struct ps2_ram* iop_ram;
