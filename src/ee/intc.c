@@ -32,6 +32,8 @@ uint64_t ps2_intc_read32(struct ps2_intc* intc, uint32_t addr) {
     switch (addr) {
         case 0x1000f000: return intc->stat;
         case 0x1000f010: return intc->mask;
+
+        default: printf("intc: Unhandled INTC read %08x\n", addr); exit(1);
     }
 
     return 0;
@@ -39,8 +41,10 @@ uint64_t ps2_intc_read32(struct ps2_intc* intc, uint32_t addr) {
 
 void ps2_intc_write32(struct ps2_intc* intc, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x1000f000: intc->stat &= ~data; return;
+        case 0x1000f000: intc->stat &= ~data; break;
         case 0x1000f010: intc->mask ^= data; break;
+
+        default: printf("intc: Unhandled INTC write %08x %08x\n", addr, data); exit(1);
     }
 
     intc_check_irq(intc);

@@ -14,16 +14,16 @@ extern "C" {
 #define EE_INTC_SBUS       1
 #define EE_INTC_VBLANK_IN  2
 #define EE_INTC_VBLANK_OUT 3
-#define EE_INTC_VIF0       4 
-#define EE_INTC_VIF1       5 
-#define EE_INTC_VU0        6 
-#define EE_INTC_VU1        7 
-#define EE_INTC_IPU        8 
-#define EE_INTC_TIMER0     9  
-#define EE_INTC_TIMER1     10  
-#define EE_INTC_TIMER2     11  
-#define EE_INTC_TIMER3     12  
-#define EE_INTC_SFIFO      13 
+#define EE_INTC_VIF0       4
+#define EE_INTC_VIF1       5
+#define EE_INTC_VU0        6
+#define EE_INTC_VU1        7
+#define EE_INTC_IPU        8
+#define EE_INTC_TIMER0     9
+#define EE_INTC_TIMER1     10
+#define EE_INTC_TIMER2     11
+#define EE_INTC_TIMER3     12
+#define EE_INTC_SFIFO      13
 #define EE_INTC_VU0_WD     14
 
 struct ps2_intc {
