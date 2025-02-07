@@ -145,7 +145,7 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
         return;
     }
 
-    // printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->drive->buf_size, dma->cdvd.madr, dma->cdvd.bcr);
+    printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->drive->buf_size, dma->cdvd.madr, dma->cdvd.bcr);
 
     // uint32_t addr = dma->cdvd.madr;
 
@@ -189,6 +189,8 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     dma->cdvd.bcr = 0;
 }
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
+    printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x\n", dma->spu1.chcr, dma->spu1.madr, dma->spu1.bcr);
+
     // Stub
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
     iop_dma_check_irq(dma);
@@ -202,7 +204,19 @@ void iop_dma_handle_otc_transfer(struct ps2_iop_dma* dma) {
     printf("iop: OTC channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
-    // Stub
+    printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr);
+
+    unsigned int size = (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16);
+
+    for (int i = 0; i < size; i++) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
+
+        iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
+        iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
+
+        dma->spu2.madr += 4;
+    }
+
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
     iop_dma_check_irq(dma);
 
@@ -300,6 +314,10 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
                 addr += 4;
                 --size;
             }
+        }
+
+        if ((dma->dicr2 & 0x400) && irq) {
+            ps2_iop_intc_irq(dma->intc, IOP_INTC_DMA);
         }
 
         if (ps2_sif_fifo_is_empty(dma->sif))
@@ -400,6 +418,7 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
         switch (addr & 0xf) {
             case 0x0: c->madr = data; return;
             case 0x4: c->bcr = data; return;
+            case 0x6: c->bcr &= 0xffff; c->bcr |= data << 16; return;
             case 0x8: {
                 c->chcr = data;
 
