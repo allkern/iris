@@ -45,6 +45,10 @@ void iop_bus_init_sio2(struct iop_bus* bus, struct ps2_sio2* sio2) {
     bus->sio2 = sio2;
 }
 
+void iop_bus_init_spu2(struct iop_bus* bus, struct ps2_spu2* spu2) {
+    bus->spu2 = spu2;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }
@@ -87,27 +91,33 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x1F801500, 0x1F80155F, iop_dma, dma);
     MAP_REG_READ(32, 0x1F801570, 0x1F80157F, iop_dma, dma);
     MAP_REG_READ(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
+    MAP_REG_READ(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
     MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     // if (addr == 0x1f9001b0) {
     //     return 0xffff;
     // }
     // Stub SPU2 status reg?
-    // if (addr == 0x1F900744) {
-    //     if (r744) {
-    //         return 0x80;
-    //     } else {
-    //         r744 = 1;
-    //         return 0;
-    //     }
-    // }
-    // if (addr == 0x1F900344) {
-    //     if (r344) {
-    //         return 0x80;
-    //     } else {
-    //         r344 = 1;
-    //         return 0;
-    //     }
+    if (addr == 0x1F900744) {
+        return 0x80;
+        if (r744) {
+            return 0x80;
+        } else {
+            r744 = 1;
+            return 0;
+        }
+    }
+    if (addr == 0x1F900344) {
+        return 0x80;
+        if (r344) {
+            return 0x80;
+        } else {
+            r344 = 1;
+            return 0;
+        }
+    }
+    // if ((addr & 0xfff0000f) == 0x1f90000a) {
+    //     return 0xffff;
     // }
 
     printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
@@ -166,6 +176,7 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x1F801500, 0x1F80155F, iop_dma, dma);
     MAP_REG_WRITE(32, 0x1F801570, 0x1F80157F, iop_dma, dma);
     MAP_REG_WRITE(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
+    MAP_REG_WRITE(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
     MAP_MEM_WRITE(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
