@@ -442,6 +442,85 @@ void show_gs_registers(lunar::instance* lunar) {
     } EndChild();
 }
 
+static GLuint tex = 0;
+
+void gen_texture(lunar::instance* lunar, int w, int h, GLint fmt, void* ptr) {
+    if (tex) {
+        glDeleteTextures(1, &tex);
+    }
+
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, fmt, ptr);
+}
+
+static uint32_t addr = 0, width = 0, height = 0;
+static float scale = 1.0f;
+
+void show_gs_memory(lunar::instance* lunar) {
+    using namespace ImGui;
+
+    struct ps2_gs* gs = lunar->ps2->gs;
+
+    static char buf0[16];
+    static char buf1[16];
+    static char buf2[16];
+    static char buf3[16];
+
+    if (InputText("Address##", buf0, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (buf0[0]) {
+            addr = strtoul(buf0, NULL, 16);
+        }
+    } 
+
+    if (InputText("Width##", buf1, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (buf1[0]) {
+            width = strtoul(buf1, NULL, 0);
+        }
+    }
+
+    if (InputText("Height##", buf2, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        if (buf2[0]) {
+            height = strtoul(buf2, NULL, 0);
+        }
+    }
+
+    sprintf(buf3, "%.1f", scale);
+
+    if (BeginCombo("Scale", buf3, ImGuiComboFlags_HeightSmall)) {
+        char buf4[16];
+
+        for (int i = 0; i < 6; i++) {
+            sprintf(buf4, "%.1f", 1.0f + (0.5f * i));
+
+            if (Selectable(buf4, scale == 1.0f + (0.5f * i))) {
+                scale = 1.0f + (0.5f * i);
+            }
+        }
+        
+        EndCombo();
+    }
+
+    if (Button("View")) {
+        addr = strtoul(buf0, NULL, 16);
+        width = strtoul(buf1, NULL, 0);
+        height = strtoul(buf2, NULL, 0);
+
+        gen_texture(lunar, width, height, GL_UNSIGNED_BYTE, &gs->vram[addr]);
+    }
+
+    if (tex) {
+        glBindTexture(GL_TEXTURE_2D, tex);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, &gs->vram[addr]);
+
+        Image((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
+    }
+}
+
 void show_gs_debugger(lunar::instance* lunar) {
     using namespace ImGui;
 
@@ -487,6 +566,10 @@ void show_gs_debugger(lunar::instance* lunar) {
 
                 case 3: {
                     show_gs_queue(lunar);
+                } break;
+
+                case 4: {
+                    show_gs_memory(lunar);
                 } break;
             }
         } EndChild();
