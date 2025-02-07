@@ -10,7 +10,7 @@ CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) $(shell sdl2-config --cflags --libs
 CXXFLAGS += -O3 -ffast-math -march=native -mtune=native -flto=auto -Wall -g
 CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
-CXXSRC += $(wildcard imgui/backends/imgui_impl_sdlrenderer2.cpp)
+CXXSRC += $(wildcard imgui/backends/imgui_impl_opengl3.cpp)
 CXXSRC += $(wildcard frontend/*.cpp)
 CXXSRC += $(wildcard frontend/ui/*.cpp)
 CXXSRC += $(wildcard src/ee/renderer/*.cpp)
