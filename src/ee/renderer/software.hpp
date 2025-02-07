@@ -5,6 +5,8 @@
 
 #include <SDL.h>
 
+#include "GL/gl3w.h"
+
 enum : int {
     // Keeps aspect ratio by native resolution
     SOFTWARE_ASPECT_NATIVE,
@@ -34,8 +36,6 @@ struct software_state {
     uint32_t psmct24_shift;
 
     SDL_Window* window = nullptr;
-    SDL_Renderer* renderer = nullptr;
-    SDL_Texture* texture = nullptr;
     struct ps2_gs* gs;
 
     int tex_w = 0;
@@ -47,9 +47,27 @@ struct software_state {
     bool integer_scaling = false;
     float scale = 1.5;
     bool bilinear = true;
+
+    GLuint vert_shader = 0;
+
+    std::vector <GLuint> programs;
+
+    GLuint default_program;
+
+    GLuint vao = 0;
+    GLuint vbo = 0;
+    GLuint ebo = 0;
+    GLuint tex = 0;
+    GLuint fbo = 0;
+    GLuint fb_vao = 0;
+    GLuint fb_vbo = 0;
+    GLuint fb_ebo = 0;
+    GLuint fb_tex = 0;
+
+    unsigned int frame = 0;
 };
 
-void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_Renderer* renderer);
+void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window);
 void software_set_size(software_state* ctx, int width, int height);
 void software_set_scale(software_state* ctx, float scale);
 void software_set_aspect_mode(software_state* ctx, int aspect_mode);
@@ -59,6 +77,8 @@ void software_get_viewport_size(software_state* ctx, int* w, int* h);
 void software_get_display_size(software_state* ctx, int* w, int* h);
 void software_get_display_format(software_state* ctx, int* fmt);
 const char* software_get_name(software_state* ctx);
+// void software_push_shader(software_state* ctx, const char* path);
+// void software_pop_shader(software_state* ctx);
 
 extern "C" {
 void software_render_point(struct ps2_gs* gs, void* udata);

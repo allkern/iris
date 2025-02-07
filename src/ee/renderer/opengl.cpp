@@ -28,6 +28,29 @@ static void opengl_push_primitive(opengl_state* ctx, int type, int verts) {
     ctx->primitives.push_back(p);
 }
 
+static inline opengl_vertex get_vertex_from_vq(struct ps2_gs* gs, int i) {
+    opengl_vertex v;
+
+    // v.x = (gs->vq[i].xyz2 & 0xffff) >> 4;
+    // v.y = (gs->vq[i].xyz2 & 0xffff0000) >> 20;
+    // v.z = gs->vq[i].xyz2 >> 32;
+    // v.z = 0.0;
+    // v.r = gs->vq[i].rgbaq & 0xff;
+    // v.g = (gs->vq[i].rgbaq >> 8) & 0xff;
+    // v.b = (gs->vq[i].rgbaq >> 16) & 0xff;
+
+    // int offsetx = (gs->xyoffset_1 & 0xffff) >> 4;
+    // int offsety = ((gs->xyoffset_1 >> 32) & 0xffff) >> 4;
+
+    // v.x -= offsetx;
+    // v.y -= offsety;
+    // v.y *= 0.5;
+
+    // printf("vertex: (%f,%f) (%f,%f,%f)\n", v.x, v.y, v.r, v.g, v.b);
+
+    return v;
+}
+
 int compile_shader(const char* src, GLint type) {
     unsigned int shader = glCreateShader(type);
 
@@ -50,29 +73,6 @@ int compile_shader(const char* src, GLint type) {
     }
 
     return shader;
-}
-
-static inline opengl_vertex get_vertex_from_vq(struct ps2_gs* gs, int i) {
-    opengl_vertex v;
-
-    // v.x = (gs->vq[i].xyz2 & 0xffff) >> 4;
-    // v.y = (gs->vq[i].xyz2 & 0xffff0000) >> 20;
-    // v.z = gs->vq[i].xyz2 >> 32;
-    // v.z = 0.0;
-    // v.r = gs->vq[i].rgbaq & 0xff;
-    // v.g = (gs->vq[i].rgbaq >> 8) & 0xff;
-    // v.b = (gs->vq[i].rgbaq >> 16) & 0xff;
-
-    // int offsetx = (gs->xyoffset_1 & 0xffff) >> 4;
-    // int offsety = ((gs->xyoffset_1 >> 32) & 0xffff) >> 4;
-
-    // // v.x -= offsetx;
-    // v.y -= offsety;
-    // v.y *= 0.5;
-
-    // printf("vertex: (%f,%f) (%f,%f,%f)\n", v.x, v.y, v.r, v.g, v.b);
-
-    return v;
 }
 
 char* opengl_read_file(const char* path) {

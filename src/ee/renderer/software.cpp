@@ -8,6 +8,43 @@
 
 #include <SDL.h>
 
+#include "GL/gl3w.h"
+
+static const char* default_vert_shader =
+    "#version 330 core\n"
+    "layout (location = 0) in vec3 pos;\n"
+    "layout (location = 1) in vec2 uv;\n"
+    "uniform vec2 screen_size;\n"
+    "out vec2 FragCoord;\n"
+    "out vec2 FragTexCoord;\n"
+    "void main() {\n"
+    "    FragCoord = (pos.xy + 1.0) / 2.0;\n"
+    "    FragTexCoord = uv;\n"
+    "    FragCoord.y = 1.0 - FragCoord.y;\n"
+    "    gl_Position = vec4(pos.xy, 0.0, 1.0);\n"
+    "}";
+
+static const char* default_frag_shader =
+    "#version 330 core\n"
+    "in vec2 FragCoord;\n"
+    "in vec2 FragTexCoord;\n"
+    "out vec4 FragColor;\n"
+    "uniform sampler2D input_texture;\n"
+    "uniform vec2 screen_size;\n"
+    "void main() {\n"
+    "    vec2 uv = vec2(FragTexCoord.x, 1.0 - FragTexCoord.y);\n"
+    "    FragColor = texture(input_texture, uv);\n"
+    "}";
+
+static const char* frag_header =
+    "#version 330 core\n"
+    "in vec2 FragCoord;\n"
+    "in vec2 FragTexCoord;\n"
+    "out vec4 FragColor;\n"
+    "uniform sampler2D input_texture;\n"
+    "uniform vec2 screen_size;\n"
+    "uniform int frame;\n";
+
 static const int psmct32_clut_block[] = {
     0x00, 0x01, 0x02, 0x03,
     0x04, 0x05, 0x06, 0x07,
@@ -20,9 +57,6 @@ static const int psmct32_clut_block[] = {
 };
 
 void software_set_size(software_state* ctx, int width, int height) {
-    if (ctx->texture)
-        SDL_DestroyTexture(ctx->texture);
-
     int format = 0;
 
     uint32_t dfbp1 = (ctx->gs->dispfb1 & 0x1ff) << 11;
@@ -60,13 +94,17 @@ void software_set_size(software_state* ctx, int width, int height) {
         return;
     }
 
-    ctx->texture = SDL_CreateTexture(
-        ctx->renderer,
-        format,
-        SDL_TEXTUREACCESS_STREAMING,
-        ctx->tex_w,
-        ctx->tex_h
-    );
+    if (ctx->tex) {
+        glDeleteTextures(1, &ctx->tex);
+    }
+
+    glGenTextures(1, &ctx->tex);
+    glBindTexture(GL_TEXTURE_2D, ctx->tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->tex_w, ctx->tex_h, 0, GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, NULL);
 
     // printf("software: width=%d height=%d format=%d display=%08x\n",
     //     ((display >> 32) & 0xfff),
@@ -103,6 +141,10 @@ void software_get_display_size(software_state* ctx, int* w, int* h) {
 
 void software_get_display_format(software_state* ctx, int* fmt) {
     *fmt = ctx->disp_fmt;
+}
+
+void software_get_interlace_mode(software_state* ctx, int* interlace) {
+    // *interlace = ctx->gs->
 }
 
 const char* software_get_name(software_state* ctx) {
@@ -237,7 +279,7 @@ static inline uint32_t gs_to_rgba32(struct ps2_gs* gs, uint32_t c, int fmt) {
         case GS_PSMCT32:
             return c;
         case GS_PSMCT24:
-            return c & 0xffffff;
+            return c | 0xff000000;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
             return ((c & 0x001f) << 3) |
@@ -283,85 +325,6 @@ static inline uint32_t gs_from_rgba32(struct ps2_gs* gs, uint32_t c, int fmt) {
 
     return 0;
 }
-
-static int gs_psmt8_c02_unswizzle_off[] = {
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7
-};
-
-static int gs_psmt8_c02_unswizzle_sh[] = {
-    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-    8 , 8 , 8 , 8 , 8 , 8 , 8 , 8 ,
-    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-    8 , 8 , 8 , 8 , 8 , 8 , 8 , 8 ,
-    16, 16, 16, 16, 16, 16, 16, 16,
-    24, 24, 24, 24, 24, 24, 24, 24,
-    16, 16, 16, 16, 16, 16, 16, 16,
-    24, 24, 24, 24, 24, 24, 24, 24
-};
-
-static int gs_psmt4_c02_unswizzle_off[] = {
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7
-};
-
-static int gs_psmt4_c13_unswizzle_off[] = {
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15,
-    2 , 3 , 6 , 7 , 10, 11, 14, 15
-};
-
-static int gs_psmt4_unswizzle_sh[] = {
-    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-    8 , 8 , 8 , 8 , 8 , 8 , 8 , 8 ,
-    16, 16, 16, 16, 16, 16, 16, 16,
-    24, 24, 24, 24, 24, 24, 24, 24,
-    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
-    8 , 8 , 8 , 8 , 8 , 8 , 8 , 8 ,
-    16, 16, 16, 16, 16, 16, 16, 16,
-    24, 24, 24, 24, 24, 24, 24, 24,
-    4 , 4 , 4 , 4 , 4 , 4 , 4 , 4 ,
-    12, 12, 12, 12, 12, 12, 12, 12,
-    20, 20, 20, 20, 20, 20, 20, 20,
-    28, 28, 28, 28, 28, 28, 28, 28,
-    4 , 4 , 4 , 4 , 4 , 4 , 4 , 4 ,
-    12, 12, 12, 12, 12, 12, 12, 12,
-    20, 20, 20, 20, 20, 20, 20, 20,
-    28, 28, 28, 28, 28, 28, 28, 28
-};
 
 static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
     switch (gs->ctx->tbpsm) {
@@ -460,7 +423,7 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
         } break;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
-            uint16_t* ptr = (uint16_t*)&gs->vram[gs->ctx->fbp] + x + (y * gs->ctx->fbw);
+            uint16_t* ptr = ((uint16_t*)&gs->vram[gs->ctx->fbp]) + x + (y * gs->ctx->fbw);
 
             *ptr = f;
         } break;
@@ -640,11 +603,154 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | ((ra & 0xff) << 24);
 }
 
-void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_Renderer* renderer) {
+int software_compile_shader(const char* src, GLint type) {
+    unsigned int shader = glCreateShader(type);
+
+    glShaderSource(shader, 1, &src, NULL);
+    glCompileShader(shader);
+
+    int success;
+    char infolog[512];
+
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
+
+    if (!success) {
+        glGetShaderInfoLog(shader, 512, NULL, infolog);
+
+        printf("gs_opengl: Shader compilation failed\n%s", infolog);
+
+        exit(1);
+
+        return 0;
+    }
+
+    return shader;
+}
+
+char* software_read_file(const char* path) {
+    FILE* file = fopen(path, "rb");
+
+    unsigned int size;
+
+    fseek(file, 0, SEEK_END);
+
+    size = ftell(file);
+
+    fseek(file, 0, SEEK_SET);
+
+    char* buf = (char*)malloc(size + 1);
+
+    buf[size] = '\0';
+
+    fread(buf, 1, size, file);
+
+    return buf;
+}
+
+void software_init_default_shader(software_state* ctx) {
+    ctx->vert_shader = software_compile_shader(default_vert_shader, GL_VERTEX_SHADER);
+    GLuint frag_shader = software_compile_shader(default_frag_shader, GL_FRAGMENT_SHADER);
+
+    char infolog[512];
+    int success;
+
+    ctx->default_program = glCreateProgram();
+
+    glAttachShader(ctx->default_program, ctx->vert_shader);
+    glAttachShader(ctx->default_program, frag_shader);
+    glLinkProgram(ctx->default_program);
+    glGetProgramiv(ctx->default_program, GL_LINK_STATUS, &success);
+
+    if (!success) {
+        glGetProgramInfoLog(ctx->default_program, 512, NULL, infolog);
+
+        printf("opengl: Program linking failed\n%s", infolog);
+
+        exit(1);
+    }
+}
+
+void software_push_shader(software_state* ctx, const char* path) {
+    char* src = software_read_file(path);
+    char* hdr = (char*)malloc(strlen(src) + strlen(frag_header) + 1);
+
+    strcpy(hdr, frag_header);
+    strcat(hdr, src);
+
+    int shader = software_compile_shader(hdr, GL_FRAGMENT_SHADER);
+
+    char infolog[512];
+    int success;
+
+    GLuint program = glCreateProgram();
+
+    glAttachShader(program, ctx->vert_shader);
+    glAttachShader(program, shader);
+    glLinkProgram(program);
+    glGetProgramiv(program, GL_LINK_STATUS, &success);
+
+    if (!success) {
+        glGetProgramInfoLog(program, 512, NULL, infolog);
+
+        printf("opengl: Program linking failed\n%s", infolog);
+
+        exit(1);
+    }
+
+    ctx->programs.push_back(program);
+
+    free(src);
+    free(hdr);
+}
+
+void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window) {
     ctx->window = window;
-    ctx->renderer = renderer;
     ctx->gs = gs;
     ctx->scale = 1.5f;
+
+    gl3wInit();
+
+    // Initialize default shaders
+    software_init_default_shader(ctx);
+
+    // software_push_shader(ctx, "shaders/flip.frag");
+    // software_push_shader(ctx, "shaders/encoder.frag");
+    // software_push_shader(ctx, "shaders/decoder.frag");
+    // software_push_shader(ctx, "shaders/curvature.frag");
+
+    // Initialize framebuffer VAO
+    static const GLfloat fb_vertices[] = {
+        // positions         // texture coords
+         1.0f,  1.0f, 0.0f,  1.0f, 1.0f,   // top right
+         1.0f, -1.0f, 0.0f,  1.0f, 0.0f,   // bottom right
+        -1.0f, -1.0f, 0.0f,  0.0f, 0.0f,   // bottom left
+        -1.0f,  1.0f, 0.0f,  0.0f, 1.0f    // top left 
+    };
+
+    static const GLuint fb_indices[] = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
+    };
+
+    glGenVertexArrays(1, &ctx->fb_vao);
+    glGenBuffers(1, &ctx->fb_vbo);
+    glGenBuffers(1, &ctx->fb_ebo);
+
+    glBindVertexArray(ctx->fb_vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, ctx->fb_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(fb_vertices), fb_vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->fb_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(fb_indices), fb_indices, GL_STATIC_DRAW);
+
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // texture coord attribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
 }
 
 static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
@@ -943,21 +1049,22 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     //     v1.rgbaq & 0xffffffff
     // );
 
-    // printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d\n",
-    //     gs->ctx->tbpsm,
-    //     gs->ctx->tbpsm,
-    //     gs->ctx->tbp0,
-    //     gs->ctx->tbw,
-    //     gs->ctx->usize,
-    //     gs->ctx->vsize,
-    //     gs->ctx->cbpsm,
-    //     gs->ctx->cbp,
-    //     gs->ctx->csm,
-    //     gs->ctx->tfx,
-    //     v1.rgbaq & 0xffffffff,
-    //     gs->abe,
-    //     gs->ctx->fbpsm
-    // );
+    printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d fbw=%d\n",
+        gs->ctx->tbpsm,
+        gs->ctx->tbpsm,
+        gs->ctx->tbp0,
+        gs->ctx->tbw,
+        gs->ctx->usize,
+        gs->ctx->vsize,
+        gs->ctx->cbpsm,
+        gs->ctx->cbp,
+        gs->ctx->csm,
+        gs->ctx->tfx,
+        v1.rgbaq & 0xffffffff,
+        gs->abe,
+        gs->ctx->fbpsm,
+        gs->ctx->fbw
+    );
 
     int z = v1.z;
     int a = v1.a;
@@ -1072,13 +1179,15 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     // printf("fbp=%x fbw=%d fbpsm=%d stride=%d dy=%d\n", dfbp, dfbw, dfbpsm, stride, dy);
 
-    if (!ctx->texture)
+    if (!ctx->tex_w)
         return;
 
     SDL_Rect size, rect;
 
+    rect.w = ctx->tex_w;
+    rect.h = ctx->tex_h;
+
     SDL_GetWindowSize(ctx->window, &size.w, &size.h);
-    SDL_QueryTexture(ctx->texture, NULL, NULL, &rect.w, &rect.h);
 
     float scale = ctx->integer_scaling ? floorf(ctx->scale) : ctx->scale;
 
@@ -1116,10 +1225,177 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     rect.x = (size.w / 2) - (rect.w / 2);
     rect.y = (size.h / 2) - (rect.h / 2);
 
-    SDL_SetTextureScaleMode(ctx->texture, ctx->bilinear ? SDL_ScaleModeLinear : SDL_ScaleModeNearest);
+    float x0 = (rect.x / ((float)size.w / 2.0f)) - 1.0f;
+    float y0 = (rect.y / ((float)size.h / 2.0f)) - 1.0f;
+    float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;
+    float y1 = ((rect.y + rect.h) / ((float)size.h / 2.0f)) - 1.0f;
 
-    SDL_UpdateTexture(ctx->texture, NULL, ptr, stride);
-    SDL_RenderCopy(ctx->renderer, ctx->texture, NULL, &rect);
+    GLfloat vertices[] = {
+        // positions   // texture coords
+        x1, y1, 0.0f,  1.0f, 1.0f,   // top right
+        x1, y0, 0.0f,  1.0f, 0.0f,   // bottom right
+        x0, y0, 0.0f,  0.0f, 0.0f,   // bottom left
+        x0, y1, 0.0f,  0.0f, 1.0f    // top left 
+    };
+
+    GLuint indices[] = {
+        0, 1, 3, // first triangle
+        1, 2, 3  // second triangle
+    };
+
+    glGenVertexArrays(1, &ctx->vao);
+    glGenBuffers(1, &ctx->vbo);
+    glGenBuffers(1, &ctx->ebo);
+
+    glBindVertexArray(ctx->vao);
+
+    glBindBuffer(GL_ARRAY_BUFFER, ctx->vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_DYNAMIC_DRAW);
+
+    // position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+
+    // texture coord attribute
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(1);
+
+    int internal_format, format;
+
+    switch (ctx->disp_fmt) {
+        case GS_PSMCT32:
+        case GS_PSMCT24: {
+            internal_format = GL_RGBA;
+            format = GL_UNSIGNED_BYTE;
+        } break;
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            internal_format = GL_RGBA;
+            format = GL_UNSIGNED_SHORT_1_5_5_5_REV;
+        } break;
+    }
+
+    // Update screen texture
+    glBindTexture(GL_TEXTURE_2D, ctx->tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, ctx->tex_w, ctx->tex_h, 0, internal_format, format, ptr);
+
+    if (!ctx->programs.size()) {
+        // No shaders present, use default shader
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, ctx->tex);
+
+        glViewport(0, 0, size.w, size.h);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glUseProgram(ctx->default_program);
+
+        glUniform1i(glGetUniformLocation(ctx->default_program, "input_texture"), 0);
+        glUniform2f(glGetUniformLocation(ctx->default_program, "screen_size"), (float)rect.w, (float)rect.h);
+        glUniform1i(glGetUniformLocation(ctx->default_program, "frame"), ctx->frame++);
+
+        glBindVertexArray(ctx->vao);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        glBindVertexArray(0);
+
+        return;
+    } else if (ctx->programs.size() == 1) {
+        // Only 1 shader present, use default framebuffer
+        glActiveTexture(GL_TEXTURE0);
+        glBindTexture(GL_TEXTURE_2D, ctx->tex);
+
+        glViewport(0, 0, size.w, size.h);
+        glBindFramebuffer(GL_FRAMEBUFFER, 0);
+        glUseProgram(ctx->programs[0]);
+
+        glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
+        glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)rect.w, (float)rect.h);
+        glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), ctx->frame++);
+
+        glBindVertexArray(ctx->vao);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+        glBindVertexArray(0);
+
+        return;
+    }
+
+    // More than 1 shader present, create framebuffer and do render graph
+    if (ctx->fb_tex) {
+        glDeleteTextures(1, &ctx->fb_tex);
+    }
+
+    glGenTextures(1, &ctx->fb_tex);
+    glBindTexture(GL_TEXTURE_2D, ctx->fb_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, rect.w, rect.h, 0, internal_format, format, NULL);
+
+    if (ctx->fbo) {
+        glDeleteFramebuffers(1, &ctx->fbo);
+    }
+
+    glGenFramebuffers(1, &ctx->fbo);
+    glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->fb_tex, 0); 
+
+    // first pass
+    // Bind screen texture
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, ctx->tex);
+
+    glViewport(0, 0, rect.w, rect.h);
+    glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
+    glUseProgram(ctx->programs[0]);
+
+    glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
+    glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)ctx->tex_w, (float)ctx->tex_h);
+    glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), ctx->frame);
+
+    glBindVertexArray(ctx->fb_vao);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    // Bind framebuffer texture for middle and last passes
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, ctx->fb_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
+
+    // "middle" passes
+    for (int i = 1; i < ctx->programs.size() - 1; i++) {
+        glUseProgram(ctx->programs[i]);
+
+        glUniform1i(glGetUniformLocation(ctx->programs[i], "input_texture"), 0);
+        glUniform2f(glGetUniformLocation(ctx->programs[i], "screen_size"), (float)rect.w, (float)rect.h);
+        glUniform1i(glGetUniformLocation(ctx->programs[i], "frame"), ctx->frame);
+
+        glBindVertexArray(ctx->fb_vao);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    }
+
+    // last pass
+    glViewport(0, 0, size.w, size.h);
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glUseProgram(ctx->programs.back());
+
+    glUniform1i(glGetUniformLocation(ctx->programs.back(), "input_texture"), 0);
+    glUniform2f(glGetUniformLocation(ctx->programs.back(), "screen_size"), (float)rect.w, (float)rect.h);
+    glUniform1i(glGetUniformLocation(ctx->programs.back(), "frame"), ctx->frame++);
+
+    glBindVertexArray(ctx->vao);
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+
+    glBindVertexArray(0);
 }
 
 static inline int gs_pixels_to_size(int fmt, int px) {
