@@ -318,6 +318,9 @@ static inline void gs_unpack_tex0(struct ps2_gs* gs, int i) {
     gs->context[i].csm = (gs->context[i].tex0 >> 55) & 1;
     gs->context[i].csa = (gs->context[i].tex0 >> 56) & 0x1f;
     gs->context[i].cld = (gs->context[i].tex0 >> 61) & 7;
+
+    gs->context[i].usize = (gs->context[i].usize > 1024) ? 1024 : gs->context[i].usize;
+    gs->context[i].vsize = (gs->context[i].vsize > 1024) ? 1024 : gs->context[i].vsize;
 }
 
 static inline void gs_unpack_clamp(struct ps2_gs* gs, int i) {
