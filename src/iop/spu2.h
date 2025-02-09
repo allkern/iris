@@ -7,85 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#define SPU2_RAM_SIZE 0x200000
-
-#define VP_VOLL(c, v)   (*((uint16_t*)(&spu2->r[0x400 * c + 0x000 + (v << 4)])))
-#define VP_VOLR(c, v)   (*((uint16_t*)(&spu2->r[0x400 * c + 0x002 + (v << 4)])))
-#define VP_PITCH(c, v)  (*((uint16_t*)(&spu2->r[0x400 * c + 0x004 + (v << 4)])))
-#define VP_ADSR1(c, v)  (*((uint16_t*)(&spu2->r[0x400 * c + 0x006 + (v << 4)])))
-#define VP_ADSR2(c, v)  (*((uint16_t*)(&spu2->r[0x400 * c + 0x008 + (v << 4)])))
-#define VP_ENVX(c, v)   (*((uint16_t*)(&spu2->r[0x400 * c + 0x00A + (v << 4)])))
-#define VP_VOLXL(c, v)  (*((uint16_t*)(&spu2->r[0x400 * c + 0x00C + (v << 4)])))
-#define VP_VOLXR(c, v)  (*((uint16_t*)(&spu2->r[0x400 * c + 0x00E + (v << 4)])))
-#define VA_SSA(c, v)    (*((uint16_t*)(&spu2->r[0x400 * c + 0x1C0 + (v * 12)])))
-#define VA_LSAX(c, v)   (*((uint16_t*)(&spu2->r[0x400 * c + 0x1C4 + (v * 12)])))
-#define VA_NAX(c, v)    (*((uint16_t*)(&spu2->r[0x400 * c + 0x1C8 + (v * 12)])))
-#define S_PMON(c)       (*((uint32_t*)(&spu2->r[0x400 * c + 0x180])))
-#define S_NON(c)        (*((uint32_t*)(&spu2->r[0x400 * c + 0x184])))
-#define S_VMIXL(c)      (*((uint32_t*)(&spu2->r[0x400 * c + 0x188])))
-#define S_VMIXEL(c)     (*((uint32_t*)(&spu2->r[0x400 * c + 0x18C])))
-#define S_VMIXR(c)      (*((uint32_t*)(&spu2->r[0x400 * c + 0x190])))
-#define S_VMIXER(c)     (*((uint32_t*)(&spu2->r[0x400 * c + 0x194])))
-#define P_MMIX(c)       (*((uint32_t*)(&spu2->r[0x400 * c + 0x198])))
-#define P_ATTR(c)       (*((uint32_t*)(&spu2->r[0x400 * c + 0x19A])))
-#define A_IRQA(c)       (*((uint32_t*)(&spu2->r[0x400 * c + 0x19C])))
-#define S_KON(c)        (*((uint32_t*)(&spu2->r[0x400 * c + 0x1A0])))
-#define S_KOFF(c)       (*((uint32_t*)(&spu2->r[0x400 * c + 0x1A4])))
-#define A_TSA(c)        (*((uint32_t*)(&spu2->r[0x400 * c + 0x1A8])))
-#define P_DATA(c)       (*((uint16_t*)(&spu2->r[0x400 * c + 0x1AC])))
-#define P_CTRL(c)       (*((uint16_t*)(&spu2->r[0x400 * c + 0x1AE])))
-#define P_ADMAS(c)      (*((uint16_t*)(&spu2->r[0x400 * c + 0x1B0])))
-#define A_ESA(c)        (*((uint32_t*)(&spu2->r[0x400 * c + 0x2E0])))
-#define FB_SRC_A(c)     (*((uint32_t*)(&spu2->r[0x400 * c + 0x2E4])))
-#define FB_SRC_B(c)     (*((uint32_t*)(&spu2->r[0x400 * c + 0x2E8])))
-#define IIR_DEST_A0(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x2EC])))
-#define IIR_DEST_A1(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x2F0])))
-#define ACC_SRC_A0(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x2F4])))
-#define ACC_SRC_A1(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x2F8])))
-#define ACC_SRC_B0(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x2FC])))
-#define ACC_SRC_B1(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x300])))
-#define IIR_SRC_A0(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x304])))
-#define IIR_SRC_A1(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x308])))
-#define IIR_DEST_B0(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x30C])))
-#define IIR_DEST_B1(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x310])))
-#define ACC_SRC_C0(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x314])))
-#define ACC_SRC_C1(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x318])))
-#define ACC_SRC_D0(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x31C])))
-#define ACC_SRC_D1(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x320])))
-#define IIR_SRC_B1(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x324])))
-#define IIR_SRC_B0(c)   (*((uint32_t*)(&spu2->r[0x400 * c + 0x328])))
-#define MIX_DEST_A0(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x32C])))
-#define MIX_DEST_A1(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x330])))
-#define MIX_DEST_B0(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x334])))
-#define MIX_DEST_B1(c)  (*((uint32_t*)(&spu2->r[0x400 * c + 0x338])))
-#define A_EEA(c)        (*((uint32_t*)(&spu2->r[0x400 * c + 0x33C])))
-#define P_ENDX(c)       (*((uint32_t*)(&spu2->r[0x400 * c + 0x340])))
-#define P_STAT(c)       (*((uint16_t*)(&spu2->r[0x400 * c + 0x344])))
-#define P_ENDS(c)       (*((uint16_t*)(&spu2->r[0x400 * c + 0x346])))
-#define P_MVOLL(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x760])))
-#define P_MVOLR(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x762])))
-#define P_EVOLL(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x764])))
-#define P_EVOLR(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x766])))
-#define P_AVOLL(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x768])))
-#define P_AVOLR(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x76A])))
-#define P_BVOLL(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x76C])))
-#define P_BVOLR(c)      (*((uint16_t*)(&spu2->r[0x28 * c + 0x76E])))
-#define P_MVOLXL(c)     (*((uint16_t*)(&spu2->r[0x28 * c + 0x770])))
-#define P_MVOLXR(c)     (*((uint16_t*)(&spu2->r[0x28 * c + 0x772])))
-#define IIR_ALPHA(c)    (*((uint16_t*)(&spu2->r[0x28 * c + 0x774])))
-#define ACC_COEF_A(c)   (*((uint16_t*)(&spu2->r[0x28 * c + 0x776])))
-#define ACC_COEF_B(c)   (*((uint16_t*)(&spu2->r[0x28 * c + 0x778])))
-#define ACC_COEF_C(c)   (*((uint16_t*)(&spu2->r[0x28 * c + 0x77A])))
-#define ACC_COEF_D(c)   (*((uint16_t*)(&spu2->r[0x28 * c + 0x77C])))
-#define IIR_COEF(c)     (*((uint16_t*)(&spu2->r[0x28 * c + 0x77E])))
-#define FB_ALPHA(c)     (*((uint16_t*)(&spu2->r[0x28 * c + 0x780])))
-#define FB_X(c)         (*((uint16_t*)(&spu2->r[0x28 * c + 0x782])))
-#define IN_COEF_L(c)    (*((uint16_t*)(&spu2->r[0x28 * c + 0x784])))
-#define IN_COEF_R(c)    (*((uint16_t*)(&spu2->r[0x28 * c + 0x786])))
-#define SPDIF_OUT       (*((uint16_t*)(&spu2->r[0x7C0])))
-#define SPDIF_MODE      (*((uint16_t*)(&spu2->r[0x7C6])))
-#define SPDIF_MEDIA     (*((uint16_t*)(&spu2->r[0x7C8])))
-#define SPDIF_COPY      (*((uint16_t*)(&spu2->r[0x7CA])))
+#define SPU2_RAM_SIZE 0x100000 // 2 MB
 
 /* Memory ranges:
     1f900000-1f90017f CORE0 Voice settings
@@ -139,22 +61,98 @@ extern "C" {
 
 struct spu2_voice {
     int playing;
-    uint32_t* ssa;
-    uint32_t* lsax;
-    uint32_t* nax;
+
+    uint16_t voll;
+    uint16_t volr;
+    uint16_t pitch;
+    uint16_t adsr1;
+    uint16_t adsr2;
+    uint16_t envx;
+    uint16_t volxl;
+    uint16_t volxr;
+    uint32_t ssa;
+    uint32_t lsax;
+    uint32_t nax;
 };
 
 struct spu2_core {
     struct spu2_voice v[24];
+
+    uint32_t pmon;
+    uint32_t non;
+    uint32_t vmixl;
+    uint32_t vmixel;
+    uint32_t vmixr;
+    uint32_t vmixer;
+    uint16_t mmix;
+    uint16_t attr;
+    uint32_t irqa;
+    uint32_t kon;
+    uint32_t koff;
+    uint32_t tsa;
+    uint16_t data;
+    uint16_t ctrl;
+    uint16_t admas;
+    uint32_t esa;
+    uint32_t fb_src_a;
+    uint32_t fb_src_b;
+    uint32_t iir_dest_a0;
+    uint32_t iir_dest_a1;
+    uint32_t acc_src_a0;
+    uint32_t acc_src_a1;
+    uint32_t acc_src_b0;
+    uint32_t acc_src_b1;
+    uint32_t iir_src_a0;
+    uint32_t iir_src_a1;
+    uint32_t iir_dest_b0;
+    uint32_t iir_dest_b1;
+    uint32_t acc_src_c0;
+    uint32_t acc_src_c1;
+    uint32_t acc_src_d0;
+    uint32_t acc_src_d1;
+    uint32_t iir_src_b1;
+    uint32_t iir_src_b0;
+    uint32_t mix_dest_a0;
+    uint32_t mix_dest_a1;
+    uint32_t mix_dest_b0;
+    uint32_t mix_dest_b1;
+    uint32_t eea;
+    uint32_t endx;
+    uint16_t stat;
+    uint16_t ends;
+    uint16_t mvoll;
+    uint16_t mvolr;
+    uint16_t evoll;
+    uint16_t evolr;
+    uint16_t avoll;
+    uint16_t avolr;
+    uint16_t bvoll;
+    uint16_t bvolr;
+    uint16_t mvolxl;
+    uint16_t mvolxr;
+    uint16_t iir_alpha;
+    uint16_t acc_coef_a;
+    uint16_t acc_coef_b;
+    uint16_t acc_coef_c;
+    uint16_t acc_coef_d;
+    uint16_t iir_coef;
+    uint16_t fb_alpha;
+    uint16_t fb_x;
+    uint16_t in_coef_l;
+    uint16_t in_coef_r;
 };
 
 struct ps2_spu2 {
-    uint16_t ram[SPU2_RAM_SIZE >> 1];
-
-    // Register area (1f900000-1f9007ff)
-    uint8_t r[0x800];
+    // 2 MB
+    uint16_t ram[0x100000];
 
     struct spu2_core c[2];
+
+    // CORE1 S/PDIF settings
+    uint32_t spdif_out;
+    uint32_t spdif_mode;
+    uint32_t spdif_media;
+    uint32_t spdif_copy;
 };
 
 struct spu2_sample {
