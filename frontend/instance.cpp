@@ -12,6 +12,7 @@
 #include "iop/iop_dis.h"
 
 #include "res/IconsMaterialSymbols.h"
+#include "tfd/tinyfiledialogs.h"
 
 #include "ee/renderer/opengl.hpp"
 #include "ee/renderer/software.hpp"
@@ -21,12 +22,16 @@
 #include "imgui_impl_opengl3.h"
 #include "imgui_internal.h"
 #include <stdio.h>
+#include <SDL_filesystem.h>
 #include <SDL.h>
 #if defined(IMGUI_IMPL_OPENGL_ES2)
 #include <SDL_opengles2.h>
 #else
 #include <SDL_opengl.h>
 #endif
+
+#define TOML_EXCEPTIONS 0
+#include <toml++/toml.hpp>
 
 // This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
 #ifdef __EMSCRIPTEN__
@@ -208,13 +213,70 @@ void sigint_handler(int signal) {
 void update_title(lunar::instance* lunar) {
     char buf[128];
 
-    const char* base = lunar->loaded ? basename(lunar->loaded) : NULL;
+    const char* base = lunar->loaded.size() ? basename(lunar->loaded.c_str()) : NULL;
 
     sprintf(buf, base ? "Iris (eegs 0.1) | %s" : "Iris (eegs 0.1)",
         base
     );
 
     SDL_SetWindowTitle(lunar->window, buf);
+}
+
+int init_settings(lunar::instance* lunar) {
+    lunar->settings_path = SDL_GetPrefPath("Allkern", "Iris");
+    lunar->settings_path.append("settings.toml");
+
+    toml::parse_result result = toml::parse_file(lunar->settings_path);
+
+    if (!result) {
+        std::string desc(result.error().description());
+
+        printf("iris: Couldn't parse settings file: %s\n", desc.c_str());
+
+        return 1;
+    }
+
+    toml::table& tbl = result.table();
+
+
+    auto paths = tbl["paths"];
+    lunar->bios_path = paths["bios_path"].value_or("");
+
+    auto window = tbl["window"];
+    lunar->window_width = window["window_width"].value_or(960);
+    lunar->window_height = window["window_height"].value_or(720);
+    lunar->fullscreen = window["fullscreen"].value_or(false);
+    // lunar->fullscreen_mode = tbl["fullscreen_mode"].value_or(0);
+
+    auto display = tbl["display"];
+    lunar->aspect_mode = display["aspect_mode"].value_or(0);
+    lunar->bilinear = display["bilinear"].value_or(true);
+    lunar->integer_scaling = display["integer_scaling"].value_or(false);
+    lunar->scale = display["scale"].value_or(1.5f);
+
+    auto debugger = tbl["debugger"];
+    lunar->show_ee_control = debugger["show_ee_control"].value_or(false);
+    lunar->show_ee_state = debugger["show_ee_state"].value_or(false);
+    lunar->show_ee_logs = debugger["show_ee_logs"].value_or(false);
+    lunar->show_ee_interrupts = debugger["show_ee_interrupts"].value_or(false);
+    lunar->show_ee_dmac = debugger["show_ee_dmac"].value_or(false);
+    lunar->show_iop_control = debugger["show_iop_control"].value_or(false);
+    lunar->show_iop_state = debugger["show_iop_state"].value_or(false);
+    lunar->show_iop_logs = debugger["show_iop_logs"].value_or(false);
+    lunar->show_iop_interrupts = debugger["show_iop_interrupts"].value_or(false);
+    lunar->show_iop_dma = debugger["show_iop_dma"].value_or(false);
+    lunar->show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
+    lunar->show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
+    lunar->show_status_bar = debugger["show_status_bar"].value_or(true);
+    lunar->show_breakpoints = debugger["show_breakpoints"].value_or(false);
+    lunar->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
+
+    software_set_aspect_mode(lunar->ctx, lunar->aspect_mode);
+    software_set_bilinear(lunar->ctx, lunar->bilinear);
+    software_set_integer_scaling(lunar->ctx, lunar->integer_scaling);
+    software_set_scale(lunar->ctx, lunar->scale);
+
+    return 0;
 }
 
 void init(lunar::instance* lunar, int argc, const char* argv[]) {
@@ -292,7 +354,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     lunar->font_small_code = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 12.0f);
     lunar->font_code       = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 16.0f);
     lunar->font_small      = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 12.0f);
-    lunar->font_heading    = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 18.0f);
+    lunar->font_heading    = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 20.0f);
     lunar->font_body       = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 16.0f);
     lunar->font_icons      = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 20.0f, &config, icon_range);
 
@@ -403,12 +465,11 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     software_init(lunar->ctx, lunar->ps2->gs, lunar->window);
 
     lunar->ticks = SDL_GetTicks();
-
     lunar->pause = true;
-    lunar->elf_path = NULL;
-    lunar->boot_path = NULL;
-    lunar->bios_path = NULL;
-    lunar->disc_path = NULL;
+
+    init_settings(lunar);
+
+    std::string bios_path;
 
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
@@ -422,7 +483,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
             ++i;
         } else if (a == "-b") {
-            lunar->bios_path = argv[i+1];
+            bios_path = argv[i+1];
 
             ++i;
         } else if (a == "-i") {
@@ -434,31 +495,33 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
         }
     }
 
-    if (!lunar->bios_path) {
-        printf("lunar: Please specify a PS2 BIOS file\n");
-
-        exit(1);
+    if (bios_path.size()) {
+        ps2_load_bios(lunar->ps2, bios_path.c_str());
+    } else {
+        if (lunar->bios_path.size()) {
+            ps2_load_bios(lunar->ps2, lunar->bios_path.c_str());
+        } else {
+            lunar->show_bios_setting_window = true;
+        }
     }
 
-    ps2_load_bios(lunar->ps2, lunar->bios_path);
-
-    if (lunar->elf_path) {
-        ps2_elf_load(lunar->ps2, lunar->elf_path);
+    if (lunar->elf_path.size()) {
+        ps2_elf_load(lunar->ps2, lunar->elf_path.c_str());
 
         lunar->loaded = lunar->elf_path;
     }
 
-    if (lunar->boot_path) {
-        ps2_boot_file(lunar->ps2, lunar->boot_path);
+    if (lunar->boot_path.size()) {
+        ps2_boot_file(lunar->ps2, lunar->boot_path.c_str());
 
         lunar->loaded = lunar->boot_path;
     }
 
-    if (lunar->disc_path) {
-        struct iso9660_state* iso = iso9660_open(lunar->disc_path);
+    if (lunar->disc_path.size()) {
+        struct iso9660_state* iso = iso9660_open(lunar->disc_path.c_str());
 
         if (!iso) {
-            printf("lunar: Couldn't open disc image \"%s\"\n", lunar->disc_path);
+            printf("lunar: Couldn't open disc image \"%s\"\n", lunar->disc_path.c_str());
 
             exit(1);
 
@@ -471,7 +534,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
             return;
 
         ps2_boot_file(lunar->ps2, boot_file);
-        ps2_cdvd_open(lunar->ps2->cdvd, lunar->disc_path);
+        ps2_cdvd_open(lunar->ps2->cdvd, lunar->disc_path.c_str());
 
         lunar->loaded = lunar->disc_path;
     }
@@ -515,6 +578,70 @@ void update_time(lunar::instance* lunar) {
     lunar->frames = 0;
 }
 
+void show_bios_setting_window(lunar::instance* lunar) {
+    using namespace ImGui;
+
+    OpenPopup("Welcome");
+
+    // Always center this window when appearing
+    ImVec2 center = GetMainViewport()->GetCenter();
+
+    SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    static char buf[512];
+
+    if (BeginPopupModal("Welcome", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        PushFont(lunar->font_heading);
+        Text("Welcome to Iris!");
+        PopFont();
+        Separator();
+        Text(
+            "Iris requires a PlayStation 2 BIOS file in order to run.\n\n"
+            "Please select one using the box below or provide one using the\n"
+            "command line arguments."
+        );
+
+        InputTextWithHint("##BIOS", "e.g. scph10000.bin", buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+        SameLine();
+
+        if (Button(ICON_MS_FOLDER)) {
+            const char* patterns[1] = { "*.bin" };
+
+            const char* file = tinyfd_openFileDialog(
+                "Select BIOS file",
+                "",
+                1,
+                patterns,
+                "BIOS files",
+                0
+            );
+
+            if (file) {
+                strncpy(buf, file, 512);
+            }
+        }
+
+        Separator();
+
+        BeginDisabled(!buf[0]);
+
+        if (Button("Done")) {
+            lunar->bios_path = buf;
+            lunar->dump_to_file = true;
+
+            ps2_load_bios(lunar->ps2, lunar->bios_path.c_str());
+
+            CloseCurrentPopup();
+
+            lunar->show_bios_setting_window = false;
+        }
+
+        EndDisabled();
+
+        EndPopup();
+    }
+}
+
 void update_window(lunar::instance* lunar) {
     using namespace ImGui;
 
@@ -547,6 +674,7 @@ void update_window(lunar::instance* lunar) {
     if (lunar->show_status_bar) show_status_bar(lunar);
     if (lunar->show_breakpoints) show_breakpoints(lunar);
     if (lunar->show_imgui_demo) ShowDemoWindow(&lunar->show_imgui_demo);
+    if (lunar->show_bios_setting_window) show_bios_setting_window(lunar);
 
     if (lunar->pause) {
         int width, height;
@@ -632,6 +760,43 @@ bool is_open(lunar::instance* lunar) {
 
 void close(lunar::instance* lunar) {
     using namespace ImGui;
+
+    if (lunar->dump_to_file) {
+        std::ofstream file(lunar->settings_path);
+
+        file << "# File auto-generated by Iris 0.1\n\n";
+
+        auto tbl = toml::table {
+            { "debugger", toml::table {
+                { "show_ee_control", lunar->show_ee_control },
+                { "show_ee_state", lunar->show_ee_state },
+                { "show_ee_logs", lunar->show_ee_logs },
+                { "show_ee_interrupts", lunar->show_ee_interrupts },
+                { "show_ee_dmac", lunar->show_ee_dmac },
+                { "show_iop_control", lunar->show_iop_control },
+                { "show_iop_state", lunar->show_iop_state },
+                { "show_iop_logs", lunar->show_iop_logs },
+                { "show_iop_interrupts", lunar->show_iop_interrupts },
+                { "show_iop_dma", lunar->show_iop_dma },
+                { "show_gs_debugger", lunar->show_gs_debugger },
+                { "show_memory_viewer", lunar->show_memory_viewer },
+                { "show_status_bar", lunar->show_status_bar },
+                { "show_breakpoints", lunar->show_breakpoints },
+                { "show_imgui_demo", lunar->show_imgui_demo }
+            } },
+            { "display", toml::table {
+                { "scale", lunar->ctx->scale },
+                { "aspect_mode", lunar->ctx->aspect_mode },
+                { "integer_scaling", lunar->ctx->integer_scaling },
+                { "bilinear", lunar->ctx->bilinear }
+            } },
+            { "paths", toml::table {
+                { "bios_path", lunar->bios_path }
+            } }
+        };
+
+        file << tbl;
+    }
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();

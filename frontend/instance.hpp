@@ -33,12 +33,12 @@ struct instance {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* texture = nullptr;
-    SDL_GLContext gl_context;
+    SDL_GLContext gl_context = nullptr;
 
     struct ps2_state* ps2 = nullptr;
 
-    unsigned int window_width;
-    unsigned int window_height;
+    unsigned int window_width = 960;
+    unsigned int window_height = 720;
     unsigned int texture_width;
     unsigned int texture_height;
     uint32_t* texture_buf = nullptr;
@@ -52,10 +52,10 @@ struct instance {
     ImFont* font_body = nullptr;
     ImFont* font_icons = nullptr;
 
-    const char* elf_path;
-    const char* boot_path;
-    const char* bios_path;
-    const char* disc_path;
+    std::string elf_path = "";
+    std::string boot_path = "";
+    std::string bios_path = "";
+    std::string disc_path = "";
 
     bool open = false;
     bool pause = true;
@@ -76,21 +76,30 @@ struct instance {
     bool show_status_bar = true;
     bool show_breakpoints = false;
     bool show_imgui_demo = false;
+    bool show_bios_setting_window = false;
     bool fullscreen = false;
 
-    int frames;
+    int aspect_mode = 0;
+    bool bilinear = true;
+    bool integer_scaling = false;
+    float scale = 1.5f;
+
+    bool dump_to_file = true;
+    std::string settings_path = "";
+
+    int frames = 0;
     float fps = 0.0f;
     unsigned int ticks = 0;
-    int menubar_height;
+    int menubar_height = 0;
 
-    const char* loaded = NULL;
+    std::string loaded = "";
 
     std::vector <std::string> ee_log = { "" };
     std::vector <std::string> iop_log = { "" };
 
-    std::vector <breakpoint> breakpoints;
+    std::vector <breakpoint> breakpoints = {};
 
-    struct ds_state* ds;
+    struct ds_state* ds = nullptr;
 };
 
 lunar::instance* create();

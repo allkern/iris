@@ -16,9 +16,6 @@ const char* aspect_mode_names[] = {
     "Auto"
 };
 
-int aspect_mode = 0;
-bool bilinear = true;
-
 void show_main_menubar(lunar::instance* lunar) {
     using namespace ImGui;
 
@@ -111,8 +108,10 @@ void show_main_menubar(lunar::instance* lunar) {
                     for (int i = 2; i <= 6; i++) {
                         char buf[16]; sprintf(buf, "%.1fx", (float)i * 0.5f);
 
-                        if (Selectable(buf)) {
-                            software_set_scale(lunar->ctx, (float)i * 0.5f);
+                        if (Selectable(buf, ((float)i * 0.5f) == lunar->scale)) {
+                            lunar->scale = (float)i * 0.5f;
+
+                            software_set_scale(lunar->ctx, lunar->scale);
                         }
                     }
 
@@ -121,10 +120,10 @@ void show_main_menubar(lunar::instance* lunar) {
 
                 if (BeginMenu("Aspect mode")) {
                     for (int i = 0; i < 6; i++) {
-                        if (Selectable(aspect_mode_names[i], aspect_mode == i)) {
-                            aspect_mode = i;
+                        if (Selectable(aspect_mode_names[i], lunar->aspect_mode == i)) {
+                            lunar->aspect_mode = i;
 
-                            software_set_aspect_mode(lunar->ctx, i);
+                            software_set_aspect_mode(lunar->ctx, lunar->aspect_mode);
                         }
                     }
 
@@ -132,14 +131,14 @@ void show_main_menubar(lunar::instance* lunar) {
                 }
 
                 if (BeginMenu("Scaling filter")) {
-                    if (Selectable("Nearest", !bilinear)) {
-                        bilinear = false;
+                    if (Selectable("Nearest", !lunar->bilinear)) {
+                        lunar->bilinear = false;
 
                         software_set_bilinear(lunar->ctx, false);
                     }
 
-                    if (Selectable("Bilinear", bilinear)) {
-                        bilinear = true;
+                    if (Selectable("Bilinear", lunar->bilinear)) {
+                        lunar->bilinear = true;
 
                         software_set_bilinear(lunar->ctx, true);
                     }
@@ -157,6 +156,11 @@ void show_main_menubar(lunar::instance* lunar) {
             }
 
             MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &lunar->show_status_bar);
+
+            if (MenuItem(ICON_MS_CONTENT_COPY " Copy data path to clipboard")) {
+                SDL_SetClipboardText(SDL_GetPrefPath("Allkern", "Iris"));
+            }
+
 
             EndMenu();
         }
