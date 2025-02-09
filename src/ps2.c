@@ -69,7 +69,7 @@ void ps2_init(struct ps2_state* ps2) {
     iop_init(ps2->iop, iop_bus_data);
 
     // Initialize devices
-    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee, ps2->ee_bus);
+    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
     ps2_gif_init(ps2->gif, ps2->gs);
     ps2_vif_init(ps2->vif, ps2->ee_bus);
