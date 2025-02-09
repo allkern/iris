@@ -2,11 +2,11 @@
 
 EXEC := eegs
 
-INCLUDE_DIRS := src imgui imgui/backends frontend gl3w/include
+INCLUDE_DIRS := imgui imgui/backends frontend gl3w/include tomlplusplus/include
 OUTPUT_DIR := bin
 
-CXX := c++
-CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) $(shell sdl2-config --cflags --libs)
+CXX := g++
+CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
 CXXFLAGS += -O3 -ffast-math -march=native -mtune=native -flto=auto -Wall -g
 CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
@@ -17,8 +17,8 @@ CXXSRC += $(wildcard src/ee/renderer/*.cpp)
 CXXOBJ := $(CXXSRC:.cpp=.o)
 
 CC := gcc
-CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) $(shell sdl2-config --cflags --libs)
-CFLAGS += -O3 -ffast-math -march=native -mtune=native 
+CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
+CFLAGS += -O3 -ffast-math -march=native -mtune=native
 CFLAGS += -flto=auto -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS
 CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
