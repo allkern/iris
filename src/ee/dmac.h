@@ -81,13 +81,14 @@ struct ps2_dmac {
     uint32_t enabler;
     uint32_t enablew;
 
+    struct ps2_ram* spr;
     struct ps2_sif* sif;
     struct ps2_iop_dma* iop_dma;
     struct ee_state* ee;
 };
 
 struct ps2_dmac* ps2_dmac_create(void);
-void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dma* iop_dma, struct ee_state* ee, struct ee_bus* bus);
+void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dma* iop_dma, struct ps2_ram* spr, struct ee_state* ee, struct ee_bus* bus);
 void ps2_dmac_destroy(struct ps2_dmac* dmac);
 uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr);
 void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data);
