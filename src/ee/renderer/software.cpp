@@ -94,6 +94,10 @@ void software_set_size(software_state* ctx, int width, int height) {
         return;
     }
 
+    if (ctx->gs->smode2 & 1) {
+        ctx->tex_h /= 2;
+    }
+
     if (ctx->tex) {
         glDeleteTextures(1, &ctx->tex);
     }
@@ -1049,22 +1053,22 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     //     v1.rgbaq & 0xffffffff
     // );
 
-    printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d fbw=%d\n",
-        gs->ctx->tbpsm,
-        gs->ctx->tbpsm,
-        gs->ctx->tbp0,
-        gs->ctx->tbw,
-        gs->ctx->usize,
-        gs->ctx->vsize,
-        gs->ctx->cbpsm,
-        gs->ctx->cbp,
-        gs->ctx->csm,
-        gs->ctx->tfx,
-        v1.rgbaq & 0xffffffff,
-        gs->abe,
-        gs->ctx->fbpsm,
-        gs->ctx->fbw
-    );
+    // printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d fbw=%d\n",
+    //     gs->ctx->tbpsm,
+    //     gs->ctx->tbpsm,
+    //     gs->ctx->tbp0,
+    //     gs->ctx->tbw,
+    //     gs->ctx->usize,
+    //     gs->ctx->vsize,
+    //     gs->ctx->cbpsm,
+    //     gs->ctx->cbp,
+    //     gs->ctx->csm,
+    //     gs->ctx->tfx,
+    //     v1.rgbaq & 0xffffffff,
+    //     gs->abe,
+    //     gs->ctx->fbpsm,
+    //     gs->ctx->fbw
+    // );
 
     int z = v1.z;
     int a = v1.a;
@@ -1445,15 +1449,17 @@ extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
     ctx->sbp <<= 6;
     ctx->sbw <<= 6;
 
+    uint32_t dbw = ctx->dbw;
+
     ctx->dbw = gs_pixels_to_size(ctx->dpsm, ctx->dbw);
     ctx->sbw = gs_pixels_to_size(ctx->spsm, ctx->sbw);
 
     ctx->psmct24_data = 0;
     ctx->psmct24_shift = 0;
 
-    printf("dbp=%x dbw=%d dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
+    printf("dbp=%x dbw=%d (%d) dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
         ctx->dbp,
-        ctx->dbw,
+        ctx->dbw, dbw,
         ctx->dpsm,
         ctx->dsax,
         ctx->dsay,
@@ -1574,6 +1580,32 @@ static inline void gs_store_hwreg_psmct24(struct ps2_gs* gs, software_state* ctx
     }
 }
 
+static inline void gs_write_psmct16(struct ps2_gs* gs, software_state* ctx, uint32_t index) {
+    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+
+    addr += (ctx->dx >> 1) + (ctx->dy * ctx->dbw);
+    
+    uint32_t mask = 0xffff << ((ctx->dx & 1) * 16);
+    uint32_t data = gs->vram[addr] & ~mask;
+
+    gs->vram[addr] = data | (index << ((ctx->dx & 1) * 16));
+
+    ctx->dx++;
+
+    if (ctx->dx == ctx->rrw) {
+        ctx->dx = 0;
+        ctx->dy++;
+    }
+}
+
+static inline void gs_store_hwreg_psmct16(struct ps2_gs* gs, software_state* ctx) {
+    for (int i = 0; i < 4; i++) {
+        uint64_t p = (gs->hwreg >> (i * 16)) & 0xffff;
+
+        gs_write_psmct16(gs, ctx, p);
+    }
+}
+
 extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
     software_state* ctx = (software_state*)udata;
 
@@ -1584,6 +1616,11 @@ extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
 
         case GS_PSMCT24: {
             gs_store_hwreg_psmct24(gs, ctx);
+        } break;
+
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            gs_store_hwreg_psmct16(gs, ctx);
         } break;
 
         case GS_PSMT8: {
