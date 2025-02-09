@@ -461,6 +461,18 @@ void gen_texture(lunar::instance* lunar, int w, int h, GLint fmt, void* ptr) {
 static uint32_t addr = 0, width = 0, height = 0;
 static float scale = 1.0f;
 
+const char* format_names[] = {
+    "32-bit/24-bit",
+    "16-bit"
+};
+
+GLuint format_enums[] = {
+    GL_UNSIGNED_BYTE,
+    GL_UNSIGNED_SHORT_1_5_5_5_REV
+};
+
+int format = 0;
+
 void show_gs_memory(lunar::instance* lunar) {
     using namespace ImGui;
 
@@ -505,17 +517,27 @@ void show_gs_memory(lunar::instance* lunar) {
         EndCombo();
     }
 
+    if (BeginCombo("Format", format_names[format], ImGuiComboFlags_HeightSmall)) {
+        for (int i = 0; i < 2; i++) {
+            if (Selectable(format_names[i], i == format)) {
+                format = i;
+            }
+        }
+
+        EndCombo();
+    }
+
     if (Button("View")) {
         addr = strtoul(buf0, NULL, 16);
         width = strtoul(buf1, NULL, 0);
         height = strtoul(buf2, NULL, 0);
 
-        gen_texture(lunar, width, height, GL_UNSIGNED_BYTE, &gs->vram[addr]);
+        gen_texture(lunar, width, height, format_enums[format], &gs->vram[addr]);
     }
 
     if (tex) {
         glBindTexture(GL_TEXTURE_2D, tex);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, &gs->vram[addr]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, format_enums[format], &gs->vram[addr]);
 
         Image((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
     }
