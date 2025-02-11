@@ -191,11 +191,21 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
     printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x\n", dma->spu1.chcr, dma->spu1.madr, dma->spu1.bcr);
 
-    // Stub
+    unsigned int size = (dma->spu1.bcr & 0xffff) * (dma->spu1.bcr >> 16);
+
+    for (int i = 0; i < size; i++) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->spu1.madr);
+
+        iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
+        iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
+
+        dma->spu1.madr += 4;
+    }
+
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
     iop_dma_check_irq(dma);
 
-    // dma->spu1.chcr &= ~0x1000000;
+    dma->spu1.chcr &= ~0x1000000;
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
     printf("iop: PIO channel unimplemented\n"); exit(1);
