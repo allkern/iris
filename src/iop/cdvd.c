@@ -606,7 +606,7 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
     }
 
     switch (ext) {
-        case CDVD_EXT_ISO: cdvd->disc_type = 18; break;
+        case CDVD_EXT_ISO: cdvd->disc_type = CDVD_DISC_PS2_CD; break;
         case CDVD_EXT_CUE: cdvd->disc_type = CDVD_DISC_PS2_CD; break;
     }
 
@@ -621,6 +621,7 @@ void ps2_cdvd_close(struct ps2_cdvd* cdvd) {
     }
 
     cdvd->file = NULL;
+    cdvd->disc_type = CDVD_DISC_NO_DISC;
 
     cdvd_set_status_bits(cdvd, CDVD_STATUS_TRAY_OPEN);
 }
