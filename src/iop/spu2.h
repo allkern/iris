@@ -60,8 +60,6 @@ extern "C" {
 */
 
 struct spu2_voice {
-    int playing;
-
     uint16_t voll;
     uint16_t volr;
     uint16_t pitch;
@@ -73,11 +71,37 @@ struct spu2_voice {
     uint32_t ssa;
     uint32_t lsax;
     uint32_t nax;
+
+    // Internal stuff
+    float f_voll;
+    float f_volr;
+    int playing;
+    unsigned int counter;
+    int32_t h[2];
+    int16_t buf[28];
+    int loop_start;
+    int loop;
+    int loop_end;
+    int prev_sample_index;
+    int16_t s[4];
+
+    // Envelope
+    int env_cycles_left;
+    int adsr_phase;
+    int adsr_cycles_reload;
+    int adsr_cycles;
+    int adsr_mode;
+    int adsr_dir;
+    int adsr_shift;
+    int adsr_step;
+    int adsr_pending_step;
+    int adsr_sustain_level;
 };
 
 struct spu2_core {
     struct spu2_voice v[24];
 
+    int words_written;
     uint32_t pmon;
     uint32_t non;
     uint32_t vmixl;
@@ -159,6 +183,7 @@ struct spu2_sample {
     union {
         uint32_t u32;
         uint16_t u16[2];
+        int16_t s16[2];
     };
 };
 
