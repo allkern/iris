@@ -406,7 +406,7 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
     style.ItemSpacing             = ImVec2(8.0, 4.0);
     style.WindowBorderSize        = 0;
     style.ChildBorderSize         = 0;
-    style.FrameBorderSize         = 0;
+    style.FrameBorderSize         = 1;
     style.PopupBorderSize         = 0;
     style.TabBorderSize           = 0;
     style.TabBarBorderSize        = 0;
