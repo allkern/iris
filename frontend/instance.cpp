@@ -110,6 +110,12 @@ static const char *ee_cc_r2[] = {
     "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
 };
 
+void sigint_handler(int signal);
+
+void atexit_handler() {
+    sigint_handler(0);
+}
+
 void sigint_handler(int signal) {
     char buf[128];
     struct ee_dis_state ee_ds;
@@ -279,8 +285,42 @@ int init_settings(lunar::instance* lunar) {
     return 0;
 }
 
+void audio_update(void* ud, uint8_t* buf, int size) {
+    lunar::instance* lunar = (lunar::instance*)ud;
+
+    memset(buf, 0, size);
+
+    if (lunar->mute || lunar->pause)
+        return;
+
+    for (int i = 0; i < (size >> 2); i++) {
+        struct spu2_sample sample = ps2_spu2_get_sample(lunar->ps2->spu2);
+
+        *(int16_t*)(&buf[(i << 2) + 0]) = sample.u16[0];
+        *(int16_t*)(&buf[(i << 2) + 2]) = sample.u16[1];
+    }
+}
+
+void init_audio(lunar::instance* lunar) {
+    SDL_AudioDeviceID dev;
+    SDL_AudioSpec obtained, desired;
+
+    desired.freq     = 48000;
+    desired.format   = AUDIO_S16SYS;
+    desired.channels = 2;
+    desired.samples  = 512;
+    desired.callback = &audio_update;
+    desired.userdata = lunar;
+
+    dev = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
+
+    if (dev)
+        SDL_PauseAudioDevice(dev, 0);
+}
+
 void init(lunar::instance* lunar, int argc, const char* argv[]) {
     g_lunar = lunar;
+
     std::signal(SIGINT, sigint_handler);
 
     SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS);
@@ -325,6 +365,8 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
         960, 720,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
     );
+
+    init_audio(lunar);
 
     lunar->gl_context = SDL_GL_CreateContext(lunar->window);
     SDL_GL_MakeCurrent(lunar->window, lunar->gl_context);
@@ -494,6 +536,8 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
             lunar->disc_path = argv[i];
         }
     }
+
+    printf("bios_path=%s\n", bios_path.c_str());
 
     if (bios_path.size()) {
         ps2_load_bios(lunar->ps2, bios_path.c_str());
@@ -673,6 +717,7 @@ void update_window(lunar::instance* lunar) {
     if (lunar->show_memory_viewer) show_memory_viewer(lunar);
     if (lunar->show_status_bar) show_status_bar(lunar);
     if (lunar->show_breakpoints) show_breakpoints(lunar);
+    if (lunar->show_about_window) show_about_window(lunar);
     if (lunar->show_imgui_demo) ShowDemoWindow(&lunar->show_imgui_demo);
     if (lunar->show_bios_setting_window) show_bios_setting_window(lunar);
 
@@ -800,7 +845,7 @@ void close(lunar::instance* lunar) {
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplSDL2_Shutdown();
-    ImGui::DestroyContext();
+    DestroyContext();
 
     SDL_GL_DeleteContext(lunar->gl_context);
     SDL_DestroyWindow(lunar->window);

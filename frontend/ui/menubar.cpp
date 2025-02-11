@@ -198,6 +198,13 @@ void show_main_menubar(lunar::instance* lunar) {
             
             EndMenu();
         }
+        if (BeginMenu("Help")) {
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " About")) {
+                lunar->show_about_window = true;
+            }
+
+            EndMenu();
+        }
 
         EndMainMenuBar();
     }

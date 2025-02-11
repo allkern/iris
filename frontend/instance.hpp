@@ -76,9 +76,12 @@ struct instance {
     bool show_status_bar = true;
     bool show_breakpoints = false;
     bool show_imgui_demo = false;
-    bool show_bios_setting_window = false;
-    bool fullscreen = false;
 
+    // Special windows
+    bool show_bios_setting_window = false;
+    bool show_about_window = false;
+
+    bool fullscreen = false;
     int aspect_mode = 0;
     bool bilinear = true;
     bool integer_scaling = false;
@@ -91,6 +94,7 @@ struct instance {
     float fps = 0.0f;
     unsigned int ticks = 0;
     int menubar_height = 0;
+    bool mute = false;
 
     std::string loaded = "";
 
@@ -126,5 +130,6 @@ void show_gs_debugger(lunar::instance* lunar);
 void show_memory_viewer(lunar::instance* lunar);
 void show_status_bar(lunar::instance* lunar);
 void show_breakpoints(lunar::instance* lunar);
+void show_about_window(lunar::instance* lunar);
 
 }
