@@ -87,6 +87,7 @@ struct ee_state {
     uint128_t r[32];
     uint128_t hi;
     uint128_t lo;
+    uint32_t prev_pc;
     uint32_t pc;
     uint32_t next_pc;
     uint32_t opcode;

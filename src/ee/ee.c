@@ -2722,7 +2722,7 @@ static inline void ee_execute(struct ee_state* ee) {
         case 0xFC000000 >> 26: ee_i_sd(ee); return;
     }
 
-    printf("ee: Invalid instruction %08x @ pc=%08x\n", ee->opcode, ee->pc);
+    printf("ee: Invalid instruction %08x @ pc=%08x\n", ee->opcode, ee->prev_pc);
 
     exit(1);
 }
@@ -2823,27 +2823,28 @@ void ee_cycle(struct ee_state* ee) {
     //     }
     // }
 
+    ee->prev_pc = ee->pc;
     ee->opcode = bus_read32(ee, ee->pc);
 
-    if (p) {
-        // fwrite(&ee->pc, 4, 1, file);
-        // fwrite(&ee->opcode, 4, 1, file);
-        fprintf(file, "%08x %08x ", ee->pc, ee->opcode);
+    // if (p) {
+    //     // fwrite(&ee->pc, 4, 1, file);
+    //     // fwrite(&ee->opcode, 4, 1, file);
+    //     fprintf(file, "%08x %08x ", ee->pc, ee->opcode);
 
-        for (int i = 1; i < 32; i++) {
-            // fwrite(&ee->r[i].ul32, 4, 1, file);
-            fprintf(file, "%08x ", ee->r[i].ul32);
-        }
+    //     for (int i = 1; i < 32; i++) {
+    //         // fwrite(&ee->r[i].ul32, 4, 1, file);
+    //         fprintf(file, "%08x ", ee->r[i].ul32);
+    //     }
 
-        fputc('\n', file);
-        --p;
+    //     fputc('\n', file);
+    //     --p;
 
-        if (!p) {
-            if (file) fclose(file);
+    //     if (!p) {
+    //         if (file) fclose(file);
 
-            exit(1);
-        }
-    }
+    //         exit(1);
+    //     }
+    // }
 
     // if (p) {
     //     ee_print_disassembly(ee);
