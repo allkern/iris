@@ -68,15 +68,15 @@ void print_highlighted(const char* buf) {
 
     for (const std::string& t : tokens) {
         if (isalpha(t[0])) {
-            TextColored(IM_RGB(211, 167, 30), t.c_str());
+            TextColored(IM_RGB(211, 167, 30), "%s", t.c_str());
         } else if (isdigit(t[0]) || t[0] == '-') {
-            TextColored(IM_RGB(138, 143, 226), t.c_str());
+            TextColored(IM_RGB(138, 143, 226), "%s", t.c_str());
         } else if (t[0] == '$') {
-            TextColored(IM_RGB(68, 169, 240), t.c_str());
+            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
         } else if (t[0] == '<') {
-            TextColored(IM_RGB(89, 89, 89), t.c_str());
+            TextColored(IM_RGB(89, 89, 89), "%s", t.c_str());
         } else {
-            Text(t.c_str());
+            Text("%s", t.c_str());
         }
 
         SameLine(0.0f, 0.0f);
@@ -145,6 +145,8 @@ static void show_ee_disassembly_view(lunar::instance* lunar) {
                 b.cpu = BKPT_CPU_EE;
                 b.size = 4;
                 b.enabled = true;
+
+                lunar->breakpoints.push_back(b);
             } SameLine();
 
             if (BeginPopupContextItem()) {
@@ -201,7 +203,7 @@ static void show_ee_disassembly_view(lunar::instance* lunar) {
             if (true) {
                 print_highlighted(disassembly);
             } else {
-                Text(disassembly);
+                Text("%s", disassembly);
             }
 
             if (g_ee_dis_state.pc == lunar->ps2->ee->pc)
@@ -266,6 +268,8 @@ static void show_iop_disassembly_view(lunar::instance* lunar) {
                 b.cpu = BKPT_CPU_IOP;
                 b.size = 4;
                 b.enabled = true;
+
+                lunar->breakpoints.push_back(b);
             } SameLine();
 
             if (BeginPopupContextItem()) {
@@ -322,7 +326,7 @@ static void show_iop_disassembly_view(lunar::instance* lunar) {
             if (true) {
                 print_highlighted(disassembly);
             } else {
-                Text(disassembly);
+                Text("%s", disassembly);
             }
 
             if (g_iop_dis_state.addr == lunar->ps2->iop->pc)

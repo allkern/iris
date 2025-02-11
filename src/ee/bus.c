@@ -207,7 +207,7 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
 
     printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr);
 
-    return (uint128_t)0;
+    return (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
 }
 
 void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {

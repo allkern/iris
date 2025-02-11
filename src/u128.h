@@ -9,7 +9,7 @@ extern "C" {
 #include <stddef.h>
 
 typedef union {
-    unsigned __int128 u128;
+    // unsigned __int128 u128;
     uint64_t u64[2];
     uint32_t u32[4];
     uint16_t u16[8];

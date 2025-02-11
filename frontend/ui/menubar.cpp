@@ -4,6 +4,7 @@
 #include "tfd/tinyfiledialogs.h"
 
 #include "ps2_elf.h"
+#include "ps2_iso9660.h"
 
 namespace lunar {
 
@@ -41,8 +42,33 @@ void show_main_menubar(lunar::instance* lunar) {
                 );
 
                 if (file) {
-                    ps2_reset(lunar->ps2);
+                    struct iso9660_state* iso = iso9660_open(file);
+
+                    if (!iso) {
+                        printf("lunar: Couldn't open disc image \"%s\"\n", file);
+
+                        exit(1);
+
+                        return;
+                    }
+
+                    char* boot_file = iso9660_get_boot_path(iso);
+
+                    if (!boot_file)
+                        return;
+
+                    // Temporarily disable window updates
+                    struct gs_callback cb = *ps2_gs_get_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+
+                    ps2_gs_remove_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+                    ps2_boot_file(lunar->ps2, boot_file);
+
+                    // Re-enable window updates
+                    ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
                     ps2_cdvd_open(lunar->ps2->cdvd, file);
+
+                    iso9660_close(iso);
 
                     lunar->loaded = file;
                 }

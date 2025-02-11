@@ -314,6 +314,8 @@ uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
     }
 
     printf("spu2: Unhandled register %x read\n", addr & 0x7ff);
+
+    return 0;
 }
 
 #define SPU2_WRITEL(cr, r) { spu2->c[cr].r &= 0xffff0000; spu2->c[cr].r |= data; }
@@ -373,8 +375,6 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
     }
 
     if ((addr >= 0x1c0 && addr <= 0x2df) || (addr >= 0x5c0 && addr <= 0x6df)) {
-        uint32_t a = addr;
-
         int core = (addr >> 10) & 1;
 
         addr -= (core ? 0x5c0 : 0x1c0);
@@ -498,7 +498,7 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         case 0x7CA: spu2->spdif_copy = data; return;
     }
 
-    printf("spu2: Unhandled register %x write (%04x)\n", addr & 0x7ff, data);
+    printf("spu2: Unhandled register %x write (%04lx)\n", addr & 0x7ff, data);
 }
 
 void ps2_spu2_destroy(struct ps2_spu2* spu2) {

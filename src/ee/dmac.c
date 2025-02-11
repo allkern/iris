@@ -76,8 +76,6 @@ static inline int channel_is_done(struct dmac_channel* ch) {
 uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
-    const char* name = dmac_get_channel_name(dmac, addr);
-
     if (c) {
         switch (addr & 0xff) {
             case 0x00: return c->chcr;
@@ -152,7 +150,7 @@ static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_ch
         } break;
 
         case 4: {
-            printf("dmac: Unsupported %d tag ID\n", c->tag.id);
+            printf("dmac: Unsupported %ld tag ID\n", c->tag.id);
 
             exit(1);
         } break;
@@ -270,7 +268,6 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
         return;
     }
 
-    int loop = 0;
     // Chain mode
     do {
         uint128_t tag = dmac_read_qword(dmac, dmac->vif1.tadr);
@@ -448,8 +445,6 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
         printf("dmac: WARNING!!! SIF FIFO not empty\n");
     }
 
-    int end = 0;
-
     do {
         uint128_t tag = dmac_read_qword(dmac, dmac->sif1.tadr);
 
@@ -507,7 +502,7 @@ void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
 }
 
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
-    struct dmac_channel* c = dmac_get_channel(dmac, addr);
+    // struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
     // printf("ee: %s start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
     //     dmac_get_channel_name(dmac, addr),
@@ -552,8 +547,6 @@ void dmac_write_stat(struct ps2_dmac* dmac, uint32_t data) {
 void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
-    const char* name = dmac_get_channel_name(dmac, addr);
-
     switch (addr) {
         case 0x1000E000: dmac->ctrl = data; return;
         case 0x1000E010: dmac_write_stat(dmac, data); return;
@@ -570,10 +563,9 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
             case 0x00: {
                 c->chcr = data;
 
-                // printf("ee: Set %s chcr <- %08x %08x\n", name, data, dmac->sif1.chcr);
-
-                if (data & 0x100)
+                if (data & 0x100) {
                     dmac_handle_channel_start(dmac, addr);
+                }
             } return;
             case 0x10: c->madr = data; return;
             case 0x20: c->qwc = data; return;

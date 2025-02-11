@@ -55,7 +55,9 @@ static inline void cdvd_set_ready(struct ps2_cdvd* cdvd) {
 void cdvd_read_sector(struct ps2_cdvd* cdvd, int lba, int offset) {
     // printf("cdvd: Read lba=%d (%x)\n", lba, lba);
     fseek(cdvd->file, lba * 0x800, SEEK_SET);
-    fread(cdvd->buf + offset, 1, 0x800, cdvd->file);
+
+    // Ignore result and avoid checking
+    (void)!fread(cdvd->buf + offset, 1, 0x800, cdvd->file);
 }
 
 static inline void cdvd_init_s_fifo(struct ps2_cdvd* cdvd, int size) {
@@ -589,7 +591,7 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
     // Read and verify PVD
     cdvd_read_sector(cdvd, 16, 0);
 
-    if (strncmp(&cdvd->buf[1], "CD001", 5)) {
+    if (strncmp((char*)&cdvd->buf[1], "CD001", 5)) {
         printf("cdvd: File \'%s\' is not a valid ISO image\n", path);
 
         exit(1);
@@ -643,7 +645,7 @@ uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
         case 0x1F402016: /* printf("cdvd: read s_cmd %x\n", cdvd->s_cmd); */ return cdvd->s_cmd;
         case 0x1F402017: /* printf("cdvd: read s_stat %x\n", cdvd->s_stat); */ return cdvd->s_stat;
         // case 0x1F402017: (W);
-        case 0x1F402018: uint8_t r = cdvd_read_s_response(cdvd); /* printf("cdvd: read s_response %x\n", r); */ return r;
+        case 0x1F402018: /* printf("cdvd: read s_response %x\n", r); */ return cdvd_read_s_response(cdvd);
     }
 
     printf("cdvd: unknown read %08x\n", addr);

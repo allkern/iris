@@ -6,6 +6,7 @@
 #include <signal.h>
 
 #ifdef _EE_USE_INTRINSICS
+#include <immintrin.h>
 #include <tmmintrin.h>
 #include <emmintrin.h>
 #include <smmintrin.h>
@@ -14,8 +15,8 @@
 #include "ee.h"
 #include "ee_dis.h"
 
-static FILE* file;
-static int p = 0;
+// static FILE* file;
+// static int p = 0;
 
 static inline int fast_abs32(int a) {
     uint32_t m = a >> 31;
@@ -141,21 +142,22 @@ const uint32_t ee_bus_region_mask_table[] = {
     0x7fffffff, 0x1fffffff, 0xffffffff, 0xffffffff
 };
 
-static inline float fpu_cvtsw(uint32_t value) {
-    switch (value & 0x7F800000) {
-        case 0x0:
-            value &= 0x80000000;
-            return *(float*)&value;
-        case 0x7F800000:
-            value = (value & 0x80000000) | 0x7F7FFFFF;
-            return *(float*)&value;
-        default:
-            return *(float*)&value;
+static inline float fpu_cvtsw(union ee_fpu_reg* reg) {
+    switch (reg->u32 & 0x7F800000) {
+        case 0x0: {
+            reg->u32 &= 0x80000000;
+        } break;
+
+        case 0x7F800000: {
+            reg->u32 = (reg->u32 & 0x80000000) | 0x7F7FFFFF;
+        } break;
     }
+
+    return reg->f;
 }
 
 static inline int ee_translate_virt(uint32_t virt, uint32_t* phys) {
-    int seg = ee_get_segment(virt);
+    // int seg = ee_get_segment(virt);
 
     // DECI2 area
     if (virt >= 0xFFFF8000) {
@@ -204,10 +206,10 @@ static inline int ee_translate_virt(uint32_t virt, uint32_t* phys) {
         ee->bus.write ## b(ee->bus.udata, phys, data);                                      \
     }
 
-BUS_READ_FUNC(8);
-BUS_READ_FUNC(16);
-BUS_READ_FUNC(32);
-BUS_READ_FUNC(64);
+BUS_READ_FUNC(8)
+BUS_READ_FUNC(16)
+BUS_READ_FUNC(32)
+BUS_READ_FUNC(64)
 
 static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
     if (addr >= 0x70000000 && addr <= 0x70003fff)
@@ -220,16 +222,16 @@ static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
 
         exit(1);
 
-        return (uint128_t)0;
+        return (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
     }
 
     return ee->bus.read128(ee->bus.udata, phys);
 }
 
-BUS_WRITE_FUNC(8);
-BUS_WRITE_FUNC(16);
-BUS_WRITE_FUNC(32);
-BUS_WRITE_FUNC(64);
+BUS_WRITE_FUNC(8)
+BUS_WRITE_FUNC(16)
+BUS_WRITE_FUNC(32)
+BUS_WRITE_FUNC(64)
 
 static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
     if (addr >= 0x70000000 && addr <= 0x70003fff) {
@@ -922,7 +924,7 @@ static inline void ee_i_pabsh(struct ee_state* ee) {
         d->u16[i] = (t->u16[i] == 0x8000) ? 0x7fff : fast_abs16(t->u16[i]);
     }
 #else
-    __m128i b = _mm_set1_epi16(0x8000);
+    __m128i b = _mm_set1_epi16((unsigned short)0x8000);
     __m128i a = _mm_load_si128((void*)t);
     __m128i f = _mm_cmpeq_epi16(a, b);
     __m128i r = _mm_add_epi16(_mm_abs_epi16(a), f);
@@ -1916,12 +1918,6 @@ static inline void ee_i_qmtc2(struct ee_state* ee) {
 }
 static inline void ee_i_rsqrts(struct ee_state* ee) { printf("ee: rsqrts unimplemented\n"); exit(1); }
 static inline void ee_i_sb(struct ee_state* ee) {
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
-
-    // if (addr >= 0x12c658 && addr < 0x12d658) {
-    //     printf("ee: %08x <- %02x (%c)\n", addr, EE_RT, EE_RT);
-    // }
-
     bus_write8(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
 }
 static inline void ee_i_sd(struct ee_state* ee) {
@@ -2021,10 +2017,11 @@ static inline void ee_i_swc1(struct ee_state* ee) {
 static inline void ee_i_swl(struct ee_state* ee) {
     static const uint32_t swl_mask[4] = { 0xffffff00, 0xffff0000, 0xff000000, 0x00000000 };
     static const uint8_t swl_shift[4] = { 24, 16, 8, 0 };
-    int16_t offset = (int16_t)EE_D_I16;
+
     uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
-    int shift = addr & 3;
     uint32_t mem = bus_read32(ee, addr & ~3);
+
+    int shift = addr & 3;
 
     bus_write32(ee, addr & ~3, (EE_RT32 >> swl_shift[shift] | (mem & swl_mask[shift])));
 
@@ -2033,10 +2030,11 @@ static inline void ee_i_swl(struct ee_state* ee) {
 static inline void ee_i_swr(struct ee_state* ee) {
     static const uint32_t swr_mask[4] = { 0x00000000, 0x000000ff, 0x0000ffff, 0x00ffffff };
     static const uint8_t swr_shift[4] = { 0, 8, 16, 24 };
-    int16_t offset = (int16_t)EE_D_I16;
+
     uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
-    int shift = addr & 3;
     uint32_t mem = bus_read32(ee, addr & ~3);
+
+    int shift = addr & 3;
 
     bus_write32(ee, addr & ~3, (EE_RT32 << swr_shift[shift]) | (mem & swr_mask[shift]));
 
@@ -2046,7 +2044,7 @@ static inline void ee_i_sync(struct ee_state* ee) {
     /* Do nothing */
 }
 
-#include "syscall.h"
+// #include "syscall.h"
 
 static inline void ee_i_syscall(struct ee_state* ee) {
     // uint32_t n = ee->r[3].ul64;
@@ -2872,7 +2870,7 @@ void ee_cycle(struct ee_state* ee) {
 
 void ee_reset(struct ee_state* ee) {
     for (int i = 0; i < 32; i++)
-        ee->r[i] = (uint128_t)0;
+        ee->r[i] = (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
 
     for (int i = 0; i < 32; i++)
         ee->f[i].u32 = 0;
@@ -2883,8 +2881,8 @@ void ee_reset(struct ee_state* ee) {
     ee->a.u32 = 0;
     ee->fcr = 0;
 
-    ee->hi = (uint128_t)0;
-    ee->lo = (uint128_t)0;
+    ee->hi = (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
+    ee->lo = (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
     ee->pc = 0xbfc00000;
     ee->next_pc = ee->pc + 4;
     ee->opcode = 0;

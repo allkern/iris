@@ -14,7 +14,6 @@
 #include "res/IconsMaterialSymbols.h"
 #include "tfd/tinyfiledialogs.h"
 
-#include "ee/renderer/opengl.hpp"
 #include "ee/renderer/software.hpp"
 
 #include "imgui.h"
@@ -243,7 +242,6 @@ int init_settings(lunar::instance* lunar) {
     }
 
     toml::table& tbl = result.table();
-
 
     auto paths = tbl["paths"];
     lunar->bios_path = paths["bios_path"].value_or("");
@@ -537,8 +535,6 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
         }
     }
 
-    printf("bios_path=%s\n", bios_path.c_str());
-
     if (bios_path.size()) {
         ps2_load_bios(lunar->ps2, bios_path.c_str());
     } else {
@@ -579,6 +575,8 @@ void init(lunar::instance* lunar, int argc, const char* argv[]) {
 
         ps2_boot_file(lunar->ps2, boot_file);
         ps2_cdvd_open(lunar->ps2->cdvd, lunar->disc_path.c_str());
+
+        iso9660_close(iso);
 
         lunar->loaded = lunar->disc_path;
     }

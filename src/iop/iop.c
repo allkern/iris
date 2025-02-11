@@ -4,7 +4,7 @@
 #include "iop.h"
 #include "iop_dis.h"
 
-static int p = 0;
+// static int p = 0;
 
 const uint32_t iop_bus_region_mask_table[] = {
     0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
@@ -166,33 +166,6 @@ void iop_cycle(struct iop_state* iop) {
 
     iop->opcode = iop_bus_read32(iop, iop->pc);
     iop->last_cycles = 0;
-
-    // uint32_t pc = iop->next_pc;
-
-    // if ((pc == 0x12C48) || (pc == 0x1420C) || (pc == 0x1430C)) {
-    //     uint32_t ptr = iop->r[5];
-    //     uint32_t size = iop->r[6];
-
-    //     if (size >= 0x1000) {
-    //         goto skip_ioman;
-    //         char c = iop_bus_read8(iop, ptr++);
-
-    //         while (c) {
-    //             iop->kputchar(iop->kputchar_udata, c);
-
-    //             fflush(stdout);
-
-    //             c = iop_bus_read8(iop, ptr++);
-    //         }
-    //     }
-
-    //     while (size--) {
-    //         iop->kputchar(iop->kputchar_udata, iop_bus_read8(iop, ptr++));
-    //         fflush(stdout);
-    //     }
-    // }
-
-    skip_ioman:;
 
     if (iop->p) {
         iop_print_disassembly(iop);
@@ -389,6 +362,10 @@ static inline void iop_i_j(struct iop_state* iop) {
                         uint8_t* buf = malloc(size);
 
                         iop->r[2] = fread(buf, 1, size, file);
+
+                        for (int i = 0; i < size; i++) {
+                            iop_bus_write8(iop, ptr + i, buf[i]);
+                        }
 
                         free(buf);
 

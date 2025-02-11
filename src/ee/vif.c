@@ -213,7 +213,7 @@ uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr) {
         case 0x10005000: printf("vif1: 128-bit FIFO read\n"); break;
     }
 
-    return (uint128_t)0;
+    return (uint128_t){ .u64[0] = 0, .u64[1] = 0 };;
 }
 
 void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {

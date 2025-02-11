@@ -74,16 +74,16 @@ static const char* r3000_cop0_table[] = {
     "invalid", "invalid", "invalid", "invalid"
 };
 
-static const char* r3000_cop2_table[] = {
-    "mfc2"   , "invalid", "cfc2"   , "invalid",
-    "mtc2"   , "invalid", "ctc2"   , "invalid",
-    "invalid", "invalid", "invalid", "invalid",
-    "invalid", "invalid", "invalid", "invalid",
-    "gte"    , "gte"    , "gte"    , "gte"    ,
-    "gte"    , "gte"    , "gte"    , "gte"    ,
-    "gte"    , "gte"    , "gte"    , "gte"    ,
-    "gte"    , "gte"    , "gte"    , "gte"
-};
+// static const char* r3000_cop2_table[] = {
+//     "mfc2"   , "invalid", "cfc2"   , "invalid",
+//     "mtc2"   , "invalid", "ctc2"   , "invalid",
+//     "invalid", "invalid", "invalid", "invalid",
+//     "invalid", "invalid", "invalid", "invalid",
+//     "gte"    , "gte"    , "gte"    , "gte"    ,
+//     "gte"    , "gte"    , "gte"    , "gte"    ,
+//     "gte"    , "gte"    , "gte"    , "gte"    ,
+//     "gte"    , "gte"    , "gte"    , "gte"
+// };
 
 static const char* r3000_bxx_table[] = {
     "bltz"   , "bgez"   , "bltz"   , "bgez"   ,
@@ -154,7 +154,7 @@ static const char* r3000_cop0_register_names[] = {
     "r47"
 };
 
-char* disassemble_secondary(char* buf, uint32_t opcode, struct iop_dis_state* state) {
+void disassemble_secondary(char* buf, uint32_t opcode, struct iop_dis_state* state) {
     char* ptr = buf;
 
     int sop = SOP;

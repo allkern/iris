@@ -17,7 +17,7 @@ void show_logs(lunar::instance* lunar, const std::vector <std::string>& logs) {
     PushFont(lunar->font_code);
 
     if (BeginTable("##logstable", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
-        for (int i = 0; i < logs.size(); i++) {
+        for (unsigned int i = 0; i < logs.size(); i++) {
             TableNextRow();
 
             TableSetColumnIndex(0);
@@ -32,7 +32,7 @@ void show_logs(lunar::instance* lunar, const std::vector <std::string>& logs) {
                 // Do something with text
             } SameLine(0.0, 0.0);
 
-            Text(logs[i].c_str());
+            Text("%s", logs[i].c_str());
         }
 
         if (iop_follow) {

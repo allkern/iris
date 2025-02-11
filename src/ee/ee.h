@@ -81,12 +81,19 @@ union ee_fpu_reg {
     float f;
 };
 
+#ifdef _EE_USE_INTRINSICS
+#define EE_ALIGNED16 __attribute__((aligned(16)))
+#else
+#define EE_ALIGNED16
+#endif
+
 struct ee_state {
     struct ee_bus_s bus;
 
-    uint128_t r[32];
-    uint128_t hi;
-    uint128_t lo;
+    uint128_t r[32] EE_ALIGNED16;
+    uint128_t hi EE_ALIGNED16;
+    uint128_t lo EE_ALIGNED16;
+
     uint32_t prev_pc;
     uint32_t pc;
     uint32_t next_pc;
@@ -149,6 +156,8 @@ void ee_reset(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
 void ee_set_int0(struct ee_state* ee);
 void ee_set_int1(struct ee_state* ee);
+
+#undef EE_ALIGNED16
 
 #ifdef __cplusplus
 }

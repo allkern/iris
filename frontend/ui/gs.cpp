@@ -133,11 +133,11 @@ void show_privileged_registers(lunar::instance* lunar) {
 
             TableSetColumnIndex(0);
 
-            Text(gs_privileged_reg_names[i]);
+            Text("%s", gs_privileged_reg_names[i]);
 
             TableSetColumnIndex(1);
 
-            Text("%08x%08x", regs[i] >> 32, regs[i] & 0xffffffff);
+            Text("%08lx%08lx", regs[i] >> 32, regs[i] & 0xffffffff);
         }
 
         EndTable();
@@ -167,11 +167,11 @@ void show_context_registers(lunar::instance* lunar, int ctx) {
 
             TableSetColumnIndex(0);
 
-            Text(gs_gp_reg_names[i]);
+            Text("%s", gs_gp_reg_names[i]);
 
             TableSetColumnIndex(1);
 
-            Text("%08x%08x", regs[i] >> 32, regs[i] & 0xffffffff);
+            Text("%08lx%08lx", regs[i] >> 32, regs[i] & 0xffffffff);
         }
 
         EndTable();
@@ -201,11 +201,11 @@ void show_internal_registers(lunar::instance* lunar) {
 
             TableSetColumnIndex(0);
 
-            Text(gs_internal_reg_names[i]);
+            Text("%s", gs_internal_reg_names[i]);
 
             TableSetColumnIndex(1);
 
-            Text("%08x%08x", regs[i] >> 32, regs[i] & 0xffffffff);
+            Text("%08lx%08lx", regs[i] >> 32, regs[i] & 0xffffffff);
         }
 
         EndTable();
@@ -225,11 +225,11 @@ static inline void show_gs_vertex_xy(lunar::instance* lunar, const gs_vertex* vt
 
     PushFont(lunar->font_code);
 
-    Text("0x%04x, 0x%04x", vtx->xyz & 0xffff, (vtx->xyz >> 16) & 0xffff);
+    Text("0x%04lx, 0x%04lx", vtx->xyz & 0xffff, (vtx->xyz >> 16) & 0xffff);
 
     TableSetColumnIndex(2);
 
-    Text("%d.%04d, %d.%04d", vtx->x, (vtx->xyz & 0xf) * 625, vtx->y, ((vtx->xyz >> 16) & 0xf) * 625);
+    Text("%d.%04ld, %d.%04ld", vtx->x, (vtx->xyz & 0xf) * 625, vtx->y, ((vtx->xyz >> 16) & 0xf) * 625);
 
     PopFont();
 
@@ -269,7 +269,7 @@ static inline void show_gs_vertex_stq(lunar::instance* lunar, const gs_vertex* v
 
     PushFont(lunar->font_code);
 
-    Text("0x%08x, 0x%08x, 0x%08x", vtx->st & 0xffffffff, vtx->st >> 32, vtx->rgbaq >> 32);
+    Text("0x%08lx, 0x%08lx, 0x%08lx", vtx->st & 0xffffffff, vtx->st >> 32, vtx->rgbaq >> 32);
 
     TableSetColumnIndex(2);
 
@@ -291,14 +291,14 @@ static inline void show_gs_vertex_uv(lunar::instance* lunar, const gs_vertex* vt
 
     PushFont(lunar->font_code);
 
-    Text("0x%08x, 0x%08x",
+    Text("0x%08lx, 0x%08lx",
         vtx->uv & 0x3fff,
         (vtx->uv >> 16) & 0x3fff
     );
 
     TableSetColumnIndex(2);
 
-    Text("%d.%04d, %d.%04d",
+    Text("%d.%04ld, %d.%04ld",
         vtx->u, (vtx->uv & 0xf) * 625,
         vtx->v, ((vtx->uv >> 16) & 0xf) * 625
     );
@@ -319,11 +319,11 @@ static inline void show_gs_vertex_rgba(lunar::instance* lunar, const gs_vertex* 
 
     PushFont(lunar->font_code);
 
-    Text("0x%08x", vtx->rgbaq & 0xffffffff);
+    Text("0x%08lx", vtx->rgbaq & 0xffffffff);
 
     TableSetColumnIndex(2);
 
-    Text("0x%02x, 0x%02x, 0x%02x, 0x%02x",
+    Text("0x%02lx, 0x%02lx, 0x%02lx, 0x%02lx",
         vtx->rgbaq & 0xff,
         (vtx->rgbaq >> 8) & 0xff,
         (vtx->rgbaq >> 16) & 0xff,
@@ -352,8 +352,6 @@ static inline void show_gs_vertex_rgba(lunar::instance* lunar, const gs_vertex* 
 void show_gs_vertex(lunar::instance* lunar, const gs_vertex* vtx) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = lunar->ps2->gs;
-
     if (BeginTable("table10", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
         PushFont(lunar->font_small_code);
         TableSetupColumn("Attribute");
@@ -379,8 +377,8 @@ void show_gs_queue(lunar::instance* lunar) {
 
     struct ps2_gs* gs = lunar->ps2->gs;
 
-    for (int i = 0; i < gs->vqi; i++) {
-        char buf[16]; sprintf(buf, "Vertex %d", i+1);
+    for (unsigned int i = 0; i < gs->vqi; i++) {
+        char buf[32]; sprintf(buf, "Vertex %d", i+1);
 
         if (TreeNode(buf)) {
             show_gs_vertex(lunar, &gs->vq[i]);
@@ -391,7 +389,7 @@ void show_gs_queue(lunar::instance* lunar) {
 
     if (TreeNode("Uninitialized")) {
         for (int i = gs->vqi; i < 4; i++) {
-            char buf[16]; sprintf(buf, "Vertex %d", i+1);
+            char buf[32]; sprintf(buf, "Vertex %d", i+1);
 
             if (TreeNode(buf)) {
                 show_gs_vertex(lunar, &gs->vq[i]);

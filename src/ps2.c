@@ -122,7 +122,18 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
     while (ps2->ee->pc != 0x00082000)
         ps2_cycle(ps2);
 
-    sprintf(ps2->ee_ram->buf + 0x89580, path);
+    uint32_t i;
+
+    // Find rom0:OSDSYS string
+    for (i = 0; i < RAM_SIZE_32MB; i += 0x10) {
+        char* ptr = (char*)&ps2->ee_ram->buf[i];
+
+        if (!strncmp(ptr, "rom0:OSDSYS", 12)) {
+            printf("eegs: Found OSDSYS path at 0x%08x\n", i);
+
+            sprintf(ptr, "%s", path);
+        }
+    }
 }
 
 void ps2_load_bios(struct ps2_state* ps2, const char* path) {
@@ -134,55 +145,32 @@ void ps2_reset(struct ps2_state* ps2) {
     iop_reset(ps2->iop);
 }
 
-static const char *ee_cc_r3[] = {
-    "r0", "at", "v0", "v1", "a0", "a1", "a2", "a3",
-    "t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7",
-    "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
-    "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
-};
-
-static int trace = 0;
+// To-do: This will soon be useless, need to integrate
+// the tracer into our debugging UI
 static int depth = 0;
 
+static inline void ps2_trace(struct ps2_state* ps2) {
+    for (int i = 0; i < ps2->nfuncs; i++) {
+        if (ps2->ee->pc == ps2->func[i].addr) {
+            printf("trace: ");
+
+            for (int i = 0; i < depth; i++)
+                putchar(' ');
+
+            printf("%s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
+
+            ++depth;
+
+            break;
+        }
+    }
+
+    if (ps2->ee->opcode == 0x03e00008)
+        if (depth > 0) --depth;
+}
+
 void ps2_cycle(struct ps2_state* ps2) {
-    // if (ps2->ee->pc == 0x0101e8a4) {
-    //     for (int i = 0; i < 32; i++) {
-    //         printf("%s: %08x %08x %08x %08x\n",
-    //             ee_cc_r3[i],
-    //             ps2->ee->r[i].u32[3],
-    //             ps2->ee->r[i].u32[2],
-    //             ps2->ee->r[i].u32[1],
-    //             ps2->ee->r[i].u32[0]
-    //         );
-    //     }
-    // }
-
-    // for (int i = 0; i < ps2->nfuncs; i++) {
-    //     // _sceSifLoadModule
-    //     if ((ps2->ee->pc == 0x1c1490) || trace)
-    //         trace = 1;
-    //     else
-    //         break;
-
-    //     if (ps2->ee->pc == ps2->func[i].addr) {
-    //         if (ps2->ee->pc == 0x1bed90)
-    //             break;
-
-    //         printf("trace: ");
-
-    //         for (int i = 0; i < depth; i++)
-    //             putchar(' ');
-
-    //         printf("%s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
-
-    //         ++depth;
-
-    //         break;
-    //     }
-    // }
-
-    // if (ps2->ee->opcode == 0x03e00008)
-    //     if (depth > 0) --depth;
+    // ps2_trace(ps2);
 
     sched_tick(ps2->sched, 8);
     ee_cycle(ps2->ee);

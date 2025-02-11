@@ -73,7 +73,7 @@ void show_ee_intc_interrupts(lunar::instance* lunar) {
 
             TableSetColumnIndex(0);
 
-            Text(ee_irq_sources[i]);
+            Text("%s", ee_irq_sources[i]);
 
             TableSetColumnIndex(1);
 
@@ -137,7 +137,7 @@ void show_iop_intc_interrupts(lunar::instance* lunar) {
 
             TableSetColumnIndex(0);
 
-            Text(iop_irq_sources[i]);
+            Text("%s", iop_irq_sources[i]);
 
             TableSetColumnIndex(1);
 

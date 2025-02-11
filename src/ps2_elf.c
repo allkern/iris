@@ -13,7 +13,11 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
     Elf32_Ehdr ehdr;
     FILE* file = fopen(path, "rb");
 
-    fread(&ehdr, sizeof(Elf32_Ehdr), 1, file);
+    if (!fread(&ehdr, sizeof(Elf32_Ehdr), 1, file)) {
+        printf("elf: Couldn't read ELF header\n");
+
+        return 1;
+    }
 
     ps2->ee->pc = ehdr.e_entry;
     ps2->ee->next_pc = ps2->ee->pc + 4;
@@ -24,7 +28,12 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
 
     for (int i = 0; i < ehdr.e_phnum; i++) {
         fseek(file, ehdr.e_phoff + (i * ehdr.e_phentsize), SEEK_SET);
-        fread(&phdr, sizeof(Elf32_Phdr), 1, file);
+        
+        if (!fread(&phdr, sizeof(Elf32_Phdr), 1, file)) {
+            printf("elf: Couldn't read program header\n");
+
+            return 1;
+        }
 
         if (phdr.p_type != PT_LOAD)
             continue;
@@ -46,7 +55,12 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
 
         // Read segment binary
         fseek(file, phdr.p_offset, SEEK_SET);
-        fread(ps2->ee_ram->buf + phdr.p_vaddr, 1, phdr.p_filesz, file);
+
+        if (!fread(ps2->ee_ram->buf + phdr.p_vaddr, 1, phdr.p_filesz, file)) {
+            printf("elf: Couldn't read segment binary\n");
+
+            return 1;
+        }
     }
 
     // Read symbol table header
@@ -54,13 +68,16 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
 
     memset(&symtab, 0, sizeof(Elf32_Shdr));
 
-    char* buf;
-
     for (int i = 0; i < ehdr.e_shnum; i++) {
         Elf32_Shdr shdr;
 
         fseek(file, ehdr.e_shoff + (i * ehdr.e_shentsize), SEEK_SET);
-        fread(&shdr, sizeof(Elf32_Shdr), 1, file);
+        
+        if (!fread(&shdr, sizeof(Elf32_Shdr), 1, file)) {
+            printf("elf: Couldn't read section header\n");
+
+            return 1;
+        }
 
         if ((shdr.sh_type == SHT_STRTAB) && (i != ehdr.e_shstrndx)) {
             printf("elf: Loading string table size=%x offset=%x\n", shdr.sh_size, shdr.sh_offset);
@@ -68,7 +85,14 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
             ps2->strtab = malloc(shdr.sh_size);
 
             fseek(file, shdr.sh_offset, SEEK_SET);
-            fread(ps2->strtab, 1, shdr.sh_size, file);
+
+            if (!fread(ps2->strtab, 1, shdr.sh_size, file)) {
+                printf("elf: Couldn't read string table\n");
+
+                free(ps2->strtab);
+
+                return 1;
+            }
         }
 
         if (shdr.sh_type == SHT_SYMTAB)
@@ -94,7 +118,7 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
         return 0;
     }
 
-    printf("Got symbol table\n");
+    printf("elf: Got symbol table\n");
 
     size_t nsyms = symtab.sh_size / symtab.sh_entsize;
 
@@ -103,7 +127,14 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
 
     for (int i = 0; i < nsyms; i++) {
         fseek(file, symtab.sh_offset + (i * symtab.sh_entsize), SEEK_SET);
-        fread(&sym, sizeof(Elf32_Sym), 1, file);
+
+        if (!fread(&sym, sizeof(Elf32_Sym), 1, file)) {
+            printf("elf: Couldn't read symbol table\n");
+
+            free(ps2->strtab);
+
+            return 1;
+        }
 
         if (ELF32_ST_TYPE(sym.st_info) != STT_FUNC)
             continue;
@@ -117,7 +148,15 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
 
     for (int i = 0; i < nsyms; i++) {
         fseek(file, symtab.sh_offset + (i * symtab.sh_entsize), SEEK_SET);
-        fread(&sym, sizeof(Elf32_Sym), 1, file);
+
+        if (!fread(&sym, sizeof(Elf32_Sym), 1, file)) {
+            printf("elf: Couldn't read symbols\n");
+
+            free(ps2->strtab);
+            free(ps2->func);
+
+            return 1;
+        }
 
         if (ELF32_ST_TYPE(sym.st_info) != STT_FUNC)
             continue;

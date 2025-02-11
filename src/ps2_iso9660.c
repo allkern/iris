@@ -6,6 +6,8 @@
 
 #include "ps2_iso9660.h"
 
+#define IGNORE_RETURN ((void)!)
+
 struct iso9660_state* iso9660_open(const char* path) {
     FILE* file = fopen(path, "rb");
 
@@ -24,7 +26,12 @@ struct iso9660_state* iso9660_open(const char* path) {
 char* iso9660_get_boot_path(struct iso9660_state* iso) {
     // Cache the PVD (Primary Volume Descriptor)
     fseek(iso->file, 16 * 0x800, SEEK_SET);
-    fread(&iso->pvd, sizeof(struct iso9660_pvd), 1, iso->file);
+
+    if (!fread(&iso->pvd, sizeof(struct iso9660_pvd), 1, iso->file)) {
+        printf("iso9660: Couldn't read PVD\n");
+
+        return NULL;
+    }
 
     if (strncmp(iso->pvd.id, "\1CD001\1", 8)) {
         printf("iso: Unknown format disc %d\n", iso->pvd.id[0]);
@@ -35,7 +42,12 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
     struct iso9660_dirent* root = (struct iso9660_dirent*)iso->pvd.root;
 
     fseek(iso->file, root->lba_le * 0x800, SEEK_SET);
-    fread(iso->buf, 0x800, 1, iso->file);
+
+    if (!fread(iso->buf, 0x800, 1, iso->file)) {
+        printf("iso9660: Couldn't read root sector\n");
+
+        return NULL;
+    }
 
     struct iso9660_dirent* dir = (struct iso9660_dirent*)iso->buf;
 
@@ -73,7 +85,12 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
     }
 
     fseek(iso->file, dir->lba_le * 0x800, SEEK_SET);
-    fread(iso->buf, 0x800, 1, iso->file);
+
+    if (!fread(iso->buf, 0x800, 1, iso->file)) {
+        printf("iso9660: Couldn't read SYSTEM.CNF\n");
+
+        return NULL;
+    }
 
     // Parse SYSTEM.CNF
     char* p = iso->buf;

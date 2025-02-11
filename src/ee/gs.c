@@ -12,7 +12,7 @@ struct ps2_gs* ps2_gs_create(void) {
 }
 
 static inline void gs_invoke_event_handler(struct ps2_gs* gs, int event) {
-    if (gs->events[event].func) [[likely]]
+    if (gs->events[event].func)
         gs->events[event].func(gs->events[event].udata);
 }
 
@@ -101,22 +101,22 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
 
     // Schedule Vblank event
     struct sched_event vblank_event;
-    struct sched_event hblank_event;
-
     vblank_event.callback = gs_handle_vblank_in;
     vblank_event.cycles = GS_FRAME_NTSC;
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
+    sched_schedule(gs->sched, vblank_event);
+
+    // struct sched_event hblank_event;
     // hblank_event.callback = gs_handle_hblank;
     // hblank_event.cycles = GS_SCANLINE_NTSC;
     // hblank_event.name = "Hblank event";
     // hblank_event.udata = gs;
 
-    gs->ctx = &gs->context[0];
-
-    sched_schedule(gs->sched, vblank_event);
     // sched_schedule(gs->sched, hblank_event);
+
+    gs->ctx = &gs->context[0];
 }
 
 void gs_switch_context(struct ps2_gs* gs, int c) {
@@ -141,13 +141,18 @@ static inline void gs_unpack_vertex(struct ps2_gs* gs, struct gs_vertex* v) {
     v->b = (v->rgbaq >> 16) & 0xff;
     v->a = (v->rgbaq >> 24) & 0xff;
 
-    uint32_t s = v->st & 0xffffffff;
-    uint32_t t = v->st >> 32;
-    uint32_t q = v->rgbaq >> 32;
+    union {
+        uint32_t u32;
+        float f;
+    } s, t, q;
 
-    v->s = *(float*)(&s);
-    v->t = *(float*)(&t);
-    v->q = *(float*)(&q);
+    s.u32 = v->st & 0xffffffff;
+    t.u32 = v->st >> 32;
+    q.u32 = v->rgbaq >> 32;
+
+    v->s = s.f;
+    v->t = t.f;
+    v->q = q.f;
     v->u = (v->uv & 0x3fff) >> 4;
     v->v = ((v->uv >> 16) & 0x3fff) >> 4;
 }
@@ -250,7 +255,7 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
         } break;
         case 6: if (gs->vqi == 2) { if (!discard) gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
         default: {
-            printf("gs: Reserved primitive %d\n", gs->prim & 7);
+            printf("gs: Reserved primitive %ld\n", gs->prim & 7);
         } break;
     }
 }

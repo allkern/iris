@@ -307,8 +307,6 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
         int irq = !!(tag & 0x40000000);
         eot = !!(tag & 0x80000000);
 
-        uint32_t ia = addr;
-
         // printf("iop: SIF1 tag addr=%08x size=%08x irq=%d eot=%d\n", addr, size, irq, eot);
 
         // char buf[128];
@@ -392,8 +390,6 @@ void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
     struct iop_dma_channel* c = iop_dma_get_channel(dma, addr);
 
-    const char* name = iop_dma_get_channel_name(addr);
-
     if (c) {
         switch (addr & 0xf) {
             case 0x0: return c->madr;
@@ -402,7 +398,9 @@ uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
             case 0xc: return c->tadr;
         }
 
-        printf("iop_dma: Unknown channel register read %08x\n", addr);
+        const char* name = iop_dma_get_channel_name(addr);
+
+        printf("iop_dma: Unknown %s register read %08x\n", name, addr);
 
         return 0;
     }
@@ -458,7 +456,9 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
             case 0xc: c->tadr = data; return;
         }
 
-        printf("iop_dma: Unknown channel register write %08x %08x\n", addr, data);
+        const char* name = iop_dma_get_channel_name(addr);
+
+        printf("iop_dma: Unknown %s register write %08x %08lx\n", name, addr, data);
 
         return;
     }
@@ -472,5 +472,5 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
         case 0x1f80157c: dma->dmacinten = data; return;
     }
 
-    printf("iop_dma: Unknown DMA register write %08x %08x\n", addr, data);
+    printf("iop_dma: Unknown DMA register write %08x %08lx\n", addr, data);
 }

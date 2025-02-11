@@ -57,31 +57,13 @@ static const int psmct32_clut_block[] = {
 };
 
 void software_set_size(software_state* ctx, int width, int height) {
-    int format = 0;
-
-    uint32_t dfbp1 = (ctx->gs->dispfb1 & 0x1ff) << 11;
-    uint32_t dfbw1 = ((ctx->gs->dispfb1 >> 9) & 0x3f) << 6;
-    uint32_t dfbpsm1 = (ctx->gs->dispfb1 >> 15) & 0x1f;
-
-    ctx->disp_fmt = dfbpsm1;
-
-    switch (dfbpsm1) {
-        case GS_PSMCT32: format = SDL_PIXELFORMAT_ABGR8888; break;
-        case GS_PSMCT24: format = SDL_PIXELFORMAT_ABGR8888; break;
-        case GS_PSMCT16:
-        case GS_PSMCT16S:
-            format = SDL_PIXELFORMAT_ABGR1555;
-        break;
-    }
-
     int en1 = ctx->gs->pmode & 1;
-    int en2 = (ctx->gs->pmode >> 1) & 1;
 
     uint64_t display = en1 ? ctx->gs->display1 : ctx->gs->display2;
     uint64_t dispfb = en1 ? ctx->gs->dispfb1 : ctx->gs->dispfb2;
 
-    int sw = (ctx->gs->ctx->scax1 - ctx->gs->ctx->scax0) + 1;
-    int sh = (ctx->gs->ctx->scay1 - ctx->gs->ctx->scay0) + 1;
+    ctx->disp_fmt = (dispfb & 0x1ff) << 11;
+
     int magh = ((display >> 23) & 7) + 1;
     int magv = ((display >> 27) & 3) + 1;
     ctx->tex_w = (((display >> 32) & 0xfff) / magh) + 1;
@@ -109,7 +91,7 @@ void software_set_size(software_state* ctx, int width, int height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->tex_w, ctx->tex_h, 0, GL_RGBA, GL_UNSIGNED_SHORT_1_5_5_5_REV, NULL);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->tex_w, ctx->tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
 
     // printf("software: width=%d height=%d format=%d display=%08x\n",
     //     ((display >> 32) & 0xfff),
@@ -167,7 +149,7 @@ static inline uint32_t gs_apply_function(struct ps2_gs* gs, uint32_t t, uint32_t
     uint32_t fr = f & 0xff;
     uint32_t fg = (f >> 8) & 0xff;
     uint32_t fb = (f >> 16) & 0xff;
-    uint32_t fa = (f >> 24) & 0xff;
+    // uint32_t fa = (f >> 24) & 0xff;
 
     switch (gs->ctx->tfx) {
         case GS_MODULATE: {
@@ -458,17 +440,15 @@ static inline void gs_write_zb(struct ps2_gs* gs, int x, int y, uint32_t z) {
 }
 
 static inline int gs_test_scissor(struct ps2_gs* gs, int x, int y) {
-    if (x < gs->ctx->scax0 || y < gs->ctx->scay0 ||
-        x > gs->ctx->scax1 || y > gs->ctx->scay1) {
+    if (x < (int)gs->ctx->scax0 || y < (int)gs->ctx->scay0 ||
+        x > (int)gs->ctx->scax1 || y > (int)gs->ctx->scay1) {
         return TR_FAIL;
     }
 
     return TR_PASS;
 }
 
-static inline int gs_test_pixel(struct ps2_gs* gs, int x, int y, int z, int a) {
-    struct gs_vertex v = gs->vq[0];
-
+static inline int gs_test_pixel(struct ps2_gs* gs, int x, int y, uint32_t z, uint8_t a) {
     int tr = TR_PASS;
 
     // Alpha test
@@ -533,11 +513,11 @@ static inline int gs_clamp_u(struct ps2_gs* gs, int u) {
         } break;
 
         case 1: {
-            u = (u < 0) ? 0 : ((u > gs->ctx->usize) ? gs->ctx->usize : u);
+            u = (u < 0) ? 0 : ((u > (int)gs->ctx->usize) ? gs->ctx->usize : u);
         } break;
 
         case 2: {
-            u = (u < gs->ctx->minu) ? gs->ctx->minu : ((u > gs->ctx->maxu) ? gs->ctx->maxu : u);
+            u = (u < (int)gs->ctx->minu) ? gs->ctx->minu : ((u > (int)gs->ctx->maxu) ? gs->ctx->maxu : u);
         } break;
 
         case 3: {
@@ -558,11 +538,11 @@ static inline int gs_clamp_v(struct ps2_gs* gs, int v) {
         } break;
 
         case 1: {
-            v = (v < 0) ? 0 : ((v > gs->ctx->vsize) ? gs->ctx->vsize : v);
+            v = (v < 0) ? 0 : ((v > (int)gs->ctx->vsize) ? gs->ctx->vsize : v);
         } break;
 
         case 2: {
-            v = (v < gs->ctx->minv) ? gs->ctx->minv : ((v > gs->ctx->maxv) ? gs->ctx->maxv : v);
+            v = (v < (int)gs->ctx->minv) ? gs->ctx->minv : ((v > (int)gs->ctx->maxv) ? gs->ctx->maxv : v);
         } break;
 
         case 3: {
@@ -588,15 +568,12 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     uint32_t ar = (av >> 0 ) & 0xff;
     uint32_t ag = (av >> 8 ) & 0xff;
     uint32_t ab = (av >> 16) & 0xff;
-    uint32_t ad = (av >> 24) & 0xff;
     uint32_t br = (bv >> 0 ) & 0xff;
     uint32_t bg = (bv >> 8 ) & 0xff;
     uint32_t bb = (bv >> 16) & 0xff;
-    uint32_t bd = (bv >> 24) & 0xff;
     uint32_t dr = (dv >> 0 ) & 0xff;
     uint32_t dg = (dv >> 8 ) & 0xff;
     uint32_t db = (dv >> 16) & 0xff;
-    uint32_t dd = (dv >> 24) & 0xff;
 
     cv >>= 24;
 
@@ -647,7 +624,11 @@ char* software_read_file(const char* path) {
 
     buf[size] = '\0';
 
-    fread(buf, 1, size, file);
+    if (!fread(buf, 1, size, file)) {
+        printf("software: Couldn't read shader source\n");
+
+        return buf;
+    }
 
     return buf;
 }
@@ -759,7 +740,7 @@ void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window) {
 }
 
 static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
-    for (int y = 0; y < ctx->rrh; y++) {
+    for (int y = 0; y < (int)ctx->rrh; y++) {
         uint32_t src = ctx->sbp + ctx->ssax + (ctx->ssay * ctx->sbw) + (y * ctx->sbw);
         uint32_t dst = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw) + (y * ctx->dbw);
 
@@ -768,8 +749,6 @@ static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
 }
 
 extern "C" void software_render_point(struct ps2_gs* gs, void* udata) {
-    software_state* ctx = (software_state*)udata;
-
     struct gs_vertex vert = gs->vq[0];
 
     vert.x -= gs->ctx->ofx;
@@ -784,62 +763,6 @@ extern "C" void software_render_point(struct ps2_gs* gs, void* udata) {
         return;
 
     gs_write_fb(gs, vert.x, vert.y, vert.rgbaq & 0xffffffff);
-
-    return;
-
-    if (gs->tme) {
-        int u = vert.u;
-        int v = vert.v;
-
-        if (!gs->fst) {
-            u = gs->ctx->usize * (vert.s / vert.q);
-            v = gs->ctx->vsize * (vert.t / vert.q);
-        }
-
-        switch (gs->ctx->wms) {
-            case 0: {
-                u %= gs->ctx->usize;
-            } break;
-
-            case 1: {
-                u = (u < 0) ? 0 : ((u > gs->ctx->usize) ? gs->ctx->usize : u);
-            } break;
-
-            case 2: {
-                u = (u < gs->ctx->minu) ? gs->ctx->minu : ((u > gs->ctx->maxu) ? gs->ctx->maxu : u);
-            } break;
-
-            case 3: {
-                int umsk = gs->ctx->minu;
-                int ufix = gs->ctx->maxu;
-
-                u = (u & umsk) | ufix;
-            } break;
-        }
-
-        switch (gs->ctx->wmt) {
-            case 0: {
-                v %= gs->ctx->vsize;
-            } break;
-
-            case 1: {
-                v = (v < 0) ? 0 : ((v > gs->ctx->vsize) ? gs->ctx->vsize : u);
-            } break;
-
-            case 2: {
-                v = (v < gs->ctx->minv) ? gs->ctx->minv : ((u > gs->ctx->maxv) ? gs->ctx->maxv : v);
-            } break;
-
-            case 3: {
-                int vmsk = gs->ctx->minv;
-                int vfix = gs->ctx->maxv;
-
-                v = (v & vmsk) | vfix;
-            } break;
-        }
-
-        uint32_t c = gs_read_tb(gs, u, v);
-    }
 }
 
 extern "C" void software_render_line(struct ps2_gs* gs, void* udata) {
@@ -1073,9 +996,6 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
 
     int z = v1.z;
     int a = v1.a;
-    int r = v1.r;
-    int g = v1.g;
-    int b = v1.b;
 
     // if (!gs->fst) {
     //     printf("gs: stq0=(%f,%f,%f) stq1=(%f,%f,%f)\n",
@@ -1151,12 +1071,8 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
 extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     software_state* ctx = (software_state*)udata;
 
-    int stride;
-
     int en1 = ctx->gs->pmode & 1;
-    int en2 = (ctx->gs->pmode >> 1) & 1;
 
-    uint64_t display = en1 ? ctx->gs->display1 : ctx->gs->display2;
     uint64_t dispfb = en1 ? ctx->gs->dispfb1 : ctx->gs->dispfb2;
 
     // if ((gs->csr & 0x2000) && en2) {
@@ -1166,20 +1082,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     // gs->csr ^= 0x2000;
 
-    int dy = (display >> 12) & 0x7ff;
     uint32_t dfbp = (dispfb & 0x1ff) << 11;
-    uint32_t dfbw = ((dispfb >> 9) & 0x3f) << 6;
-    uint32_t dfbpsm = (dispfb >> 15) & 0x1f;
-
-    switch (dfbpsm) {
-        case GS_PSMCT32: stride = dfbw * 4; break;
-        case GS_PSMCT24: stride = dfbw * 4; break;
-        case GS_PSMCT16:
-        case GS_PSMCT16S:
-            stride = dfbw * 2;
-        break;
-    }
-
     uint32_t* ptr = &gs->vram[dfbp];
 
     // printf("fbp=%x fbw=%d fbpsm=%d stride=%d dy=%d\n", dfbp, dfbw, dfbpsm, stride, dy);
@@ -1377,7 +1280,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
 
     // "middle" passes
-    for (int i = 1; i < ctx->programs.size() - 1; i++) {
+    for (int i = 1; i < (int)ctx->programs.size() - 1; i++) {
         glUseProgram(ctx->programs[i]);
 
         glUniform1i(glGetUniformLocation(ctx->programs[i], "input_texture"), 0);
@@ -1528,13 +1431,13 @@ static inline void gs_store_hwreg_psmt8(struct ps2_gs* gs, software_state* ctx) 
 static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_state* ctx) {
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
 
-    uint32_t data[2] = {
+    uint64_t data[2] = {
         gs->hwreg & 0xffffffff,
         gs->hwreg >> 32
     };
 
     for (int i = 0; i < 2; i++) {
-        gs->vram[addr + ctx->dx++ + (ctx->dy * ctx->dbw)] = data[i];
+        gs->vram[(addr + ctx->dx++ + (ctx->dy * ctx->dbw)) & 0xfffff] = data[i];
 
         if (ctx->dx == ctx->rrw) {
             ctx->dx = 0;
