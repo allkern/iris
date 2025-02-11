@@ -94,9 +94,10 @@ void software_set_size(software_state* ctx, int width, int height) {
         return;
     }
 
-    if (ctx->gs->smode2 & 1) {
-        ctx->tex_h /= 2;
-    }
+    // SMODE2 INT=1 FFMD=0
+    // if ((ctx->gs->smode2 & 3) == 1) {
+    //     ctx->tex_h /= 2;
+    // }
 
     if (ctx->tex) {
         glDeleteTextures(1, &ctx->tex);
@@ -1584,7 +1585,7 @@ static inline void gs_write_psmct16(struct ps2_gs* gs, software_state* ctx, uint
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
 
     addr += (ctx->dx >> 1) + (ctx->dy * ctx->dbw);
-    
+
     uint32_t mask = 0xffff << ((ctx->dx & 1) * 16);
     uint32_t data = gs->vram[addr] & ~mask;
 
