@@ -62,7 +62,8 @@ struct software_state {
     GLuint fb_vao = 0;
     GLuint fb_vbo = 0;
     GLuint fb_ebo = 0;
-    GLuint fb_tex = 0;
+    GLuint fb_in_tex = 0;
+    GLuint fb_out_tex = 0;
 
     unsigned int frame = 0;
 };
