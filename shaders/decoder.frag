@@ -5,16 +5,28 @@
 #define PI   3.14159265358979323846
 #define TAU  6.28318530717958647693
 
-#define BRIGHTNESS_FACTOR        1.0
+#define BRIGHTNESS_FACTOR        20.0
 
 // The decoded IQ signals get multiplied by this
 // factor. Bigger values yield more color saturation
-#define CHROMA_SATURATION_FACTOR 5.0
+#define CHROMA_SATURATION_FACTOR 2.0
 
 // Size of the decoding FIR filter. bigger values
 // yield more smuggly video and are more expensive
-#define CHROMA_DECODER_FIR_SIZE  15
-#define LUMA_DECODER_FIR_SIZE  15
+#define CHROMA_DECODER_FIR_SIZE  16
+#define LUMA_DECODER_FIR_SIZE  16
+
+float sinc(float x) {
+    x *= PI;
+    
+    return (x == 0.0) ? 1.0 : (sin(x) / x);
+}
+
+float sincf(float cutoff, float n) {
+    float cut2 = 2.0 * cutoff;
+    
+    return cut2 * sinc(cut2 * n);
+}
 
 // YIQ to RGB matrix
 const mat3 yiq_to_rgb = mat3(
@@ -35,7 +47,7 @@ void main() {
     vec2 uv = FragTexCoord * screen_size;
 
     // Chroma decoder oscillator frequency 
-    float fc = 1000.0f;
+    float fc = 16.0;
 
     float counter = 0.0;
 
@@ -46,18 +58,19 @@ void main() {
     vec3 yiq = vec3(0.0);
     
     // Decode Luma first
-    for (int d = 0; d < LUMA_DECODER_FIR_SIZE; d++) {
-        vec2 p = vec2(uv.x + float(d) - float(LUMA_DECODER_FIR_SIZE / 2), uv.y);
+    for (int d = -LUMA_DECODER_FIR_SIZE; d < LUMA_DECODER_FIR_SIZE; d++) {
+        vec2 p = vec2(uv.x + float(d), uv.y);
         vec3 s = texture(input_texture, p / screen_size).rgb;
         float t = fc * (uv.x + float(d));
-        
-        // Apply Blackman window for smoother colors
-        float window = blackman(float(d), float(LUMA_DECODER_FIR_SIZE)); 
 
-        yiq += s * vec3(BRIGHTNESS_FACTOR, 0.0, 0.0) * window;
+        float window = blackman(float(d + LUMA_DECODER_FIR_SIZE), float(LUMA_DECODER_FIR_SIZE)); 
+        float filt = sincf(0.25, float(d));
 
-        //counter++;
+        yiq.x += s.x * filt;
     }
+
+    yiq.x /= LUMA_DECODER_FIR_SIZE;
+    yiq.x *= BRIGHTNESS_FACTOR;
     
     // Then decode chroma
     for (int d = -CHROMA_DECODER_FIR_SIZE; d < CHROMA_DECODER_FIR_SIZE; d++) {
@@ -67,15 +80,12 @@ void main() {
         
         // Apply Blackman window for smoother colors
         float window = blackman(float(d + CHROMA_DECODER_FIR_SIZE), float(CHROMA_DECODER_FIR_SIZE * 2 + 1)); 
+        float filt = sincf(0.25, float(d));
 
-        yiq += s * vec3(0.0, cos(t), sin(t)) * window;
-
-        counter++;
+        yiq.yz += s.yz * vec2(cos(t), sin(t));
     }
 
-    yiq /= counter;
-
-    // Saturate chroma (IQ)
+    yiq.yz /= (CHROMA_DECODER_FIR_SIZE * 2) + 1;
     yiq.yz *= CHROMA_SATURATION_FACTOR;
 
     FragColor = vec4((yiq_to_rgb * yiq), 1.0);
