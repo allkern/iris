@@ -77,8 +77,9 @@ struct ee_bus_s {
 #define EE_VEC_IRQ     0x00000200
 
 union ee_fpu_reg {
-    uint32_t u32;
     float f;
+    uint32_t u32;
+    int32_t s32;
 };
 
 #ifdef _EE_USE_INTRINSICS

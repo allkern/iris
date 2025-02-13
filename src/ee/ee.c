@@ -156,6 +156,15 @@ static inline float fpu_cvtsw(union ee_fpu_reg* reg) {
     return reg->f;
 }
 
+static inline void fpu_cvtws(union ee_fpu_reg* d, union ee_fpu_reg* s) {
+    if ((s->u32 & 0x7F800000) <= 0x4E800000)
+        d->s32 = (int32_t)s->f;
+    else if ((s->u32 & 0x80000000) == 0)
+        d->u32 = 0x7FFFFFFF;
+    else
+        d->u32 = 0x80000000;
+}
+
 static inline int ee_translate_virt(uint32_t virt, uint32_t* phys) {
     // int seg = ee_get_segment(virt);
 
@@ -378,17 +387,17 @@ static inline void ee_i_andi(struct ee_state* ee) {
 }
 static inline void ee_i_bc0f(struct ee_state* ee) { return; printf("ee: bc0f unimplemented\n"); exit(1); }
 static inline void ee_i_bc0fl(struct ee_state* ee) { printf("ee: bc0fl unimplemented\n"); exit(1); }
-static inline void ee_i_bc0t(struct ee_state* ee) { // printf("ee: bc0t unimplemented\n"); exit(1);
+static inline void ee_i_bc0t(struct ee_state* ee) {
     BRANCH(1, EE_D_SI16);
 }
 static inline void ee_i_bc0tl(struct ee_state* ee) { printf("ee: bc0tl unimplemented\n"); exit(1); }
-static inline void ee_i_bc1f(struct ee_state* ee) { // printf("ee: bc1f unimplemented\n"); exit(1);
+static inline void ee_i_bc1f(struct ee_state* ee) {
     BRANCH((ee->fcr & (1 << 23)) == 0, EE_D_SI16);
 }
-static inline void ee_i_bc1fl(struct ee_state* ee) { // printf("ee: bc1fl unimplemented\n"); exit(1);
+static inline void ee_i_bc1fl(struct ee_state* ee) {
     BRANCH_LIKELY((ee->fcr & (1 << 23)) == 0, EE_D_SI16);
 }
-static inline void ee_i_bc1t(struct ee_state* ee) { // printf("ee: bc1t unimplemented\n"); exit(1);
+static inline void ee_i_bc1t(struct ee_state* ee) {
     BRANCH((ee->fcr & (1 << 23)) != 0, EE_D_SI16);
 }
 static inline void ee_i_bc1tl(struct ee_state* ee) {
@@ -462,7 +471,11 @@ static inline void ee_i_cache(struct ee_state* ee) {
 } 
 static inline void ee_i_callmsr(struct ee_state* ee) { printf("ee: callmsr unimplemented\n"); exit(1); }
 static inline void ee_i_ceq(struct ee_state* ee) {
-    ee->fcr |= (EE_FS == EE_FT) << 23;
+    if (EE_FS == EE_FT) {
+        ee->fcr |= 1 << 23;    
+    } else {
+        ee->fcr &= ~(1 << 23);
+    }
 }
 static inline void ee_i_cf(struct ee_state* ee) { printf("ee: cf unimplemented\n"); exit(1); }
 static inline void ee_i_cfc1(struct ee_state* ee) {
@@ -494,10 +507,11 @@ static inline void ee_i_ctc2(struct ee_state* ee) {
     /* To-do: VU1 */
 }
 static inline void ee_i_cvts(struct ee_state* ee) {
-    EE_FD = (float)EE_FS32;
+    EE_FD = (float)ee->f[EE_D_FS].s32;
+    EE_FD = fpu_cvtsw(&ee->f[EE_D_FD]);
 }
 static inline void ee_i_cvtw(struct ee_state* ee) {
-    EE_FD32 = (uint32_t)floorf(EE_FS);
+    fpu_cvtws(&ee->f[EE_D_FD], &ee->f[EE_D_FS]);
 }
 static inline void ee_i_dadd(struct ee_state* ee) { printf("ee: dadd unimplemented\n"); exit(1); }
 static inline void ee_i_daddi(struct ee_state* ee) { printf("ee: daddi unimplemented\n"); exit(1); }
