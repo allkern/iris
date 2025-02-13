@@ -7,7 +7,7 @@ OUTPUT_DIR := bin
 
 CXX := g++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
-CXXFLAGS += -O3 -ffast-math -march=native -mtune=native -flto=auto -Wall -Werror -g -D_EE_USE_INTRINSICS
+CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -Werror -g -D_EE_USE_INTRINSICS
 CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_opengl3.cpp)
