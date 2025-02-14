@@ -1,13 +1,13 @@
-#include "instance.hpp"
+#include "iris.hpp"
 
 int main(int argc, const char* argv[]) {
-    lunar::instance instance;
+    iris::instance instance;
 
-    lunar::init(&instance, argc, argv);
+    iris::init(&instance, argc, argv);
 
-    while (lunar::is_open(&instance)) {
-        lunar::update(&instance);
+    while (iris::is_open(&instance)) {
+        iris::update(&instance);
     }
 
-    lunar::close(&instance);
+    iris::close(&instance);
 }
