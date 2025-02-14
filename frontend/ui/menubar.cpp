@@ -1,4 +1,4 @@
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "tfd/tinyfiledialogs.h"
@@ -6,7 +6,7 @@
 #include "ps2_elf.h"
 #include "ps2_iso9660.h"
 
-namespace lunar {
+namespace iris {
 
 const char* aspect_mode_names[] = {
     "Native",
@@ -17,18 +17,18 @@ const char* aspect_mode_names[] = {
     "Auto"
 };
 
-void show_main_menubar(lunar::instance* lunar) {
+void show_main_menubar(iris::instance* iris) {
     using namespace ImGui;
 
-    PushFont(lunar->font_icons);
+    PushFont(iris->font_icons);
     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 7.0));
 
     if (BeginMainMenuBar()) {
         ImVec2 size = GetWindowSize();
 
-        lunar->menubar_height = size.y;
+        iris->menubar_height = size.y;
 
-        if (BeginMenu("Lunar")) {
+        if (BeginMenu("Iris")) {
             if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Load disc...")) {
                 const char* patterns[3] = { "*.iso", "*.bin", "*.cue" };
 
@@ -45,7 +45,7 @@ void show_main_menubar(lunar::instance* lunar) {
                     struct iso9660_state* iso = iso9660_open(file);
 
                     if (!iso) {
-                        printf("lunar: Couldn't open disc image \"%s\"\n", file);
+                        printf("iris: Couldn't open disc image \"%s\"\n", file);
 
                         exit(1);
 
@@ -58,19 +58,19 @@ void show_main_menubar(lunar::instance* lunar) {
                         return;
 
                     // Temporarily disable window updates
-                    struct gs_callback cb = *ps2_gs_get_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+                    struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
 
-                    ps2_gs_remove_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
-                    ps2_boot_file(lunar->ps2, boot_file);
+                    ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+                    ps2_boot_file(iris->ps2, boot_file);
 
                     // Re-enable window updates
-                    ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+                    ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
 
-                    ps2_cdvd_open(lunar->ps2->cdvd, file);
+                    ps2_cdvd_open(iris->ps2->cdvd, file);
 
                     iso9660_close(iso);
 
-                    lunar->loaded = file;
+                    iris->loaded = file;
                 }
             }
 
@@ -88,23 +88,23 @@ void show_main_menubar(lunar::instance* lunar) {
 
                 if (file) {
                     // Temporarily disable window updates
-                    struct gs_callback cb = *ps2_gs_get_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+                    struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
 
-                    ps2_gs_remove_callback(lunar->ps2->gs, GS_EVENT_VBLANK);
+                    ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
 
-                    ps2_elf_load(lunar->ps2, file);
+                    ps2_elf_load(iris->ps2, file);
 
                     // Re-enable window updates
-                    ps2_gs_init_callback(lunar->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+                    ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
 
-                    lunar->loaded = file;
+                    iris->loaded = file;
                 }
             }
 
             Separator();
 
-            if (MenuItem(lunar->pause ? ICON_MS_PLAY_ARROW " Run" : ICON_MS_PAUSE " Pause", "Space")) {
-                lunar->pause = !lunar->pause;
+            if (MenuItem(iris->pause ? ICON_MS_PLAY_ARROW " Run" : ICON_MS_PAUSE " Pause", "Space")) {
+                iris->pause = !iris->pause;
             }
 
             if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
@@ -120,9 +120,9 @@ void show_main_menubar(lunar::instance* lunar) {
                 );
 
                 if (file) {
-                    ps2_cdvd_open(lunar->ps2->cdvd, file);
+                    ps2_cdvd_open(iris->ps2->cdvd, file);
 
-                    lunar->loaded = file;
+                    iris->loaded = file;
                 }
             }
 
@@ -134,10 +134,10 @@ void show_main_menubar(lunar::instance* lunar) {
                     for (int i = 2; i <= 6; i++) {
                         char buf[16]; sprintf(buf, "%.1fx", (float)i * 0.5f);
 
-                        if (Selectable(buf, ((float)i * 0.5f) == lunar->scale)) {
-                            lunar->scale = (float)i * 0.5f;
+                        if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
+                            iris->scale = (float)i * 0.5f;
 
-                            software_set_scale(lunar->ctx, lunar->scale);
+                            software_set_scale(iris->ctx, iris->scale);
                         }
                     }
 
@@ -146,10 +146,10 @@ void show_main_menubar(lunar::instance* lunar) {
 
                 if (BeginMenu("Aspect mode")) {
                     for (int i = 0; i < 6; i++) {
-                        if (Selectable(aspect_mode_names[i], lunar->aspect_mode == i)) {
-                            lunar->aspect_mode = i;
+                        if (Selectable(aspect_mode_names[i], iris->aspect_mode == i)) {
+                            iris->aspect_mode = i;
 
-                            software_set_aspect_mode(lunar->ctx, lunar->aspect_mode);
+                            software_set_aspect_mode(iris->ctx, iris->aspect_mode);
                         }
                     }
 
@@ -157,31 +157,31 @@ void show_main_menubar(lunar::instance* lunar) {
                 }
 
                 if (BeginMenu("Scaling filter")) {
-                    if (Selectable("Nearest", !lunar->bilinear)) {
-                        lunar->bilinear = false;
+                    if (Selectable("Nearest", !iris->bilinear)) {
+                        iris->bilinear = false;
 
-                        software_set_bilinear(lunar->ctx, false);
+                        software_set_bilinear(iris->ctx, false);
                     }
 
-                    if (Selectable("Bilinear", lunar->bilinear)) {
-                        lunar->bilinear = true;
+                    if (Selectable("Bilinear", iris->bilinear)) {
+                        iris->bilinear = true;
 
-                        software_set_bilinear(lunar->ctx, true);
+                        software_set_bilinear(iris->ctx, true);
                     }
 
                     EndMenu();
                 }
 
-                MenuItem("Integer scaling", nullptr, &lunar->ctx->integer_scaling);
+                MenuItem("Integer scaling", nullptr, &iris->ctx->integer_scaling);
 
-                if (MenuItem("Fullscreen", nullptr, &lunar->fullscreen)) {
-                    SDL_SetWindowFullscreen(lunar->window, lunar->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+                if (MenuItem("Fullscreen", nullptr, &iris->fullscreen)) {
+                    SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
                 }
 
                 EndMenu();
             }
 
-            MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &lunar->show_status_bar);
+            MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar);
 
             if (MenuItem(ICON_MS_CONTENT_COPY " Copy data path to clipboard")) {
                 SDL_SetClipboardText(SDL_GetPrefPath("Allkern", "Iris"));
@@ -191,42 +191,42 @@ void show_main_menubar(lunar::instance* lunar) {
             EndMenu();
         }
         if (BeginMenu("Tools")) {
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " ImGui Demo", NULL, &lunar->show_imgui_demo));
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " ImGui Demo", NULL, &iris->show_imgui_demo));
 
             EndMenu();
         }
         if (BeginMenu("Debug")) {
             SeparatorText("EE");
             // if (BeginMenu(ICON_MS_BUG_REPORT " EE")) {
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##ee", NULL, &lunar->show_ee_control));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##ee", NULL, &lunar->show_ee_state));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##ee", NULL, &lunar->show_ee_logs));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##ee", NULL, &lunar->show_ee_interrupts));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##ee", NULL, &iris->show_ee_control));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##ee", NULL, &iris->show_ee_state));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##ee", NULL, &iris->show_ee_logs));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##ee", NULL, &iris->show_ee_interrupts));
 
                 // EndMenu();
             // }
 
             SeparatorText("IOP");
             // if (BeginMenu(ICON_MS_BUG_REPORT " IOP")) {
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##iop", NULL, &lunar->show_iop_control));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##iop", NULL, &lunar->show_iop_state));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##iop", NULL, &lunar->show_iop_logs));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##iop", NULL, &lunar->show_iop_interrupts));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##iop", NULL, &iris->show_iop_control));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##iop", NULL, &iris->show_iop_state));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##iop", NULL, &iris->show_iop_logs));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##iop", NULL, &iris->show_iop_interrupts));
 
             //     EndMenu();
             // }
 
             Separator();
 
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Breakpoints", NULL, &lunar->show_breakpoints));
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &lunar->show_gs_debugger));
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &lunar->show_memory_viewer));
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Breakpoints", NULL, &iris->show_breakpoints));
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &iris->show_gs_debugger));
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &iris->show_memory_viewer));
             
             EndMenu();
         }
         if (BeginMenu("Help")) {
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " About")) {
-                lunar->show_about_window = true;
+                iris->show_about_window = true;
             }
 
             EndMenu();

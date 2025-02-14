@@ -2,11 +2,11 @@
 #include <string>
 #include <cctype>
 
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
-namespace lunar {
+namespace iris {
 
 static const char* gs_internal_reg_names[] = {
     "prim",
@@ -112,17 +112,17 @@ static const char* gs_context_names[] = {
 
 static int gs_context = 0;
 
-void show_privileged_registers(lunar::instance* lunar) {
+void show_privileged_registers(iris::instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = lunar->ps2->gs;
+    struct ps2_gs* gs = iris->ps2->gs;
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     uint64_t* regs = &gs->pmode;
 
     if (BeginTable("table6", 2, ImGuiTableFlags_RowBg)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Register");
         TableSetupColumn("Value");
         TableHeadersRow();
@@ -146,17 +146,17 @@ void show_privileged_registers(lunar::instance* lunar) {
     PopFont();
 }
 
-void show_context_registers(lunar::instance* lunar, int ctx) {
+void show_context_registers(iris::instance* iris, int ctx) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = lunar->ps2->gs;
+    struct ps2_gs* gs = iris->ps2->gs;
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     uint64_t* regs = &gs->context[ctx].frame;
 
     if (BeginTable("table9", 2, ImGuiTableFlags_RowBg)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Register");
         TableSetupColumn("Value");
         TableHeadersRow();
@@ -180,17 +180,17 @@ void show_context_registers(lunar::instance* lunar, int ctx) {
     PopFont();
 }
 
-void show_internal_registers(lunar::instance* lunar) {
+void show_internal_registers(iris::instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = lunar->ps2->gs;
+    struct ps2_gs* gs = iris->ps2->gs;
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     uint64_t* regs = &gs->prim;
 
     if (BeginTable("table6", 2, ImGuiTableFlags_RowBg)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Register");
         TableSetupColumn("Value");
         TableHeadersRow();
@@ -214,7 +214,7 @@ void show_internal_registers(lunar::instance* lunar) {
     PopFont();
 }
 
-static inline void show_gs_vertex_xy(lunar::instance* lunar, const gs_vertex* vtx) {
+static inline void show_gs_vertex_xy(iris::instance* iris, const gs_vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -223,7 +223,7 @@ static inline void show_gs_vertex_xy(lunar::instance* lunar, const gs_vertex* vt
 
     TableSetColumnIndex(1);
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     Text("0x%04lx, 0x%04lx", vtx->xyz & 0xffff, (vtx->xyz >> 16) & 0xffff);
 
@@ -236,7 +236,7 @@ static inline void show_gs_vertex_xy(lunar::instance* lunar, const gs_vertex* vt
     TableNextRow();
 }
 
-static inline void show_gs_vertex_z(lunar::instance* lunar, const gs_vertex* vtx) {
+static inline void show_gs_vertex_z(iris::instance* iris, const gs_vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -245,7 +245,7 @@ static inline void show_gs_vertex_z(lunar::instance* lunar, const gs_vertex* vtx
 
     TableSetColumnIndex(1);
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     Text("0x%08x", vtx->z);
 
@@ -258,7 +258,7 @@ static inline void show_gs_vertex_z(lunar::instance* lunar, const gs_vertex* vtx
     TableNextRow();
 }
 
-static inline void show_gs_vertex_stq(lunar::instance* lunar, const gs_vertex* vtx) {
+static inline void show_gs_vertex_stq(iris::instance* iris, const gs_vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -267,7 +267,7 @@ static inline void show_gs_vertex_stq(lunar::instance* lunar, const gs_vertex* v
 
     TableSetColumnIndex(1);
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     Text("0x%08lx, 0x%08lx, 0x%08lx", vtx->st & 0xffffffff, vtx->st >> 32, vtx->rgbaq >> 32);
 
@@ -280,7 +280,7 @@ static inline void show_gs_vertex_stq(lunar::instance* lunar, const gs_vertex* v
     TableNextRow();
 }
 
-static inline void show_gs_vertex_uv(lunar::instance* lunar, const gs_vertex* vtx) {
+static inline void show_gs_vertex_uv(iris::instance* iris, const gs_vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -289,7 +289,7 @@ static inline void show_gs_vertex_uv(lunar::instance* lunar, const gs_vertex* vt
 
     TableSetColumnIndex(1);
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     Text("0x%08lx, 0x%08lx",
         vtx->uv & 0x3fff,
@@ -308,7 +308,7 @@ static inline void show_gs_vertex_uv(lunar::instance* lunar, const gs_vertex* vt
     TableNextRow();
 }
 
-static inline void show_gs_vertex_rgba(lunar::instance* lunar, const gs_vertex* vtx) {
+static inline void show_gs_vertex_rgba(iris::instance* iris, const gs_vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -317,7 +317,7 @@ static inline void show_gs_vertex_rgba(lunar::instance* lunar, const gs_vertex* 
 
     TableSetColumnIndex(1);
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     Text("0x%08lx", vtx->rgbaq & 0xffffffff);
 
@@ -349,11 +349,11 @@ static inline void show_gs_vertex_rgba(lunar::instance* lunar, const gs_vertex* 
     TableNextRow();
 }
 
-void show_gs_vertex(lunar::instance* lunar, const gs_vertex* vtx) {
+void show_gs_vertex(iris::instance* iris, const gs_vertex* vtx) {
     using namespace ImGui;
 
     if (BeginTable("table10", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Attribute");
         TableSetupColumn("Raw");
         TableSetupColumn("Value");
@@ -362,26 +362,26 @@ void show_gs_vertex(lunar::instance* lunar, const gs_vertex* vtx) {
 
         TableNextRow();
 
-        show_gs_vertex_xy(lunar, vtx);
-        show_gs_vertex_z(lunar, vtx);
-        show_gs_vertex_stq(lunar, vtx);
-        show_gs_vertex_uv(lunar, vtx);
-        show_gs_vertex_rgba(lunar, vtx);
+        show_gs_vertex_xy(iris, vtx);
+        show_gs_vertex_z(iris, vtx);
+        show_gs_vertex_stq(iris, vtx);
+        show_gs_vertex_uv(iris, vtx);
+        show_gs_vertex_rgba(iris, vtx);
 
         EndTable();
     }
 }
 
-void show_gs_queue(lunar::instance* lunar) {
+void show_gs_queue(iris::instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = lunar->ps2->gs;
+    struct ps2_gs* gs = iris->ps2->gs;
 
     for (unsigned int i = 0; i < gs->vqi; i++) {
         char buf[32]; sprintf(buf, "Vertex %d", i+1);
 
         if (TreeNode(buf)) {
-            show_gs_vertex(lunar, &gs->vq[i]);
+            show_gs_vertex(iris, &gs->vq[i]);
 
             TreePop();
         }
@@ -392,7 +392,7 @@ void show_gs_queue(lunar::instance* lunar) {
             char buf[32]; sprintf(buf, "Vertex %d", i+1);
 
             if (TreeNode(buf)) {
-                show_gs_vertex(lunar, &gs->vq[i]);
+                show_gs_vertex(iris, &gs->vq[i]);
 
                 TreePop();
             }
@@ -402,7 +402,7 @@ void show_gs_queue(lunar::instance* lunar) {
     }
 }
 
-void show_gs_registers(lunar::instance* lunar) {
+void show_gs_registers(iris::instance* iris) {
     using namespace ImGui;
 
     if (BeginTable("table6", 4, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
@@ -422,19 +422,19 @@ void show_gs_registers(lunar::instance* lunar) {
     if (BeginChild("##gsr")) {
         switch (gs_context) {
             case 0: {
-                show_privileged_registers(lunar);
+                show_privileged_registers(iris);
             } break;
 
             case 1: {
-                show_context_registers(lunar, 0);
+                show_context_registers(iris, 0);
             } break;
 
             case 2: {
-                show_context_registers(lunar, 1);
+                show_context_registers(iris, 1);
             } break;
 
             case 3: {
-                show_internal_registers(lunar);
+                show_internal_registers(iris);
             } break;
         }
     } EndChild();
@@ -442,7 +442,7 @@ void show_gs_registers(lunar::instance* lunar) {
 
 static GLuint tex = 0;
 
-void gen_texture(lunar::instance* lunar, int w, int h, GLint fmt, void* ptr) {
+void gen_texture(iris::instance* iris, int w, int h, GLint fmt, void* ptr) {
     if (tex) {
         glDeleteTextures(1, &tex);
     }
@@ -471,10 +471,10 @@ GLuint format_enums[] = {
 
 int format = 0;
 
-void show_gs_memory(lunar::instance* lunar) {
+void show_gs_memory(iris::instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = lunar->ps2->gs;
+    struct ps2_gs* gs = iris->ps2->gs;
 
     static char buf0[16];
     static char buf1[16];
@@ -530,7 +530,7 @@ void show_gs_memory(lunar::instance* lunar) {
         width = strtoul(buf1, NULL, 0);
         height = strtoul(buf2, NULL, 0);
 
-        gen_texture(lunar, width, height, format_enums[format], &gs->vram[addr]);
+        gen_texture(iris, width, height, format_enums[format], &gs->vram[addr]);
     }
 
     if (tex) {
@@ -541,10 +541,10 @@ void show_gs_memory(lunar::instance* lunar) {
     }
 }
 
-void show_gs_debugger(lunar::instance* lunar) {
+void show_gs_debugger(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("GS", &lunar->show_gs_debugger, ImGuiWindowFlags_MenuBar)) {
+    if (Begin("GS", &iris->show_gs_debugger, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {
@@ -581,15 +581,15 @@ void show_gs_debugger(lunar::instance* lunar) {
         if (BeginChild("##gschild")) {
             switch (gs_debug_index) {
                 case 0: {
-                    show_gs_registers(lunar);
+                    show_gs_registers(iris);
                 } break;
 
                 case 3: {
-                    show_gs_queue(lunar);
+                    show_gs_queue(iris);
                 } break;
 
                 case 4: {
-                    show_gs_memory(lunar);
+                    show_gs_memory(iris);
                 } break;
             }
         } EndChild();

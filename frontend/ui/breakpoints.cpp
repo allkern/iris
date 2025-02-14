@@ -2,11 +2,11 @@
 #include <string>
 #include <cctype>
 
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
-namespace lunar {
+namespace iris {
 
 const char* cpu_names[] = {
     "EE",
@@ -16,11 +16,11 @@ const char* cpu_names[] = {
 static breakpoint* selected = nullptr;
 static breakpoint editable;
 
-void show_breakpoints_table(lunar::instance* lunar) {
+void show_breakpoints_table(iris::instance* iris) {
     using namespace ImGui;
 
     if (BeginTable("##breakpoints", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Address");
         TableSetupColumn("CPU");
         TableSetupColumn("Flags");
@@ -33,7 +33,7 @@ void show_breakpoints_table(lunar::instance* lunar) {
 
         int i = 0;
 
-        for (breakpoint& b : lunar->breakpoints) {
+        for (breakpoint& b : iris->breakpoints) {
             TableSetColumnIndex(0);
 
             char buf[16]; sprintf(buf, "##d%x", i);
@@ -42,7 +42,7 @@ void show_breakpoints_table(lunar::instance* lunar) {
                 selected = &b;
             } SameLine(0.0, 0.0);
 
-            PushFont(lunar->font_code);
+            PushFont(iris->font_code);
 
             Text("%08x", b.addr);
 
@@ -54,7 +54,7 @@ void show_breakpoints_table(lunar::instance* lunar) {
 
             TableSetColumnIndex(2);
 
-            PushFont(lunar->font_code);
+            PushFont(iris->font_code);
 
             Text("%c%c%c",
                 b.cond_r ? 'R' : '.',
@@ -81,7 +81,7 @@ void show_breakpoints_table(lunar::instance* lunar) {
             if (Selectable(buf, false, 0, ImVec2(20, 0))) {
                 selected = nullptr;
 
-                lunar->breakpoints.erase(lunar->breakpoints.begin() + i);
+                iris->breakpoints.erase(iris->breakpoints.begin() + i);
             }
 
             i++;
@@ -93,7 +93,7 @@ void show_breakpoints_table(lunar::instance* lunar) {
     }
 }
 
-void show_breakpoint_editor(lunar::instance* lunar) {
+void show_breakpoint_editor(iris::instance* iris) {
     using namespace ImGui;
 
     if (BeginCombo("CPU", cpu_names[editable.cpu], ImGuiComboFlags_HeightSmall)) {
@@ -108,7 +108,7 @@ void show_breakpoint_editor(lunar::instance* lunar) {
 
     static char buf[32];
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     if (InputText("##address", buf, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
         if (buf[0]) {
@@ -138,15 +138,15 @@ void show_breakpoint_editor(lunar::instance* lunar) {
     if (Button("New breakpoint")) {
         editable.addr = strtoul(buf, NULL, 16);
 
-        lunar->breakpoints.push_back(editable);
-        selected = &lunar->breakpoints.back();
+        iris->breakpoints.push_back(editable);
+        selected = &iris->breakpoints.back();
     }
 }
 
-void show_breakpoints(lunar::instance* lunar) {
+void show_breakpoints(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("Breakpoints", &lunar->show_breakpoints, ImGuiWindowFlags_MenuBar)) {
+    if (Begin("Breakpoints", &iris->show_breakpoints, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             MenuItem("Settings");
 
@@ -156,7 +156,7 @@ void show_breakpoints(lunar::instance* lunar) {
         if (Button(ICON_MS_DELETE, ImVec2(50, 0))) {
             selected = nullptr;
 
-            lunar->breakpoints.clear();
+            iris->breakpoints.clear();
         } SameLine();
 
         if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
@@ -164,7 +164,7 @@ void show_breakpoints(lunar::instance* lunar) {
         }
 
         if (Button(ICON_MS_REMOVE_SELECTION)) {
-            for (breakpoint& b : lunar->breakpoints) {
+            for (breakpoint& b : iris->breakpoints) {
                 b.enabled = false;
             }
         } SameLine();
@@ -174,7 +174,7 @@ void show_breakpoints(lunar::instance* lunar) {
         }
 
         if (Button(ICON_MS_SELECT)) {
-            for (breakpoint& b : lunar->breakpoints) {
+            for (breakpoint& b : iris->breakpoints) {
                 b.enabled = true;
             }
         }
@@ -186,13 +186,13 @@ void show_breakpoints(lunar::instance* lunar) {
         Separator();
 
         if (BeginChild("##tablechild", ImVec2(0, GetContentRegionAvail().y / 2.0f))) {
-            show_breakpoints_table(lunar);
+            show_breakpoints_table(iris);
         } EndChild();
 
         SeparatorText("Add breakpoint");
 
         if (BeginChild("##tablechild2")) {
-            show_breakpoint_editor(lunar);
+            show_breakpoint_editor(iris);
         } EndChild();
     } End();
 }

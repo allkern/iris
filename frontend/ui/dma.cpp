@@ -2,24 +2,24 @@
 #include <string>
 #include <cctype>
 
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
-namespace lunar {
+namespace iris {
 
-void show_ee_dmac(lunar::instance* lunar) {
+void show_ee_dmac(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("EE DMAC", &lunar->show_ee_dmac)) {
+    if (Begin("EE DMAC", &iris->show_ee_dmac)) {
 
     } End();
 }
 
-void show_iop_dma(lunar::instance* lunar) {
+void show_iop_dma(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("IOP DMA", &lunar->show_iop_dma)) {
+    if (Begin("IOP DMA", &iris->show_iop_dma)) {
 
     } End();
 }

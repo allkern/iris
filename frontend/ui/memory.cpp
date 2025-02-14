@@ -2,22 +2,22 @@
 #include <string>
 #include <cctype>
 
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "memory_viewer.h"
 
-namespace lunar {
+namespace iris {
 
 static MemoryEditor editor;
 
-void show_memory_viewer(lunar::instance* lunar) {
+void show_memory_viewer(iris::instance* iris) {
     using namespace ImGui;
 
-    struct ps2_state* ps2 = lunar->ps2;
+    struct ps2_state* ps2 = iris->ps2;
 
-    if (Begin("Memory", &lunar->show_memory_viewer)) {
-        PushFont(lunar->font_code);
+    if (Begin("Memory", &iris->show_memory_viewer)) {
+        PushFont(iris->font_code);
 
         editor.DrawContents(ps2->ee_ram->buf, RAM_SIZE_32MB, 0);
 

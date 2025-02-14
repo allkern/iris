@@ -1,6 +1,6 @@
 #include "imgui_internal.h"
 
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
@@ -45,7 +45,7 @@ void EndMainStatusBar()
 
 }
 
-namespace lunar {
+namespace iris {
 
 int get_format_bpp(int fmt) {
     switch (fmt) {
@@ -58,27 +58,27 @@ int get_format_bpp(int fmt) {
     return 0;
 }
 
-void show_status_bar(lunar::instance* lunar) {
+void show_status_bar(iris::instance* iris) {
     using namespace ImGui;
 
     if (BeginMainStatusBar()) {
         int vp_w, vp_h, disp_w, disp_h, disp_fmt;
 
-        software_get_viewport_size(lunar->ctx, &vp_w, &vp_h);
-        software_get_display_size(lunar->ctx, &disp_w, &disp_h);
-        software_get_display_format(lunar->ctx, &disp_fmt);
+        software_get_viewport_size(iris->ctx, &vp_w, &vp_h);
+        software_get_display_size(iris->ctx, &disp_w, &disp_h);
+        software_get_display_format(iris->ctx, &disp_fmt);
 
         if (vp_w) {
             Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %dbpp | %.1f fps",
-                software_get_name(lunar->ctx),
+                software_get_name(iris->ctx),
                 disp_w, disp_h,
                 vp_w, vp_h,
                 get_format_bpp(disp_fmt),
-                lunar->fps * 2.0f
+                iris->fps * 2.0f
             );
         } else {
             Text(ICON_MS_MONITOR " %s | No image",
-                software_get_name(lunar->ctx)
+                software_get_name(iris->ctx)
             );
         }
 

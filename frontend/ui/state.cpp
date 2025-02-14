@@ -2,7 +2,7 @@
 #include <string>
 #include <cctype>
 
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
@@ -11,7 +11,7 @@
 
 #define IM_RGB(r, g, b) ImVec4(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), 1.0)
 
-namespace lunar {
+namespace iris {
 
 static const char* ee_cop0_r[] = {
     "Index",
@@ -67,10 +67,10 @@ uint32_t iop_frames[32];
 static ImGuiTableFlags ee_table_sizing = ImGuiTableFlags_SizingStretchSame;
 static ImGuiTableFlags iop_table_sizing = ImGuiTableFlags_SizingStretchProp;
 
-static inline void show_ee_main_registers(lunar::instance* lunar) {
+static inline void show_ee_main_registers(iris::instance* iris) {
     using namespace ImGui;
 
-    struct ee_state* ee = lunar->ps2->ee;
+    struct ee_state* ee = iris->ps2->ee;
 
     for (int i = 0; i < 32; i++) {
         for (int j = 0; j < 4; j++) {
@@ -81,10 +81,10 @@ static inline void show_ee_main_registers(lunar::instance* lunar) {
         ee_prev[i] = ee->r[i];
     }
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     if (BeginTable("ee#registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("96-127");
         TableSetupColumn("64-95");
@@ -114,7 +114,7 @@ static inline void show_ee_main_registers(lunar::instance* lunar) {
                 if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                     static char new_value[9];
 
-                    PushFont(lunar->font_small_code);
+                    PushFont(iris->font_small_code);
                     TextDisabled("Edit "); SameLine(0.0, 0.0);
                     Text("%s", mips_cc_r[i]); SameLine(0.0, 0.0);
                     TextDisabled(" (bits %d-%d)", j*32, ((j+1)*32)-1);
@@ -123,14 +123,14 @@ static inline void show_ee_main_registers(lunar::instance* lunar) {
                     PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                    PushFont(lunar->font_body);
+                    PushFont(iris->font_body);
                     PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                     AlignTextToFramePadding();
                     Text(ICON_MS_EDIT); SameLine();
 
                     SetNextItemWidth(100);
-                    PushFont(lunar->font_code);
+                    PushFont(iris->font_code);
 
                     if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                         if (new_value[0])
@@ -168,10 +168,10 @@ static inline void show_ee_main_registers(lunar::instance* lunar) {
     PopFont();
 }
 
-static inline void show_ee_cop0_registers(lunar::instance* lunar) {
+static inline void show_ee_cop0_registers(iris::instance* iris) {
     using namespace ImGui;
 
-    struct ee_state* ee = lunar->ps2->ee;
+    struct ee_state* ee = iris->ps2->ee;
 
     for (int i = 0; i < 32; i++) {
         if (ee_cop0_prev[i] != ee->cop0_r[i])
@@ -180,10 +180,10 @@ static inline void show_ee_cop0_registers(lunar::instance* lunar) {
         ee_cop0_prev[i] = ee->cop0_r[i];
     }
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     if (BeginTable("ee#cop0registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("96-127");
         TableSetupColumn("64-95");
@@ -212,7 +212,7 @@ static inline void show_ee_cop0_registers(lunar::instance* lunar) {
             if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                 static char new_value[9];
 
-                PushFont(lunar->font_small_code);
+                PushFont(iris->font_small_code);
                 TextDisabled("Edit "); SameLine(0.0, 0.0);
                 Text("%s", ee_cop0_r[i]);
                 PopFont();
@@ -220,14 +220,14 @@ static inline void show_ee_cop0_registers(lunar::instance* lunar) {
                 PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                 PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                PushFont(lunar->font_body);
+                PushFont(iris->font_body);
                 PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                 AlignTextToFramePadding();
                 Text(ICON_MS_EDIT); SameLine();
 
                 SetNextItemWidth(100);
-                PushFont(lunar->font_code);
+                PushFont(iris->font_code);
 
                 if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (new_value[0])
@@ -264,10 +264,10 @@ static inline void show_ee_cop0_registers(lunar::instance* lunar) {
     PopFont();
 }
 
-static inline void show_ee_fpu_registers(lunar::instance* lunar) {
+static inline void show_ee_fpu_registers(iris::instance* iris) {
 using namespace ImGui;
 
-    struct ee_state* ee = lunar->ps2->ee;
+    struct ee_state* ee = iris->ps2->ee;
 
     for (int i = 0; i < 32; i++) {
         if (ee_fpu_prev[i] != ee->f[i].u32)
@@ -276,10 +276,10 @@ using namespace ImGui;
         ee_fpu_prev[i] = ee->f[i].u32;
     }
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
     if (BeginTable("ee#fpuregisters", 3, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(lunar->font_small_code);
+        PushFont(iris->font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("u32");
         TableSetupColumn("float");
@@ -306,7 +306,7 @@ using namespace ImGui;
             if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                 static char new_value[9];
 
-                PushFont(lunar->font_small_code);
+                PushFont(iris->font_small_code);
                 TextDisabled("Edit "); SameLine(0.0, 0.0);
                 Text("f%d ", i); SameLine(0.0, 0.0);
                 TextDisabled("(as u32)");
@@ -315,14 +315,14 @@ using namespace ImGui;
                 PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                 PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                PushFont(lunar->font_body);
+                PushFont(iris->font_body);
                 PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                 AlignTextToFramePadding();
                 Text(ICON_MS_EDIT); SameLine();
 
                 SetNextItemWidth(100);
-                PushFont(lunar->font_code);
+                PushFont(iris->font_code);
 
                 if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (new_value[0])
@@ -363,7 +363,7 @@ using namespace ImGui;
             if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                 static char new_value[9];
 
-                PushFont(lunar->font_small_code);
+                PushFont(iris->font_small_code);
                 TextDisabled("Edit "); SameLine(0.0, 0.0);
                 Text("f%d ", i); SameLine(0.0, 0.0);
                 TextDisabled("(as float)");
@@ -372,14 +372,14 @@ using namespace ImGui;
                 PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                 PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                PushFont(lunar->font_body);
+                PushFont(iris->font_body);
                 PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                 AlignTextToFramePadding();
                 Text(ICON_MS_EDIT); SameLine();
 
                 SetNextItemWidth(100);
-                PushFont(lunar->font_code);
+                PushFont(iris->font_code);
 
                 if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsScientific | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (new_value[0])
@@ -416,12 +416,12 @@ using namespace ImGui;
     PopFont();
 }
 
-static inline void show_iop_main_registers(lunar::instance* lunar) {
+static inline void show_iop_main_registers(iris::instance* iris) {
     using namespace ImGui;
 
-    PushFont(lunar->font_code);
+    PushFont(iris->font_code);
 
-    struct iop_state* iop = lunar->ps2->iop;
+    struct iop_state* iop = iris->ps2->iop;
 
     for (int i = 0; i < 32; i++) {
         if (iop_prev[i] != iop->r[i])
@@ -448,21 +448,21 @@ static inline void show_iop_main_registers(lunar::instance* lunar) {
                 if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                     static char new_value[9];
 
-                    PushFont(lunar->font_small_code);
+                    PushFont(iris->font_small_code);
                     TextDisabled("Edit %s", mips_cc_r[i]);
                     PopFont();
 
                     PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                    PushFont(lunar->font_body);
+                    PushFont(iris->font_body);
                     PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                     AlignTextToFramePadding();
                     Text(ICON_MS_EDIT); SameLine();
 
                     SetNextItemWidth(100);
-                    PushFont(lunar->font_code);
+                    PushFont(iris->font_code);
 
                     if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                         if (new_value[0])
@@ -505,7 +505,7 @@ static inline void show_iop_main_registers(lunar::instance* lunar) {
     PopFont();
 }
 
-static inline void show_work_in_progress(lunar::instance* lunar) {
+static inline void show_work_in_progress(iris::instance* iris) {
     using namespace ImGui;
 
     Text("Work-in-progress!");
@@ -538,10 +538,10 @@ static const char* ee_reg_group_names[] = {
 
 static int ee_reg_group = 0;
 
-void show_ee_state(lunar::instance* lunar) {
+void show_ee_state(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("EE state", &lunar->show_ee_state, ImGuiWindowFlags_MenuBar)) {
+    if (Begin("EE state", &iris->show_ee_state, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {
@@ -578,23 +578,23 @@ void show_ee_state(lunar::instance* lunar) {
         if (BeginChild("ee#child")) {
             switch (ee_reg_group) {
                 case 0: {
-                    show_ee_main_registers(lunar);
+                    show_ee_main_registers(iris);
                 } break;
 
                 case 1: {
-                    show_ee_cop0_registers(lunar);
+                    show_ee_cop0_registers(iris);
                 } break;
 
                 case 2: {
-                    show_ee_fpu_registers(lunar);
+                    show_ee_fpu_registers(iris);
                 } break;
 
                 case 3: {
-                    show_work_in_progress(lunar);
+                    show_work_in_progress(iris);
                 } break;
 
                 case 4: {
-                    show_work_in_progress(lunar);
+                    show_work_in_progress(iris);
                 } break;
             }
 
@@ -615,10 +615,10 @@ void show_ee_state(lunar::instance* lunar) {
     }
 }
 
-void show_iop_state(lunar::instance* lunar) {
+void show_iop_state(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("IOP state", &lunar->show_iop_state, ImGuiWindowFlags_MenuBar)) {
+    if (Begin("IOP state", &iris->show_iop_state, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {
@@ -638,7 +638,7 @@ void show_iop_state(lunar::instance* lunar) {
             EndMenuBar();
         }
         if (BeginChild("iop#child")) {
-            show_iop_main_registers(lunar);
+            show_iop_main_registers(iris);
 
             EndChild();
         }

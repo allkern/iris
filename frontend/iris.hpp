@@ -14,7 +14,7 @@
 #include "ps2.h"
 #include "ee/renderer/software.hpp"
 
-namespace lunar {
+namespace iris {
 
 enum : int {
     BKPT_CPU_EE,
@@ -106,30 +106,42 @@ struct instance {
     struct ds_state* ds = nullptr;
 };
 
-lunar::instance* create();
-void init(lunar::instance* lunar, int argc, const char* argv[]);
-void close(lunar::instance* lunar);
-void destroy(lunar::instance* lunar);
-bool is_open(lunar::instance* lunar);
+iris::instance* create();
+void init(iris::instance* iris, int argc, const char* argv[]);
+void close(iris::instance* iris);
+void destroy(iris::instance* iris);
+bool is_open(iris::instance* iris);
 
-void update(lunar::instance* lunar);
-void update_window(lunar::instance* lunar);
+int init_audio(iris::instance* iris);
+int init_settings(iris::instance* iris, int argc, const char* argv[]);
+void cli_check_for_help_version(iris::instance* iris, int argc, const char* argv[]);
+void close_settings(iris::instance* iris);
 
-void show_main_menubar(lunar::instance* lunar);
-void show_ee_control(lunar::instance* lunar);
-void show_ee_state(lunar::instance* lunar);
-void show_ee_logs(lunar::instance* lunar);
-void show_ee_interrupts(lunar::instance* lunar);
-void show_ee_dmac(lunar::instance* lunar);
-void show_iop_control(lunar::instance* lunar);
-void show_iop_state(lunar::instance* lunar);
-void show_iop_logs(lunar::instance* lunar);
-void show_iop_interrupts(lunar::instance* lunar);
-void show_iop_dma(lunar::instance* lunar);
-void show_gs_debugger(lunar::instance* lunar);
-void show_memory_viewer(lunar::instance* lunar);
-void show_status_bar(lunar::instance* lunar);
-void show_breakpoints(lunar::instance* lunar);
-void show_about_window(lunar::instance* lunar);
+void update(iris::instance* iris);
+void update_window(iris::instance* iris);
+
+void show_main_menubar(iris::instance* iris);
+void show_ee_control(iris::instance* iris);
+void show_ee_state(iris::instance* iris);
+void show_ee_logs(iris::instance* iris);
+void show_ee_interrupts(iris::instance* iris);
+void show_ee_dmac(iris::instance* iris);
+void show_iop_control(iris::instance* iris);
+void show_iop_state(iris::instance* iris);
+void show_iop_logs(iris::instance* iris);
+void show_iop_interrupts(iris::instance* iris);
+void show_iop_dma(iris::instance* iris);
+void show_gs_debugger(iris::instance* iris);
+void show_memory_viewer(iris::instance* iris);
+void show_status_bar(iris::instance* iris);
+void show_breakpoints(iris::instance* iris);
+void show_about_window(iris::instance* iris);
+void show_bios_setting_window(iris::instance* iris);
+
+void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key);
+void handle_keyup_event(iris::instance* iris, SDL_KeyboardEvent& key);
+void handle_scissor_event(void* udata);
+void handle_ee_tty_event(void* udata, char c);
+void handle_iop_tty_event(void* udata, char c);
 
 }

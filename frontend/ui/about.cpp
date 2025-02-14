@@ -2,13 +2,13 @@
 #include <string>
 #include <cctype>
 
-#include "instance.hpp"
+#include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
-namespace lunar {
+namespace iris {
 
-void show_about_window(lunar::instance* lunar) {
+void show_about_window(iris::instance* iris) {
     using namespace ImGui;
 
     static const ImGuiWindowFlags flags =
@@ -16,7 +16,7 @@ void show_about_window(lunar::instance* lunar) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking;
 
-    if (Begin("About", &lunar->show_about_window, flags)) {
+    if (Begin("About", &iris->show_about_window, flags)) {
         Text("Hello, world!");
     } End();
 }

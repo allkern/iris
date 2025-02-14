@@ -1,6 +1,12 @@
 .PHONY: clean
 
-EXEC := eegs
+PLATFORM := $(shell uname -s)
+
+VERSION_TAG := $(shell git describe --always --tags --abbrev=0)
+COMMIT_HASH := $(shell git rev-parse --short HEAD)
+OS_INFO := $(shell uname -rmo)
+
+EXEC := iris
 
 INCLUDE_DIRS := imgui imgui/backends frontend gl3w/include tomlplusplus/include
 OUTPUT_DIR := bin
@@ -8,6 +14,9 @@ OUTPUT_DIR := bin
 CXX := g++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
 CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -Werror -g -D_EE_USE_INTRINSICS
+CXXFLAGS += -D_IRIS_VERSION="$(VERSION_TAG)"
+CXXFLAGS += -D_IRIS_COMMIT="$(COMMIT_HASH)"
+CXXFLAGS += -D_IRIS_OSVERSION="$(OS_INFO)"
 CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_opengl3.cpp)
@@ -28,6 +37,11 @@ CSRC += $(wildcard src/dev/*.c)
 CSRC += $(wildcard gl3w/src/*.c)
 CSRC += $(wildcard frontend/tfd/*.c)
 COBJ := $(CSRC:.c=.o)
+
+ifeq ($(PLATFORM),Darwin)
+	CFLAGS += -mmacosx-version-min=10.9 -Wno-newline-eof
+	CXXFLAGS += -mmacosx-version-min=10.9 -Wno-newline-eof
+endif
 
 all: $(OUTPUT_DIR) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)
 
