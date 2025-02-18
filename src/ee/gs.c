@@ -32,8 +32,8 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
 
     sched_schedule(gs->sched, vblank_in_event);
 
-    // gs->csr ^= 1 << 13;
-    // gs->csr ^= 1 << 12;
+    gs->csr ^= 1 << 13;
+    gs->csr ^= 1 << 12;
 
     // gs->csr &= ~(8);
     // gs->csr &= ~(2);
