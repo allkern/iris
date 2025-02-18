@@ -128,15 +128,16 @@ void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
     // printf("spu2: core%d data=%04x tsa=%08x\n", c, data, spu2->c[c].tsa);
 
     spu2->ram[spu2->c[c].tsa++] = data;
-    spu2->c[c].words_written++;
+
+    spu2->c[c].tsa &= 0xfffff;
 }
 
 void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
     spu2->c[c].attr = data & 0x7fff;
 
-    // if (data & 0x8000) {
-    //     spu2->c[c].stat = 0;
-    // }
+    if (data & 0x8000) {
+        spu2->c[c].stat = 0;
+    }
 }
 
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {

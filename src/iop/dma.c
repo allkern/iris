@@ -202,10 +202,10 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
         dma->spu1.madr += 4;
     }
 
-    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
-    iop_dma_check_irq(dma);
+    // iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
+    // iop_dma_check_irq(dma);
 
-    dma->spu1.chcr &= ~0x1000000;
+    // dma->spu1.chcr &= ~0x1000000;
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
     printf("iop: PIO channel unimplemented\n"); exit(1);
@@ -227,10 +227,10 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
         dma->spu2.madr += 4;
     }
 
-    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
-    iop_dma_check_irq(dma);
+    // iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
+    // iop_dma_check_irq(dma);
 
-    dma->spu2.chcr &= ~0x1000000;
+    // dma->spu2.chcr &= ~0x1000000;
 }
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     printf("iop: DEV9 channel unimplemented\n"); exit(1);
