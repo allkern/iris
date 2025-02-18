@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <deque>
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -27,6 +28,34 @@ struct breakpoint {
     bool cond_r, cond_w, cond_x;
     int size;
     bool enabled;
+};
+
+struct move_animation {
+    int frames;
+    int frames_remaining;
+    float source_x, source_y;
+    float target_x, target_y;
+    float x, y;
+};
+
+struct fade_animation {
+    int frames;
+    int frames_remaining;
+    int source_alpha, target_alpha;
+    int alpha;
+};
+
+struct notification {
+    int type;
+    int state;
+    int frames;
+    int frames_remaining;
+    float width, height;
+    float text_width, text_height;
+    bool end;
+    move_animation move;
+    fade_animation fade;
+    std::string text;
 };
 
 struct instance {
@@ -96,12 +125,16 @@ struct instance {
     int menubar_height = 0;
     bool mute = false;
 
+    bool limit_fps = true;
+    float fps_cap = 60.0f;
+
     std::string loaded = "";
 
     std::vector <std::string> ee_log = { "" };
     std::vector <std::string> iop_log = { "" };
 
-    std::vector <breakpoint> breakpoints = {};
+    std::vector <iris::breakpoint> breakpoints = {};
+    std::deque <iris::notification> notifications = {};
 
     struct ds_state* ds = nullptr;
 };
@@ -143,5 +176,9 @@ void handle_keyup_event(iris::instance* iris, SDL_KeyboardEvent& key);
 void handle_scissor_event(void* udata);
 void handle_ee_tty_event(void* udata, char c);
 void handle_iop_tty_event(void* udata, char c);
+
+void handle_animations(iris::instance* iris);
+
+void push_info(iris::instance* iris, std::string text);
 
 }

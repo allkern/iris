@@ -101,7 +101,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     iris->gl_context = SDL_GL_CreateContext(iris->window);
     SDL_GL_MakeCurrent(iris->window, iris->gl_context);
-    SDL_GL_SetSwapInterval(0);
+    SDL_GL_SetSwapInterval(1);
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -158,7 +158,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     // Init theme
     ImVec4* colors = style.Colors;
     colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
-    colors[ImGuiCol_TextDisabled]           = ImVec4(0.29f, 0.35f, 0.39f, 1.00f);
+    colors[ImGuiCol_TextDisabled]           = ImVec4(0.35f, 0.35f, 0.35f, 1.00f);
     colors[ImGuiCol_WindowBg]               = ImVec4(0.02f, 0.02f, 0.02f, 1.00f);
     colors[ImGuiCol_ChildBg]                = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
     colors[ImGuiCol_PopupBg]                = ImVec4(0.07f, 0.09f, 0.10f, 1.00f);
@@ -280,8 +280,19 @@ void update_time(iris::instance* iris) {
     iris->frames = 0;
 }
 
+void sleep_limiter(iris::instance* iris) {
+    uint32_t ticks = (1.0f / iris->fps_cap) * 1000.0f;
+    uint32_t now = SDL_GetTicks();
+
+    while ((SDL_GetTicks() - now) < ticks);
+}
+
 void update_window(iris::instance* iris) {
     using namespace ImGui;
+
+    // Only limit FPS to 60 when paused
+    if (iris->limit_fps && iris->pause)
+        sleep_limiter(iris);
 
     update_title(iris);
     update_time(iris);
@@ -331,6 +342,8 @@ void update_window(iris::instance* iris) {
             ICON_MS_PAUSE
         );
     }
+
+    handle_animations(iris);
 
     // Rendering
     ImGui::Render();
