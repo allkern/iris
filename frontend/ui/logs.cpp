@@ -80,7 +80,7 @@ void show_iop_logs(iris::instance* iris) {
                     iop_follow = !iop_follow;
                 }
 
-                EndMenu();
+                ImGui::EndMenu();
             }
 
             EndMenuBar();

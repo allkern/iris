@@ -555,10 +555,10 @@ void show_gs_debugger(iris::instance* iris) {
                         }
                     }
 
-                    EndMenu();
+                    ImGui::EndMenu();
                 }
 
-                EndMenu();
+                ImGui::EndMenu();
             }
 
             EndMenuBar();

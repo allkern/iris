@@ -552,10 +552,10 @@ void show_ee_state(iris::instance* iris) {
                         }
                     }
 
-                    EndMenu();
+                    ImGui::EndMenu();
                 }
 
-                EndMenu();
+                ImGui::EndMenu();
             }
 
             EndMenuBar();
@@ -629,10 +629,10 @@ void show_iop_state(iris::instance* iris) {
                         }
                     }
 
-                    EndMenu();
+                    ImGui::EndMenu();
                 }
 
-                EndMenu();
+                ImGui::EndMenu();
             }
 
             EndMenuBar();

@@ -1,5 +1,7 @@
 #include "iris.hpp"
 
+#undef main
+
 int main(int argc, const char* argv[]) {
     iris::instance instance;
 

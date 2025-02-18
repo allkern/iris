@@ -1,8 +1,10 @@
+SDL2-2.32.0/
 .vscode/
 bin/
 tools/
 elf/
 roms/
+src/elf.h
 main2.cpp
 compare
 compare.cpp

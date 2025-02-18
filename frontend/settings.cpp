@@ -45,8 +45,7 @@ void print_help(iris::instance* iris) {
 }
 
 int parse_toml_settings(iris::instance* iris) {
-iris->settings_path = SDL_GetPrefPath("Allkern", "Iris");
-    iris->settings_path.append("settings.toml");
+    iris->settings_path = iris->pref_path + "settings.toml";
 
     toml::parse_result result = toml::parse_file(iris->settings_path);
 

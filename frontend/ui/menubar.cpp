@@ -126,7 +126,7 @@ void show_main_menubar(iris::instance* iris) {
                 }
             }
 
-            EndMenu();
+            ImGui::EndMenu();
         }
         if (BeginMenu("Settings")) {
             if (BeginMenu(ICON_MS_MONITOR " Display")) {
@@ -141,7 +141,7 @@ void show_main_menubar(iris::instance* iris) {
                         }
                     }
 
-                    EndMenu();
+                    ImGui::EndMenu();
                 }
 
                 if (BeginMenu("Aspect mode")) {
@@ -153,7 +153,7 @@ void show_main_menubar(iris::instance* iris) {
                         }
                     }
 
-                    EndMenu();
+                    ImGui::EndMenu();
                 }
 
                 if (BeginMenu("Scaling filter")) {
@@ -169,7 +169,7 @@ void show_main_menubar(iris::instance* iris) {
                         software_set_bilinear(iris->ctx, true);
                     }
 
-                    EndMenu();
+                    ImGui::EndMenu();
                 }
 
                 MenuItem("Integer scaling", nullptr, &iris->ctx->integer_scaling);
@@ -178,22 +178,22 @@ void show_main_menubar(iris::instance* iris) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
                 }
 
-                EndMenu();
+                ImGui::EndMenu();
             }
 
             MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar);
 
             if (MenuItem(ICON_MS_CONTENT_COPY " Copy data path to clipboard")) {
-                SDL_SetClipboardText(SDL_GetPrefPath("Allkern", "Iris"));
+                SDL_SetClipboardText(iris->pref_path.c_str());
             }
 
 
-            EndMenu();
+            ImGui::EndMenu();
         }
         if (BeginMenu("Tools")) {
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " ImGui Demo", NULL, &iris->show_imgui_demo));
 
-            EndMenu();
+            ImGui::EndMenu();
         }
         if (BeginMenu("Debug")) {
             SeparatorText("EE");
@@ -203,7 +203,7 @@ void show_main_menubar(iris::instance* iris) {
                 if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##ee", NULL, &iris->show_ee_logs));
                 if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##ee", NULL, &iris->show_ee_interrupts));
 
-                // EndMenu();
+                // ImGui::EndMenu();
             // }
 
             SeparatorText("IOP");
@@ -213,7 +213,7 @@ void show_main_menubar(iris::instance* iris) {
                 if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##iop", NULL, &iris->show_iop_logs));
                 if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##iop", NULL, &iris->show_iop_interrupts));
 
-            //     EndMenu();
+            //     ImGui::EndMenu();
             // }
 
             Separator();
@@ -222,14 +222,14 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &iris->show_gs_debugger));
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &iris->show_memory_viewer));
             
-            EndMenu();
+            ImGui::EndMenu();
         }
         if (BeginMenu("Help")) {
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " About")) {
                 iris->show_about_window = true;
             }
 
-            EndMenu();
+            ImGui::EndMenu();
         }
 
         EndMainMenuBar();

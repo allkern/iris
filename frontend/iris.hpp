@@ -85,6 +85,8 @@ struct instance {
     std::string boot_path = "";
     std::string bios_path = "";
     std::string disc_path = "";
+    std::string pref_path = "";
+    std::string ini_path = "";
 
     bool open = false;
     bool pause = true;

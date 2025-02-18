@@ -1,9 +1,12 @@
+#include <filesystem>
 #include <csignal>
 #include <chrono>
 #include <string>
 #include <vector>
+#include <string>
 
 #include "iris.hpp"
+#include "platform.hpp"
 
 #include "ee/ee_dis.h"
 #include "iop/iop_dis.h"
@@ -42,10 +45,14 @@ iris::instance* create();
 void update_title(iris::instance* iris) {
     char buf[128];
 
-    const char* base = iris->loaded.size() ? basename(iris->loaded.c_str()) : NULL;
+    std::string base = "";
 
-    sprintf(buf, base ? "Iris (eegs 0.1) | %s" : "Iris (eegs 0.1)",
-        base
+    if (iris->loaded.size()) {
+        base = std::filesystem::path(iris->loaded).filename().string();
+    }
+
+    sprintf(buf, base.size() ? "Iris (eegs 0.1) | %s" : "Iris (eegs 0.1)",
+        base.c_str()
     );
 
     SDL_SetWindowTitle(iris->window, buf);
@@ -97,19 +104,30 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
     );
 
+    init_platform(iris);
     init_audio(iris);
 
     iris->gl_context = SDL_GL_CreateContext(iris->window);
     SDL_GL_MakeCurrent(iris->window, iris->gl_context);
     SDL_GL_SetSwapInterval(1);
 
-    IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    IMGUI_CHECKVERSION();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
+    if (std::filesystem::exists("portable")) {
+        iris->pref_path = "./";
+    } else {
+        iris->pref_path = std::string(SDL_GetPrefPath("Allkern", "Iris"));
+    }
+
+    iris->ini_path = iris->pref_path + "imgui.ini";
+
+    io.IniFilename = iris->ini_path.c_str();
+ 
     ImGui::StyleColorsDark();
 
     // Setup Platform/Renderer backends
@@ -400,6 +418,7 @@ bool is_open(iris::instance* iris) {
 void close(iris::instance* iris) {
     using namespace ImGui;
 
+    destroy_platform(iris);
     close_settings(iris);
 
     ImGui_ImplOpenGL3_Shutdown();
