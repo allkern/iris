@@ -2074,8 +2074,12 @@ static inline void ee_i_syscall(struct ee_state* ee) {
 static inline void ee_i_teq(struct ee_state* ee) {
     if (EE_RS == EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_teqi(struct ee_state* ee) { printf("ee: teqi unimplemented\n"); exit(1); }
-static inline void ee_i_tge(struct ee_state* ee) { printf("ee: tge unimplemented\n"); exit(1); }
+static inline void ee_i_teqi(struct ee_state* ee) {
+    if (EE_RS == SE6416(EE_D_I16)) ee_exception_level1(ee, CAUSE_EXC1_TR);
+}
+static inline void ee_i_tge(struct ee_state* ee) {
+    if (EE_RS >= EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
+}
 static inline void ee_i_tgei(struct ee_state* ee) { printf("ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee) { printf("ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee) { printf("ee: tgeu unimplemented\n"); exit(1); }
