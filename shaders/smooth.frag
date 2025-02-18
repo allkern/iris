@@ -14,7 +14,7 @@ vec2 curvature(vec2 coord, float bend) {
 }
 
 void main() {
-    vec2 uv = curvature(FragTexCoord, 5.5);
+    vec2 uv = FragTexCoord; // curvature(FragTexCoord, 5.5);
     vec3 rgb = vec3(0.0);
 
 	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0)

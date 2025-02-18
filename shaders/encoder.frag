@@ -33,8 +33,8 @@ float hash13(vec3 p3) {
 void main() {
     vec2 uv = FragTexCoord * screen_size;
 
-    float noise_strength = 0.1;
-    
+    float noise_strength = 0.0;
+
     // Get a pixel from iChannel0
     // float noise_y = hash12(vec2(float(int(uv.y) >> 1), float(frame))) * noise_strength;
     float noise_x = hash13(vec3(uv.xy, float(frame))) * noise_strength;

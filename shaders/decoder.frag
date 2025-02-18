@@ -9,7 +9,7 @@
 
 // The decoded IQ signals get multiplied by this
 // factor. Bigger values yield more color saturation
-#define CHROMA_SATURATION_FACTOR 2.0
+#define CHROMA_SATURATION_FACTOR 4.0
 
 // Size of the decoding FIR filter. bigger values
 // yield more smuggly video and are more expensive
@@ -58,7 +58,7 @@ void main() {
     vec3 yiq = vec3(0.0);
     
     // Decode Luma first
-    for (int d = -LUMA_DECODER_FIR_SIZE; d < LUMA_DECODER_FIR_SIZE; d++) {
+    for (int d = -LUMA_DECODER_FIR_SIZE; d < 0; d++) {
         vec2 p = vec2(uv.x + float(d), uv.y);
         vec3 s = texture(input_texture, p / screen_size).rgb;
         float t = fc * (uv.x + float(d));
@@ -73,13 +73,13 @@ void main() {
     yiq.x *= BRIGHTNESS_FACTOR;
     
     // Then decode chroma
-    for (int d = -CHROMA_DECODER_FIR_SIZE; d < CHROMA_DECODER_FIR_SIZE; d++) {
+    for (int d = -CHROMA_DECODER_FIR_SIZE; d < 0; d++) {
         vec2 p = vec2(uv.x + float(d), uv.y);
         vec3 s = texture(input_texture, p / screen_size).rgb;
         float t = fc * (uv.x + float(d)) + ((PI / 2.0) * uv.y) + ((PI) * float(frame & 1));
         
         // Apply Blackman window for smoother colors
-        float window = blackman(float(d + CHROMA_DECODER_FIR_SIZE), float(CHROMA_DECODER_FIR_SIZE * 2 + 1)); 
+        float window = blackman(float(d + CHROMA_DECODER_FIR_SIZE), float(CHROMA_DECODER_FIR_SIZE)); 
         float filt = sincf(0.25, float(d));
 
         yiq.yz += s.yz * vec2(cos(t), sin(t));
