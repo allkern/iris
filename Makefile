@@ -20,6 +20,7 @@ CXXFLAGS += -D_IRIS_OSVERSION="$(OS_INFO)"
 CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_opengl3.cpp)
+CXXSRC += $(wildcard frontend/platform/stub.cpp)
 CXXSRC += $(wildcard frontend/*.cpp)
 CXXSRC += $(wildcard frontend/ui/*.cpp)
 CXXSRC += $(wildcard src/ee/renderer/*.cpp)

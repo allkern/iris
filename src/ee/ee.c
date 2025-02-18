@@ -15,6 +15,12 @@
 #include "ee.h"
 #include "ee_dis.h"
 
+#ifdef _WIN32
+#define SSUBOVF64 __builtin_ssubll_overflow
+#else
+#define SSUBOVF64 __builtin_ssubl_overflow
+#endif
+
 // static FILE* file;
 // static int p = 0;
 
@@ -621,7 +627,7 @@ static inline void ee_i_dsrlv(struct ee_state* ee) {
 static inline void ee_i_dsub(struct ee_state* ee) {// printf("ee: dsub unimplemented\n"); exit(1);
     int64_t r;
 
-    if (__builtin_ssubll_overflow((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
+    if (SSUBOVF64((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
         ee_exception_level1(ee, CAUSE_EXC1_OV);
     } else {
         EE_RD = r;
