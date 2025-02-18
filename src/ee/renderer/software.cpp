@@ -157,7 +157,7 @@ static inline uint32_t gs_apply_function(struct ps2_gs* gs, uint32_t t, uint32_t
     uint32_t fr = f & 0xff;
     uint32_t fg = (f >> 8) & 0xff;
     uint32_t fb = (f >> 16) & 0xff;
-    // uint32_t fa = (f >> 24) & 0xff;
+    uint32_t fa = (f >> 24) & 0xff;
 
     switch (gs->ctx->tfx) {
         case GS_MODULATE: {
@@ -185,10 +185,21 @@ static inline uint32_t gs_apply_function(struct ps2_gs* gs, uint32_t t, uint32_t
             pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
         } break;
         case GS_HIGHLIGHT2: {
-            pa = (f >> 24) & 0xff;
-            pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
-            pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
-            pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
+            switch (gs->ctx->tcc) {
+                case 0: {
+                    pa = (f >> 24) & 0xff;
+                    pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
+                    pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
+                    pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
+                } break;
+
+                case 1: {
+                    pr = CLAMP(((tr * fr) >> 7) + fa, 0, 255);
+                    pg = CLAMP(((tg * fg) >> 7) + fa, 0, 255);
+                    pb = CLAMP(((tb * fb) >> 7) + fa, 0, 255);
+                    pa = (t >> 24) & 0xff;
+                } break;
+            }
         } break;
     }
 
@@ -225,7 +236,7 @@ static inline uint32_t gs_read_fb(struct ps2_gs* gs, int x, int y) {
 static inline uint32_t gs_read_zb(struct ps2_gs* gs, int x, int y) {
     switch (gs->ctx->zbpsm) {
         case GS_ZSMZ32:
-            return gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)];
+            return gs->vram[(gs->ctx->zbp + x + (y * gs->ctx->fbw)) & 0xfffff];
         case GS_ZSMZ24:
             return gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)] & 0xffffff;
         case GS_ZSMZ16:
@@ -324,12 +335,7 @@ static inline uint32_t gs_from_rgba32(struct ps2_gs* gs, uint32_t c, int fmt) {
 static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
     switch (gs->ctx->tbpsm) {
         case GS_PSMCT32: {
-            uint32_t addr = gs->ctx->tbp0 + u + (v * gs->ctx->tbw);
-
-            if (addr >= 0x100000)
-                break;
-
-            return gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)];
+            return gs->vram[(gs->ctx->tbp0 + u + (v * gs->ctx->tbw)) & 0xfffff];
         }
         case GS_PSMCT24:
             return gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)] & 0xffffff;
@@ -426,7 +432,9 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
 }
 
 static inline void gs_write_zb(struct ps2_gs* gs, int x, int y, uint32_t z) {
-    // To-do: Implement ZBMSK
+    if (gs->ctx->zbmsk)
+        return;
+
     switch (gs->ctx->zbpsm) {
         case GS_ZSMZ32: {
             gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)] = z;
@@ -437,12 +445,9 @@ static inline void gs_write_zb(struct ps2_gs* gs, int x, int y, uint32_t z) {
         } break;
         case GS_ZSMZ16:
         case GS_ZSMZ16S: {
-            int shift = (x & 1) << 4;
-            uint32_t mask = 0xffff << shift;
-            uint32_t addr = gs->ctx->fbp + (x >> 1) + (y * (gs->ctx->fbw >> 1));
-            uint32_t data = gs->vram[addr] & ~mask;
+            uint16_t* ptr = (uint16_t*)&gs->vram[gs->ctx->zbp];
 
-            gs->vram[addr] = ((uint32_t)z & mask) | data;
+            *(ptr + x + (y * gs->ctx->fbw)) = z;
         } break;
     }
 }
@@ -564,43 +569,41 @@ static inline int gs_clamp_v(struct ps2_gs* gs, int v) {
     return v;
 }
 
-static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t c) {
+static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t s) {
     uint32_t d = gs_read_fb(gs, x, y);
 
     d = gs_to_rgba32(gs, d, gs->ctx->fbpsm);
 
-    // uint32_t av = (gs->ctx->a == 0) ? c : ((gs->ctx->a == 1) ? d : 0);
-    // uint32_t bv = (gs->ctx->b == 0) ? c : ((gs->ctx->a == 1) ? d : 0);
-    // uint32_t cv = (gs->ctx->c == 0) ? c : ((gs->ctx->a == 1) ? d : (gs->ctx->fix << 24));
-    // uint32_t dv = (gs->ctx->d == 0) ? c : ((gs->ctx->a == 1) ? d : 0);
+    uint32_t av = (gs->ctx->a == 0) ? s : ((gs->ctx->a == 1) ? d : 0);
+    uint32_t bv = (gs->ctx->b == 0) ? s : ((gs->ctx->b == 1) ? d : 0);
+    uint32_t cv = (gs->ctx->c == 0) ? (s >> 24) : ((gs->ctx->c == 1) ? (d >> 24): gs->ctx->fix);
+    uint32_t dv = (gs->ctx->d == 0) ? s : ((gs->ctx->d == 1) ? d : 0);
 
-    // uint32_t ar = (av >> 0 ) & 0xff;
-    // uint32_t ag = (av >> 8 ) & 0xff;
-    // uint32_t ab = (av >> 16) & 0xff;
-    // uint32_t br = (bv >> 0 ) & 0xff;
-    // uint32_t bg = (bv >> 8 ) & 0xff;
-    // uint32_t bb = (bv >> 16) & 0xff;
-    // uint32_t dr = (dv >> 0 ) & 0xff;
-    // uint32_t dg = (dv >> 8 ) & 0xff;
-    // uint32_t db = (dv >> 16) & 0xff;
+    // if (gs->tme)
+    //     printf("Cd=%08x Cs=%08x a=%08x (%d) b=%08x (%d) c=%08x (%d) d=%08x (%d)\n", d, s,
+    //     av, gs->ctx->a,
+    //     bv, gs->ctx->b,
+    //     cv, gs->ctx->c,
+    //     dv, gs->ctx->d
+    // );
 
-    // cv >>= 24;
+    uint32_t ar = (av >> 0 ) & 0xff;
+    uint32_t ag = (av >> 8 ) & 0xff;
+    uint32_t ab = (av >> 16) & 0xff;
+    uint32_t aa = (av >> 24) & 0xff;
+    uint32_t br = (bv >> 0 ) & 0xff;
+    uint32_t bg = (bv >> 8 ) & 0xff;
+    uint32_t bb = (bv >> 16) & 0xff;
+    uint32_t ba = (bv >> 24) & 0xff;
+    uint32_t dr = (dv >> 0 ) & 0xff;
+    uint32_t dg = (dv >> 8 ) & 0xff;
+    uint32_t db = (dv >> 16) & 0xff;
+    uint32_t da = (dv >> 24) & 0xff;
 
-    // uint32_t rr = (((ar - br) * cv) >> 7) + dr;
-    // uint32_t rg = (((ag - bg) * cv) >> 7) + dg;
-    // uint32_t rb = (((ab - bb) * cv) >> 7) + db;
-    // uint32_t ra = c >> 24;
-
-    uint32_t cr = (c >> 0) & 0xff;
-    uint32_t cg = (c >> 8) & 0xff;
-    uint32_t cb = (c >> 16) & 0xff;
-    uint32_t dr = (d >> 0) & 0xff;
-    uint32_t dg = (d >> 8) & 0xff;
-    uint32_t db = (d >> 16) & 0xff;
-    uint32_t rr = (cr + dr) / 2;
-    uint32_t rg = (cg + dg) / 2;
-    uint32_t rb = (cb + db) / 2;
-    uint32_t ra = 0xff;
+    uint32_t rr = (((ar - br) * cv) >> 7) + dr;
+    uint32_t rg = (((ag - bg) * cv) >> 7) + dg;
+    uint32_t rb = (((ab - bb) * cv) >> 7) + db;
+    uint32_t ra = (((aa - ba) * cv) >> 7) + da;
 
     return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | ((ra & 0xff) << 24);
 }
@@ -719,11 +722,10 @@ void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window) {
     // Initialize default shaders
     software_init_default_shader(ctx);
 
-    // software_push_shader(ctx, "shaders/flip.frag");
-    // software_push_shader(ctx, "shaders/encoder.frag");
-    // software_push_shader(ctx, "shaders/decoder.frag");
-    // software_push_shader(ctx, "shaders/smooth.frag");
-    // software_push_shader(ctx, "shaders/curvature.frag");
+    software_push_shader(ctx, "shaders/flip.frag");
+    software_push_shader(ctx, "shaders/encoder.frag");
+    software_push_shader(ctx, "shaders/decoder.frag");
+    software_push_shader(ctx, "shaders/smooth.frag");
 
     // Initialize framebuffer VAO
     static const GLfloat fb_vertices[] = {
@@ -951,6 +953,8 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
                 continue;
             }
 
+            // To-do: Alpha blending
+
             uint32_t fc = fr | (fg << 8) | (fb << 16) | (fa << 24);
 
             switch (tr) {
@@ -990,33 +994,55 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     int xmax = (int32_t)std::max(v0.x, v1.x);
     int ymax = (int32_t)std::max(v0.y, v1.y);
 
-    // printf("gs: Sprite at (%d,%d-%d,%d) tme=%d abe=%d rgba=%08x\n",
-    //     v0.x, v0.y,
-    //     v1.x, v1.y,
-    //     gs->tme,
-    //     gs->abe,
-    //     v1.rgbaq & 0xffffffff
-    // );
-
-    // printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08x abe=%d FB format=%d fbw=%d\n",
-    //     gs->ctx->tbpsm,
-    //     gs->ctx->tbpsm,
-    //     gs->ctx->tbp0,
-    //     gs->ctx->tbw,
-    //     gs->ctx->usize,
-    //     gs->ctx->vsize,
-    //     gs->ctx->cbpsm,
-    //     gs->ctx->cbp,
-    //     gs->ctx->csm,
-    //     gs->ctx->tfx,
-    //     v1.rgbaq & 0xffffffff,
-    //     gs->abe,
-    //     gs->ctx->fbpsm,
-    //     gs->ctx->fbw
-    // );
-
     int z = v1.z;
     int a = v1.a;
+
+    // printf("gs: Sprite at (%d,%d-%d,%d) min=(%d,%d) max=(%d,%d) zte=%d ztst=%d zmsk=%d z=%d zbp=%x fbp=%x tme=%d abe=%d rgba=%08lx scissor=(%d,%d-%d,%d) ctx=%d\n",
+    //     v0.x, v0.y,
+    //     v1.x, v1.y,
+    //     xmin, ymin,
+    //     xmax, ymax,
+    //     gs->ctx->zte,
+    //     gs->ctx->ztst,
+    //     gs->ctx->zbmsk,
+    //     z,
+    //     gs->ctx->zbp,
+    //     gs->ctx->fbp,
+    //     gs->tme,
+    //     gs->abe,
+    //     v1.rgbaq & 0xffffffff,
+    //     gs->ctx->scax0, gs->ctx->scay0,
+    //     gs->ctx->scax1, gs->ctx->scay1,
+    //     gs->ctxt
+    // );
+
+    // if (gs->tme) {
+    //     printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d uv=(%d,%d) TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08lx abe=%d FB format=%d fbw=%d fba=%ld\n",
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbp0,
+    //         gs->ctx->tbw,
+    //         v0.u,
+    //         v0.v,
+    //         gs->ctx->usize,
+    //         gs->ctx->vsize,
+    //         gs->ctx->cbpsm,
+    //         gs->ctx->cbp,
+    //         gs->ctx->csm,
+    //         gs->ctx->tfx,
+    //         v1.rgbaq & 0xffffffff,
+    //         gs->abe,
+    //         gs->ctx->fbpsm,
+    //         gs->ctx->fbw,
+    //         gs->ctx->fba// ,
+    //         // gs->ctx->a,
+    //         // gs->ctx->b,
+    //         // gs->ctx->c,
+    //         // gs->ctx->d,
+    //         // gs->ctx->tcc,
+    //         // gs->ctx->fix
+    //     );
+    // }
 
     // if (!gs->fst) {
     //     printf("gs: stq0=(%f,%f,%f) stq1=(%f,%f,%f)\n",
