@@ -4,7 +4,7 @@ namespace iris {
 
 void handle_ee_tty_event(void* udata, char c) {
     iris::instance* iris = (iris::instance*)udata;
-    
+
     if (c == '\r')
         return;
 
@@ -17,7 +17,7 @@ void handle_ee_tty_event(void* udata, char c) {
 
 void handle_iop_tty_event(void* udata, char c) {
     iris::instance* iris = (iris::instance*)udata;
-    
+
     if (c == '\r')
         return;
 

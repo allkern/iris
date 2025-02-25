@@ -45,15 +45,46 @@ static const char* frag_header =
     "uniform vec2 screen_size;\n"
     "uniform int frame;\n";
 
-static const int psmct32_clut_block[] = {
-    0x00, 0x01, 0x02, 0x03,
-    0x04, 0x05, 0x06, 0x07,
-    0x40, 0x41, 0x42, 0x43,
-    0x44, 0x45, 0x46, 0x47,
-    0x08, 0x09, 0x0a, 0x0b,
-    0x0c, 0x0d, 0x0e, 0x0f,
-    0x48, 0x49, 0x4a, 0x4b,
-    0x4c, 0x4d, 0x4e, 0x4f
+// static const int psmct32_clut_block[] = {
+//     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+//     0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+//     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+//     0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f
+// };
+
+static const int psmt8_clut_block[] = {
+    0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
+    0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+    0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+    0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+    0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37,
+    0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+    0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+    0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
+    0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57,
+    0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+    0x58, 0x59, 0x5a, 0x5b, 0x5c, 0x5d, 0x5e, 0x5f,
+    0x60, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77,
+    0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+    0x78, 0x79, 0x7a, 0x7b, 0x7c, 0x7d, 0x7e, 0x7f,
+    0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,
+    0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,
+    0x88, 0x89, 0x8a, 0x8b, 0x8c, 0x8d, 0x8e, 0x8f,
+    0x98, 0x99, 0x9a, 0x9b, 0x9c, 0x9d, 0x9e, 0x9f,
+    0xa0, 0xa1, 0xa2, 0xa3, 0xa4, 0xa5, 0xa6, 0xa7,
+    0xb0, 0xb1, 0xb2, 0xb3, 0xb4, 0xb5, 0xb6, 0xb7,
+    0xa8, 0xa9, 0xaa, 0xab, 0xac, 0xad, 0xae, 0xaf,
+    0xb8, 0xb9, 0xba, 0xbb, 0xbc, 0xbd, 0xbe, 0xbf,
+    0xc0, 0xc1, 0xc2, 0xc3, 0xc4, 0xc5, 0xc6, 0xc7,
+    0xd0, 0xd1, 0xd2, 0xd3, 0xd4, 0xd5, 0xd6, 0xd7,
+    0xc8, 0xc9, 0xca, 0xcb, 0xcc, 0xcd, 0xce, 0xcf,
+    0xd8, 0xd9, 0xda, 0xdb, 0xdc, 0xdd, 0xde, 0xdf,
+    0xe0, 0xe1, 0xe2, 0xe3, 0xe4, 0xe5, 0xe6, 0xe7,
+    0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7,
+    0xe8, 0xe9, 0xea, 0xeb, 0xec, 0xed, 0xee, 0xef,
+    0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
 void software_set_size(software_state* ctx, int width, int height) {
@@ -85,9 +116,9 @@ void software_set_size(software_state* ctx, int width, int height) {
     }
 
     // SMODE2 INT=1 FFMD=0
-    // if ((ctx->gs->smode2 & 1) == 1) {
-    //     ctx->tex_h /= 2;
-    // }
+    if ((ctx->gs->smode2 & 3) == 3) {
+        ctx->tex_h /= 2;
+    }
 
     if (ctx->tex) {
         glDeleteTextures(1, &ctx->tex);
@@ -253,27 +284,50 @@ static inline uint32_t gs_read_zb(struct ps2_gs* gs, int x, int y) {
 }
 
 static inline uint32_t gs_read_cb(struct ps2_gs* gs, int i) {
-    // CSM2 should be the same?
+    // Note: CSM2 should be the same?
     // not sure if the different arrangement actually
     // changes how address calculation is performed
     // maybe it only applies to the CLUT cache
     // - Edit: CSM2 uses the TEXCLUT reg, and it's
     // basically just like a normal buffer
 
-    switch (gs->ctx->cbpsm) {
-        case GS_PSMCT32: {
-            int b = i >> 5;
-            int p = psmct32_clut_block[i & 0x1f] + b;
+    // Note: CLUT buffers are always 64 pixels wide
 
-            return gs->vram[gs->ctx->cbp + p];
+    switch (gs->ctx->tbpsm) {
+        case GS_PSMT8H:
+        case GS_PSMT8: {
+            int p = psmt8_clut_block[i];
+            int x = p & 0xf;
+            int y = p >> 4;
+
+            switch (gs->ctx->cbpsm) {
+                case GS_PSMCT32: {
+                    return gs->vram[gs->ctx->cbp + x + (y * 64)];
+                } break;
+
+                case GS_PSMCT16:
+                case GS_PSMCT16S: {
+                    return *(((uint16_t*)&gs->vram[gs->ctx->cbp + (y * 32)]) + x);
+                } break;
+            }
         } break;
-        case GS_PSMCT16:
-        case GS_PSMCT16S: {
-            int shift = (i & 1) << 4;
 
-            uint32_t data = gs->vram[gs->ctx->cbp + (i >> 1)];
+        case GS_PSMT4HH:
+        case GS_PSMT4HL:
+        case GS_PSMT4: {
+            int x = i & 0x7;
+            int y = i >> 3;
 
-            return (data & (0xffff << shift)) >> shift;
+            switch (gs->ctx->cbpsm) {
+                case GS_PSMCT32: {
+                    return gs->vram[gs->ctx->cbp + x + (y * 64)];
+                } break;
+
+                case GS_PSMCT16:
+                case GS_PSMCT16S: {
+                    return *(((uint16_t*)&gs->vram[gs->ctx->cbp + (y * 32)]) + x);
+                } break;
+            }
         } break;
     }
 
@@ -338,14 +392,14 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
             return gs->vram[(gs->ctx->tbp0 + u + (v * gs->ctx->tbw)) & 0xfffff];
         }
         case GS_PSMCT24:
-            return gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)] & 0xffffff;
+            return gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)] | 0xff000000;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
             int shift = (u & 1) << 4;
 
             uint32_t data = gs->vram[gs->ctx->tbp0 + (u >> 1) + (v * (gs->ctx->tbw >> 1))];
 
-            return (data & (0xffff << shift)) >> shift;
+            return ((data & (0xffff << shift)) >> shift);
         } break;
         case GS_PSMT8: {
             // 1 page = 128x64px block = 16x16px
@@ -385,11 +439,7 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
             int shift = (u & 7) << 2;
 
             uint32_t addr = gs->ctx->tbp0 + (u >> 3) + (v * (gs->ctx->tbw >> 3));
-
-            if (addr >= 0x100000)
-                break;
-
-            uint32_t data = gs->vram[addr];
+            uint32_t data = gs->vram[addr & 0xfffff];
 
             int index = (data & (0xf << shift)) >> shift;
 
@@ -416,7 +466,7 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
     // To-do: Implement FBMSK
     switch (gs->ctx->fbpsm) {
         case GS_PSMCT32: {
-            gs->vram[gs->ctx->fbp + x + (y * gs->ctx->fbw)] = f;
+            gs->vram[(gs->ctx->fbp + x + (y * gs->ctx->fbw)) & 0xfffff] = f;
         } break;
 
         case GS_PSMCT24: {
@@ -432,7 +482,7 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
 }
 
 static inline void gs_write_zb(struct ps2_gs* gs, int x, int y, uint32_t z) {
-    if (gs->ctx->zbmsk)
+    if (gs->ctx->zbmsk || !gs->ctx->zte)
         return;
 
     switch (gs->ctx->zbpsm) {
@@ -587,6 +637,8 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     //     dv, gs->ctx->d
     // );
 
+    cv = CLAMP(cv, 0, 127);
+
     uint32_t ar = (av >> 0 ) & 0xff;
     uint32_t ag = (av >> 8 ) & 0xff;
     uint32_t ab = (av >> 16) & 0xff;
@@ -605,7 +657,7 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     uint32_t rb = (((ab - bb) * cv) >> 7) + db;
     uint32_t ra = (((aa - ba) * cv) >> 7) + da;
 
-    return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | ((ra & 0xff) << 24);
+    return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | 0xff000000;
 }
 
 int software_compile_shader(const char* src, GLint type) {
@@ -722,10 +774,10 @@ void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window) {
     // Initialize default shaders
     software_init_default_shader(ctx);
 
-    software_push_shader(ctx, "shaders/flip.frag");
-    software_push_shader(ctx, "shaders/encoder.frag");
-    software_push_shader(ctx, "shaders/decoder.frag");
-    software_push_shader(ctx, "shaders/smooth.frag");
+    // software_push_shader(ctx, "shaders/flip.frag");
+    // software_push_shader(ctx, "shaders/encoder.frag");
+    // software_push_shader(ctx, "shaders/decoder.frag");
+    // software_push_shader(ctx, "shaders/smooth.frag");
 
     // Initialize framebuffer VAO
     static const GLfloat fb_vertices[] = {
@@ -962,8 +1014,8 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
                 case TR_ZB_ONLY: gs_write_zb(gs, p.x, p.y, fz); break;
                 // To-do: case TR_RGB_ONLY: gs_write_fb(gs, x, y, c); break;
                 case TR_PASS: {
-                    gs_write_fb(gs, p.x, p.y, fc);
                     gs_write_zb(gs, p.x, p.y, fz);
+                    gs_write_fb(gs, p.x, p.y, fc);
                 } break;
             }
 
@@ -997,11 +1049,15 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     int z = v1.z;
     int a = v1.a;
 
-    // printf("gs: Sprite at (%d,%d-%d,%d) min=(%d,%d) max=(%d,%d) zte=%d ztst=%d zmsk=%d z=%d zbp=%x fbp=%x tme=%d abe=%d rgba=%08lx scissor=(%d,%d-%d,%d) ctx=%d\n",
+    // printf("gs: Sprite at (%d,%d-%d,%d) min=(%d,%d) max=(%d,%d) ate=%d atst=%d afail=%d aref=%02x zte=%d ztst=%d zmsk=%d z=%d zbp=%x fbp=%x tme=%d abe=%d rgba=%08lx scissor=(%d,%d-%d,%d) ctx=%d\n",
     //     v0.x, v0.y,
     //     v1.x, v1.y,
     //     xmin, ymin,
     //     xmax, ymax,
+    //     gs->ctx->ate,
+    //     gs->ctx->atst,
+    //     gs->ctx->afail,
+    //     gs->ctx->aref,
     //     gs->ctx->zte,
     //     gs->ctx->ztst,
     //     gs->ctx->zbmsk,
@@ -1107,8 +1163,8 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
                 case TR_ZB_ONLY: gs_write_zb(gs, x, y, z); break;
                 // To-do: case TR_RGB_ONLY: gs_write_fb(gs, x, y, c); break;
                 case TR_PASS: {
-                    gs_write_fb(gs, x, y, c);
                     gs_write_zb(gs, x, y, z);
+                    gs_write_fb(gs, x, y, c);
                 } break;
             }
         }
@@ -1119,15 +1175,15 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     software_state* ctx = (software_state*)udata;
 
     int en1 = ctx->gs->pmode & 1;
+    int en2 = (ctx->gs->pmode >> 1) & 1;
 
-    uint64_t dispfb = en1 ? ctx->gs->dispfb1 : ctx->gs->dispfb2;
+    uint64_t dispfb = 0;
 
-    // if ((gs->csr & 0x2000) && en2) {
-    //     display = ctx->gs->display2;
-    //     dispfb = ctx->gs->dispfb2;
-    // }
-
-    // gs->csr ^= 0x2000;
+    if (en1) {
+        dispfb = ctx->gs->dispfb1;
+    } else if (en2) {
+        dispfb = ctx->gs->dispfb2;
+    }
 
     uint32_t dfbp = (dispfb & 0x1ff) << 11;
     uint32_t* ptr = &gs->vram[dfbp];
@@ -1422,6 +1478,8 @@ extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
     ctx->sy = 0;
     ctx->px = 0;
 
+    uint32_t dbp = ctx->dbp;
+
     ctx->dbp <<= 6;
     ctx->dbw <<= 6;
     ctx->sbp <<= 6;
@@ -1435,8 +1493,8 @@ extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
     ctx->psmct24_data = 0;
     ctx->psmct24_shift = 0;
 
-    printf("dbp=%x dbw=%d (%d) dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
-        ctx->dbp,
+    printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
+        ctx->dbp, dbp,
         ctx->dbw, dbw,
         ctx->dpsm,
         ctx->dsax,
