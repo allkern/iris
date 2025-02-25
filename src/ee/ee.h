@@ -11,6 +11,8 @@ extern "C" {
 
 #include "u128.h"
 
+#include "vu.h"
+
 struct ee_bus_s {
     void* udata;
     uint64_t (*read8)(void* udata, uint32_t addr);
@@ -104,6 +106,8 @@ struct ee_state {
 
     struct ps2_ram* scratchpad;
 
+    int cpcond0;
+
     union {
         uint32_t cop0_r[32];
     
@@ -148,15 +152,19 @@ struct ee_state {
     union ee_fpu_reg a;
 
     uint32_t fcr;
+
+    struct vu_state* vu0;
+    struct vu_state* vu1;
 };
 
 struct ee_state* ee_create(void);
-void ee_init(struct ee_state* ee, struct ee_bus_s bus);
+void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, struct ee_bus_s bus);
 void ee_cycle(struct ee_state* ee);
 void ee_reset(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
 void ee_set_int0(struct ee_state* ee);
 void ee_set_int1(struct ee_state* ee);
+void ee_set_cpcond0(struct ee_state* ee, int v);
 
 #undef EE_ALIGNED16
 

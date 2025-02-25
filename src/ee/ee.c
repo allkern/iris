@@ -21,6 +21,9 @@
 #define SSUBOVF64 __builtin_ssubl_overflow
 #endif
 
+#define VU_LOWER(ins) { ee->vu0->lower = ee->opcode; vu_i_ ## ins(ee->vu0); }
+#define VU_UPPER(ins) { ee->vu0->upper = ee->opcode; vu_i_ ## ins(ee->vu0); }
+
 // static FILE* file;
 // static int p = 0;
 
@@ -345,8 +348,12 @@ void ee_set_int0(struct ee_state* ee) {
 void ee_set_int1(struct ee_state* ee) {
     ee->cause |= EE_CAUSE_IP3;
 }
+
+void ee_set_cpcond0(struct ee_state* ee, int v) {
+    ee->cpcond0 = v;
+}
+
 static inline void ee_i_abss(struct ee_state* ee) {
-    // printf("%08x: abs f%d = abs(f%d)\n", ee->pc, EE_D_FD, EE_D_FS);
     EE_FD = fabsf(EE_FS);
 }
 static inline void ee_i_add(struct ee_state* ee) {
@@ -391,12 +398,18 @@ static inline void ee_i_and(struct ee_state* ee) {
 static inline void ee_i_andi(struct ee_state* ee) {
     EE_RT = EE_RS & EE_D_I16;
 }
-static inline void ee_i_bc0f(struct ee_state* ee) { return; printf("ee: bc0f unimplemented\n"); exit(1); }
-static inline void ee_i_bc0fl(struct ee_state* ee) { printf("ee: bc0fl unimplemented\n"); exit(1); }
-static inline void ee_i_bc0t(struct ee_state* ee) {
-    BRANCH(1, EE_D_SI16);
+static inline void ee_i_bc0f(struct ee_state* ee) {
+    BRANCH(!ee->cpcond0, EE_D_SI16);
 }
-static inline void ee_i_bc0tl(struct ee_state* ee) { printf("ee: bc0tl unimplemented\n"); exit(1); }
+static inline void ee_i_bc0fl(struct ee_state* ee) {
+    BRANCH_LIKELY(!ee->cpcond0, EE_D_SI16);
+}
+static inline void ee_i_bc0t(struct ee_state* ee) {
+    BRANCH(ee->cpcond0, EE_D_SI16);
+}
+static inline void ee_i_bc0tl(struct ee_state* ee) {
+    BRANCH_LIKELY(ee->cpcond0, EE_D_SI16);
+}
 static inline void ee_i_bc1f(struct ee_state* ee) {
     BRANCH((ee->fcr & (1 << 23)) == 0, EE_D_SI16);
 }
@@ -475,7 +488,6 @@ static inline void ee_i_break(struct ee_state* ee) {
 static inline void ee_i_cache(struct ee_state* ee) {
     /* To-do: Cache emulation */
 } 
-static inline void ee_i_callmsr(struct ee_state* ee) { printf("ee: callmsr unimplemented\n"); exit(1); }
 static inline void ee_i_ceq(struct ee_state* ee) {
     if (EE_FS == EE_FT) {
         ee->fcr |= 1 << 23;    
@@ -488,9 +500,10 @@ static inline void ee_i_cfc1(struct ee_state* ee) {
     EE_RT = EE_D_FS ? ee->fcr : 0x2e00;
 }
 static inline void ee_i_cfc2(struct ee_state* ee) {
-    EE_RT = 0;
+    // To-do: Handle FBRST, VPU_STAT, CMSAR1
+    int d = EE_D_RD;
 
-    /* To-do: VU1 */
+    EE_RT = d < 16 ? ee->vu0->vi[d] : ee->vu0->cr[d - 16];
 }
 static inline void ee_i_cle(struct ee_state* ee) {
     if (EE_FS <= EE_FT) {
@@ -510,7 +523,14 @@ static inline void ee_i_ctc1(struct ee_state* ee) {
     ee->fcr = EE_RT;
 }
 static inline void ee_i_ctc2(struct ee_state* ee) {
-    /* To-do: VU1 */
+    // To-do: Handle FBRST, VPU_STAT, CMSAR1
+    int d = EE_D_RD;
+
+    if (d < 16) {
+        ee->vu0->vi[d] = EE_RT32;
+    } else {
+        ee->vu0->cr[d - 16] = EE_RT32;
+    }
 }
 static inline void ee_i_cvts(struct ee_state* ee) {
     EE_FD = (float)ee->f[EE_D_FS].s32;
@@ -718,7 +738,9 @@ static inline void ee_i_lhu(struct ee_state* ee) {
 static inline void ee_i_lq(struct ee_state* ee) {
     ee->r[EE_D_RT] = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
 }
-static inline void ee_i_lqc2(struct ee_state* ee) { return; printf("ee: lqc2 unimplemented\n"); exit(1); }
+static inline void ee_i_lqc2(struct ee_state* ee) {
+    ee->vu0->vf[EE_D_RT].u128 = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
+}
 static inline void ee_i_lui(struct ee_state* ee) {
     EE_RT = SE6432(EE_D_I16 << 16);
 }
@@ -1931,10 +1953,18 @@ static inline void ee_i_pxor(struct ee_state* ee) {
 }
 static inline void ee_i_qfsrv(struct ee_state* ee) { printf("ee: qfsrv unimplemented\n"); exit(1); }
 static inline void ee_i_qmfc2(struct ee_state* ee) {
-    /* To-do: VU1 */
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[t].u64[0] = ee->vu0->vf[d].u64[0];
+    ee->r[t].u64[1] = ee->vu0->vf[d].u64[1];
 }
 static inline void ee_i_qmtc2(struct ee_state* ee) {
-    /* To-do: VU1 */
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->vu0->vf[d].u64[0] = ee->r[t].u64[0];
+    ee->vu0->vf[d].u64[1] = ee->r[t].u64[1];
 }
 static inline void ee_i_rsqrts(struct ee_state* ee) { printf("ee: rsqrts unimplemented\n"); exit(1); }
 static inline void ee_i_sb(struct ee_state* ee) {
@@ -1991,9 +2021,11 @@ static inline void ee_i_sltu(struct ee_state* ee) {
     EE_RD = EE_RS < EE_RT;
 }
 static inline void ee_i_sq(struct ee_state* ee) {
-    bus_write128(ee, (EE_RS32 + SE3216(EE_D_I16)) & 0xfffffff0, ee->r[EE_D_RT]);
+    bus_write128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf, ee->r[EE_D_RT]);
 }
-static inline void ee_i_sqc2(struct ee_state* ee) { printf("ee: sqc2 unimplemented\n"); exit(1); }
+static inline void ee_i_sqc2(struct ee_state* ee) {
+    bus_write128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf, ee->vu0->vf[EE_D_RT].u128);
+}
 static inline void ee_i_sqrts(struct ee_state* ee) {
     EE_FD = sqrtf(EE_FT);
 }
@@ -2020,7 +2052,9 @@ static inline void ee_i_sub(struct ee_state* ee) {
         EE_RD = SE6432(r);
     }
 }
-static inline void ee_i_subas(struct ee_state* ee) { printf("ee: subas unimplemented\n"); exit(1); }
+static inline void ee_i_subas(struct ee_state* ee) {
+    ee->a.f = EE_FS - EE_FT;
+}
 static inline void ee_i_subs(struct ee_state* ee) {
     EE_FD = EE_FS - EE_FT;
 }
@@ -2101,133 +2135,126 @@ static inline void ee_i_tltiu(struct ee_state* ee) { printf("ee: tltiu unimpleme
 static inline void ee_i_tltu(struct ee_state* ee) { printf("ee: tltu unimplemented\n"); exit(1); }
 static inline void ee_i_tne(struct ee_state* ee) { printf("ee: tne unimplemented\n"); exit(1); }
 static inline void ee_i_tnei(struct ee_state* ee) { printf("ee: tnei unimplemented\n"); exit(1); }
-static inline void ee_i_vabs(struct ee_state* ee) { printf("ee: vabs unimplemented\n"); exit(1); }
-static inline void ee_i_vadd(struct ee_state* ee) { printf("ee: vadd unimplemented\n"); exit(1); }
-static inline void ee_i_vadda(struct ee_state* ee) { printf("ee: vadda unimplemented\n"); exit(1); }
-static inline void ee_i_vaddai(struct ee_state* ee) { printf("ee: vaddai unimplemented\n"); exit(1); }
-static inline void ee_i_vaddaq(struct ee_state* ee) { printf("ee: vaddaq unimplemented\n"); exit(1); }
-static inline void ee_i_vaddaw(struct ee_state* ee) { printf("ee: vaddaw unimplemented\n"); exit(1); }
-static inline void ee_i_vaddax(struct ee_state* ee) { printf("ee: vaddax unimplemented\n"); exit(1); }
-static inline void ee_i_vadday(struct ee_state* ee) { printf("ee: vadday unimplemented\n"); exit(1); }
-static inline void ee_i_vaddaz(struct ee_state* ee) { printf("ee: vaddaz unimplemented\n"); exit(1); }
-static inline void ee_i_vaddi(struct ee_state* ee) { printf("ee: vaddi unimplemented\n"); exit(1); }
-static inline void ee_i_vaddq(struct ee_state* ee) { printf("ee: vaddq unimplemented\n"); exit(1); }
-static inline void ee_i_vaddw(struct ee_state* ee) { printf("ee: vaddw unimplemented\n"); exit(1); }
-static inline void ee_i_vaddx(struct ee_state* ee) { printf("ee: vaddx unimplemented\n"); exit(1); }
-static inline void ee_i_vaddy(struct ee_state* ee) { printf("ee: vaddy unimplemented\n"); exit(1); }
-static inline void ee_i_vaddz(struct ee_state* ee) { printf("ee: vaddz unimplemented\n"); exit(1); }
+static inline void ee_i_vabs(struct ee_state* ee) { VU_UPPER(abs) }
+static inline void ee_i_vadd(struct ee_state* ee) { VU_UPPER(add) }
+static inline void ee_i_vadda(struct ee_state* ee) { VU_UPPER(adda) }
+static inline void ee_i_vaddai(struct ee_state* ee) { VU_UPPER(addai) }
+static inline void ee_i_vaddaq(struct ee_state* ee) { VU_UPPER(addaq) }
+static inline void ee_i_vaddaw(struct ee_state* ee) { VU_UPPER(addaw) }
+static inline void ee_i_vaddax(struct ee_state* ee) { VU_UPPER(addax) }
+static inline void ee_i_vadday(struct ee_state* ee) { VU_UPPER(adday) }
+static inline void ee_i_vaddaz(struct ee_state* ee) { VU_UPPER(addaz) }
+static inline void ee_i_vaddi(struct ee_state* ee) { VU_UPPER(addi) }
+static inline void ee_i_vaddq(struct ee_state* ee) { VU_UPPER(addq) }
+static inline void ee_i_vaddw(struct ee_state* ee) { VU_UPPER(addw) }
+static inline void ee_i_vaddx(struct ee_state* ee) { VU_UPPER(addx) }
+static inline void ee_i_vaddy(struct ee_state* ee) { VU_UPPER(addy) }
+static inline void ee_i_vaddz(struct ee_state* ee) { VU_UPPER(addz) }
 static inline void ee_i_vcallms(struct ee_state* ee) { printf("ee: vcallms unimplemented\n"); exit(1); }
-static inline void ee_i_vclipw(struct ee_state* ee) { printf("ee: vclipw unimplemented\n"); exit(1); }
-static inline void ee_i_vdiv(struct ee_state* ee) { printf("ee: vdiv unimplemented\n"); exit(1); }
-static inline void ee_i_vftoi0(struct ee_state* ee) { printf("ee: vftoi0 unimplemented\n"); exit(1); }
-static inline void ee_i_vftoi12(struct ee_state* ee) { printf("ee: vftoi12 unimplemented\n"); exit(1); }
-static inline void ee_i_vftoi15(struct ee_state* ee) { printf("ee: vftoi15 unimplemented\n"); exit(1); }
-static inline void ee_i_vftoi4(struct ee_state* ee) { printf("ee: vftoi4 unimplemented\n"); exit(1); }
-static inline void ee_i_viadd(struct ee_state* ee) {
-    /* To-do: VU1 */
-}
-static inline void ee_i_viaddi(struct ee_state* ee) { printf("ee: viaddi unimplemented\n"); exit(1); }
-static inline void ee_i_viand(struct ee_state* ee) { printf("ee: viand unimplemented\n"); exit(1); }
-static inline void ee_i_vilwr(struct ee_state* ee) { printf("ee: vilwr unimplemented\n"); exit(1); }
-static inline void ee_i_vior(struct ee_state* ee) { printf("ee: vior unimplemented\n"); exit(1); }
-static inline void ee_i_visub(struct ee_state* ee) { printf("ee: visub unimplemented\n"); exit(1); }
-static inline void ee_i_viswr(struct ee_state* ee) {
-    /* To-do: VU1 */
-}
-static inline void ee_i_vitof0(struct ee_state* ee) { printf("ee: vitof0 unimplemented\n"); exit(1); }
-static inline void ee_i_vitof12(struct ee_state* ee) { printf("ee: vitof12 unimplemented\n"); exit(1); }
-static inline void ee_i_vitof15(struct ee_state* ee) { printf("ee: vitof15 unimplemented\n"); exit(1); }
-static inline void ee_i_vitof4(struct ee_state* ee) { printf("ee: vitof4 unimplemented\n"); exit(1); }
-static inline void ee_i_vlqd(struct ee_state* ee) { printf("ee: vlqd unimplemented\n"); exit(1); }
-static inline void ee_i_vlqi(struct ee_state* ee) { printf("ee: vlqi unimplemented\n"); exit(1); }
-static inline void ee_i_vmadd(struct ee_state* ee) { printf("ee: vmadd unimplemented\n"); exit(1); }
-static inline void ee_i_vmadda(struct ee_state* ee) { printf("ee: vmadda unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddai(struct ee_state* ee) { printf("ee: vmaddai unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddaq(struct ee_state* ee) { printf("ee: vmaddaq unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddaw(struct ee_state* ee) { printf("ee: vmaddaw unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddax(struct ee_state* ee) { printf("ee: vmaddax unimplemented\n"); exit(1); }
-static inline void ee_i_vmadday(struct ee_state* ee) { printf("ee: vmadday unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddaz(struct ee_state* ee) { printf("ee: vmaddaz unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddi(struct ee_state* ee) { printf("ee: vmaddi unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddq(struct ee_state* ee) { printf("ee: vmaddq unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddw(struct ee_state* ee) { printf("ee: vmaddw unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddx(struct ee_state* ee) { printf("ee: vmaddx unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddy(struct ee_state* ee) { printf("ee: vmaddy unimplemented\n"); exit(1); }
-static inline void ee_i_vmaddz(struct ee_state* ee) { printf("ee: vmaddz unimplemented\n"); exit(1); }
-static inline void ee_i_vmax(struct ee_state* ee) { printf("ee: vmax unimplemented\n"); exit(1); }
-static inline void ee_i_vmaxi(struct ee_state* ee) { printf("ee: vmaxi unimplemented\n"); exit(1); }
-static inline void ee_i_vmaxw(struct ee_state* ee) { printf("ee: vmaxw unimplemented\n"); exit(1); }
-static inline void ee_i_vmaxx(struct ee_state* ee) { printf("ee: vmaxx unimplemented\n"); exit(1); }
-static inline void ee_i_vmaxy(struct ee_state* ee) { printf("ee: vmaxy unimplemented\n"); exit(1); }
-static inline void ee_i_vmaxz(struct ee_state* ee) { printf("ee: vmaxz unimplemented\n"); exit(1); }
-static inline void ee_i_vmfir(struct ee_state* ee) { printf("ee: vmfir unimplemented\n"); exit(1); }
-static inline void ee_i_vmini(struct ee_state* ee) { printf("ee: vmini unimplemented\n"); exit(1); }
-static inline void ee_i_vminii(struct ee_state* ee) { printf("ee: vminii unimplemented\n"); exit(1); }
-static inline void ee_i_vminiw(struct ee_state* ee) { printf("ee: vminiw unimplemented\n"); exit(1); }
-static inline void ee_i_vminix(struct ee_state* ee) { printf("ee: vminix unimplemented\n"); exit(1); }
-static inline void ee_i_vminiy(struct ee_state* ee) { printf("ee: vminiy unimplemented\n"); exit(1); }
-static inline void ee_i_vminiz(struct ee_state* ee) { printf("ee: vminiz unimplemented\n"); exit(1); }
-static inline void ee_i_vmove(struct ee_state* ee) { printf("ee: vmove unimplemented\n"); exit(1); }
-static inline void ee_i_vmr32(struct ee_state* ee) { printf("ee: vmr32 unimplemented\n"); exit(1); }
-static inline void ee_i_vmsub(struct ee_state* ee) { printf("ee: vmsub unimplemented\n"); exit(1); }
-static inline void ee_i_vmsuba(struct ee_state* ee) { printf("ee: vmsuba unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubai(struct ee_state* ee) { printf("ee: vmsubai unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubaq(struct ee_state* ee) { printf("ee: vmsubaq unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubaw(struct ee_state* ee) { printf("ee: vmsubaw unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubax(struct ee_state* ee) { printf("ee: vmsubax unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubay(struct ee_state* ee) { printf("ee: vmsubay unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubaz(struct ee_state* ee) { printf("ee: vmsubaz unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubi(struct ee_state* ee) { printf("ee: vmsubi unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubq(struct ee_state* ee) { printf("ee: vmsubq unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubw(struct ee_state* ee) { printf("ee: vmsubw unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubx(struct ee_state* ee) { printf("ee: vmsubx unimplemented\n"); exit(1); }
-static inline void ee_i_vmsuby(struct ee_state* ee) { printf("ee: vmsuby unimplemented\n"); exit(1); }
-static inline void ee_i_vmsubz(struct ee_state* ee) { printf("ee: vmsubz unimplemented\n"); exit(1); }
-static inline void ee_i_vmtir(struct ee_state* ee) { printf("ee: vmtir unimplemented\n"); exit(1); }
-static inline void ee_i_vmul(struct ee_state* ee) { printf("ee: vmul unimplemented\n"); exit(1); }
-static inline void ee_i_vmula(struct ee_state* ee) { printf("ee: vmula unimplemented\n"); exit(1); }
-static inline void ee_i_vmulai(struct ee_state* ee) { printf("ee: vmulai unimplemented\n"); exit(1); }
-static inline void ee_i_vmulaq(struct ee_state* ee) { printf("ee: vmulaq unimplemented\n"); exit(1); }
-static inline void ee_i_vmulaw(struct ee_state* ee) { printf("ee: vmulaw unimplemented\n"); exit(1); }
-static inline void ee_i_vmulax(struct ee_state* ee) { printf("ee: vmulax unimplemented\n"); exit(1); }
-static inline void ee_i_vmulay(struct ee_state* ee) { printf("ee: vmulay unimplemented\n"); exit(1); }
-static inline void ee_i_vmulaz(struct ee_state* ee) { printf("ee: vmulaz unimplemented\n"); exit(1); }
-static inline void ee_i_vmuli(struct ee_state* ee) { printf("ee: vmuli unimplemented\n"); exit(1); }
-static inline void ee_i_vmulq(struct ee_state* ee) { printf("ee: vmulq unimplemented\n"); exit(1); }
-static inline void ee_i_vmulw(struct ee_state* ee) { printf("ee: vmulw unimplemented\n"); exit(1); }
-static inline void ee_i_vmulx(struct ee_state* ee) { printf("ee: vmulx unimplemented\n"); exit(1); }
-static inline void ee_i_vmuly(struct ee_state* ee) { printf("ee: vmuly unimplemented\n"); exit(1); }
-static inline void ee_i_vmulz(struct ee_state* ee) { printf("ee: vmulz unimplemented\n"); exit(1); }
-static inline void ee_i_vnop(struct ee_state* ee) { printf("ee: vnop unimplemented\n"); exit(1); }
-static inline void ee_i_vopmsub(struct ee_state* ee) { printf("ee: vopmsub unimplemented\n"); exit(1); }
-static inline void ee_i_vopmula(struct ee_state* ee) { printf("ee: vopmula unimplemented\n"); exit(1); }
-static inline void ee_i_vrget(struct ee_state* ee) { printf("ee: vrget unimplemented\n"); exit(1); }
-static inline void ee_i_vrinit(struct ee_state* ee) { printf("ee: vrinit unimplemented\n"); exit(1); }
-static inline void ee_i_vrnext(struct ee_state* ee) { printf("ee: vrnext unimplemented\n"); exit(1); }
-static inline void ee_i_vrsqrt(struct ee_state* ee) { printf("ee: vrsqrt unimplemented\n"); exit(1); }
-static inline void ee_i_vrxor(struct ee_state* ee) { printf("ee: vrxor unimplemented\n"); exit(1); }
-static inline void ee_i_vsqd(struct ee_state* ee) { printf("ee: vsqd unimplemented\n"); exit(1); }
-static inline void ee_i_vsqi(struct ee_state* ee) {
-    /* To-do: VU1 */
-}
-static inline void ee_i_vsqrt(struct ee_state* ee) { printf("ee: vsqrt unimplemented\n"); exit(1); }
-static inline void ee_i_vsub(struct ee_state* ee) {
-    /* To-do: VU1 */
-}
-static inline void ee_i_vsuba(struct ee_state* ee) { printf("ee: vsuba unimplemented\n"); exit(1); }
-static inline void ee_i_vsubai(struct ee_state* ee) { printf("ee: vsubai unimplemented\n"); exit(1); }
-static inline void ee_i_vsubaq(struct ee_state* ee) { printf("ee: vsubaq unimplemented\n"); exit(1); }
-static inline void ee_i_vsubaw(struct ee_state* ee) { printf("ee: vsubaw unimplemented\n"); exit(1); }
-static inline void ee_i_vsubax(struct ee_state* ee) { printf("ee: vsubax unimplemented\n"); exit(1); }
-static inline void ee_i_vsubay(struct ee_state* ee) { printf("ee: vsubay unimplemented\n"); exit(1); }
-static inline void ee_i_vsubaz(struct ee_state* ee) { printf("ee: vsubaz unimplemented\n"); exit(1); }
-static inline void ee_i_vsubi(struct ee_state* ee) { printf("ee: vsubi unimplemented\n"); exit(1); }
-static inline void ee_i_vsubq(struct ee_state* ee) { printf("ee: vsubq unimplemented\n"); exit(1); }
-static inline void ee_i_vsubw(struct ee_state* ee) { printf("ee: vsubw unimplemented\n"); exit(1); }
-static inline void ee_i_vsubx(struct ee_state* ee) { printf("ee: vsubx unimplemented\n"); exit(1); }
-static inline void ee_i_vsuby(struct ee_state* ee) { printf("ee: vsuby unimplemented\n"); exit(1); }
-static inline void ee_i_vsubz(struct ee_state* ee) { printf("ee: vsubz unimplemented\n"); exit(1); }
-static inline void ee_i_vwaitq(struct ee_state* ee) { printf("ee: vwaitq unimplemented\n"); exit(1); }
+static inline void ee_i_vcallmsr(struct ee_state* ee) { printf("ee: vcallmsr unimplemented\n"); exit(1); }
+static inline void ee_i_vclipw(struct ee_state* ee) { VU_UPPER(clip) }
+static inline void ee_i_vdiv(struct ee_state* ee) { VU_LOWER(div) }
+static inline void ee_i_vftoi0(struct ee_state* ee) { VU_UPPER(ftoi0) }
+static inline void ee_i_vftoi12(struct ee_state* ee) { VU_UPPER(ftoi12) }
+static inline void ee_i_vftoi15(struct ee_state* ee) { VU_UPPER(ftoi15) }
+static inline void ee_i_vftoi4(struct ee_state* ee) { VU_UPPER(ftoi4) }
+static inline void ee_i_viadd(struct ee_state* ee) { VU_LOWER(iadd) }
+static inline void ee_i_viaddi(struct ee_state* ee) { VU_LOWER(iaddi) }
+static inline void ee_i_viand(struct ee_state* ee) { VU_LOWER(iand) }
+static inline void ee_i_vilwr(struct ee_state* ee) { VU_LOWER(ilwr) }
+static inline void ee_i_vior(struct ee_state* ee) { VU_LOWER(ior) }
+static inline void ee_i_visub(struct ee_state* ee) { VU_LOWER(isub) }
+static inline void ee_i_viswr(struct ee_state* ee) { VU_LOWER(iswr) }
+static inline void ee_i_vitof0(struct ee_state* ee) { VU_UPPER(itof0) }
+static inline void ee_i_vitof12(struct ee_state* ee) { VU_UPPER(itof12) }
+static inline void ee_i_vitof15(struct ee_state* ee) { VU_UPPER(itof15) }
+static inline void ee_i_vitof4(struct ee_state* ee) { VU_UPPER(itof4) }
+static inline void ee_i_vlqd(struct ee_state* ee) { VU_LOWER(lqd) }
+static inline void ee_i_vlqi(struct ee_state* ee) { VU_LOWER(lqi) }
+static inline void ee_i_vmadd(struct ee_state* ee) { VU_UPPER(madd) }
+static inline void ee_i_vmadda(struct ee_state* ee) { VU_UPPER(madda) }
+static inline void ee_i_vmaddai(struct ee_state* ee) { VU_UPPER(maddai) }
+static inline void ee_i_vmaddaq(struct ee_state* ee) { VU_UPPER(maddaq) }
+static inline void ee_i_vmaddaw(struct ee_state* ee) { VU_UPPER(maddaw) }
+static inline void ee_i_vmaddax(struct ee_state* ee) { VU_UPPER(maddax) }
+static inline void ee_i_vmadday(struct ee_state* ee) { VU_UPPER(madday) }
+static inline void ee_i_vmaddaz(struct ee_state* ee) { VU_UPPER(maddaz) }
+static inline void ee_i_vmaddi(struct ee_state* ee) { VU_UPPER(maddi) }
+static inline void ee_i_vmaddq(struct ee_state* ee) { VU_UPPER(maddq) }
+static inline void ee_i_vmaddw(struct ee_state* ee) { VU_UPPER(maddw) }
+static inline void ee_i_vmaddx(struct ee_state* ee) { VU_UPPER(maddx) }
+static inline void ee_i_vmaddy(struct ee_state* ee) { VU_UPPER(maddy) }
+static inline void ee_i_vmaddz(struct ee_state* ee) { VU_UPPER(maddz) }
+static inline void ee_i_vmax(struct ee_state* ee) { VU_UPPER(max) }
+static inline void ee_i_vmaxi(struct ee_state* ee) { VU_UPPER(maxi) }
+static inline void ee_i_vmaxw(struct ee_state* ee) { VU_UPPER(maxw) }
+static inline void ee_i_vmaxx(struct ee_state* ee) { VU_UPPER(maxx) }
+static inline void ee_i_vmaxy(struct ee_state* ee) { VU_UPPER(maxy) }
+static inline void ee_i_vmaxz(struct ee_state* ee) { VU_UPPER(maxz) }
+static inline void ee_i_vmfir(struct ee_state* ee) { VU_UPPER(mfir) }
+static inline void ee_i_vmini(struct ee_state* ee) { VU_UPPER(mini) }
+static inline void ee_i_vminii(struct ee_state* ee) { VU_UPPER(minii) }
+static inline void ee_i_vminiw(struct ee_state* ee) { VU_UPPER(miniw) }
+static inline void ee_i_vminix(struct ee_state* ee) { VU_UPPER(minix) }
+static inline void ee_i_vminiy(struct ee_state* ee) { VU_UPPER(miniy) }
+static inline void ee_i_vminiz(struct ee_state* ee) { VU_UPPER(miniz) }
+static inline void ee_i_vmove(struct ee_state* ee) { VU_LOWER(move) }
+static inline void ee_i_vmr32(struct ee_state* ee) { VU_LOWER(mr32) }
+static inline void ee_i_vmsub(struct ee_state* ee) { VU_UPPER(msub) }
+static inline void ee_i_vmsuba(struct ee_state* ee) { VU_UPPER(msuba) }
+static inline void ee_i_vmsubai(struct ee_state* ee) { VU_UPPER(msubai) }
+static inline void ee_i_vmsubaq(struct ee_state* ee) { VU_UPPER(msubaq) }
+static inline void ee_i_vmsubaw(struct ee_state* ee) { VU_UPPER(msubaw) }
+static inline void ee_i_vmsubax(struct ee_state* ee) { VU_UPPER(msubax) }
+static inline void ee_i_vmsubay(struct ee_state* ee) { VU_UPPER(msubay) }
+static inline void ee_i_vmsubaz(struct ee_state* ee) { VU_UPPER(msubaz) }
+static inline void ee_i_vmsubi(struct ee_state* ee) { VU_UPPER(msubi) }
+static inline void ee_i_vmsubq(struct ee_state* ee) { VU_UPPER(msubq) }
+static inline void ee_i_vmsubw(struct ee_state* ee) { VU_UPPER(msubw) }
+static inline void ee_i_vmsubx(struct ee_state* ee) { VU_UPPER(msubx) }
+static inline void ee_i_vmsuby(struct ee_state* ee) { VU_UPPER(msuby) }
+static inline void ee_i_vmsubz(struct ee_state* ee) { VU_UPPER(msubz) }
+static inline void ee_i_vmtir(struct ee_state* ee) { VU_LOWER(mtir) }
+static inline void ee_i_vmul(struct ee_state* ee) { VU_UPPER(mul) }
+static inline void ee_i_vmula(struct ee_state* ee) { VU_UPPER(mula) }
+static inline void ee_i_vmulai(struct ee_state* ee) { VU_UPPER(mulai) }
+static inline void ee_i_vmulaq(struct ee_state* ee) { VU_UPPER(mulaq) }
+static inline void ee_i_vmulaw(struct ee_state* ee) { VU_UPPER(mulaw) }
+static inline void ee_i_vmulax(struct ee_state* ee) { VU_UPPER(mulax) }
+static inline void ee_i_vmulay(struct ee_state* ee) { VU_UPPER(mulay) }
+static inline void ee_i_vmulaz(struct ee_state* ee) { VU_UPPER(mulaz) }
+static inline void ee_i_vmuli(struct ee_state* ee) { VU_UPPER(muli) }
+static inline void ee_i_vmulq(struct ee_state* ee) { VU_UPPER(mulq) }
+static inline void ee_i_vmulw(struct ee_state* ee) { VU_UPPER(mulw) }
+static inline void ee_i_vmulx(struct ee_state* ee) { VU_UPPER(mulx) }
+static inline void ee_i_vmuly(struct ee_state* ee) { VU_UPPER(muly) }
+static inline void ee_i_vmulz(struct ee_state* ee) { VU_UPPER(mulz) }
+static inline void ee_i_vnop(struct ee_state* ee) { VU_UPPER(nop) }
+static inline void ee_i_vopmsub(struct ee_state* ee) { VU_UPPER(opmsub) }
+static inline void ee_i_vopmula(struct ee_state* ee) { VU_UPPER(opmula) }
+static inline void ee_i_vrget(struct ee_state* ee) { VU_LOWER(rget) }
+static inline void ee_i_vrinit(struct ee_state* ee) { VU_LOWER(rinit) }
+static inline void ee_i_vrnext(struct ee_state* ee) { VU_LOWER(rnext) }
+static inline void ee_i_vrsqrt(struct ee_state* ee) { VU_LOWER(rsqrt) }
+static inline void ee_i_vrxor(struct ee_state* ee) { VU_LOWER(rxor) }
+static inline void ee_i_vsqd(struct ee_state* ee) { VU_LOWER(sqd) }
+static inline void ee_i_vsqi(struct ee_state* ee) { VU_LOWER(sqi) }
+static inline void ee_i_vsqrt(struct ee_state* ee) { VU_LOWER(sqrt) }
+static inline void ee_i_vsub(struct ee_state* ee) { VU_UPPER(sub) }
+static inline void ee_i_vsuba(struct ee_state* ee) { VU_UPPER(suba) }
+static inline void ee_i_vsubai(struct ee_state* ee) { VU_UPPER(subai) }
+static inline void ee_i_vsubaq(struct ee_state* ee) { VU_UPPER(subaq) }
+static inline void ee_i_vsubaw(struct ee_state* ee) { VU_UPPER(subaw) }
+static inline void ee_i_vsubax(struct ee_state* ee) { VU_UPPER(subax) }
+static inline void ee_i_vsubay(struct ee_state* ee) { VU_UPPER(subay) }
+static inline void ee_i_vsubaz(struct ee_state* ee) { VU_UPPER(subaz) }
+static inline void ee_i_vsubi(struct ee_state* ee) { VU_UPPER(subi) }
+static inline void ee_i_vsubq(struct ee_state* ee) { VU_UPPER(subq) }
+static inline void ee_i_vsubw(struct ee_state* ee) { VU_UPPER(subw) }
+static inline void ee_i_vsubx(struct ee_state* ee) { VU_UPPER(subx) }
+static inline void ee_i_vsuby(struct ee_state* ee) { VU_UPPER(suby) }
+static inline void ee_i_vsubz(struct ee_state* ee) { VU_UPPER(subz) }
+static inline void ee_i_vwaitq(struct ee_state* ee) { VU_LOWER(waitq) }
 static inline void ee_i_xor(struct ee_state* ee) {
     EE_RD = EE_RS ^ EE_RT;
 }
@@ -2239,13 +2266,15 @@ struct ee_state* ee_create(void) {
     return malloc(sizeof(struct ee_state));
 }
 
-void ee_init(struct ee_state* ee, struct ee_bus_s bus) {
+void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, struct ee_bus_s bus) {
     memset(ee, 0, sizeof(struct ee_state));
 
     ee->prid = 0x2e20;
     ee->pc = EE_VEC_RESET;
     ee->next_pc = ee->pc + 4;
     ee->bus = bus;
+    ee->vu0 = vu0;
+    ee->vu1 = vu1;
 
     // To-do: Set SR
 
@@ -2449,61 +2478,61 @@ static inline void ee_execute(struct ee_state* ee) {
                 case 0x03C00000 >> 21:
                 case 0x03E00000 >> 21: {
                     switch (ee->opcode & 0x0000003F) {
-                        case 0x00000000: return; ee_i_vaddx(ee); return;
-                        case 0x00000001: return; ee_i_vaddy(ee); return;
-                        case 0x00000002: return; ee_i_vaddz(ee); return;
-                        case 0x00000003: return; ee_i_vaddw(ee); return;
-                        case 0x00000004: return; ee_i_vsubx(ee); return;
-                        case 0x00000005: return; ee_i_vsuby(ee); return;
-                        case 0x00000006: return; ee_i_vsubz(ee); return;
-                        case 0x00000007: return; ee_i_vsubw(ee); return;
-                        case 0x00000008: return; ee_i_vmaddx(ee); return;
-                        case 0x00000009: return; ee_i_vmaddy(ee); return;
-                        case 0x0000000A: return; ee_i_vmaddz(ee); return;
-                        case 0x0000000B: return; ee_i_vmaddw(ee); return;
-                        case 0x0000000C: return; ee_i_vmsubx(ee); return;
-                        case 0x0000000D: return; ee_i_vmsuby(ee); return;
-                        case 0x0000000E: return; ee_i_vmsubz(ee); return;
-                        case 0x0000000F: return; ee_i_vmsubw(ee); return;
-                        case 0x00000010: return; ee_i_vmaxx(ee); return;
-                        case 0x00000011: return; ee_i_vmaxy(ee); return;
-                        case 0x00000012: return; ee_i_vmaxz(ee); return;
-                        case 0x00000013: return; ee_i_vmaxw(ee); return;
-                        case 0x00000014: return; ee_i_vminix(ee); return;
-                        case 0x00000015: return; ee_i_vminiy(ee); return;
-                        case 0x00000016: return; ee_i_vminiz(ee); return;
-                        case 0x00000017: return; ee_i_vminiw(ee); return;
-                        case 0x00000018: return; ee_i_vmulx(ee); return;
-                        case 0x00000019: return; ee_i_vmuly(ee); return;
-                        case 0x0000001A: return; ee_i_vmulz(ee); return;
-                        case 0x0000001B: return; ee_i_vmulw(ee); return;
-                        case 0x0000001C: return; ee_i_vmulq(ee); return;
-                        case 0x0000001D: return; ee_i_vmaxi(ee); return;
-                        case 0x0000001E: return; ee_i_vmuli(ee); return;
-                        case 0x0000001F: return; ee_i_vminii(ee); return;
-                        case 0x00000020: return; ee_i_vaddq(ee); return;
-                        case 0x00000021: return; ee_i_vmaddq(ee); return;
-                        case 0x00000022: return; ee_i_vaddi(ee); return;
-                        case 0x00000023: return; ee_i_vmaddi(ee); return;
-                        case 0x00000024: return; ee_i_vsubq(ee); return;
-                        case 0x00000025: return; ee_i_vmsubq(ee); return;
-                        case 0x00000026: return; ee_i_vsubi(ee); return;
-                        case 0x00000027: return; ee_i_vmsubi(ee); return;
-                        case 0x00000028: return; ee_i_vadd(ee); return;
-                        case 0x00000029: return; ee_i_vmadd(ee); return;
-                        case 0x0000002A: return; ee_i_vmul(ee); return;
-                        case 0x0000002B: return; ee_i_vmax(ee); return;
-                        case 0x0000002C: return; ee_i_vsub(ee); return;
-                        case 0x0000002D: return; ee_i_vmsub(ee); return;
-                        case 0x0000002E: return; ee_i_vopmsub(ee); return;
-                        case 0x0000002F: return; ee_i_vmini(ee); return;
-                        case 0x00000030: return; ee_i_viadd(ee); return;
-                        case 0x00000031: return; ee_i_visub(ee); return;
-                        case 0x00000032: return; ee_i_viaddi(ee); return;
-                        case 0x00000034: return; ee_i_viand(ee); return;
-                        case 0x00000035: return; ee_i_vior(ee); return;
-                        case 0x00000038: return; ee_i_vcallms(ee); return;
-                        case 0x00000039: ee_i_callmsr(ee); return;
+                        case 0x00000000: ee_i_vaddx(ee); return;
+                        case 0x00000001: ee_i_vaddy(ee); return;
+                        case 0x00000002: ee_i_vaddz(ee); return;
+                        case 0x00000003: ee_i_vaddw(ee); return;
+                        case 0x00000004: ee_i_vsubx(ee); return;
+                        case 0x00000005: ee_i_vsuby(ee); return;
+                        case 0x00000006: ee_i_vsubz(ee); return;
+                        case 0x00000007: ee_i_vsubw(ee); return;
+                        case 0x00000008: ee_i_vmaddx(ee); return;
+                        case 0x00000009: ee_i_vmaddy(ee); return;
+                        case 0x0000000A: ee_i_vmaddz(ee); return;
+                        case 0x0000000B: ee_i_vmaddw(ee); return;
+                        case 0x0000000C: ee_i_vmsubx(ee); return;
+                        case 0x0000000D: ee_i_vmsuby(ee); return;
+                        case 0x0000000E: ee_i_vmsubz(ee); return;
+                        case 0x0000000F: ee_i_vmsubw(ee); return;
+                        case 0x00000010: ee_i_vmaxx(ee); return;
+                        case 0x00000011: ee_i_vmaxy(ee); return;
+                        case 0x00000012: ee_i_vmaxz(ee); return;
+                        case 0x00000013: ee_i_vmaxw(ee); return;
+                        case 0x00000014: ee_i_vminix(ee); return;
+                        case 0x00000015: ee_i_vminiy(ee); return;
+                        case 0x00000016: ee_i_vminiz(ee); return;
+                        case 0x00000017: ee_i_vminiw(ee); return;
+                        case 0x00000018: ee_i_vmulx(ee); return;
+                        case 0x00000019: ee_i_vmuly(ee); return;
+                        case 0x0000001A: ee_i_vmulz(ee); return;
+                        case 0x0000001B: ee_i_vmulw(ee); return;
+                        case 0x0000001C: ee_i_vmulq(ee); return;
+                        case 0x0000001D: ee_i_vmaxi(ee); return;
+                        case 0x0000001E: ee_i_vmuli(ee); return;
+                        case 0x0000001F: ee_i_vminii(ee); return;
+                        case 0x00000020: ee_i_vaddq(ee); return;
+                        case 0x00000021: ee_i_vmaddq(ee); return;
+                        case 0x00000022: ee_i_vaddi(ee); return;
+                        case 0x00000023: ee_i_vmaddi(ee); return;
+                        case 0x00000024: ee_i_vsubq(ee); return;
+                        case 0x00000025: ee_i_vmsubq(ee); return;
+                        case 0x00000026: ee_i_vsubi(ee); return;
+                        case 0x00000027: ee_i_vmsubi(ee); return;
+                        case 0x00000028: ee_i_vadd(ee); return;
+                        case 0x00000029: ee_i_vmadd(ee); return;
+                        case 0x0000002A: ee_i_vmul(ee); return;
+                        case 0x0000002B: ee_i_vmax(ee); return;
+                        case 0x0000002C: ee_i_vsub(ee); return;
+                        case 0x0000002D: ee_i_vmsub(ee); return;
+                        case 0x0000002E: ee_i_vopmsub(ee); return;
+                        case 0x0000002F: ee_i_vmini(ee); return;
+                        case 0x00000030: ee_i_viadd(ee); return;
+                        case 0x00000031: ee_i_visub(ee); return;
+                        case 0x00000032: ee_i_viaddi(ee); return;
+                        case 0x00000034: ee_i_viand(ee); return;
+                        case 0x00000035: ee_i_vior(ee); return;
+                        case 0x00000038: ee_i_vcallms(ee); return;
+                        case 0x00000039: ee_i_vcallmsr(ee); return;
                         case 0x0000003C:
                         case 0x0000003D:
                         case 0x0000003E:
@@ -2511,71 +2540,71 @@ static inline void ee_execute(struct ee_state* ee) {
                             uint32_t func = (ee->opcode & 3) | ((ee->opcode & 0x7c0) >> 4);
 
                             switch (func) {
-                                case 0x00000000: return; ee_i_vaddax(ee); return;
-                                case 0x00000001: return; ee_i_vadday(ee); return;
-                                case 0x00000002: return; ee_i_vaddaz(ee); return;
-                                case 0x00000003: return; ee_i_vaddaw(ee); return;
-                                case 0x00000004: return; ee_i_vsubax(ee); return;
-                                case 0x00000005: return; ee_i_vsubay(ee); return;
-                                case 0x00000006: return; ee_i_vsubaz(ee); return;
-                                case 0x00000007: return; ee_i_vsubaw(ee); return;
-                                case 0x00000008: return; ee_i_vmaddax(ee); return;
-                                case 0x00000009: return; ee_i_vmadday(ee); return;
-                                case 0x0000000A: return; ee_i_vmaddaz(ee); return;
-                                case 0x0000000B: return; ee_i_vmaddaw(ee); return;
-                                case 0x0000000C: return; ee_i_vmsubax(ee); return;
-                                case 0x0000000D: return; ee_i_vmsubay(ee); return;
-                                case 0x0000000E: return; ee_i_vmsubaz(ee); return;
-                                case 0x0000000F: return; ee_i_vmsubaw(ee); return;
-                                case 0x00000010: return; ee_i_vitof0(ee); return;
-                                case 0x00000011: return; ee_i_vitof4(ee); return;
-                                case 0x00000012: return; ee_i_vitof12(ee); return;
-                                case 0x00000013: return; ee_i_vitof15(ee); return;
-                                case 0x00000014: return; ee_i_vftoi0(ee); return;
-                                case 0x00000015: return; ee_i_vftoi4(ee); return;
-                                case 0x00000016: return; ee_i_vftoi12(ee); return;
-                                case 0x00000017: return; ee_i_vftoi15(ee); return;
-                                case 0x00000018: return; ee_i_vmulax(ee); return;
-                                case 0x00000019: return; ee_i_vmulay(ee); return;
-                                case 0x0000001A: return; ee_i_vmulaz(ee); return;
-                                case 0x0000001B: return; ee_i_vmulaw(ee); return;
-                                case 0x0000001C: return; ee_i_vmulaq(ee); return;
-                                case 0x0000001D: return; ee_i_vabs(ee); return;
-                                case 0x0000001E: return; ee_i_vmulai(ee); return;
-                                case 0x0000001F: return; ee_i_vclipw(ee); return;
-                                case 0x00000020: return; ee_i_vaddaq(ee); return;
-                                case 0x00000021: return; ee_i_vmaddaq(ee); return;
-                                case 0x00000022: return; ee_i_vaddai(ee); return;
-                                case 0x00000023: return; ee_i_vmaddai(ee); return;
-                                case 0x00000024: return; ee_i_vsubaq(ee); return;
-                                case 0x00000025: return; ee_i_vmsubaq(ee); return;
-                                case 0x00000026: return; ee_i_vsubai(ee); return;
-                                case 0x00000027: return; ee_i_vmsubai(ee); return;
-                                case 0x00000028: return; ee_i_vadda(ee); return;
-                                case 0x00000029: return; ee_i_vmadda(ee); return;
-                                case 0x0000002A: return; ee_i_vmula(ee); return;
-                                case 0x0000002C: return; ee_i_vsuba(ee); return;
-                                case 0x0000002D: return; ee_i_vmsuba(ee); return;
-                                case 0x0000002E: return; ee_i_vopmula(ee); return;
-                                case 0x0000002F: return; ee_i_vnop(ee); return;
-                                case 0x00000030: return; ee_i_vmove(ee); return;
-                                case 0x00000031: return; ee_i_vmr32(ee); return;
-                                case 0x00000034: return; ee_i_vlqi(ee); return;
-                                case 0x00000035: return; ee_i_vsqi(ee); return;
-                                case 0x00000036: return; ee_i_vlqd(ee); return;
-                                case 0x00000037: return; ee_i_vsqd(ee); return;
-                                case 0x00000038: return; ee_i_vdiv(ee); return;
-                                case 0x00000039: return; ee_i_vsqrt(ee); return;
-                                case 0x0000003A: return; ee_i_vrsqrt(ee); return;
-                                case 0x0000003B: return; ee_i_vwaitq(ee); return;
-                                case 0x0000003C: return; ee_i_vmtir(ee); return;
-                                case 0x0000003D: return; ee_i_vmfir(ee); return;
-                                case 0x0000003E: return; ee_i_vilwr(ee); return;
-                                case 0x0000003F: return; ee_i_viswr(ee); return;
-                                case 0x00000040: return; ee_i_vrnext(ee); return;
-                                case 0x00000041: return; ee_i_vrget(ee); return;
-                                case 0x00000042: return; ee_i_vrinit(ee); return;
-                                case 0x00000043: return; ee_i_vrxor(ee); return;
+                                case 0x00000000: ee_i_vaddax(ee); return;
+                                case 0x00000001: ee_i_vadday(ee); return;
+                                case 0x00000002: ee_i_vaddaz(ee); return;
+                                case 0x00000003: ee_i_vaddaw(ee); return;
+                                case 0x00000004: ee_i_vsubax(ee); return;
+                                case 0x00000005: ee_i_vsubay(ee); return;
+                                case 0x00000006: ee_i_vsubaz(ee); return;
+                                case 0x00000007: ee_i_vsubaw(ee); return;
+                                case 0x00000008: ee_i_vmaddax(ee); return;
+                                case 0x00000009: ee_i_vmadday(ee); return;
+                                case 0x0000000A: ee_i_vmaddaz(ee); return;
+                                case 0x0000000B: ee_i_vmaddaw(ee); return;
+                                case 0x0000000C: ee_i_vmsubax(ee); return;
+                                case 0x0000000D: ee_i_vmsubay(ee); return;
+                                case 0x0000000E: ee_i_vmsubaz(ee); return;
+                                case 0x0000000F: ee_i_vmsubaw(ee); return;
+                                case 0x00000010: ee_i_vitof0(ee); return;
+                                case 0x00000011: ee_i_vitof4(ee); return;
+                                case 0x00000012: ee_i_vitof12(ee); return;
+                                case 0x00000013: ee_i_vitof15(ee); return;
+                                case 0x00000014: ee_i_vftoi0(ee); return;
+                                case 0x00000015: ee_i_vftoi4(ee); return;
+                                case 0x00000016: ee_i_vftoi12(ee); return;
+                                case 0x00000017: ee_i_vftoi15(ee); return;
+                                case 0x00000018: ee_i_vmulax(ee); return;
+                                case 0x00000019: ee_i_vmulay(ee); return;
+                                case 0x0000001A: ee_i_vmulaz(ee); return;
+                                case 0x0000001B: ee_i_vmulaw(ee); return;
+                                case 0x0000001C: ee_i_vmulaq(ee); return;
+                                case 0x0000001D: ee_i_vabs(ee); return;
+                                case 0x0000001E: ee_i_vmulai(ee); return;
+                                case 0x0000001F: ee_i_vclipw(ee); return;
+                                case 0x00000020: ee_i_vaddaq(ee); return;
+                                case 0x00000021: ee_i_vmaddaq(ee); return;
+                                case 0x00000022: ee_i_vaddai(ee); return;
+                                case 0x00000023: ee_i_vmaddai(ee); return;
+                                case 0x00000024: ee_i_vsubaq(ee); return;
+                                case 0x00000025: ee_i_vmsubaq(ee); return;
+                                case 0x00000026: ee_i_vsubai(ee); return;
+                                case 0x00000027: ee_i_vmsubai(ee); return;
+                                case 0x00000028: ee_i_vadda(ee); return;
+                                case 0x00000029: ee_i_vmadda(ee); return;
+                                case 0x0000002A: ee_i_vmula(ee); return;
+                                case 0x0000002C: ee_i_vsuba(ee); return;
+                                case 0x0000002D: ee_i_vmsuba(ee); return;
+                                case 0x0000002E: ee_i_vopmula(ee); return;
+                                case 0x0000002F: ee_i_vnop(ee); return;
+                                case 0x00000030: ee_i_vmove(ee); return;
+                                case 0x00000031: ee_i_vmr32(ee); return;
+                                case 0x00000034: ee_i_vlqi(ee); return;
+                                case 0x00000035: ee_i_vsqi(ee); return;
+                                case 0x00000036: ee_i_vlqd(ee); return;
+                                case 0x00000037: ee_i_vsqd(ee); return;
+                                case 0x00000038: ee_i_vdiv(ee); return;
+                                case 0x00000039: ee_i_vsqrt(ee); return;
+                                case 0x0000003A: ee_i_vrsqrt(ee); return;
+                                case 0x0000003B: ee_i_vwaitq(ee); return;
+                                case 0x0000003C: ee_i_vmtir(ee); return;
+                                case 0x0000003D: ee_i_vmfir(ee); return;
+                                case 0x0000003E: ee_i_vilwr(ee); return;
+                                case 0x0000003F: ee_i_viswr(ee); return;
+                                case 0x00000040: ee_i_vrnext(ee); return;
+                                case 0x00000041: ee_i_vrget(ee); return;
+                                case 0x00000042: ee_i_vrinit(ee); return;
+                                case 0x00000043: ee_i_vrxor(ee); return;
                             }
                         } break;
                     }
@@ -2740,13 +2769,13 @@ static inline void ee_execute(struct ee_state* ee) {
         case 0xD8000000 >> 26: ee_i_lqc2(ee); return;
         case 0xDC000000 >> 26: ee_i_ld(ee); return;
         case 0xE4000000 >> 26: ee_i_swc1(ee); return;
-        case 0xF8000000 >> 26: return; ee_i_sqc2(ee); return;
+        case 0xF8000000 >> 26: ee_i_sqc2(ee); return;
         case 0xFC000000 >> 26: ee_i_sd(ee); return;
     }
 
     printf("ee: Invalid instruction %08x @ pc=%08x\n", ee->opcode, ee->prev_pc);
 
-    exit(1);
+    // exit(1);
 }
 
 int loop = 0;
