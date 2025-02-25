@@ -10,10 +10,15 @@ extern "C" {
 #include "sched.h"
 #include "dma.h"
 
+#define CDVD_ERR_CANT_OPEN 0
+#define CDVD_ERR_ISO_INVALID 1
+#define CDVD_ERR_UNSUPPORTED_SS 2
+
 #define CDVD_EXT_ISO 0
-#define CDVD_EXT_CUE 1
-#define CDVD_EXT_NONE 2
-#define CDVD_EXT_UNSUPPORTED 3
+#define CDVD_EXT_BIN 1
+#define CDVD_EXT_CUE 2
+#define CDVD_EXT_NONE 3
+#define CDVD_EXT_UNSUPPORTED 4
 
 /*
     0     Tray status (1=open)
@@ -78,18 +83,19 @@ extern "C" {
     FEh  DVDV (Movie disc)
     FFh  Illegal
 */
-#define CDVD_DISC_NO_DISC       0
-#define CDVD_DISC_DETECTING     1
-#define CDVD_DISC_DETECTING_CD  2
-#define CDVD_DISC_DETECTING_DVD 3
-#define CDVD_DISC_PSX_CD        4
-#define CDVD_DISC_PSX_CDDA      16
-#define CDVD_DISC_PS2_CD        17
-#define CDVD_DISC_PS2_CDDA      18
-#define CDVD_DISC_PS2_DVD       19
-#define CDVD_DISC_CDDA          253
-#define CDVD_DISC_DVD_VIDEO     254
-#define CDVD_DISC_INVALID       255
+#define CDVD_DISC_NO_DISC          0
+#define CDVD_DISC_DETECTING        1
+#define CDVD_DISC_DETECTING_CD     2
+#define CDVD_DISC_DETECTING_DVD    3
+#define CDVD_DISC_DETECTING_DL_DVD 4
+#define CDVD_DISC_PSX_CD           16
+#define CDVD_DISC_PSX_CDDA         17
+#define CDVD_DISC_PS2_CD           18
+#define CDVD_DISC_PS2_CDDA         19
+#define CDVD_DISC_PS2_DVD          20
+#define CDVD_DISC_CDDA             253
+#define CDVD_DISC_DVD_VIDEO        254
+#define CDVD_DISC_INVALID          255
 
 /*
     0-5   Unknown
@@ -137,6 +143,9 @@ struct ps2_cdvd {
     struct ps2_iop_dma* dma;
     struct ps2_iop_intc* intc;
     struct sched_state* sched;
+
+    // Dual-layer DVDs
+    uint32_t layer2_lba;
 };
 
 struct ps2_cdvd* ps2_cdvd_create(void);
