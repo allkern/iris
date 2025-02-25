@@ -13,6 +13,7 @@ extern "C" {
 
 #include "intc.h"
 #include "cdvd.h"
+#include "sched.h"
 
 #include "bus_decl.h"
 
@@ -76,10 +77,11 @@ struct ps2_iop_dma {
     struct ps2_sif* sif;
     struct ps2_cdvd* drive;
     struct ps2_dmac* ee_dma;
+    struct sched_state* sched;
 };
 
 struct ps2_iop_dma* ps2_iop_dma_create(void);
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct iop_bus* bus);
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct sched_state* sched, struct iop_bus* bus);
 void ps2_iop_dma_destroy(struct ps2_iop_dma* dma);
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr);
 void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data);

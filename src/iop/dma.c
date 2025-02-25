@@ -54,13 +54,14 @@ struct ps2_iop_dma* ps2_iop_dma_create(void) {
     return malloc(sizeof(struct ps2_iop_dma));
 }
 
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct iop_bus* bus) {
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct sched_state* sched, struct iop_bus* bus) {
     memset(dma, 0, sizeof(struct ps2_iop_dma));
 
     dma->intc = intc;
     dma->bus = bus;
     dma->sif = sif;
     dma->drive = cdvd;
+    dma->sched = sched;
     dma->ee_dma = ee_dma;
 }
 
@@ -145,7 +146,7 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
         return;
     }
 
-    printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->drive->buf_size, dma->cdvd.madr, dma->cdvd.bcr);
+    // printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->drive->buf_size, dma->cdvd.madr, dma->cdvd.bcr);
 
     // uint32_t addr = dma->cdvd.madr;
 
@@ -188,8 +189,18 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     dma->cdvd.chcr &= ~0x1000000;
     dma->cdvd.bcr = 0;
 }
+
+void spu1_dma_irq_event_handler(void* udata, int overshoot) {
+    struct ps2_iop_dma* dma = (struct ps2_iop_dma*)udata;
+
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
+    iop_dma_check_irq(dma);
+
+    dma->spu1.chcr &= ~0x1000000;
+}
+
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
-    printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x\n", dma->spu1.chcr, dma->spu1.madr, dma->spu1.bcr);
+    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x\n", dma->spu1.chcr, dma->spu1.madr, dma->spu1.bcr);
 
     unsigned int size = (dma->spu1.bcr & 0xffff) * (dma->spu1.bcr >> 16);
 
@@ -202,10 +213,16 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
         dma->spu1.madr += 4;
     }
 
-    // iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
-    // iop_dma_check_irq(dma);
+    struct sched_event spu1_dma_irq_event;
 
-    // dma->spu1.chcr &= ~0x1000000;
+    spu1_dma_irq_event.callback = spu1_dma_irq_event_handler;
+    spu1_dma_irq_event.cycles = 1000000;
+    spu1_dma_irq_event.name = "SPU1 DMA IRQ event";
+    spu1_dma_irq_event.udata = dma;
+
+    // printf("dma: Scheduling SPU1 DMA IRQ %d cycles from now\n", spu1_dma_irq_event.cycles);
+
+    sched_schedule(dma->sched, spu1_dma_irq_event);
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
     printf("iop: PIO channel unimplemented\n"); exit(1);
@@ -213,8 +230,18 @@ void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
 void iop_dma_handle_otc_transfer(struct ps2_iop_dma* dma) {
     printf("iop: OTC channel unimplemented\n"); exit(1);
 }
+
+void spu2_dma_irq_event_handler(void* udata, int overshoot) {
+    struct ps2_iop_dma* dma = (struct ps2_iop_dma*)udata;
+
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
+    iop_dma_check_irq(dma);
+
+    dma->spu2.chcr &= ~0x1000000;
+}
+
 void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
-    printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr);
+    // printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr);
 
     unsigned int size = (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16);
 
@@ -227,10 +254,16 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
         dma->spu2.madr += 4;
     }
 
-    // iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
-    // iop_dma_check_irq(dma);
+    struct sched_event spu2_dma_irq_event;
 
-    // dma->spu2.chcr &= ~0x1000000;
+    spu2_dma_irq_event.callback = spu2_dma_irq_event_handler;
+    spu2_dma_irq_event.cycles = 1000000;
+    spu2_dma_irq_event.name = "SPU2 DMA IRQ event";
+    spu2_dma_irq_event.udata = dma;
+
+    // printf("dma: Scheduling SPU2 DMA IRQ %d cycles from now\n", spu2_dma_irq_event.cycles);
+
+    sched_schedule(dma->sched, spu2_dma_irq_event);
 }
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     printf("iop: DEV9 channel unimplemented\n"); exit(1);
