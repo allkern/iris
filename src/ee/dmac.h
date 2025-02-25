@@ -78,8 +78,7 @@ struct ps2_dmac {
     uint32_t sqwc;
     uint32_t rbsr;
     uint32_t rbor;
-    uint32_t enabler;
-    uint32_t enablew;
+    uint32_t enable;
 
     struct ps2_ram* spr;
     struct ps2_sif* sif;

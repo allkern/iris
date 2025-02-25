@@ -28,7 +28,7 @@ void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dm
     dmac->ee = ee;
 
     // v2+ BIOSes need this value on boot (smh...)
-    dmac->enabler = 0x1201;
+    dmac->enable = 0x1201;
 }
 
 void ps2_dmac_destroy(struct ps2_dmac* dmac) {
@@ -99,8 +99,8 @@ uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr) {
         case 0x1000E030: return dmac->sqwc;
         case 0x1000E040: return dmac->rbsr;
         case 0x1000E050: return dmac->rbor;
-        case 0x1000F520: return dmac->enabler;
-        case 0x1000F590: return dmac->enablew;
+        case 0x1000F520: return dmac->enable;
+        case 0x1000F590: break; // ENABLEW (W)
     }
 
     return 0;
@@ -217,10 +217,12 @@ static inline void dmac_process_dest_tag(struct ps2_dmac* dmac, struct dmac_chan
     }
 }
 
-static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
-    dmac->stat |= 1 << ch;
+static inline void dmac_test_cpcond0(struct ps2_dmac* dmac) {
+    ee_set_cpcond0(dmac->ee, (((~dmac->pcr) | dmac->stat) & 0x3ff) == 0x3ff);
+}
 
-    // printf("dmac: channel=%d flag=%08x mask=%08x irq=%08x\n", ch, dmac->stat & 0x3ff, (dmac->stat >> 16) & 0x3ff, (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff));
+static inline void dmac_test_irq(struct ps2_dmac* dmac) {
+    dmac_test_cpcond0(dmac);
 
     if ((dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff)) {
         ee_set_int1(dmac->ee);
@@ -228,6 +230,14 @@ static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
         // Reset INT1
         dmac->ee->cause &= ~EE_CAUSE_IP3;
     }
+}
+
+static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
+    dmac->stat |= 1 << ch;
+
+    // printf("dmac: channel=%d flag=%08x mask=%08x irq=%08x\n", ch, dmac->stat & 0x3ff, (dmac->stat >> 16) & 0x3ff, (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff));
+
+    dmac_test_irq(dmac);
 }
 
 void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {
@@ -536,12 +546,7 @@ void dmac_write_stat(struct ps2_dmac* dmac, uint32_t data) {
     dmac->stat &= ~istat;
     dmac->stat ^= imask;
 
-    if ((dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff)) {
-        ee_set_int1(dmac->ee);
-    } else {
-        // Reset INT1
-        dmac->ee->cause &= ~EE_CAUSE_IP3;
-    }
+    dmac_test_irq(dmac);
 }
 
 void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
@@ -550,12 +555,12 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
     switch (addr) {
         case 0x1000E000: dmac->ctrl = data; return;
         case 0x1000E010: dmac_write_stat(dmac, data); return;
-        case 0x1000E020: dmac->pcr = data; return;
+        case 0x1000E020: dmac->pcr = data; dmac_test_cpcond0(dmac); return;
         case 0x1000E030: dmac->sqwc = data; return;
         case 0x1000E040: dmac->rbsr = data; return;
         case 0x1000E050: dmac->rbor = data; return;
-        case 0x1000F520: dmac->enabler = data; return;
-        case 0x1000F590: dmac->enablew = data; return;
+        case 0x1000F520: return; // ENABLER (R)
+        case 0x1000F590: dmac->enable = data; return;
     }
 
     if (c) {
