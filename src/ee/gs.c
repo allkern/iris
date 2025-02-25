@@ -254,6 +254,7 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
             }
         } break;
         case 6: if (gs->vqi == 2) { if (!discard) gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
+        case 7: if (gs->vqi == 2) { if (!discard) gs->backend.render_sprite(gs, gs->backend.udata); gs->vqi = 0; } break;
         default: {
             printf("gs: Reserved primitive %ld\n", gs->prim & 7);
         } break;
@@ -262,24 +263,24 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
 
 uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
     switch (addr) {
-        case 0x12000000: return gs->pmode;
-        case 0x12000010: return gs->smode1;
-        case 0x12000020: return gs->smode2;
-        case 0x12000030: return gs->srfsh;
-        case 0x12000040: return gs->synch1;
-        case 0x12000050: return gs->synch2;
-        case 0x12000060: return gs->syncv;
-        case 0x12000070: return gs->dispfb1;
-        case 0x12000080: return gs->display1;
-        case 0x12000090: return gs->dispfb2;
-        case 0x120000A0: return gs->display2;
-        case 0x120000B0: return gs->extbuf;
-        case 0x120000C0: return gs->extdata;
-        case 0x120000D0: return gs->extwrite;
-        case 0x120000E0: return gs->bgcolor;
-        case 0x12001000: return gs->csr;
-        case 0x12001010: return gs->imr;
-        case 0x12001040: return gs->busdir;
+        case 0x12000000: return gs->csr | 0x551b0000;
+        case 0x12000010: return gs->csr | 0x551b0000;
+        case 0x12000020: return gs->csr | 0x551b0000;
+        case 0x12000030: return gs->csr | 0x551b0000;
+        case 0x12000040: return gs->csr | 0x551b0000;
+        case 0x12000050: return gs->csr | 0x551b0000;
+        case 0x12000060: return gs->csr | 0x551b0000;
+        case 0x12000070: return gs->csr | 0x551b0000;
+        case 0x12000080: return gs->csr | 0x551b0000;
+        case 0x12000090: return gs->csr | 0x551b0000;
+        case 0x120000A0: return gs->csr | 0x551b0000;
+        case 0x120000B0: return gs->csr | 0x551b0000;
+        case 0x120000C0: return gs->csr | 0x551b0000;
+        case 0x120000D0: return gs->csr | 0x551b0000;
+        case 0x120000E0: return gs->csr | 0x551b0000;
+        case 0x12001000: return gs->csr | 0x551b0000;
+        case 0x12001010: return gs->csr | 0x551b0000;
+        case 0x12001040: return gs->csr | 0x551b0000;
         case 0x12001080: return gs->siglblid;
     }
 
