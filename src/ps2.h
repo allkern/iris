@@ -13,6 +13,7 @@ extern "C" {
 #include "ee/dmac.h"
 #include "ee/intc.h"
 #include "ee/timers.h"
+#include "ee/vu.h"
 #include "iop/bus.h"
 #include "iop/bus_decl.h"
 #include "iop/iop.h"
@@ -40,6 +41,8 @@ struct ps2_state {
     // CPUs
     struct ee_state* ee;
     struct iop_state* iop;
+    struct vu_state* vu0;
+    struct vu_state* vu1;
 
     // EE-only
     struct ee_bus* ee_bus;

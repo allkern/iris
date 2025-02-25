@@ -135,9 +135,9 @@ void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
 void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
     spu2->c[c].attr = data & 0x7fff;
 
-    if (data & 0x8000) {
-        spu2->c[c].stat = 0;
-    }
+    // if (data & 0x8000) {
+    //     spu2->c[c].stat = 0;
+    // }
 }
 
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
