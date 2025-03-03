@@ -5,7 +5,7 @@
 #define PI   3.14159265358979323846
 #define TAU  6.28318530717958647693
 
-#define BRIGHTNESS_FACTOR        20.0
+#define BRIGHTNESS_FACTOR        40.0
 
 // The decoded IQ signals get multiplied by this
 // factor. Bigger values yield more color saturation

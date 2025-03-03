@@ -14,7 +14,7 @@ foreach ($SRC in $CSRC) {
 
     if (-Not (Test-Path $OBJ)) {
         gcc -c $SRC -o $OBJ `
-            -O3 -ffast-math -march=native -mtune=native -Werror -pedantic `
+            -O3 -ffast-math -march=native -mtune=native -pedantic `
             -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format `
             -I"`"$($IMGUI_DIR)`"" `
             -I"`"$($IMGUI_DIR)\backends`"" `

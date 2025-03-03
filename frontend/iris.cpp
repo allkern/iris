@@ -263,9 +263,18 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     renderer_set_bilinear(iris->ctx, iris->bilinear);
     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
 
-    if (iris->renderer_backend == RENDERER_NULL) {
-        push_info(iris, "Renderer is set to \"Null\", no output will be displayed");
-    }
+    // Note:
+    // Crashes on Windows for some reason?
+    // ImGui reports the font is not loaded, but it should be.
+    // Possible ImGui issue?
+
+    // ImGui::PushFont(iris->font_body);
+
+    // if (iris->renderer_backend == RENDERER_NULL) {
+    //     push_info(iris, "Renderer is set to \"Null\", no output will be displayed");
+    // }
+
+    // ImGui::PopFont();
 }
 
 void destroy(iris::instance* iris);

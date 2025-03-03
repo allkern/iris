@@ -856,6 +856,8 @@ void software_thread_push_shader(software_thread_state* ctx, const char* path) {
 void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
+    gl3wInit();
+
     ctx->window = window;
     ctx->gs = gs;
     ctx->scale = 1.5f;
@@ -1598,15 +1600,15 @@ void transfer_start(struct ps2_gs* gs, void* udata) {
     ctx->psmct24_data = 0;
     ctx->psmct24_shift = 0;
 
-    printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
-        ctx->dbp, dbp,
-        ctx->dbw, dbw,
-        ctx->dpsm,
-        ctx->dsax,
-        ctx->dsay,
-        ctx->rrw,
-        ctx->rrh
-    );
+    // printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
+    //     ctx->dbp, dbp,
+    //     ctx->dbw, dbw,
+    //     ctx->dpsm,
+    //     ctx->dsax,
+    //     ctx->dsay,
+    //     ctx->rrw,
+    //     ctx->rrh
+    // );
 
     if (ctx->xdir == 2) {
         software_thread_vram_blit(gs, ctx);
