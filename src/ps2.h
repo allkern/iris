@@ -9,7 +9,6 @@ extern "C" {
 #include "ee/ee.h"
 #include "ee/gif.h"
 #include "ee/vif.h"
-#include "ee/gs.h"
 #include "ee/dmac.h"
 #include "ee/intc.h"
 #include "ee/timers.h"
@@ -26,6 +25,7 @@ extern "C" {
 #include "shared/bios.h"
 #include "shared/ram.h"
 #include "shared/sif.h"
+#include "gs/gs.h"
 
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"

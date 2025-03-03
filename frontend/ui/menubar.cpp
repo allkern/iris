@@ -17,6 +17,12 @@ const char* aspect_mode_names[] = {
     "Auto"
 };
 
+const char* renderer_names[] = {
+    "Null",
+    "Software",
+    "Software (Threaded)"
+};
+
 void show_main_menubar(iris::instance* iris) {
     using namespace ImGui;
 
@@ -130,6 +136,23 @@ void show_main_menubar(iris::instance* iris) {
         }
         if (BeginMenu("Settings")) {
             if (BeginMenu(ICON_MS_MONITOR " Display")) {
+                if (BeginMenu(ICON_MS_BRUSH " Renderer")) {
+                    for (int i = 0; i < 3; i++) {
+                        if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
+                            iris->renderer_backend = i;
+
+                            renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, i);
+                            renderer_set_scale(iris->ctx, iris->scale);
+                            renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+                            renderer_set_bilinear(iris->ctx, iris->bilinear);
+                            renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+                            renderer_set_size(iris->ctx, 0, 0);
+                        }
+                    }
+
+                    ImGui::EndMenu();
+                }
+
                 if (BeginMenu("Scale")) {
                     for (int i = 2; i <= 6; i++) {
                         char buf[16]; sprintf(buf, "%.1fx", (float)i * 0.5f);
@@ -137,7 +160,7 @@ void show_main_menubar(iris::instance* iris) {
                         if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
                             iris->scale = (float)i * 0.5f;
 
-                            software_set_scale(iris->ctx, iris->scale);
+                            renderer_set_scale(iris->ctx, iris->scale);
                         }
                     }
 
@@ -149,7 +172,7 @@ void show_main_menubar(iris::instance* iris) {
                         if (Selectable(aspect_mode_names[i], iris->aspect_mode == i)) {
                             iris->aspect_mode = i;
 
-                            software_set_aspect_mode(iris->ctx, iris->aspect_mode);
+                            renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
                         }
                     }
 
@@ -160,19 +183,21 @@ void show_main_menubar(iris::instance* iris) {
                     if (Selectable("Nearest", !iris->bilinear)) {
                         iris->bilinear = false;
 
-                        software_set_bilinear(iris->ctx, false);
+                        renderer_set_bilinear(iris->ctx, false);
                     }
 
                     if (Selectable("Bilinear", iris->bilinear)) {
                         iris->bilinear = true;
 
-                        software_set_bilinear(iris->ctx, true);
+                        renderer_set_bilinear(iris->ctx, true);
                     }
 
                     ImGui::EndMenu();
                 }
 
-                MenuItem("Integer scaling", nullptr, &iris->ctx->integer_scaling);
+                if (MenuItem("Integer scaling", nullptr, &iris->integer_scaling)) {
+                    renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+                }
 
                 if (MenuItem("Fullscreen", nullptr, &iris->fullscreen)) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);

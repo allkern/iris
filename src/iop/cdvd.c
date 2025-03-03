@@ -153,7 +153,7 @@ void cdvd_read_sector(struct ps2_cdvd* cdvd, int lba, int offset) {
     fseek(cdvd->file, lba * 0x800, SEEK_SET);
 
     // Ignore result and avoid checking
-    (void)!fread(cdvd->buf + offset, 1, 0x800, cdvd->file);
+    (void)!fread(&cdvd->buf[offset], 1, 0x800, cdvd->file);
 }
 
 static inline void cdvd_init_s_fifo(struct ps2_cdvd* cdvd, int size) {
@@ -228,9 +228,22 @@ static inline void cdvd_s_read_nvram(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[1] = cdvd->nvram[(addr << 1) + 1];
 }
 static inline void cdvd_s_write_nvram(struct ps2_cdvd* cdvd) {
-    printf("cdvd: write_rtc\n");
+    printf("cdvd: write_nvram\n");
 
     exit(1);
+}
+static inline void cdvd_s_read_ilink_id(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 9);
+
+    uint8_t id[9] = {
+        0x00, 0xac, 0xff, 0xff,
+        0xff, 0xff, 0xb9, 0x86,
+        0x00
+    };
+
+    for (int i = 0; i < 9; i++) {
+        cdvd->s_fifo[i] = id[i];
+    }
 }
 static inline void cdvd_s_forbid_dvd(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
@@ -296,6 +309,7 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x09: printf("cdvd: write_rtc\n"); cdvd_s_write_rtc(cdvd); break;
         case 0x0a: printf("cdvd: read_nvram\n"); cdvd_s_read_nvram(cdvd); break;
         case 0x0b: printf("cdvd: write_nvram\n"); cdvd_s_write_nvram(cdvd); break;
+        case 0x12: printf("cdvd: read_ilink_id\n"); cdvd_s_read_ilink_id(cdvd); break;
         case 0x15: printf("cdvd: forbid_dvd\n"); cdvd_s_forbid_dvd(cdvd); break;
         case 0x17: printf("cdvd: read_ilink_model\n"); cdvd_s_read_ilink_model(cdvd); break;
         case 0x1a: printf("cdvd: certify_boot\n"); cdvd_s_certify_boot(cdvd); break;
@@ -387,7 +401,7 @@ void cdvd_do_read(void* udata, int overshoot) {
             } break;
             case CDVD_CD_SS_2340: {
                 // LBA -> MSF
-                uint64_t a = (cdvd->read_lba + i) + 150;
+                uint64_t a = cdvd->read_lba + 150;
                 uint32_t m = a / 4500;
 
                 a -= m * 4500;

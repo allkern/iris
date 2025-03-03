@@ -24,67 +24,107 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
         switch ((data >> 24) & 0x7f) {
             case VIF_CMD_NOP: {
-                // printf("vif: NOP\n");
+                // printf("vif1: NOP\n");
             } break;
             case VIF_CMD_STCYCL: {
-                // printf("vif: STCYCL(%04x)\n", data & 0xffff);
+                // printf("vif1: STCYCL(%04x)\n", data & 0xffff);
 
                 vif->vif1_cycle = data & 0xffff;
             } break;
             case VIF_CMD_OFFSET: {
-                // printf("vif: OFFSET(%04x)\n", data & 0xffff);
+                // printf("vif1: OFFSET(%04x)\n", data & 0xffff);
 
                 vif->vif1_ofst = data & 0xffff;
             } break;
             case VIF_CMD_BASE: {
-                // printf("vif: BASE(%04x)\n", data & 0xffff);
+                // printf("vif1: BASE(%04x)\n", data & 0xffff);
 
-                vif->vif1_base = data & 0xffff;
+                vif->vif1_base = data & 0x3f;
+            } break;
+            case VIF_CMD_ITOP: {
+                // printf("vif1: ITOP(%04x)\n", data & 0xffff);
+
+                vif->vif1_itop = data & 0x3f;
             } break;
             case VIF_CMD_STMOD: {
-                // printf("vif: STMOD(%04x)\n", data & 0xffff);
+                // printf("vif1: STMOD(%04x)\n", data & 0xffff);
 
                 vif->vif1_mode = data & 3;
             } break;
             case VIF_CMD_MSKPATH3: {
-                // printf("vif: MSKPATH3(%04x)\n", data & 0xffff);
+                // printf("vif1: MSKPATH3(%04x)\n", data & 0xffff);
             } break;
             case VIF_CMD_MARK: {
-                // printf("vif: MARK(%04x)\n", data & 0xffff);
+                // printf("vif1: MARK(%04x)\n", data & 0xffff);
 
                 vif->vif1_mark = data & 0xffff;
             } break;
             case VIF_CMD_FLUSH: {
-                // printf("vif: FLUSH\n");
+                // printf("vif1: FLUSH\n");
             } break;
             case VIF_CMD_MSCAL: {
-                // printf("vif: MSCAL(%04x)\n", data & 0xffff);
+                // printf("vif1: MSCAL(%04x)\n", data & 0xffff);
             } break;
-            case VIF_CMD_MPG: {
-                // printf("vif: MPG(%04x, %04x)\n", (data >> 16) & 0xff, data & 0xffff);
+            case VIF_CMD_STMASK: {
+                // printf("vif1: STMASK(%04x)\n", data & 0xffff);
 
                 vif->vif1_state = VIF_RECV_DATA;
-                vif->vif1_pending_words = (((data >> 16) & 0xff) * 8) / 4;
+                vif->vif1_pending_words = 1;
+            } break;
+            case VIF_CMD_STROW: {
+                // printf("vif1: STROW(%04x)\n", data & 0xffff);
 
-                // printf("pending words: %08x (%d)\n",
-                //     vif->vif1_pending_words,
-                //     vif->vif1_pending_words
-                // );
+                vif->vif1_state = VIF_RECV_DATA;
+                vif->vif1_pending_words = 4;
+            } break;
+            case VIF_CMD_STCOL: {
+                // printf("vif1: STCOL(%04x)\n", data & 0xffff);
+
+                vif->vif1_state = VIF_RECV_DATA;
+                vif->vif1_pending_words = 4;
+            } break;
+            case VIF_CMD_MPG: {
+                // printf("vif1: MPG(%04x, %04x)\n", (data >> 16) & 0xff, data & 0xffff);
+
+                int num = (data >> 16) & 0xff;
+
+                if (!num) num = 256;
+
+                vif->vif1_state = VIF_RECV_DATA;
+                vif->vif1_pending_words = (num * 8) / 4;
             } break;
             case VIF_CMD_DIRECT: {
-                // printf("vif: DIRECT(%04x)\n", data & 0xffff);
+                // printf("vif1: DIRECT(%04x)\n", data & 0xffff);
 
                 vif->vif1_state = VIF_RECV_DATA;
                 vif->vif1_pending_words = (data & 0xffff) * 4;
             } break;
             default: {
-                // printf("vif: Unhandled command %02x\n", vif->vif1_cmd);
+                // printf("vif1: Unhandled command %02x\n", vif->vif1_cmd);
             } break;
         }
     } else {
         switch (vif->vif1_cmd) {
+            case VIF_CMD_STMASK: {
+                vif->vif1_mask = data;
+                vif->vif1_state = VIF_IDLE;
+            } break;
+            case VIF_CMD_STROW: {
+                vif->vif1_r[4 - (vif->vif1_pending_words--)] = data;
+
+                if (!vif->vif1_pending_words) {
+                    vif->vif1_state = VIF_IDLE;
+                }
+            } break;
+            case VIF_CMD_STCOL: {
+                vif->vif1_c[4 - (vif->vif1_pending_words--)] = data;
+
+                if (!vif->vif1_pending_words) {
+                    vif->vif1_state = VIF_IDLE;
+                }
+            } break;
             case VIF_CMD_MPG: {
-                // printf("vif: Writing %08x to VU mem\n", data);
+                // printf("vif1: Writing %08x to VU mem\n", data);
 
                 if (!(--vif->vif1_pending_words)) {
                     vif->vif1_state = VIF_IDLE;
@@ -152,7 +192,7 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
         case 0x10003d60: return vif->vif1_c[2];
         case 0x10003d70: return vif->vif1_c[3];
         case 0x10004000: printf("vif0: FIFO read\n"); break;
-        case 0x10005000: printf("vif1: FIFO read\n"); break;
+        case 0x10005000: // printf("vif1: FIFO read\n"); break;
     }
 
     return 0;
@@ -210,7 +250,7 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
 uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr) {
     switch (addr) {
         case 0x10004000: printf("vif0: 128-bit FIFO read\n"); break;
-        case 0x10005000: printf("vif1: 128-bit FIFO read\n"); break;
+        case 0x10005000: // printf("vif1: 128-bit FIFO read\n"); break;
     }
 
     return (uint128_t){ .u64[0] = 0, .u64[1] = 0 };;

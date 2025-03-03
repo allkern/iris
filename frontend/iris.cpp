@@ -14,7 +14,7 @@
 #include "res/IconsMaterialSymbols.h"
 #include "tfd/tinyfiledialogs.h"
 
-#include "ee/renderer/software.hpp"
+#include "gs/renderer/software.hpp"
 
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -90,6 +90,8 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 #endif
 
+    gl3wInit();
+
     // Create window with graphics context
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -121,7 +123,11 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     if (std::filesystem::exists("portable")) {
         iris->pref_path = "./";
     } else {
-        iris->pref_path = std::string(SDL_GetPrefPath("Allkern", "Iris"));
+        char* pref = SDL_GetPrefPath("Allkern", "Iris");
+
+        iris->pref_path = std::string(pref);
+
+        SDL_free(pref);
     }
 
     iris->ini_path = iris->pref_path + "imgui.ini";
@@ -241,23 +247,25 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     iris->ds = ds_sio2_attach(iris->ps2->sio2, 0);
 
-    // To-do: Implement backend constructor and destructor
-    iris->ctx = new software_state;
-    iris->ps2->gs->backend.udata = iris->ctx;
-    iris->ps2->gs->backend.render_point = software_render_point;
-    iris->ps2->gs->backend.render_line = software_render_line;
-    iris->ps2->gs->backend.render_triangle = software_render_triangle;
-    iris->ps2->gs->backend.render_sprite = software_render_sprite;
-    iris->ps2->gs->backend.render = software_render;
-    iris->ps2->gs->backend.transfer_start = software_transfer_start;
-    iris->ps2->gs->backend.transfer_write = software_transfer_write;
-    iris->ps2->gs->backend.transfer_read = software_transfer_read;
+    iris->ctx = renderer_create();
+    iris->renderer_backend = RENDERER_NULL;
+
+    renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, RENDERER_NULL);
 
     iris->ticks = SDL_GetTicks();
     iris->pause = true;
-
-    software_init(iris->ctx, iris->ps2->gs, iris->window);
+    
     init_settings(iris, argc, argv);
+    
+    renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->renderer_backend);
+    renderer_set_scale(iris->ctx, iris->scale);
+    renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+    renderer_set_bilinear(iris->ctx, iris->bilinear);
+    renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+
+    if (iris->renderer_backend == RENDERER_NULL) {
+        push_info(iris, "Renderer is set to \"Null\", no output will be displayed");
+    }
 }
 
 void destroy(iris::instance* iris);
@@ -370,7 +378,7 @@ void update_window(iris::instance* iris) {
     glClear(GL_COLOR_BUFFER_BIT);
 
     // Render display texture
-    software_render(iris->ps2->gs, iris->ps2->gs->backend.udata);
+    renderer_render(iris->ctx);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
@@ -417,6 +425,8 @@ bool is_open(iris::instance* iris) {
 
 void close(iris::instance* iris) {
     using namespace ImGui;
+
+    renderer_destroy(iris->ctx);
 
     destroy_platform(iris);
     close_settings(iris);

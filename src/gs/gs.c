@@ -4,7 +4,7 @@
 #include <stdio.h>
 
 #include "gs.h"
-#include "intc.h"
+#include "ee/intc.h"
 #include "iop/intc.h"
 
 struct ps2_gs* ps2_gs_create(void) {
@@ -25,7 +25,6 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     struct sched_event vblank_in_event;
 
     vblank_in_event.callback = gs_handle_vblank_in;
-    vblank_in_event.cycles = 4489;
     vblank_in_event.cycles = GS_FRAME_NTSC;
     vblank_in_event.name = "Vblank in event";
     vblank_in_event.udata = gs;
@@ -53,12 +52,11 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event vblank_out_event;
 
     vblank_out_event.callback = gs_handle_vblank_out;
-    vblank_out_event.cycles = 431096;
     vblank_out_event.cycles = GS_VBLANK_NTSC; 
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
-    // Set Vblank flag?
+    // Set Vblank and Hblank flag
     gs->csr |= 0xf;
 
     // Tell backend to render scene
@@ -67,7 +65,10 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
 
-    if (gs->csr & (gs->imr >> 8)) {
+    uint32_t mask = (gs->imr >> 8) & 0x1f;
+    uint32_t stat = gs->csr & 0x1f;
+
+    if (stat & (~mask)) {
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 
@@ -117,6 +118,8 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     // sched_schedule(gs->sched, hblank_event);
 
     gs->ctx = &gs->context[0];
+
+    gs->csr |= 2;
 }
 
 void gs_switch_context(struct ps2_gs* gs, int c) {
@@ -479,7 +482,17 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x53: /* printf("gs: TRXDIR <- %016lx\n", data); */ gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return; // gs_start_transfer(gs); return;
         case 0x54: gs->hwreg = data; gs->backend.transfer_write(gs, gs->backend.udata); return; // gs_transfer_write(gs); return;
         case 0x60: /* printf("gs: SIGNAL <- %016lx\n", data); */ gs->signal = data; return;
-        case 0x61: /* printf("gs: FINISH <- %016lx\n", data); */ gs->finish = data; return;
+        case 0x61: {
+            // Trigger FINISH event
+            gs->csr |= 2;
+
+            uint32_t mask = (gs->imr >> 8) & 0x1f;
+            uint32_t stat = gs->csr & 0x1f;
+
+            if (stat & (~mask)) {
+                ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+            }
+        } return;
         case 0x62: /* printf("gs: LABEL <- %016lx\n", data); */ gs->label = data; return;
         default: {
             // printf("gs: Invalid privileged register %02x write %016lx\n", reg, data);

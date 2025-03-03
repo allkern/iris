@@ -31,7 +31,7 @@ void handle_iop_tty_event(void* udata, char c) {
 void handle_scissor_event(void* udata) {
     iris::instance* iris = (iris::instance*)udata;
 
-    software_set_size(iris->ctx, 0, 0);
+    renderer_set_size(iris->ctx, 0, 0);
 }
 
 }

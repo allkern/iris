@@ -97,6 +97,8 @@ struct ee_state {
     uint128_t hi EE_ALIGNED16;
     uint128_t lo EE_ALIGNED16;
 
+    uint64_t total_cycles;
+
     uint32_t prev_pc;
     uint32_t pc;
     uint32_t next_pc;

@@ -11,9 +11,10 @@
 #include "imgui_impl_sdlrenderer2.h"
 
 #include <SDL.h>
+#include "GL/gl3w.h"
 
 #include "ps2.h"
-#include "ee/renderer/software.hpp"
+#include "gs/renderer/renderer.hpp"
 
 namespace iris {
 
@@ -72,7 +73,8 @@ struct instance {
     unsigned int texture_height;
     uint32_t* texture_buf = nullptr;
 
-    software_state* ctx = nullptr;
+    unsigned int renderer_backend;
+    renderer_state* ctx = nullptr;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;

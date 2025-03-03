@@ -73,6 +73,7 @@ int parse_toml_settings(iris::instance* iris) {
     iris->bilinear = display["bilinear"].value_or(true);
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);
+    iris->renderer_backend = display["renderer"].value_or(RENDERER_SOFTWARE_THREAD);
 
     auto debugger = tbl["debugger"];
     iris->show_ee_control = debugger["show_ee_control"].value_or(false);
@@ -91,10 +92,10 @@ int parse_toml_settings(iris::instance* iris) {
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
 
-    software_set_aspect_mode(iris->ctx, iris->aspect_mode);
-    software_set_bilinear(iris->ctx, iris->bilinear);
-    software_set_integer_scaling(iris->ctx, iris->integer_scaling);
-    software_set_scale(iris->ctx, iris->scale);
+    renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+    renderer_set_bilinear(iris->ctx, iris->bilinear);
+    renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+    renderer_set_scale(iris->ctx, iris->scale);
 
     return 0;
 }
@@ -219,10 +220,11 @@ void close_settings(iris::instance* iris) {
             { "show_imgui_demo", iris->show_imgui_demo }
         } },
         { "display", toml::table {
-            { "scale", iris->ctx->scale },
-            { "aspect_mode", iris->ctx->aspect_mode },
-            { "integer_scaling", iris->ctx->integer_scaling },
-            { "bilinear", iris->ctx->bilinear }
+            { "scale", iris->scale },
+            { "aspect_mode", iris->aspect_mode },
+            { "integer_scaling", iris->integer_scaling },
+            { "bilinear", iris->bilinear },
+            { "renderer", iris->renderer_backend }
         } },
         { "paths", toml::table {
             { "bios_path", iris->bios_path }

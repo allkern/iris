@@ -64,13 +64,13 @@ void show_status_bar(iris::instance* iris) {
     if (BeginMainStatusBar()) {
         int vp_w, vp_h, disp_w, disp_h, disp_fmt;
 
-        software_get_viewport_size(iris->ctx, &vp_w, &vp_h);
-        software_get_display_size(iris->ctx, &disp_w, &disp_h);
-        software_get_display_format(iris->ctx, &disp_fmt);
+        renderer_get_viewport_size(iris->ctx, &vp_w, &vp_h);
+        renderer_get_display_size(iris->ctx, &disp_w, &disp_h);
+        renderer_get_display_format(iris->ctx, &disp_fmt);
 
         if (vp_w) {
             Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %dbpp | %.1f fps",
-                software_get_name(iris->ctx),
+                renderer_get_name(iris->ctx),
                 disp_w, disp_h,
                 vp_w, vp_h,
                 get_format_bpp(disp_fmt),
@@ -78,7 +78,7 @@ void show_status_bar(iris::instance* iris) {
             );
         } else {
             Text(ICON_MS_MONITOR " %s | No image",
-                software_get_name(iris->ctx)
+                renderer_get_name(iris->ctx)
             );
         }
 

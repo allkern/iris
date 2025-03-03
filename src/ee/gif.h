@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#include "gs.h"
+#include "gs/gs.h"
 #include "u128.h"
 
 #define GIF_STATE_RECV_TAG 0

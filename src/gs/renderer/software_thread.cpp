@@ -3,8 +3,8 @@
 #include <cstdio>
 #include <cmath>
 
-#include "ee/gs.h"
-#include "software.hpp"
+#include "gs/gs.h"
+#include "software_thread.hpp"
 
 #include <SDL.h>
 
@@ -45,13 +45,6 @@ static const char* frag_header =
     "uniform vec2 screen_size;\n"
     "uniform int frame;\n";
 
-// static const int psmct32_clut_block[] = {
-//     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-//     0x40, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47,
-//     0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-//     0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f
-// };
-
 static const int psmt8_clut_block[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -87,7 +80,86 @@ static const int psmt8_clut_block[] = {
     0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff
 };
 
-void software_set_size(software_state* ctx, int width, int height) {
+void render_point(struct ps2_gs* gs, void* udata);
+void render_line(struct ps2_gs* gs, void* udata);
+void render_triangle(struct ps2_gs* gs, void* udata);
+void render_sprite(struct ps2_gs* gs, void* udata);
+void transfer_start(struct ps2_gs* gs, void* udata);
+void transfer_write(struct ps2_gs* gs, void* udata);
+void transfer_read(struct ps2_gs* gs, void* udata);
+
+void software_thread_render_thread(software_thread_state* ctx) {
+    while (!ctx->end_signal) {
+        while (true) {
+            ctx->queue_mtx.lock();
+
+            if (ctx->render_queue.empty()) {
+                ctx->queue_mtx.unlock();
+
+                break;
+            }
+
+            // Explicitly copy data from the queue
+            render_data rdata = render_data(ctx->render_queue.front());
+
+            // Assign context pointer to the copied context
+            rdata.gs.ctx = &rdata.gs.context[(rdata.gs.attr & GS_CTXT) ? 1 : 0];
+
+            ctx->render_queue.pop();
+            ctx->queue_mtx.unlock();
+
+            ctx->render_mtx.lock();
+
+            switch (rdata.prim) {
+                case 0: render_point(&rdata.gs, nullptr); break;
+                case 1: render_line(&rdata.gs, nullptr); break;
+                case 2: render_triangle(&rdata.gs, nullptr); break;
+                case 3: render_sprite(&rdata.gs, nullptr); break;
+            }
+
+            ctx->render_mtx.unlock();
+        }
+
+        std::this_thread::yield();
+    }
+}
+
+void software_thread_destroy(void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    // Send end signal to rendering thread
+    ctx->end_signal = true;
+
+    // Clear rendering queue
+    ctx->queue_mtx.lock();
+
+    while (!ctx->render_queue.empty())
+        ctx->render_queue.pop();
+
+    ctx->queue_mtx.unlock();
+
+    for (GLuint p : ctx->programs)
+        if (p) glDeleteProgram(p);
+
+    if (ctx->default_program) glDeleteProgram(ctx->default_program);
+    if (ctx->vao) glDeleteVertexArrays(1, &ctx->vao);
+    if (ctx->vbo) glDeleteBuffers(1, &ctx->vbo);
+    if (ctx->ebo) glDeleteBuffers(1, &ctx->ebo);
+    if (ctx->tex) glDeleteTextures(1, &ctx->tex);
+    if (ctx->fbo) glDeleteFramebuffers(1, &ctx->fbo);
+    if (ctx->fb_vao) glDeleteVertexArrays(1, &ctx->fb_vao);
+    if (ctx->fb_vbo) glDeleteBuffers(1, &ctx->fb_vbo);
+    if (ctx->fb_ebo) glDeleteBuffers(1, &ctx->fb_ebo);
+    if (ctx->fb_in_tex) glDeleteTextures(1, &ctx->fb_in_tex);
+    if (ctx->fb_out_tex) glDeleteTextures(1, &ctx->fb_out_tex);
+
+    // Should call destructors for our mutex, thread and queue
+    delete ctx;
+}
+
+void software_thread_set_size(void* udata, int width, int height) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     int en1 = ctx->gs->pmode & 1;
     int en2 = (ctx->gs->pmode >> 1) & 1;
 
@@ -126,6 +198,7 @@ void software_set_size(software_state* ctx, int width, int height) {
 
     glGenTextures(1, &ctx->tex);
     glBindTexture(GL_TEXTURE_2D, ctx->tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
@@ -139,42 +212,58 @@ void software_set_size(software_state* ctx, int width, int height) {
     // );
 }
 
-void software_set_scale(software_state* ctx, float scale) {
+void software_thread_set_scale(void* udata, float scale) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     ctx->scale = scale;
 }
 
-void software_set_aspect_mode(software_state* ctx, int aspect_mode) {
+void software_thread_set_aspect_mode(void* udata, int aspect_mode) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     ctx->aspect_mode = aspect_mode;
 }
 
-void software_set_integer_scaling(software_state* ctx, bool integer_scaling) {
+void software_thread_set_integer_scaling(void* udata, bool integer_scaling) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     ctx->integer_scaling = integer_scaling;
 }
 
-void software_set_bilinear(software_state* ctx, bool bilinear) {
+void software_thread_set_bilinear(void* udata, bool bilinear) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     ctx->bilinear = bilinear;
 }
 
-void software_get_viewport_size(software_state* ctx, int* w, int* h) {
+void software_thread_get_viewport_size(void* udata, int* w, int* h) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     *w = ctx->tex_w;
     *h = ctx->tex_h;
 }
 
-void software_get_display_size(software_state* ctx, int* w, int* h) {
+void software_thread_get_display_size(void* udata, int* w, int* h) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     *w = ctx->disp_w;
     *h = ctx->disp_h;
 }
 
-void software_get_display_format(software_state* ctx, int* fmt) {
+void software_thread_get_display_format(void* udata, int* fmt) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     *fmt = ctx->disp_fmt;
 }
 
-void software_get_interlace_mode(software_state* ctx, int* interlace) {
+void software_thread_get_interlace_mode(void* udata, int* interlace) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     // *interlace = ctx->gs->
 }
 
-const char* software_get_name(software_state* ctx) {
-    return "Software";
+const char* software_thread_get_name(void* udata) {
+    return "Software (Threaded)";
 }
 
 #define CLAMP(v, l, u) (((v) > (u)) ? (u) : (((v) < (l)) ? (l) : (v)))
@@ -657,10 +746,10 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     uint32_t rb = (((ab - bb) * cv) >> 7) + db;
     uint32_t ra = (((aa - ba) * cv) >> 7) + da;
 
-    return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | 0xff000000;
+    return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | ((ra & 0xff) << 24);
 }
 
-int software_compile_shader(const char* src, GLint type) {
+int software_thread_compile_shader(const char* src, GLint type) {
     unsigned int shader = glCreateShader(type);
 
     glShaderSource(shader, 1, &src, NULL);
@@ -684,7 +773,7 @@ int software_compile_shader(const char* src, GLint type) {
     return shader;
 }
 
-char* software_read_file(const char* path) {
+char* software_thread_read_file(const char* path) {
     FILE* file = fopen(path, "rb");
 
     unsigned int size;
@@ -708,9 +797,9 @@ char* software_read_file(const char* path) {
     return buf;
 }
 
-void software_init_default_shader(software_state* ctx) {
-    ctx->vert_shader = software_compile_shader(default_vert_shader, GL_VERTEX_SHADER);
-    GLuint frag_shader = software_compile_shader(default_frag_shader, GL_FRAGMENT_SHADER);
+void software_thread_init_default_shader(software_thread_state* ctx) {
+    ctx->vert_shader = software_thread_compile_shader(default_vert_shader, GL_VERTEX_SHADER);
+    GLuint frag_shader = software_thread_compile_shader(default_frag_shader, GL_FRAGMENT_SHADER);
 
     char infolog[512];
     int success;
@@ -731,14 +820,14 @@ void software_init_default_shader(software_state* ctx) {
     }
 }
 
-void software_push_shader(software_state* ctx, const char* path) {
-    char* src = software_read_file(path);
+void software_thread_push_shader(software_thread_state* ctx, const char* path) {
+    char* src = software_thread_read_file(path);
     char* hdr = (char*)malloc(strlen(src) + strlen(frag_header) + 1);
 
     strcpy(hdr, frag_header);
     strcat(hdr, src);
 
-    int shader = software_compile_shader(hdr, GL_FRAGMENT_SHADER);
+    int shader = software_thread_compile_shader(hdr, GL_FRAGMENT_SHADER);
 
     char infolog[512];
     int success;
@@ -764,20 +853,20 @@ void software_push_shader(software_state* ctx, const char* path) {
     free(hdr);
 }
 
-void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window) {
+void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
     ctx->window = window;
     ctx->gs = gs;
     ctx->scale = 1.5f;
 
-    gl3wInit();
-
     // Initialize default shaders
-    software_init_default_shader(ctx);
+    software_thread_init_default_shader(ctx);
 
-    // software_push_shader(ctx, "shaders/flip.frag");
-    // software_push_shader(ctx, "shaders/encoder.frag");
-    // software_push_shader(ctx, "shaders/decoder.frag");
-    // software_push_shader(ctx, "shaders/smooth.frag");
+    // software_thread_push_shader(ctx, "shaders/flip.frag");
+    // software_thread_push_shader(ctx, "shaders/encoder.frag");
+    // software_thread_push_shader(ctx, "shaders/decoder.frag");
+    // software_thread_push_shader(ctx, "shaders/smooth.frag");
 
     // Initialize framebuffer VAO
     static const GLfloat fb_vertices[] = {
@@ -812,9 +901,13 @@ void software_init(software_state* ctx, struct ps2_gs* gs, SDL_Window* window) {
     // texture coord attribute
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
+
+    ctx->end_signal = false;
+    ctx->render_thr = std::thread(software_thread_render_thread, ctx);
+    ctx->render_thr.detach();
 }
 
-static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
+static inline void software_thread_vram_blit(struct ps2_gs* gs, software_thread_state* ctx) {
     for (int y = 0; y < (int)ctx->rrh; y++) {
         uint32_t src = ctx->sbp + ctx->ssax + (ctx->ssay * ctx->sbw) + (y * ctx->sbw);
         uint32_t dst = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw) + (y * ctx->dbw);
@@ -823,7 +916,7 @@ static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
     }
 }
 
-extern "C" void software_render_point(struct ps2_gs* gs, void* udata) {
+void render_point(struct ps2_gs* gs, void* udata) {
     struct gs_vertex vert = gs->vq[0];
 
     vert.x -= gs->ctx->ofx;
@@ -840,7 +933,12 @@ extern "C" void software_render_point(struct ps2_gs* gs, void* udata) {
     gs_write_fb(gs, vert.x, vert.y, vert.rgbaq & 0xffffffff);
 }
 
-extern "C" void software_render_line(struct ps2_gs* gs, void* udata) {
+void render_line(struct ps2_gs* gs, void* udata) {
+    // struct gs_vertex v0 = gs->vq[0];
+    // struct gs_vertex v1 = gs->vq[1];
+
+    // gs_write_fb(gs, v0.x, v0.y, v0.rgbaq & 0xffffffff);
+    // gs_write_fb(gs, v1.x, v1.y, v1.rgbaq & 0xffffffff);
 }
 
 #define EDGE(a, b, c) ((b.x-a.x)*(c.y-a.y)-(b.y-a.y)*(c.x-a.x))
@@ -851,7 +949,7 @@ extern "C" void software_render_line(struct ps2_gs* gs, void* udata) {
 
 #define IS_TOPLEFT(a, b) ((b.y > a.y) || ((a.y == b.y) && (b.x < a.x)))
 
-extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
+void render_triangle(struct ps2_gs* gs, void* udata) {
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
     struct gs_vertex v2 = gs->vq[2];
@@ -1005,9 +1103,11 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
                 continue;
             }
 
-            // To-do: Alpha blending
-
             uint32_t fc = fr | (fg << 8) | (fb << 16) | (fa << 24);
+
+            if (gs->abe) {
+                fc = gs_alpha_blend(gs, p.x, p.y, fc);
+            }
 
             switch (tr) {
                 case TR_FB_ONLY: gs_write_fb(gs, p.x, p.y, fc); break;
@@ -1032,7 +1132,7 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
     }
 }
 
-extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
+void render_sprite(struct ps2_gs* gs, void* udata) {
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
 
@@ -1171,8 +1271,8 @@ extern "C" void software_render_sprite(struct ps2_gs* gs, void* udata) {
     }
 }
 
-extern "C" void software_render(struct ps2_gs* gs, void* udata) {
-    software_state* ctx = (software_state*)udata;
+void render(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
 
     int en1 = ctx->gs->pmode & 1;
     int en2 = (ctx->gs->pmode >> 1) & 1;
@@ -1203,28 +1303,28 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     float scale = ctx->integer_scaling ? floorf(ctx->scale) : ctx->scale;
 
     switch (ctx->aspect_mode) {
-        case SOFTWARE_ASPECT_NATIVE: {
+        case RENDERER_ASPECT_NATIVE: {
             rect.w *= scale;
             rect.h *= scale;
         } break;
 
-        case SOFTWARE_ASPECT_4_3: {
+        case RENDERER_ASPECT_4_3: {
             rect.w *= scale;
             rect.h = (float)rect.w * (3.0f / 4.0f);
         } break;
 
-        case SOFTWARE_ASPECT_16_9: {
+        case RENDERER_ASPECT_16_9: {
             rect.w *= scale;
             rect.h = (float)rect.w * (9.0f / 16.0f);
         } break;
 
-        case SOFTWARE_ASPECT_STRETCH: {
+        case RENDERER_ASPECT_STRETCH: {
             rect.w = size.w;
             rect.h = size.h;
         } break;
 
-        case SOFTWARE_ASPECT_AUTO:
-        case SOFTWARE_ASPECT_STRETCH_KEEP: {
+        case RENDERER_ASPECT_AUTO:
+        case RENDERER_ASPECT_STRETCH_KEEP: {
             rect.h = size.h;
             rect.w = (float)rect.h * (4.0f / 3.0f);
         } break;
@@ -1291,6 +1391,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     // Update screen texture
     glBindTexture(GL_TEXTURE_2D, ctx->tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
@@ -1344,6 +1445,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     glGenTextures(1, &ctx->fb_out_tex);
     glBindTexture(GL_TEXTURE_2D, ctx->fb_out_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
@@ -1356,6 +1458,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     glGenTextures(1, &ctx->fb_in_tex);
     glBindTexture(GL_TEXTURE_2D, ctx->fb_in_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
@@ -1396,6 +1499,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
         glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, input_tex);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
@@ -1416,6 +1520,7 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, output_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
@@ -1455,8 +1560,8 @@ static inline int gs_pixels_to_size(int fmt, int px) {
     return px;
 }
 
-extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
-    software_state* ctx = (software_state*)udata;
+void transfer_start(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
 
     ctx->dbp = (gs->bitbltbuf >> 32) & 0x3fff;
     ctx->dbw = (gs->bitbltbuf >> 48) & 0x3f;
@@ -1504,11 +1609,11 @@ extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
     );
 
     if (ctx->xdir == 2) {
-        software_vram_blit(gs, ctx);
+        software_thread_vram_blit(gs, ctx);
     }
 }
 
-static inline void gs_write_psmt4(struct ps2_gs* gs, software_state* ctx, uint32_t index) {
+static inline void gs_write_psmt4(struct ps2_gs* gs, software_thread_state* ctx, uint32_t index) {
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
 
     addr += (ctx->dx >> 3) + (ctx->dy * ctx->dbw);
@@ -1526,7 +1631,7 @@ static inline void gs_write_psmt4(struct ps2_gs* gs, software_state* ctx, uint32
     }
 }
 
-static inline void gs_write_psmt8(struct ps2_gs* gs, software_state* ctx, uint32_t index) {
+static inline void gs_write_psmt8(struct ps2_gs* gs, software_thread_state* ctx, uint32_t index) {
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
 
     addr += (ctx->dx >> 2) + (ctx->dy * ctx->dbw);
@@ -1544,7 +1649,7 @@ static inline void gs_write_psmt8(struct ps2_gs* gs, software_state* ctx, uint32
     }
 }
 
-static inline void gs_store_hwreg_psmt4(struct ps2_gs* gs, software_state* ctx) {
+static inline void gs_store_hwreg_psmt4(struct ps2_gs* gs, software_thread_state* ctx) {
     for (int i = 0; i < 16; i++) {
         uint64_t index = (gs->hwreg >> (i * 4)) & 0xf;
 
@@ -1552,7 +1657,7 @@ static inline void gs_store_hwreg_psmt4(struct ps2_gs* gs, software_state* ctx) 
     }
 }
 
-static inline void gs_store_hwreg_psmt8(struct ps2_gs* gs, software_state* ctx) {
+static inline void gs_store_hwreg_psmt8(struct ps2_gs* gs, software_thread_state* ctx) {
     for (int i = 0; i < 8; i++) {
         uint64_t index = (gs->hwreg >> (i * 8)) & 0xff;
 
@@ -1560,7 +1665,7 @@ static inline void gs_store_hwreg_psmt8(struct ps2_gs* gs, software_state* ctx) 
     }
 }
 
-static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_state* ctx) {
+static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_thread_state* ctx) {
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
 
     uint64_t data[2] = {
@@ -1578,7 +1683,7 @@ static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_state* ctx
     }
 }
 
-static inline void gs_psmct24_write(struct ps2_gs* gs, software_state* ctx, uint32_t data) {
+static inline void gs_psmct24_write(struct ps2_gs* gs, software_thread_state* ctx, uint32_t data) {
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
 
     gs->vram[addr + (ctx->dx++) + (ctx->dy * ctx->dbw)] = data;
@@ -1589,7 +1694,7 @@ static inline void gs_psmct24_write(struct ps2_gs* gs, software_state* ctx, uint
     }
 }
 
-static inline void gs_store_hwreg_psmct24(struct ps2_gs* gs, software_state* ctx) {
+static inline void gs_store_hwreg_psmct24(struct ps2_gs* gs, software_thread_state* ctx) {
     switch (ctx->psmct24_shift++) {
         case 0: {
             gs_psmct24_write(gs, ctx, gs->hwreg & 0xffffff);
@@ -1616,7 +1721,7 @@ static inline void gs_store_hwreg_psmct24(struct ps2_gs* gs, software_state* ctx
     }
 }
 
-static inline void gs_write_psmct16(struct ps2_gs* gs, software_state* ctx, uint32_t index) {
+static inline void gs_write_psmct16(struct ps2_gs* gs, software_thread_state* ctx, uint32_t index) {
     uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
 
     addr += (ctx->dx >> 1) + (ctx->dy * ctx->dbw);
@@ -1634,7 +1739,7 @@ static inline void gs_write_psmct16(struct ps2_gs* gs, software_state* ctx, uint
     }
 }
 
-static inline void gs_store_hwreg_psmct16(struct ps2_gs* gs, software_state* ctx) {
+static inline void gs_store_hwreg_psmct16(struct ps2_gs* gs, software_thread_state* ctx) {
     for (int i = 0; i < 4; i++) {
         uint64_t p = (gs->hwreg >> (i * 16)) & 0xffff;
 
@@ -1642,8 +1747,8 @@ static inline void gs_store_hwreg_psmct16(struct ps2_gs* gs, software_state* ctx
     }
 }
 
-extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
-    software_state* ctx = (software_state*)udata;
+void transfer_write(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
 
     switch (ctx->dpsm) {
         case GS_PSMCT32: {
@@ -1673,6 +1778,111 @@ extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
     }
 }
 
-extern "C" void software_transfer_read(struct ps2_gs* gs, void* udata) {
+void transfer_read(struct ps2_gs* gs, void* udata) {
     gs->hwreg = 0;
+}
+
+extern "C" void software_thread_render_point(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->queue_mtx.lock();
+    ctx->render_queue.push(render_data());
+
+    render_data& rdata = ctx->render_queue.back();
+
+    rdata.gs = *gs;
+    rdata.prim = 0;
+    ctx->queue_mtx.unlock();
+}
+
+extern "C" void software_thread_render_line(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->queue_mtx.lock();
+    ctx->render_queue.push(render_data());
+
+    render_data& rdata = ctx->render_queue.back();
+
+    rdata.gs = *gs;
+    rdata.prim = 1;
+    ctx->queue_mtx.unlock();
+}
+
+extern "C" void software_thread_render_triangle(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->queue_mtx.lock();
+    ctx->render_queue.push(render_data());
+
+    render_data& rdata = ctx->render_queue.back();
+
+    rdata.gs = *gs;
+    rdata.prim = 2;
+    ctx->queue_mtx.unlock();
+}
+
+extern "C" void software_thread_render_sprite(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->queue_mtx.lock();
+    ctx->render_queue.push(render_data());
+
+    render_data& rdata = ctx->render_queue.back();
+
+    rdata.gs = *gs;
+    rdata.prim = 3;
+    ctx->queue_mtx.unlock();
+}
+
+extern "C" void software_thread_render(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    // Block until queue is empty
+    while (true) {
+        ctx->queue_mtx.lock();
+
+        if (ctx->render_queue.empty()) {
+            ctx->queue_mtx.unlock();
+
+            break;
+        }
+
+        ctx->queue_mtx.unlock();
+    }
+
+    ctx->render_mtx.lock();
+
+    render(gs, ctx);
+
+    ctx->render_mtx.unlock();
+}
+
+extern "C" void software_thread_transfer_start(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->render_mtx.lock();
+
+    transfer_start(gs, ctx);
+
+    ctx->render_mtx.unlock();
+}
+
+extern "C" void software_thread_transfer_write(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->render_mtx.lock();
+
+    transfer_write(gs, ctx);
+
+    ctx->render_mtx.unlock();
+}
+
+extern "C" void software_thread_transfer_read(struct ps2_gs* gs, void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->render_mtx.lock();
+
+    transfer_read(gs, ctx);
+
+    ctx->render_mtx.unlock();
 }

@@ -2773,9 +2773,9 @@ static inline void ee_execute(struct ee_state* ee) {
         case 0xFC000000 >> 26: ee_i_sd(ee); return;
     }
 
-    printf("ee: Invalid instruction %08x @ pc=%08x\n", ee->opcode, ee->prev_pc);
+    printf("ee: Invalid instruction %08x @ pc=%08x (cyc=%ld)\n", ee->opcode, ee->prev_pc, ee->total_cycles);
 
-    // exit(1);
+    exit(1);
 }
 
 int loop = 0;
@@ -2897,6 +2897,10 @@ void ee_cycle(struct ee_state* ee) {
     //     }
     // }
 
+    // if (ee->total_cycles >= 250576836) {
+    //     ee_print_disassembly(ee);
+    // }
+
     // if (p) {
     //     ee_print_disassembly(ee);
 
@@ -2909,6 +2913,8 @@ void ee_cycle(struct ee_state* ee) {
 
     ee->pc = ee->next_pc;
     ee->next_pc += 4;
+
+    ++ee->total_cycles;
 
     ee_execute(ee);
 

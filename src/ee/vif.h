@@ -80,6 +80,7 @@ struct ps2_vif {
     uint128_t vif1_data;
     uint128_t vif0_data;
 
+    struct ee_intc* intc;
     struct ee_bus* bus;
 };
 
