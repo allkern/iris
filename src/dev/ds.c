@@ -20,31 +20,43 @@ static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) 
     // printf("ds: ds_cmd_read_data(%04x)\n", ds->buttons);
 
     queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, 0x41);
+    queue_push(sio2->out, 0x79);
     queue_push(sio2->out, 0x5a);
     queue_push(sio2->out, ds->buttons & 0xff);
     queue_push(sio2->out, ds->buttons >> 8);
-    // queue_push(sio2->out, ds->ax_right_y);
-    // queue_push(sio2->out, ds->ax_right_x);
-    // queue_push(sio2->out, ds->ax_left_y);
-    // queue_push(sio2->out, ds->ax_left_x);
+    queue_push(sio2->out, ds->ax_right_y);
+    queue_push(sio2->out, ds->ax_right_x);
+    queue_push(sio2->out, ds->ax_left_y);
+    queue_push(sio2->out, ds->ax_left_x);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
 }
 static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     // printf("ds: ds_cmd_config_mode(%02x)\n", sio2->in->buf[3]);
 
     if (!ds->config_mode) {
         queue_push(sio2->out, 0xff);
-        queue_push(sio2->out, 0x41);
+        queue_push(sio2->out, 0x79);
         queue_push(sio2->out, 0x5a);
         queue_push(sio2->out, 0x00);
         queue_push(sio2->out, 0x00);
-        // queue_push(sio2->out, ds->ax_right_y);
-        // queue_push(sio2->out, ds->ax_right_x);
-        // queue_push(sio2->out, ds->ax_left_y);
-        // queue_push(sio2->out, ds->ax_left_x);
+        queue_push(sio2->out, ds->ax_right_y);
+        queue_push(sio2->out, ds->ax_right_x);
+        queue_push(sio2->out, ds->ax_left_y);
+        queue_push(sio2->out, ds->ax_left_x);
     } else {
         queue_push(sio2->out, 0xff);
-        queue_push(sio2->out, 0x41);
+        queue_push(sio2->out, 0x79);
         queue_push(sio2->out, 0x5a);
         queue_push(sio2->out, 0x00);
         queue_push(sio2->out, 0x00);
@@ -56,15 +68,26 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
 
     ds->config_mode = sio2->in->buf[3];
 }
+static inline void ds_cmd_set_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
+    queue_push(sio2->out, 0xff);
+    queue_push(sio2->out, 0xf3);
+    queue_push(sio2->out, 0x5a);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+}
 static inline void ds_cmd_query_model(struct ps2_sio2* sio2, struct ds_state* ds) {
     // printf("ds: ds_cmd_query_model\n");
 
     queue_push(sio2->out, 0xff); // Header
     queue_push(sio2->out, 0xf3); // Mode
     queue_push(sio2->out, 0x5a);
-    queue_push(sio2->out, 0x01); // Model
+    queue_push(sio2->out, 0x03); // Model (01=Dualshock/Digital 03=Dualshock 2)
     queue_push(sio2->out, 0x02);
-    queue_push(sio2->out, 0x00); // Analog?
+    queue_push(sio2->out, 0x01); // Analog (00=no 01=yes)
     queue_push(sio2->out, 0x02);
     queue_push(sio2->out, 0x01);
     queue_push(sio2->out, 0x00);
@@ -143,15 +166,18 @@ void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
     uint8_t cmd = sio2->in->buf[1];
 
     switch (cmd) {
-        case 0x41: ds_cmd_query_masked(sio2, ds); break;
-        case 0x42: ds_cmd_read_data(sio2, ds); break;
-        case 0x43: ds_cmd_config_mode(sio2, ds); break;
-        case 0x45: ds_cmd_query_model(sio2, ds); break;
-        case 0x46: ds_cmd_query_act(sio2, ds); break;
-        case 0x47: ds_cmd_query_comb(sio2, ds); break;
-        case 0x4C: ds_cmd_query_mode(sio2, ds); break;
-        case 0x4D: ds_cmd_vibration_toggle(sio2, ds); break;
+        case 0x41: ds_cmd_query_masked(sio2, ds); return;
+        case 0x42: ds_cmd_read_data(sio2, ds); return;
+        case 0x43: ds_cmd_config_mode(sio2, ds); return;
+        case 0x44: ds_cmd_set_mode(sio2, ds); return;
+        case 0x45: ds_cmd_query_model(sio2, ds); return;
+        case 0x46: ds_cmd_query_act(sio2, ds); return;
+        case 0x47: ds_cmd_query_comb(sio2, ds); return;
+        case 0x4C: ds_cmd_query_mode(sio2, ds); return;
+        case 0x4D: ds_cmd_vibration_toggle(sio2, ds); return;
     }
+
+    printf("ds: Unhandled command %02x\n", cmd);
 }
 
 struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
