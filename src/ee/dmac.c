@@ -323,14 +323,21 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
 
     dmac_set_irq(dmac, DMAC_VIF1);
 }
+
 void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
     dmac_set_irq(dmac, DMAC_GIF);
 
     dmac->gif.chcr &= ~0x100;
 
-    // printf("dmac: GIF transfer mode=%d madr=%08x qwc=%d\n", (dmac->gif.chcr >> 2) & 7, dmac->gif.madr, dmac->gif.qwc);
+    // fprintf(file, "dmac: GIF transfer mode=%d madr=%08x qwc=%d\n", (dmac->gif.chcr >> 2) & 7, dmac->gif.madr, dmac->gif.qwc);
+
     for (int i = 0; i < dmac->gif.qwc; i++) {
         uint128_t q = dmac_read_qword(dmac, dmac->gif.madr);
+
+        // fprintf(file, "ee: Sending %016lx%016lx from %08x to GIF FIFO (burst)\n",
+        //     q.u64[1], q.u64[0],
+        //     dmac->gif.madr
+        // );
 
         // GIF FIFO address
         ee_bus_write128(dmac->bus, 0x10006000, q);
@@ -338,22 +345,22 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
         dmac->gif.madr += 16;
     }
 
-    if (((dmac->gif.chcr >> 2) & 7) != 1)
+    if (((dmac->gif.chcr >> 2) & 7) != 1) {
         return;
+    }
 
     // Chain mode
-
     do {
         uint128_t tag = dmac_read_qword(dmac, dmac->gif.tadr);
 
         dmac_process_source_tag(dmac, &dmac->gif, tag);
 
-        // printf("ee: gif qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
+        // fprintf(file, "ee: gif tag qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
 
         for (int i = 0; i < dmac->gif.tag.qwc; i++) {
             uint128_t q = dmac_read_qword(dmac, dmac->gif.madr);
 
-            // printf("ee: Sending %016lx%016lx from %08x to GIF FIFO\n",
+            // fprintf(file, "ee: Sending %016lx%016lx from %08x to GIF FIFO (chain)\n",
             //     q.u64[1], q.u64[0],
             //     dmac->gif.madr
             // );
@@ -372,12 +379,50 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
     printf("ee: IPU from channel unimplemented\n");
 
+    exit(1);
+
     dmac_set_irq(dmac, DMAC_IPU_FROM);
 
     dmac->ipu_from.chcr &= ~0x100;
 }
 void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
-    printf("ee: IPU to channel unimplemented\n");
+    printf("ee: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
+        dmac->ipu_to.chcr,
+        dmac->ipu_to.chcr & 1,
+        (dmac->ipu_to.chcr >> 2) & 3,
+        !!(dmac->ipu_to.chcr & 0x40),
+        dmac->ipu_to.madr,
+        dmac->ipu_to.qwc,
+        dmac->ipu_to.tadr
+    );
+
+    do {
+        uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr);
+
+        dmac_process_source_tag(dmac, &dmac->ipu_to, tag);
+
+        // printf("ee: ipu_to tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx end=%d tte=%d\n",
+        //     dmac->ipu_to.tag.qwc,
+        //     dmac->ipu_to.tag.id,
+        //     dmac->ipu_to.tag.irq,
+        //     dmac->ipu_to.tag.addr,
+        //     dmac->ipu_to.tag.mem,
+        //     dmac->ipu_to.tag.data,
+        //     dmac->ipu_to.tag.end,
+        //     (dmac->ipu_to.chcr >> 7) & 1
+        // );
+        // printf("ee: SIF1 tag madr=%08x\n", dmac->sif1.madr);
+
+        for (int i = 0; i < dmac->ipu_to.tag.qwc; i++) {
+            uint128_t q = dmac_read_qword(dmac, dmac->ipu_to.madr);
+
+            ee_bus_write128(dmac->bus, 0x10007010, q);
+
+            dmac->ipu_to.madr += 16;
+        }
+    } while (!channel_is_done(&dmac->ipu_to));
+
+    // exit(1);
 
     dmac_set_irq(dmac, DMAC_IPU_TO);
 
