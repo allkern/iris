@@ -10,6 +10,9 @@ extern "C" {
 #include "u128.h"
 #include "bus.h"
 
+#include "ee/intc.h"
+#include "sched.h"
+
 enum {
     VIF_IDLE,
     VIF_RECV_DATA
@@ -80,12 +83,13 @@ struct ps2_vif {
     uint128_t vif1_data;
     uint128_t vif0_data;
 
+    struct sched_state* sched;
     struct ee_intc* intc;
     struct ee_bus* bus;
 };
 
 struct ps2_vif* ps2_vif_create(void);
-void ps2_vif_init(struct ps2_vif* vif, struct ee_bus* bus);
+void ps2_vif_init(struct ps2_vif* vif, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus);
 void ps2_vif_destroy(struct ps2_vif* vif);
 uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr);
 void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data);
