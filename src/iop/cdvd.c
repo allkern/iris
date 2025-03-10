@@ -7,6 +7,14 @@
 
 #include "cdvd.h"
 
+#ifdef _WIN32
+#define fseek64 fseeko64
+#define ftell64 ftello64
+#else
+#define fseek64 fseek
+#define ftell64 ftell
+#endif
+
 static const uint8_t nvram_init_data[1024] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -145,12 +153,12 @@ static inline void cdvd_set_ready(struct ps2_cdvd* cdvd) {
     cdvd->n_stat |= CDVD_N_STATUS_READY;
 }
 
-void cdvd_read_sector(struct ps2_cdvd* cdvd, int lba, int offset) {
+void cdvd_read_sector(struct ps2_cdvd* cdvd, uint32_t lba, int offset) {
     if (!cdvd->file)
         return;
 
     // printf("cdvd: Read lba=%d (%x)\n", lba, lba);
-    fseek(cdvd->file, lba * 0x800, SEEK_SET);
+    fseek64(cdvd->file, lba * 0x800, SEEK_SET);
 
     // Ignore result and avoid checking
     (void)!fread(&cdvd->buf[offset], 1, 0x800, cdvd->file);
@@ -368,14 +376,14 @@ static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
 
     // Small delta
     if (delta < 8)
-        return (block_timing * delta) + contiguous_cycles;
+        return ((block_timing * delta) + contiguous_cycles) / 8;
 
     // Fast seek: ~30ms
     if (delta < 4371)
-        return ((36864000 / 1000) * 30) + contiguous_cycles;
+        return (((36864000 / 1000) * 30) + contiguous_cycles) / 8;
 
     // Full seek: ~100ms
-    return ((36864000 / 1000) * 100) + contiguous_cycles;
+    return (((36864000 / 1000) * 100) + contiguous_cycles) / 8;
 }
 
 static inline void cdvd_set_status_bits(struct ps2_cdvd* cdvd, uint8_t data) {
@@ -386,7 +394,7 @@ static inline void cdvd_set_status_bits(struct ps2_cdvd* cdvd, uint8_t data) {
 void cdvd_do_read(void* udata, int overshoot) {
     struct ps2_cdvd* cdvd = (struct ps2_cdvd*)udata;
 
-    printf("cdvd: Reading %d %d byte sector(s) from lba=%x (%d)\n", cdvd->read_count, cdvd->read_size, cdvd->read_lba, cdvd->read_lba);
+    // printf("cdvd: Reading %d %d byte sector(s) from lba=%x (%d)\n", cdvd->read_count, cdvd->read_size, cdvd->read_lba, cdvd->read_lba);
 
     // Do read
     int sector_count = cdvd->read_count;
@@ -463,7 +471,12 @@ void cdvd_do_read(void* udata, int overshoot) {
 }
 
 static inline void cdvd_n_nop(struct ps2_cdvd* cdvd) {
-    printf("cdvd: nop\n"); exit(1);
+    printf("cdvd: nop\n");
+
+    cdvd_set_ready(cdvd);
+
+    // Send IRQ to IOP
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
 }
 static inline void cdvd_n_nop_sync(struct ps2_cdvd* cdvd) {
     printf("cdvd: nop_sync\n"); exit(1);
@@ -506,7 +519,17 @@ static inline void cdvd_n_pause(struct ps2_cdvd* cdvd) {
     cdvd->i_stat |= 1;
 }
 static inline void cdvd_n_seek(struct ps2_cdvd* cdvd) {
-    printf("cdvd: seek\n"); exit(1);
+    printf("cdvd: seek\n");
+
+    cdvd_set_ready(cdvd);
+    cdvd_set_status_bits(cdvd, CDVD_STATUS_PAUSED);
+
+    cdvd->status &= ~(CDVD_STATUS_READING | CDVD_STATUS_SEEKING);
+
+    // Send IRQ to IOP
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
+
+    cdvd->i_stat |= 1;
 }
 static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
     /*  Params:
@@ -542,13 +565,13 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
         CDVD_STATUS_SEEKING
     );
 
-    printf("cdvd: ReadCd lba=%08x count=%08x size=%d cycles=%ld speed=%02x\n",
-        cdvd->read_lba,
-        cdvd->read_count,
-        cdvd->read_size,
-        event.cycles,
-        cdvd->n_params[9]
-    );
+    // printf("cdvd: ReadCd lba=%08x count=%08x size=%d cycles=%ld speed=%02x\n",
+    //     cdvd->read_lba,
+    //     cdvd->read_count,
+    //     cdvd->read_size,
+    //     event.cycles,
+    //     cdvd->n_params[9]
+    // );
 
     sched_schedule(cdvd->sched, event);
 }
@@ -572,7 +595,7 @@ static inline void cdvd_n_read_cdda(struct ps2_cdvd* cdvd) {
     cdvd->read_speed = cdvd->n_params[9];
     cdvd->read_size = CDVD_CD_SS_2340;
 
-    printf("cdvd: ReadCdda lba=%08x count=%08x\n", cdvd->read_lba, cdvd->read_count);
+    // printf("cdvd: ReadCdda lba=%08x count=%08x\n", cdvd->read_lba, cdvd->read_count);
 
     struct sched_event event;
 
@@ -609,7 +632,7 @@ static inline void cdvd_n_read_dvd(struct ps2_cdvd* cdvd) {
     cdvd->read_speed = cdvd->n_params[9];
     cdvd->read_size = CDVD_DVD_SS;
 
-    printf("cdvd: ReadDvd lba=%08x count=%08x\n", cdvd->read_lba, cdvd->read_count);
+    // printf("cdvd: ReadDvd lba=%08x count=%08x\n", cdvd->read_lba, cdvd->read_count);
 
     struct sched_event event;
 
@@ -769,9 +792,9 @@ int cdvd_get_extension(const char* path) {
 int cdvd_detect_disc_type(struct ps2_cdvd* cdvd) {
     uint64_t size = 0;
 
-    fseek(cdvd->file, 0, SEEK_END);
+    fseek64(cdvd->file, 0, SEEK_END);
 
-    size = ftell(cdvd->file);
+    size = ftell64(cdvd->file);
 
     cdvd_read_sector(cdvd, 16, 0);
 
@@ -862,18 +885,18 @@ uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
     // printf("cdvd: read %08x\n", addr);
 
     switch (addr) {
-        case 0x1F402004: printf("cdvd: read n_cmd %x\n", cdvd->n_cmd); return cdvd->n_cmd;
-        case 0x1F402005: printf("cdvd: read n_stat %x\n", cdvd->n_stat); return cdvd->n_stat;
+        case 0x1F402004: /* printf("cdvd: read n_cmd %x\n", cdvd->n_cmd); */ return cdvd->n_cmd;
+        case 0x1F402005: /* printf("cdvd: read n_stat %x\n", cdvd->n_stat); */ return cdvd->n_stat;
         // case 0x1F402005: (W)
-        case 0x1F402006: printf("cdvd: read error %x\n", 0); return 0; //cdvd->error;
+        case 0x1F402006: /* printf("cdvd: read error %x\n", 0); */ return 0; //cdvd->error;
         // case 0x1F402007: (W)
-        case 0x1F402008: printf("cdvd: read i_stat %x\n", cdvd->i_stat); return cdvd->i_stat;
-        case 0x1F40200A: printf("cdvd: read status %x\n", cdvd->status); return cdvd->status;
-        case 0x1F40200B: printf("cdvd: read sticky_status %x\n", cdvd->sticky_status); return cdvd->sticky_status;
-        case 0x1F40200F: printf("cdvd: read disc_type %x\n", cdvd->disc_type); return cdvd->disc_type;
-        case 0x1F402013: printf("cdvd: read speed %x\n", cdvd->read_speed); return 0x14;
-        case 0x1F402016: printf("cdvd: read s_cmd %x\n", cdvd->s_cmd); return cdvd->s_cmd;
-        case 0x1F402017: printf("cdvd: read s_stat %x\n", cdvd->s_stat); return cdvd->s_stat;
+        case 0x1F402008: /* printf("cdvd: read i_stat %x\n", cdvd->i_stat); */ return cdvd->i_stat;
+        case 0x1F40200A: /* printf("cdvd: read status %x\n", cdvd->status); */ return cdvd->status;
+        case 0x1F40200B: /* printf("cdvd: read sticky_status %x\n", cdvd->sticky_status); */ return cdvd->sticky_status;
+        case 0x1F40200F: /* printf("cdvd: read disc_type %x\n", cdvd->disc_type); */ return cdvd->disc_type;
+        case 0x1F402013: /* printf("cdvd: read speed %x\n", cdvd->read_speed); */ return 0x14;
+        case 0x1F402016: /* printf("cdvd: read s_cmd %x\n", cdvd->s_cmd); */ return cdvd->s_cmd;
+        case 0x1F402017: /* printf("cdvd: read s_stat %x\n", cdvd->s_stat); */ return cdvd->s_stat;
         // case 0x1F402017: (W);
         case 0x1F402018: return cdvd_read_s_response(cdvd); // { int r = cdvd_read_s_response(cdvd); printf("cdvd: read s_response %x\n", r); return r; }
     }
@@ -903,3 +926,6 @@ void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data) {
 
     return;
 }
+
+#undef fseek64
+#undef ftell64
