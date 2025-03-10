@@ -93,12 +93,18 @@ void show_main_menubar(iris::instance* iris) {
                 );
 
                 if (file) {
+                    std::string str(file);
+
+                    str = "host:" + str;
+
                     // Temporarily disable window updates
                     struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
 
                     ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
 
-                    ps2_elf_load(iris->ps2, file);
+                    ps2_boot_file(iris->ps2, str.c_str());
+
+                    // ps2_elf_load(iris->ps2, file);
 
                     // Re-enable window updates
                     ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
