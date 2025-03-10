@@ -72,6 +72,8 @@ struct software_thread_state {
     GLuint fb_out_tex = 0;
 
     unsigned int frame = 0;
+
+    uint32_t* buf = nullptr;
 };
 
 void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window);

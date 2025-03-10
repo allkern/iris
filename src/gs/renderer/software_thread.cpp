@@ -10,6 +10,203 @@
 
 #include "GL/gl3w.h"
 
+int psmct32_block[] = {
+    0 , 1 , 4 , 5 , 16, 17, 20, 21,
+    2 , 3 , 6 , 7 , 18, 19, 22, 23,
+    8 , 9 , 12, 13, 24, 25, 28, 29,
+    10, 11, 14, 15, 26, 27, 30, 31
+};
+
+int psmct32_column[] = {
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15
+};
+
+static inline int psmct32_addr(int base, int width, int x, int y) {
+    // base expressed in blocks
+    // 1 page = 64x32 = 8 KiB = 2048 words
+    // 1 block = 8x8 = 256 B = 64 words
+    // 1 column = 8x2 = 64 B = 16 words
+
+    int page = (x >> 6) + ((y >> 5) * width);
+    int blkx = (x >> 3) & 7;
+    int blky = (y >> 3) & 3;
+    int blk = blkx + (blky * 8);
+    int col = (y >> 1) & 3;
+    int idx = (x & 7) + ((y & 1) * 8);
+
+    // Unswizzle block
+    blk = psmct32_block[blk];
+
+    // Unswizzle column
+    idx = psmct32_column[idx];
+
+    // printf("(%x, %d, %d, %d) -> p=%d b=%d c=%d addr=%08x\n",
+    //     base, width, x, y,
+    //     page, blk, cl,
+    //     (page * 2048) + (base * 64) + (blk * 64) + cl
+    // );
+
+    return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
+}
+
+int psmt8_column_02[] = {
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7
+};
+
+int psmt8_column_13[] = {
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15
+};
+
+int psmt8_shift[] = {
+    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+    2 , 2 , 2 , 2 , 2 , 2 , 2 , 2 ,
+    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+    2 , 2 , 2 , 2 , 2 , 2 , 2 , 2 ,
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+    3 , 3 , 3 , 3 , 3 , 3 , 3 , 3 ,
+    1 , 1 , 1 , 1 , 1 , 1 , 1 , 1 ,
+    3 , 3 , 3 , 3 , 3 , 3 , 3 , 3
+};
+
+static inline int psmt8_addr(int base, int width, int x, int y) {
+    // page            block          column
+    // 128 x 64 pixels 16 x 16 pixels 16 x 4 pixels
+    // base expressed in blocks
+    // 1 page = 128x64 = 8 KiB = 2048 words
+    // 1 block = 16x16 = 256 B = 64 words
+    // 1 column = 16x4 = 64 B = 16 words
+    // 1 page = 128/4x64 = 32x64 words
+    // 1 block = 16/4x16 = 4x16 words
+    // 1 column = 16/4x4 = 4x4 words
+
+    int page = (x >> 7) + ((y >> 6) * (width >> 1));
+    int blkx = (x >> 4) & 7;
+    int blky = (y >> 4) & 3;
+    int blk = blkx + (blky * 8);
+    int col = (y >> 2) & 3;
+    int idx = (x & 15) + ((y & 3) * 16);
+    // int shift = (x & 3) * 16;
+
+    // Unswizzle block
+    blk = psmct32_block[blk];
+
+    // Unswizzle column
+    idx = (col & 1) ? psmt8_column_13[idx] : psmt8_column_02[idx];
+
+    // printf("(%x, %d, %d, %d) -> p=%d b=%d c=%d addr=%08x\n",
+    //     base, width, x, y,
+    //     page, blk, cl,
+    //     (page * 2048) + (base * 64) + (blk * 64) + cl
+    // );
+
+    return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
+}
+
+int psmt4_block[] = {
+    0 , 2 , 8 , 10, 1 , 3 , 9 , 11,
+    4 , 6 , 12, 14, 5 , 7 , 13, 15,
+    16, 18, 24, 26, 17, 19, 25, 27,
+    20, 22, 28, 30, 21, 23, 29, 31
+};
+
+int psmt4_column_02[] = {
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7
+};
+
+int psmt4_column_13[] = {
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    8 , 9 , 12, 13, 0 , 1 , 4 , 5 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    10, 11, 14, 15, 2 , 3 , 6 , 7 ,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    0 , 1 , 4 , 5 , 8 , 9 , 12, 13,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15,
+    2 , 3 , 6 , 7 , 10, 11, 14, 15
+};
+
+int psmt4_shift[] = {
+    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+    8 , 8 , 8 , 8 , 8 , 8 , 8 , 8 ,
+    16, 16, 16, 16, 16, 16, 16, 16,
+    24, 24, 24, 24, 24, 24, 24, 24,
+    0 , 0 , 0 , 0 , 0 , 0 , 0 , 0 ,
+    8 , 8 , 8 , 8 , 8 , 8 , 8 , 8 ,
+    16, 16, 16, 16, 16, 16, 16, 16,
+    24, 24, 24, 24, 24, 24, 24, 24,
+    4 , 4 , 4 , 4 , 4 , 4 , 4 , 4 ,
+    12, 12, 12, 12, 12, 12, 12, 12,
+    20, 20, 20, 20, 20, 20, 20, 20,
+    28, 28, 28, 28, 28, 28, 28, 28,
+    4 , 4 , 4 , 4 , 4 , 4 , 4 , 4 ,
+    12, 12, 12, 12, 12, 12, 12, 12,
+    20, 20, 20, 20, 20, 20, 20, 20,
+    28, 28, 28, 28, 28, 28, 28, 28
+};
+
+static inline int psmt4_addr(int base, int width, int x, int y) {
+    // page             block          column
+    // 128 x 128 pixels 32 x 16 pixels 32 x 4 pixels
+    int page = (x >> 7) + ((y >> 7) * (width >> 1));
+    int blkx = (x >> 5) & 3;
+    int blky = (y >> 4) & 7;
+    int blk = blkx + (blky * 4);
+    int col = (y >> 2) & 3;
+    int idx = (x & 31) + ((y & 3) * 32);
+    // int shift = (x & 3) * 16;
+
+    // Unswizzle block
+    blk = psmt4_block[blk];
+
+    // Unswizzle column
+    idx = (col & 1) ? psmt4_column_13[idx] : psmt4_column_02[idx];
+
+    // printf("(%x, %d, %d, %d) -> p=%d b=%d c=%d addr=%08x\n",
+    //     base, width, x, y,
+    //     page, blk, cl,
+    //     (page * 2048) + (base * 64) + (blk * 64) + cl
+    // );
+
+    return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
+}
+
 static const char* default_vert_shader =
     "#version 330 core\n"
     "layout (location = 0) in vec3 pos;\n"
@@ -177,20 +374,36 @@ void software_thread_set_size(void* udata, int width, int height) {
 
     int magh = ((display >> 23) & 7) + 1;
     int magv = ((display >> 27) & 3) + 1;
-    ctx->tex_w = (((display >> 32) & 0xfff) / magh) + 1;
-    ctx->tex_h = (((display >> 44) & 0x7ff) / magv) + 1;
 
     if (((display >> 32) & 0xfff) == 0) {
         ctx->tex_w = 0;
         ctx->tex_h = 0;
-
+        
         return;
     }
 
-    // SMODE2 INT=1 FFMD=0
-    if ((ctx->gs->smode2 & 3) == 3) {
-        ctx->tex_h /= 2;
+    if (((display >> 44) & 0x7ff) == 0) {
+        ctx->tex_w = 0;
+        ctx->tex_h = 0;
+        
+        return;
     }
+
+    uint32_t tex_w = (((display >> 32) & 0xfff) / magh) + 1;
+    uint32_t tex_h = (((display >> 44) & 0x7ff) / magv) + 1;
+
+    // SMODE2 INT=1 FFMD=1
+    if ((ctx->gs->smode2 & 3) == 3) {
+        tex_h /= 2;
+    }
+
+    // Do nothing if the size hasn't changed
+    if (tex_w == ctx->tex_w && tex_h == ctx->tex_h) {
+        return;
+    }
+
+    ctx->tex_w = tex_w;
+    ctx->tex_h = tex_h;
 
     if (ctx->tex) {
         glDeleteTextures(1, &ctx->tex);
@@ -204,6 +417,27 @@ void software_thread_set_size(void* udata, int width, int height) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->tex_w, ctx->tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+
+    // if ((ctx->gs->smode2 & 3) != 3)
+    //     return;
+
+    // if (ctx->buf)
+    //     free(ctx->buf);
+
+    // int bpp = 0;
+
+    // switch (ctx->disp_fmt) {
+    //     case GS_PSMCT32:
+    //     case GS_PSMCT24: {
+    //         bpp = 4;
+    //     } break;
+    //     case GS_PSMCT16:
+    //     case GS_PSMCT16S: {
+    //         bpp = 2;
+    //     } break;
+    // }
+
+    // ctx->buf = (uint32_t*)malloc((ctx->tex_w * bpp) * ctx->tex_h);
 
     // printf("software: width=%d height=%d format=%d display=%08x\n",
     //     ((display >> 32) & 0xfff),
@@ -391,7 +625,7 @@ static inline uint32_t gs_read_cb(struct ps2_gs* gs, int i) {
 
             switch (gs->ctx->cbpsm) {
                 case GS_PSMCT32: {
-                    return gs->vram[gs->ctx->cbp + x + (y * 64)];
+                    return gs->vram[psmct32_addr(gs->ctx->cbp, 1, x, y)];
                 } break;
 
                 case GS_PSMCT16:
@@ -409,7 +643,8 @@ static inline uint32_t gs_read_cb(struct ps2_gs* gs, int i) {
 
             switch (gs->ctx->cbpsm) {
                 case GS_PSMCT32: {
-                    return gs->vram[gs->ctx->cbp + x + (y * 64)];
+                    // return gs->clut_cache[gs->ctx->csa + x + (y * 8)];
+                    return gs->vram[psmct32_addr(gs->ctx->cbp, 1, x, y)];
                 } break;
 
                 case GS_PSMCT16:
@@ -477,11 +712,10 @@ static inline uint32_t gs_from_rgba32(struct ps2_gs* gs, uint32_t c, int fmt) {
 
 static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
     switch (gs->ctx->tbpsm) {
-        case GS_PSMCT32: {
-            return gs->vram[(gs->ctx->tbp0 + u + (v * gs->ctx->tbw)) & 0xfffff];
-        }
+        case GS_PSMCT32:
+            return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v)];
         case GS_PSMCT24:
-            return gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)] | 0xff000000;
+            return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v)] | 0xff000000;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
             int shift = (u & 1) << 4;
@@ -491,6 +725,12 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
             return ((data & (0xffff << shift)) >> shift);
         } break;
         case GS_PSMT8: {
+            uint32_t addr = psmt8_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
+            uint8_t* vram = (uint8_t*)(&gs->vram[addr]);
+
+            int idx = (u & 15) + ((v & 3) * 16);
+
+            return gs_read_cb(gs, vram[psmt8_shift[idx]]);
             // 1 page = 128x64px block = 16x16px
             // 1 block = 256 bytes = 64 words
             // tbp = 0
@@ -507,17 +747,17 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
             // tbp offset = unswizzle_block(u, v) * 64 words
             // blk offset = unswizzle_column(u, v)
             // addr = tbp + tbp offset + blk offset
-            uint32_t addr = gs->ctx->tbp0 + (u >> 2) + (v * (gs->ctx->tbw >> 2));
+            // uint32_t addr = gs->ctx->tbp0 + (u >> 2) + (v * (gs->ctx->tbw >> 2));
 
-            if (addr >= 0x100000)
-                break;
+            // if (addr >= 0x100000)
+            //     break;
 
-            uint32_t data = gs->vram[gs->ctx->tbp0 + (u >> 2) + (v * (gs->ctx->tbw >> 2))];
+            // uint32_t data = gs->vram[gs->ctx->tbp0 + (u >> 2) + (v * (gs->ctx->tbw >> 2))];
 
-            int shift = (u & 3) << 3;
-            int index = (data & (0xff << shift)) >> shift;
+            // int shift = (u & 3) << 3;
+            // int index = (data & (0xff << shift)) >> shift;
 
-            return gs_read_cb(gs, index);
+            // return gs_read_cb(gs, index);
         } break;
         case GS_PSMT8H: {
             uint32_t data = gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)];
@@ -525,14 +765,14 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
             return gs_read_cb(gs, data >> 24);
         } break;
         case GS_PSMT4: {
-            int shift = (u & 7) << 2;
+            uint32_t addr = psmt4_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
 
-            uint32_t addr = gs->ctx->tbp0 + (u >> 3) + (v * (gs->ctx->tbw >> 3));
-            uint32_t data = gs->vram[addr & 0xfffff];
-
-            int index = (data & (0xf << shift)) >> shift;
-
-            return gs_read_cb(gs, index);
+            int idx = (u & 31) + ((v & 3) * 32);
+            int shift = psmt4_shift[idx];
+        
+            uint32_t mask = 0xful << shift;
+        
+            return gs_read_cb(gs, (gs->vram[addr] & mask) >> shift);
         } break;
         case GS_PSMT4HL: {
             uint32_t data = gs->vram[gs->ctx->tbp0 + u + (v * gs->ctx->tbw)];
@@ -1008,6 +1248,34 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
     //     gs->ctx->zte
     // );
 
+    // if (gs->tme) {
+    //     printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d uv=(%d,%d) TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08lx abe=%d FB format=%d fbw=%d fba=%ld\n",
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbp0,
+    //         gs->ctx->tbw,
+    //         v0.u,
+    //         v0.v,
+    //         gs->ctx->usize,
+    //         gs->ctx->vsize,
+    //         gs->ctx->cbpsm,
+    //         gs->ctx->cbp,
+    //         gs->ctx->csm,
+    //         gs->ctx->tfx,
+    //         v1.rgbaq & 0xffffffff,
+    //         gs->abe,
+    //         gs->ctx->fbpsm,
+    //         gs->ctx->fbw,
+    //         gs->ctx->fba// ,
+    //         // gs->ctx->a,
+    //         // gs->ctx->b,
+    //         // gs->ctx->c,
+    //         // gs->ctx->d,
+    //         // gs->ctx->tcc,
+    //         // gs->ctx->fix
+    //     );
+    // }
+
     // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) min=(%d,%d) max=(%d,%d) sca0=(%d,%d) sca1=(%d,%d) offset=(%d,%d)\n",
     //     v0.x, v0.y, v0.z,
     //     v1.x, v1.y, v1.z,
@@ -1273,6 +1541,8 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     }
 }
 
+static int frame = 0;
+
 void render(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
@@ -1294,6 +1564,44 @@ void render(struct ps2_gs* gs, void* udata) {
 
     if (!ctx->tex_w)
         return;
+
+    // if ((ctx->gs->smode2 & 3) == 3) {
+    //     // Need to deinterlace
+    //     int bpp = 0;
+
+    //     switch (ctx->disp_fmt) {
+    //         case GS_PSMCT32:
+    //         case GS_PSMCT24: {
+    //             bpp = 4;
+    //         } break;
+    //         case GS_PSMCT16:
+    //         case GS_PSMCT16S: {
+    //             bpp = 2;
+    //         } break;
+    //     }
+
+    //     int stride = ctx->tex_w * bpp;
+    //     int odd = (ctx->gs->csr >> 13) & 1;
+    //     int sy = 0;
+
+    //     frame ^= 1;
+
+    //     // printf("csr.12=%d csr.13=%d\n",
+    //     //     (ctx->gs->csr >> 12) & 1,
+    //     //     (ctx->gs->csr >> 13) & 1
+    //     // );
+    
+    //     for (int y = (odd ^ 1); y < ctx->tex_h; y += 2) {
+    //         uint8_t* dst = ((uint8_t*)ctx->buf) + (stride * y);
+    //         uint8_t* src = ((uint8_t*)ptr) + (stride * sy);
+
+    //         ++sy;
+
+    //         memcpy(dst, src, stride);
+    //     }
+
+    //     ptr = ctx->buf;
+    // }
 
     SDL_Rect size, rect;
 
@@ -1579,36 +1887,38 @@ void transfer_start(struct ps2_gs* gs, void* udata) {
     ctx->rrw = (gs->trxreg >> 0) & 0xfff;
     ctx->rrh = (gs->trxreg >> 32) & 0xfff;
     ctx->xdir = gs->trxdir & 3;
-    ctx->dx = 0;
-    ctx->dy = 0;
-    ctx->sx = 0;
-    ctx->sy = 0;
+    ctx->dx = ctx->dsax;
+    ctx->dy = ctx->dsay;
+    ctx->sx = ctx->ssax;
+    ctx->sy = ctx->ssay;
     ctx->px = 0;
 
-    uint32_t dbp = ctx->dbp;
+    // uint32_t dbp = ctx->dbp;
 
-    ctx->dbp <<= 6;
-    ctx->dbw <<= 6;
-    ctx->sbp <<= 6;
-    ctx->sbw <<= 6;
+    // ctx->dbp <<= 6;
+    // ctx->dbw <<= 6;
+    // ctx->sbp <<= 6;
+    // ctx->sbw <<= 6;
 
-    uint32_t dbw = ctx->dbw;
+    // uint32_t dbw = ctx->dbw;
 
-    ctx->dbw = gs_pixels_to_size(ctx->dpsm, ctx->dbw);
-    ctx->sbw = gs_pixels_to_size(ctx->spsm, ctx->sbw);
+    // ctx->dbw = gs_pixels_to_size(ctx->dpsm, ctx->dbw);
+    // ctx->sbw = gs_pixels_to_size(ctx->spsm, ctx->sbw);
 
     ctx->psmct24_data = 0;
     ctx->psmct24_shift = 0;
 
-    // printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
-    //     ctx->dbp, dbp,
-    //     ctx->dbw, dbw,
-    //     ctx->dpsm,
-    //     ctx->dsax,
-    //     ctx->dsay,
-    //     ctx->rrw,
-    //     ctx->rrh
-    // );
+    // FILE* file = fopen("gs.dump", "a");
+    printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) rr=(%d,%d)\n",
+        ctx->dbp, ctx->dbp,
+        ctx->dbw, ctx->dbw,
+        ctx->dpsm,
+        ctx->dsax,
+        ctx->dsay,
+        ctx->rrw,
+        ctx->rrh
+    );
+    // fclose(file);
 
     if (ctx->xdir == 2) {
         software_thread_vram_blit(gs, ctx);
@@ -1616,37 +1926,35 @@ void transfer_start(struct ps2_gs* gs, void* udata) {
 }
 
 static inline void gs_write_psmt4(struct ps2_gs* gs, software_thread_state* ctx, uint32_t index) {
-    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+    uint32_t addr = psmt4_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy) & 0xfffff;
 
-    addr += (ctx->dx >> 3) + (ctx->dy * ctx->dbw);
-    
-    uint32_t mask = 0xf << ((ctx->dx & 7) * 4);
-    uint32_t data = gs->vram[addr] & ~mask;
+    int idx = (ctx->dx & 31) + ((ctx->dy & 3) * 32);
+    int shift = psmt4_shift[idx];
 
-    gs->vram[addr] = data | (index << ((ctx->dx & 7) * 4));
+    uint32_t mask = 0xful << shift;
+
+    gs->vram[addr] = (gs->vram[addr] & ~mask) | (index << shift);
 
     ctx->dx++;
 
-    if (ctx->dx == ctx->rrw) {
-        ctx->dx = 0;
+    if (ctx->dx == (ctx->rrw + ctx->dsax)) {
+        ctx->dx = ctx->dsax;
         ctx->dy++;
     }
 }
 
 static inline void gs_write_psmt8(struct ps2_gs* gs, software_thread_state* ctx, uint32_t index) {
-    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+    uint32_t addr = psmt8_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy) & 0xfffff;
+    uint8_t* vram = (uint8_t*)(&gs->vram[addr]);
 
-    addr += (ctx->dx >> 2) + (ctx->dy * ctx->dbw);
-    
-    uint32_t mask = 0xff << ((ctx->dx & 3) * 8);
-    uint32_t data = gs->vram[addr] & ~mask;
+    int idx = (ctx->dx & 15) + ((ctx->dy & 3) * 16);
 
-    gs->vram[addr] = data | (index << ((ctx->dx & 3) * 8));
+    vram[psmt8_shift[idx]] = index;
 
     ctx->dx++;
 
-    if (ctx->dx == ctx->rrw) {
-        ctx->dx = 0;
+    if (ctx->dx == (ctx->rrw + ctx->dsax)) {
+        ctx->dx = ctx->dsax;
         ctx->dy++;
     }
 }
@@ -1668,31 +1976,31 @@ static inline void gs_store_hwreg_psmt8(struct ps2_gs* gs, software_thread_state
 }
 
 static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_thread_state* ctx) {
-    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
-
     uint64_t data[2] = {
         gs->hwreg & 0xffffffff,
         gs->hwreg >> 32
     };
 
     for (int i = 0; i < 2; i++) {
-        gs->vram[(addr + ctx->dx++ + (ctx->dy * ctx->dbw)) & 0xfffff] = data[i];
+        uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
 
-        if (ctx->dx == ctx->rrw) {
-            ctx->dx = 0;
+        gs->vram[addr & 0xfffff] = data[i];
+
+        if (ctx->dx == (ctx->rrw + ctx->dsax)) {
+            ctx->dx = ctx->dsax;
             ctx->dy++;
         }
     }
 }
 
 static inline void gs_psmct24_write(struct ps2_gs* gs, software_thread_state* ctx, uint32_t data) {
-    uint32_t addr = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw);
+    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
 
-    gs->vram[addr + (ctx->dx++) + (ctx->dy * ctx->dbw)] = data;
+    gs->vram[addr & 0xfffff] = data;
 
-    if (ctx->dx == ctx->rrw) {
-        ctx->dx = 0;
-        ++ctx->dy;
+    if (ctx->dx == (ctx->rrw + ctx->dsax)) {
+        ctx->dx = ctx->dsax;
+        ctx->dy++;
     }
 }
 
@@ -1729,13 +2037,13 @@ static inline void gs_write_psmct16(struct ps2_gs* gs, software_thread_state* ct
     addr += (ctx->dx >> 1) + (ctx->dy * ctx->dbw);
 
     uint32_t mask = 0xffff << ((ctx->dx & 1) * 16);
-    uint32_t data = gs->vram[addr] & ~mask;
+    uint32_t data = gs->vram[addr & 0xfffff] & ~mask;
 
-    gs->vram[addr] = data | (index << ((ctx->dx & 1) * 16));
+    gs->vram[addr & 0xfffff] = data | (index << ((ctx->dx & 1) * 16));
 
     ctx->dx++;
 
-    if (ctx->dx == ctx->rrw) {
+    if (ctx->dx == (ctx->rrw + ctx->dsax)) {
         ctx->dx = 0;
         ctx->dy++;
     }
