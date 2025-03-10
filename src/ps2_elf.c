@@ -58,8 +58,6 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
 
         if (!fread(ps2->ee_ram->buf + phdr.p_vaddr, 1, phdr.p_filesz, file)) {
             printf("elf: Couldn't read segment binary\n");
-
-            return 1;
         }
     }
 
