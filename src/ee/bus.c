@@ -49,6 +49,10 @@ void ee_bus_init_gs(struct ee_bus* bus, struct ps2_gs* gs) {
     bus->gs = gs;
 }
 
+void ee_bus_init_ipu(struct ee_bus* bus, struct ps2_ipu* ipu) {
+    bus->ipu = ipu;
+}
+
 void ee_bus_init_timers(struct ee_bus* bus, struct ps2_ee_timers* timers) {
     bus->timers = timers;
 }
@@ -129,6 +133,8 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x1000F200, 0x1000F26F, sif, sif);
     MAP_REG_READ(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
+    MAP_REG_READ(64, 0x10002000, 0x1000203F, ipu, ipu);
+    MAP_REG_READ(64, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_REG_READ(32, 0x10003000, 0x100037FF, gif, gif);
     MAP_REG_READ(32, 0x10003800, 0x10005FFF, vif, vif);
     MAP_REG_READ(32, 0x1000F000, 0x1000F01F, intc, intc);
@@ -186,6 +192,8 @@ uint64_t ee_bus_read64(void* udata, uint32_t addr) {
     MAP_MEM_READ(64, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_READ(64, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_REG_READ(64, 0x12000000, 0x12001FFF, gs, gs);
+    MAP_REG_READ(64, 0x10002000, 0x1000203F, ipu, ipu);
+    MAP_REG_READ(64, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_REG_READ(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers); // Reuse 32-bit function
@@ -204,6 +212,7 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     MAP_MEM_READ(128, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_READ(128, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_REG_READ(128, 0x10004000, 0x10005FFF, vif, vif);
+    MAP_REG_READ(128, 0x10007000, 0x1000701F, ipu, ipu);
 
     printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr);
 
@@ -250,7 +259,9 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(32, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(32, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_REG_WRITE(32, 0x10000000, 0x10001FFF, ee_timers, timers);
+    MAP_REG_WRITE(64, 0x10002000, 0x1000203F, ipu, ipu);
     MAP_REG_WRITE(32, 0x10003000, 0x100037FF, gif, gif);
+    MAP_REG_WRITE(64, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_WRITE(32, 0x1000F000, 0x1000F01F, intc, intc);
     MAP_REG_WRITE(32, 0x1000F200, 0x1000F26F, sif, sif);
@@ -299,6 +310,8 @@ void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(64, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(64, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_REG_WRITE(64, 0x12000000, 0x12002000, gs, gs);
+    MAP_REG_WRITE(64, 0x10002000, 0x1000203F, ipu, ipu);
+    MAP_REG_WRITE(64, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
 
@@ -313,6 +326,7 @@ void ee_bus_write128(void* udata, uint32_t addr, uint128_t data) {
     MAP_MEM_WRITE(128, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(128, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_REG_WRITE(128, 0x10006000, 0x10006FFF, gif, gif);
+    MAP_REG_WRITE(128, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_REG_WRITE(128, 0x10004000, 0x10005FFF, vif, vif);
 
     // printf("bus: Unhandled 128-bit write to physical address 0x%08x (0x%08x%08x%08x%08x)\n", addr, data.u32[3], data.u32[2], data.u32[1], data.u32[0]);

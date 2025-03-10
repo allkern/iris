@@ -26,6 +26,7 @@ extern "C" {
 #include "shared/ram.h"
 #include "shared/sif.h"
 #include "gs/gs.h"
+#include "ipu/ipu.h"
 
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
@@ -49,6 +50,7 @@ struct ps2_state {
     struct ps2_gif* gif;
     struct ps2_vif* vif;
     struct ps2_gs* gs;
+    struct ps2_ipu* ipu;
     struct ps2_dmac* ee_dma;
     struct ps2_ram* ee_ram;
     struct ps2_intc* ee_intc;

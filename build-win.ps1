@@ -59,8 +59,9 @@ $OBJS = ($CSRC -replace '.c$',".o")
 $OBJS += ($CXXSRC -replace '.cpp$',".o")
 
 c++ @OBJS main.cpp -o iris `
+    res/icon.res `
     -O3 -march=native -mtune=native -lcomdlg32 -lole32 -lSDL2main -lSDL2 `
-    -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -mwindows -ldwmapi `
+    -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -ldwmapi `
     -I"`"$($IMGUI_DIR)`"" `
     -I"`"$($IMGUI_DIR)\backends`"" `
     -I"`"$($SDL2_DIR)\include`"" `

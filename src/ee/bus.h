@@ -13,6 +13,7 @@ extern "C" {
 #include "timers.h"
 #include "vif.h"
 #include "../iop/cdvd.h"
+#include "ipu/ipu.h"
 
 #include "shared/ram.h"
 #include "shared/sif.h"
@@ -24,12 +25,13 @@ struct ee_bus {
     struct ps2_dmac* dmac;
     struct ps2_gif* gif;
     struct ps2_gs* gs;
+    struct ps2_ipu* ipu;
     struct ps2_intc* intc;
     struct ps2_vif* vif;
     struct ps2_ee_timers* timers;
-    struct ps2_cdvd* cdvd;
-
+    
     // EE/IOP
+    struct ps2_cdvd* cdvd;
     struct ps2_bios* bios;
     struct ps2_ram* iop_ram;
     struct ps2_sif* sif;
@@ -48,6 +50,7 @@ void ee_bus_init_intc(struct ee_bus* bus, struct ps2_intc* intc);
 void ee_bus_init_gif(struct ee_bus* bus, struct ps2_gif* gif);
 void ee_bus_init_vif(struct ee_bus* bus, struct ps2_vif* vif);
 void ee_bus_init_gs(struct ee_bus* bus, struct ps2_gs* gs);
+void ee_bus_init_ipu(struct ee_bus* bus, struct ps2_ipu* ipu);
 void ee_bus_init_timers(struct ee_bus* bus, struct ps2_ee_timers* timers);
 void ee_bus_init_bios(struct ee_bus* bus, struct ps2_bios* bios);
 void ee_bus_init_iop_ram(struct ee_bus* bus, struct ps2_ram* iop_ram);
