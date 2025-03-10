@@ -7,6 +7,9 @@ extern "C" {
 
 #include <stdint.h>
 
+#include "sched.h"
+#include "intc.h"
+
 #define SPU2_RAM_SIZE 0x100000 // 2 MB
 
 /* Memory ranges:
@@ -177,6 +180,9 @@ struct ps2_spu2 {
     uint32_t spdif_mode;
     uint32_t spdif_media;
     uint32_t spdif_copy;
+
+    struct ps2_iop_intc* intc;
+    struct sched_state* sched;
 };
 
 struct spu2_sample {
@@ -188,7 +194,7 @@ struct spu2_sample {
 };
 
 struct ps2_spu2* ps2_spu2_create(void);
-void ps2_spu2_init(struct ps2_spu2* spu2);
+void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_intc* intc, struct sched_state* sched);
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr);
 void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data);
 void ps2_spu2_destroy(struct ps2_spu2* spu2);

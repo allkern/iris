@@ -76,8 +76,11 @@ struct ps2_spu2* ps2_spu2_create(void) {
     return (struct ps2_spu2*)malloc(sizeof(struct ps2_spu2));
 }
 
-void ps2_spu2_init(struct ps2_spu2* spu2) {
+void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_intc* intc, struct sched_state* sched) {
     memset(spu2, 0, sizeof(struct ps2_spu2));
+
+    spu2->intc = intc;
+    spu2->sched = sched;
 
     // CORE0/1 DMA status (ready)
     spu2->c[0].stat = 0x80;
@@ -127,17 +130,47 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
     // printf("spu2: core%d data=%04x tsa=%08x\n", c, data, spu2->c[c].tsa);
 
+    // if (spu2->c[c].tsa == spu2->c[c].irqa)
+    //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
+
     spu2->ram[spu2->c[c].tsa++] = data;
 
     spu2->c[c].tsa &= 0xfffff;
 }
 
+void spu2_core0_reset_handler(void* udata, int overshoot) {
+    struct ps2_spu2* spu2 = (struct ps2_spu2*)udata;
+
+    printf("spu2: core0 Reset\n");
+
+    spu2->c[0].stat |= 0x80;
+}
+
+void spu2_core1_reset_handler(void* udata, int overshoot) {
+    struct ps2_spu2* spu2 = (struct ps2_spu2*)udata;
+
+    printf("spu2: core1 Reset\n");
+
+    spu2->c[1].stat |= 0x80;
+}
+
 void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
     spu2->c[c].attr = data & 0x7fff;
 
-    // if (data & 0x8000) {
-    //     spu2->c[c].stat = 0;
-    // }
+    if (data & 0x8000) {
+        struct sched_event event;
+
+        printf("spu2: Resetting core%d\n", c);
+
+        event.callback = c ? spu2_core1_reset_handler : spu2_core0_reset_handler;
+        event.cycles = 10000;
+        event.name = "SPU2 Reset";
+        event.udata = spu2;
+
+        sched_schedule(spu2->sched, event);
+
+        spu2->c[c].stat = 0;
+    }
 }
 
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
@@ -521,6 +554,9 @@ static const int ps_adpcm_coefs_i[5][2] = {
 void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
     uint16_t hdr = spu2->ram[v->nax];
 
+    // if (v->nax == spu2->c[0].irqa || v->nax == spu2->c[1].irqa)
+    //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
+
     v->loop_start = (hdr >> 8) & 1;
     v->loop = (hdr >> 9) & 1;
     v->loop_end = (hdr >> 10) & 1;
@@ -536,7 +572,11 @@ void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
     for (int i = 0; i < 28; i++) {
         int sh = (i & 3) * 4;
 
-        uint16_t n = (spu2->ram[v->nax + 1 + (i >> 2)] & (0xf << sh)) >> sh;
+        uint32_t addr = v->nax + 1 + (i >> 2);
+        uint16_t n = (spu2->ram[addr] & (0xf << sh)) >> sh;
+
+        if (addr == spu2->c[0].irqa || addr == spu2->c[1].irqa)
+            ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
 
         // Sign extend t
         int32_t t = (int16_t)((n << 12) & 0xf000) >> shift_factor;
@@ -574,10 +614,10 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         } else if (v->loop_end) {
             if (!v->loop) {
                 v->playing = 0;
-                printf("voice %d loop_end\n", vc);
+                // printf("voice %d loop_end\n", vc);
             } else {
                 v->nax = v->lsax;
-                printf("voice %d loop_end repeat\n", vc);
+                // printf("voice %d loop_end repeat\n", vc);
             }
         } else {
             v->nax += 8;
