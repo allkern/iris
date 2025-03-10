@@ -132,6 +132,12 @@ void ps2_gs_destroy(struct ps2_gs* gs) {
 }
 
 void gs_start_primitive(struct ps2_gs* gs) {
+    if (gs->prim & ~0x7ff) {
+        // printf("gs: Invalid prim value %016x\n", gs->prim);
+
+        // exit(1);
+    }
+
     gs->vqi = 0;
 }
 
@@ -314,22 +320,96 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
     }
 }
 
+// static inline void gs_load_clut_cache(struct ps2_gs* gs, int i) {
+//     // printf("tbpsm=%x cbpsm=%x csm=%d csa=%x (%d) cld=%d\n",
+//     //     gs->context[i].tbpsm,
+//     //     gs->context[i].cbpsm,
+//     //     gs->context[i].csm,
+//     //     gs->context[i].csa,
+//     //     gs->context[i].csa,
+//     //     gs->context[i].cld
+//     // );
+
+//     switch (gs->context[i].cld) {
+//         case 1: break;
+//         case 2: gs->cbp0 = gs->context[i].cbp; break;
+//         case 3: gs->cbp1 = gs->context[i].cbp; break;
+//         case 4: if (gs->context[i].cbp == gs->cbp0) return; break;
+//         case 5: if (gs->context[i].cbp == gs->cbp1) return; break;
+//         default: return;
+//     }
+
+//     switch (gs->context[i].tbpsm) {
+//         case GS_PSMT8H:
+//         case GS_PSMT8: {
+//             switch (gs->context[i].cbpsm) {
+//                 case GS_PSMCT32: {
+//                     for (int y = 0; y < 16; y++) {
+//                         for (int x = 0; x < 16; x++) {
+//                             uint32_t cache_addr = (gs->context[i].csa * 16) + (x + (y * 16));
+//                             uint32_t vram_addr = gs->context[i].cbp + (x + (y * 64));
+
+//                             gs->clut_cache[cache_addr] = gs->vram[vram_addr];
+//                         }
+//                     }
+//                 } break;
+
+//                 case GS_PSMCT16:
+//                 case GS_PSMCT16S: {
+//                     printf("16bpp 8-bit CLUT\n");
+
+//                     exit(1);
+//                 } break;
+//             }
+//         } break;
+
+//         case GS_PSMT4HH:
+//         case GS_PSMT4HL:
+//         case GS_PSMT4: {
+//             switch (gs->context[i].cbpsm) {
+//                 case GS_PSMCT32: {
+//                     for (int y = 0; y < 2; y++) {
+//                         for (int x = 0; x < 8; x++) {
+//                             uint32_t cache_addr = (gs->context[i].csa * 16) + (x + (y * 8));
+//                             uint32_t vram_addr = gs->context[i].cbp + (x + (y * 64));
+
+//                             gs->clut_cache[cache_addr] = gs->vram[vram_addr];
+//                         }
+//                     }
+//                 } break;
+
+//                 case GS_PSMCT16:
+//                 case GS_PSMCT16S: {
+//                     printf("16bpp 4-bit CLUT\n");
+
+//                     exit(1);
+//                 } break;
+//             }
+//         } break;
+//     }
+// }
+
 static inline void gs_unpack_tex0(struct ps2_gs* gs, int i) {
-    gs->context[i].tbp0 = (gs->context[i].tex0 & 0x3fff) << 6;
-    gs->context[i].tbw = ((gs->context[i].tex0 >> 14) & 0x3f) << 6;
+    gs->context[i].tbp0 = gs->context[i].tex0 & 0x3fff;
+    gs->context[i].tbw = (gs->context[i].tex0 >> 14) & 0x3f;
     gs->context[i].tbpsm = (gs->context[i].tex0 >> 20) & 0x3f;
     gs->context[i].usize = 1 << ((gs->context[i].tex0 >> 26) & 0x3f); // tw
     gs->context[i].vsize = 1 << ((gs->context[i].tex0 >> 30) & 0x3f); // th
     gs->context[i].tcc = (gs->context[i].tex0 >> 34) & 1;
     gs->context[i].tfx = (gs->context[i].tex0 >> 35) & 3;
-    gs->context[i].cbp = ((gs->context[i].tex0 >> 37) & 0x3fff) << 6;
+    gs->context[i].cbp = (gs->context[i].tex0 >> 37) & 0x3fff;
     gs->context[i].cbpsm = (gs->context[i].tex0 >> 51) & 0xf;
     gs->context[i].csm = (gs->context[i].tex0 >> 55) & 1;
     gs->context[i].csa = (gs->context[i].tex0 >> 56) & 0x1f;
     gs->context[i].cld = (gs->context[i].tex0 >> 61) & 7;
-
+    
     gs->context[i].usize = (gs->context[i].usize > 1024) ? 1024 : gs->context[i].usize;
     gs->context[i].vsize = (gs->context[i].vsize > 1024) ? 1024 : gs->context[i].vsize;
+
+    if (gs->context[i].cld) {
+        // printf("gs: CLUT cache load (mode %d, dbp=%08x)\n", gs->context[i].cld, gs->context[i].cbp);
+        // gs_load_clut_cache(gs, i);
+    }
 }
 
 static inline void gs_unpack_clamp(struct ps2_gs* gs, int i) {
@@ -353,11 +433,20 @@ static inline void gs_unpack_tex1(struct ps2_gs* gs, int i) {
 
 static inline void gs_unpack_tex2(struct ps2_gs* gs, int i) {
     gs->context[i].tbpsm = (gs->context[i].tex2 >> 20) & 0x3f;
-    gs->context[i].cbp = ((gs->context[i].tex2 >> 37) & 0x3fff) << 6;
+    gs->context[i].cbp = (gs->context[i].tex2 >> 37) & 0x3fff;
     gs->context[i].cbpsm = (gs->context[i].tex2 >> 51) & 0xf;
     gs->context[i].csm = (gs->context[i].tex2 >> 55) & 1;
     gs->context[i].csa = (gs->context[i].tex2 >> 56) & 0x1f;
     gs->context[i].cld = (gs->context[i].tex2 >> 61) & 7;
+
+    if (gs->context[i].cld) {
+        // printf("gs: CLUT cache load (mode %d, dbp=%08x)\n", gs->context[i].cld, gs->context[i].cbp);
+        // gs_load_clut_cache(gs, i);
+    }
+
+    // if (gs->context[i].cld) {
+    //     gs_load_clut_cache(gs, i);
+    // }
 }
 
 static inline void gs_unpack_xyoffset(struct ps2_gs* gs, int i) {
@@ -366,21 +455,21 @@ static inline void gs_unpack_xyoffset(struct ps2_gs* gs, int i) {
 }
 
 static inline void gs_unpack_miptbp1(struct ps2_gs* gs, int i) {
-    gs->context[i].mmtbp[0] = (gs->context[i].miptbp1 & 0x3fff) << 6;
-    gs->context[i].mmtbw[0] = ((gs->context[i].miptbp1 >> 14) & 0x3f) << 6;
-    gs->context[i].mmtbp[1] = ((gs->context[i].miptbp1 >> 20) & 0x3fff) << 6;
-    gs->context[i].mmtbw[1] = ((gs->context[i].miptbp1 >> 34) & 0x3f) << 6;
-    gs->context[i].mmtbp[2] = ((gs->context[i].miptbp1 >> 40) & 0x3fff) << 6;
-    gs->context[i].mmtbw[2] = ((gs->context[i].miptbp1 >> 54) & 0x3f) << 6;
+    gs->context[i].mmtbp[0] = gs->context[i].miptbp1 & 0x3fff;
+    gs->context[i].mmtbw[0] = (gs->context[i].miptbp1 >> 14) & 0x3f;
+    gs->context[i].mmtbp[1] = (gs->context[i].miptbp1 >> 20) & 0x3fff;
+    gs->context[i].mmtbw[1] = (gs->context[i].miptbp1 >> 34) & 0x3f;
+    gs->context[i].mmtbp[2] = (gs->context[i].miptbp1 >> 40) & 0x3fff;
+    gs->context[i].mmtbw[2] = (gs->context[i].miptbp1 >> 54) & 0x3f;
 }
 
 static inline void gs_unpack_miptbp2(struct ps2_gs* gs, int i) {
-    gs->context[i].mmtbp[3] = (gs->context[i].miptbp2 & 0x3fff) << 6;
-    gs->context[i].mmtbw[3] = ((gs->context[i].miptbp2 >> 14) & 0x3f) << 6;
-    gs->context[i].mmtbp[4] = ((gs->context[i].miptbp2 >> 20) & 0x3fff) << 6;
-    gs->context[i].mmtbw[4] = ((gs->context[i].miptbp2 >> 34) & 0x3f) << 6;
-    gs->context[i].mmtbp[5] = ((gs->context[i].miptbp2 >> 40) & 0x3fff) << 6;
-    gs->context[i].mmtbw[5] = ((gs->context[i].miptbp2 >> 54) & 0x3f) << 6;
+    gs->context[i].mmtbp[3] = gs->context[i].miptbp2 & 0x3fff;
+    gs->context[i].mmtbw[3] = (gs->context[i].miptbp2 >> 14) & 0x3f;
+    gs->context[i].mmtbp[4] = (gs->context[i].miptbp2 >> 20) & 0x3fff;
+    gs->context[i].mmtbw[4] = (gs->context[i].miptbp2 >> 34) & 0x3f;
+    gs->context[i].mmtbp[5] = (gs->context[i].miptbp2 >> 40) & 0x3fff;
+    gs->context[i].mmtbw[5] = (gs->context[i].miptbp2 >> 54) & 0x3f;
 }
 
 static inline void gs_unpack_scissor(struct ps2_gs* gs, int i) {

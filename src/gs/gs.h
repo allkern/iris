@@ -259,6 +259,11 @@ struct ps2_gs {
 
     uint32_t* vram;
 
+    // 1KB CLUT cache
+    uint32_t clut_cache[0x100];
+    uint32_t cbp0;
+    uint32_t cbp1;
+
     uint32_t attr;
     struct gs_context context[2];
     struct gs_context* ctx;
