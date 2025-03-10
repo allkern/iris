@@ -6,6 +6,14 @@
 
 #include "ps2_iso9660.h"
 
+#ifdef _WIN32
+#define fseek64 fseeko64
+#define ftell64 ftello64
+#else
+#define fseek64 fseek
+#define ftell64 ftell
+#endif
+
 #define IGNORE_RETURN ((void)!)
 
 struct iso9660_state* iso9660_open(const char* path) {
@@ -41,7 +49,7 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
 
     struct iso9660_dirent* root = (struct iso9660_dirent*)iso->pvd.root;
 
-    fseek(iso->file, root->lba_le * 0x800, SEEK_SET);
+    fseek64(iso->file, root->lba_le * 0x800, SEEK_SET);
 
     if (!fread(iso->buf, 0x800, 1, iso->file)) {
         printf("iso9660: Couldn't read root sector\n");
@@ -84,7 +92,7 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
         return NULL;
     }
 
-    fseek(iso->file, dir->lba_le * 0x800, SEEK_SET);
+    fseek64(iso->file, dir->lba_le * 0x800, SEEK_SET);
 
     if (!fread(iso->buf, 0x800, 1, iso->file)) {
         printf("iso9660: Couldn't read SYSTEM.CNF\n");
@@ -153,3 +161,6 @@ void iso9660_close(struct iso9660_state* iso) {
 
     free(iso);
 }
+
+#undef fseek64
+#undef ftell64
