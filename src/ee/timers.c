@@ -54,8 +54,8 @@ void ps2_ee_timers_write32(struct ps2_ee_timers* timers, uint32_t addr, uint64_t
 
     switch (addr & 0xff) {
         case 0x00: timers->timer[t].counter = data & 0xffff; return;
-        case 0x10: timers->timer[t].mode = data; return;
-        case 0x20: ee_timers_write_mode(timers, data & 0xffff, t); return;
+        case 0x10: ee_timers_write_mode(timers, data & 0xffff, t); return;
+        case 0x20: timers->timer[t].compare = data; return;
         case 0x30: timers->timer[t].hold = data & 0xffff; return;
     }
 }
