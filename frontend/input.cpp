@@ -24,8 +24,13 @@ uint32_t map_button(SDL_Keycode k) {
 }
 
 void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key) {
-    if (key.keysym.sym == SDLK_SPACE) {
-        iris->pause = !iris->pause;
+    switch (key.keysym.sym) {
+        case SDLK_SPACE: iris->pause = !iris->pause; break;
+        case SDLK_F11: {
+            iris->fullscreen = !iris->fullscreen;
+
+            SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+        } break;
     }
 
     uint16_t mask = map_button(key.keysym.sym);

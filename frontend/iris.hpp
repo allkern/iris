@@ -82,6 +82,7 @@ struct instance {
     ImFont* font_heading = nullptr;
     ImFont* font_body = nullptr;
     ImFont* font_icons = nullptr;
+    ImFont* font_icons_big = nullptr;
 
     std::string elf_path = "";
     std::string boot_path = "";
@@ -119,6 +120,9 @@ struct instance {
     bool bilinear = true;
     bool integer_scaling = false;
     float scale = 1.5f;
+    int window_mode = 0;
+
+    std::deque <std::string> recents;
 
     bool dump_to_file = true;
     std::string settings_path = "";
@@ -174,6 +178,7 @@ void show_status_bar(iris::instance* iris);
 void show_breakpoints(iris::instance* iris);
 void show_about_window(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
+// void show_gamelist(iris::instance* iris);
 
 void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key);
 void handle_keyup_event(iris::instance* iris, SDL_KeyboardEvent& key);

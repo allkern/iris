@@ -92,6 +92,11 @@ int parse_toml_settings(iris::instance* iris) {
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
 
+    toml::array* recents = tbl["recents"]["array"].as_array();
+
+    for (int i = 0; i < recents->size(); i++)
+        iris->recents.push_back(recents->at(i).as_string()->get());
+
     renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
     renderer_set_bilinear(iris->ctx, iris->bilinear);
     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
@@ -228,8 +233,16 @@ void close_settings(iris::instance* iris) {
         } },
         { "paths", toml::table {
             { "bios_path", iris->bios_path }
+        } },
+        { "recents", toml::table {
+            { "array", toml::array() }
         } }
     };
+
+    toml::array* recents = tbl["recents"]["array"].as_array();
+
+    for (const std::string& s : iris->recents)
+        recents->push_back(s);
 
     file << tbl;
 }

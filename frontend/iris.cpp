@@ -42,6 +42,8 @@ static const ImWchar icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
 iris::instance* create();
 
+int last_mouse_click = 0;
+
 void update_title(iris::instance* iris) {
     char buf[128];
 
@@ -111,7 +113,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     iris->gl_context = SDL_GL_CreateContext(iris->window);
     SDL_GL_MakeCurrent(iris->window, iris->gl_context);
-    SDL_GL_SetSwapInterval(1);
+    SDL_GL_SetSwapInterval(0);
 
     ImGui::CreateContext();
     IMGUI_CHECKVERSION();
@@ -154,6 +156,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     iris->font_heading    = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 20.0f);
     iris->font_body       = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 16.0f);
     iris->font_icons      = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 20.0f, &config, icon_range);
+    iris->font_icons_big  = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 50.0f, NULL, icon_range);
 
     io.FontDefault = iris->font_body;
 
@@ -281,6 +284,10 @@ void destroy(iris::instance* iris);
 
 void update(iris::instance* iris) {
     if (!iris->pause) {
+        // if (iris->ps2->ee->total_cycles >= 71748358) {
+        //     iris->pause = true;
+        // }
+
         ps2_cycle(iris->ps2);
 
         for (const breakpoint& b : iris->breakpoints) {
@@ -339,7 +346,21 @@ void update_window(iris::instance* iris) {
     ImGui_ImplSDL2_NewFrame();
     NewFrame();
 
-    show_main_menubar(iris);
+    if (!iris->fullscreen) {
+        show_main_menubar(iris);
+    }
+
+    int w, h;
+
+    SDL_GetWindowSize(iris->window, &w, &h);
+
+    h -= iris->menubar_height;
+
+    // To-do: Optionally hide main menubar
+    if (iris->show_status_bar)
+        h -= iris->menubar_height;
+
+    renderer_set_window_rect(iris->ctx, 0, iris->menubar_height, w, h);
 
     DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
@@ -355,9 +376,10 @@ void update_window(iris::instance* iris) {
     if (iris->show_iop_dma) show_iop_dma(iris);
     if (iris->show_gs_debugger) show_gs_debugger(iris);
     if (iris->show_memory_viewer) show_memory_viewer(iris);
-    if (iris->show_status_bar) show_status_bar(iris);
+    if (iris->show_status_bar && !iris->fullscreen) show_status_bar(iris);
     if (iris->show_breakpoints) show_breakpoints(iris);
     if (iris->show_about_window) show_about_window(iris);
+    // if (iris->show_gamelist) show_gamelist(iris);
     if (iris->show_imgui_demo) ShowDemoWindow(&iris->show_imgui_demo);
     if (iris->show_bios_setting_window) show_bios_setting_window(iris);
 
@@ -368,10 +390,16 @@ void update_window(iris::instance* iris) {
 
         auto ts = CalcTextSize(ICON_MS_PAUSE);
 
+        int offset = 0;
+
+        if (!iris->fullscreen) {
+            offset += iris->menubar_height;
+        }
+
         GetBackgroundDrawList()->AddText(
             ImVec2(
                 width - ts.x * 1.5f,
-                iris->menubar_height + ts.x * 0.5f
+                offset + ts.x * 0.5f
             ),
             0xffffffff,
             ICON_MS_PAUSE
@@ -424,6 +452,16 @@ void update_window(iris::instance* iris) {
             case SDL_KEYUP: {
                 handle_keyup_event(iris, event.key);
             } break;
+
+            // case SDL_MOUSEBUTTONDOWN: {
+            //     if ((SDL_GetTicks() - last_mouse_click) < 500) {
+            //         iris->fullscreen = !iris->fullscreen;
+
+            //         SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+            //     }
+
+            //     last_mouse_click = SDL_GetTicks();
+            // } break;
         }
     }
 }
