@@ -1,7 +1,10 @@
+#include <filesystem>
+
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "tfd/tinyfiledialogs.h"
+#include "pfd/pfd.h"
 
 #include "ps2_elf.h"
 #include "ps2_iso9660.h"
@@ -23,6 +26,83 @@ const char* renderer_names[] = {
     "Software (Threaded)"
 };
 
+void add_recent(iris::instance* iris, std::string file) {
+    auto it = std::find(iris->recents.begin(), iris->recents.end(), file);
+
+    if (it != iris->recents.end()) {
+        iris->recents.erase(it);
+        iris->recents.push_front(file);
+
+        return;
+    }
+
+    iris->recents.push_front(file);
+
+    if (iris->recents.size() == 11)
+        iris->recents.pop_back();
+}
+
+int open_file(iris::instance* iris, std::string file) {
+    std::filesystem::path path(file);
+    std::string ext = path.extension().string();
+
+    // Load disc image
+    if (ext == ".iso" || ext == ".bin" || ext == ".cue") {
+        struct iso9660_state* iso = iso9660_open(file.c_str());
+
+        if (!iso) {
+            return 1;
+            // printf("iris: Couldn't open disc image \"%s\"\n", file.c_str());
+
+            // exit(1);
+
+            // return;
+        }
+
+        char* boot_file = iso9660_get_boot_path(iso);
+
+        if (!boot_file) {
+            return 2;
+        }
+
+        // Temporarily disable window updates
+        struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+        ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+        ps2_boot_file(iris->ps2, boot_file);
+
+        // Re-enable window updates
+        ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
+        ps2_cdvd_open(iris->ps2->cdvd, file.c_str());
+
+        iso9660_close(iso);
+
+        iris->loaded = file;
+
+        return 0;
+    }
+
+    // Load executable
+    file = "host:" + file;
+
+    // Temporarily disable window updates
+    struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+    ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+    ps2_boot_file(iris->ps2, file.c_str());
+
+    // ps2_elf_load(iris->ps2, file);
+
+    // Re-enable window updates
+    ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
+    iris->loaded = file;
+
+    return 0;
+}
+
 void show_main_menubar(iris::instance* iris) {
     using namespace ImGui;
 
@@ -35,83 +115,123 @@ void show_main_menubar(iris::instance* iris) {
         iris->menubar_height = size.y;
 
         if (BeginMenu("Iris")) {
-            if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Load disc...")) {
-                const char* patterns[3] = { "*.iso", "*.bin", "*.cue" };
+            if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Open...")) {
+                auto f = pfd::open_file("Select a file to load", "", {
+                    "All File Types (*.iso; *.bin; *.cue; *.elf)", "*.iso *.bin *.cue *.elf",
+                    "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
+                    "ELF Executables (*.elf)", "*.elf",
+                    "All Files (*.*)", "*"
+                });
 
-                const char* file = tinyfd_openFileDialog(
-                    "Select CD/DVD image",
-                    "",
-                    3,
-                    patterns,
-                    "Disc images",
-                    0
-                );
+                if (f.result().size()) {
+                    open_file(iris, f.result().at(0));
+                    add_recent(iris, f.result().at(0));
+                }
+            }
 
-                if (file) {
-                    struct iso9660_state* iso = iso9660_open(file);
-
-                    if (!iso) {
-                        printf("iris: Couldn't open disc image \"%s\"\n", file);
-
-                        exit(1);
-
-                        return;
+            if (BeginMenu(ICON_MS_HISTORY " Open Recent", iris->recents.size())) {
+                for (const std::string& s : iris->recents) {
+                    if (MenuItem(s.c_str())) {
+                        open_file(iris, s);
+                        add_recent(iris, s);
                     }
-
-                    char* boot_file = iso9660_get_boot_path(iso);
-
-                    if (!boot_file)
-                        return;
-
-                    // Temporarily disable window updates
-                    struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
-
-                    ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
-                    ps2_boot_file(iris->ps2, boot_file);
-
-                    // Re-enable window updates
-                    ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
-
-                    ps2_cdvd_open(iris->ps2->cdvd, file);
-
-                    iso9660_close(iso);
-
-                    iris->loaded = file;
                 }
+
+                Separator();
+
+                if (MenuItem(ICON_MS_DELETE_HISTORY " Clear all recents")) {
+                    iris->recents.clear();
+                }
+
+                // To-do: Use try_open_file
+                // if (MenuItem("Clear invalid recents")) {
+                //     iris->recents.clear();
+                // }
+
+                // To-do
+                // if (MenuItem("Stop recents history")) {
+                // }
+
+                ImGui::EndMenu();
             }
 
-            if (MenuItem(ICON_MS_DRAFT " Load executable...")) {
-                const char* patterns[3] = { "*.elf" };
+            // if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Load disc...")) {
+            //     const char* patterns[3] = { "*.iso", "*.bin", "*.cue" };
 
-                const char* file = tinyfd_openFileDialog(
-                    "Select ELF executable",
-                    "",
-                    1,
-                    patterns,
-                    "ELF executables",
-                    0
-                );
+            //     const char* file = tinyfd_openFileDialog(
+            //         "Select CD/DVD image",
+            //         "",
+            //         3,
+            //         patterns,
+            //         "Disc images",
+            //         0
+            //     );
 
-                if (file) {
-                    std::string str(file);
+            //     if (file) {
+            //         struct iso9660_state* iso = iso9660_open(file);
 
-                    str = "host:" + str;
+            //         if (!iso) {
+            //             printf("iris: Couldn't open disc image \"%s\"\n", file);
 
-                    // Temporarily disable window updates
-                    struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+            //             exit(1);
 
-                    ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+            //             return;
+            //         }
 
-                    ps2_boot_file(iris->ps2, str.c_str());
+            //         char* boot_file = iso9660_get_boot_path(iso);
 
-                    // ps2_elf_load(iris->ps2, file);
+            //         if (!boot_file)
+            //             return;
 
-                    // Re-enable window updates
-                    ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+            //         // Temporarily disable window updates
+            //         struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
 
-                    iris->loaded = file;
-                }
-            }
+            //         ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+            //         ps2_boot_file(iris->ps2, boot_file);
+
+            //         // Re-enable window updates
+            //         ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
+            //         ps2_cdvd_open(iris->ps2->cdvd, file);
+
+            //         iso9660_close(iso);
+
+            //         iris->loaded = file;
+            //     }
+            // }
+
+            // if (MenuItem(ICON_MS_DRAFT " Load executable...")) {
+            //     const char* patterns[3] = { "*.elf" };
+
+            //     const char* file = tinyfd_openFileDialog(
+            //         "Select ELF executable",
+            //         "",
+            //         1,
+            //         patterns,
+            //         "ELF executables",
+            //         0
+            //     );
+
+            //     if (file) {
+            //         std::string str(file);
+
+            //         str = "host:" + str;
+
+            //         // Temporarily disable window updates
+            //         struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+            //         ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+            //         ps2_boot_file(iris->ps2, str.c_str());
+
+            //         // ps2_elf_load(iris->ps2, file);
+
+            //         // Re-enable window updates
+            //         ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
+            //         iris->loaded = file;
+            //     }
+            // }
 
             Separator();
 
@@ -119,23 +239,26 @@ void show_main_menubar(iris::instance* iris) {
                 iris->pause = !iris->pause;
             }
 
+            // To-do: Show confirm dialog maybe?
+            if (MenuItem(ICON_MS_REFRESH " Reset")) {
+                ps2_reset(iris->ps2);
+            }
+
             if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
-                const char* patterns[3] = { "*.iso", "*.bin", "*.cue" };
+                auto f = pfd::open_file("Select CD/DVD image", "", {
+                    "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
+                    "All Files (*.*)", "*"
+                });
 
-                const char* file = tinyfd_openFileDialog(
-                    "Select CD/DVD image",
-                    "",
-                    3,
-                    patterns,
-                    "Disc images",
-                    0
-                );
+                if (f.result().size()) {
+                    ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str());
 
-                if (file) {
-                    ps2_cdvd_open(iris->ps2->cdvd, file);
-
-                    iris->loaded = file;
+                    iris->loaded = f.result().at(0);
                 }
+            }
+
+            if (MenuItem(ICON_MS_EJECT " Eject disc")) {
+                ps2_cdvd_close(iris->ps2->cdvd);
             }
 
             ImGui::EndMenu();
@@ -161,7 +284,7 @@ void show_main_menubar(iris::instance* iris) {
 
                 if (BeginMenu("Scale")) {
                     for (int i = 2; i <= 6; i++) {
-                        char buf[16]; sprintf(buf, "%.1fx", (float)i * 0.5f);
+                        char buf[16]; snprintf(buf, 16, "%.1fx", (float)i * 0.5f);
 
                         if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
                             iris->scale = (float)i * 0.5f;
@@ -205,7 +328,7 @@ void show_main_menubar(iris::instance* iris) {
                     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
 
-                if (MenuItem("Fullscreen", nullptr, &iris->fullscreen)) {
+                if (MenuItem("Fullscreen", "F11", &iris->fullscreen)) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
                 }
 
