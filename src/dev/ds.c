@@ -3,6 +3,19 @@
 #include <stdlib.h>
 #include <string.h>
 
+static inline void ds_cmd_set_vref_param(struct ps2_sio2* sio2, struct ds_state* ds) {
+    // printf("ds: ds_cmd_set_vref_param\n");
+
+    queue_push(sio2->out, 0xff);
+    queue_push(sio2->out, 0xf3);
+    queue_push(sio2->out, 0x5a);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x02);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x5a);
+}
 static inline void ds_cmd_query_masked(struct ps2_sio2* sio2, struct ds_state* ds) {
     // printf("ds: ds_cmd_query_masked\n");
 
@@ -159,6 +172,19 @@ static inline void ds_cmd_vibration_toggle(struct ps2_sio2* sio2, struct ds_stat
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
 }
+static inline void ds_cmd_set_native_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
+    // printf("ds: ds_cmd_set_native_mode\n");
+
+    queue_push(sio2->out, 0xff);
+    queue_push(sio2->out, 0xf3);
+    queue_push(sio2->out, 0x5a);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x5a);
+}
 
 void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
     struct ds_state* ds = (struct ds_state*)udata;
@@ -166,6 +192,7 @@ void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
     uint8_t cmd = sio2->in->buf[1];
 
     switch (cmd) {
+        case 0x40: ds_cmd_set_vref_param(sio2, ds); return;
         case 0x41: ds_cmd_query_masked(sio2, ds); return;
         case 0x42: ds_cmd_read_data(sio2, ds); return;
         case 0x43: ds_cmd_config_mode(sio2, ds); return;
@@ -175,9 +202,12 @@ void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
         case 0x47: ds_cmd_query_comb(sio2, ds); return;
         case 0x4C: ds_cmd_query_mode(sio2, ds); return;
         case 0x4D: ds_cmd_vibration_toggle(sio2, ds); return;
+        case 0x4F: ds_cmd_set_native_mode(sio2, ds); return;
     }
 
     printf("ds: Unhandled command %02x\n", cmd);
+
+    exit(1);
 }
 
 struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
