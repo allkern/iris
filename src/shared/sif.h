@@ -28,7 +28,8 @@ struct ps2_sif {
     uint32_t ctrl;
     uint32_t bd6;
 
-    struct sif_fifo fifo;
+    struct sif_fifo sif0;
+    struct sif_fifo sif1;
 };
 
 struct ps2_sif* ps2_sif_create(void);
@@ -38,10 +39,14 @@ uint64_t ps2_sif_read32(struct ps2_sif* sif, uint32_t addr);
 void ps2_sif_write32(struct ps2_sif* sif, uint32_t addr, uint64_t data);
 
 // DMA stuff
-void ps2_sif_fifo_write(struct ps2_sif* sif, uint128_t data);
-uint128_t ps2_sif_fifo_read(struct ps2_sif* sif);
-void ps2_sif_fifo_reset(struct ps2_sif* sif);
-int ps2_sif_fifo_is_empty(struct ps2_sif* sif);
+void ps2_sif0_write(struct ps2_sif* sif, uint128_t data);
+uint128_t ps2_sif0_read(struct ps2_sif* sif);
+void ps2_sif0_reset(struct ps2_sif* sif);
+int ps2_sif0_is_empty(struct ps2_sif* sif);
+void ps2_sif1_write(struct ps2_sif* sif, uint128_t data);
+uint128_t ps2_sif1_read(struct ps2_sif* sif);
+void ps2_sif1_reset(struct ps2_sif* sif);
+int ps2_sif1_is_empty(struct ps2_sif* sif);
 
 #ifdef __cplusplus
 }

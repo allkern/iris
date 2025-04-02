@@ -125,6 +125,8 @@ static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_ch
     //     c->tag.data
     // );
 
+    assert(!c->tag.mem);
+
     c->tag.end = 0;
 
     switch (c->tag.id) {
@@ -430,7 +432,7 @@ void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
 }
 void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
     // SIF FIFO is empty, keep waiting
-    if (ps2_sif_fifo_is_empty(dmac->sif)) {
+    if (ps2_sif0_is_empty(dmac->sif)) {
         return;
     }
 
@@ -439,14 +441,14 @@ void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
         return;
     }
 
-    while (!ps2_sif_fifo_is_empty(dmac->sif)) {
-        uint128_t tag = ps2_sif_fifo_read(dmac->sif);
+    while (!ps2_sif0_is_empty(dmac->sif)) {
+        uint128_t tag = ps2_sif0_read(dmac->sif);
 
         dmac_process_dest_tag(dmac, &dmac->sif0, tag);
 
         // printf("ee: sif0 tag qwc=%08lx madr=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx tte=%d\n",
         //     dmac->sif0.tag.qwc,
-        //     madr,
+        //     dmac->sif0.madr,
         //     dmac->sif0.tag.id,
         //     dmac->sif0.tag.irq,
         //     dmac->sif0.tag.addr,
@@ -456,7 +458,21 @@ void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
         // );
 
         for (int i = 0; i < dmac->sif0.tag.qwc; i++) {
-            uint128_t q = ps2_sif_fifo_read(dmac->sif);
+            if (ps2_sif0_is_empty(dmac->sif)) {
+                printf("dmac: qwc != 0 FIFO empty\n");
+
+                if (channel_is_done(&dmac->sif0)) {
+                    printf("dmac: qwc != 0 FIFO empty\n");
+
+                    dmac->sif0.chcr &= ~0x100;
+        
+                    dmac_set_irq(dmac, DMAC_SIF0);
+        
+                    return;
+                }
+            }
+
+            uint128_t q = ps2_sif0_read(dmac->sif);
 
             // printf("%08x: ", dmac->sif0.madr);
 
@@ -484,11 +500,17 @@ void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
 
             dmac_set_irq(dmac, DMAC_SIF0);
 
-            ps2_sif_fifo_reset(dmac->sif);
+            // ps2_sif_fifo_reset(dmac->sif);
 
             return;
         }
     }
+
+    // dmac->sif0.chcr &= ~0x100;
+
+    // dmac_set_irq(dmac, DMAC_SIF0);
+
+    // ps2_sif_fifo_reset(dmac->sif);
 
     // We shouldn't send an interrupt if tag end or irq/tie weren't
     // set
@@ -496,9 +518,10 @@ void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
 void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
     assert(!dmac->sif1.qwc);
 
-    if (!ps2_sif_fifo_is_empty(dmac->sif)) {
-        printf("dmac: WARNING!!! SIF FIFO not empty\n");
-    }
+    // This should be ok?
+    // if (!ps2_sif_fifo_is_empty(dmac->sif)) {
+    //     printf("dmac: WARNING!!! SIF FIFO not empty\n");
+    // }
 
     do {
         uint128_t tag = dmac_read_qword(dmac, dmac->sif1.tadr);
@@ -534,7 +557,7 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
 
             // puts("|");
 
-            ps2_sif_fifo_write(dmac->sif, q);
+            ps2_sif1_write(dmac->sif, q);
 
             dmac->sif1.madr += 16;
         }
@@ -557,7 +580,7 @@ void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
 }
 
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
-    // struct dmac_channel* c = dmac_get_channel(dmac, addr);
+    struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
     // printf("ee: %s start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
     //     dmac_get_channel_name(dmac, addr),

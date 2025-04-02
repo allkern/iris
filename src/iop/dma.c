@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include <stdio.h>
 #include <ctype.h>
 
@@ -39,13 +40,17 @@ inline static void iop_dma_check_irq(struct ps2_iop_dma* dma) {
     int mcien = dma->dicr & 0x800000;
     uint32_t dicr_flags = dma->dicr & 0x7f000000;
     uint32_t dicr2_flags = dma->dicr2 & 0x3f000000;
+    int cinten = !!(dma->dmacinten & 1);
+    int minten = !(dma->dmacinten & 2);
 
     int mif = be || (mcien && (dicr_flags || dicr2_flags));
+
+    mif = mif && cinten;
 
     dma->dicr &= 0x7fffffff;
     dma->dicr |= mif ? 0x80000000 : 0;
 
-    if (mif) {
+    if (mif && minten) {
         ps2_iop_intc_irq(dma->intc, IOP_INTC_DMA);
     }
 }
@@ -63,6 +68,8 @@ void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct
     dma->drive = cdvd;
     dma->sched = sched;
     dma->ee_dma = ee_dma;
+
+    dma->dmacinten = 0x01;
 }
 
 void ps2_iop_dma_destroy(struct ps2_iop_dma* dma) {
@@ -269,7 +276,13 @@ void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     printf("iop: DEV9 channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
-    ps2_sif_fifo_reset(dma->sif);
+    // if (!ps2_sif0_is_empty(dma->sif)) {
+    //     printf("iopdma: SIF FIFO not empty\n");
+
+    //     exit(1);
+    // }
+
+    // ps2_sif0_reset(dma->sif);
 
     dma->sif0.eot = 0;
 
@@ -288,7 +301,7 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
             q.u32[2] = 0;
             q.u32[3] = 0;
 
-            ps2_sif_fifo_write(dma->sif, q);
+            ps2_sif0_write(dma->sif, q);
         }
 
         while (dma->sif0.size) {
@@ -297,7 +310,7 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
             q.u32[2] = iop_bus_read32(dma->bus, dma->sif0.addr + 8);
             q.u32[3] = iop_bus_read32(dma->bus, dma->sif0.addr + 12);
 
-            ps2_sif_fifo_write(dma->sif, q);
+            ps2_sif0_write(dma->sif, q);
 
             dma->sif0.addr += 16;
             dma->sif0.size -= 4;
@@ -319,11 +332,13 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
 
 void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
     // No data in the SIF FIFO yet
-    if (ps2_sif_fifo_is_empty(dma->sif))
+    if (ps2_sif1_is_empty(dma->sif))
         return;
 
     // Data ready but channel isn't ready yet, keep waiting
     if (!(dma->sif1.chcr & 0x1000000)) {
+        // printf("iop: EE sent SIF1 but channel isn't ready\n");
+
         return;
     }
 
@@ -331,7 +346,7 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
     int eot;
 
     do {
-        uint128_t q = ps2_sif_fifo_read(dma->sif);
+        uint128_t q = ps2_sif1_read(dma->sif);
 
         uint64_t tag = q.u64[0];
 
@@ -347,7 +362,7 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
         // puts(rpc_decode_packet(buf, ((void*)dma->sif->fifo.data) + (dma->sif->fifo.read_index * 16)));
 
         while (size) {
-            uint128_t q = ps2_sif_fifo_read(dma->sif);
+            uint128_t q = ps2_sif1_read(dma->sif);
 
             for (int i = 0; i < 4; i++) {
                 iop_bus_write32(dma->bus, addr, q.u32[i]);
@@ -357,23 +372,19 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
             }
         }
 
+        // Send interrupt on tag IRQ (regardless of channel IRQ enable)
         if ((dma->dicr2 & 0x400) && irq) {
             ps2_iop_intc_irq(dma->intc, IOP_INTC_DMA);
         }
 
-        if (ps2_sif_fifo_is_empty(dma->sif))
+        if (ps2_sif1_is_empty(dma->sif))
             break;
     } while (!eot);
-
-    // if (!eot) {
-    //     printf("iop: SIF1 waiting for transfer with EOT bit set\n");
-    //     return;
-    // }
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIF1);
     iop_dma_check_irq(dma);
 
-    ps2_sif_fifo_reset(dma->sif);
+    // ps2_sif1_reset(dma->sif);
 
     dma->sif1.chcr &= ~0x1000000;
 }
@@ -466,7 +477,16 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
                 if (!(c->chcr & 0x1000000))
                     return;
 
-                // printf("iop: Starting %s channel with chcr=%08x\n", iop_dma_get_channel_name(addr), data);
+                // printf("iop: Starting %s channel with chcr=%08x madr=%08x bcr=%08x tadr=%08x\n", iop_dma_get_channel_name(addr), data, c->madr, c->bcr, c->tadr);
+
+                // Check negative MADR increments
+                assert((c->chcr & 2) == 0);
+
+                // Check for burst transfers
+                assert(((c->chcr >> 9) & 3) != 0);
+
+                // Check for 0-sized blocks
+                assert((c->bcr & 0xffff) != 0);
 
                 switch (addr & 0xff0) {
                     case 0x080: iop_dma_handle_mdec_in_transfer(dma); break;
@@ -502,7 +522,7 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
         case 0x1f8010f4: iop_dma_set_dicr(dma, data); iop_dma_check_irq(dma); return;
         case 0x1f801574: iop_dma_set_dicr2(dma, data); iop_dma_check_irq(dma); return;
         case 0x1f801578: dma->dmacen = data; return;
-        case 0x1f80157c: dma->dmacinten = data; return;
+        case 0x1f80157c: dma->dmacinten = data; iop_dma_check_irq(dma); return;
     }
 
     printf("iop_dma: Unknown DMA register write %08x %08lx\n", addr, data);
