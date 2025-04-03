@@ -38,16 +38,16 @@ We can then replace the OSDSYS path with the path we got from SYSTEM.CNF, which 
 This console is significantly more complex compared to the PS1, here's a rough list of components:
 ```
 🟡 EE (R5900) CPU
-- 🔴 FPU
+- 🟡 FPU
 - 🟡 MMI (SIMD)
-- 🔴 TLB
+- 🟡 TLB
 - 🟡 DMAC
 - 🟢 INTC
 - 🟡 Timers
 - 🟢 GIF
 - 🟡 GS
-- 🔴 VU0
-  = 🔴 Macro mode
+- 🟡 VU0
+  = 🟡 Macro mode
   = 🔴 Micro mode
   = 🔴 VIF0
 - 🔴 VU1 (always micro mode)
@@ -59,7 +59,7 @@ This console is significantly more complex compared to the PS1, here's a rough l
 - 🟡 Timers
 - 🟡 CDVD
 - 🟡 SIO2 (controllers and Memory Cards)
-- 🔴 SPU2
+- 🟡 SPU2
 - 🔴 DEV9
 - 🔴 USB/FireWire?
 - 🔴 Ethernet
