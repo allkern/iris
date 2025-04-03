@@ -238,7 +238,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     colors[ImGuiCol_NavHighlight]           = ImVec4(0.15f, 0.20f, 0.22f, 1.00f);
     colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
     colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
-    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.80f, 0.80f, 0.80f, 0.35f);
+    colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.00f, 0.00f, 0.00f, 0.35f);
 
     iris->open = true;
     iris->ps2 = ps2_create();
@@ -251,7 +251,6 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     iris->ds = ds_sio2_attach(iris->ps2->sio2, 0);
 
     iris->ctx = renderer_create();
-    iris->renderer_backend = RENDERER_NULL;
 
     renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, RENDERER_NULL);
 
