@@ -11,6 +11,7 @@ extern "C" {
 
 struct ps2_ram {
     uint8_t* buf;
+    size_t size;
 };
 
 #define RAM_SIZE_2MB 0x200000
@@ -21,6 +22,7 @@ struct ps2_ram {
 
 struct ps2_ram* ps2_ram_create(void);
 void ps2_ram_init(struct ps2_ram* ram, int size);
+void ps2_ram_reset(struct ps2_ram* ram);
 void ps2_ram_destroy(struct ps2_ram* ram);
 
 uint64_t ps2_ram_read8(struct ps2_ram* ram, uint32_t addr);
