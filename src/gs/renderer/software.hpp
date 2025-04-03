@@ -65,6 +65,7 @@ void software_set_bilinear(void* ctx, bool bilinear);
 void software_get_viewport_size(void* ctx, int* w, int* h);
 void software_get_display_size(void* ctx, int* w, int* h);
 void software_get_display_format(void* ctx, int* fmt);
+void software_set_window_rect(void* udata, int x, int y, int w, int h);
 const char* software_get_name(void* ctx);
 // void software_push_shader(software_state* ctx, const char* path);
 // void software_pop_shader(software_state* ctx);

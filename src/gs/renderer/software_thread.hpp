@@ -44,6 +44,9 @@ struct software_thread_state {
     SDL_Window* window = nullptr;
     struct ps2_gs* gs;
 
+    unsigned int window_x, window_y;
+    unsigned int window_w, window_h;
+
     int tex_w = 0;
     int tex_h = 0;
     int disp_w = 0;
@@ -86,6 +89,7 @@ void software_thread_set_bilinear(void* udata, bool bilinear);
 void software_thread_get_viewport_size(void* udata, int* w, int* h);
 void software_thread_get_display_size(void* udata, int* w, int* h);
 void software_thread_get_display_format(void* udata, int* fmt);
+void software_thread_set_window_rect(void* udata, int x, int y, int w, int h);
 const char* software_thread_get_name(void* udata);
 // void software_push_shader(software_state* ctx, const char* path);
 // void software_pop_shader(software_state* ctx);
