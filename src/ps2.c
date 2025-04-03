@@ -150,6 +150,11 @@ void ps2_load_bios(struct ps2_state* ps2, const char* path) {
 void ps2_reset(struct ps2_state* ps2) {
     ee_reset(ps2->ee);
     iop_reset(ps2->iop);
+
+    ps2_gs_reset(ps2->gs);
+    ps2_ram_reset(ps2->ee_ram);
+    ps2_ram_reset(ps2->iop_ram);
+    ps2_ram_reset(ps2->ee->scratchpad);
 }
 
 // To-do: This will soon be useless, need to integrate
@@ -177,7 +182,28 @@ static inline void ps2_trace(struct ps2_state* ps2) {
 }
 
 void ps2_cycle(struct ps2_state* ps2) {
+    // if (ps2->ee->pc == 0xe0040)
+    //     printf("ee: Entry @ cyc=%ld\n", ps2->ee->total_cycles);
+
     // ps2_trace(ps2);
+
+    // Waitloop detection
+    // if (ps2->ee->pc == 0x81fc0) {
+    //     while (!sched_tick(ps2->sched, 8)) {
+    //         --ps2->ee_cycles;
+
+    //         if (!ps2->ee_cycles) {
+    //             iop_cycle(ps2->iop);
+    //             ps2_iop_timers_tick(ps2->iop_timers);
+        
+    //             ps2->ee_cycles = 7;
+    //         }
+    //     }
+
+    //     ee_cycle(ps2->ee);
+
+    //     return;
+    // }
 
     sched_tick(ps2->sched, 8);
     ee_cycle(ps2->ee);
