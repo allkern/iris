@@ -79,15 +79,15 @@ void sched_schedule(struct sched_state* sched, struct sched_event event) {
     }
 }
 
-void sched_tick(struct sched_state* sched, int cycles) {
+int sched_tick(struct sched_state* sched, int cycles) {
     if (!sched->nevents)
-        return;
+        return 0;
 
     sched->events[0].cycles -= cycles;
     sched->offset += cycles;
 
     if (sched->events[0].cycles > 0)
-        return;
+        return 0;
 
     --sched->nevents;
 
@@ -102,6 +102,8 @@ void sched_tick(struct sched_state* sched, int cycles) {
     event.callback(event.udata, event.cycles);
 
     sched->offset = 0;
+
+    return 1;
 }
 
 const struct sched_event* sched_next_event(struct sched_state* sched) {
