@@ -61,6 +61,8 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
         }
     }
 
+    printf("Entry: 0x%08x\n", ehdr.e_entry);
+
     // Read symbol table header
     Elf32_Shdr symtab;
 
@@ -164,8 +166,6 @@ int ps2_elf_load(struct ps2_state* ps2, const char* path) {
     }
  
     fclose(file);
-
-    printf("Entry: 0x%08x\n", ehdr.e_entry);
 
     return 0;
 }
