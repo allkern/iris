@@ -122,6 +122,13 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     gs->csr |= 2;
 }
 
+void ps2_gs_reset(struct ps2_gs* gs) {
+    gs->ctx = &gs->context[0];
+    gs->csr |= 2;
+
+    memset(gs->vram, 0, 0x400000);
+}
+
 void gs_switch_context(struct ps2_gs* gs, int c) {
     gs->ctx = &gs->context[c];
 }
@@ -162,19 +169,11 @@ static inline void gs_unpack_vertex(struct ps2_gs* gs, struct gs_vertex* v) {
     v->s = s.f;
     v->t = t.f;
     v->q = q.f;
-    v->u = (v->uv & 0x3fff) >> 4;
-    v->v = ((v->uv >> 16) & 0x3fff) >> 4;
+    v->u = v->uv & 0x3fff;
+    v->v = (v->uv >> 16) & 0x3fff;
 }
 
 void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
-    gs->vq[gs->vqi].fog = gs->fog;
-
-    if (discard) {
-        gs->vq[gs->vqi].fog = data >> 56;
-
-        data &= 0xffffff;
-    }
-
     gs->vq[gs->vqi].xyz = data;
     gs->vq[gs->vqi].st = gs->st;
     gs->vq[gs->vqi].uv = gs->uv;
@@ -268,6 +267,18 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
             printf("gs: Reserved primitive %ld\n", gs->prim & 7);
         } break;
     }
+}
+
+void gs_write_vertex_fog(struct ps2_gs* gs, uint64_t data, int discard) {
+    gs->vq[gs->vqi].fog = data >> 56;
+
+    gs_write_vertex(gs, data & 0xffffffffffffffull, discard);
+}
+
+void gs_write_vertex_no_fog(struct ps2_gs* gs, uint64_t data, int discard) {
+    gs->vq[gs->vqi].fog = gs->fog;
+
+    gs_write_vertex(gs, data, discard);
 }
 
 uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
@@ -393,8 +404,8 @@ static inline void gs_unpack_tex0(struct ps2_gs* gs, int i) {
     gs->context[i].tbp0 = gs->context[i].tex0 & 0x3fff;
     gs->context[i].tbw = (gs->context[i].tex0 >> 14) & 0x3f;
     gs->context[i].tbpsm = (gs->context[i].tex0 >> 20) & 0x3f;
-    gs->context[i].usize = 1 << ((gs->context[i].tex0 >> 26) & 0x3f); // tw
-    gs->context[i].vsize = 1 << ((gs->context[i].tex0 >> 30) & 0x3f); // th
+    gs->context[i].usize = 1 << ((gs->context[i].tex0 >> 26) & 0xf); // tw
+    gs->context[i].vsize = 1 << ((gs->context[i].tex0 >> 30) & 0xf); // th
     gs->context[i].tcc = (gs->context[i].tex0 >> 34) & 1;
     gs->context[i].tfx = (gs->context[i].tex0 >> 35) & 3;
     gs->context[i].cbp = (gs->context[i].tex0 >> 37) & 0x3fff;
@@ -402,7 +413,7 @@ static inline void gs_unpack_tex0(struct ps2_gs* gs, int i) {
     gs->context[i].csm = (gs->context[i].tex0 >> 55) & 1;
     gs->context[i].csa = (gs->context[i].tex0 >> 56) & 0x1f;
     gs->context[i].cld = (gs->context[i].tex0 >> 61) & 7;
-    
+
     gs->context[i].usize = (gs->context[i].usize > 1024) ? 1024 : gs->context[i].usize;
     gs->context[i].vsize = (gs->context[i].vsize > 1024) ? 1024 : gs->context[i].vsize;
 
@@ -512,7 +523,7 @@ static inline void gs_unpack_zbuf(struct ps2_gs* gs, int i) {
 }
 
 static inline void gs_unpack_texclut(struct ps2_gs* gs) {
-    gs->cbw = (gs->texclut & 0x3f) << 6;
+    gs->cbw = gs->texclut & 0x3f;
     gs->cou = ((gs->texclut >> 6) & 0x3f) << 4;
     gs->cov = (gs->texclut >> 12) & 0x3ff;
 }
@@ -523,15 +534,15 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x01: /* printf("gs: RGBAQ <- %016lx\n", data); */ gs->rgbaq = data; return;
         case 0x02: /* printf("gs: ST <- %016lx\n", data); */ gs->st = data; return;
         case 0x03: /* printf("gs: UV <- %016lx\n", data); */ gs->uv = data; return;
-        case 0x04: /* printf("gs: XYZF2 <- %016lx\n", data); */ gs->xyzf2 = data; gs_write_vertex(gs, gs->xyzf2, 0); return;
-        case 0x05: /* printf("gs: XYZ2 <- %016lx\n", data); */ gs->xyz2 = data; gs_write_vertex(gs, gs->xyz2, 0); return;
+        case 0x04: /* printf("gs: XYZF2 <- %016lx\n", data); */ gs->xyzf2 = data; gs_write_vertex_fog(gs, gs->xyzf2, 0); return;
+        case 0x05: /* printf("gs: XYZ2 <- %016lx\n", data); */ gs->xyz2 = data; gs_write_vertex_no_fog(gs, gs->xyz2, 0); return;
         case 0x06: /* printf("gs: TEX0_1 <- %016lx\n", data); */ gs->context[0].tex0 = data; gs_unpack_tex0(gs, 0); return;
         case 0x07: /* printf("gs: TEX0_2 <- %016lx\n", data); */ gs->context[1].tex0 = data; gs_unpack_tex0(gs, 1); return;
         case 0x08: /* printf("gs: CLAMP_1 <- %016lx\n", data); */ gs->context[0].clamp = data; gs_unpack_clamp(gs, 0); return;
         case 0x09: /* printf("gs: CLAMP_2 <- %016lx\n", data); */ gs->context[1].clamp = data; gs_unpack_clamp(gs, 1); return;
         case 0x0A: /* printf("gs: FOG <- %016lx\n", data); */ gs->fog = data; return;
-        case 0x0C: /* printf("gs: XYZF3 <- %016lx\n", data); */ gs->xyzf3 = data; gs_write_vertex(gs, gs->xyzf3, 1); return;
-        case 0x0D: /* printf("gs: XYZ3 <- %016lx\n", data); */ gs->xyz3 = data; gs_write_vertex(gs, gs->xyz3, 1); return;
+        case 0x0C: /* printf("gs: XYZF3 <- %016lx\n", data); */ gs->xyzf3 = data; gs_write_vertex_fog(gs, gs->xyzf3, 1); return;
+        case 0x0D: /* printf("gs: XYZ3 <- %016lx\n", data); */ gs->xyz3 = data; gs_write_vertex_no_fog(gs, gs->xyz3, 1); return;
         case 0x14: /* printf("gs: TEX1_1 <- %016lx\n", data); */ gs->context[0].tex1 = data; gs_unpack_tex1(gs, 0); return;
         case 0x15: /* printf("gs: TEX1_2 <- %016lx\n", data); */ gs->context[1].tex1 = data; gs_unpack_tex1(gs, 1); return;
         case 0x16: /* printf("gs: TEX2_1 <- %016lx\n", data); */ gs->context[0].tex2 = data; gs_unpack_tex2(gs, 0); return;
