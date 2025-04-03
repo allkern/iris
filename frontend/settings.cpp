@@ -69,7 +69,7 @@ int parse_toml_settings(iris::instance* iris) {
     // iris->fullscreen_mode = tbl["fullscreen_mode"].value_or(0);
 
     auto display = tbl["display"];
-    iris->aspect_mode = display["aspect_mode"].value_or(0);
+    iris->aspect_mode = display["aspect_mode"].value_or(RENDERER_ASPECT_AUTO);
     iris->bilinear = display["bilinear"].value_or(true);
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);

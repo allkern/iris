@@ -73,7 +73,7 @@ struct instance {
     unsigned int texture_height;
     uint32_t* texture_buf = nullptr;
 
-    unsigned int renderer_backend;
+    unsigned int renderer_backend = RENDERER_SOFTWARE_THREAD;
     renderer_state* ctx = nullptr;
 
     ImFont* font_small_code = nullptr;
@@ -116,7 +116,7 @@ struct instance {
     bool show_about_window = false;
 
     bool fullscreen = false;
-    int aspect_mode = 0;
+    int aspect_mode = RENDERER_ASPECT_AUTO;
     bool bilinear = true;
     bool integer_scaling = false;
     float scale = 1.5f;

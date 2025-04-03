@@ -84,7 +84,7 @@ struct ps2_vif {
     uint128_t vif0_data;
 
     struct sched_state* sched;
-    struct ee_intc* intc;
+    struct ps2_intc* intc;
     struct ee_bus* bus;
 };
 
