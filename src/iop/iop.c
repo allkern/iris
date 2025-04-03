@@ -4,6 +4,8 @@
 #include "iop.h"
 #include "iop_dis.h"
 
+#include "iop_export.h"
+
 // static int p = 0;
 
 const uint32_t iop_bus_region_mask_table[] = {
@@ -32,6 +34,31 @@ static inline void iop_bus_write16(struct iop_state* iop, uint32_t addr, uint32_
 }
 
 static inline void iop_bus_write32(struct iop_state* iop, uint32_t addr, uint32_t data) {
+    iop->bus.write32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+}
+
+// External functions
+uint32_t iop_read8(struct iop_state* iop, uint32_t addr) {
+    return iop->bus.read8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+}
+
+uint32_t iop_read16(struct iop_state* iop, uint32_t addr) {
+    return iop->bus.read16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+}
+
+uint32_t iop_read32(struct iop_state* iop, uint32_t addr) {
+    return iop->bus.read32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+}
+
+void iop_write8(struct iop_state* iop, uint32_t addr, uint32_t data) {
+    iop->bus.write8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+}
+
+void iop_write16(struct iop_state* iop, uint32_t addr, uint32_t data) {
+    iop->bus.write16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+}
+
+void iop_write32(struct iop_state* iop, uint32_t addr, uint32_t data) {
     iop->bus.write32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
 }
 
@@ -276,175 +303,16 @@ static inline void iop_i_bgezal(struct iop_state* iop) {
         BRANCH(IMM16S << 2);
 }
 
-static inline uint32_t irx_import_table_addr(struct iop_state* iop, int entry) {
-    uint32_t i = entry - 0x18;
-
-    while ((entry - i) < 0x2000) {
-        if (iop_bus_read32(iop, i) == 0x41e00000)
-            return i;
-
-        i -= 4;
-    }
-
-    return 0;
-}
-
-// To-do: Move this to its own file
-#include "iop_export.h"
-
-static FILE* file;
-
 static inline void iop_i_j(struct iop_state* iop) {
     iop->branch = 1;
 
     DO_PENDING_LOAD;
 
-    uint32_t slot = iop_bus_read32(iop, iop->pc);
-
-    if ((slot >> 16) == 0x2400) {
-        uint32_t itable = irx_import_table_addr(iop, iop->pc);
-
-        if (itable) {
-            char buf[9];
-
-            for (int i = 0; i < 8; i++)
-                buf[i] = iop_bus_read32(iop, itable + 12 + i);
-
-            if (!strncmp(buf, "ioman", 8)) {
-                char buf[256];
-
-                switch (slot & 0xffff) {
-                    case IOMAN_OPEN: {
-                        for (int i = 0; i < 256; i++) {
-                            uint8_t d = iop_bus_read32(iop, iop->r[4] + i);
-
-                            buf[i] = d;
-
-                            if (!d)
-                                break;
-                        }
-
-                        // printf("ioman_open(\"%s\", %x, %x)\n", buf, iop->r[5], iop->r[6]);
-
-                        if (strncmp(buf, "host:", 5))
-                            break;
-
-                        if (file) {
-                            fclose(file);
-                        }
-
-                        if (buf[5] == '/') {
-                            file = fopen(buf + 6, "rb");
-                        } else {
-                            file = fopen(buf + 5, "rb");
-                        }
-
-                        if (!file)
-                            break;
-
-                        iop->r[2] = 0x100;
-
-                        iop->pc = iop->r[31];
-                        iop->next_pc = iop->pc + 4;
-
-                        return;
-                    } break;
-                    // case IOMAN_CLOSE: printf("ioman_close()\n"); break;
-                    case IOMAN_READ: {
-                        if (iop->r[4] != 0x100)
-                            break;
-
-                        uint32_t ptr = iop->r[5];
-                        uint32_t size = iop->r[6];
-
-                        // printf("ioman_read(%d, %x, %x)\n", iop->r[4], ptr, size);
-
-                        uint8_t* buf = malloc(size);
-
-                        iop->r[2] = fread(buf, 1, size, file);
-
-                        for (int i = 0; i < size; i++) {
-                            iop_bus_write8(iop, ptr + i, buf[i]);
-                        }
-
-                        free(buf);
-
-                        iop->pc = iop->r[31];
-                        iop->next_pc = iop->pc + 4;
-
-                        return;
-                    } break;
-                    case IOMAN_WRITE: {
-                        uint32_t fd = iop->r[4];
-                        uint32_t ptr = iop->r[5];
-                        uint32_t size = iop->r[6] & 0xfff;
-
-                        if (fd != 1)
-                            break;
-
-                        char c = iop_bus_read8(iop, ptr++);
-                        int cnt = 0;
-
-                        while (c && ((cnt++) != size)) {
-                            iop->kputchar(iop->kputchar_udata, c);
-
-                            fflush(stdout);
-
-                            c = iop_bus_read8(iop, ptr++);
-                        }
-
-                        iop->pc = iop->r[31];
-                        iop->next_pc = iop->pc + 4;
-                        iop->r[2] = size;
-
-                        return;
-                    } break;
-                    // case IOMAN_LSEEK: printf("ioman_lseek()\n"); break;
-                    // case IOMAN_IOCTL: printf("ioman_ioctl()\n"); break;
-                    // case IOMAN_REMOVE: printf("ioman_remove()\n"); break;
-                    // case IOMAN_MKDIR: printf("ioman_mkdir()\n"); break;
-                    // case IOMAN_RMDIR: printf("ioman_rmdir()\n"); break;
-                    // case IOMAN_DOPEN: printf("ioman_dopen()\n"); break;
-                    // case IOMAN_DCLOSE: printf("ioman_dclose()\n"); break;
-                    // case IOMAN_DREAD: printf("ioman_dread()\n"); break;
-                    // case IOMAN_GETSTAT: printf("ioman_getstat()\n"); break;
-                    // case IOMAN_CHSTAT: printf("ioman_chstat()\n"); break;
-                    // case IOMAN_FORMAT: printf("ioman_format()\n"); break;
-                    // case IOMAN_ADDDRV: printf("ioman_adddrv()\n"); break;
-                    // case IOMAN_DELDRV: printf("ioman_deldrv()\n"); break;
-                    // case IOMAN_STDIOINIT: printf("ioman_stdioinit()\n"); break;
-                    // case IOMAN_RENAME: printf("ioman_rename()\n"); break;
-                    // case IOMAN_CHDIR: printf("ioman_chdir()\n"); break;
-                    // case IOMAN_SYNC: printf("ioman_sync()\n"); break;
-                    // case IOMAN_MOUNT: printf("ioman_mount()\n"); break;
-                    // case IOMAN_UMOUNT: printf("ioman_umount()\n"); break;
-                    // case IOMAN_LSEEK64: printf("ioman_lseek64()\n"); break;
-                    // case IOMAN_DEVCTL: printf("ioman_devctl()\n"); break;
-                    // case IOMAN_SYMLINK: printf("ioman_symlink()\n"); break;
-                    // case IOMAN_READLINK: printf("ioman_readlink()\n"); break;
-                    // case IOMAN_IOCTL2: printf("ioman_ioctl2()\n"); break;
-                }
-            }
-
-            // printf("-------------> HLE module=\'%s\' @ 0x%08x func=%d\n", buf, itable, slot & 0xffff);
-        }
-    }
+    // If we get a 1 that means the call has been HLE'd
+    if (iop_test_module_hooks(iop))
+        return;
 
     iop->next_pc = (iop->next_pc & 0xf0000000) | (IMM26 << 2);
-
-    // if ((iop->next_pc & 0xFFFF) == 0x1EC8 || (iop->next_pc & 0xFFFF) == 0x1F64) {
-    //     uint32_t ptr = iop->r[4];
-    //     uint16_t version = iop_bus_read16(iop, ptr + 8);
-
-    //     char name[9];
-
-    //     for (int i = 0; i < 8; i++)
-    //         name[i] = iop_bus_read8(iop, ptr + 12 + i);
-
-    //     name[8] = 0;
-
-    //     printf("iop: Register library %s version %d.0%d\n", name, version >> 8, version & 0xff);
-    // }
 }
 
 static inline void iop_i_jal(struct iop_state* iop) {

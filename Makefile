@@ -25,6 +25,7 @@ CXXSRC += $(wildcard frontend/*.cpp)
 CXXSRC += $(wildcard frontend/ui/*.cpp)
 CXXSRC += $(wildcard src/gs/renderer/*.cpp)
 CXXSRC += $(wildcard src/ipu/*.cpp)
+CXXSRC += $(wildcard src/iop/hle/*.cpp)
 CXXOBJ := $(CXXSRC:.cpp=.o)
 
 CC := gcc

@@ -1,6 +1,10 @@
 #ifndef IOP_H
 #define IOP_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #include <stdint.h>
 #include <stdio.h>
 
@@ -143,6 +147,14 @@ void iop_set_irq_pending(struct iop_state* iop);
 void iop_fetch(struct iop_state* iop);
 int iop_execute(struct iop_state* iop);
 
+// External bus access functions
+uint32_t iop_read8(struct iop_state* iop, uint32_t addr);
+uint32_t iop_read16(struct iop_state* iop, uint32_t addr);
+uint32_t iop_read32(struct iop_state* iop, uint32_t addr);
+void iop_write8(struct iop_state* iop, uint32_t addr, uint32_t data);
+void iop_write16(struct iop_state* iop, uint32_t addr, uint32_t data);
+void iop_write32(struct iop_state* iop, uint32_t addr, uint32_t data);
+
 /*
     00h INT     Interrupt
     01h MOD     TLB modification (none such in PSX)
@@ -175,5 +187,9 @@ int iop_execute(struct iop_state* iop);
 #define CAUSE_RI        (0x0a << 2)
 #define CAUSE_CPU       (0x0b << 2)
 #define CAUSE_OV        (0x0c << 2)
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

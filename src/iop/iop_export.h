@@ -1,3 +1,15 @@
+#ifndef IOP_EXPORT_H
+#define IOP_EXPORT_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#include "iop.h"
+
+#define MODULE_UNKNOWN  0
+#define MODULE_IOMAN    1
+
 #define IOMAN_OPEN      4
 #define IOMAN_CLOSE     5
 #define IOMAN_READ      6
@@ -26,3 +38,12 @@
 #define IOMAN_SYMLINK   32
 #define IOMAN_READLINK  33
 #define IOMAN_IOCTL2    34
+
+int iop_test_module_hooks(struct iop_state* iop);
+void iop_return(struct iop_state* iop, int ret);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

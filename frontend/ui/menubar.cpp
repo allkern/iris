@@ -83,8 +83,9 @@ int open_file(iris::instance* iris, std::string file) {
         return 0;
     }
 
+    // Note: We need the trailing whitespaces here because of IOMAN HLE
     // Load executable
-    file = "host:" + file;
+    file = "host:  " + file;
 
     // Temporarily disable window updates
     struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
