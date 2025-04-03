@@ -24,8 +24,8 @@
 #define VU_LOWER(ins) { ee->vu0->lower = ee->opcode; vu_i_ ## ins(ee->vu0); }
 #define VU_UPPER(ins) { ee->vu0->upper = ee->opcode; vu_i_ ## ins(ee->vu0); }
 
-// static FILE* file;
-// static int p = 0;
+static FILE* file;
+static int p = 0;
 
 static inline int fast_abs32(int a) {
     uint32_t m = a >> 31;
@@ -174,8 +174,47 @@ static inline void fpu_cvtws(union ee_fpu_reg* d, union ee_fpu_reg* s) {
         d->u32 = 0x80000000;
 }
 
-static inline int ee_translate_virt(uint32_t virt, uint32_t* phys) {
-    // int seg = ee_get_segment(virt);
+static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t virt) {
+    struct ee_vtlb_entry* entry = NULL;
+
+    for (int i = 0; i < 48; i++) {
+        ee->vtlb[i].mask;
+    }
+}
+
+static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t* phys) {
+    int seg = ee_get_segment(virt);
+
+    // // Assume we're in kernel mode
+    if (seg == EE_KSEG0 || seg == EE_KSEG1) {
+        *phys = virt & 0x1fffffff;
+
+        return 0;
+    }
+
+    if (virt >= 0x00000000 && virt <= 0x01FFFFFF) {
+        *phys = virt & 0x1FFFFFF;
+
+        return 0;
+    }
+
+    if (virt >= 0x10000000 && virt <= 0x1FFFFFFF) {
+        *phys = virt & 0x1FFFFFFF;
+
+        return 0;
+    }
+
+    if (virt >= 0x20000000 && virt <= 0x21FFFFFF) {
+        *phys = virt & 0x1FFFFFF;
+
+        return 0;
+    }
+
+    if (virt >= 0x30000000 && virt <= 0x31FFFFFF) {
+        *phys = virt & 0x1FFFFFF;
+
+        return 0;
+    }
 
     // DECI2 area
     if (virt >= 0xFFFF8000) {
@@ -186,24 +225,22 @@ static inline int ee_translate_virt(uint32_t virt, uint32_t* phys) {
 
     *phys = virt & ee_bus_region_mask_table[virt >> 29];
 
-    // if (seg == EE_KSEG0 || seg == EE_KSEG1) {
-    //     *phys = virt & 0x1fffffff;
+    printf("ee: Unhandled virtual address %08x @ cyc=%ld\n", virt, ee->total_cycles);
 
-    //     return 0;
-    // }
+    exit(1);
 
-    // // To-do: MMU mapping
-    // *phys = virt & 0x1fffffff;
+    // To-do: MMU mapping
+    *phys = virt & 0x1fffffff;
 
     return 0;
 }
 
 #define BUS_READ_FUNC(b)                                                        \
     static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) {  \
-        if (addr >= 0x70000000 && addr <= 0x70003fff)                           \
+        if ((addr & 0x70000000) == 0x70000000)                                  \
             return ps2_ram_read ## b(ee->scratchpad, addr & 0x3fff);            \
         uint32_t phys;                                                          \
-        if (ee_translate_virt(addr, &phys)) {                                   \
+        if (ee_translate_virt(ee, addr, &phys)) {                               \
             printf("ee: TLB mapping error\n");                                  \
             exit(1);                                                            \
             return 0;                                                           \
@@ -213,10 +250,10 @@ static inline int ee_translate_virt(uint32_t virt, uint32_t* phys) {
 
 #define BUS_WRITE_FUNC(b)                                                                   \
     static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) {  \
-        if (addr >= 0x70000000 && addr <= 0x70003fff)                                       \
+        if ((addr & 0x70000000) == 0x70000000)                                              \
             { ps2_ram_write ## b(ee->scratchpad, addr & 0x3fff, data); return; }            \
         uint32_t phys;                                                                      \
-        if (ee_translate_virt(addr, &phys)) {                                               \
+        if (ee_translate_virt(ee, addr, &phys)) {                                           \
             printf("ee: TLB mapping error\n");                                              \
             exit(1);                                                                        \
             return;                                                                         \
@@ -230,12 +267,12 @@ BUS_READ_FUNC(32)
 BUS_READ_FUNC(64)
 
 static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
-    if (addr >= 0x70000000 && addr <= 0x70003fff)
-        return ps2_ram_read128(ee->scratchpad, addr & 0x3fff);
+    if ((addr & 0x70000000) == 0x70000000)
+        return ps2_ram_read128(ee->scratchpad, addr & 0x3ff0);
 
     uint32_t phys;
 
-    if (ee_translate_virt(addr, &phys)) {
+    if (ee_translate_virt(ee, addr, &phys)) {
         printf("ee: TLB mapping error\n");
 
         exit(1);
@@ -252,15 +289,15 @@ BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
 static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
-    if (addr >= 0x70000000 && addr <= 0x70003fff) {
-        ps2_ram_write128(ee->scratchpad, addr & 0x3fff, data);
+    if ((addr & 0x70000000) == 0x70000000) {
+        ps2_ram_write128(ee->scratchpad, addr & 0x3ff0, data);
 
         return;
     }
 
     uint32_t phys;
 
-    if (ee_translate_virt(addr, &phys)) {
+    if (ee_translate_virt(ee, addr, &phys)) {
         printf("ee: TLB mapping error\n");
 
         exit(1);
@@ -861,7 +898,7 @@ static inline void ee_i_mflo1(struct ee_state* ee) {
     EE_RD = EE_LO1;
 }
 static inline void ee_i_mfsa(struct ee_state* ee) {
-    EE_RD = ee->sa;
+    EE_RD = ee->sa & 0xf;
 }
 static inline void ee_i_mins(struct ee_state* ee) {
     EE_FD = fminf(EE_FS, EE_FT);
@@ -885,7 +922,6 @@ static inline void ee_i_mtc0(struct ee_state* ee) {
     ee->cop0_r[EE_D_RD] = EE_RT32;
 }
 static inline void ee_i_mtc1(struct ee_state* ee) {
-    // printf("mtc1 f%d <- %08x\n", EE_D_FS, EE_RT32);
     EE_FS32 = EE_RT32;
 }
 static inline void ee_i_mthi(struct ee_state* ee) {
@@ -901,9 +937,11 @@ static inline void ee_i_mtlo1(struct ee_state* ee) {
     EE_LO1 = EE_RS;
 }
 static inline void ee_i_mtsa(struct ee_state* ee) {
-    ee->sa = (uint32_t)EE_RS;
+    ee->sa = ((uint32_t)EE_RS) & 0xf;
 }
-static inline void ee_i_mtsab(struct ee_state* ee) { printf("ee: mtsab unimplemented\n"); exit(1); }
+static inline void ee_i_mtsab(struct ee_state* ee) {
+    ee->sa = (EE_RS ^ EE_D_I16) & 15;
+}
 static inline void ee_i_mtsah(struct ee_state* ee) {
     ee->sa = ((EE_RS ^ EE_D_I16) & 7) << 1;
 }
@@ -1951,7 +1989,36 @@ static inline void ee_i_pxor(struct ee_state* ee) {
     ee->r[d].u64[0] = rs.u64[0] ^ rt.u64[0];
     ee->r[d].u64[1] = rs.u64[1] ^ rt.u64[1];
 }
-static inline void ee_i_qfsrv(struct ee_state* ee) { printf("ee: qfsrv unimplemented\n"); exit(1); }
+static inline void ee_i_qfsrv(struct ee_state* ee) {
+    uint128_t rs = ee->r[EE_D_RS];
+    uint128_t rt = ee->r[EE_D_RT];
+    int d = EE_D_RD;
+
+    int shift = ee->sa * 8;
+
+    uint128_t v;
+
+    if (!shift) {
+        v = rt;
+    } else {
+        if (shift < 64) {
+            v.u64[0] = rt.u64[0] >> shift;
+            v.u64[1] = rt.u64[1] >> shift;
+            v.u64[0] |= rt.u64[1] << (64 - shift);
+            v.u64[1] |= rs.u64[0] << (64 - shift);
+        } else {
+            v.u64[0] = rt.u64[1] >> (shift - 64);
+            v.u64[1] = rs.u64[0] >> (shift - 64);
+
+            if (shift != 64) {
+                v.u64[0] |= rs.u64[0] << (128u - shift);
+                v.u64[1] |= rs.u64[1] << (128u - shift);
+            }
+        }
+    }
+
+    ee->r[d] = v;
+}
 static inline void ee_i_qmfc2(struct ee_state* ee) {
     int t = EE_D_RT;
     int d = EE_D_RD;
@@ -1966,7 +2033,9 @@ static inline void ee_i_qmtc2(struct ee_state* ee) {
     ee->vu0->vf[d].u64[0] = ee->r[t].u64[0];
     ee->vu0->vf[d].u64[1] = ee->r[t].u64[1];
 }
-static inline void ee_i_rsqrts(struct ee_state* ee) { printf("ee: rsqrts unimplemented\n"); exit(1); }
+static inline void ee_i_rsqrts(struct ee_state* ee) {
+    EE_FD = EE_FS / sqrtf(EE_FT);
+}
 static inline void ee_i_sb(struct ee_state* ee) {
     bus_write8(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
 }
@@ -2015,7 +2084,7 @@ static inline void ee_i_slti(struct ee_state* ee) {
     EE_RT = ((int64_t)EE_RS) < SE6416(EE_D_I16);
 }
 static inline void ee_i_sltiu(struct ee_state* ee) {
-    EE_RT = EE_RS < (uint64_t)EE_D_I16;
+    EE_RT = EE_RS < (uint64_t)(SE6416(EE_D_I16));
 }
 static inline void ee_i_sltu(struct ee_state* ee) {
     EE_RD = EE_RS < EE_RT;
@@ -2065,7 +2134,6 @@ static inline void ee_i_sw(struct ee_state* ee) {
     bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT32);
 }
 static inline void ee_i_swc1(struct ee_state* ee) {
-    // printf("swc1 %08x+%08x=%08x %08x (%f)\n", EE_RS32, SE3216(EE_D_I16), EE_RS32 + SE3216(EE_D_I16), ee->f[EE_D_RT].u32, ee->f[EE_D_RT].f);
     bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), EE_FT32);
 }
 static inline void ee_i_swl(struct ee_state* ee) {
@@ -2126,6 +2194,13 @@ static inline void ee_i_tgeu(struct ee_state* ee) { printf("ee: tgeu unimplement
 static inline void ee_i_tlbp(struct ee_state* ee) { return; printf("ee: tlbp unimplemented\n"); exit(1); }
 static inline void ee_i_tlbr(struct ee_state* ee) { return; printf("ee: tlbr unimplemented\n"); exit(1); }
 static inline void ee_i_tlbwi(struct ee_state* ee) {
+    printf("ee: Index=%d EntryLo0=%08x EntryLo1=%08x EntryHi=%08x PageMask=%08x\n",
+        ee->index,
+        ee->entrylo0,
+        ee->entrylo1,
+        ee->entryhi,
+        ee->pagemask
+    );
     /* To-do: MMU */
 }
 static inline void ee_i_tlbwr(struct ee_state* ee) { return; printf("ee: tlbwr unimplemented\n"); exit(1); }
@@ -2133,7 +2208,9 @@ static inline void ee_i_tlt(struct ee_state* ee) { printf("ee: tlt unimplemented
 static inline void ee_i_tlti(struct ee_state* ee) { printf("ee: tlti unimplemented\n"); exit(1); }
 static inline void ee_i_tltiu(struct ee_state* ee) { printf("ee: tltiu unimplemented\n"); exit(1); }
 static inline void ee_i_tltu(struct ee_state* ee) { printf("ee: tltu unimplemented\n"); exit(1); }
-static inline void ee_i_tne(struct ee_state* ee) { printf("ee: tne unimplemented\n"); exit(1); }
+static inline void ee_i_tne(struct ee_state* ee) {
+    if (EE_RS != EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
+}
 static inline void ee_i_tnei(struct ee_state* ee) { printf("ee: tnei unimplemented\n"); exit(1); }
 static inline void ee_i_vabs(struct ee_state* ee) { VU_UPPER(abs) }
 static inline void ee_i_vadd(struct ee_state* ee) { VU_UPPER(add) }
@@ -2805,11 +2882,10 @@ void ee_cycle(struct ee_state* ee) {
         ee_exception_level1(ee, CAUSE_EXC1_INT);
     }
 
-    // if (ee->pc == 0x102528) {
-    //     printf("Strm_Init()\n");
-
-    //     exit(1);
-    // }
+	// if (ee->pc == 0x160700) {
+	// 	p = 5000;
+	// 	file = fopen("eegs.dump", "w");
+	// }
 
     // if (ee->pc == 0x1c14bc) {
     //     p = 100;
@@ -2920,8 +2996,8 @@ void ee_cycle(struct ee_state* ee) {
 
     ++ee->count;
 
-    if (ee->count == ee->compare)
-        ee->cause |= EE_CAUSE_IP7;
+    // if (ee->count == ee->compare)
+    //     ee->cause |= EE_CAUSE_IP7;
 
     ee->r[0].u64[0] = 0;
     ee->r[0].u64[1] = 0;

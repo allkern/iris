@@ -78,6 +78,42 @@ struct ee_bus_s {
 #define EE_VEC_COMMON  0x00000180
 #define EE_VEC_IRQ     0x00000200
 
+/*
+    1       V0 - Even page valid. When not set, the memory referenced in this entry is not mapped.
+    2       D0 - Even page dirty. When not set, writes cause an exception.
+    3-5     C0 - Even page cache mode.
+            2=Uncached
+            3=Cached
+            7=Uncached accelerated
+    6-25    PFN0 - Even page frame number.
+    33      V1 - Odd page valid.
+    34      D1 - Odd page dirty.
+    35      C1 - Odd page cache mode.
+    38-57   PFN1 - Odd page frame number.
+    63      S - Scratchpad. When set, the virtual mapping goes to scratchpad instead of main memory.
+    64-71   ASID - Address Space ID.
+    76      G - Global. When set, ASID is ignored.
+    77-95   VPN2 - Virtual page number / 2.
+            Even pages have a VPN of (VPN2 * 2) and odd pages have a VPN of (VPN2 * 2) + 1
+    109-120 MASK - Size of an even/odd page.
+*/
+
+struct ee_vtlb_entry {
+    int v0;
+    int d0;
+    int c0;
+    int pfn0;
+    int v1;
+    int d1;
+    int c1;
+    int pfn1;
+    int s;
+    int asid;
+    int g;
+    int vpn2;
+    int mask;
+};
+
 union ee_fpu_reg {
     float f;
     uint32_t u32;
@@ -157,6 +193,8 @@ struct ee_state {
 
     struct vu_state* vu0;
     struct vu_state* vu1;
+
+    struct ee_vtlb_entry vtlb[48];
 };
 
 struct ee_state* ee_create(void);
