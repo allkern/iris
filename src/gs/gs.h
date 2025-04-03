@@ -349,6 +349,7 @@ struct ps2_gs {
 
 struct ps2_gs* ps2_gs_create(void);
 void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct ps2_ee_timers* ee_timers, struct ps2_iop_timers* iop_timers, struct sched_state* sched);
+void ps2_gs_reset(struct ps2_gs* gs);
 void ps2_gs_init_renderer(struct ps2_gs* gs, struct gs_renderer renderer);
 void ps2_gs_destroy(struct ps2_gs* gs);
 uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr);
