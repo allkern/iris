@@ -575,8 +575,9 @@ void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
         uint32_t addr = v->nax + 1 + (i >> 2);
         uint16_t n = (spu2->ram[addr] & (0xf << sh)) >> sh;
 
-        if (addr == spu2->c[0].irqa || addr == spu2->c[1].irqa)
-            ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
+        // Don't send SPU2 IRQs
+        // if (addr == spu2->c[0].irqa || addr == spu2->c[1].irqa)
+        //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
 
         // Sign extend t
         int32_t t = (int16_t)((n << 12) & 0xf000) >> shift_factor;
