@@ -141,14 +141,17 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     MAP_MEM_READ(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     if (addr == 0x1f801450) return 0;
+    if (addr == 0x1f801414) return 1;
 
     // Time Crisis II (USA) needs i.Link/FireWire support
     if (addr == 0x1f808410) return 8;
 
     // if (addr == 0x1f801560) return 1;
     if ((addr & 0xff000000) == 0x1e000000) return 0;
+    // Bloody Roar 4 Wrong IOP CDVD DMA
+    // if ((addr & 0xff000000) == 0x0c000000) { *(uint8_t*)0 = 0; }
 
-    // printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -183,7 +186,7 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
     MAP_MEM_WRITE(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
-    // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
+    printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
 }
 
 void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
@@ -203,7 +206,7 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
 
     if (addr == 0x1f801450) return;
 
-    // printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);
+    printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);
 }
 
 #undef MAP_READ

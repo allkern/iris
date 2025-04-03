@@ -446,6 +446,22 @@ void cdvd_do_read(void* udata, int overshoot) {
                 cdvd->buf[3] = lba & 0xff;
 
                 cdvd_read_sector(cdvd, cdvd->read_lba++, 12);
+
+                // for (int i = 0; i < 2064;) {
+                //     for (int x = 0; x < 16; x++) {
+                //         printf("%02x ", cdvd->buf[i+x]);
+                //     }
+        
+                //     putchar('|');
+        
+                //     for (int x = 0; x < 16; x++) {
+                //         printf("%c", isprint(cdvd->buf[i+x]) ? cdvd->buf[i+x] : '.');
+                //     }
+        
+                //     puts("|");
+        
+                //     i += 16;
+                // }
             } break;
         }
 
@@ -701,6 +717,8 @@ static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {
 static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->n_cmd = cmd;
 
+    // printf("cdvd: N command %02x\n", cmd);
+
     cdvd_set_busy(cdvd);
 
     switch (cdvd->n_cmd) {
@@ -866,6 +884,7 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
     );
 
     cdvd->status &= ~CDVD_STATUS_TRAY_OPEN;
+    cdvd->status |= CDVD_STATUS_SPINNING;
 
     return 0;
 }
@@ -879,6 +898,22 @@ void ps2_cdvd_close(struct ps2_cdvd* cdvd) {
     cdvd->disc_type = CDVD_DISC_NO_DISC;
 
     cdvd_set_status_bits(cdvd, CDVD_STATUS_TRAY_OPEN);
+
+    cdvd->status &= ~(CDVD_STATUS_SPINNING | CDVD_STATUS_SEEKING | CDVD_STATUS_READING);
+}
+
+uint8_t cdvd_read_speed(struct ps2_cdvd* cdvd) {
+    uint8_t speed = cdvd->read_speed & 0x3F;
+
+    if (!speed)
+        speed = (cdvd->disc_type == CDVD_DISC_PS2_DVD) ? 3 : 5;
+
+    if (cdvd->disc_type == CDVD_DISC_PS2_DVD)
+        speed += 0xF;
+    else
+        speed--;
+
+    return speed;
 }
 
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
@@ -894,7 +929,7 @@ uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
         case 0x1F40200A: /* printf("cdvd: read status %x\n", cdvd->status); */ return cdvd->status;
         case 0x1F40200B: /* printf("cdvd: read sticky_status %x\n", cdvd->sticky_status); */ return cdvd->sticky_status;
         case 0x1F40200F: /* printf("cdvd: read disc_type %x\n", cdvd->disc_type); */ return cdvd->disc_type;
-        case 0x1F402013: /* printf("cdvd: read speed %x\n", cdvd->read_speed); */ return 0x14;
+        case 0x1F402013: /* printf("cdvd: read speed %x\n", cdvd_read_speed(cdvd)); return */ cdvd_read_speed(cdvd);
         case 0x1F402016: /* printf("cdvd: read s_cmd %x\n", cdvd->s_cmd); */ return cdvd->s_cmd;
         case 0x1F402017: /* printf("cdvd: read s_stat %x\n", cdvd->s_stat); */ return cdvd->s_stat;
         // case 0x1F402017: (W);
