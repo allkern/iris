@@ -18,6 +18,7 @@ void null_get_display_size(void* ctx, int* w, int* h) {
 void null_get_display_format(void* ctx, int* fmt) {
     *fmt = 0;
 }
+void null_set_window_rect(void* ctx, int x, int y, int w, int h) {}
 const char* null_get_name(void* ctx) { return "Null"; }
 
 extern "C" void null_render_point(struct ps2_gs* gs, void* udata) {}
