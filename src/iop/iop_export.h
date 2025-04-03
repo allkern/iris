@@ -5,7 +5,11 @@
 extern "C" {
 #endif
 
+#include <string.h>
+
 #include "iop.h"
+
+#include "hle/ioman.h"
 
 #define MODULE_UNKNOWN  0
 #define MODULE_IOMAN    1

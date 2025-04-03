@@ -21,7 +21,10 @@
 #define IOMAN_DRIVE_MC1       6
 #define IOMAN_DRIVE_MASS      7
 
+#ifdef __cplusplus
 extern "C" {
+#endif
+
 int ioman_open(struct iop_state* iop);
 int ioman_close(struct iop_state* iop);
 int ioman_read(struct iop_state* iop);
@@ -50,6 +53,9 @@ int ioman_devctl(struct iop_state* iop);
 int ioman_symlink(struct iop_state* iop);
 int ioman_readlink(struct iop_state* iop);
 int ioman_ioctl2(struct iop_state* iop);
+
+#ifdef __cplusplus
 }
+#endif
 
 #endif
