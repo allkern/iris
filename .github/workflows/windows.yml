@@ -11,6 +11,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
+        submodules: 'recursive'
         fetch-depth: 0
     - name: Run build-deps
       run: ./build-deps.ps1
