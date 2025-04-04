@@ -6,7 +6,7 @@ VERSION_TAG := $(shell git describe --always --tags --abbrev=0)
 COMMIT_HASH := $(shell git rev-parse --short HEAD)
 OS_INFO := $(shell uname -rmo)
 
-EXEC := iris_$(TARGET)
+EXEC := "iris_$(TARGET)"
 
 INCLUDE_DIRS := imgui imgui/backends frontend gl3w/include tomlplusplus/include
 OUTPUT_DIR := bin
