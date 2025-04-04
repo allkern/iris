@@ -13,6 +13,9 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
+    - name: Install x86_64 brew
+      run: |
+           arch -x86_64 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
     - name: Install SDL2 and dylibbundler
       run: |
            arch -x86_64 /usr/local/bin/brew install sdl2
