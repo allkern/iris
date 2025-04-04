@@ -2,8 +2,6 @@
 
 ./setup_gl3w.sh
 
-ls /usr/local/lib
-
 # Build emulator
 make USE_INTRINSICS=1 TARGET=x86_64-apple-macos10.15 -j8
 # make USE_INTRINSICS=0 TARGET=arm64-apple-macos10.15 -j8
