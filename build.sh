@@ -11,9 +11,11 @@ lipo -create -output ./bin/iris "./bin/iris_x86_64-apple-macos10.15" "./bin/iris
 
 # Create bundle filesystem
 mkdir -p ./dist/iris.app/Contents/MacOS/Libraries
+mkdir -p ./dist/iris.app/Contents/Resources
 
 # Move executable to folder
-mv ./bin/iris ./dist/iris.app/Contents/MacOS
+cp ./bin/iris ./dist/iris.app/Contents/MacOS
+cp ./res/iris.icns ./dist/iris.app/Contents/Resources/iris.icns 
 
 # Make executable
 chmod 777 ./dist/iris.app/Contents/MacOS/iris

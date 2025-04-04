@@ -15,6 +15,7 @@ jobs:
         fetch-depth: 0
     - name: Install SDL2 and dylibbundler
       run: |
+           arch -x86_64 /usr/local/bin/brew install sdl2
            brew install sdl2
            brew install dylibbundler
     - name: Build and pack Iris

@@ -28,5 +28,7 @@
 			<true/>
 		<key>NSPrincipalClass</key>
 			<string>NSApplication</string>
+		<key>CFBundleIconFile</key>
+			<string>iris</string>
 	</dict>
 </plist>
