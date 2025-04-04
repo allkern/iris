@@ -11,7 +11,7 @@ OUTPUT_DIR := bin
 
 CXX := g++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
-CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -std=c++20
+CXXFLAGS += -O3 -flto=auto -Wall -std=c++20
 CXXFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof -target $(TARGET)
 CXXFLAGS += -D_IRIS_VERSION="$(VERSION_TAG)"
 CXXFLAGS += -D_IRIS_COMMIT="$(COMMIT_HASH)"
@@ -29,7 +29,7 @@ CXXOBJ := $(CXXSRC:.cpp=.o)
 
 CC := gcc
 CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
-CFLAGS += -O3 -ffast-math -march=native -mtune=native -pedantic
+CFLAGS += -O3 -ffast-math -pedantic
 CFLAGS += -flto=auto -Wall -mmacosx-version-min=10.15 -Wno-newline-eof -target $(TARGET)
 CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
