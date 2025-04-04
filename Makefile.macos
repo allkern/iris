@@ -6,7 +6,7 @@ VERSION_TAG := $(shell git describe --always --tags --abbrev=0)
 COMMIT_HASH := $(shell git rev-parse --short HEAD)
 OS_INFO := $(shell uname -rmo)
 
-EXEC := iris
+EXEC := iris_$(TARGET)
 
 INCLUDE_DIRS := imgui imgui/backends frontend gl3w/include tomlplusplus/include
 OUTPUT_DIR := bin
@@ -60,7 +60,7 @@ $(CXXOBJ): %.o: %.cpp
 	@echo " CXX" $<; $(CXX) -c $< -o $@ $(CXXFLAGS)
 
 $(OUTPUT_DIR)/$(EXEC): $(COBJ) $(CXXOBJ)
-	$(CXX) $(COBJ) $(CXXOBJ) main.cpp -o $(OUTPUT_DIR)/$(EXEC).$(TARGET) $(CXXFLAGS)
+	$(CXX) $(COBJ) $(CXXOBJ) main.cpp -o $(OUTPUT_DIR)/$(EXEC) $(CXXFLAGS)
 
 clean:
 	rm -rf $(OUTPUT_DIR)
