@@ -1,7 +1,5 @@
 .PHONY: clean
 
-PLATFORM := $(shell uname -s)
-
 VERSION_TAG := $(shell git describe --always --tags --abbrev=0)
 COMMIT_HASH := $(shell git rev-parse --short HEAD)
 OS_INFO := $(shell uname -rmo)
