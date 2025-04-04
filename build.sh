@@ -3,7 +3,7 @@
 ./setup_gl3w.sh
 
 # Build emulator
-make
+make USE_INTRINSICS=0 -j8
 
 # Create bundle filesystem
 mkdir -p iris.app/Contents/MacOS/Libraries

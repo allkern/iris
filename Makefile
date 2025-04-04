@@ -13,7 +13,7 @@ OUTPUT_DIR := bin
 
 CXX := g++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
-CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -D_EE_USE_INTRINSICS
+CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall
 CXXFLAGS += -D_IRIS_VERSION="$(VERSION_TAG)"
 CXXFLAGS += -D_IRIS_COMMIT="$(COMMIT_HASH)"
 CXXFLAGS += -D_IRIS_OSVERSION="$(OS_INFO)"
@@ -31,7 +31,7 @@ CXXOBJ := $(CXXSRC:.cpp=.o)
 CC := gcc
 CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
 CFLAGS += -O3 -ffast-math -march=native -mtune=native -pedantic
-CFLAGS += -flto=auto -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS
+CFLAGS += -flto=auto -Wall -mssse3 -msse4
 CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
 CSRC += $(wildcard src/iop/*.c)
@@ -41,6 +41,11 @@ CSRC += $(wildcard src/dev/*.c)
 CSRC += $(wildcard gl3w/src/*.c)
 CSRC += $(wildcard frontend/tfd/*.c)
 COBJ := $(CSRC:.c=.o)
+
+ifndef USE_INTRINSICS
+	CFLAGS += -D_EE_USE_INTRINSICS
+	CXXFLAGS += -D_EE_USE_INTRINSICS
+endif
 
 ifeq ($(PLATFORM),Darwin)
 	CFLAGS += -mmacosx-version-min=10.9 -Wno-newline-eof
