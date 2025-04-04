@@ -45,11 +45,6 @@ ifndef USE_INTRINSICS
 	CXXFLAGS += -D_EE_USE_INTRINSICS
 endif
 
-ifeq ($(PLATFORM),Darwin)
-	CFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof
-	CXXFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof
-endif
-
 all: $(OUTPUT_DIR) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)
 
 $(OUTPUT_DIR):
