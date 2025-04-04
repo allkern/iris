@@ -13,7 +13,7 @@ OUTPUT_DIR := bin
 
 CXX := g++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
-CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall
+CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -std=c++20
 CXXFLAGS += -D_IRIS_VERSION="$(VERSION_TAG)"
 CXXFLAGS += -D_IRIS_COMMIT="$(COMMIT_HASH)"
 CXXFLAGS += -D_IRIS_OSVERSION="$(OS_INFO)"
@@ -31,7 +31,7 @@ CXXOBJ := $(CXXSRC:.cpp=.o)
 CC := gcc
 CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
 CFLAGS += -O3 -ffast-math -march=native -mtune=native -pedantic
-CFLAGS += -flto=auto -Wall -mssse3 -msse4
+CFLAGS += -flto=auto -Wall
 CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
 CSRC += $(wildcard src/iop/*.c)
@@ -43,7 +43,7 @@ CSRC += $(wildcard frontend/tfd/*.c)
 COBJ := $(CSRC:.c=.o)
 
 ifndef USE_INTRINSICS
-	CFLAGS += -D_EE_USE_INTRINSICS
+	CFLAGS += -D_EE_USE_INTRINSICS -mssse3 -msse4
 	CXXFLAGS += -D_EE_USE_INTRINSICS
 endif
 
