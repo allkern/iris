@@ -25,9 +25,10 @@ jobs:
     - name: Pack executable
       run: |
            chmod +x ./bin/iris
-           mv ./bin/iris ./
-           tar -czf iris-ubuntu-latest.tar.gz ./iris
+           mkdir dist
+           mv ./bin/iris ./dist
+           mv ./res ./dist
     - uses: actions/upload-artifact@v4
       with:
         name: iris-ubuntu-latest
-        path: ./iris-ubuntu-latest.tar.gz
+        path: ./dist

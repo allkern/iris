@@ -21,8 +21,7 @@ jobs:
       run: |
            git fetch --all --tags
            ./build.sh
-           tar -czf iris-macos-latest.tar.gz iris.app
     - uses: actions/upload-artifact@v4
       with:
         name: iris-macos-latest
-        path: ./iris-macos-latest.tar.gz
+        path: ./iris.app
