@@ -1,0 +1,25 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Run build-deps
+      run: ./build-deps.ps1
+    - name: Run build-win64
+      run: |
+           ./build-win.ps1
+           New-Item -Path "iris" -ItemType Directory
+           Copy-Item -Recurse "bin" -Destination "iris"
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-win64-latest
+        path: iris/

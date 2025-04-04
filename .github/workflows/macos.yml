@@ -1,0 +1,27 @@
+name: macOS CI
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Install SDL2 and dylibbundler
+      run: |
+           brew install sdl2
+           brew install dylibbundler
+    - name: Build and pack Iris
+      run: |
+           git fetch --all --tags
+           ./build.sh
+           tar -czf iris-macos-latest.tar.gz iris.app
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-macos-latest
+        path: ./iris-macos-latest.tar.gz

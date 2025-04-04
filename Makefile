@@ -13,7 +13,7 @@ OUTPUT_DIR := bin
 
 CXX := g++
 CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
-CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -g -D_EE_USE_INTRINSICS
+CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -D_EE_USE_INTRINSICS
 CXXFLAGS += -D_IRIS_VERSION="$(VERSION_TAG)"
 CXXFLAGS += -D_IRIS_COMMIT="$(COMMIT_HASH)"
 CXXFLAGS += -D_IRIS_OSVERSION="$(OS_INFO)"

@@ -1,0 +1,32 @@
+name: Ubuntu CI
+
+on:
+  push:
+    branches: [ "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    - name: Install SDL2
+      run: |
+           sudo apt update
+           sudo apt install libsdl2-dev
+    - name: Build Iris
+      run: |
+           git fetch --all --tags
+           ./setup_gl3w.sh
+           make
+    - name: Pack executable
+      run: |
+           chmod +x ./bin/iris
+           mv ./bin/iris ./
+           tar -czf iris-ubuntu-latest.tar.gz ./iris
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-ubuntu-latest
+        path: ./iris-ubuntu-latest.tar.gz
