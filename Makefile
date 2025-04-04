@@ -48,8 +48,8 @@ ifndef USE_INTRINSICS
 endif
 
 ifeq ($(PLATFORM),Darwin)
-	CFLAGS += -mmacosx-version-min=10.9 -Wno-newline-eof
-	CXXFLAGS += -mmacosx-version-min=10.9 -Wno-newline-eof
+	CFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof
+	CXXFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof
 endif
 
 all: $(OUTPUT_DIR) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)
