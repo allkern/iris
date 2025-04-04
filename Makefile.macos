@@ -10,7 +10,7 @@ INCLUDE_DIRS := imgui imgui/backends frontend gl3w/include tomlplusplus/include
 OUTPUT_DIR := bin
 
 CXX := g++
-CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
+CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell arch -x86_64 sdl2-config --cflags --libs)
 CXXFLAGS += -O3 -flto=auto -Wall -std=c++20
 CXXFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof -target $(TARGET)
 CXXFLAGS += -D_IRIS_VERSION="$(VERSION_TAG)"
