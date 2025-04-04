@@ -1,22 +1,23 @@
 .PHONY: clean
 
+PLATFORM := $(shell uname -s)
+
 VERSION_TAG := $(shell git describe --always --tags --abbrev=0)
 COMMIT_HASH := $(shell git rev-parse --short HEAD)
 OS_INFO := $(shell uname -rmo)
 
-EXEC := "iris_$(TARGET)"
+EXEC := iris
 
 INCLUDE_DIRS := imgui imgui/backends frontend gl3w/include tomlplusplus/include
 OUTPUT_DIR := bin
 
 CXX := g++
-CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell arch -x86_64 sdl2-config --cflags --libs)
-CXXFLAGS += -O3 -flto=auto -Wall -std=c++20
-CXXFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof -target $(TARGET)
+CXXFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
+CXXFLAGS += -O3 -march=native -mtune=native -flto=auto -Wall -std=c++20
+CXXFLAGS += -mmacosx-version-min=10.15 -Wno-newline-eof
 CXXFLAGS += -D_IRIS_VERSION="$(VERSION_TAG)"
 CXXFLAGS += -D_IRIS_COMMIT="$(COMMIT_HASH)"
 CXXFLAGS += -D_IRIS_OSVERSION="$(OS_INFO)"
-CXXFLAGS += -L/usr/local/Cellar/sdl2/2.32.4/lib
 CXXSRC := $(wildcard imgui/*.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_sdl2.cpp)
 CXXSRC += $(wildcard imgui/backends/imgui_impl_opengl3.cpp)
@@ -29,10 +30,9 @@ CXXSRC += $(wildcard src/iop/hle/*.cpp)
 CXXOBJ := $(CXXSRC:.cpp=.o)
 
 CC := gcc
-CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell arch -x86_64 sdl2-config --cflags --libs)
-CFLAGS += -O3 -ffast-math -pedantic
-CFLAGS += -flto=auto -Wall -mmacosx-version-min=10.15 -Wno-newline-eof -target $(TARGET)
-CFLAGS += -L/usr/local/Cellar/sdl2/2.32.4/lib
+CFLAGS := $(addprefix -I, $(INCLUDE_DIRS)) -iquote src $(shell sdl2-config --cflags --libs)
+CFLAGS += -O3 -ffast-math -march=native -mtune=native -pedantic
+CFLAGS += -flto=auto -Wall -mmacosx-version-min=10.15 -Wno-newline-eof
 CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
 CSRC += $(wildcard src/iop/*.c)
