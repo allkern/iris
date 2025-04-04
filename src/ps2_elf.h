@@ -5,7 +5,11 @@
 extern "C" {
 #endif
 
+#ifdef __linux__
 #include <elf.h>
+#else
+#include "elf.h"
+#endif
 
 #include "ps2.h"
 
