@@ -36,12 +36,18 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
-extern char _binary_res_Roboto_Regular_ttf_start[];
-extern char _binary_res_FiraCode_Regular_ttf_start[];
-extern char _binary_res_MaterialSymbolsRounded_ttf_start[];
-extern char _binary_res_Roboto_Regular_ttf_end[];
-extern char _binary_res_FiraCode_Regular_ttf_end[];
-extern char _binary_res_MaterialSymbolsRounded_ttf_end[];
+#define INCBIN_PREFIX g_
+#define INCBIN_STYLE INCBIN_STYLE_SNAKE
+
+#include "incbin/incbin.h"
+
+INCBIN(roboto, "res/Roboto-Regular.ttf");
+INCBIN(symbols, "res/MaterialSymbolsRounded.ttf");
+INCBIN(firacode, "res/FiraCode-Regular.ttf");
+
+INCBIN_EXTERN(roboto);
+INCBIN_EXTERN(symbols);
+INCBIN_EXTERN(firacode);
 
 namespace iris {
 
@@ -161,17 +167,13 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     ImFontConfig config_no_own;
     config_no_own.FontDataOwnedByAtlas = false;
 
-    ptrdiff_t firacode_size = _binary_res_FiraCode_Regular_ttf_end - _binary_res_FiraCode_Regular_ttf_start;
-    ptrdiff_t roboto_size = _binary_res_Roboto_Regular_ttf_end - _binary_res_Roboto_Regular_ttf_start;
-    ptrdiff_t material_size = _binary_res_MaterialSymbolsRounded_ttf_end - _binary_res_MaterialSymbolsRounded_ttf_start;
-
-    iris->font_small_code = io.Fonts->AddFontFromMemoryTTF(_binary_res_FiraCode_Regular_ttf_start, firacode_size, 12.0F, &config_no_own);
-    iris->font_code       = io.Fonts->AddFontFromMemoryTTF(_binary_res_FiraCode_Regular_ttf_start, firacode_size, 16.0F, &config_no_own);
-    iris->font_small      = io.Fonts->AddFontFromMemoryTTF(_binary_res_Roboto_Regular_ttf_start, roboto_size, 12.0F, &config_no_own);
-    iris->font_heading    = io.Fonts->AddFontFromMemoryTTF(_binary_res_Roboto_Regular_ttf_start, roboto_size, 20.0F, &config_no_own);
-    iris->font_body       = io.Fonts->AddFontFromMemoryTTF(_binary_res_Roboto_Regular_ttf_start, roboto_size, 16.0F, &config_no_own);
-    iris->font_icons      = io.Fonts->AddFontFromMemoryTTF(_binary_res_MaterialSymbolsRounded_ttf_start, material_size, 20.0F, &config, icon_range);
-    iris->font_icons_big  = io.Fonts->AddFontFromMemoryTTF(_binary_res_MaterialSymbolsRounded_ttf_start, material_size, 50.0F, &config_no_own, icon_range);
+    iris->font_small_code = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 12.0F, &config_no_own);
+    iris->font_code       = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 16.0F, &config_no_own);
+    iris->font_small      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 12.0F, &config_no_own);
+    iris->font_heading    = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 20.0F, &config_no_own);
+    iris->font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 16.0F, &config_no_own);
+    iris->font_icons      = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 20.0F, &config, icon_range);
+    iris->font_icons_big  = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 50.0F, &config_no_own, icon_range);
 
     io.FontDefault = iris->font_body;
 

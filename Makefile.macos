@@ -43,7 +43,7 @@ CSRC += $(wildcard gl3w/src/*.c)
 CSRC += $(wildcard frontend/tfd/*.c)
 COBJ := $(CSRC:.c=.o)
 
-LD := ld
+LD := lld
 FONTS := $(wildcard res/*.ttf)
 FOBJ := $(FONTS:.ttf=.o)
 
