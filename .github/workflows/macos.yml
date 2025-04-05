@@ -5,7 +5,7 @@ on:
     branches: [ "master" ]
 
 jobs:
-  build:
+  macos-arm64-build:
     runs-on: macos-latest
 
     steps:
@@ -23,5 +23,60 @@ jobs:
            ./build.sh
     - uses: actions/upload-artifact@v4
       with:
-        name: iris-macos-latest
+        name: iris-macos-arm64-latest
         path: ./dist
+
+  macos-x86_64-build:
+    runs-on: macos-13
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+    - name: Install SDL2 and dylibbundler
+      run: |
+           brew install sdl2 dylibbundler
+    - name: Build and pack Iris
+      run: |
+           git fetch --all --tags
+           ./build.sh
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-macos-x86_64-latest
+        path: ./dist
+
+  macos-universal-build:
+    name: MacOS-Universal
+    needs: [macos-x86_64-build, macos-arm64-build]
+    runs-on: macos-latest
+
+    steps:
+      - name: Download x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: iris-macos-x86_64-latest
+          path: x86_64
+      - name: Download ARM64
+        uses: actions/download-artifact@v4
+        with:
+          name: iris-macos-arm64-latest
+          path: arm64
+      - name: Combine app bundles
+        shell: bash
+        run: |
+          set -x
+          unzip x86_64/*.zip -d x86_64
+          unzip arm64/*.zip -d arm64
+          lipo {x86_64,arm64}/iris.app/Contents/MacOS/iris -create -output iris
+          cp -v -a arm64/iris.app iris.app
+          cp -v iris iris.app/Contents/MacOS/iris
+          # Mix in x86_64 files that do not appear in the ARM64 build (e.g. libvulkan)
+          cp -v -R -n x86_64/iris.app/* iris.app/ || true
+          codesign --force -s - -vvvv iris.app
+          zip -r -y iris-universal.zip iris.app
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: MacOS iris App Bundle (universal)
+          path: iris-universal.zip
