@@ -47,8 +47,8 @@ jobs:
         path: ./dist
 
   macos-universal-build:
-    name: MacOS-Universal
-    needs: [macos-x86_64-build, macos-arm64-build]
+    name: macos-universal
+    needs: [macos-x86_64-build,macos-arm64-build]
     runs-on: macos-latest
 
     steps:
@@ -65,9 +65,10 @@ jobs:
       - name: Combine app bundles
         shell: bash
         run: |
+          ls .
+          ls arm64
+          ls x86_64
           set -x
-          unzip x86_64/*.zip -d x86_64
-          unzip arm64/*.zip -d arm64
           lipo {x86_64,arm64}/iris.app/Contents/MacOS/iris -create -output iris
           cp -v -a arm64/iris.app iris.app
           cp -v iris iris.app/Contents/MacOS/iris
