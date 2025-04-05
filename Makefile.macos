@@ -43,15 +43,22 @@ CSRC += $(wildcard gl3w/src/*.c)
 CSRC += $(wildcard frontend/tfd/*.c)
 COBJ := $(CSRC:.c=.o)
 
+LD := ld
+FONTS := $(wildcard res/*.ttf)
+FOBJ := $(FONTS:.ttf=.o)
+
 ifndef USE_INTRINSICS
 	CFLAGS += -D_EE_USE_INTRINSICS -mssse3 -msse4
 	CXXFLAGS += -D_EE_USE_INTRINSICS
 endif
 
-all: $(OUTPUT_DIR) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)
+all: $(OUTPUT_DIR) $(FOBJ) $(COBJ) $(CXXOBJ) $(OUTPUT_DIR)/$(EXEC)
 
 $(OUTPUT_DIR):
 	mkdir -p $(OUTPUT_DIR)
+
+$(FOBJ): %.o: %.ttf
+	@echo " LD " $<; $(LD) -r -b binary $< -o $@
 
 $(COBJ): %.o: %.c
 	@echo " CC " $<; $(CC) -c $< -o $@ $(CFLAGS)
@@ -60,8 +67,8 @@ $(CXXOBJ): %.o: %.cpp
 	@echo " CXX" $<; $(CXX) -c $< -o $@ $(CXXFLAGS)
 
 $(OUTPUT_DIR)/$(EXEC): $(COBJ) $(CXXOBJ)
-	$(CXX) $(COBJ) $(CXXOBJ) main.cpp -o $(OUTPUT_DIR)/$(EXEC) $(CXXFLAGS)
+	$(CXX) $(FOBJ) $(COBJ) $(CXXOBJ) main.cpp -o $(OUTPUT_DIR)/$(EXEC) $(CXXFLAGS)
 
 clean:
 	rm -rf $(OUTPUT_DIR)
-	rm $(COBJ) $(CXXOBJ)
+	rm $(FOBJ) $(COBJ) $(CXXOBJ)

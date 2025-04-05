@@ -36,6 +36,13 @@
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
 #endif
 
+extern char _binary_res_Roboto_Regular_ttf_start[];
+extern char _binary_res_FiraCode_Regular_ttf_start[];
+extern char _binary_res_MaterialSymbolsRounded_ttf_start[];
+extern char _binary_res_Roboto_Regular_ttf_end[];
+extern char _binary_res_FiraCode_Regular_ttf_end[];
+extern char _binary_res_MaterialSymbolsRounded_ttf_end[];
+
 namespace iris {
 
 static const ImWchar icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
@@ -149,14 +156,22 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     config.MergeMode = true;
     config.GlyphMinAdvanceX = 13.0f;
     config.GlyphOffset = ImVec2(0.0f, 4.0f);
+    config.FontDataOwnedByAtlas = false;
 
-    iris->font_small_code = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 12.0f);
-    iris->font_code       = io.Fonts->AddFontFromFileTTF("res/FiraCode-Regular.ttf", 16.0f);
-    iris->font_small      = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 12.0f);
-    iris->font_heading    = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 20.0f);
-    iris->font_body       = io.Fonts->AddFontFromFileTTF("res/Roboto-Regular.ttf", 16.0f);
-    iris->font_icons      = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 20.0f, &config, icon_range);
-    iris->font_icons_big  = io.Fonts->AddFontFromFileTTF("res/" FONT_ICON_FILE_NAME_MSR, 50.0f, NULL, icon_range);
+    ImFontConfig config_no_own;
+    config_no_own.FontDataOwnedByAtlas = false;
+
+    ptrdiff_t firacode_size = _binary_res_FiraCode_Regular_ttf_end - _binary_res_FiraCode_Regular_ttf_start;
+    ptrdiff_t roboto_size = _binary_res_Roboto_Regular_ttf_end - _binary_res_Roboto_Regular_ttf_start;
+    ptrdiff_t material_size = _binary_res_MaterialSymbolsRounded_ttf_end - _binary_res_MaterialSymbolsRounded_ttf_start;
+
+    iris->font_small_code = io.Fonts->AddFontFromMemoryTTF(_binary_res_FiraCode_Regular_ttf_start, firacode_size, 12.0F, &config_no_own);
+    iris->font_code       = io.Fonts->AddFontFromMemoryTTF(_binary_res_FiraCode_Regular_ttf_start, firacode_size, 16.0F, &config_no_own);
+    iris->font_small      = io.Fonts->AddFontFromMemoryTTF(_binary_res_Roboto_Regular_ttf_start, roboto_size, 12.0F, &config_no_own);
+    iris->font_heading    = io.Fonts->AddFontFromMemoryTTF(_binary_res_Roboto_Regular_ttf_start, roboto_size, 20.0F, &config_no_own);
+    iris->font_body       = io.Fonts->AddFontFromMemoryTTF(_binary_res_Roboto_Regular_ttf_start, roboto_size, 16.0F, &config_no_own);
+    iris->font_icons      = io.Fonts->AddFontFromMemoryTTF(_binary_res_MaterialSymbolsRounded_ttf_start, material_size, 20.0F, &config, icon_range);
+    iris->font_icons_big  = io.Fonts->AddFontFromMemoryTTF(_binary_res_MaterialSymbolsRounded_ttf_start, material_size, 50.0F, &config_no_own, icon_range);
 
     io.FontDefault = iris->font_body;
 

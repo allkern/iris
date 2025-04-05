@@ -21,7 +21,6 @@ jobs:
            New-Item -Path "dist" -ItemType Directory
            Copy-Item "iris.exe" -Destination "dist"
            Copy-Item "SDL2-2.32.0/x86_64-w64-mingw32/bin/SDL2.dll" -Destionation "dist"
-           Copy-Item -Recurse "res" -Destination "dist"
     - uses: actions/upload-artifact@v4
       with:
         name: iris-win-latest
