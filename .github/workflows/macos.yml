@@ -65,9 +65,6 @@ jobs:
       - name: Combine app bundles
         shell: bash
         run: |
-          ls .
-          ls arm64
-          ls x86_64
           set -x
           lipo {x86_64,arm64}/iris.app/Contents/MacOS/iris -create -output iris
           cp -v -a arm64/iris.app iris.app
@@ -75,9 +72,8 @@ jobs:
           # Mix in x86_64 files that do not appear in the ARM64 build (e.g. libvulkan)
           cp -v -R -n x86_64/iris.app/* iris.app/ || true
           codesign --force -s - -vvvv iris.app
-          zip -r -y iris-universal.zip iris.app
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: MacOS iris App Bundle (universal)
-          path: iris-universal.zip
+          name: iris-macos-universal-latest
+          path: iris.app/
