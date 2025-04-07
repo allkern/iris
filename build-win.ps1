@@ -13,17 +13,17 @@ foreach ($SRC in $CSRC) {
     $OBJ = $($SRC -replace '.c$',".o")
 
     if (-Not (Test-Path $OBJ)) {
-        gcc -c $SRC -o $OBJ -v -E `
+        gcc -c $SRC -o $OBJ `
             -O3 -ffast-math -march=native -mtune=native -pedantic `
             -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format `
-            -I"`"$($IMGUI_DIR)`"" `
-            -I"`"$($IMGUI_DIR)\backends`"" `
-            -I"`"$($SDL2_DIR)\include`"" `
-            -I"`"$($SDL2_DIR)\include\SDL2`"" `
-            -I"`"$($GL3W_DIR)\include`"" `
-            -I"`"$($IRIS_DIR)`"" `
-            -I"`"$($TOMLPP_DIR)\include`"" `
-            -I"`"$($SRC_DIR)`"" `
+            -I"$($IMGUI_DIR)" `
+            -I"$($IMGUI_DIR)\backends" `
+            -I"$($SDL2_DIR)\include" `
+            -I"$($SDL2_DIR)\include\SDL2" `
+            -I"$($GL3W_DIR)\include" `
+            -I"$($IRIS_DIR)" `
+            -I"$($TOMLPP_DIR)\include" `
+            -I"$($SRC_DIR)" `
             -L"$($SDL2_DIR)\lib"
     }
 }
@@ -43,14 +43,14 @@ foreach ($SRC in $CXXSRC) {
         c++ -c $SRC -o $OBJ `
             -O3 -march=native -mtune=native `
             -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -Werror=implicit-fallthrough `
-            -I"`"$($IMGUI_DIR)`"" `
-            -I"`"$($IMGUI_DIR)\backends`"" `
-            -I"`"$($SDL2_DIR)\include`"" `
-            -I"`"$($SDL2_DIR)\include\SDL2`"" `
-            -I"`"$($GL3W_DIR)\include`"" `
-            -I"`"$($IRIS_DIR)`"" `
-            -I"`"$($TOMLPP_DIR)\include`"" `
-            -I"`"$($SRC_DIR)`"" `
+            -I"$($IMGUI_DIR)" `
+            -I"$($IMGUI_DIR)\backends" `
+            -I"$($SDL2_DIR)\include" `
+            -I"$($SDL2_DIR)\include\SDL2" `
+            -I"$($GL3W_DIR)\include" `
+            -I"$($IRIS_DIR)" `
+            -I"$($TOMLPP_DIR)\include" `
+            -I"$($SRC_DIR)" `
             -L"$($SDL2_DIR)\lib"
     }
 }
@@ -62,12 +62,12 @@ c++ @OBJS main.cpp -o iris `
     res/icon.res `
     -O3 -march=native -mtune=native -lcomdlg32 -lole32 -lSDL2main -lSDL2 `
     -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -ldwmapi -luuid -Werror=implicit-fallthrough `
-    -I"`"$($IMGUI_DIR)`"" `
-    -I"`"$($IMGUI_DIR)\backends`"" `
-    -I"`"$($SDL2_DIR)\include`"" `
-    -I"`"$($SDL2_DIR)\include\SDL2`"" `
-    -I"`"$($GL3W_DIR)\include`"" `
-    -I"`"$($IRIS_DIR)`"" `
-    -I"`"$($TOMLPP_DIR)\include`"" `
-    -I"`"$($SRC_DIR)`"" `
+    -I"$($IMGUI_DIR)" `
+    -I"$($IMGUI_DIR)\backends" `
+    -I"$($SDL2_DIR)\include" `
+    -I"$($SDL2_DIR)\include\SDL2" `
+    -I"$($GL3W_DIR)\include" `
+    -I"$($IRIS_DIR)" `
+    -I"$($TOMLPP_DIR)\include" `
+    -I"$($SRC_DIR)" `
     -L"$($SDL2_DIR)\lib"
