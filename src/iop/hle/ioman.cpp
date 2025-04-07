@@ -182,13 +182,13 @@ extern "C" int ioman_lseek(struct iop_state* iop) {
     int32_t off = iop->r[5];
     uint32_t whence = iop->r[6];
 
-    int ret = 0;
-
     switch (whence) {
-        case 0: ret = fseek(state.files[fd], off, SEEK_SET); break;
-        case 1: ret = fseek(state.files[fd], off, SEEK_CUR); break;
-        case 2: ret = fseek(state.files[fd], off, SEEK_END); break;
+        case 0: fseek(state.files[fd], off, SEEK_SET); break;
+        case 1: fseek(state.files[fd], off, SEEK_CUR); break;
+        case 2: fseek(state.files[fd], off, SEEK_END); break;
     }
+
+    int ret = ftell(state.files[fd]);
 
     iop_return(iop, ret);
 

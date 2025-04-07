@@ -13,7 +13,7 @@ foreach ($SRC in $CSRC) {
     $OBJ = $($SRC -replace '.c$',".o")
 
     if (-Not (Test-Path $OBJ)) {
-        gcc -c $SRC -o $OBJ `
+        gcc -c $SRC -o $OBJ -v -E `
             -O3 -ffast-math -march=native -mtune=native -pedantic `
             -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format `
             -I"`"$($IMGUI_DIR)`"" `
