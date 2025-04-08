@@ -493,39 +493,40 @@ static inline uint32_t gs_apply_function(struct ps2_gs* gs, uint32_t t, uint32_t
             pb = CLAMP((tb * fb) >> 7, 0, 255);
             pa = ta;
 
-            // if (gs->ctx->tcc) {
-            //     pa = CLAMP((ta * fa) >> 7, 0, 255);
-            // } else {
-            //     pa = fa;
-            // }
+            if (gs->ctx->tcc) {
+                pa = CLAMP((ta * fa) >> 7, 0, 255);
+            } else {
+                pa = fa;
+            }
         } break;
         case GS_DECAL: {
             pr = tr;
             pg = tg;
             pb = tb;
-            pa = ta;
+            pa = fa;
+
+            if (gs->ctx->tcc) {
+                pa = ta;
+            }
         } break;
         case GS_HIGHLIGHT: {
-            pa = (f >> 24) & 0xff;
-            pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
-            pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
-            pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
+            pr = CLAMP(((tr * fr) >> 7) + fa, 0, 255);
+            pg = CLAMP(((tg * fg) >> 7) + fa, 0, 255);
+            pb = CLAMP(((tb * fb) >> 7) + fa, 0, 255);
+            pa = fa;
+
+            if (gs->ctx->tcc) {
+                pa += ta;
+            }
         } break;
         case GS_HIGHLIGHT2: {
-            switch (gs->ctx->tcc) {
-                case 0: {
-                    pa = (f >> 24) & 0xff;
-                    pr = CLAMP(((tr * fr) >> 7) + pa, 0, 255);
-                    pg = CLAMP(((tg * fg) >> 7) + pa, 0, 255);
-                    pb = CLAMP(((tb * fb) >> 7) + pa, 0, 255);
-                } break;
+            pr = CLAMP(((tr * fr) >> 7) + fa, 0, 255);
+            pg = CLAMP(((tg * fg) >> 7) + fa, 0, 255);
+            pb = CLAMP(((tb * fb) >> 7) + fa, 0, 255);
+            pa = fa;
 
-                case 1: {
-                    pr = CLAMP(((tr * fr) >> 7) + fa, 0, 255);
-                    pg = CLAMP(((tg * fg) >> 7) + fa, 0, 255);
-                    pb = CLAMP(((tb * fb) >> 7) + fa, 0, 255);
-                    pa = (t >> 24) & 0xff;
-                } break;
+            if (gs->ctx->tcc) {
+                pa = ta;
             }
         } break;
     }
@@ -658,14 +659,44 @@ static inline uint32_t gs_to_rgba32(struct ps2_gs* gs, uint32_t c, int fmt) {
     switch (fmt) {
         case GS_PSMCT32:
             return c;
-        case GS_PSMCT24:
-            return c | 0xff000000;
+        case GS_PSMCT24: {
+            uint32_t a = 0;
+
+            if (gs->aem) {
+                if (c & 0xffffff) {
+                    a = gs->ta0;
+                } else {
+                    a = 0;
+                }
+            } else {
+                a = gs->ta0;
+            }
+
+            return c | (a << 24);
+        } break;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
+            int ia = c & 0x8000;
+            uint32_t oa = 0;
+
+            if (ia) {
+                oa = gs->ta1;
+            } else {
+                if (gs->aem) {
+                    if (c & 0x7fff) {
+                        oa = gs->ta0;
+                    } else {
+                        oa = 0;
+                    }
+                } else {
+                    oa = gs->ta0;
+                }
+            }
+
             return ((c & 0x001f) << 3) |
                    ((c & 0x03e0) << 6) |
                    ((c & 0x7c00) << 9) |
-                   ((c & 0x8000) ? 0xff000000 : 0);
+                   (oa << 24);
         } break;
         case GS_PSMT8:
         case GS_PSMT8H:
@@ -711,7 +742,7 @@ static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
         case GS_PSMCT32:
             return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v)];
         case GS_PSMCT24:
-            return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v)] | 0xff000000;
+            return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v)];
         case GS_PSMCT16:
         case GS_PSMCT16S: {
             uint32_t addr = psmct16_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
@@ -719,7 +750,7 @@ static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
 
             int idx = (u & 15) + ((v & 1) * 16);
 
-            return gs->vram[software_psmct16_shift[idx]] | 0x8000;
+            return gs->vram[software_psmct16_shift[idx]];
         } break;
         case GS_PSMT8: {
             uint32_t addr = psmt8_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
@@ -812,7 +843,7 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
         } break;
 
         case GS_PSMCT24: {
-            gs->vram[gs->ctx->fbp + x + (y * gs->ctx->fbw)] = f | 0xff000000;
+            gs->vram[gs->ctx->fbp + x + (y * gs->ctx->fbw)] = f;
         } break;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
@@ -968,14 +999,29 @@ static inline int gs_clamp_v(struct ps2_gs* gs, int v) {
 static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t s) {
     uint32_t d = gs_read_fb(gs, x, y);
 
-    d = gs_to_rgba32(gs, d, gs->ctx->fbpsm);
+    switch (gs->ctx->fbpsm) {
+        case GS_PSMCT32: break;
+        case GS_PSMCT24: d |= 0x80000000; break;
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            int a = d & 0x8000;
+
+            d = ((d & 0x001f) << 3) |
+                ((d & 0x03e0) << 6) |
+                ((d & 0x7c00) << 9);
+
+            d |= a ? 0x80000000 : 0;
+        } break;
+    }
 
     uint32_t av = (gs->ctx->a == 0) ? s : ((gs->ctx->a == 1) ? d : 0);
     uint32_t bv = (gs->ctx->b == 0) ? s : ((gs->ctx->b == 1) ? d : 0);
-    uint32_t cv = (gs->ctx->c == 0) ? (s >> 24) : ((gs->ctx->c == 1) ? (d >> 24): gs->ctx->fix);
+    uint32_t cv = (gs->ctx->c == 0) ? (s >> 24) : ((gs->ctx->c == 1) ? (d >> 24) : gs->ctx->fix);
     uint32_t dv = (gs->ctx->d == 0) ? s : ((gs->ctx->d == 1) ? d : 0);
+    
+    // cv = CLAMP(cv, 0, 127);
 
-    // if (gs->tme)
+    // if (!gs->tme)
     //     printf("Cd=%08x Cs=%08x a=%08x (%d) b=%08x (%d) c=%08x (%d) d=%08x (%d)\n", d, s,
     //     av, gs->ctx->a,
     //     bv, gs->ctx->b,
@@ -983,27 +1029,33 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     //     dv, gs->ctx->d
     // );
 
-    cv = CLAMP(cv, 0, 127);
+    int ar = (av >> 0 ) & 0xff;
+    int ag = (av >> 8 ) & 0xff;
+    int ab = (av >> 16) & 0xff;
+    // uint32_t aa = (av >> 24) & 0xff;
+    int br = (bv >> 0 ) & 0xff;
+    int bg = (bv >> 8 ) & 0xff;
+    int bb = (bv >> 16) & 0xff;
+    // uint32_t ba = (bv >> 24) & 0xff;
+    int dr = (dv >> 0 ) & 0xff;
+    int dg = (dv >> 8 ) & 0xff;
+    int db = (dv >> 16) & 0xff;
+    // uint32_t da = (dv >> 24) & 0xff;
 
-    uint32_t ar = (av >> 0 ) & 0xff;
-    uint32_t ag = (av >> 8 ) & 0xff;
-    uint32_t ab = (av >> 16) & 0xff;
-    uint32_t aa = (av >> 24) & 0xff;
-    uint32_t br = (bv >> 0 ) & 0xff;
-    uint32_t bg = (bv >> 8 ) & 0xff;
-    uint32_t bb = (bv >> 16) & 0xff;
-    uint32_t ba = (bv >> 24) & 0xff;
-    uint32_t dr = (dv >> 0 ) & 0xff;
-    uint32_t dg = (dv >> 8 ) & 0xff;
-    uint32_t db = (dv >> 16) & 0xff;
-    uint32_t da = (dv >> 24) & 0xff;
+    int rr = ar - br;
+    int rg = ag - bg;
+    int rb = ab - bb;
 
-    uint32_t rr = (((ar - br) * cv) >> 7) + dr;
-    uint32_t rg = (((ag - bg) * cv) >> 7) + dg;
-    uint32_t rb = (((ab - bb) * cv) >> 7) + db;
-    uint32_t ra = (((aa - ba) * cv) >> 7) + da;
+    rr = ((rr * (int)cv) >> 7) + dr;
+    rg = ((rg * (int)cv) >> 7) + dg;
+    rb = ((rb * (int)cv) >> 7) + db;
+    // uint32_t ra = (((aa - ba) * cv) >> 7) + da;
 
-    return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | ((ra & 0xff) << 24);
+    rr = CLAMP(rr, 0, 255);
+    rg = CLAMP(rg, 0, 255);
+    rb = CLAMP(rb, 0, 255);
+
+    return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | (d & 0xff000000);
 }
 
 int software_compile_shader(const char* src, GLint type) {
@@ -2029,7 +2081,7 @@ static inline void gs_write_psmct16(struct ps2_gs* gs, software_state* ctx, uint
 
     int idx = (ctx->dx & 15) + ((ctx->dy & 3) * 16);
 
-    vram[software_psmct16_shift[idx]] = index | 0x8000;
+    vram[software_psmct16_shift[idx]] = index;
 
     ctx->dx++;
 

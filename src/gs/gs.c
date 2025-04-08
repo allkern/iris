@@ -528,6 +528,12 @@ static inline void gs_unpack_texclut(struct ps2_gs* gs) {
     gs->cov = (gs->texclut >> 12) & 0x3ff;
 }
 
+static inline void gs_unpack_texa(struct ps2_gs* gs) {
+    gs->aem = (gs->texa >> 15) & 1;
+    gs->ta0 = (gs->texa >> 0) & 0xff;
+    gs->ta1 = (gs->texa >> 32) & 0xff;
+}
+
 void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
     switch (reg) {
         case 0x00: /* printf("gs: PRIM <- %016lx\n", data); */ gs->prim = data; gs_start_primitive(gs); return;
@@ -557,7 +563,7 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x35: /* printf("gs: MIPTBP1_2 <- %016lx\n", data); */ gs->context[1].miptbp1 = data; gs_unpack_miptbp1(gs, 1); return;
         case 0x36: /* printf("gs: MIPTBP2_1 <- %016lx\n", data); */ gs->context[0].miptbp2 = data; gs_unpack_miptbp2(gs, 0); return;
         case 0x37: /* printf("gs: MIPTBP2_2 <- %016lx\n", data); */ gs->context[1].miptbp2 = data; gs_unpack_miptbp2(gs, 1); return;
-        case 0x3B: /* printf("gs: TEXA <- %016lx\n", data); */ gs->texa = data; return;
+        case 0x3B: /* printf("gs: TEXA <- %016lx\n", data); */ gs->texa = data; gs_unpack_texa(gs); return;
         case 0x3D: /* printf("gs: FOGCOL <- %016lx\n", data); */ gs->fogcol = data; return;
         case 0x3F: /* printf("gs: TEXFLUSH <- %016lx\n", data); */ gs->texflush = data; return;
         case 0x40: /* printf("gs: SCISSOR_1 <- %016lx\n", data); */ gs->context[0].scissor = data; gs_unpack_scissor(gs, 0); gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;

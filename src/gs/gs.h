@@ -338,6 +338,11 @@ struct ps2_gs {
     uint32_t cou;
     uint32_t cov;
 
+    // TEXA
+    int aem;
+    uint32_t ta0;
+    uint32_t ta1;
+
     struct gs_callback events[2];
 
     struct sched_state* sched;
