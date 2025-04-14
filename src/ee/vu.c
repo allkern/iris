@@ -205,7 +205,14 @@ void vu_i_addw(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, d, i, vu_vf_i(vu, s, i) + bc);
     }
 }
-void vu_i_adda(struct vu_state* vu) { printf("vu: adda unimplemented\n"); exit(1); }
+void vu_i_adda(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) + vu_vf_i(vu, t, i);
+    }
+}
 void vu_i_addai(struct vu_state* vu) { printf("vu: addai unimplemented\n"); exit(1); }
 void vu_i_addaq(struct vu_state* vu) { printf("vu: addaq unimplemented\n"); exit(1); }
 void vu_i_addax(struct vu_state* vu) {
@@ -313,10 +320,46 @@ void vu_i_subw(struct vu_state* vu) {
 void vu_i_suba(struct vu_state* vu) { printf("vu: suba unimplemented\n"); exit(1); }
 void vu_i_subai(struct vu_state* vu) { printf("vu: subai unimplemented\n"); exit(1); }
 void vu_i_subaq(struct vu_state* vu) { printf("vu: subaq unimplemented\n"); exit(1); }
-void vu_i_subax(struct vu_state* vu) { printf("vu: subax unimplemented\n"); exit(1); }
-void vu_i_subay(struct vu_state* vu) { printf("vu: subay unimplemented\n"); exit(1); }
-void vu_i_subaz(struct vu_state* vu) { printf("vu: subaz unimplemented\n"); exit(1); }
-void vu_i_subaw(struct vu_state* vu) { printf("vu: subaw unimplemented\n"); exit(1); }
+void vu_i_subax(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_x(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) - bc;
+    }
+}
+void vu_i_subay(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_y(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) - bc;
+    }
+}
+void vu_i_subaz(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_z(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) - bc;
+    }
+}
+void vu_i_subaw(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_w(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) - bc;
+    }
+}
 void vu_i_mul(struct vu_state* vu) {
     int s = VU_UD_S;
     int d = VU_UD_D;
@@ -504,18 +547,107 @@ void vu_i_msubq(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, d, i, vu_acc_i(vu, i) - (vu_vf_i(vu, s, i) * vu->q.f));
     }
 }
-void vu_i_msubx(struct vu_state* vu) { printf("vu: msubx unimplemented\n"); exit(1); }
-void vu_i_msuby(struct vu_state* vu) { printf("vu: msuby unimplemented\n"); exit(1); }
-void vu_i_msubz(struct vu_state* vu) { printf("vu: msubz unimplemented\n"); exit(1); }
-void vu_i_msubw(struct vu_state* vu) { printf("vu: msubw unimplemented\n"); exit(1); }
+void vu_i_msubx(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    float bc = vu_vf_x(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vf(vu, d, i, vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc);
+    }
+}
+void vu_i_msuby(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    float bc = vu_vf_y(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vf(vu, d, i, vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc);
+    }
+}
+void vu_i_msubz(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    float bc = vu_vf_z(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vf(vu, d, i, vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc);
+    }
+}
+void vu_i_msubw(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    float bc = vu_vf_w(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vf(vu, d, i, vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc);
+    }
+}
 void vu_i_msuba(struct vu_state* vu) { printf("vu: msuba unimplemented\n"); exit(1); }
 void vu_i_msubai(struct vu_state* vu) { printf("vu: msubai unimplemented\n"); exit(1); }
 void vu_i_msubaq(struct vu_state* vu) { printf("vu: msubaq unimplemented\n"); exit(1); }
-void vu_i_msubax(struct vu_state* vu) { printf("vu: msubax unimplemented\n"); exit(1); }
-void vu_i_msubay(struct vu_state* vu) { printf("vu: msubay unimplemented\n"); exit(1); }
-void vu_i_msubaz(struct vu_state* vu) { printf("vu: msubaz unimplemented\n"); exit(1); }
-void vu_i_msubaw(struct vu_state* vu) { printf("vu: msubaw unimplemented\n"); exit(1); }
-void vu_i_max(struct vu_state* vu) { printf("vu: max unimplemented\n"); exit(1); }
+void vu_i_msubax(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_x(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
+    }
+}
+void vu_i_msubay(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_y(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
+    }
+}
+void vu_i_msubaz(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_z(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
+    }
+}
+void vu_i_msubaw(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_w(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
+    }
+}
+void vu_i_max(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float fs = vu_vf_i(vu, s, i);
+            float ft = vu_vf_i(vu, t, i);
+
+            vu_set_vf(vu, d, i, (fs > ft) ? fs : ft);
+        }
+    }
+}
 void vu_i_maxi(struct vu_state* vu) { printf("vu: maxi unimplemented\n"); exit(1); }
 void vu_i_maxx(struct vu_state* vu) {
     int s = VU_UD_S;
@@ -578,7 +710,20 @@ void vu_i_maxw(struct vu_state* vu) {
     }
 }
 void vu_i_mini(struct vu_state* vu) { printf("vu: mini unimplemented\n"); exit(1); }
-void vu_i_minii(struct vu_state* vu) { printf("vu: minii unimplemented\n"); exit(1); }
+void vu_i_minii(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float fs = vu_vf_i(vu, s, i);
+            float ft = vu_vf_i(vu, t, i);
+
+            vu_set_vf(vu, d, i, (fs < ft) ? fs : ft);
+        }
+    }
+}
 void vu_i_minix(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;

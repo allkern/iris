@@ -40,6 +40,20 @@ enum {
 #define VIF_CMD_DIRECTHL 0x51
 // 60h-7Fh UNPACK
 
+#define UNPACK_S_32  0
+#define UNPACK_S_16  1
+#define UNPACK_S_8   2
+#define UNPACK_V2_32 4
+#define UNPACK_V2_16 5
+#define UNPACK_V2_8  6
+#define UNPACK_V3_32 8
+#define UNPACK_V3_16 9
+#define UNPACK_V3_8  10
+#define UNPACK_V4_32 12
+#define UNPACK_V4_16 13
+#define UNPACK_V4_8  14
+#define UNPACK_V4_5  15
+
 struct ps2_vif {
     uint32_t vif0_stat;
     uint32_t vif0_fbrst;

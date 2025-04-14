@@ -207,7 +207,7 @@ void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
 
     printf("ds: Unhandled command %02x\n", cmd);
 
-    exit(1);
+    // exit(1);
 }
 
 struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {

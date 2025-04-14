@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -93,6 +94,12 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case VIF_CMD_MSCAL: {
                 // printf("vif1: MSCAL(%04x)\n", data & 0xffff);
             } break;
+            case VIF_CMD_MSCALF: {
+                // printf("vif1: MSCALF(%04x)\n", data & 0xffff);
+            } break;
+            case VIF_CMD_MSCNT: {
+                // printf("vif1: MSCNT\n");
+            } break;
             case VIF_CMD_STMASK: {
                 // printf("vif1: STMASK(%04x)\n", data & 0xffff);
 
@@ -145,15 +152,36 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case 0x74: case 0x75: case 0x76: case 0x77:
             case 0x78: case 0x79: case 0x7a: case 0x7b:
             case 0x7c: case 0x7d: case 0x7e: case 0x7f: {
+                int fmt = (data >> 24) & 0xf;
                 int cl = vif->vif1_cycle & 0xff;
                 int wl = (vif->vif1_cycle >> 8) & 0xff;
                 int vl = (data >> 24) & 3;
                 int vn = (data >> 26) & 3;
                 int num = (data >> 16) & 0xff;
+                int flg = (data >> 15) & 1;
+                int usn = (data >> 14) & 1;
+                int addr = data & 0x3ff;
+                int filling = cl < wl;
 
-                printf("vif: UNPACK %02x cl=%02x wl=%02x vl=%d vn=%d num=%02x\n", data >> 24, cl, wl, vl, vn, num);
+                if (!num) num = 256;
+                if (flg) addr += vif->vif1_tops;
 
-                exit(1);
+                // printf("vif: UNPACK %02x cl=%02x wl=%02x vl=%d vn=%d num=%02x\n", data >> 24, cl, wl, vl, vn, num);
+
+                assert(!filling);
+
+                vif->vif1_pending_words = (((32>>vl) * (vn+1)) * num) / 32;
+                vif->vif1_state = VIF_RECV_DATA;
+
+                // printf("vif: %d pending words\n", vif->vif1_pending_words);
+
+                // switch (fmt) {
+                //     case UNPACK_V2_16: break;
+                //     case UNPACK_V4_32: break;
+                //     case UNPACK_V4_16: break;
+
+                //     default: printf("vif1: Unhandled UNPACK format %d\n", fmt); exit(1);
+                // }
             } break;
             default: {
                 printf("vif1: Unhandled command %02x\n", vif->vif1_cmd);
@@ -198,6 +226,19 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                     vif->vif1_shift = 0;
                 }
 
+                if (!(--vif->vif1_pending_words)) {
+                    vif->vif1_state = VIF_IDLE;
+                }
+            } break;
+
+            case 0x60: case 0x61: case 0x62: case 0x63:
+            case 0x64: case 0x65: case 0x66: case 0x67:
+            case 0x68: case 0x69: case 0x6a: case 0x6b:
+            case 0x6c: case 0x6d: case 0x6e: case 0x6f:
+            case 0x70: case 0x71: case 0x72: case 0x73:
+            case 0x74: case 0x75: case 0x76: case 0x77:
+            case 0x78: case 0x79: case 0x7a: case 0x7b:
+            case 0x7c: case 0x7d: case 0x7e: case 0x7f: {
                 if (!(--vif->vif1_pending_words)) {
                     vif->vif1_state = VIF_IDLE;
                 }

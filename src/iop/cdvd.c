@@ -948,7 +948,7 @@ void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data) {
         case 0x1F402004: cdvd_handle_n_command(cdvd, data); return;
         case 0x1F402005: cdvd_handle_n_param(cdvd, data); return;
         case 0x1F402006: /* Read-only */ return;
-        case 0x1F402007: printf("cdvd: break\n"); exit(1); /* To-do: BREAK */ return;
+        case 0x1F402007: printf("cdvd: break\n"); /* To-do: BREAK */ return;
         case 0x1F402008: cdvd->i_stat &= ~data; return;
         case 0x1F40200A: return;
         case 0x1F40200B: return;
