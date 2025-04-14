@@ -76,9 +76,9 @@ struct spu2_voice {
     uint32_t nax;
 
     // Internal stuff
+    int playing;
     float f_voll;
     float f_volr;
-    int playing;
     unsigned int counter;
     int32_t h[2];
     int16_t buf[28];
@@ -89,7 +89,7 @@ struct spu2_voice {
     int16_t s[4];
 
     // Envelope
-    int env_cycles_left;
+    int adsr_cycles_left;
     int adsr_phase;
     int adsr_cycles_reload;
     int adsr_cycles;

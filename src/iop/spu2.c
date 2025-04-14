@@ -85,9 +85,13 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_intc* intc, struct sche
     // CORE0/1 DMA status (ready)
     spu2->c[0].stat = 0x80;
     spu2->c[1].stat = 0x80;
+    spu2->c[0].endx = 0x00ffffff;
+    spu2->c[1].endx = 0x00ffffff;
 }
 
 void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v);
+void adsr_load_attack(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v);
+void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v, int i);
 
 void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
     // printf("spu2: core%d kon%c %04x\n", c, h ? 'h' : 'l', data);
@@ -97,6 +101,7 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
             continue;
 
         struct spu2_voice* v = &spu2->c[c].v[i+h*16];
+        struct spu2_core* cr = &spu2->c[c];
 
         v->playing = 1;
         v->nax = v->ssa;
@@ -107,9 +112,13 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         v->envx = 0;
         v->f_voll = (float)v->voll / 32767.0f;
         v->f_volr = (float)v->volr / 32767.0f;
+        v->adsr_sustain_level = ((v->adsr1 & 0xf) + 1) * 0x800;
+
+        cr->endx &= ~(1 << (i+h*16));
 
         printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
 
+        adsr_load_attack(spu2, cr, v);
         spu2_decode_adpcm_block(spu2, v);
     }
 }
@@ -124,6 +133,7 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         // spu2->c[c].v[i+h*16].playing = 0;
 
         // To-do: Enter ADSR release
+        adsr_load_release(spu2, &spu2->c[c], &spu2->c[c].v[i], i);
     }
 }
 
@@ -292,8 +302,8 @@ uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
             case 0x33A: return spu2->c[core].mix_dest_b1 >> 16;
             case 0x33C: return spu2->c[core].eea >> 16;
             case 0x33E: return spu2->c[core].eea & 0xffff;
-            case 0x340: return spu2->c[core].endx & 0xffff;
-            case 0x342: return spu2->c[core].endx >> 16;
+            case 0x340: return spu2->c[core].endx >> 16;
+            case 0x342: return spu2->c[core].endx & 0xffff;
             case 0x344: return spu2->c[core].stat;
             case 0x346: return spu2->c[core].ends;
         }
@@ -400,8 +410,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
             case 0x1A2: spu2_write_kon(spu2, core, 1, data); return;
             case 0x1A4: spu2_write_koff(spu2, core, 0, data); return;
             case 0x1A6: spu2_write_koff(spu2, core, 1, data); return;
-            case 0x1A8: SPU2_WRITEH(core, tsa); spu2->c[core].words_written = 0; return;
-            case 0x1AA: SPU2_WRITEL(core, tsa); spu2->c[core].words_written = 0; return;
+            case 0x1A8: SPU2_WRITEH(core, tsa); return;
+            case 0x1AA: SPU2_WRITEL(core, tsa); return;
             case 0x1AC: spu2_write_data(spu2, core, data); return;
             case 0x1AE: spu2->c[core].ctrl = data; return;
             case 0x1B0: spu2->c[core].admas = data; return;
@@ -477,8 +487,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
             case 0x33A: SPU2_WRITEH(core, mix_dest_b1); return;
             case 0x33C: SPU2_WRITEH(core, eea); return;
             case 0x33E: SPU2_WRITEL(core, eea); return;
-            case 0x340: SPU2_WRITEL(core, endx); return;
-            case 0x342: SPU2_WRITEH(core, endx); return;
+            case 0x340: SPU2_WRITEH(core, endx); return;
+            case 0x342: SPU2_WRITEL(core, endx); return;
             case 0x344: spu2->c[core].stat = data; return;
             case 0x346: spu2->c[core].ends = data; return;
         }
@@ -557,9 +567,9 @@ void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
     // if (v->nax == spu2->c[0].irqa || v->nax == spu2->c[1].irqa)
     //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
 
-    v->loop_start = (hdr >> 8) & 1;
+    v->loop_end = (hdr >> 8) & 1;
     v->loop = (hdr >> 9) & 1;
-    v->loop_end = (hdr >> 10) & 1;
+    v->loop_start = (hdr >> 10) & 1;
 
     // printf("spu2: start=%d loop=%d end=%d\n", v->loop_start, v->loop, v->loop_end);
 
@@ -593,6 +603,154 @@ void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
     }
 }
 
+#define PHASE v->adsr_phase
+#define CYCLES v->adsr_cycles
+#define EXPONENTIAL v->adsr_mode
+#define DECREASE v->adsr_dir
+#define SHIFT v->adsr_shift
+#define STEP v->adsr_step
+#define LEVEL_STEP v->adsr_pending_step
+#define LEVEL v->envx
+#define CLAMP(v, l, h) (((v) <= (l)) ? (l) : (((v) >= (h)) ? (h) : (v)))
+#define MAX(a, b) ((a) > (b) ? (a) : (b))
+
+enum {
+    ADSR_ATTACK,
+    ADSR_DECAY,
+    ADSR_SUSTAIN,
+    ADSR_RELEASE,
+    ADSR_END
+};
+
+void adsr_calculate_values(struct ps2_spu2* spu2, struct spu2_voice* v) {
+    CYCLES = 1 << MAX(0, SHIFT - 11);
+    LEVEL_STEP = STEP << MAX(0, 11 - SHIFT);
+
+    if (EXPONENTIAL && (LEVEL > 0x6000) && !DECREASE)
+        CYCLES *= 4;
+    
+    if (EXPONENTIAL && DECREASE)
+        LEVEL_STEP = (LEVEL_STEP * LEVEL) >> 15;
+
+    v->adsr_cycles_reload = CYCLES;
+}
+
+void adsr_load_attack(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v) {
+    v->adsr_phase = ADSR_ATTACK;
+    v->adsr_mode  = (v->adsr1 >> 15) & 1;
+    v->adsr_shift = (v->adsr1 >> 10) & 0x1f;
+    v->adsr_step  = 7 - ((v->adsr1 >> 8) & 3);
+    v->adsr_dir   = 0;
+    v->envx       = 0;
+
+    adsr_calculate_values(spu2, v);
+
+    // printf("adsr: attack mode=%d shift=%d step=%d dir=%d envx=%d\n",
+    //     v->adsr_mode,
+    //     v->adsr_shift,
+    //     v->adsr_step,
+    //     v->adsr_dir,
+    //     v->envx
+    // );
+}
+
+void adsr_load_decay(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v) {
+    v->adsr_phase = ADSR_DECAY;
+    v->adsr_mode  = 1;
+    v->adsr_dir   = 1;
+    v->adsr_shift = (v->adsr1 >> 4) & 0xf;
+    v->adsr_step  = -8;
+    v->envx       = 0x7fff;
+
+    adsr_calculate_values(spu2, v);
+}
+
+void adsr_load_sustain(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v) {
+    v->adsr_phase = ADSR_SUSTAIN;
+    v->adsr_mode  = (v->adsr2 >> 15) & 1;
+    v->adsr_dir   = (v->adsr2 >> 14) & 1;
+    v->adsr_shift = (v->adsr2 >> 8) & 0x1f;
+    v->adsr_step  = (v->adsr2 >> 6) & 3;
+    v->adsr_step  = v->adsr_dir ? (-8 + v->adsr_step) : (7 - v->adsr_step);
+    v->envx       = v->adsr_sustain_level;
+
+    adsr_calculate_values(spu2, v);
+}
+
+void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v, int i) {
+    v->adsr_phase = ADSR_RELEASE;
+    v->adsr_mode  = (v->adsr2 >> 5) & 1;
+    v->adsr_dir   = 1;
+    v->adsr_shift = (v->adsr2 >> 5) & 0x1f;
+    v->adsr_step  = -8;
+
+    c->endx |= 1 << i;
+
+    adsr_calculate_values(spu2, v);
+}
+
+void spu2_handle_adsr(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v) {
+    if (CYCLES) {
+        CYCLES -= 1;
+
+        return;
+    }
+
+    adsr_calculate_values(spu2, v);
+
+    LEVEL += LEVEL_STEP;
+
+    switch (v->adsr_phase) {
+        case ADSR_ATTACK: {
+            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+
+            if (LEVEL == 0x7fff)
+                adsr_load_decay(spu2, c, v);
+        } break;
+
+        case ADSR_DECAY: {
+            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+
+            if (LEVEL <= v->adsr_sustain_level)
+                adsr_load_sustain(spu2, c, v);
+        } break;
+
+        case ADSR_SUSTAIN: {
+            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+
+            /* Not stopped automatically, need to KOFF */
+        } break;
+
+        case ADSR_RELEASE: {
+            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+
+            if (!LEVEL) {
+                PHASE = ADSR_END;
+                CYCLES = 0;
+                LEVEL_STEP = 0;
+
+                v->playing = 0;
+            }
+        } break;
+
+        case ADSR_END: {
+            v->playing = 0;
+        } break;
+    }
+
+    CYCLES = v->adsr_cycles_reload;
+}
+
+#undef PHASE
+#undef CYCLES
+#undef MODE
+#undef DIR
+#undef SHIFT
+#undef STEP
+#undef PENDING_STEP
+#undef CLAMP
+#undef MAX
+
 struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) {
     if (!spu2->c[cr].v[vc].playing)
         return silence;
@@ -603,22 +761,38 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
 
     int sample_index = v->counter >> 12;
 
+    spu2_handle_adsr(spu2, c, v);
+
     if (sample_index > 27) {
         sample_index -= 28;
 
         v->counter &= 0xfff;
         v->counter |= sample_index << 12;
 
+        // if (v->loop_end) {
+        //     c->endx |= 1 << vc;
+
+        //     if (!v->loop) {
+        //         adsr_load_release(spu2, c, v, vc);
+        //     }
+        // } else if (v->loop_start) {
+        //     v->lsax = v->nax;
+        // } else {
+        //     v->nax += 8;
+        // }
+
         if (v->loop_start) {
             v->lsax = v->nax;
-            // printf("voice %d loop_start\n", vc);
         } else if (v->loop_end) {
+            // printf("spu2: Loop end at 0x%08x (lsax=%08x ssa=%08x) loop=%d\n", v->nax, v->lsax, v->ssa, v->loop);
+            c->endx |= 1 << vc;
+            
+            v->nax = v->lsax;
+            v->playing = 0;
+            v->envx = 0;
+            
             if (!v->loop) {
-                v->playing = 0;
-                // printf("voice %d loop_end\n", vc);
-            } else {
-                v->nax = v->lsax;
-                // printf("voice %d loop_end repeat\n", vc);
+                adsr_load_release(spu2, c, v, vc);
             }
         } else {
             v->nax += 8;
@@ -648,7 +822,9 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
     out += (g2 * v->s[1]) >> 15;
     out += (g3 * v->s[0]) >> 15;
 
-    s.s16[0] = (float)out * v->f_voll;
+    float adsr_vol = (float)v->envx / 32767.0f;
+
+    s.s16[0] = ((float)out * v->f_voll) * adsr_vol;
     s.s16[1] = s.s16[0];
 
     v->counter += v->pitch;
