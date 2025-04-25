@@ -21,12 +21,12 @@ static inline void ds_cmd_query_masked(struct ps2_sio2* sio2, struct ds_state* d
 
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
-    queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, 0x00);
-    queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x5a);
+    queue_push(sio2->out, 0xff);
+    queue_push(sio2->out, 0xff);
+    queue_push(sio2->out, 0xff);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x5a);
 }
 static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) {
@@ -67,6 +67,8 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
         queue_push(sio2->out, ds->ax_right_x);
         queue_push(sio2->out, ds->ax_left_y);
         queue_push(sio2->out, ds->ax_left_x);
+
+        ds->config_mode = sio2->in->buf[3];
     } else {
         queue_push(sio2->out, 0xff);
         queue_push(sio2->out, 0x79);
@@ -77,11 +79,13 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
         queue_push(sio2->out, 0x00);
         queue_push(sio2->out, 0x00);
         queue_push(sio2->out, 0x00);
-    }
 
-    ds->config_mode = sio2->in->buf[3];
+        ds->config_mode = 0;
+    }
 }
 static inline void ds_cmd_set_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
+    // printf("ds: ds_cmd_set_mode(%02x)\n", sio2->in->buf[3]);
+
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
     queue_push(sio2->out, 0x5a);
@@ -96,7 +100,7 @@ static inline void ds_cmd_query_model(struct ps2_sio2* sio2, struct ds_state* ds
     // printf("ds: ds_cmd_query_model\n");
 
     queue_push(sio2->out, 0xff); // Header
-    queue_push(sio2->out, 0xf3); // Mode
+    queue_push(sio2->out, 0xf3); // Mode (F3=Config)
     queue_push(sio2->out, 0x5a);
     queue_push(sio2->out, 0x03); // Model (01=Dualshock/Digital 03=Dualshock 2)
     queue_push(sio2->out, 0x02);
