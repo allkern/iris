@@ -309,12 +309,39 @@ static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t da
 #undef BUS_READ_FUNC
 #undef BUS_WRITE_FUNC
 
+static inline int ee_skip_fmv(struct ee_state* ee, uint32_t addr) {
+    if (bus_read32(ee, addr + 4) != 0x03E00008)
+        return 0;
+
+    uint32_t code = bus_read32(ee, addr);
+    uint32_t p1 = 0x8c800040;
+    uint32_t p2 = 0x8c020000 | (code & 0x1f0000) << 5;
+
+    if ((code & 0xffe0ffff) != p1) {
+        return 0;
+    }
+
+    if (bus_read32(ee, addr + 8) != p2) {
+        return 0;
+    }
+
+    printf("ee: Skipping FMV\n");
+
+    return 1;
+}
+
 static inline void ee_set_pc(struct ee_state* ee, uint32_t addr) {
+    if (ee_skip_fmv(ee, addr))
+        return;
+
     ee->pc = addr;
     ee->next_pc = addr + 4;
 }
 
 static inline void ee_set_pc_delayed(struct ee_state* ee, uint32_t addr) {
+    if (ee_skip_fmv(ee, addr))
+        return;
+
     ee->next_pc = addr;
     ee->branch = 1;
 }
@@ -2227,8 +2254,8 @@ static inline void ee_i_vaddw(struct ee_state* ee) { VU_UPPER(addw) }
 static inline void ee_i_vaddx(struct ee_state* ee) { VU_UPPER(addx) }
 static inline void ee_i_vaddy(struct ee_state* ee) { VU_UPPER(addy) }
 static inline void ee_i_vaddz(struct ee_state* ee) { VU_UPPER(addz) }
-static inline void ee_i_vcallms(struct ee_state* ee) { printf("ee: vcallms unimplemented\n"); exit(1); }
-static inline void ee_i_vcallmsr(struct ee_state* ee) { printf("ee: vcallmsr unimplemented\n"); exit(1); }
+static inline void ee_i_vcallms(struct ee_state* ee) { printf("ee: vcallms unimplemented\n"); }
+static inline void ee_i_vcallmsr(struct ee_state* ee) { printf("ee: vcallmsr unimplemented\n"); }
 static inline void ee_i_vclipw(struct ee_state* ee) { VU_UPPER(clip) }
 static inline void ee_i_vdiv(struct ee_state* ee) { VU_LOWER(div) }
 static inline void ee_i_vftoi0(struct ee_state* ee) { VU_UPPER(ftoi0) }
