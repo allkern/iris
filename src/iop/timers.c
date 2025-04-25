@@ -52,7 +52,7 @@ void iop_timer_tick(struct ps2_iop_timers* timers, int i) {
             ++t->counter;
         }
     } else {
-        ++t->counter;
+        t->counter += 9;
     }
 
     if (t->counter >= t->target && prev < t->target) {
@@ -61,6 +61,8 @@ void iop_timer_tick(struct ps2_iop_timers* timers, int i) {
         t->cmp_irq_set = 1;
 
         if (t->cmp_irq && t->irq_en) {
+            // printf(" timer %d irq\n", i);
+
             ps2_iop_intc_irq(timers->intc, timer_get_irq_mask(i));
 
             if (!t->rep_irq) {
@@ -139,12 +141,12 @@ uint32_t iop_timer_handle_mode_read(struct ps2_iop_timers* timers, int i) {
 
 uint64_t ps2_iop_timers_read32(struct ps2_iop_timers* timers, uint32_t addr) {
     switch (addr & 0xfff) {
-        case 0x100: /* printf("iop: Timer 0 counter read %08x %08x\n", timers->timer[0].counter, timers->timer[0].target); */ return timers->timer[0].counter;
-        case 0x110: /* printf("iop: Timer 1 counter read %08x %08x\n", timers->timer[1].counter, timers->timer[1].target); */ return timers->timer[1].counter;
-        case 0x120: /* printf("iop: Timer 2 counter read %08x %08x\n", timers->timer[2].counter, timers->timer[2].target); */ return timers->timer[2].counter;
-        case 0x480: /* printf("iop: Timer 3 counter read %08x %08x\n", timers->timer[3].counter, timers->timer[3].target); */ return timers->timer[3].counter;
-        case 0x490: /* printf("iop: Timer 4 counter read %08x %08x\n", timers->timer[4].counter, timers->timer[4].target); */ return timers->timer[4].counter;
-        case 0x4a0: /* printf("iop: Timer 5 counter read %08x %08x\n", timers->timer[5].counter, timers->timer[5].target); */ return timers->timer[5].counter;
+        case 0x100: return timers->timer[0].counter;
+        case 0x110: return timers->timer[1].counter;
+        case 0x120: return timers->timer[2].counter;
+        case 0x480: return timers->timer[3].counter;
+        case 0x490: return timers->timer[4].counter;
+        case 0x4a0: return timers->timer[5].counter;
         case 0x108: return timers->timer[0].target;
         case 0x118: return timers->timer[1].target;
         case 0x128: return timers->timer[2].target;
@@ -170,28 +172,26 @@ void iop_timer_handle_mode_write(struct ps2_iop_timers* timers, int t, uint64_t 
     timer->mode &= 0x1c00;
     timer->mode |= data & 0xe3ff;
 
-    if (t != 5)
-        return;
-
     if (timer->counter >= timer->target) {
         timer->cmp_irq_set = 1;
 
         // ps2_iop_intc_irq(timers->intc, timer_get_irq_mask(t));
     }
 
-    // printf("iop: Timer %d mode write %08x -> %08x gate_en=%d gate_mode=%d irq_reset=%d cmp_irq=%d ovf_irq=%d rep_irq=%d levl=%d use_ext=%d irq_en=%d\n",
-    //     t, timers->timer[t].mode,
-    //     data,
-    //     timers->timer[t].gate_en,
-    //     timers->timer[t].gate_mode,
-    //     timers->timer[t].irq_reset,
-    //     timers->timer[t].cmp_irq,
-    //     timers->timer[t].ovf_irq,
-    //     timers->timer[t].rep_irq,
-    //     timers->timer[t].levl,
-    //     timers->timer[t].use_ext,
-    //     timers->timer[t].irq_en
-    // );
+    printf("iop: Timer %d mode write %08x -> %08x gate_en=%d gate_mode=%d irq_reset=%d cmp_irq=%d ovf_irq=%d rep_irq=%d levl=%d use_ext=%d irq_en=%d t4_prescaler=%d\n",
+        t, timers->timer[t].mode,
+        data,
+        timers->timer[t].gate_en,
+        timers->timer[t].gate_mode,
+        timers->timer[t].irq_reset,
+        timers->timer[t].cmp_irq,
+        timers->timer[t].ovf_irq,
+        timers->timer[t].rep_irq,
+        timers->timer[t].levl,
+        timers->timer[t].use_ext,
+        timers->timer[t].irq_en,
+        timers->timer[t].t4_prescaler
+    );
 
     /* To-do: Schedule timer interrupts for better performance */
 }
