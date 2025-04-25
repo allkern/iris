@@ -28,6 +28,8 @@ struct ee_bus {
     struct ps2_ipu* ipu;
     struct ps2_intc* intc;
     struct ps2_vif* vif;
+    struct vu_state* vu0;
+    struct vu_state* vu1;
     struct ps2_ee_timers* timers;
     
     // EE/IOP
@@ -56,6 +58,8 @@ void ee_bus_init_bios(struct ee_bus* bus, struct ps2_bios* bios);
 void ee_bus_init_iop_ram(struct ee_bus* bus, struct ps2_ram* iop_ram);
 void ee_bus_init_sif(struct ee_bus* bus, struct ps2_sif* sif);
 void ee_bus_init_cdvd(struct ee_bus* bus, struct ps2_cdvd* cdvd);
+void ee_bus_init_vu0(struct ee_bus* bus, struct vu_state* vu);
+void ee_bus_init_vu1(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), void* udata);
 
 #ifdef __cplusplus
