@@ -180,6 +180,7 @@ struct ps2_spu2 {
     uint32_t spdif_mode;
     uint32_t spdif_media;
     uint32_t spdif_copy;
+    int spdif_irq;
 
     struct ps2_iop_intc* intc;
     struct sched_state* sched;

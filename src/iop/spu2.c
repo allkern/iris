@@ -89,6 +89,25 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_intc* intc, struct sche
     spu2->c[1].endx = 0x00ffffff;
 }
 
+void spu2_irq(struct ps2_spu2* spu2, int c) {
+    if (spu2->spdif_irq & (4 << c))
+        return;
+
+    spu2->spdif_irq |= 4 << c;
+
+    printf("spu2: IRQ fired\n");
+
+    // ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
+}
+
+void spu2_check_irq(struct ps2_spu2* spu2, uint32_t addr) {
+    for (int i = 0; i < 2; i++) {
+        if (addr == spu2->c[i].irqa && (spu2->c[i].attr & (1 << 6))) {
+            spu2_irq(spu2, i);
+        }
+    }
+}
+
 void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v);
 void adsr_load_attack(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v);
 void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v, int i);
@@ -103,13 +122,37 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         struct spu2_voice* v = &spu2->c[c].v[i+h*16];
         struct spu2_core* cr = &spu2->c[c];
 
+        // Make sure to clear the internal state of a voice
+        // before playing
+        v->playing = 1;
+        v->counter = 0;
+        v->h[0] = 0;
+        v->h[1] = 1;
+
+        for (int i = 0; i < 28; i++)
+            v->buf[i] = 0;
+
+        v->loop_start = 0;
+        v->loop = 0;
+        v->loop_end = 0;
+        v->prev_sample_index = 0;
+
+        for (int i = 0; i < 4; i++)
+            v->s[i] = 0;
+
+        v->adsr_cycles_left = 0;
+        v->adsr_phase = 0;
+        v->adsr_cycles_reload = 0;
+        v->adsr_cycles = 0;
+        v->adsr_mode = 0;
+        v->adsr_dir = 0;
+        v->adsr_shift = 0;
+        v->adsr_step = 0;
+        v->adsr_pending_step = 0;
+        v->adsr_sustain_level = 0;
+
         v->playing = 1;
         v->nax = v->ssa;
-        v->counter = 0;
-        v->loop = 0;
-        v->loop_start = 0;
-        v->loop_end = 0;
-        v->envx = 0;
         v->f_voll = (float)v->voll / 32767.0f;
         v->f_volr = (float)v->volr / 32767.0f;
         v->adsr_sustain_level = ((v->adsr1 & 0xf) + 1) * 0x800;
@@ -130,18 +173,19 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         if (!(data & (1 << i)))
             continue;
 
+        int v = i+h*16;
+
         // spu2->c[c].v[i+h*16].playing = 0;
 
         // To-do: Enter ADSR release
-        adsr_load_release(spu2, &spu2->c[c], &spu2->c[c].v[i], i);
+        printf("spu2: voice %d koff\n", v);
+        adsr_load_release(spu2, &spu2->c[c], &spu2->c[c].v[v], v);
     }
 }
 
 void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
     // printf("spu2: core%d data=%04x tsa=%08x\n", c, data, spu2->c[c].tsa);
-
-    // if (spu2->c[c].tsa == spu2->c[c].irqa)
-    //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
+    spu2_check_irq(spu2, spu2->c[c].tsa);
 
     spu2->ram[spu2->c[c].tsa++] = data;
 
@@ -165,6 +209,12 @@ void spu2_core1_reset_handler(void* udata, int overshoot) {
 }
 
 void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
+    // if (spu2->c[c].attr & (1 << 6)) {
+    //     if (!(data & (1 << 6))) {
+    //         spu2->spdif_irq &= ~(4 << c);
+    //     }
+    // }
+
     spu2->c[c].attr = data & 0x7fff;
 
     if (data & 0x8000) {
@@ -352,6 +402,7 @@ uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
         case 0x7ac: return spu2->c[1].in_coef_l;
         case 0x7ae: return spu2->c[1].in_coef_r;
         case 0x7C0: return spu2->spdif_out;
+        // case 0x7C2: return spu2->spdif_irq;
         case 0x7C6: return spu2->spdif_mode;
         case 0x7C8: return spu2->spdif_media;
         case 0x7CA: return spu2->spdif_copy;
@@ -537,6 +588,7 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         case 0x7ac: spu2->c[1].in_coef_l = data; return;
         case 0x7ae: spu2->c[1].in_coef_r = data; return;
         case 0x7C0: spu2->spdif_out = data; return;
+        // case 0x7C2: spu2->spdif_irq = data; return;
         case 0x7C6: spu2->spdif_mode = data; return;
         case 0x7C8: spu2->spdif_media = data; return;
         case 0x7CA: spu2->spdif_copy = data; return;
@@ -563,6 +615,8 @@ static const int ps_adpcm_coefs_i[5][2] = {
 
 void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
     uint16_t hdr = spu2->ram[v->nax];
+
+    // spu2_check_irq(spu2, v->nax);
 
     // if (v->nax == spu2->c[0].irqa || v->nax == spu2->c[1].irqa)
     //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
@@ -628,7 +682,7 @@ void adsr_calculate_values(struct ps2_spu2* spu2, struct spu2_voice* v) {
 
     if (EXPONENTIAL && (LEVEL > 0x6000) && !DECREASE)
         CYCLES *= 4;
-    
+
     if (EXPONENTIAL && DECREASE)
         LEVEL_STEP = (LEVEL_STEP * LEVEL) >> 15;
 
@@ -681,7 +735,7 @@ void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_v
     v->adsr_phase = ADSR_RELEASE;
     v->adsr_mode  = (v->adsr2 >> 5) & 1;
     v->adsr_dir   = 1;
-    v->adsr_shift = (v->adsr2 >> 5) & 0x1f;
+    v->adsr_shift = v->adsr2 & 0x1f;
     v->adsr_step  = -8;
 
     c->endx |= 1 << i;
@@ -783,16 +837,18 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
 
         if (v->loop_start) {
             v->lsax = v->nax;
+
+            v->nax += 8;
         } else if (v->loop_end) {
-            // printf("spu2: Loop end at 0x%08x (lsax=%08x ssa=%08x) loop=%d\n", v->nax, v->lsax, v->ssa, v->loop);
-            c->endx |= 1 << vc;
-            
+            // printf("spu2: Voice %d loop end at 0x%08x (lsax=%08x ssa=%08x) loop=%d\n", vc, v->nax, v->lsax, v->ssa, v->loop);
+
             v->nax = v->lsax;
-            v->playing = 0;
-            v->envx = 0;
-            
+
+            adsr_load_release(spu2, c, v, vc);
+
             if (!v->loop) {
-                adsr_load_release(spu2, c, v, vc);
+                v->envx = 0;
+                v->playing = 0;
             }
         } else {
             v->nax += 8;
@@ -825,7 +881,7 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
     float adsr_vol = (float)v->envx / 32767.0f;
 
     s.s16[0] = ((float)out * v->f_voll) * adsr_vol;
-    s.s16[1] = s.s16[0];
+    s.s16[1] = ((float)out * v->f_volr) * adsr_vol;
 
     v->counter += v->pitch;
 
@@ -841,13 +897,13 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
     s.u16[1] = 0;
 
     for (int i = 0; i < 24; i++) {
-        struct spu2_sample v0 = spu2_get_voice_sample(spu2, 0, i);
-        struct spu2_sample v1 = spu2_get_voice_sample(spu2, 1, i);
+        struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
+        struct spu2_sample c1 = spu2_get_voice_sample(spu2, 1, i);
 
-        s.s16[0] += v0.s16[0];
-        s.s16[1] += v0.s16[1];
-        s.s16[0] += v1.s16[0];
-        s.s16[1] += v1.s16[1];
+        s.s16[0] += c0.s16[0];
+        s.s16[1] += c0.s16[1];
+        s.s16[0] += c1.s16[0];
+        s.s16[1] += c1.s16[1];
     }
 
     return s;
