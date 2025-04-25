@@ -45,6 +45,8 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, uint32_t d
     timers->timer[t].mode &= 0xc00;
     timers->timer[t].mode |= data & (~0xc00);
     timers->timer[t].mode &= ~(data & 0xc00);
+
+    // printf("timers: timer %d write %08x -> %08x\n", t, data, timers->timer[t].mode);
 }
 
 void ps2_ee_timers_write32(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data) {
@@ -121,7 +123,7 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         if (t->mode & 0x200) {
             // printf("ee: timer %d overflow IRQ\n", timer);
 
-            // ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
+            ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
     }
 
