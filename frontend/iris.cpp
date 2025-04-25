@@ -266,6 +266,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_SCISSOR, handle_scissor_event, iris);
 
     iris->ds = ds_sio2_attach(iris->ps2->sio2, 0);
+    iris->mcd = mcd_sio2_attach(iris->ps2->sio2, 2);
 
     iris->ctx = renderer_create();
 

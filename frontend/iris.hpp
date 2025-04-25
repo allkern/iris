@@ -145,6 +145,7 @@ struct instance {
     std::deque <iris::notification> notifications = {};
 
     struct ds_state* ds = nullptr;
+    struct mcd_state* mcd = nullptr;
 };
 
 iris::instance* create();
