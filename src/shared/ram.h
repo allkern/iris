@@ -14,6 +14,7 @@ struct ps2_ram {
     size_t size;
 };
 
+#define RAM_SIZE_1KB 0x400
 #define RAM_SIZE_2MB 0x200000
 #define RAM_SIZE_32MB 0x2000000
 #define RAM_SIZE_64MB 0x4000000

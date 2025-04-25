@@ -12,6 +12,8 @@ void ps2_ram_init(struct ps2_ram* ram, int size) {
 
     ram->buf = malloc(size);
     ram->size = size;
+
+    memset(ram->buf, 0, ram->size);
 }
 
 void ps2_ram_reset(struct ps2_ram* ram) {
