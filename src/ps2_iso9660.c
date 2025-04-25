@@ -33,7 +33,7 @@ struct iso9660_state* iso9660_open(const char* path) {
 
 char* iso9660_get_boot_path(struct iso9660_state* iso) {
     // Cache the PVD (Primary Volume Descriptor)
-    fseek(iso->file, 16 * 0x800, SEEK_SET);
+    fseek64(iso->file, 16 * 0x800, SEEK_SET);
 
     if (!fread(&iso->pvd, sizeof(struct iso9660_pvd), 1, iso->file)) {
         printf("iso9660: Couldn't read PVD\n");
@@ -49,7 +49,7 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
 
     struct iso9660_dirent* root = (struct iso9660_dirent*)iso->pvd.root;
 
-    fseek64(iso->file, root->lba_le * 0x800, SEEK_SET);
+    fseek64(iso->file, (uint64_t)root->lba_le * 0x800, SEEK_SET);
 
     if (!fread(iso->buf, 0x800, 1, iso->file)) {
         printf("iso9660: Couldn't read root sector\n");
@@ -92,13 +92,15 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
         return NULL;
     }
 
-    fseek64(iso->file, dir->lba_le * 0x800, SEEK_SET);
+    fseek64(iso->file, (uint64_t)dir->lba_le * 0x800, SEEK_SET);
 
     if (!fread(iso->buf, 0x800, 1, iso->file)) {
         printf("iso9660: Couldn't read SYSTEM.CNF\n");
 
         return NULL;
     }
+
+    printf("isobuf: %s\n", iso->buf);
 
     // Parse SYSTEM.CNF
     char* p = iso->buf;
@@ -115,7 +117,7 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
 
         *kptr = '\0';
 
-        // printf("key: %s\n", key);
+        printf("key: %s\n", key);
 
         if (!strncmp(key, "BOOT2", 64)) {
             while (isspace(*p)) ++p;
