@@ -5,8 +5,8 @@
 
 #include "dmac.h"
 
-static inline uint128_t dmac_read_qword(struct ps2_dmac* dmac, uint32_t addr) {
-    int spr = addr & 0x80000000;
+static inline uint128_t dmac_read_qword(struct ps2_dmac* dmac, uint32_t addr, int mem) {
+    int spr = mem || (addr & 0x80000000);
 
     if (!spr)
         return ee_bus_read128(dmac->bus, addr);
@@ -87,7 +87,7 @@ uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr) {
             case 0x80: return c->sadr;
         }
 
-        printf("dmac: Unknown channel register %02x\n", addr & 0xff);
+        // printf("dmac: Unknown channel register %02x\n", addr & 0xff);
 
         return 0;
     }
@@ -124,8 +124,6 @@ static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_ch
     //     c->tag.mem,
     //     c->tag.data
     // );
-
-    assert(!c->tag.mem);
 
     c->tag.end = 0;
 
@@ -243,11 +241,80 @@ static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
 }
 
 void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {
-    printf("ee: VIF0 channel unimplemented\n");
+    // printf("ee: VIF0 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
+    //     dmac->vif0.chcr & 1,
+    //     (dmac->vif0.chcr >> 2) & 3,
+    //     (dmac->vif0.chcr >> 6) & 1,
+    //     (dmac->vif0.chcr >> 7) & 1,
+    //     dmac->vif0.qwc,
+    //     dmac->vif0.madr,
+    //     dmac->vif0.tadr
+    // );
 
-    dmac_set_irq(dmac, DMAC_VIF0);
+    for (int i = 0; i < dmac->vif0.qwc; i++) {
+        uint128_t q = dmac_read_qword(dmac, dmac->vif0.madr, 0);
+
+        // VIF0 FIFO address
+        // ee_bus_write32(dmac->bus, 0x10005000, q.u32[0]);
+        // ee_bus_write32(dmac->bus, 0x10005000, q.u32[1]);
+        // ee_bus_write32(dmac->bus, 0x10005000, q.u32[2]);
+        // ee_bus_write32(dmac->bus, 0x10005000, q.u32[3]);
+
+        dmac->vif0.madr += 16;
+    }
+
+    if (((dmac->vif0.chcr >> 2) & 7) != 1) {
+        dmac->vif0.chcr &= ~0x100;
+
+        dmac_set_irq(dmac, DMAC_VIF0);
+
+        return;
+    }
+
+    // Chain mode
+    do {
+        uint128_t tag = dmac_read_qword(dmac, dmac->vif0.tadr, 0);
+
+        dmac_process_source_tag(dmac, &dmac->vif0, tag);
+
+        // printf("ee: vif0 tag qwc=%08x madr=%08x tadr=%08x id=%d addr=%08x\n",
+        //     dmac->vif0.tag.qwc,
+        //     dmac->vif0.madr,
+        //     dmac->vif0.tadr,
+        //     dmac->vif0.tag.id,
+        //     dmac->vif0.tag.addr
+        // );
+
+        // CHCR.TTE: Transfer tag DATA field
+        if ((dmac->vif0.chcr >> 6) & 1) {
+            // ee_bus_write32(dmac->bus, 0x10005000, dmac->vif0.tag.data & 0xffffffff);
+            // ee_bus_write32(dmac->bus, 0x10005000, dmac->vif0.tag.data >> 32);
+        }
+
+        for (int i = 0; i < dmac->vif0.tag.qwc; i++) {
+            uint128_t q = dmac_read_qword(dmac, dmac->vif0.madr, dmac->vif0.tag.mem);
+
+            // printf("ee: Sending %016lx%016lx from %08x to VIF0 FIFO\n",
+            //     q.u64[1], q.u64[0],
+            //     dmac->vif0.madr
+            // );
+
+            // ee_bus_write32(dmac->bus, 0x10005000, q.u32[0]);
+            // ee_bus_write32(dmac->bus, 0x10005000, q.u32[1]);
+            // ee_bus_write32(dmac->bus, 0x10005000, q.u32[2]);
+            // ee_bus_write32(dmac->bus, 0x10005000, q.u32[3]);
+
+            dmac->vif0.madr += 16;
+        }
+
+        if (dmac->vif0.tag.id == 1) {
+            dmac->vif0.tadr = dmac->vif0.madr;
+        }
+    } while (!channel_is_done(&dmac->vif0));
 
     dmac->vif0.chcr &= ~0x100;
+
+    dmac_set_irq(dmac, DMAC_VIF0);
 }
 void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     // printf("ee: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
@@ -261,7 +328,7 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     // );
 
     for (int i = 0; i < dmac->vif1.qwc; i++) {
-        uint128_t q = dmac_read_qword(dmac, dmac->vif1.madr);
+        uint128_t q = dmac_read_qword(dmac, dmac->vif1.madr, 0);
 
         // VIF1 FIFO address
         ee_bus_write32(dmac->bus, 0x10005000, q.u32[0]);
@@ -282,7 +349,7 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
 
     // Chain mode
     do {
-        uint128_t tag = dmac_read_qword(dmac, dmac->vif1.tadr);
+        uint128_t tag = dmac_read_qword(dmac, dmac->vif1.tadr, 0);
 
         dmac_process_source_tag(dmac, &dmac->vif1, tag);
 
@@ -301,7 +368,7 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
         }
 
         for (int i = 0; i < dmac->vif1.tag.qwc; i++) {
-            uint128_t q = dmac_read_qword(dmac, dmac->vif1.madr);
+            uint128_t q = dmac_read_qword(dmac, dmac->vif1.madr, dmac->vif1.tag.mem);
 
             // printf("ee: Sending %016lx%016lx from %08x to VIF1 FIFO\n",
             //     q.u64[1], q.u64[0],
@@ -334,7 +401,7 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
     // fprintf(file, "dmac: GIF transfer mode=%d madr=%08x qwc=%d\n", (dmac->gif.chcr >> 2) & 7, dmac->gif.madr, dmac->gif.qwc);
 
     for (int i = 0; i < dmac->gif.qwc; i++) {
-        uint128_t q = dmac_read_qword(dmac, dmac->gif.madr);
+        uint128_t q = dmac_read_qword(dmac, dmac->gif.madr, 0);
 
         // fprintf(file, "ee: Sending %016lx%016lx from %08x to GIF FIFO (burst)\n",
         //     q.u64[1], q.u64[0],
@@ -353,14 +420,14 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 
     // Chain mode
     do {
-        uint128_t tag = dmac_read_qword(dmac, dmac->gif.tadr);
+        uint128_t tag = dmac_read_qword(dmac, dmac->gif.tadr, 0);
 
         dmac_process_source_tag(dmac, &dmac->gif, tag);
 
         // fprintf(file, "ee: gif tag qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
 
         for (int i = 0; i < dmac->gif.tag.qwc; i++) {
-            uint128_t q = dmac_read_qword(dmac, dmac->gif.madr);
+            uint128_t q = dmac_read_qword(dmac, dmac->gif.madr, dmac->gif.tag.mem);
 
             // fprintf(file, "ee: Sending %016lx%016lx from %08x to GIF FIFO (chain)\n",
             //     q.u64[1], q.u64[0],
@@ -398,8 +465,14 @@ void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
         dmac->ipu_to.tadr
     );
 
+    dmac_set_irq(dmac, DMAC_IPU_TO);
+
+    dmac->ipu_to.chcr &= ~0x100;
+
+    return;
+
     do {
-        uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr);
+        uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr, 0);
 
         dmac_process_source_tag(dmac, &dmac->ipu_to, tag);
 
@@ -416,7 +489,7 @@ void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
         // printf("ee: SIF1 tag madr=%08x\n", dmac->sif1.madr);
 
         for (int i = 0; i < dmac->ipu_to.tag.qwc; i++) {
-            uint128_t q = dmac_read_qword(dmac, dmac->ipu_to.madr);
+            uint128_t q = dmac_read_qword(dmac, dmac->ipu_to.madr, dmac->ipu_to.tag.mem);
 
             ee_bus_write128(dmac->bus, 0x10007010, q);
 
@@ -524,7 +597,7 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
     // }
 
     do {
-        uint128_t tag = dmac_read_qword(dmac, dmac->sif1.tadr);
+        uint128_t tag = dmac_read_qword(dmac, dmac->sif1.tadr, 0);
 
         dmac_process_source_tag(dmac, &dmac->sif1, tag);
 
@@ -541,7 +614,7 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
         // printf("ee: SIF1 tag madr=%08x\n", dmac->sif1.madr);
 
         for (int i = 0; i < dmac->sif1.tag.qwc; i++) {
-            uint128_t q = dmac_read_qword(dmac, dmac->sif1.madr);
+            uint128_t q = dmac_read_qword(dmac, dmac->sif1.madr, dmac->sif1.tag.mem);
 
             // printf("%08x: ", dmac->sif1.madr);
 
@@ -574,9 +647,17 @@ void dmac_handle_sif2_transfer(struct ps2_dmac* dmac) {
 }
 void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
     printf("ee: SPR from channel unimplemented\n"); exit(1);
+
+    dmac_set_irq(dmac, DMAC_SPR_FROM);
+
+    dmac->spr_from.chcr &= ~0x100;
 }
 void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
     printf("ee: SPR to channel unimplemented\n"); exit(1);
+
+    dmac_set_irq(dmac, DMAC_SPR_TO);
+
+    dmac->spr_to.chcr &= ~0x100;
 }
 
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
@@ -641,14 +722,14 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                 }
             } return;
             case 0x10: c->madr = data; return;
-            case 0x20: c->qwc = data; return;
+            case 0x20: c->qwc = data & 0xffff; return;
             case 0x30: c->tadr = data; return;
             case 0x40: c->asr0 = data; return;
             case 0x50: c->asr1 = data; return;
             case 0x80: c->sadr = data; return;
         }
 
-        printf("dmac: Unknown channel register %02x\n", addr & 0xff);
+        // printf("dmac: Unknown channel register %02x\n", addr & 0xff);
 
         return;
     }
