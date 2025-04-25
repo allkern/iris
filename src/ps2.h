@@ -22,6 +22,8 @@ extern "C" {
 #include "iop/cdvd.h"
 #include "iop/sio2.h"
 #include "iop/spu2.h"
+#include "iop/usb.h"
+#include "iop/fw.h"
 #include "shared/bios.h"
 #include "shared/ram.h"
 #include "shared/sif.h"
@@ -30,6 +32,7 @@ extern "C" {
 
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
+#include "dev/mcd.h"
 
 #include "sched.h"
 
@@ -58,12 +61,15 @@ struct ps2_state {
 
     // IOP-only
     struct iop_bus* iop_bus;
+    struct ps2_ram* iop_spr;
     struct ps2_iop_dma* iop_dma;
     struct ps2_iop_intc* iop_intc;
     struct ps2_iop_timers* iop_timers;
     struct ps2_cdvd* cdvd;
     struct ps2_sio2* sio2;
     struct ps2_spu2* spu2;
+    struct ps2_usb* usb;
+    struct ps2_fw* fw;
 
     // Shared
     struct ps2_ram* iop_ram;
