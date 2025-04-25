@@ -83,7 +83,7 @@ static inline int psmct16_addr(int base, int width, int x, int y) {
     // 1 block = 8x8 = 256 B = 64 words
     // 1 column = 8x2 = 64 B = 16 words
 
-    int page = (x >> 6) + ((y >> 6) * (width >> 1));
+    int page = (x >> 6) + ((y >> 6) * width);
     int blkx = (x >> 4) & 3;
     int blky = (y >> 3) & 7;
     int blk = blkx + (blky * 4);
@@ -92,6 +92,47 @@ static inline int psmct16_addr(int base, int width, int x, int y) {
 
     // Unswizzle block
     blk = psmct16_block[blk];
+
+    // Unswizzle column
+    idx = psmct16_column[idx];
+
+    // printf("(%x, %d, %d, %d) -> p=%d b=%d c=%d addr=%08x\n",
+    //     base, width, x, y,
+    //     page, blk, cl,
+    //     (page * 2048) + (base * 64) + (blk * 64) + cl
+    // );
+
+    return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
+}
+
+int psmct16s_block[] = {
+    0 , 2 , 16, 18,
+    1 , 3 , 17, 19,
+    8 , 10, 24, 26,
+    9 , 11, 25, 27,
+    4 , 6 , 20, 22,
+    5 , 7 , 21, 23,
+    12, 14, 28, 30,
+    13, 15, 29, 31
+};
+
+static inline int psmct16s_addr(int base, int width, int x, int y) {
+    // page            block          column
+    // 64 x 64 pixels  16 x 8 pixels  16 x 2 pixels
+    // base expressed in blocks
+    // 1 page = 64x32 = 8 KiB = 2048 words
+    // 1 block = 8x8 = 256 B = 64 words
+    // 1 column = 8x2 = 64 B = 16 words
+
+    int page = (x >> 6) + ((y >> 6) * width);
+    int blkx = (x >> 4) & 3;
+    int blky = (y >> 3) & 7;
+    int blk = blkx + (blky * 4);
+    int col = (y >> 1) & 3;
+    int idx = (x & 15) + ((y & 1) * 16);
+
+    // Unswizzle block
+    blk = psmct16s_block[blk];
 
     // Unswizzle column
     idx = psmct16_column[idx];
@@ -283,6 +324,7 @@ static const char* default_frag_shader =
     "out vec4 FragColor;\n"
     "uniform sampler2D input_texture;\n"
     "uniform vec2 screen_size;\n"
+    "uniform int frame;\n"
     "void main() {\n"
     "    vec2 uv = vec2(FragTexCoord.x, 1.0 - FragTexCoord.y);\n"
     "    FragColor = texture(input_texture, uv);\n"
@@ -858,14 +900,21 @@ static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
             return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v)];
         case GS_PSMCT24:
             return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v)];
-        case GS_PSMCT16:
-        case GS_PSMCT16S: {
+        case GS_PSMCT16: {
             uint32_t addr = psmct16_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
             uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
 
             int idx = (u & 15) + ((v & 1) * 16);
 
-            return gs->vram[psmct16_shift[idx]];
+            return vram[psmct16_shift[idx]];
+        } break;
+        case GS_PSMCT16S: {
+            uint32_t addr = psmct16s_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
+            uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
+
+            int idx = (u & 15) + ((v & 1) * 16);
+
+            return vram[psmct16_shift[idx]];
         } break;
         case GS_PSMT8: {
             uint32_t addr = psmt8_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
@@ -958,7 +1007,7 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
         } break;
 
         case GS_PSMCT24: {
-            gs->vram[gs->ctx->fbp + x + (y * gs->ctx->fbw)] = f;
+            gs->vram[(gs->ctx->fbp + x + (y * gs->ctx->fbw)) & 0xfffff] = f;
         } break;
         case GS_PSMCT16:
         case GS_PSMCT16S: {
@@ -1212,7 +1261,7 @@ int software_thread_compile_shader(const char* src, GLint type) {
     if (!success) {
         glGetShaderInfoLog(shader, 512, NULL, infolog);
 
-        printf("gs_opengl: Shader compilation failed\n%s", infolog);
+        printf("software: Shader compilation failed\n%s", infolog);
 
         exit(1);
 
@@ -1385,6 +1434,8 @@ void render_point(struct ps2_gs* gs, void* udata) {
 }
 
 void render_line(struct ps2_gs* gs, void* udata) {
+    return;
+
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
 
@@ -1732,6 +1783,15 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     //     );
     // }
 
+    // if (gs->tme) {
+    //     printf("gs: (%d,%d)-(%d,%d) (%d,%d)-(%d,%d)\n",
+    //         v0.x, v0.y,
+    //         v1.x, v1.y,
+    //         v0.u, v0.v,
+    //         v1.u, v1.v
+    //     );
+    // }
+
     // if (!gs->fst) {
     //     printf("gs: stq0=(%f,%f,%f) stq1=(%f,%f,%f)\n",
     //         v0.s, v0.t, v0.q,
@@ -1977,7 +2037,7 @@ void render(struct ps2_gs* gs, void* udata) {
 
         glUniform1i(glGetUniformLocation(ctx->default_program, "input_texture"), 0);
         glUniform2f(glGetUniformLocation(ctx->default_program, "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->default_program, "frame"), ctx->frame++);
+        glUniform1i(glGetUniformLocation(ctx->default_program, "frame"), (ctx->gs->csr >> 12) & 1);
 
         glBindVertexArray(ctx->vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -1996,7 +2056,7 @@ void render(struct ps2_gs* gs, void* udata) {
 
         glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
         glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), ctx->frame++);
+        glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), (ctx->gs->csr >> 12) & 1);
 
         glBindVertexArray(ctx->vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -2052,7 +2112,7 @@ void render(struct ps2_gs* gs, void* udata) {
 
     glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
     glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)ctx->tex_w, (float)ctx->tex_h);
-    glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), ctx->frame);
+    glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), (ctx->gs->csr >> 12) & 1);
 
     glBindVertexArray(ctx->fb_vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -2080,7 +2140,7 @@ void render(struct ps2_gs* gs, void* udata) {
 
         glUniform1i(glGetUniformLocation(ctx->programs[i], "input_texture"), 0);
         glUniform2f(glGetUniformLocation(ctx->programs[i], "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->programs[i], "frame"), ctx->frame);
+        glUniform1i(glGetUniformLocation(ctx->programs[i], "frame"), (ctx->gs->csr >> 12) & 1);
 
         glBindVertexArray(ctx->fb_vao);
         glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -2101,7 +2161,7 @@ void render(struct ps2_gs* gs, void* udata) {
 
     glUniform1i(glGetUniformLocation(ctx->programs.back(), "input_texture"), 0);
     glUniform2f(glGetUniformLocation(ctx->programs.back(), "screen_size"), (float)rect.w, (float)rect.h);
-    glUniform1i(glGetUniformLocation(ctx->programs.back(), "frame"), ctx->frame++);
+    glUniform1i(glGetUniformLocation(ctx->programs.back(), "frame"), (ctx->gs->csr >> 12) & 1);
 
     glBindVertexArray(ctx->vao);
     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -2333,7 +2393,23 @@ static inline void gs_write_psmct16(struct ps2_gs* gs, software_thread_state* ct
     uint32_t addr = psmct16_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy) & 0xfffff;
     uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
 
-    int idx = (ctx->dx & 15) + ((ctx->dy & 3) * 16);
+    int idx = (ctx->dx & 15) + ((ctx->dy & 1) * 16);
+
+    vram[psmct16_shift[idx]] = index;
+
+    ctx->dx++;
+
+    if (ctx->dx == (ctx->rrw + ctx->dsax)) {
+        ctx->dx = ctx->dsax;
+        ctx->dy++;
+    }
+}
+
+static inline void gs_write_psmct16s(struct ps2_gs* gs, software_thread_state* ctx, uint32_t index) {
+    uint32_t addr = psmct16s_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy) & 0xfffff;
+    uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
+
+    int idx = (ctx->dx & 15) + ((ctx->dy & 1) * 16);
 
     vram[psmct16_shift[idx]] = index;
 
@@ -2353,6 +2429,14 @@ static inline void gs_store_hwreg_psmct16(struct ps2_gs* gs, software_thread_sta
     }
 }
 
+static inline void gs_store_hwreg_psmct16s(struct ps2_gs* gs, software_thread_state* ctx) {
+    for (int i = 0; i < 4; i++) {
+        uint64_t p = (gs->hwreg >> (i * 16)) & 0xffff;
+
+        gs_write_psmct16s(gs, ctx, p);
+    }
+}
+
 void transfer_write(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
@@ -2365,9 +2449,12 @@ void transfer_write(struct ps2_gs* gs, void* udata) {
             gs_store_hwreg_psmct24(gs, ctx);
         } break;
 
-        case GS_PSMCT16:
-        case GS_PSMCT16S: {
+        case GS_PSMCT16: {
             gs_store_hwreg_psmct16(gs, ctx);
+        } break;
+
+        case GS_PSMCT16S: {
+            gs_store_hwreg_psmct16s(gs, ctx);
         } break;
 
         case GS_PSMT8: {

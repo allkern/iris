@@ -1979,6 +1979,17 @@ static inline void gs_write_psmt8(struct ps2_gs* gs, software_state* ctx, uint32
     }
 }
 
+static inline void gs_write_psmct32(struct ps2_gs* gs, software_state* ctx, uint32_t data) {
+    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
+
+    gs->vram[addr & 0xfffff] = data;
+
+    if (ctx->dx == (ctx->rrw + ctx->dsax)) {
+        ctx->dx = ctx->dsax;
+        ctx->dy++;
+    }
+}
+
 static inline void gs_store_hwreg_psmt4(struct ps2_gs* gs, software_state* ctx) {
     for (int i = 0; i < 16; i++) {
         uint64_t index = (gs->hwreg >> (i * 4)) & 0xf;
@@ -2026,14 +2037,7 @@ static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_state* ctx
     };
 
     for (int i = 0; i < 2; i++) {
-        uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
-
-        gs->vram[addr] = data[i];
-
-        if (ctx->dx == (ctx->rrw + ctx->dsax)) {
-            ctx->dx = ctx->dsax;
-            ctx->dy++;
-        }
+        gs_write_psmct32(gs, ctx, data[i]);
     }
 }
 

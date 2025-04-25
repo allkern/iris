@@ -31,16 +31,6 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
 
     sched_schedule(gs->sched, vblank_in_event);
 
-    gs->csr ^= 1 << 13;
-    gs->csr ^= 1 << 12;
-
-    // gs->csr &= ~(8);
-    // gs->csr &= ~(2);
-    // gs->csr &= ~(1 << 12);
-    // gs->csr &= ~(1 << 13);
-    // gs->csr ^= 8;
-    // gs->csr ^= 1 << 13;
-
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_OUT);
@@ -58,6 +48,9 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
 
     // Set Vblank and Hblank flag
     gs->csr |= 0xf;
+
+    // Toggle field
+    gs->csr ^= 1 << 13;
 
     // Tell backend to render scene
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
@@ -324,7 +317,7 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
         case 0x120000C0: gs->extdata = data; return;
         case 0x120000D0: gs->extwrite = data; return;
         case 0x120000E0: gs->bgcolor = data; return;
-        case 0x12001000: gs->csr &= ~(data & 0xf); return;
+        case 0x12001000: gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf)); return;
         case 0x12001010: gs->imr = data; return;
         case 0x12001040: gs->busdir = data; return;
         case 0x12001080: gs->siglblid = data; return;
@@ -529,8 +522,8 @@ static inline void gs_unpack_texclut(struct ps2_gs* gs) {
 }
 
 static inline void gs_unpack_texa(struct ps2_gs* gs) {
+    gs->ta0 = gs->texa & 0xff;
     gs->aem = (gs->texa >> 15) & 1;
-    gs->ta0 = (gs->texa >> 0) & 0xff;
     gs->ta1 = (gs->texa >> 32) & 0xff;
 }
 
