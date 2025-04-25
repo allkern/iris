@@ -40,8 +40,8 @@ void vu_init(struct vu_state* vu, int id, struct vu_state* vu1) {
     vu->vu1 = vu1;
 
     if (!id) {
-        vu->micro_mem_size = 0x3ff;
-        vu->vu_mem_size = 0x1ff;
+        vu->micro_mem_size = 0x1ff;
+        vu->vu_mem_size = 0xff;
     } else {
         vu->micro_mem_size = 0x7ff;
         vu->vu_mem_size = 0x3ff;
@@ -422,7 +422,14 @@ void vu_i_mulw(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, d, i, vu_vf_i(vu, s, i) * bc);
     }
 }
-void vu_i_mula(struct vu_state* vu) { printf("vu: mula unimplemented\n"); exit(1); }
+void vu_i_mula(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
+    }
+}
 void vu_i_mulai(struct vu_state* vu) { printf("vu: mulai unimplemented\n"); exit(1); }
 void vu_i_mulaq(struct vu_state* vu) { printf("vu: mulaq unimplemented\n"); exit(1); }
 void vu_i_mulax(struct vu_state* vu) {
@@ -435,8 +442,26 @@ void vu_i_mulax(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) * bc;
     }
 }
-void vu_i_mulay(struct vu_state* vu) { printf("vu: mulay unimplemented\n"); exit(1); }
-void vu_i_mulaz(struct vu_state* vu) { printf("vu: mulaz unimplemented\n"); exit(1); }
+void vu_i_mulay(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_y(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) * bc;
+    }
+}
+void vu_i_mulaz(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    float bc = vu_vf_z(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu->acc.f[i] = vu_vf_i(vu, s, i) * bc;
+    }
+}
 void vu_i_mulaw(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -709,7 +734,20 @@ void vu_i_maxw(struct vu_state* vu) {
         }
     }
 }
-void vu_i_mini(struct vu_state* vu) { printf("vu: mini unimplemented\n"); exit(1); }
+void vu_i_mini(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float fs = vu_vf_i(vu, s, i);
+            float ft = vu_vf_i(vu, t, i);
+
+            vu_set_vf(vu, d, i, (fs < ft) ? fs : ft);
+        }
+    }
+}
 void vu_i_minii(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -788,9 +826,30 @@ void vu_i_itof0(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)(int32_t)vu->vf[s].u32[i]);
     }
 }
-void vu_i_itof4(struct vu_state* vu) { printf("vu: itof4 unimplemented\n"); exit(1); }
-void vu_i_itof12(struct vu_state* vu) { printf("vu: itof12 unimplemented\n"); exit(1); }
-void vu_i_itof15(struct vu_state* vu) { printf("vu: itof15 unimplemented\n"); exit(1); }
+void vu_i_itof4(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)((int32_t)vu->vf[s].u32[i]) * 0.0625f));
+    }
+}
+void vu_i_itof12(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)((int32_t)vu->vf[s].u32[i]) * 0.000244140625f));
+    }
+}
+void vu_i_itof15(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)((int32_t)vu->vf[s].u32[i]) * 0.000030517578125f));
+    }
+}
 void vu_i_clip(struct vu_state* vu) {
     int t = VU_UD_T;
     int s = VU_UD_S;
@@ -861,7 +920,16 @@ void vu_i_iblez(struct vu_state* vu) { printf("vu: iblez unimplemented\n"); exit
 void vu_i_ibltz(struct vu_state* vu) { printf("vu: ibltz unimplemented\n"); exit(1); }
 void vu_i_ibne(struct vu_state* vu) { printf("vu: ibne unimplemented\n"); exit(1); }
 void vu_i_ilw(struct vu_state* vu) { printf("vu: ilw unimplemented\n"); exit(1); }
-void vu_i_ilwr(struct vu_state* vu) { printf("vu: ilwr unimplemented\n"); exit(1); }
+void vu_i_ilwr(struct vu_state* vu) {
+    int s = VU_LD_S;
+    int t = VU_LD_T;
+
+    uint32_t addr = vu->vi[s] & vu->vu_mem_size;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_LD_DI(i)) vu->vi[t] = vu->vu_mem[addr].u32[i];
+    }
+}
 void vu_i_ior(struct vu_state* vu) { printf("vu: ior unimplemented\n"); exit(1); }
 void vu_i_isub(struct vu_state* vu) { printf("vu: isub unimplemented\n"); exit(1); }
 void vu_i_isubiu(struct vu_state* vu) { printf("vu: isubiu unimplemented\n"); exit(1); }
@@ -904,7 +972,13 @@ void vu_i_mr32(struct vu_state* vu) {
     }
 }
 void vu_i_mtir(struct vu_state* vu) { printf("vu: mtir unimplemented\n"); exit(1); }
-void vu_i_rget(struct vu_state* vu) { printf("vu: rget unimplemented\n"); exit(1); }
+void vu_i_rget(struct vu_state* vu) {
+    int t = VU_LD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->r.u32;
+    }
+}
 void vu_i_rinit(struct vu_state* vu) {
     int s = VU_LD_S;
 
@@ -933,7 +1007,9 @@ void vu_i_rnext(struct vu_state* vu) {
 void vu_i_rsqrt(struct vu_state* vu) {
     vu->q.f = vu_vf_i(vu, VU_LD_S, VU_LD_SF) / sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
 }
-void vu_i_rxor(struct vu_state* vu) { printf("vu: rxor unimplemented\n"); exit(1); }
+void vu_i_rxor(struct vu_state* vu) {
+    vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[VU_LD_S].u32[VU_LD_SF]) & 0x007FFFFF);
+}
 void vu_i_sq(struct vu_state* vu) { printf("vu: sq unimplemented\n"); exit(1); }
 void vu_i_sqd(struct vu_state* vu) { printf("vu: sqd unimplemented\n"); exit(1); }
 void vu_i_sqi(struct vu_state* vu) {
@@ -958,3 +1034,69 @@ void vu_i_waitq(struct vu_state* vu) {
 void vu_i_xgkick(struct vu_state* vu) { printf("vu: xgkick unimplemented\n"); exit(1); }
 void vu_i_xitop(struct vu_state* vu) { printf("vu: xitop unimplemented\n"); exit(1); }
 void vu_i_xtop(struct vu_state* vu) { printf("vu: xtop unimplemented\n"); exit(1); }
+
+uint64_t ps2_vu_read8(struct vu_state* vu, uint32_t addr) {
+    if (addr <= 0x3FFF)
+        return ((uint8_t*)vu->micro_mem)[addr & vu->micro_mem_size];
+
+    return ((uint8_t*)vu->vu_mem)[addr & vu->vu_mem_size];
+}
+uint64_t ps2_vu_read16(struct vu_state* vu, uint32_t addr) {
+    if (addr <= 0x3FFF)
+        return ((uint16_t*)vu->micro_mem)[addr & vu->micro_mem_size];
+
+    return ((uint16_t*)vu->vu_mem)[addr & vu->vu_mem_size];
+}
+uint64_t ps2_vu_read32(struct vu_state* vu, uint32_t addr) {
+    if (addr <= 0x3FFF)
+        return ((uint32_t*)vu->micro_mem)[addr & vu->micro_mem_size];
+
+    return ((uint32_t*)vu->vu_mem)[addr & vu->vu_mem_size];
+}
+uint64_t ps2_vu_read64(struct vu_state* vu, uint32_t addr) {
+    if (addr <= 0x3FFF)
+        return vu->micro_mem[addr & vu->micro_mem_size];
+
+    return ((uint64_t*)vu->vu_mem)[addr & vu->vu_mem_size];
+}
+uint128_t ps2_vu_read128(struct vu_state* vu, uint32_t addr) {
+    if (addr <= 0x3FFF)
+        return ((uint128_t*)vu->micro_mem)[addr & vu->micro_mem_size];
+
+    return vu->vu_mem[addr & vu->vu_mem_size];
+}
+void ps2_vu_write8(struct vu_state* vu, uint32_t addr, uint64_t data) {
+    if (addr <= 0x3FFF) {
+        ((uint8_t*)vu->micro_mem)[addr & vu->micro_mem_size] = data;
+    } else {
+        ((uint8_t*)vu->vu_mem)[addr & vu->vu_mem_size] = data;
+    }
+}
+void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data) {
+    if (addr <= 0x3FFF) {
+        ((uint16_t*)vu->micro_mem)[addr & vu->micro_mem_size] = data;
+    } else {
+        ((uint16_t*)vu->vu_mem)[addr & vu->vu_mem_size] = data;
+    }
+}
+void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data) {
+    if (addr <= 0x3FFF) {
+        ((uint32_t*)vu->micro_mem)[addr & vu->micro_mem_size] = data;
+    } else {
+        ((uint32_t*)vu->vu_mem)[addr & vu->vu_mem_size] = data;
+    }
+}
+void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data) {
+    if (addr <= 0x3FFF) {
+        vu->micro_mem[addr & vu->micro_mem_size] = data;
+    } else {
+        ((uint64_t*)vu->vu_mem)[addr & vu->vu_mem_size] = data;
+    }
+}
+void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
+    if (addr <= 0x3FFF) {
+        ((uint128_t*)vu->micro_mem)[addr & vu->micro_mem_size] = data;
+    } else {
+        vu->vu_mem[addr & vu->vu_mem_size] = data;
+    }
+}

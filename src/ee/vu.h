@@ -245,6 +245,18 @@ void vu_i_xgkick(struct vu_state* vu);
 void vu_i_xitop(struct vu_state* vu);
 void vu_i_xtop(struct vu_state* vu);
 
+// VU mem bus interface
+uint64_t ps2_vu_read8(struct vu_state* vu, uint32_t addr);
+uint64_t ps2_vu_read16(struct vu_state* vu, uint32_t addr);
+uint64_t ps2_vu_read32(struct vu_state* vu, uint32_t addr);
+uint64_t ps2_vu_read64(struct vu_state* vu, uint32_t addr);
+uint128_t ps2_vu_read128(struct vu_state* vu, uint32_t addr);
+void ps2_vu_write8(struct vu_state* vu, uint32_t addr, uint64_t data);
+void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data);
+void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data);
+void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data);
+void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data);
+
 #ifdef __cplusplus
 }
 #endif
