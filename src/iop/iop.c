@@ -13,53 +13,66 @@ const uint32_t iop_bus_region_mask_table[] = {
     0x7fffffff, 0x1fffffff, 0xffffffff, 0xffffffff
 };
 
+static inline uint32_t iop_translate_addr(uint32_t addr) {
+    //KSEG0
+    if (addr >= 0x80000000 && addr < 0xA0000000)
+        return addr - 0x80000000;
+
+    //KSEG1
+    if (addr >= 0xA0000000 && addr < 0xC0000000)
+        return addr - 0xA0000000;
+
+    //KUSEG, KSEG2
+    return addr;
+}
+
 static inline uint32_t iop_bus_read8(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+    return iop->bus.read8(iop->bus.udata, iop_translate_addr(addr));
 }
 
 static inline uint32_t iop_bus_read16(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+    return iop->bus.read16(iop->bus.udata, iop_translate_addr(addr));
 }
 
 static inline uint32_t iop_bus_read32(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+    return iop->bus.read32(iop->bus.udata, iop_translate_addr(addr));
 }
 
 static inline void iop_bus_write8(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+    iop->bus.write8(iop->bus.udata, iop_translate_addr(addr), data);
 }
 
 static inline void iop_bus_write16(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+    iop->bus.write16(iop->bus.udata, iop_translate_addr(addr), data);
 }
 
 static inline void iop_bus_write32(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+    iop->bus.write32(iop->bus.udata, iop_translate_addr(addr), data);
 }
 
 // External functions
 uint32_t iop_read8(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+    return iop->bus.read8(iop->bus.udata, iop_translate_addr(addr));
 }
 
 uint32_t iop_read16(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+    return iop->bus.read16(iop->bus.udata, iop_translate_addr(addr));
 }
 
 uint32_t iop_read32(struct iop_state* iop, uint32_t addr) {
-    return iop->bus.read32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29]);
+    return iop->bus.read32(iop->bus.udata, iop_translate_addr(addr));
 }
 
 void iop_write8(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write8(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+    iop->bus.write8(iop->bus.udata, iop_translate_addr(addr), data);
 }
 
 void iop_write16(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write16(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+    iop->bus.write16(iop->bus.udata, iop_translate_addr(addr), data);
 }
 
 void iop_write32(struct iop_state* iop, uint32_t addr, uint32_t data) {
-    iop->bus.write32(iop->bus.udata, addr & iop_bus_region_mask_table[addr >> 29], data);
+    iop->bus.write32(iop->bus.udata, iop_translate_addr(addr), data);
 }
 
 static const uint32_t g_iop_cop0_write_mask_table[] = {
