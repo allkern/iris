@@ -44,6 +44,8 @@ static inline int ioman_get_drive(std::string path) {
         return IOMAN_DRIVE_CDROM0;
     } else if (drive == "host") {
         return IOMAN_DRIVE_HOST;
+    } else if (drive == "host0") {
+        return IOMAN_DRIVE_HOST;        
     } else if (drive == "mc0") {
         return IOMAN_DRIVE_MC0;
     } else if (drive == "mc1") {
@@ -72,17 +74,31 @@ extern "C" int ioman_open(struct iop_state* iop) {
 
     std::string path(buf);
 
+    int drive = ioman_get_drive(path);
+
     // Only hook host files
-    if (ioman_get_drive(path) != IOMAN_DRIVE_HOST)
+    if (drive != IOMAN_DRIVE_HOST && drive != IOMAN_DRIVE_MASS)
         return 0;
 
+    // printf("path=%s\n", path.c_str());
+
+    auto p = path.find_first_of(':');
+
+    if (p == std::string::npos) return 0;
+
     // Get access path
-    std::string str = path.substr(path.find_first_of(':') + 1);
-    
+    std::string str = path.substr(p + 1);
+
+    if (!str.size()) return 0;
+
     if (str[0] == '/' || str[0] == '\\')
         str = str.substr(1);
 
-    str = str.substr(str.find_first_not_of(' '));
+    p = str.find_first_not_of(' ');
+
+    if (p == std::string::npos) return 0;
+
+    str = str.substr(p);
 
     std::filesystem::path absolute = std::filesystem::absolute(str);
 
