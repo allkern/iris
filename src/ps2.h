@@ -74,6 +74,8 @@ struct ps2_state {
     // Shared
     struct ps2_ram* iop_ram;
     struct ps2_bios* bios;
+    struct ps2_bios* rom1; // Mapped to 1E000000-1E3FFFFF (DVD firmware)
+    struct ps2_bios* rom2; // Mapped to 1E400000-1E7FFFFF (Chinese exts)
     struct ps2_sif* sif;
 
     struct sched_state* sched;
@@ -92,6 +94,8 @@ void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), 
 void ps2_boot_file(struct ps2_state* ps2, const char* path);
 void ps2_reset(struct ps2_state* ps2);
 void ps2_load_bios(struct ps2_state* ps2, const char* path);
+void ps2_load_rom1(struct ps2_state* ps2, const char* path);
+void ps2_load_rom2(struct ps2_state* ps2, const char* path);
 void ps2_cycle(struct ps2_state* ps2);
 void ps2_iop_cycle(struct ps2_state* ps2);
 void ps2_destroy(struct ps2_state* ps2);

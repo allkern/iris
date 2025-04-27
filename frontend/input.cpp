@@ -31,6 +31,9 @@ void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key) {
 
             SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
         } break;
+        case SDLK_m: {
+            ps2_iop_intc_irq(iris->ps2->iop_intc, IOP_INTC_USB);
+        } break;
     }
 
     uint16_t mask = map_button(key.keysym.sym);

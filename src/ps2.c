@@ -35,6 +35,8 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->iop_timers = ps2_iop_timers_create();
     ps2->iop_ram = ps2_ram_create();
     ps2->bios = ps2_bios_create();
+    ps2->rom1 = ps2_bios_create();
+    ps2->rom2 = ps2_bios_create();
     ps2->sif = ps2_sif_create();
     ps2->cdvd = ps2_cdvd_create();
     ps2->sio2 = ps2_sio2_create();
@@ -96,10 +98,14 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_usb_init(ps2->usb);
     ps2_fw_init(ps2->fw, ps2->iop_intc);
     ps2_bios_init(ps2->bios, NULL);
+    ps2_bios_init(ps2->rom1, NULL);
+    ps2_bios_init(ps2->rom2, NULL);
     ps2_sif_init(ps2->sif);
 
     // Initialize bus pointers
     iop_bus_init_bios(ps2->iop_bus, ps2->bios);
+    iop_bus_init_rom1(ps2->iop_bus, ps2->rom1);
+    iop_bus_init_rom2(ps2->iop_bus, ps2->rom2);
     iop_bus_init_iop_ram(ps2->iop_bus, ps2->iop_ram);
     iop_bus_init_iop_spr(ps2->iop_bus, ps2->iop_spr);
     iop_bus_init_sif(ps2->iop_bus, ps2->sif);
@@ -112,6 +118,8 @@ void ps2_init(struct ps2_state* ps2) {
     iop_bus_init_usb(ps2->iop_bus, ps2->usb);
     iop_bus_init_fw(ps2->iop_bus, ps2->fw);
     ee_bus_init_bios(ps2->ee_bus, ps2->bios);
+    ee_bus_init_rom1(ps2->ee_bus, ps2->rom1);
+    ee_bus_init_rom2(ps2->ee_bus, ps2->rom2);
     ee_bus_init_iop_ram(ps2->ee_bus, ps2->iop_ram);
     ee_bus_init_sif(ps2->ee_bus, ps2->sif);
     ee_bus_init_dmac(ps2->ee_bus, ps2->ee_dma);
@@ -156,6 +164,14 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
 
 void ps2_load_bios(struct ps2_state* ps2, const char* path) {
     ps2_bios_init(ps2->bios, path);
+}
+
+void ps2_load_rom1(struct ps2_state* ps2, const char* path) {
+    ps2_bios_init(ps2->rom1, path);
+}
+
+void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
+    ps2_bios_init(ps2->rom2, path);
 }
 
 void ps2_reset(struct ps2_state* ps2) {
@@ -276,6 +292,8 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_usb_destroy(ps2->usb);
     ps2_fw_destroy(ps2->fw);
     ps2_bios_destroy(ps2->bios);
+    ps2_bios_destroy(ps2->rom1);
+    ps2_bios_destroy(ps2->rom2);
     ps2_sif_destroy(ps2->sif);
 
     free(ps2);

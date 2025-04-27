@@ -61,6 +61,8 @@ int parse_toml_settings(iris::instance* iris) {
 
     auto paths = tbl["paths"];
     iris->bios_path = paths["bios_path"].value_or("");
+    iris->rom1_path = paths["rom1_path"].value_or("");
+    iris->rom2_path = paths["rom2_path"].value_or("");
 
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
@@ -119,6 +121,8 @@ void cli_check_for_help_version(iris::instance* iris, int argc, const char* argv
 
 void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     std::string bios_path;
+    std::string rom1_path;
+    std::string rom2_path;
 
     for (int i = 1; i < argc; i++) {
         std::string a(argv[i]);
@@ -133,6 +137,14 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
             ++i;
         } else if (a == "-b" || a == "--bios") {
             bios_path = argv[i+1];
+
+            ++i;
+        } else if (a == "--rom1") {
+            rom1_path = argv[i+1];
+
+            ++i;
+        } else if (a == "--rom2") {
+            rom2_path = argv[i+1];
 
             ++i;
         } else if (a == "-i" || a == "--disc") {
@@ -151,6 +163,22 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
             ps2_load_bios(iris->ps2, iris->bios_path.c_str());
         } else {
             iris->show_bios_setting_window = true;
+        }
+    }
+
+    if (rom1_path.size()) {
+        ps2_load_rom1(iris->ps2, rom1_path.c_str());
+    } else {
+        if (iris->rom1_path.size()) {
+            ps2_load_rom1(iris->ps2, iris->rom1_path.c_str());
+        }
+    }
+
+    if (rom2_path.size()) {
+        ps2_load_rom2(iris->ps2, rom2_path.c_str());
+    } else {
+        if (iris->rom2_path.size()) {
+            ps2_load_rom2(iris->ps2, iris->rom2_path.c_str());
         }
     }
 
@@ -232,7 +260,9 @@ void close_settings(iris::instance* iris) {
             { "renderer", iris->renderer_backend }
         } },
         { "paths", toml::table {
-            { "bios_path", iris->bios_path }
+            { "bios_path", iris->bios_path },
+            { "rom1_path", iris->rom1_path },
+            { "rom2_path", iris->rom2_path },
         } },
         { "recents", toml::table {
             { "array", toml::array() }

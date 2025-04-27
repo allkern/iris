@@ -169,7 +169,7 @@ void gif_handle_tag(struct ps2_gif* gif, uint128_t data) {
         } break;
     }
 
-    // fprintf(file, "giftag: nloop=%04lx eop=%d prim=%d fmt=%d nregs=%d reg=%016lx\n",
+    // printf("giftag: nloop=%04lx eop=%d prim=%d fmt=%d nregs=%d reg=%016lx\n",
     //     gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.fmt, gif->tag.nregs, gif->tag.reg
     // );
 
@@ -246,7 +246,7 @@ void gif_handle_reglist(struct ps2_gif* gif, uint128_t data) {
             case 0x0e:
             case 0x0f: break;
 
-            default: printf("gif: REGLIST format for reg %d unimplemented\n", r); exit(1); break;
+            // default: printf("gif: REGLIST format for reg %d unimplemented\n", r); break;
         }
 
         // Note: This handles odd NREGS*NLOOP case

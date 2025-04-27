@@ -17,6 +17,14 @@ void ee_bus_init_bios(struct ee_bus* bus, struct ps2_bios* bios) {
     bus->bios = bios;
 }
 
+void ee_bus_init_rom1(struct ee_bus* bus, struct ps2_bios* rom1) {
+    bus->rom1 = rom1;
+}
+
+void ee_bus_init_rom2(struct ee_bus* bus, struct ps2_bios* rom2) {
+    bus->rom2 = rom2;
+}
+
 void ee_bus_init_iop_ram(struct ee_bus* bus, struct ps2_ram* iop_ram) {
     bus->iop_ram = iop_ram;
 }
@@ -97,12 +105,14 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
     MAP_MEM_READ(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_READ(8, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_READ(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
+    MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ(8, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(8, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_READ(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_READ(8, 0x1F402004, 0x1F402018, cdvd, cdvd);
-    MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_READ(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
+    MAP_MEM_READ(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
     printf("bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
 
@@ -112,13 +122,15 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
 uint64_t ee_bus_read16(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
-    MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ(16, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(16, 0x20000000, 0x21FFFFFF, ram, ee_ram);
+    MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ(16, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_READ(16, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_READ(16, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(16, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_MEM_READ(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
+    MAP_MEM_READ(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
     if (addr == 0x1a000010) return 0xffff;
 
@@ -154,6 +166,8 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers);
     MAP_MEM_READ(32, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(32, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_MEM_READ(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
+    MAP_MEM_READ(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
     switch (addr) {
         case 0x1000F440: {
@@ -213,6 +227,8 @@ uint64_t ee_bus_read64(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers); // Reuse 32-bit function
     MAP_MEM_READ(64, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(64, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_MEM_READ(64, 0x1E000000, 0x1E3FFFFF, bios, rom1);
+    MAP_MEM_READ(64, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
     printf("bus: Unhandled 64-bit read from physical address 0x%08x\n", addr); // exit(1);
 
@@ -231,6 +247,8 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     MAP_REG_READ(128, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_MEM_READ(128, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(128, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_MEM_READ(128, 0x1E000000, 0x1E3FFFFF, bios, rom1);
+    MAP_MEM_READ(128, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
     printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); exit(1);
 

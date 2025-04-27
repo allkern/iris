@@ -22,6 +22,8 @@ extern "C" {
 
 struct iop_bus {
     struct ps2_bios* bios;
+    struct ps2_bios* rom1;
+    struct ps2_bios* rom2;
     struct ps2_ram* iop_ram;
     struct ps2_ram* iop_spr;
     struct ps2_sif* sif;
@@ -36,6 +38,8 @@ struct iop_bus {
 };
 
 void iop_bus_init_bios(struct iop_bus* bus, struct ps2_bios* bios);
+void iop_bus_init_rom1(struct iop_bus* bus, struct ps2_bios* rom1);
+void iop_bus_init_rom2(struct iop_bus* bus, struct ps2_bios* rom2);
 void iop_bus_init_iop_ram(struct iop_bus* bus, struct ps2_ram* iop_ram);
 void iop_bus_init_iop_spr(struct iop_bus* bus, struct ps2_ram* iop_spr);
 void iop_bus_init_sif(struct iop_bus* bus, struct ps2_sif* sif);

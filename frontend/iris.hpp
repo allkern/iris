@@ -87,6 +87,8 @@ struct instance {
     std::string elf_path = "";
     std::string boot_path = "";
     std::string bios_path = "";
+    std::string rom1_path = "";
+    std::string rom2_path = "";
     std::string disc_path = "";
     std::string pref_path = "";
     std::string ini_path = "";

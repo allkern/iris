@@ -186,7 +186,7 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             default: {
                 printf("vif1: Unhandled command %02x\n", vif->vif1_cmd);
 
-                exit(1);
+                // exit(1);
             } break;
         }
     } else {

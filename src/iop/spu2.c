@@ -841,12 +841,11 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
             v->nax += 8;
         } else if (v->loop_end) {
             // printf("spu2: Voice %d loop end at 0x%08x (lsax=%08x ssa=%08x) loop=%d\n", vc, v->nax, v->lsax, v->ssa, v->loop);
-
             v->nax = v->lsax;
 
-            adsr_load_release(spu2, c, v, vc);
-
             if (!v->loop) {
+                adsr_load_release(spu2, c, v, vc);
+
                 v->envx = 0;
                 v->playing = 0;
             }

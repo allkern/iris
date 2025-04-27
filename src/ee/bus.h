@@ -35,6 +35,8 @@ struct ee_bus {
     // EE/IOP
     struct ps2_cdvd* cdvd;
     struct ps2_bios* bios;
+    struct ps2_bios* rom1;
+    struct ps2_bios* rom2;
     struct ps2_ram* iop_ram;
     struct ps2_sif* sif;
 
@@ -55,6 +57,8 @@ void ee_bus_init_gs(struct ee_bus* bus, struct ps2_gs* gs);
 void ee_bus_init_ipu(struct ee_bus* bus, struct ps2_ipu* ipu);
 void ee_bus_init_timers(struct ee_bus* bus, struct ps2_ee_timers* timers);
 void ee_bus_init_bios(struct ee_bus* bus, struct ps2_bios* bios);
+void ee_bus_init_rom1(struct ee_bus* bus, struct ps2_bios* rom1);
+void ee_bus_init_rom2(struct ee_bus* bus, struct ps2_bios* rom2);
 void ee_bus_init_iop_ram(struct ee_bus* bus, struct ps2_ram* iop_ram);
 void ee_bus_init_sif(struct ee_bus* bus, struct ps2_sif* sif);
 void ee_bus_init_cdvd(struct ee_bus* bus, struct ps2_cdvd* cdvd);
