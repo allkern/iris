@@ -128,6 +128,9 @@ struct ps2_cdvd {
     int s_fifo_index;
     int s_fifo_size;
 
+    uint8_t mecha_decode;
+    uint8_t cdkey[16];
+
     FILE* file;
     uint8_t buf[2340];
     int buf_size;

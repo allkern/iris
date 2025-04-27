@@ -139,6 +139,144 @@ static const uint8_t itob_table[] = {
     0x88, 0x89, 0x90, 0x91, 0x92, 0x93, 0x94, 0x95,
 };
 
+void cdvd_read_sector(struct ps2_cdvd* cdvd, uint64_t lba, int offset) {
+    if (!cdvd->file)
+        return;
+
+    // printf("cdvd: Read lba=%d (%x)\n", lba, lba);
+    fseek64(cdvd->file, lba * 0x800, SEEK_SET);
+
+    // Ignore result and avoid checking
+    (void)!fread(&cdvd->buf[offset], 1, 0x800, cdvd->file);
+}
+
+struct __attribute__((packed)) iso9660_pvd {
+	char id[8];
+	char system_id[32];
+	char volume_id[32];
+	char zero[8];
+	uint32_t total_sector_le, total_sect_be;
+	char zero2[32];
+	uint16_t volume_set_size_le, volume_set_size_be;
+    uint16_t volume_seq_nr_le, volume_seq_nr_be;
+	uint16_t sector_size_le, sector_size_be;
+	uint32_t path_table_len_le, path_table_len_be;
+	uint32_t path_table_le, path_table_2nd_le;
+	uint32_t path_table_be, path_table_2nd_be;
+	uint8_t root[34];
+	char volume_set_id[128], publisher_id[128], data_preparer_id[128], application_id[128];
+	char copyright_file_id[37], abstract_file_id[37], bibliographical_file_id[37];
+};
+
+struct __attribute__((packed)) iso9660_dirent {
+    uint8_t dr_len;
+    uint8_t ext_dr_len;
+    uint32_t lba_le, lba_be;
+    uint32_t size_le, size_be;
+    uint8_t date[7];
+    uint8_t flags;
+    uint8_t file_unit_size;
+    uint8_t interleave_gap_size;
+    uint16_t volume_seq_nr_le, volume_seq_nr_be;
+    uint8_t id_len;
+    uint8_t id;
+};
+
+char* cdvd_get_serial(struct ps2_cdvd* cdvd, char* serial) {
+    cdvd_read_sector(cdvd, 16, 0);
+
+    struct iso9660_pvd pvd = *(struct iso9660_pvd*)cdvd->buf;
+
+    if (strncmp(pvd.id, "\1CD001\1", 8)) {
+        printf("iso: Unknown format disc %d\n", pvd.id[0]);
+
+        return NULL;
+    }
+
+    struct iso9660_dirent* root = (struct iso9660_dirent*)pvd.root;
+
+    cdvd_read_sector(cdvd, root->lba_le, 0);
+
+    struct iso9660_dirent* dir = (struct iso9660_dirent*)cdvd->buf;
+
+    while (dir->dr_len) {
+        if (dir->id_len == 12) {
+            if (!strcmp((char*)&dir->id, "SYSTEM.CNF;1")) {
+                break;
+            }
+        }
+
+        uint8_t* ptr = (uint8_t*)dir;
+
+        dir = (struct iso9660_dirent*)(ptr + dir->dr_len);
+    }
+
+    if (!dir->dr_len) {
+        printf("iso: SYSTEM.CNF not found! (non-PlayStation disc?)\n");
+
+        return NULL;
+    }
+
+    cdvd_read_sector(cdvd, dir->lba_le, 0);
+
+    // Parse SYSTEM.CNF
+    char* p = cdvd->buf;
+    char key[64];
+    
+    while (*p) {
+        char* kptr = key;
+
+        while (isspace(*p))
+            ++p;
+
+        while (isalnum(*p))
+            *kptr++ = *p++;
+
+        *kptr = '\0';
+
+        if (!strncmp(key, "BOOT2", 64)) {
+            while (isspace(*p)) ++p;
+
+            if (*p != '=') {
+                printf("iso: Expected =\n");
+
+                return NULL;
+            }
+
+            ++p;
+
+            while (isspace(*p)) ++p;
+
+            while (*p != ':') ++p;
+
+            ++p;
+
+            if (*p == '\\' || *p == '/')
+                ++p;
+
+            int i;
+
+            for (i = 0; i < 16; i++) {
+                if (*p == ';' || *p == '\n' || *p == '\r')
+                    break;
+
+                serial[i] = *p++;
+            }
+
+            serial[i] = '\0';
+
+            return serial;
+        } else {
+            while ((*p != '\n') && (*p != '\0') && (*p != '\r')) ++p;
+            while ((*p == '\n') || (*p == '\r')) ++p;
+        }
+    }
+
+    printf("iso: Couldn't find BOOT2 entry in SYSTEM.CNF (PlayStation disc?)\n");
+
+    return NULL;
+}
+
 static inline int cdvd_is_dual_layer(struct ps2_cdvd* cdvd) {
     return cdvd->layer2_lba;
 }
@@ -151,17 +289,6 @@ static inline void cdvd_set_busy(struct ps2_cdvd* cdvd) {
 static inline void cdvd_set_ready(struct ps2_cdvd* cdvd) {
     cdvd->n_stat &= ~CDVD_N_STATUS_BUSY;
     cdvd->n_stat |= CDVD_N_STATUS_READY;
-}
-
-void cdvd_read_sector(struct ps2_cdvd* cdvd, uint64_t lba, int offset) {
-    if (!cdvd->file)
-        return;
-
-    // printf("cdvd: Read lba=%d (%x)\n", lba, lba);
-    fseek64(cdvd->file, lba * 0x800, SEEK_SET);
-
-    // Ignore result and avoid checking
-    (void)!fread(&cdvd->buf[offset], 1, 0x800, cdvd->file);
 }
 
 static inline void cdvd_init_s_fifo(struct ps2_cdvd* cdvd, int size) {
@@ -487,6 +614,18 @@ void cdvd_fetch_sector(struct ps2_cdvd* cdvd) {
             // }
         } break;
     }
+
+    if (!cdvd->mecha_decode)
+        return;
+
+    uint8_t shift_amount = (cdvd->mecha_decode >> 4) & 7;
+    int do_xor = (cdvd->mecha_decode) & 1;
+    int do_shift = (cdvd->mecha_decode) & 2;
+
+    for (int i = 0; i < cdvd->read_size; ++i) {
+        if (do_xor) cdvd->buf[i] ^= cdvd->cdkey[4];
+        if (do_shift) cdvd->buf[i] = (cdvd->buf[i] >> shift_amount) | (cdvd->buf[i] << (8 - shift_amount));
+    }
 }
 
 void cdvd_do_read(void* udata, int overshoot) {
@@ -790,6 +929,82 @@ static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {
 
     cdvd->i_stat |= 1;
 }
+static inline void cdvd_n_read_key(struct ps2_cdvd* cdvd) {
+    uint32_t b0 = cdvd->n_params[3];
+    uint32_t b1 = cdvd->n_params[4];
+    uint32_t b2 = cdvd->n_params[5];
+    uint32_t b3 = cdvd->n_params[6];
+    uint32_t arg = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
+
+    printf("arg=%08x\n", arg);
+
+    // Code referenced/taken from PCSX2
+    // This performs some kind of encryption/checksum with the game's serial?
+    memset(cdvd->cdkey, 0, 16);
+
+    char serial[16];
+
+    if (!cdvd_get_serial(cdvd, serial)) {
+        printf("cdvd: Couldn't find game serial, can't get cdkey\n");
+    } else {
+        printf("cdvd: \'%s\'\n", serial);
+    }
+
+    int32_t letters = (int32_t)((serial[3] & 0x7F) << 0) |
+                (int32_t)((serial[2] & 0x7F) << 7) |
+                (int32_t)((serial[1] & 0x7F) << 14) |
+                (int32_t)((serial[0] & 0x7F) << 21);
+
+    char m[6];
+
+    for (int i = 0; i < 3; i++)
+        m[i] = serial[i+5];
+
+    for (int i = 0; i < 2; i++)
+        m[i+3] = serial[i+9];
+
+    m[5] = '\0';
+    
+    int32_t code = strtoul(m, NULL, 10);
+
+    printf("code=%d\n", code);
+
+    uint32_t key_0_3 = ((code & 0x1FC00) >> 10) | ((0x01FFFFFF & letters) << 7);
+    uint32_t key_4 = ((code & 0x0001F) << 3) | ((0x0E000000 & letters) >> 25);
+    uint32_t key_14 = ((code & 0x003E0) >> 2) | 0x04;
+
+    cdvd->cdkey[0] = (key_0_3 & 0x000000FF) >> 0;
+    cdvd->cdkey[1] = (key_0_3 & 0x0000FF00) >> 8;
+    cdvd->cdkey[2] = (key_0_3 & 0x00FF0000) >> 16;
+    cdvd->cdkey[3] = (key_0_3 & 0xFF000000) >> 24;
+    cdvd->cdkey[4] = key_4;
+
+    switch (arg) {
+        case 75: {
+            cdvd->cdkey[14] = key_14;
+            cdvd->cdkey[15] = 0x05;
+        } break;
+        case 4246: {
+            cdvd->cdkey[0] = 0x07;
+            cdvd->cdkey[1] = 0xF7;
+            cdvd->cdkey[2] = 0xF2;
+            cdvd->cdkey[3] = 0x01;
+            cdvd->cdkey[4] = 0x00;
+            cdvd->cdkey[15] = 0x01;
+        } break;
+        default: {
+            cdvd->cdkey[15] = 0x01;
+        } break;
+    }
+
+    cdvd_set_ready(cdvd);
+    cdvd_set_status_bits(cdvd, CDVD_STATUS_PAUSED);
+
+    // Send IRQ to IOP
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
+
+    cdvd->i_stat |= 1;
+}
 
 static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->n_cmd = cmd;
@@ -809,6 +1024,12 @@ static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x07: cdvd_n_read_cdda(cdvd); break;
         case 0x08: cdvd_n_read_dvd(cdvd); break;
         case 0x09: cdvd_n_get_toc(cdvd); break;
+        case 0x0c: cdvd_n_read_key(cdvd); break;
+        default: {
+            printf("cdvd: Unhandled N command %02x\n", cdvd->n_cmd);
+
+            exit(1);
+        } break;
     }
 
     // Reset N param FIFO
@@ -1011,6 +1232,30 @@ uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr) {
         case 0x1F402017: /* printf("cdvd: read s_stat %x\n", cdvd->s_stat); */ return cdvd->s_stat;
         // case 0x1F402017: (W);
         case 0x1F402018: return cdvd_read_s_response(cdvd); // { int r = cdvd_read_s_response(cdvd); printf("cdvd: read s_response %x\n", r); return r; }
+
+        case 0x1F402020:
+        case 0x1F402021:
+        case 0x1F402022:
+        case 0x1F402023:
+        case 0x1F402024:
+            // printf("cdvd: ReadKey %08x (%d) -> %02x\n", addr, addr - 0x1f402020, cdvd->cdkey[addr - 0x1F402020]);
+            return cdvd->cdkey[addr - 0x1F402020];
+        case 0x1F402028:
+        case 0x1F402029:
+        case 0x1F40202A:
+        case 0x1F40202B:
+        case 0x1F40202C:
+            // printf("cdvd: ReadKey %08x (%d) -> %02x\n", addr, addr - 0x1f402023, cdvd->cdkey[addr - 0x1F402023]);
+            return cdvd->cdkey[addr - 0x1F402023];
+        case 0x1F402030:
+        case 0x1F402031:
+        case 0x1F402032:
+        case 0x1F402033:
+        case 0x1F402034:
+            // printf("cdvd: ReadKey %08x (%d) -> %02x\n", addr, addr - 0x1f402026, cdvd->cdkey[addr - 0x1F402026]);
+            return cdvd->cdkey[addr - 0x1F402026];
+        case 0x1F402038:
+            return cdvd->cdkey[15];
     }
 
     printf("cdvd: unknown read %08x\n", addr);
@@ -1033,6 +1278,7 @@ void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data) {
         case 0x1F402016: cdvd_handle_s_command(cdvd, data); return;
         case 0x1F402017: cdvd_handle_s_param(cdvd, data); return;
         // case 0x1F402017: (W);
+        case 0x1F40203A: cdvd->mecha_decode = data; return;
         case 0x1F402018: return;
     }
 
