@@ -52,7 +52,7 @@ This console is significantly more complex compared to the PS1, here's a rough l
   = 🔴 VIF0
 - 🔴 VU1 (always micro mode)
   = 🟡 VIF1
-- 🔴 IPU
+- 🟡 IPU
 🟢 IOP (R3000) CPU
 - 🟡 DMAC
 - 🟢 INTC
@@ -61,7 +61,7 @@ This console is significantly more complex compared to the PS1, here's a rough l
 - 🟡 SIO2 (controllers and Memory Cards)
 - 🟡 SPU2
 - 🔴 DEV9
-- 🔴 USB/FireWire?
+- 🟡 USB/FireWire?
 - 🔴 Ethernet
 - 🔴 PS1 backcompat (PS1 hardware)
 🟡 SIF
