@@ -37,8 +37,9 @@ CSRC += $(wildcard src/iop/disc/*.c)
 CSRC += $(wildcard src/shared/*.c)
 CSRC += $(wildcard src/gs/*.c)
 CSRC += $(wildcard src/dev/*.c)
-CSRC += $(wildcard gl3w/src/*.c)
+CSRC += $(wildcard gl3w/src/gl3w.c)
 CSRC += $(wildcard frontend/tfd/*.c)
+CSRC += $(wildcard src/iop/hle/*.c)
 COBJ := $(CSRC:.c=.o)
 
 ifndef USE_INTRINSICS

@@ -368,6 +368,7 @@ void show_main_menubar(iris::instance* iris) {
                 if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##iop", NULL, &iris->show_iop_state));
                 if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##iop", NULL, &iris->show_iop_logs));
                 if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##iop", NULL, &iris->show_iop_interrupts));
+                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Modules##iop", NULL, &iris->show_iop_modules));
 
             //     ImGui::EndMenu();
             // }
