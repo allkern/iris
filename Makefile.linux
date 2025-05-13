@@ -33,6 +33,7 @@ CFLAGS += -flto=auto -Wall
 CSRC := $(wildcard src/*.c)
 CSRC += $(wildcard src/ee/*.c)
 CSRC += $(wildcard src/iop/*.c)
+CSRC += $(wildcard src/iop/disc/*.c)
 CSRC += $(wildcard src/shared/*.c)
 CSRC += $(wildcard src/gs/*.c)
 CSRC += $(wildcard src/dev/*.c)
