@@ -9,6 +9,7 @@ extern "C" {
 
 struct ps2_bios {
     uint8_t* buf;
+    size_t size;
 };
 
 struct ps2_bios* ps2_bios_create(void);
