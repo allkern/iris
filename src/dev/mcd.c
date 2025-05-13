@@ -6,12 +6,15 @@
 void mcd_cmd_probe(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     printf("mcd: mcd_cmd_probe\n");
 
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x2b);
     queue_push(sio2->out, mcd->term);
 }
 void mcd_cmd_auth_f3(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     printf("mcd: mcd_cmd_auth_f3\n");
 
+    queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x2b);
     queue_push(sio2->out, mcd->term);

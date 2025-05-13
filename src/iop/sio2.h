@@ -13,6 +13,7 @@ extern "C" {
 #include "dma.h"
 
 #define SIO2_DEV_PAD  0x01
+#define SIO2_DEV_PS1PAD 0x42 // ?
 #define SIO2_DEV_MTAP 0x21
 #define SIO2_DEV_IR   0x61
 #define SIO2_DEV_MCD  0x81
@@ -37,6 +38,8 @@ struct ps2_sio2 {
     uint32_t recv2;
     uint32_t recv3;
     uint32_t istat;
+
+    int send3_index;
 
     struct ps2_iop_dma* dma;
     struct ps2_iop_intc* intc;
