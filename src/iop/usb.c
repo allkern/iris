@@ -23,8 +23,8 @@ uint64_t ps2_usb_read32(struct ps2_usb* usb, uint32_t addr) {
         case 0x00: printf("usb: read USB_HC_REVISION\n"); return 0;
         case 0x04: printf("usb: read USB_HC_CONTROL\n"); return 0;
         case 0x08: printf("usb: read USB_HC_COMMANDSTATUS\n"); return 0;
-        case 0x0c: printf("usb: read USB_HC_INTERRUPTSTATUS\n"); return 0;
-        case 0x10: printf("usb: read USB_HC_INTERRUPTENABLE\n"); return 0;
+        case 0x0c: printf("usb: read USB_HC_INTERRUPTSTATUS\n"); return 0xffffffff;
+        case 0x10: printf("usb: read USB_HC_INTERRUPTENABLE\n"); return 0xffffffff;
         case 0x14: printf("usb: read USB_HC_INTERRUPTDISABLE\n"); return 0;
         case 0x18: printf("usb: read USB_HC_HCCA\n"); return 0;
         case 0x1c: printf("usb: read USB_HC_PERIODCURRENTED\n"); return 0;
@@ -38,13 +38,14 @@ uint64_t ps2_usb_read32(struct ps2_usb* usb, uint32_t addr) {
         case 0x3c: printf("usb: read USB_HC_FMNUMBER\n"); return 0;
         case 0x40: printf("usb: read USB_HC_PERIODICSTART\n"); return 0;
         case 0x44: printf("usb: read USB_HC_LSTHRESHOLD\n"); return 0;
-        case 0x48: printf("usb: read USB_HC_RHDESCRIPTORA\n"); return 0;
-        case 0x4c: printf("usb: read USB_HC_RHDESCRIPTORB\n"); return 0;
-        case 0x50: printf("usb: read USB_HC_RHSTATUS\n"); return 0;
+        case 0x48: printf("usb: read USB_HC_RHDESCRIPTORA\n"); return 0x3F000202;
+        case 0x4c: printf("usb: read USB_HC_RHDESCRIPTORB\n"); return 0xffff;
+        case 0x50: printf("usb: read USB_HC_RHSTATUS\n"); return 0xffffffff;
     }
 
     if (addr >= 0x54 && addr <= 0x8c) {
         printf("usb: Read USB_HC_RHPORT%dSTATUS\n", (addr - 0x54) >> 2);
+        return 0x150303;
     }
 
     printf("usb: Unhandled read at %08x\n", addr);
