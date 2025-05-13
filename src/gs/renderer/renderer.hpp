@@ -15,6 +15,8 @@ enum : int {
     RENDERER_ASPECT_4_3,
     // Force 16:9
     RENDERER_ASPECT_16_9,
+    // Force 5:4 (PAL)
+    RENDERER_ASPECT_5_4,
     // Use NVRAM settings (same as SOFTWARE_ASPECT_STRETCH_KEEP for now)
     RENDERER_ASPECT_AUTO
 };

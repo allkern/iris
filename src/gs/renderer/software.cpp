@@ -1298,12 +1298,12 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
     p.x = xmin;
     p.y = ymin;
 
-    int bias0 = IS_TOPLEFT(v1, v2) ? 0 : -1;
-    int bias1 = IS_TOPLEFT(v2, v0) ? 0 : -1;
-    int bias2 = IS_TOPLEFT(v0, v1) ? 0 : -1;
-    int w0_row = EDGE(v1, v2, p) + bias0;
-    int w1_row = EDGE(v2, v0, p) + bias1;
-    int w2_row = EDGE(v0, v1, p) + bias2;
+    // int bias0 = IS_TOPLEFT(v1, v2) ? 0 : -1;
+    // int bias1 = IS_TOPLEFT(v2, v0) ? 0 : -1;
+    // int bias2 = IS_TOPLEFT(v0, v1) ? 0 : -1;
+    int w0_row = EDGE(v1, v2, p); // + bias0;
+    int w1_row = EDGE(v2, v0, p); // + bias1;
+    int w2_row = EDGE(v0, v1, p); // + bias2;
 
     // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) min=(%d,%d) max=(%d,%d) iip=%d tme=%d fst=%d abe=%d tfx=%d tcc=%d zte=%d\n",
     //     v0.x, v0.y, v0.z,
@@ -1410,7 +1410,7 @@ extern "C" void software_render_triangle(struct ps2_gs* gs, void* udata) {
                 fa = t >> 24;
             }
 
-            int fz = (float)v0.z * iw0 + (float)v1.z * iw1 + (float)v2.z * iw2;
+            uint32_t fz = (uint32_t)floorf((double)v0.z * iw0 + (double)v1.z * iw1 + (double)v2.z * iw2);
 
             int tr = gs_test_pixel(gs, p.x, p.y, fz, fa);
 
@@ -1635,6 +1635,11 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
         case RENDERER_ASPECT_16_9: {
             rect.w *= scale;
             rect.h = (float)rect.w * (9.0f / 16.0f);
+        } break;
+
+        case RENDERER_ASPECT_5_4: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (4.0f / 5.0f);
         } break;
 
         case RENDERER_ASPECT_STRETCH: {
@@ -1935,7 +1940,12 @@ extern "C" void software_transfer_start(struct ps2_gs* gs, void* udata) {
 }
 
 static inline void gs_write_psmct32_or(struct ps2_gs* gs, software_state* ctx, uint32_t data) {
-    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
+    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy);
+
+    if (ctx->dbp == gs->ctx->fbp)
+        addr = gs->ctx->fbp + (ctx->dx + (ctx->dy * gs->ctx->fbw));
+
+    ctx->dx++;
 
     gs->vram[addr & 0xfffff] |= data;
 
@@ -1980,7 +1990,12 @@ static inline void gs_write_psmt8(struct ps2_gs* gs, software_state* ctx, uint32
 }
 
 static inline void gs_write_psmct32(struct ps2_gs* gs, software_state* ctx, uint32_t data) {
-    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
+    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy);
+
+    if (ctx->dbp == gs->ctx->fbp)
+        addr = gs->ctx->fbp + (ctx->dx + (ctx->dy * gs->ctx->fbw));
+
+    ctx->dx++;
 
     gs->vram[addr & 0xfffff] = data;
 

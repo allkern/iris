@@ -10,6 +10,8 @@
 
 #include "GL/gl3w.h"
 
+static uint32_t* buf;
+
 int psmct32_block[] = {
     0 , 1 , 4 , 5 , 16, 17, 20, 21,
     2 , 3 , 6 , 7 , 18, 19, 22, 23,
@@ -490,9 +492,9 @@ void software_thread_set_size(void* udata, int width, int height) {
     uint32_t tex_h = (((display >> 44) & 0x7ff) / magv) + 1;
 
     // SMODE2 INT=1 FFMD=1
-    if ((ctx->gs->smode2 & 3) == 3) {
-        tex_h /= 2;
-    }
+    // if ((ctx->gs->smode2 & 3) == 3) {
+    //     tex_h /= 2;
+    // }
 
     // Do nothing if the size hasn't changed
     if (tex_w == ctx->tex_w && tex_h == ctx->tex_h) {
@@ -501,6 +503,10 @@ void software_thread_set_size(void* udata, int width, int height) {
 
     ctx->tex_w = tex_w;
     ctx->tex_h = tex_h;
+
+    if (buf) free(buf);
+
+    buf = (uint32_t*)malloc((ctx->tex_w * sizeof(uint32_t)) * ctx->tex_h);
 
     if (ctx->tex) {
         glDeleteTextures(1, &ctx->tex);
@@ -723,7 +729,7 @@ static inline uint32_t gs_read_cb_csm2(struct ps2_gs* gs, int i) {
 
     int idx = (x & 15) + ((gs->cov & 1) * 16);
 
-    return gs->vram[psmct16_shift[idx]];
+    return vram[psmct16_shift[idx]];
 
     // switch (gs->ctx->tbpsm) {
     //     case GS_PSMT8H:
@@ -779,7 +785,7 @@ static inline uint32_t gs_read_cb(struct ps2_gs* gs, int i) {
 
                     int idx = (x & 15) + ((y & 1) * 16);
 
-                    return gs->vram[psmct16_shift[idx]];
+                    return vram[psmct16_shift[idx]];
                 } break;
             }
         } break;
@@ -803,7 +809,7 @@ static inline uint32_t gs_read_cb(struct ps2_gs* gs, int i) {
 
                     int idx = (x & 15) + ((y & 1) * 16);
 
-                    return gs->vram[psmct16_shift[idx]];
+                    return vram[psmct16_shift[idx]];
                 } break;
             }
         } break;
@@ -934,9 +940,9 @@ static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
 
             int idx = (u & 31) + ((v & 3) * 32);
             int shift = psmt4_shift[idx];
-        
+
             uint32_t mask = 0xful << shift;
-        
+
             return gs_read_cb(gs, (gs->vram[addr] & mask) >> shift);
         } break;
         case GS_PSMT4HL: {
@@ -955,6 +961,11 @@ static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
 }
 
 static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
+    if ((gs->ctx->xyoffset >> 32) & 0xf)
+        v += 0x10;
+
+    // return gs_read_tb_impl(gs, u >> 4, v >> 4);
+
     if (gs->ctx->mmag) {
         float a = (u & 0xf) * 0.0625;
         float b = (v & 0xf) * 0.0625;
@@ -969,27 +980,37 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
         uint32_t s2 = gs_read_tb_impl(gs, iu0, iv1);
         uint32_t s3 = gs_read_tb_impl(gs, iu1, iv1);
 
-        uint32_t r0 = s0 & 0xff;
-        uint32_t g0 = (s0 >> 8) & 0xff;
-        uint32_t b0 = (s0 >> 16) & 0xff;
-        uint32_t a0 = (s0 >> 24) & 0xff;
-        uint32_t r1 = s1 & 0xff;
-        uint32_t g1 = (s1 >> 8) & 0xff;
-        uint32_t b1 = (s1 >> 16) & 0xff;
-        uint32_t a1 = (s1 >> 24) & 0xff;
-        uint32_t r2 = s2 & 0xff;
-        uint32_t g2 = (s2 >> 8) & 0xff;
-        uint32_t b2 = (s2 >> 16) & 0xff;
-        uint32_t a2 = (s2 >> 24) & 0xff;
-        uint32_t r3 = s3 & 0xff;
-        uint32_t g3 = (s3 >> 8) & 0xff;
-        uint32_t b3 = (s3 >> 16) & 0xff;
-        uint32_t a3 = (s3 >> 24) & 0xff;
+        s0 = gs_to_rgba32(gs, s0, gs->ctx->tbpsm);
+        s1 = gs_to_rgba32(gs, s1, gs->ctx->tbpsm);
+        s2 = gs_to_rgba32(gs, s2, gs->ctx->tbpsm);
+        s3 = gs_to_rgba32(gs, s3, gs->ctx->tbpsm);
+
+        int r0 = s0 & 0xff;
+        int g0 = (s0 >> 8) & 0xff;
+        int b0 = (s0 >> 16) & 0xff;
+        int a0 = (s0 >> 24) & 0xff;
+        int r1 = s1 & 0xff;
+        int g1 = (s1 >> 8) & 0xff;
+        int b1 = (s1 >> 16) & 0xff;
+        int a1 = (s1 >> 24) & 0xff;
+        int r2 = s2 & 0xff;
+        int g2 = (s2 >> 8) & 0xff;
+        int b2 = (s2 >> 16) & 0xff;
+        int a2 = (s2 >> 24) & 0xff;
+        int r3 = s3 & 0xff;
+        int g3 = (s3 >> 8) & 0xff;
+        int b3 = (s3 >> 16) & 0xff;
+        int a3 = (s3 >> 24) & 0xff;
 
         uint32_t rr = ((1.0-a) * (1.0-b) * r0) + (a * (1.0-b) * r1) + ((1.0-a) * b * r2) + (a * b * r3);
         uint32_t gg = ((1.0-a) * (1.0-b) * g0) + (a * (1.0-b) * g1) + ((1.0-a) * b * g2) + (a * b * g3);
         uint32_t bb = ((1.0-a) * (1.0-b) * b0) + (a * (1.0-b) * b1) + ((1.0-a) * b * b2) + (a * b * b3);
         uint32_t aa = ((1.0-a) * (1.0-b) * a0) + (a * (1.0-b) * a1) + ((1.0-a) * b * a2) + (a * b * a3);
+
+        rr = CLAMP(rr, 0, 255);
+        gg = CLAMP(gg, 0, 255);
+        bb = CLAMP(bb, 0, 255);
+        aa = CLAMP(aa, 0, 255);
 
         return rr | (gg << 8) | (bb << 16) | (aa << 24);
     } else {
@@ -1046,6 +1067,15 @@ static inline void gs_write_fb_no_alpha(struct ps2_gs* gs, int x, int y, uint32_
 static inline void gs_write_zb(struct ps2_gs* gs, int x, int y, uint32_t z) {
     if (gs->ctx->zbmsk || !gs->ctx->zte)
         return;
+
+    switch (gs->ctx->zbpsm) {
+        case 0x01: z = std::min(z, 0xffffffu); break;
+        case 0x02: z = std::min(z, 0xffffu); break;
+        case 0x0A: z = std::min(z, 0xffffu); break;
+        case 0x31: z = std::min(z, 0xffffffu); break;
+        case 0x32: z = std::min(z, 0xffffu); break;
+        case 0x3A: z = std::min(z, 0xffffu); break;
+    }
 
     switch (gs->ctx->zbpsm) {
         case GS_ZSMZ32: {
@@ -1116,6 +1146,15 @@ static inline int gs_test_pixel(struct ps2_gs* gs, int x, int y, uint32_t z, uin
     // Depth test
     if (gs->ctx->zte) {
         uint32_t zb = gs_read_zb(gs, x, y);
+
+        switch (gs->ctx->zbpsm) {
+            case 0x01: z = std::min(z, 0xffffffu); break;
+            case 0x02: z = std::min(z, 0xffffu); break;
+            case 0x0A: z = std::min(z, 0xffffu); break;
+            case 0x31: z = std::min(z, 0xffffffu); break;
+            case 0x32: z = std::min(z, 0xffffu); break;
+            case 0x3A: z = std::min(z, 0xffffu); break;
+        }
 
         switch (gs->ctx->ztst) {
             case 0: return TR_FAIL;
@@ -1245,6 +1284,56 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     rb = CLAMP(rb, 0, 255);
 
     return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | (d & 0xff000000);
+}
+
+static inline float lerpf(int32_t x, float u1, int32_t x1, float u2, int32_t x2) {
+    float b = u1 * (x2 - x);
+
+    b += u2 * (x - x1);
+
+    if (!(x2 - x1))
+        return u1;
+
+    return b / (x2 - x1);
+}
+
+static inline int32_t lerp(int32_t x, int32_t u1, int32_t x1, int32_t u2, int32_t x2) {
+    int64_t b = (int64_t)u1 * (x2 - x);
+
+    b += (int64_t)u2 * (x - x1);
+
+    if (!(x2 - x1))
+        return u1;
+
+    return b / (x2 - x1);
+}
+
+int32_t stepsize(int32_t u1, int32_t x1, int32_t u2, int32_t x2, int64_t mult) {
+    if (!(x2 - x1))
+        return ((u2 - u1) * mult);
+
+    return ((u2 - u1) * mult)/(x2 - x1);
+}
+
+static inline void gs_draw_pixel(struct ps2_gs* gs, int x, int y, uint32_t z, uint32_t c) {
+    int a = c >> 24;
+
+    int tr = gs_test_pixel(gs, x, y, z, a);
+
+    if (tr == TR_FAIL)
+        return;
+
+    if (gs->abe) c = gs_alpha_blend(gs, x, y, c);
+
+    switch (tr) {
+        case TR_FB_ONLY: gs_write_fb(gs, x, y, c); break;
+        case TR_ZB_ONLY: gs_write_zb(gs, x, y, z); break;
+        case TR_RGB_ONLY: gs_write_fb_no_alpha(gs, x, y, c); break;
+        case TR_PASS: {
+            gs_write_zb(gs, x, y, z);
+            gs_write_fb(gs, x, y, c);
+        } break;
+    }
 }
 
 int software_thread_compile_shader(const char* src, GLint type) {
@@ -1402,15 +1491,35 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window) {
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(1);
 
+    glGenVertexArrays(1, &ctx->vao);
+    glGenBuffers(1, &ctx->vbo);
+    glGenBuffers(1, &ctx->ebo);
+
     ctx->end_signal = false;
     ctx->render_thr = std::thread(software_thread_render_thread, ctx);
     ctx->render_thr.detach();
 }
 
 static inline void software_thread_vram_blit(struct ps2_gs* gs, software_thread_state* ctx) {
+    // printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) sbp=%x (%x) sbw=%d (%d) spsm=%02x ssa=(%d,%d) rr=(%d,%d) xdir=%d\n",
+    //     ctx->dbp, ctx->dbp,
+    //     ctx->dbw, ctx->dbw,
+    //     ctx->dpsm,
+    //     ctx->dsax,
+    //     ctx->dsay,
+    //     ctx->sbp, ctx->sbp,
+    //     ctx->sbw, ctx->sbw,
+    //     ctx->spsm,
+    //     ctx->ssax,
+    //     ctx->ssay,
+    //     ctx->rrw,
+    //     ctx->rrh,
+    //     ctx->xdir
+    // );
+
     for (int y = 0; y < (int)ctx->rrh; y++) {
-        uint32_t src = ctx->sbp + ctx->ssax + (ctx->ssay * ctx->sbw) + (y * ctx->sbw);
-        uint32_t dst = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->dbw) + (y * ctx->dbw);
+        uint32_t src = ctx->sbp + ctx->ssax + (ctx->ssay * ctx->rrw) + (y * ctx->rrw);
+        uint32_t dst = ctx->dbp + ctx->dsax + (ctx->dsay * ctx->rrw) + (y * ctx->rrw);
 
         memcpy(gs->vram + dst, gs->vram + src, ctx->rrw * sizeof(uint32_t));
     }
@@ -1425,19 +1534,14 @@ void render_point(struct ps2_gs* gs, void* udata) {
     if (!gs_test_scissor(gs, vert.x, vert.y))
         return;
 
-    int tr = gs_test_pixel(gs, vert.x, vert.y, vert.z, vert.a);
-
-    if (tr == TR_FAIL)
-        return;
-
-    gs_write_fb(gs, vert.x, vert.y, vert.rgbaq & 0xffffffff);
+    gs_draw_pixel(gs, vert.x, vert.y, vert.z, vert.rgbaq & 0xffffffff);
 }
 
 void render_line(struct ps2_gs* gs, void* udata) {
-    return;
-
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
+
+    // printf("v0=(%d,%d) v1=(%d,%d)\n", v0.x, v0.y, v1.x, v1.y);
 
     v0.x -= gs->ctx->ofx;
     v0.y -= gs->ctx->ofy;
@@ -1451,12 +1555,42 @@ void render_line(struct ps2_gs* gs, void* udata) {
     int error = dx + dy;
 
     while (1) {
-        int tr = gs_test_pixel(gs, v0.x, v0.y, v0.z, v0.a);
+        if (gs_test_scissor(gs, v0.x, v0.y))
+            gs_draw_pixel(gs, v0.x, v0.y, v0.z, v1.rgbaq & 0xffffffff);
 
-        if (tr == TR_FAIL)
-            return;
+        int e2 = error << 1;
+    
+        if (e2 >= dy) {
+            if (v0.x == v1.x) break;
 
-        gs_write_fb(gs, v0.x, v0.y, v1.rgbaq & 0xffffffff);
+            error = error + dy;
+            v0.x = v0.x + sx;
+        }
+
+        if (e2 <= dx) {
+            if (v0.y == v1.y) break;
+
+            error = error + dx;
+            v0.y = v0.y + sy;
+        }
+    }
+}
+
+void gs_draw_wireframe(struct ps2_gs* gs, struct gs_vertex v0, struct gs_vertex v1) {
+    v0.x -= gs->ctx->ofx;
+    v0.y -= gs->ctx->ofy;
+    v1.x -= gs->ctx->ofx;
+    v1.y -= gs->ctx->ofy;
+
+    int dx = abs(v1.x - v0.x);
+    int sx = v0.x < v1.x ? 1 : -1;
+    int dy = -abs(v1.y - v0.y);
+    int sy = v0.y < v1.y ? 1 : -1;
+    int error = dx + dy;
+
+    while (1) {
+        if (gs_test_scissor(gs, v0.x, v0.y))
+            gs_write_fb(gs, v0.x, v0.y, 0xff0000ff);
 
         int e2 = error << 1;
     
@@ -1500,6 +1634,12 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
     v0.y -= gs->ctx->ofy;
     v1.y -= gs->ctx->ofy;
     v2.y -= gs->ctx->ofy;
+    // v0.x -= 1;
+    // v1.x -= 1;
+    // v2.x -= 1;
+    // v0.y -= 1;
+    // v1.y -= 1;
+    // v2.y -= 1;
 
     int xmin = MIN3(v0.x, v1.x, v2.x);
     int ymin = MIN3(v0.y, v1.y, v2.y);
@@ -1519,14 +1659,14 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
     p.x = xmin;
     p.y = ymin;
 
-    int bias0 = IS_TOPLEFT(v1, v2) ? 0 : -1;
-    int bias1 = IS_TOPLEFT(v2, v0) ? 0 : -1;
-    int bias2 = IS_TOPLEFT(v0, v1) ? 0 : -1;
-    int w0_row = EDGE(v1, v2, p) + bias0;
-    int w1_row = EDGE(v2, v0, p) + bias1;
-    int w2_row = EDGE(v0, v1, p) + bias2;
+    // int bias0 = IS_TOPLEFT(v1, v2) ? 0 : -1;
+    // int bias1 = IS_TOPLEFT(v2, v0) ? 0 : -1;
+    // int bias2 = IS_TOPLEFT(v0, v1) ? 0 : -1;
+    int w0_row = EDGE(v1, v2, p); // + bias0;
+    int w1_row = EDGE(v2, v0, p); // + bias1;
+    int w2_row = EDGE(v0, v1, p); // + bias2;
 
-    // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) min=(%d,%d) max=(%d,%d) iip=%d tme=%d fst=%d abe=%d tfx=%d tcc=%d zte=%d\n",
+    // printf("triangle: v0=(%d,%d,%08x) v1=(%d,%d,%08x) v2=(%d,%d,%08x) min=(%d,%d) max=(%d,%d) iip=%d tme=%d fst=%d abe=%d tfx=%d tcc=%d zte=%d\n",
     //     v0.x, v0.y, v0.z,
     //     v1.x, v1.y, v1.z,
     //     v2.x, v2.y, v2.z,
@@ -1607,9 +1747,9 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
             }
 
             // Calculate interpolation weights
-            float iw0 = (float)w0 / (float)area;
-            float iw1 = (float)w1 / (float)area;
-            float iw2 = (float)w2 / (float)area;
+            double iw0 = (double)w0 / (double)area;
+            double iw1 = (double)w1 / (double)area;
+            double iw2 = (double)w2 / (double)area;
 
             uint32_t fr, fg, fb, fa;
 
@@ -1659,7 +1799,7 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
                 fa = t >> 24;
             }
 
-            int fz = (float)v0.z * iw0 + (float)v1.z * iw1 + (float)v2.z * iw2;
+            uint32_t fz = (uint32_t)floorf((double)v0.z * iw0 + (double)v1.z * iw1 + (double)v2.z * iw2);
 
             int tr = gs_test_pixel(gs, p.x, p.y, fz, fa);
 
@@ -1673,19 +1813,7 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
 
             uint32_t fc = fr | (fg << 8) | (fb << 16) | (fa << 24);
 
-            if (gs->abe) {
-                fc = gs_alpha_blend(gs, p.x, p.y, fc);
-            }
-
-            switch (tr) {
-                case TR_FB_ONLY: gs_write_fb(gs, p.x, p.y, fc); break;
-                case TR_ZB_ONLY: gs_write_zb(gs, p.x, p.y, fz); break;
-                case TR_RGB_ONLY: gs_write_fb_no_alpha(gs, p.x, p.y, fc); break;
-                case TR_PASS: {
-                    gs_write_zb(gs, p.x, p.y, fz);
-                    gs_write_fb(gs, p.x, p.y, fc);
-                } break;
-            }
+            gs_draw_pixel(gs, p.x, p.y, fz, fc);
 
             // One step to the right
             w0 += a12;
@@ -1698,9 +1826,33 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
         w1_row += b20;
         w2_row += b01;
     }
+
+    // gs_draw_wireframe(gs, gs->vq[0], gs->vq[1]);
+    // gs_draw_wireframe(gs, gs->vq[1], gs->vq[2]);
+    // gs_draw_wireframe(gs, gs->vq[2], gs->vq[0]);
 }
 
 void render_sprite(struct ps2_gs* gs, void* udata) {
+    // gs_draw_wireframe(gs, dv0, dv2);
+
+    // if (gs->tme) {
+    //     struct gs_vertex dv0 = gs->vq[0];
+    //     struct gs_vertex dv1 = gs->vq[0];
+    //     struct gs_vertex dv2 = gs->vq[1];
+    //     struct gs_vertex dv3 = gs->vq[1];
+
+    //     dv1.x = gs->vq[1].x;
+    //     dv1.y = gs->vq[0].y;
+    //     dv3.x = gs->vq[0].x;
+    //     dv3.y = gs->vq[1].y;
+
+    //     gs_draw_wireframe(gs, dv0, dv1);
+    //     gs_draw_wireframe(gs, dv1, dv2);
+    //     gs_draw_wireframe(gs, dv2, dv3);
+    //     gs_draw_wireframe(gs, dv3, dv0);
+    //     return;
+    // }
+
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
 
@@ -1804,6 +1956,9 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     //     );
     // }
 
+    // if (!gs->tme)
+    //     return;
+
     float u = v0.u;
     float v = v0.v;
 
@@ -1839,26 +1994,24 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
                 a = c >> 24;
             }
 
-            int tr = gs_test_pixel(gs, x, y, z, a);
-
-            if (tr == TR_FAIL)
-                continue;
-
-            if (gs->abe) {
-                c = gs_alpha_blend(gs, x, y, c);
-            }
-
-            switch (tr) {
-                case TR_FB_ONLY: gs_write_fb(gs, x, y, c); break;
-                case TR_ZB_ONLY: gs_write_zb(gs, x, y, z); break;
-                case TR_RGB_ONLY: gs_write_fb_no_alpha(gs, x, y, c); break;
-                case TR_PASS: {
-                    gs_write_zb(gs, x, y, z);
-                    gs_write_fb(gs, x, y, c);
-                } break;
-            }
+            gs_draw_pixel(gs, x, y, z, c);
         }
     }
+
+    // struct gs_vertex dv0 = gs->vq[0];
+    // struct gs_vertex dv1 = gs->vq[0];
+    // struct gs_vertex dv2 = gs->vq[1];
+    // struct gs_vertex dv3 = gs->vq[1];
+
+    // dv1.x = gs->vq[1].x;
+    // dv1.y = gs->vq[0].y;
+    // dv3.x = gs->vq[0].x;
+    // dv3.y = gs->vq[1].y;
+
+    // gs_draw_wireframe(gs, dv0, dv1);
+    // gs_draw_wireframe(gs, dv1, dv2);
+    // gs_draw_wireframe(gs, dv2, dv3);
+    // gs_draw_wireframe(gs, dv3, dv0);
 }
 
 void render(struct ps2_gs* gs, void* udata) {
@@ -1883,43 +2036,39 @@ void render(struct ps2_gs* gs, void* udata) {
     if (!ctx->tex_w)
         return;
 
-    // if ((ctx->gs->smode2 & 3) == 3) {
-    //     // Need to deinterlace
-    //     int bpp = 0;
+    if ((ctx->gs->smode2 & 3) == 3) {
+        // Need to deinterlace
+        int bpp = 0;
 
-    //     switch (ctx->disp_fmt) {
-    //         case GS_PSMCT32:
-    //         case GS_PSMCT24: {
-    //             bpp = 4;
-    //         } break;
-    //         case GS_PSMCT16:
-    //         case GS_PSMCT16S: {
-    //             bpp = 2;
-    //         } break;
-    //     }
+        switch (ctx->disp_fmt) {
+            case GS_PSMCT32:
+            case GS_PSMCT24: {
+                bpp = 4;
+            } break;
+            case GS_PSMCT16:
+            case GS_PSMCT16S: {
+                bpp = 2;
+            } break;
+        }
 
-    //     int stride = ctx->tex_w * bpp;
-    //     int odd = (ctx->gs->csr >> 13) & 1;
-    //     int sy = 0;
+        int stride = ctx->tex_w * bpp;
+        int odd = ((ctx->gs->csr >> 13) & 1) == 0;
+        int sy = 0;
 
-    //     frame ^= 1;
+        // printf("csr.12=%d csr.13=%d\n",
+        //     (ctx->gs->csr >> 12) & 1,
+        //     (ctx->gs->csr >> 13) & 1
+        // );
 
-    //     // printf("csr.12=%d csr.13=%d\n",
-    //     //     (ctx->gs->csr >> 12) & 1,
-    //     //     (ctx->gs->csr >> 13) & 1
-    //     // );
-    
-    //     for (int y = (odd ^ 1); y < ctx->tex_h; y += 2) {
-    //         uint8_t* dst = ((uint8_t*)ctx->buf) + (stride * y);
-    //         uint8_t* src = ((uint8_t*)ptr) + (stride * sy);
+        for (int y = 0; y < ctx->tex_h / 2; y++) {
+            uint8_t* dst = ((uint8_t*)buf) + (stride * ((y * 2) + odd));
+            uint8_t* src = ((uint8_t*)ptr) + (stride * y);
 
-    //         ++sy;
+            memcpy(dst, src, stride);
+        }
 
-    //         memcpy(dst, src, stride);
-    //     }
-
-    //     ptr = ctx->buf;
-    // }
+        ptr = buf;
+    }
 
     SDL_Rect size, rect;
 
@@ -1944,6 +2093,11 @@ void render(struct ps2_gs* gs, void* udata) {
         case RENDERER_ASPECT_16_9: {
             rect.w *= scale;
             rect.h = (float)rect.w * (9.0f / 16.0f);
+        } break;
+
+        case RENDERER_ASPECT_5_4: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (4.0f / 5.0f);
         } break;
 
         case RENDERER_ASPECT_STRETCH: {
@@ -1981,10 +2135,6 @@ void render(struct ps2_gs* gs, void* udata) {
         0, 1, 3, // first triangle
         1, 2, 3  // second triangle
     };
-
-    glGenVertexArrays(1, &ctx->vao);
-    glGenBuffers(1, &ctx->vbo);
-    glGenBuffers(1, &ctx->ebo);
 
     glBindVertexArray(ctx->vao);
 
@@ -2245,7 +2395,12 @@ void transfer_start(struct ps2_gs* gs, void* udata) {
 }
 
 static inline void gs_write_psmct32(struct ps2_gs* gs, software_thread_state* ctx, uint32_t data) {
-    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
+    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy);
+
+    if (ctx->dbp == gs->ctx->fbp)
+        addr = gs->ctx->fbp + (ctx->dx + (ctx->dy * gs->ctx->fbw));
+
+    ctx->dx++;
 
     gs->vram[addr & 0xfffff] = data;
 
@@ -2256,7 +2411,12 @@ static inline void gs_write_psmct32(struct ps2_gs* gs, software_thread_state* ct
 }
 
 static inline void gs_write_psmct32_or(struct ps2_gs* gs, software_thread_state* ctx, uint32_t data) {
-    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
+    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx, ctx->dy);
+
+    if (ctx->dbp == gs->ctx->fbp)
+        addr = gs->ctx->fbp + (ctx->dx + (ctx->dy * gs->ctx->fbw));
+
+    ctx->dx++;
 
     gs->vram[addr & 0xfffff] |= data;
 
