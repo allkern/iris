@@ -59,7 +59,7 @@ struct ps2_iop_dma* ps2_iop_dma_create(void) {
     return malloc(sizeof(struct ps2_iop_dma));
 }
 
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct sched_state* sched, struct iop_bus* bus) {
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu, struct sched_state* sched, struct iop_bus* bus) {
     memset(dma, 0, sizeof(struct ps2_iop_dma));
 
     dma->intc = intc;
@@ -69,6 +69,7 @@ void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct
     dma->sched = sched;
     dma->ee_dma = ee_dma;
     dma->sio2 = sio2;
+    dma->spu = spu;
 
     dma->dmacinten = 0x01;
 }
@@ -218,8 +219,10 @@ void spu1_dma_irq_event_handler(void* udata, int overshoot) {
     dma->spu1.chcr &= ~0x1000000;
 }
 
+static FILE* file;
+
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
-    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x\n", dma->spu1.chcr, dma->spu1.madr, dma->spu1.bcr);
+    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x adma=%d\n", dma->spu1.chcr, dma->spu1.madr, dma->spu1.bcr, dma->spu->c[0].admas);
 
     unsigned int size = (dma->spu1.bcr & 0xffff) * (dma->spu1.bcr >> 16);
 
@@ -232,14 +235,18 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
         dma->spu1.madr += 4;
     }
 
+    // If ADMA is on, then the transfer will be ended by the SPU2
+    // whenever all samples were played
+    if (dma->spu->c[0].admas & 1)
+        return;
+
+    // Else we need to end the transfer ourselves
     struct sched_event spu1_dma_irq_event;
 
     spu1_dma_irq_event.callback = spu1_dma_irq_event_handler;
     spu1_dma_irq_event.cycles = 1000000;
     spu1_dma_irq_event.name = "SPU1 DMA IRQ event";
     spu1_dma_irq_event.udata = dma;
-
-    // printf("dma: Scheduling SPU1 DMA IRQ %d cycles from now\n", spu1_dma_irq_event.cycles);
 
     sched_schedule(dma->sched, spu1_dma_irq_event);
 }
@@ -260,12 +267,22 @@ void spu2_dma_irq_event_handler(void* udata, int overshoot) {
 }
 
 void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
-    // printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr);
+    // printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr,
+    //     (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, dma->spu->c[1].admas
+    // );
 
     unsigned int size = (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16);
 
+    // file = fopen("core1.adma", "ab");
+
+    // uint16_t buf[0x400];
+    // uint16_t* ptr = buf;
+
     for (int i = 0; i < size; i++) {
         uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
+
+        // *ptr++ = d & 0xffff;
+        // *ptr++ = d >> 16;
 
         iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
         iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
@@ -273,14 +290,39 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
         dma->spu2.madr += 4;
     }
 
+    // for (int i = 0; i < 0x100; i++) {
+    //     uint16_t s0 = buf[i+0x000];
+    //     uint16_t s1 = buf[i+0x100];
+
+    //     iop_bus_write16(dma->bus, 0x1f9005ac, s0);
+    //     iop_bus_write16(dma->bus, 0x1f9005ac, s1);
+
+    //     fwrite(&s0, sizeof(uint16_t), 1, file);
+    //     fwrite(&s1, sizeof(uint16_t), 1, file);
+    // }
+
+    // for (int i = 0; i < 0x100; i++) {
+    //     uint16_t s0 = buf[i+0x200];
+    //     uint16_t s1 = buf[i+0x300];
+
+    //     fwrite(&s0, sizeof(uint16_t), 1, file);
+    //     fwrite(&s1, sizeof(uint16_t), 1, file);
+    // }
+
+    // fclose(file);
+
+    // If ADMA is on, then the transfer will be ended by the SPU2
+    // whenever all samples were played
+    if (dma->spu->c[1].admas & 2)
+        return;
+
+    // Else we need to end the transfer ourselves
     struct sched_event spu2_dma_irq_event;
 
     spu2_dma_irq_event.callback = spu2_dma_irq_event_handler;
     spu2_dma_irq_event.cycles = 1000000;
     spu2_dma_irq_event.name = "SPU2 DMA IRQ event";
     spu2_dma_irq_event.udata = dma;
-
-    // printf("dma: Scheduling SPU2 DMA IRQ %d cycles from now\n", spu2_dma_irq_event.cycles);
 
     sched_schedule(dma->sched, spu2_dma_irq_event);
 }
@@ -626,4 +668,18 @@ void ps2_iop_dma_write16(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
     printf("iop_dma: Unknown DMA register write %08x %08lx\n", addr, data);
 
     exit(1);
+}
+
+void iop_dma_end_spu1_transfer(struct ps2_iop_dma* dma) {
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
+    iop_dma_check_irq(dma);
+
+    dma->spu1.chcr &= ~0x1000000;
+}
+
+void iop_dma_end_spu2_transfer(struct ps2_iop_dma* dma) {
+    iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
+    iop_dma_check_irq(dma);
+
+    dma->spu2.chcr &= ~0x1000000;
 }

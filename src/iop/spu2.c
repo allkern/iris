@@ -76,9 +76,10 @@ struct ps2_spu2* ps2_spu2_create(void) {
     return (struct ps2_spu2*)malloc(sizeof(struct ps2_spu2));
 }
 
-void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_intc* intc, struct sched_state* sched) {
+void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct sched_state* sched) {
     memset(spu2, 0, sizeof(struct ps2_spu2));
 
+    spu2->dma = dma;
     spu2->intc = intc;
     spu2->sched = sched;
 
@@ -97,7 +98,7 @@ void spu2_irq(struct ps2_spu2* spu2, int c) {
 
     printf("spu2: IRQ fired\n");
 
-    // ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
+    ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
 }
 
 void spu2_check_irq(struct ps2_spu2* spu2, uint32_t addr) {
@@ -178,13 +179,31 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         // spu2->c[c].v[i+h*16].playing = 0;
 
         // To-do: Enter ADSR release
-        printf("spu2: voice %d koff\n", v);
+        // printf("spu2: voice %d koff\n", v);
         adsr_load_release(spu2, &spu2->c[c], &spu2->c[c].v[v], v);
+    }
+}
+
+void adma_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
+    if (spu2->c[c].memin_write_addr < 0x100) {
+        spu2->ram[(c ? 0x2400 : 0x2000) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
+    } else if (spu2->c[c].memin_write_addr < 0x200) {
+        spu2->ram[(c ? 0x2600 : 0x2200) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
+    } else if (spu2->c[c].memin_write_addr < 0x300) {
+        spu2->ram[(c ? 0x2500 : 0x2100) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
+    } else if (spu2->c[c].memin_write_addr < 0x400) {
+        spu2->ram[(c ? 0x2700 : 0x2300) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
     }
 }
 
 void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
     // printf("spu2: core%d data=%04x tsa=%08x\n", c, data, spu2->c[c].tsa);
+    if (spu2->c[c].admas & (1 << c)) {
+        adma_write_data(spu2, c, data);
+
+        return;
+    }
+
     spu2_check_irq(spu2, spu2->c[c].tsa);
 
     spu2->ram[spu2->c[c].tsa++] = data;
@@ -616,7 +635,7 @@ static const int ps_adpcm_coefs_i[5][2] = {
 void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
     uint16_t hdr = spu2->ram[v->nax];
 
-    // spu2_check_irq(spu2, v->nax);
+    spu2_check_irq(spu2, v->nax);
 
     // if (v->nax == spu2->c[0].irqa || v->nax == spu2->c[1].irqa)
     //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
@@ -752,45 +771,50 @@ void spu2_handle_adsr(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_vo
 
     adsr_calculate_values(spu2, v);
 
-    LEVEL += LEVEL_STEP;
+    int level = v->envx;
+
+    level += LEVEL_STEP;
 
     switch (v->adsr_phase) {
         case ADSR_ATTACK: {
-            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+            level = CLAMP(level, 0x0000, 0x7fff);
 
-            if (LEVEL == 0x7fff)
+            if (level == 0x7fff)
                 adsr_load_decay(spu2, c, v);
         } break;
 
         case ADSR_DECAY: {
-            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+            level = CLAMP(level, 0x0000, 0x7fff);
 
-            if (LEVEL <= v->adsr_sustain_level)
+            if (level <= v->adsr_sustain_level)
                 adsr_load_sustain(spu2, c, v);
         } break;
 
         case ADSR_SUSTAIN: {
-            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+            level = CLAMP(level, 0x0000, 0x7fff);
 
             /* Not stopped automatically, need to KOFF */
         } break;
 
         case ADSR_RELEASE: {
-            LEVEL = CLAMP(LEVEL, 0x0000, 0x7fff);
+            level = CLAMP(level, 0x0000, 0x7fff);
 
-            if (!LEVEL) {
+            if (!level) {
                 PHASE = ADSR_END;
                 CYCLES = 0;
-                LEVEL_STEP = 0;
 
+                v->envx = 0;
                 v->playing = 0;
             }
         } break;
 
         case ADSR_END: {
+            v->envx = 0;
             v->playing = 0;
         } break;
     }
+
+    v->envx = level;
 
     CYCLES = v->adsr_cycles_reload;
 }
@@ -889,11 +913,63 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
     return s;
 }
 
+static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
+    if ((spu2->c[c].admas & (1 << c)) == 0)
+        return silence;
+
+    if (spu2->c[c].memin_write_addr < 0x200)
+        return silence;
+
+    struct spu2_sample s = silence;
+
+    s.s16[0] = spu2->ram[(c ? 0x2400 : 0x2000) + spu2->c[c].memin_read_addr];
+    s.s16[1] = spu2->ram[(c ? 0x2600 : 0x2200) + spu2->c[c].memin_read_addr];
+
+    spu2->c[c].memin_read_addr++;
+
+    if (spu2->c[c].memin_read_addr == 0x200) {
+        spu2->c[c].memin_read_addr = 0;
+        spu2->c[c].memin_write_addr = 0;
+
+        if (c) {
+            iop_dma_end_spu2_transfer(spu2->dma);
+        } else {
+            iop_dma_end_spu1_transfer(spu2->dma);
+        }
+    }
+
+    if (spu2->c[c].memin_read_addr == 0x200) {
+        spu2->c[c].memin_read_addr = 0;
+        spu2->c[c].memin_write_addr = 0;
+
+        if (c) {
+            iop_dma_end_spu2_transfer(spu2->dma);
+        } else {
+            iop_dma_end_spu1_transfer(spu2->dma);
+        }
+    }
+
+    return s;
+}
+
+struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
+    return spu2_get_adma_sample(spu2, c);
+}
+
 struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
     struct spu2_sample s = silence;
 
     s.u16[0] = 0;
     s.u16[1] = 0;
+
+    // ADMA
+    struct spu2_sample c0_adma = spu2_get_adma_sample(spu2, 0);
+    struct spu2_sample c1_adma = spu2_get_adma_sample(spu2, 1);
+
+    s.s16[0] += c0_adma.s16[0];
+    s.s16[1] += c0_adma.s16[1];
+    s.s16[0] += c1_adma.s16[0];
+    s.s16[1] += c1_adma.s16[1];
 
     for (int i = 0; i < 24; i++) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
@@ -906,4 +982,8 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
     }
 
     return s;
+}
+
+struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v) {
+    return spu2_get_voice_sample(spu2, c, v);
 }

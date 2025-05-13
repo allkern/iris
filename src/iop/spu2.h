@@ -9,6 +9,7 @@ extern "C" {
 
 #include "sched.h"
 #include "intc.h"
+#include "dma.h"
 
 #define SPU2_RAM_SIZE 0x100000 // 2 MB
 
@@ -167,6 +168,15 @@ struct spu2_core {
     uint16_t fb_x;
     uint16_t in_coef_l;
     uint16_t in_coef_r;
+
+    // ADMA
+    uint32_t memin_write_addr;
+    uint32_t memin_read_addr;
+
+    int16_t adma_ringbuf[4096];
+    uint32_t adma_ringbuf_write_idx;
+    uint32_t adma_ringbuf_read_idx;
+    int adma_ringbuf_full;
 };
 
 struct ps2_spu2 {
@@ -182,6 +192,7 @@ struct ps2_spu2 {
     uint32_t spdif_copy;
     int spdif_irq;
 
+    struct ps2_iop_dma* dma;
     struct ps2_iop_intc* intc;
     struct sched_state* sched;
 };
@@ -195,11 +206,13 @@ struct spu2_sample {
 };
 
 struct ps2_spu2* ps2_spu2_create(void);
-void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_intc* intc, struct sched_state* sched);
+void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct sched_state* sched);
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr);
 void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data);
 void ps2_spu2_destroy(struct ps2_spu2* spu2);
 struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu);
+struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v);
+struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c);
 
 #ifdef __cplusplus
 }

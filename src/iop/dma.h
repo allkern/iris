@@ -15,6 +15,7 @@ extern "C" {
 #include "cdvd.h"
 #include "sched.h"
 #include "sio2.h"
+#include "spu2.h"
 
 #include "bus_decl.h"
 
@@ -80,11 +81,12 @@ struct ps2_iop_dma {
     struct ps2_cdvd* drive;
     struct ps2_dmac* ee_dma;
     struct ps2_sio2* sio2;
+    struct ps2_spu2* spu;
     struct sched_state* sched;
 };
 
 struct ps2_iop_dma* ps2_iop_dma_create(void);
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct sched_state* sched, struct iop_bus* bus);
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu, struct sched_state* sched, struct iop_bus* bus);
 void ps2_iop_dma_destroy(struct ps2_iop_dma* dma);
 uint64_t ps2_iop_dma_read16(struct ps2_iop_dma* dma, uint32_t addr);
 void ps2_iop_dma_write16(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data);
@@ -103,6 +105,9 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma);
 void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma);
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma);
 void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma);
+
+void iop_dma_end_spu1_transfer(struct ps2_iop_dma* dma);
+void iop_dma_end_spu2_transfer(struct ps2_iop_dma* dma);
 
 #ifdef __cplusplus
 }
