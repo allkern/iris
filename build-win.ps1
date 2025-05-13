@@ -15,7 +15,7 @@ foreach ($SRC in $CSRC) {
     if (-Not (Test-Path $OBJ)) {
         gcc -c $SRC -o $OBJ `
             -O3 -ffast-math -march=native -mtune=native -pedantic `
-            -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format `
+            -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -g `
             -I"$($IMGUI_DIR)" `
             -I"$($IMGUI_DIR)\backends" `
             -I"$($SDL2_DIR)\include" `
@@ -41,7 +41,7 @@ foreach ($SRC in $CXXSRC) {
 
     if (-Not (Test-Path $OBJ)) {
         c++ -c $SRC -o $OBJ `
-            -O3 -march=native -mtune=native `
+            -O3 -march=native -mtune=native -g `
             -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -Werror=implicit-fallthrough `
             -I"$($IMGUI_DIR)" `
             -I"$($IMGUI_DIR)\backends" `
@@ -60,7 +60,7 @@ $OBJS += ($CXXSRC -replace '.cpp$',".o")
 
 c++ @OBJS main.cpp -o iris `
     res/icon.res `
-    -O3 -march=native -mtune=native -lcomdlg32 -lole32 -lSDL2main -lSDL2 `
+    -O3 -march=native -mtune=native -lcomdlg32 -lole32 -lSDL2main -lSDL2 -g `
     -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -ldwmapi -luuid -Werror=implicit-fallthrough `
     -I"$($IMGUI_DIR)" `
     -I"$($IMGUI_DIR)\backends" `
