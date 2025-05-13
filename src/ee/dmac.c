@@ -224,12 +224,7 @@ static inline void dmac_test_cpcond0(struct ps2_dmac* dmac) {
 static inline void dmac_test_irq(struct ps2_dmac* dmac) {
     dmac_test_cpcond0(dmac);
 
-    if ((dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff)) {
-        ee_set_int1(dmac->ee);
-    } else {
-        // Reset INT1
-        dmac->ee->cause &= ~EE_CAUSE_IP3;
-    }
+    ee_set_int1(dmac->ee, (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff));
 }
 
 static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
@@ -446,30 +441,71 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 }
 
 void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
-    printf("ee: IPU from channel unimplemented\n");
+    // printf("ee: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
+    //     dmac->ipu_to.chcr,
+    //     dmac->ipu_to.chcr & 1,
+    //     (dmac->ipu_to.chcr >> 2) & 3,
+    //     !!(dmac->ipu_to.chcr & 0x40),
+    //     dmac->ipu_to.madr,
+    //     dmac->ipu_to.qwc,
+    //     dmac->ipu_to.tadr
+    // );
 
-    exit(1);
+    // dmac_set_irq(dmac, DMAC_IPU_TO);
+
+    // dmac->ipu_to.chcr &= ~0x100;
+
+    // return;
+
+    do {
+        uint128_t tag = ee_bus_read128(dmac->bus, 0x10007000);
+
+        dmac_process_dest_tag(dmac, &dmac->ipu_from, tag);
+
+        printf("ee: ipu_from tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx end=%d tte=%d\n",
+            dmac->ipu_to.tag.qwc,
+            dmac->ipu_to.tag.id,
+            dmac->ipu_to.tag.irq,
+            dmac->ipu_to.tag.addr,
+            dmac->ipu_to.tag.mem,
+            dmac->ipu_to.tag.data,
+            dmac->ipu_to.tag.end,
+            (dmac->ipu_to.chcr >> 7) & 1
+        );
+
+        exit(1);
+    
+        for (int i = 0; i < dmac->ipu_from.tag.qwc; i++) {
+            uint128_t q = ee_bus_read128(dmac->bus, 0x10007000);
+
+            ee_bus_write128(dmac->bus, dmac->ipu_from.madr, q);
+
+            dmac->ipu_from.madr += 16;
+        }
+    } while (!channel_is_done(&dmac->ipu_from));
+
+    // exit(1);
 
     dmac_set_irq(dmac, DMAC_IPU_FROM);
 
     dmac->ipu_from.chcr &= ~0x100;
 }
 void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
-    printf("ee: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
-        dmac->ipu_to.chcr,
-        dmac->ipu_to.chcr & 1,
-        (dmac->ipu_to.chcr >> 2) & 3,
-        !!(dmac->ipu_to.chcr & 0x40),
-        dmac->ipu_to.madr,
-        dmac->ipu_to.qwc,
-        dmac->ipu_to.tadr
-    );
+    // printf("ee: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
+    //     dmac->ipu_to.chcr,
+    //     dmac->ipu_to.chcr & 1,
+    //     (dmac->ipu_to.chcr >> 2) & 3,
+    //     !!(dmac->ipu_to.chcr & 0x40),
+    //     dmac->ipu_to.madr,
+    //     dmac->ipu_to.qwc,
+    //     dmac->ipu_to.tadr
+    // );
 
-    dmac_set_irq(dmac, DMAC_IPU_TO);
+    // dmac_set_irq(dmac, DMAC_IPU_TO);
 
-    dmac->ipu_to.chcr &= ~0x100;
+    // dmac->ipu_to.chcr &= ~0x100;
 
-    return;
+    // return;
 
     do {
         uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr, 0);
@@ -733,4 +769,56 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 
         return;
     }
+}
+
+uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr) {
+    struct dmac_channel* c = dmac_get_channel(dmac, addr & ~3);
+
+    switch (addr) {
+        case 0x10009000: {
+            return c->chcr & 0xff;
+        }
+
+        case 0x1000a001: {
+            return (c->chcr >> 8) & 0xff;
+        }
+    }
+
+    printf("dmac: 8-bit read from %08x\n", addr);
+
+    exit(1);
+
+    return 0;
+}
+
+void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
+    struct dmac_channel* c = dmac_get_channel(dmac, addr & ~3);
+
+    switch (addr) {
+        case 0x10008000:
+        case 0x10009000: {
+            c->chcr &= 0xff00;
+            c->chcr |= data & 0xff;
+
+            return;
+        } break;
+
+        case 0x10008001:
+        case 0x10009001: {
+            c->chcr &= 0x00ff;
+            c->chcr |= (data & 0xff) << 8;
+
+            if (c->chcr & 0x100) {
+                dmac_handle_channel_start(dmac, addr);
+            }
+
+            return;
+        } break;
+    }
+
+    printf("dmac: 8-bit write to %08x (%02x)\n", addr, data);
+
+    exit(1);
+
+    return;
 }
