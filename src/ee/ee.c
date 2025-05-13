@@ -346,7 +346,7 @@ static inline void ee_set_pc_delayed(struct ee_state* ee, uint32_t addr) {
     ee->branch = 1;
 }
 
-static inline void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
+void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
     uint32_t vec = EE_VEC_COMMON;
 
     ee->cause &= ~EE_CAUSE_EXC;
@@ -405,12 +405,41 @@ static inline void ee_exception_level2(struct ee_state* ee, uint32_t cause) {
     ee_set_pc(ee, ((ee->status & EE_SR_DEV) ? 0xbfc00200 : 0x80000000) + vec);
 }
 
-void ee_set_int0(struct ee_state* ee) {
-    ee->cause |= EE_CAUSE_IP2;
+static inline void ee_check_irq(struct ee_state* ee) {
+    int irq_enabled = (ee->status & EE_SR_IE) && (ee->status & EE_SR_EIE) &&
+        (!(ee->status & EE_SR_EXL)) && (!(ee->status & EE_SR_ERL));
+    int int0_pending = (ee->status & EE_SR_IM2) && (ee->cause & EE_CAUSE_IP2);
+    int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
+
+    if (irq_enabled && (int0_pending || int1_pending)) {
+        ee->pc += 4;
+
+        // printf("ee: Handling irq at pc=%08x (int0=%d (%d) int1=%d (%d)) sr=%08x delay_slot=%d\n",
+        //     ee->pc,
+        //     int0_pending, !!(ee->status & EE_SR_IM2),
+        //     int1_pending, !!(ee->status & EE_SR_IM3),
+        //     ee->status,
+        //     ee->delay_slot
+        // );
+
+        ee_exception_level1(ee, CAUSE_EXC1_INT);
+    }
 }
 
-void ee_set_int1(struct ee_state* ee) {
-    ee->cause |= EE_CAUSE_IP3;
+void ee_set_int0(struct ee_state* ee, int v) {
+    if (v) {
+        ee->cause |= EE_CAUSE_IP2;
+    } else {
+        ee->cause &= ~EE_CAUSE_IP2;
+    }
+}
+
+void ee_set_int1(struct ee_state* ee, int v) {
+    if (v) {
+        ee->cause |= EE_CAUSE_IP3;
+    } else {
+        ee->cause &= ~EE_CAUSE_IP3;
+    }
 }
 
 void ee_set_cpcond0(struct ee_state* ee, int v) {
@@ -2057,8 +2086,7 @@ static inline void ee_i_qmtc2(struct ee_state* ee) {
     int t = EE_D_RT;
     int d = EE_D_RD;
 
-    ee->vu0->vf[d].u64[0] = ee->r[t].u64[0];
-    ee->vu0->vf[d].u64[1] = ee->r[t].u64[1];
+    ee->vu0->vf[d].u128 = ee->r[t];
 }
 static inline void ee_i_rsqrts(struct ee_state* ee) {
     EE_FD = EE_FS / sqrtf(EE_FT);
@@ -2888,26 +2916,9 @@ void ee_cycle(struct ee_state* ee) {
     ee->delay_slot = ee->branch;
     ee->branch = 0;
 
-    int irq_enabled = (ee->status & EE_SR_IE) && (ee->status & EE_SR_EIE) &&
-                      (!(ee->status & EE_SR_EXL)) && (!(ee->status & EE_SR_ERL));
-    int int0_pending = (ee->status & EE_SR_IM2) && (ee->cause & EE_CAUSE_IP2);
-    int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
-    int int5_pending = (ee->status & EE_SR_IM7) && (ee->cause & EE_CAUSE_IP7);
-
-    if (irq_enabled && (int0_pending || int1_pending || int5_pending)) {
-        ee->pc += 4;
-
-        // printf("ee: Handling irq at pc=%08x (int0=%d (%d) int1=%d (%d) int5=%d (%d)) sr=%08x delay_slot=%d\n",
-        //     ee->pc,
-        //     int0_pending, !!(ee->status & EE_SR_IM2),
-        //     int1_pending, !!(ee->status & EE_SR_IM3),
-        //     int5_pending, !!(ee->status & EE_SR_IM7),
-        //     ee->status,
-        //     ee->delay_slot
-        // );
-
-        ee_exception_level1(ee, CAUSE_EXC1_INT);
-    }
+    // Would check for interrupts here, but we do this outside of the core
+    // to reduce overhead
+    ee_check_irq(ee);
 
 	// if (ee->pc == 0x160700) {
 	// 	p = 5000;
@@ -3017,10 +3028,9 @@ void ee_cycle(struct ee_state* ee) {
     ee->pc = ee->next_pc;
     ee->next_pc += 4;
 
-    ++ee->total_cycles;
-
     ee_execute(ee);
 
+    ++ee->total_cycles;
     ++ee->count;
 
     // if (ee->count == ee->compare)

@@ -202,8 +202,8 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, st
 void ee_cycle(struct ee_state* ee);
 void ee_reset(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
-void ee_set_int0(struct ee_state* ee);
-void ee_set_int1(struct ee_state* ee);
+void ee_set_int0(struct ee_state* ee, int v);
+void ee_set_int1(struct ee_state* ee, int v);
 void ee_set_cpcond0(struct ee_state* ee, int v);
 
 #undef EE_ALIGNED16
