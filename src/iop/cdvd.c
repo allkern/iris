@@ -3,17 +3,10 @@
 #include <string.h>
 #include <assert.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <time.h>
 
 #include "cdvd.h"
-
-#ifdef _WIN32
-#define fseek64 fseeko64
-#define ftell64 ftello64
-#else
-#define fseek64 fseek
-#define ftell64 ftell
-#endif
 
 static const uint8_t nvram_init_data[1024] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -139,146 +132,28 @@ static const uint8_t itob_table[] = {
     0x88, 0x89, 0x90, 0x91, 0x92, 0x93, 0x94, 0x95,
 };
 
-void cdvd_read_sector(struct ps2_cdvd* cdvd, uint64_t lba, int offset) {
-    if (!cdvd->file)
-        return;
-
-    // printf("cdvd: Read lba=%d (%x)\n", lba, lba);
-    fseek64(cdvd->file, lba * 0x800, SEEK_SET);
-
-    // Ignore result and avoid checking
-    (void)!fread(&cdvd->buf[offset], 1, 0x800, cdvd->file);
-}
-
-struct __attribute__((packed)) iso9660_pvd {
-	char id[8];
-	char system_id[32];
-	char volume_id[32];
-	char zero[8];
-	uint32_t total_sector_le, total_sect_be;
-	char zero2[32];
-	uint16_t volume_set_size_le, volume_set_size_be;
-    uint16_t volume_seq_nr_le, volume_seq_nr_be;
-	uint16_t sector_size_le, sector_size_be;
-	uint32_t path_table_len_le, path_table_len_be;
-	uint32_t path_table_le, path_table_2nd_le;
-	uint32_t path_table_be, path_table_2nd_be;
-	uint8_t root[34];
-	char volume_set_id[128], publisher_id[128], data_preparer_id[128], application_id[128];
-	char copyright_file_id[37], abstract_file_id[37], bibliographical_file_id[37];
-};
-
-struct __attribute__((packed)) iso9660_dirent {
-    uint8_t dr_len;
-    uint8_t ext_dr_len;
-    uint32_t lba_le, lba_be;
-    uint32_t size_le, size_be;
-    uint8_t date[7];
-    uint8_t flags;
-    uint8_t file_unit_size;
-    uint8_t interleave_gap_size;
-    uint16_t volume_seq_nr_le, volume_seq_nr_be;
-    uint8_t id_len;
-    uint8_t id;
-};
-
-char* cdvd_get_serial(struct ps2_cdvd* cdvd, char* serial) {
-    cdvd_read_sector(cdvd, 16, 0);
-
-    struct iso9660_pvd pvd = *(struct iso9660_pvd*)cdvd->buf;
-
-    if (strncmp(pvd.id, "\1CD001\1", 8)) {
-        printf("iso: Unknown format disc %d\n", pvd.id[0]);
-
-        return NULL;
+static inline const char* cdvd_get_type_name(int type) {
+    switch (type) {
+        case CDVD_DISC_NO_DISC: return "No disc";
+        case CDVD_DISC_DETECTING: return "Detecting";
+        case CDVD_DISC_DETECTING_CD: return "Detecting CD";
+        case CDVD_DISC_DETECTING_DVD: return "Detecting DVD";
+        case CDVD_DISC_DETECTING_DL_DVD: return "Detecting Dual-layer DVD";
+        case CDVD_DISC_PSX_CD: return "PlayStation CD";
+        case CDVD_DISC_PSX_CDDA: return "PlayStation CDDA";
+        case CDVD_DISC_PS2_CD: return "PlayStation 2 CD";
+        case CDVD_DISC_PS2_CDDA: return "PlayStation 2 CDDA";
+        case CDVD_DISC_PS2_DVD: return "PlayStation 2 DVD";
+        case CDVD_DISC_CDDA: return "CD Audio";
+        case CDVD_DISC_DVD_VIDEO: return "DVD Video";
+        case CDVD_DISC_INVALID: return "Invalid";
     }
 
-    struct iso9660_dirent* root = (struct iso9660_dirent*)pvd.root;
-
-    cdvd_read_sector(cdvd, root->lba_le, 0);
-
-    struct iso9660_dirent* dir = (struct iso9660_dirent*)cdvd->buf;
-
-    while (dir->dr_len) {
-        if (dir->id_len == 12) {
-            if (!strcmp((char*)&dir->id, "SYSTEM.CNF;1")) {
-                break;
-            }
-        }
-
-        uint8_t* ptr = (uint8_t*)dir;
-
-        dir = (struct iso9660_dirent*)(ptr + dir->dr_len);
-    }
-
-    if (!dir->dr_len) {
-        printf("iso: SYSTEM.CNF not found! (non-PlayStation disc?)\n");
-
-        return NULL;
-    }
-
-    cdvd_read_sector(cdvd, dir->lba_le, 0);
-
-    // Parse SYSTEM.CNF
-    char* p = cdvd->buf;
-    char key[64];
-    
-    while (*p) {
-        char* kptr = key;
-
-        while (isspace(*p))
-            ++p;
-
-        while (isalnum(*p))
-            *kptr++ = *p++;
-
-        *kptr = '\0';
-
-        if (!strncmp(key, "BOOT2", 64)) {
-            while (isspace(*p)) ++p;
-
-            if (*p != '=') {
-                printf("iso: Expected =\n");
-
-                return NULL;
-            }
-
-            ++p;
-
-            while (isspace(*p)) ++p;
-
-            while (*p != ':') ++p;
-
-            ++p;
-
-            if (*p == '\\' || *p == '/')
-                ++p;
-
-            int i;
-
-            for (i = 0; i < 16; i++) {
-                if (*p == ';' || *p == '\n' || *p == '\r')
-                    break;
-
-                serial[i] = *p++;
-            }
-
-            serial[i] = '\0';
-
-            return serial;
-        } else {
-            while ((*p != '\n') && (*p != '\0') && (*p != '\r')) ++p;
-            while ((*p == '\n') || (*p == '\r')) ++p;
-        }
-    }
-
-    printf("iso: Couldn't find BOOT2 entry in SYSTEM.CNF (PlayStation disc?)\n");
-
-    return NULL;
+    return "Unknown";
 }
 
 static inline int cdvd_is_dual_layer(struct ps2_cdvd* cdvd) {
-    return cdvd->layer2_lba;
+    return disc_get_volume_lba(cdvd->disc, 1);
 }
 
 static inline void cdvd_set_busy(struct ps2_cdvd* cdvd) {
@@ -310,6 +185,12 @@ static inline void cdvd_s_mechacon_version(struct ps2_cdvd* cdvd) {
             cdvd->s_fifo[1] = 0x06;
             cdvd->s_fifo[2] = 0x02;
             cdvd->s_fifo[3] = 0x00;
+        } break;
+
+        case 0x90: {
+            cdvd_init_s_fifo(cdvd, 1);
+
+            cdvd->s_fifo[0] = 0x00;
         } break;
 
         case 0xef: {
@@ -434,6 +315,16 @@ static inline void cdvd_s_close_config(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_mg_write_data(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_mechacon_auth_8f(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 static inline void cdvd_s_mg_write_hdr_start(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
 
@@ -468,10 +359,12 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     switch (cmd) {
         case 0x03: printf("cdvd: mechacon_version\n"); cdvd_s_mechacon_version(cdvd); break;
         case 0x05: printf("cdvd: update_sticky_flags\n"); cdvd_s_update_sticky_flags(cdvd); break;
+        // case 0x06: printf("cdvd: tray_ctrl\n"); cdvd_s_tray_ctrl(cdvd); break;
         case 0x08: /* printf("cdvd: read_rtc\n"); */ cdvd_s_read_rtc(cdvd); break;
         case 0x09: printf("cdvd: write_rtc\n"); cdvd_s_write_rtc(cdvd); break;
         case 0x0a: printf("cdvd: read_nvram\n"); cdvd_s_read_nvram(cdvd); break;
         case 0x0b: printf("cdvd: write_nvram\n"); cdvd_s_write_nvram(cdvd); break;
+        // case 0x0f: printf("cdvd: power_off\n"); cdvd_s_power_off(cdvd); break;
         case 0x12: printf("cdvd: read_ilink_id\n"); cdvd_s_read_ilink_id(cdvd); break;
         case 0x15: printf("cdvd: forbid_dvd\n"); cdvd_s_forbid_dvd(cdvd); break;
         case 0x17: printf("cdvd: read_ilink_model\n"); cdvd_s_read_ilink_model(cdvd); break;
@@ -485,6 +378,8 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x41: printf("cdvd: read_config\n"); cdvd_s_read_config(cdvd); break;
         case 0x42: printf("cdvd: write_config\n"); cdvd_s_write_config(cdvd); break;
         case 0x43: printf("cdvd: close_config\n"); cdvd_s_close_config(cdvd); break;
+        case 0x8d: printf("cdvd: mg_write_data\n"); cdvd_s_mg_write_data(cdvd); break;
+        case 0x8f: printf("cdvd: mechacon_auth_8f\n"); cdvd_s_mechacon_auth_8f(cdvd); break;
         case 0x90: printf("cdvd: mg_write_hdr_start\n"); cdvd_s_mg_write_hdr_start(cdvd); break;
 
         default: {
@@ -555,7 +450,7 @@ void cdvd_fetch_sector(struct ps2_cdvd* cdvd) {
     switch (cdvd->read_size) {
         case CDVD_CD_SS_2048:
         case CDVD_CD_SS_2328: {
-            cdvd_read_sector(cdvd, cdvd->read_lba++, 0);
+            disc_read_sector(cdvd->disc, cdvd->buf, cdvd->read_lba++, DISC_SS_DATA);
         } break;
         case CDVD_CD_SS_2340: {
             // LBA -> MSF
@@ -574,17 +469,16 @@ void cdvd_fetch_sector(struct ps2_cdvd* cdvd) {
             cdvd->buf[3] = 1;
 
             // Write raw data at offset 12
-            cdvd_read_sector(cdvd, cdvd->read_lba++, 12);
+            disc_read_sector(cdvd->disc, cdvd->buf + 12, cdvd->read_lba++, DISC_SS_DATA);
         } break;
         case CDVD_DVD_SS: {
             memset(cdvd->buf, 0, 2340);
 
             uint32_t lba, layer;
 
-            if (cdvd_is_dual_layer(cdvd)) {
+            if (cdvd->layer2_lba) {
                 layer = cdvd->read_lba >= cdvd->layer2_lba;
                 lba = cdvd->read_lba - cdvd->layer2_lba + 0x30000;
-
             } else {
                 layer = 0;
                 lba = cdvd->read_lba + 0x30000;
@@ -595,7 +489,7 @@ void cdvd_fetch_sector(struct ps2_cdvd* cdvd) {
             cdvd->buf[2] = (lba >> 8) & 0xFF;
             cdvd->buf[3] = lba & 0xff;
 
-            cdvd_read_sector(cdvd, cdvd->read_lba++, 12);
+            disc_read_sector(cdvd->disc, cdvd->buf + 12, cdvd->read_lba++, DISC_SS_DATA);
 
             // for (int i = 0; i < 2064;) {
             //     for (int x = 0; x < 16; x++) {
@@ -797,12 +691,13 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
         CDVD_STATUS_SEEKING
     );
 
-    printf("cdvd: ReadCd lba=%08x count=%08x size=%d cycles=%ld speed=%02x\n",
+    printf("cdvd: ReadCd lba=%08x count=%08x size=%d cycles=%ld speed=%02x (%p)\n",
         cdvd->read_lba,
         cdvd->read_count,
         cdvd->read_size,
         event.cycles,
-        cdvd->n_params[9]
+        cdvd->n_params[9],
+        cdvd->disc->read_sector
     );
 }
 static inline void cdvd_n_read_cdda(struct ps2_cdvd* cdvd) {
@@ -936,15 +831,13 @@ static inline void cdvd_n_read_key(struct ps2_cdvd* cdvd) {
     uint32_t b3 = cdvd->n_params[6];
     uint32_t arg = b0 | (b1 << 8) | (b2 << 16) | (b3 << 24);
 
-    printf("arg=%08x\n", arg);
-
     // Code referenced/taken from PCSX2
     // This performs some kind of encryption/checksum with the game's serial?
     memset(cdvd->cdkey, 0, 16);
 
     char serial[16];
 
-    if (!cdvd_get_serial(cdvd, serial)) {
+    if (!disc_get_serial(cdvd->disc, serial)) {
         printf("cdvd: Couldn't find game serial, can't get cdkey\n");
     } else {
         printf("cdvd: \'%s\'\n", serial);
@@ -966,8 +859,6 @@ static inline void cdvd_n_read_key(struct ps2_cdvd* cdvd) {
     m[5] = '\0';
     
     int32_t code = strtoul(m, NULL, 10);
-
-    printf("code=%d\n", code);
 
     uint32_t key_0_3 = ((code & 0x1FC00) >> 10) | ((0x01FFFFFF & letters) << 7);
     uint32_t key_4 = ((code & 0x0001F) << 3) | ((0x0E000000 & letters) >> 25);
@@ -1073,131 +964,84 @@ void ps2_cdvd_destroy(struct ps2_cdvd* cdvd) {
     free(cdvd);
 }
 
-static const char* cdvd_extensions[] = {
-    "iso",
-    "bin",
-    "cue",
-    NULL
-};
+void cdvd_set_detected_type(void* udata, int overshoot) {
+    struct ps2_cdvd* cdvd = (struct ps2_cdvd*)udata;
 
-int cdvd_get_extension(const char* path) {
-    if (!path)
-        return CDVD_EXT_UNSUPPORTED;
-
-    if (!(*path))
-        return CDVD_EXT_UNSUPPORTED;
-
-    const char* ptr = path + (strlen(path) - 1);
-
-    while (*ptr != '.') {
-        if (ptr == path)
-            return CDVD_EXT_NONE;
-
-        --ptr;
-    }
-
-    for (int i = 0; cdvd_extensions[i]; i++) {
-        if (!strcmp(ptr + 1, cdvd_extensions[i])) {
-            return i;
-        }
-    }
-
-    return CDVD_EXT_UNSUPPORTED;
+    cdvd->disc_type = cdvd->detected_disc_type;
 }
 
-int cdvd_detect_disc_type(struct ps2_cdvd* cdvd) {
-    uint64_t size = 0;
-
-    fseek64(cdvd->file, 0, SEEK_END);
-
-    size = ftell64(cdvd->file);
-
-    cdvd_read_sector(cdvd, 16, 0);
-
-    uint64_t sector_size = *(uint16_t*)&cdvd->buf[0x80];
-    uint64_t volume_size = *(uint32_t*)&cdvd->buf[0x50];
-    uint64_t path_table_lba = *(uint32_t*)&cdvd->buf[0x8c];
-
-    // printf("sector_size=%lx volume_size=%lx (%ld) in bytes=%lx (%ld) path_table_lba=%lx (%ld) size=%lx (%ld)\n",
-    //     sector_size,
-    //     volume_size, volume_size,
-    //     volume_size * sector_size, volume_size * sector_size,
-    //     path_table_lba, path_table_lba,
-    //     size, size
-    // );
-
-    // DVD is dual-layer
-    if ((volume_size * sector_size) < size) {
-        cdvd->layer2_lba = volume_size;
-    
-        return CDVD_DISC_PS2_DVD;
-    }
-
-    if ((volume_size * sector_size) <= 681574400 || path_table_lba != 257) {
-        return CDVD_DISC_PS2_CD;
-    }
-
-    return CDVD_DISC_PS2_DVD;
-}
-
-// To-do: Disc images
 int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
     ps2_cdvd_close(cdvd);
 
-    // int ext = cdvd_get_extension(path);
-
     cdvd->layer2_lba = 0;
-    cdvd->file = fopen(path, "rb");
 
-    if (!cdvd->file) {
-        printf("cdvd: Cannot open disc image \"%s\"\n", path);
+    cdvd->disc = disc_open(path);
 
-        return CDVD_ERR_CANT_OPEN;
+    if (!cdvd->disc) {
+        printf("cdvd: Couldn't open disc \'%s\'\n", path);
+
+        return 1;
     }
 
-    // Read and verify PVD
-    cdvd_read_sector(cdvd, 16, 0);
+    cdvd->detected_disc_type = disc_get_type(cdvd->disc);
+    cdvd->layer2_lba = disc_get_volume_lba(cdvd->disc, 1);
+   
+    printf("cdvd: Opened \'%s\' (%s)\n", path, cdvd_get_type_name(cdvd->disc_type));
 
-    if (strncmp((char*)&cdvd->buf[1], "CD001", 5)) {
-        printf("cdvd: File \'%s\' is not a valid ISO image\n", path);
+    switch (cdvd->detected_disc_type) {
+        case CDVD_DISC_PS2_CD:
+        case CDVD_DISC_PS2_CDDA:
+        case CDVD_DISC_CDDA:
+        case CDVD_DISC_PSX_CD:
+        case CDVD_DISC_PSX_CDDA: {
+            cdvd->disc_type = CDVD_DISC_DETECTING_CD;
+        } break;
 
-        return CDVD_ERR_ISO_INVALID;
+        case CDVD_DISC_PS2_DVD:
+        case CDVD_DISC_DVD_VIDEO: {
+            cdvd->disc_type = cdvd->layer2_lba ? CDVD_DISC_DETECTING_DL_DVD : CDVD_DISC_DETECTING_DVD;
+        } break;
     }
-
-    if ((*(uint16_t*)(cdvd->buf + 0x80)) != 0x800) {
-        printf("cdvd: Unsupported image sector size %d\n", *((uint16_t*)(cdvd->buf + 0x80)));
-
-        return CDVD_ERR_UNSUPPORTED_SS;
-    }
-
-    // switch (ext) {
-    //     case CDVD_EXT_ISO: cdvd->disc_type = CDVD_DISC_PS2_DVD; break;
-    //     case CDVD_EXT_CUE: cdvd->disc_type = CDVD_DISC_PS2_CD; break;
-    // }
-
-    cdvd->disc_type = cdvd_detect_disc_type(cdvd);
-
-    printf("cdvd: PS2 %s Detected\n",
-        cdvd->disc_type == CDVD_DISC_PS2_CD ? "CD" : "DVD"
-    );
 
     cdvd->status &= ~CDVD_STATUS_TRAY_OPEN;
     cdvd->status |= CDVD_STATUS_SPINNING;
+
+    struct sched_event event;
+
+    event.cycles = 36864000; // IOP clock = 1s
+    event.udata = cdvd;
+    event.name = "CDVD disc detect";
+    event.callback = cdvd_set_detected_type;
+
+    sched_schedule(cdvd->sched, event);
 
     return 0;
 }
 
 void ps2_cdvd_close(struct ps2_cdvd* cdvd) {
-    if (cdvd->file) {
-        fclose(cdvd->file);
+    if (cdvd->disc) {
+        disc_close(cdvd->disc);
+
+        cdvd->disc = NULL;
     }
 
-    cdvd->file = NULL;
     cdvd->disc_type = CDVD_DISC_NO_DISC;
 
     cdvd_set_status_bits(cdvd, CDVD_STATUS_TRAY_OPEN);
 
     cdvd->status &= ~(CDVD_STATUS_SPINNING | CDVD_STATUS_SEEKING | CDVD_STATUS_READING);
+
+    // Send disc ejected IRQ
+    cdvd->i_stat = CDVD_IRQ_DISC_EJECTED;
+
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
+}
+
+void ps2_cdvd_power_off(struct ps2_cdvd* cdvd) {
+    // Send poweroff IRQ
+    cdvd->i_stat = CDVD_IRQ_POWER_OFF;
+
+    ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
 }
 
 uint8_t cdvd_read_speed(struct ps2_cdvd* cdvd) {
@@ -1284,6 +1128,3 @@ void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data) {
 
     return;
 }
-
-#undef fseek64
-#undef ftell64

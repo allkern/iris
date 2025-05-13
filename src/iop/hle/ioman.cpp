@@ -96,9 +96,8 @@ extern "C" int ioman_open(struct iop_state* iop) {
 
     p = str.find_first_not_of(' ');
 
-    if (p == std::string::npos) return 0;
-
-    str = str.substr(p);
+    if (p != std::string::npos)
+        str = str.substr(p);
 
     std::filesystem::path absolute = std::filesystem::absolute(str);
 
@@ -106,6 +105,8 @@ extern "C" int ioman_open(struct iop_state* iop) {
 
     if (!file)
         return 0;
+
+    printf("ioman: Opened \'%s\'\n", absolute.string().c_str());
 
     int slot = ioman_allocate_file(file);
 
