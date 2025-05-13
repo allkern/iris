@@ -9,6 +9,7 @@ extern "C" {
 
 #include "u128.h"
 #include "ee.h"
+#include "sched.h"
 
 #define EE_INTC_GS         0
 #define EE_INTC_SBUS       1
@@ -31,13 +32,17 @@ struct ps2_intc {
     uint32_t mask;
 
     struct ee_state* ee;
+    struct sched_state* sched;
 };
 
 struct ps2_intc* ps2_intc_create(void);
-void ps2_intc_init(struct ps2_intc* intc, struct ee_state* ee);
+void ps2_intc_init(struct ps2_intc* intc, struct ee_state* ee, struct sched_state* sched);
 void ps2_intc_destroy(struct ps2_intc* intc);
 uint64_t ps2_intc_read32(struct ps2_intc* intc, uint32_t addr);
+void ps2_intc_write8(struct ps2_intc* intc, uint32_t addr, uint64_t data);
+void ps2_intc_write16(struct ps2_intc* intc, uint32_t addr, uint64_t data);
 void ps2_intc_write32(struct ps2_intc* intc, uint32_t addr, uint64_t data);
+void ps2_intc_write64(struct ps2_intc* intc, uint32_t addr, uint64_t data);
 void ps2_intc_irq(struct ps2_intc* intc, int dev);
 
 #ifdef __cplusplus
