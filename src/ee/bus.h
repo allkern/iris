@@ -12,8 +12,9 @@ extern "C" {
 #include "intc.h"
 #include "timers.h"
 #include "vif.h"
-#include "../iop/cdvd.h"
 #include "ipu/ipu.h"
+#include "../iop/cdvd.h"
+#include "../iop/usb.h"
 
 #include "shared/ram.h"
 #include "shared/sif.h"
@@ -34,6 +35,7 @@ struct ee_bus {
     
     // EE/IOP
     struct ps2_cdvd* cdvd;
+    struct ps2_usb* usb;
     struct ps2_bios* bios;
     struct ps2_bios* rom1;
     struct ps2_bios* rom2;
@@ -62,6 +64,7 @@ void ee_bus_init_rom2(struct ee_bus* bus, struct ps2_bios* rom2);
 void ee_bus_init_iop_ram(struct ee_bus* bus, struct ps2_ram* iop_ram);
 void ee_bus_init_sif(struct ee_bus* bus, struct ps2_sif* sif);
 void ee_bus_init_cdvd(struct ee_bus* bus, struct ps2_cdvd* cdvd);
+void ee_bus_init_usb(struct ee_bus* bus, struct ps2_usb* usb);
 void ee_bus_init_vu0(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_vu1(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), void* udata);

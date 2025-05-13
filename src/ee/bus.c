@@ -69,6 +69,10 @@ void ee_bus_init_cdvd(struct ee_bus* bus, struct ps2_cdvd* cdvd) {
     bus->cdvd = cdvd;
 }
 
+void ee_bus_init_usb(struct ee_bus* bus, struct ps2_usb* usb) {
+    bus->usb = usb;
+}
+
 void ee_bus_init_vu0(struct ee_bus* bus, struct vu_state* vu) {
     bus->vu0 = vu;
 }
@@ -108,8 +112,8 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
     MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ(8, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(8, 0x11008000, 0x1100FFFF, vu, vu1);
-    MAP_REG_READ(32, 0x10008000, 0x1000EFFF, dmac, dmac);
-    MAP_REG_READ(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
+    MAP_REG_READ(8, 0x10008000, 0x1000EFFF, dmac, dmac);
+    MAP_REG_READ(8, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_READ(8, 0x1F402004, 0x1F402018, cdvd, cdvd);
     MAP_MEM_READ(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
@@ -168,6 +172,7 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     MAP_MEM_READ(32, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_READ(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
+    MAP_REG_READ(32, 0x1F801600, 0x1F8016FF, usb, usb);
 
     switch (addr) {
         case 0x1000F440: {
@@ -250,7 +255,7 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     MAP_MEM_READ(128, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(128, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
-    printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); exit(1);
+    printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); // exit(1);
 
     return (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
 }
@@ -262,11 +267,13 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
-    MAP_REG_WRITE(32, 0x10008000, 0x1000EFFF, dmac, dmac);
-    MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
+    MAP_REG_WRITE(8, 0x10008000, 0x1000EFFF, dmac, dmac);
+    MAP_REG_WRITE(8, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_WRITE(8, 0x1F402004, 0x1F402018, cdvd, cdvd);
     MAP_MEM_WRITE(8, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(8, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_REG_WRITE(8, 0x1000F000, 0x1000F01F, intc, intc);
+    MAP_MEM_WRITE(8, 0x1FC00000, 0x1FFFFFFF, bios, bios); // BIOS Firmware update
 
     if (addr == 0x1000f180) { bus->kputchar(bus->kputchar_udata, data & 0xff); return; }
 
@@ -282,6 +289,8 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(16, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_WRITE(16, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(16, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_REG_WRITE(16, 0x1000F000, 0x1000F01F, intc, intc);
+    MAP_MEM_WRITE(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     switch (addr) {
         case 0x1a000008:
@@ -311,6 +320,8 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(32, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     MAP_MEM_WRITE(32, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(32, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_MEM_WRITE(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_REG_WRITE(32, 0x1F801600, 0x1F8016FF, usb, usb);
 
     switch (addr) {
         case 0x1000f430: {
@@ -358,6 +369,8 @@ void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_WRITE(64, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(64, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_MEM_WRITE(64, 0x1000F000, 0x1000F01F, intc, intc);
+    MAP_MEM_WRITE(64, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     // printf("bus: Unhandled 64-bit write to physical address 0x%08x (0x%08lx%08lx)\n", addr, data >> 32, data & 0xffffffff);
 }
@@ -374,6 +387,7 @@ void ee_bus_write128(void* udata, uint32_t addr, uint128_t data) {
     MAP_REG_WRITE(128, 0x10004000, 0x10005FFF, vif, vif);
     MAP_MEM_WRITE(128, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(128, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_MEM_WRITE(128, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     // printf("bus: Unhandled 128-bit write to physical address 0x%08x (0x%08x%08x%08x%08x)\n", addr, data.u32[3], data.u32[2], data.u32[1], data.u32[0]);
 }
