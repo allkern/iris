@@ -777,9 +777,51 @@ void vu_i_minix(struct vu_state* vu) {
         }
     }
 }
-void vu_i_miniy(struct vu_state* vu) { printf("vu: miniy unimplemented\n"); exit(1); }
-void vu_i_miniz(struct vu_state* vu) { printf("vu: miniz unimplemented\n"); exit(1); }
-void vu_i_miniw(struct vu_state* vu) { printf("vu: miniw unimplemented\n"); exit(1); }
+void vu_i_miniy(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    float bc = vu_vf_y(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float fs = vu_vf_i(vu, s, i);
+
+            vu_set_vf(vu, d, i, (fs < bc) ? fs : bc);
+        }
+    }
+}
+void vu_i_miniz(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    float bc = vu_vf_z(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float fs = vu_vf_i(vu, s, i);
+
+            vu_set_vf(vu, d, i, (fs < bc) ? fs : bc);
+        }
+    }
+}
+void vu_i_miniw(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+    int d = VU_UD_D;
+
+    float bc = vu_vf_w(vu, t);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float fs = vu_vf_i(vu, s, i);
+
+            vu_set_vf(vu, d, i, (fs < bc) ? fs : bc);
+        }
+    }
+}
 void vu_i_opmula(struct vu_state* vu) {
     int s = VU_LD_S;
     int t = VU_LD_T;
