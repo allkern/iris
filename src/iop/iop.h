@@ -67,6 +67,12 @@ struct iop_state {
     uint32_t cop0_r[16];
 
     int p;
+
+    uint32_t module_list_addr;
+
+    /* cache module list */
+    int module_count;
+    struct iop_module *module_list;
 };
 
 /*

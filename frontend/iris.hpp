@@ -111,6 +111,7 @@ struct instance {
     bool show_iop_state = false;
     bool show_iop_logs = false;
     bool show_iop_interrupts = false;
+    bool show_iop_modules = false;
     bool show_iop_dma = false;
     bool show_gs_debugger = false;
     bool show_spu2_debugger = false;
@@ -180,6 +181,7 @@ void show_iop_control(iris::instance* iris);
 void show_iop_state(iris::instance* iris);
 void show_iop_logs(iris::instance* iris);
 void show_iop_interrupts(iris::instance* iris);
+void show_iop_modules(iris::instance* iris);
 void show_iop_dma(iris::instance* iris);
 void show_gs_debugger(iris::instance* iris);
 void show_spu2_debugger(iris::instance* iris);

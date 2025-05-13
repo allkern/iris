@@ -87,6 +87,7 @@ int parse_toml_settings(iris::instance* iris) {
     iris->show_iop_state = debugger["show_iop_state"].value_or(false);
     iris->show_iop_logs = debugger["show_iop_logs"].value_or(false);
     iris->show_iop_interrupts = debugger["show_iop_interrupts"].value_or(false);
+    iris->show_iop_modules = debugger["show_iop_modules"].value_or(false);
     iris->show_iop_dma = debugger["show_iop_dma"].value_or(false);
     iris->show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
     iris->show_spu2_debugger = debugger["show_spu2_debugger"].value_or(false);
@@ -236,6 +237,7 @@ void close_settings(iris::instance* iris) {
             { "show_iop_state", iris->show_iop_state },
             { "show_iop_logs", iris->show_iop_logs },
             { "show_iop_interrupts", iris->show_iop_interrupts },
+            { "show_iop_modules", iris->show_iop_modules},
             { "show_iop_dma", iris->show_iop_dma },
             { "show_gs_debugger", iris->show_gs_debugger },
             { "show_spu2_debugger", iris->show_spu2_debugger },

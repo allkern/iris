@@ -390,6 +390,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_iop_state) show_iop_state(iris);
     if (iris->show_iop_logs) show_iop_logs(iris);
     if (iris->show_iop_interrupts) show_iop_interrupts(iris);
+    if (iris->show_iop_modules) show_iop_modules(iris);
     if (iris->show_iop_dma) show_iop_dma(iris);
     if (iris->show_gs_debugger) show_gs_debugger(iris);
     if (iris->show_spu2_debugger) show_spu2_debugger(iris);
