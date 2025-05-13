@@ -117,7 +117,7 @@ char* iso9660_get_boot_path(struct iso9660_state* iso) {
 
         *kptr = '\0';
 
-        printf("key: %s\n", key);
+        // printf("key: %s\n", key);
 
         if (!strncmp(key, "BOOT2", 64)) {
             while (isspace(*p)) ++p;
