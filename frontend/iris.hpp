@@ -93,6 +93,11 @@ struct instance {
     std::string pref_path = "";
     std::string ini_path = "";
 
+    bool core0_mute[24] = { false };
+    bool core1_mute[24] = { false };
+    int core0_solo = -1;
+    int core1_solo = -1;
+
     bool open = false;
     bool pause = true;
     bool step = false;
@@ -108,6 +113,7 @@ struct instance {
     bool show_iop_interrupts = false;
     bool show_iop_dma = false;
     bool show_gs_debugger = false;
+    bool show_spu2_debugger = false;
     bool show_memory_viewer = false;
     bool show_status_bar = true;
     bool show_breakpoints = false;
@@ -176,6 +182,7 @@ void show_iop_logs(iris::instance* iris);
 void show_iop_interrupts(iris::instance* iris);
 void show_iop_dma(iris::instance* iris);
 void show_gs_debugger(iris::instance* iris);
+void show_spu2_debugger(iris::instance* iris);
 void show_memory_viewer(iris::instance* iris);
 void show_status_bar(iris::instance* iris);
 void show_breakpoints(iris::instance* iris);

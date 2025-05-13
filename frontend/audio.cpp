@@ -11,10 +11,58 @@ void audio_update(void* ud, uint8_t* buf, int size) {
         return;
 
     for (int i = 0; i < (size >> 2); i++) {
-        struct spu2_sample sample = ps2_spu2_get_sample(iris->ps2->spu2);
+        struct spu2_sample s;
 
-        *(int16_t*)(&buf[(i << 2) + 0]) = sample.u16[0];
-        *(int16_t*)(&buf[(i << 2) + 2]) = sample.u16[1];
+        struct spu2_sample c0_adma = ps2_spu2_get_adma_sample(iris->ps2->spu2, 0);
+        struct spu2_sample c1_adma = ps2_spu2_get_adma_sample(iris->ps2->spu2, 1);
+    
+        s.s16[0] = c0_adma.s16[0];
+        s.s16[1] = c0_adma.s16[1];
+        s.s16[0] += c1_adma.s16[0];
+        s.s16[1] += c1_adma.s16[1];
+
+        if (iris->core0_solo >= 0) {
+            for (int i = 0; i < 24; i++) {
+                struct spu2_sample c0 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 0, i);
+
+                bool mute = iris->core0_mute[i] || i != iris->core0_solo;
+
+                s.s16[0] += mute ? 0 : c0.s16[0];
+                s.s16[1] += mute ? 0 : c0.s16[1];
+            }
+        } else {
+            for (int i = 0; i < 24; i++) {
+                struct spu2_sample c0 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 0, i);
+
+                bool mute = iris->core0_mute[i];
+
+                s.s16[0] += mute ? 0 : c0.s16[0];
+                s.s16[1] += mute ? 0 : c0.s16[1];
+            }
+        }
+
+        if (iris->core1_solo >= 0) {
+            for (int i = 0; i < 24; i++) {
+                struct spu2_sample c1 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 1, i);
+
+                bool mute = iris->core1_mute[i] || i != iris->core1_solo;
+
+                s.s16[0] += mute ? 0 : c1.s16[0];
+                s.s16[1] += mute ? 0 : c1.s16[1];
+            }
+        } else {
+            for (int i = 0; i < 24; i++) {
+                struct spu2_sample c1 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 1, i);
+
+                bool mute = iris->core1_mute[i];
+
+                s.s16[0] += mute ? 0 : c1.s16[0];
+                s.s16[1] += mute ? 0 : c1.s16[1];
+            }
+        }
+
+        *(int16_t*)(&buf[(i << 2) + 0]) = s.u16[0];
+        *(int16_t*)(&buf[(i << 2) + 2]) = s.u16[1];
     }
 }
 

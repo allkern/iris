@@ -392,6 +392,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_iop_interrupts) show_iop_interrupts(iris);
     if (iris->show_iop_dma) show_iop_dma(iris);
     if (iris->show_gs_debugger) show_gs_debugger(iris);
+    if (iris->show_spu2_debugger) show_spu2_debugger(iris);
     if (iris->show_memory_viewer) show_memory_viewer(iris);
     if (iris->show_status_bar && !iris->fullscreen) show_status_bar(iris);
     if (iris->show_breakpoints) show_breakpoints(iris);

@@ -15,8 +15,9 @@ const char* aspect_mode_names[] = {
     "Native",
     "Stretch",
     "Stretch (Keep aspect ratio)",
-    "Force 4:3",
-    "Force 16:9",
+    "Force 4:3 (NTSC)",
+    "Force 16:9 (Widescreen)",
+    "Force 5:4 (PAL)",
     "Auto"
 };
 
@@ -46,24 +47,18 @@ int open_file(iris::instance* iris, std::string file) {
     std::filesystem::path path(file);
     std::string ext = path.extension().string();
 
+    for (char& c : ext)
+        c = tolower(c);
+
     // Load disc image
     if (ext == ".iso" || ext == ".bin" || ext == ".cue") {
-        struct iso9660_state* iso = iso9660_open(file.c_str());
-
-        if (!iso) {
+        if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str()))
             return 1;
-            // printf("iris: Couldn't open disc image \"%s\"\n", file.c_str());
 
-            // exit(1);
+        char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
 
-            // return;
-        }
-
-        char* boot_file = iso9660_get_boot_path(iso);
-
-        if (!boot_file) {
+        if (!boot_file)
             return 2;
-        }
 
         // Temporarily disable window updates
         struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
@@ -73,10 +68,6 @@ int open_file(iris::instance* iris, std::string file) {
 
         // Re-enable window updates
         ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
-
-        ps2_cdvd_open(iris->ps2->cdvd, file.c_str());
-
-        iso9660_close(iso);
 
         iris->loaded = file;
 
@@ -117,12 +108,16 @@ void show_main_menubar(iris::instance* iris) {
 
         if (BeginMenu("Iris")) {
             if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Open...")) {
+                iris->mute = true;
+
                 auto f = pfd::open_file("Select a file to load", "", {
                     "All File Types (*.iso; *.bin; *.cue; *.elf)", "*.iso *.bin *.cue *.elf",
                     "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
                     "ELF Executables (*.elf)", "*.elf",
                     "All Files (*.*)", "*"
                 });
+
+                iris->mute = false;
 
                 if (f.result().size()) {
                     open_file(iris, f.result().at(0));
@@ -246,19 +241,25 @@ void show_main_menubar(iris::instance* iris) {
             }
 
             if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
+                iris->mute = true;
+
                 auto f = pfd::open_file("Select CD/DVD image", "", {
                     "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
                     "All Files (*.*)", "*"
                 });
 
-                if (f.result().size()) {
-                    ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str());
+                iris->mute = false;
 
-                    iris->loaded = f.result().at(0);
+                if (f.result().size()) {
+                    if (!ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str())) {
+                        iris->loaded = f.result().at(0);
+                    }
                 }
             }
 
             if (MenuItem(ICON_MS_EJECT " Eject disc")) {
+                iris->loaded = "";
+
                 ps2_cdvd_close(iris->ps2->cdvd);
             }
 
@@ -298,7 +299,7 @@ void show_main_menubar(iris::instance* iris) {
                 }
 
                 if (BeginMenu("Aspect mode")) {
-                    for (int i = 0; i < 6; i++) {
+                    for (int i = 0; i < 7; i++) {
                         if (Selectable(aspect_mode_names[i], iris->aspect_mode == i)) {
                             iris->aspect_mode = i;
 
@@ -375,6 +376,7 @@ void show_main_menubar(iris::instance* iris) {
 
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " Breakpoints", NULL, &iris->show_breakpoints));
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &iris->show_gs_debugger));
+            if (MenuItem(ICON_MS_LINE_START_CIRCLE " SPU2 debugger", NULL, &iris->show_spu2_debugger));
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &iris->show_memory_viewer));
             
             ImGui::EndMenu();

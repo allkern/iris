@@ -80,11 +80,21 @@ void show_ee_intc_interrupts(iris::instance* iris) {
             int status = intc->stat & (1 << i);
             int mask = intc->mask & (1 << i);
 
-            Text(status ? ICON_MS_CHECK : "");
+            char label[16];
+
+            sprintf(label, "%s##s%x", status ? ICON_MS_CHECK : "", i);
+
+            if (Selectable(label)) {
+                intc->stat ^= 1 << i;
+            }
 
             TableSetColumnIndex(2);
 
-            Text(mask ? ICON_MS_CHECK : "");
+            sprintf(label, "%s##m%x", mask ? ICON_MS_CHECK : "", i);
+
+            if (Selectable(label)) {
+                intc->stat ^= 1 << i;
+            }
         }
 
         EndTable();
@@ -144,11 +154,21 @@ void show_iop_intc_interrupts(iris::instance* iris) {
             int status = intc->stat & (1 << i);
             int mask = intc->mask & (1 << i);
 
-            Text(status ? ICON_MS_CHECK : "");
+            char label[16];
+
+            sprintf(label, "%s##s%x", status ? ICON_MS_CHECK : "", i);
+
+            if (Selectable(label)) {
+                intc->stat ^= 1 << i;
+            }
 
             TableSetColumnIndex(2);
 
-            Text(mask ? ICON_MS_CHECK : "");
+            sprintf(label, "%s##m%x", mask ? ICON_MS_CHECK : "", i);
+
+            if (Selectable(label)) {
+                intc->mask ^= 1 << i;
+            }
         }
 
         EndTable();

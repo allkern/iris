@@ -31,7 +31,11 @@ void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key) {
 
             SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
         } break;
-        case SDLK_m: {
+        case SDLK_F1: {
+            printf("ps2: Sending poweroff signal\n");
+            ps2_cdvd_power_off(iris->ps2->cdvd);
+        } break;
+        case SDLK_0: {
             ps2_iop_intc_irq(iris->ps2->iop_intc, IOP_INTC_USB);
         } break;
     }

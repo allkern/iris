@@ -89,6 +89,7 @@ int parse_toml_settings(iris::instance* iris) {
     iris->show_iop_interrupts = debugger["show_iop_interrupts"].value_or(false);
     iris->show_iop_dma = debugger["show_iop_dma"].value_or(false);
     iris->show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
+    iris->show_spu2_debugger = debugger["show_spu2_debugger"].value_or(false);
     iris->show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
     iris->show_status_bar = debugger["show_status_bar"].value_or(true);
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
@@ -195,25 +196,15 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     }
 
     if (iris->disc_path.size()) {
-        struct iso9660_state* iso = iso9660_open(iris->disc_path.c_str());
-
-        if (!iso) {
-            printf("iris: Couldn't open disc image \"%s\"\n", iris->disc_path.c_str());
-
-            exit(1);
-
+        if (ps2_cdvd_open(iris->ps2->cdvd, iris->disc_path.c_str()))
             return;
-        }
 
-        char* boot_file = iso9660_get_boot_path(iso);
+        char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
 
         if (!boot_file)
             return;
 
         ps2_boot_file(iris->ps2, boot_file);
-        ps2_cdvd_open(iris->ps2->cdvd, iris->disc_path.c_str());
-
-        iso9660_close(iso);
 
         iris->loaded = iris->disc_path;
     }
@@ -247,6 +238,7 @@ void close_settings(iris::instance* iris) {
             { "show_iop_interrupts", iris->show_iop_interrupts },
             { "show_iop_dma", iris->show_iop_dma },
             { "show_gs_debugger", iris->show_gs_debugger },
+            { "show_spu2_debugger", iris->show_spu2_debugger },
             { "show_memory_viewer", iris->show_memory_viewer },
             { "show_status_bar", iris->show_status_bar },
             { "show_breakpoints", iris->show_breakpoints },
