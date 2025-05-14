@@ -324,7 +324,7 @@ int disc_get_type(struct disc_state* disc) {
 
             // printf("dir=\'%s\' (%d)\n", (char*)&dir->id, dir->id_len);
 
-            next:
+            next:;
 
             uint8_t* ptr = (uint8_t*)dir;
 
