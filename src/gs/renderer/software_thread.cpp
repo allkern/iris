@@ -1012,7 +1012,7 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
         bb = CLAMP(bb, 0, 255);
         aa = CLAMP(aa, 0, 255);
 
-        return rr | (gg << 8) | (bb << 16) | (aa << 24);
+        return gs_from_rgba32(gs, rr | (gg << 8) | (bb << 16) | (aa << 24), gs->ctx->tbpsm);
     } else {
         return gs_read_tb_impl(gs, u >> 4, v >> 4);
     }

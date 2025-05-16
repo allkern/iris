@@ -517,7 +517,7 @@ static inline void ee_i_bc1tl(struct ee_state* ee) {
 }
 static inline void ee_i_bc2f(struct ee_state* ee) { printf("ee: bc2f unimplemented\n"); exit(1); }
 static inline void ee_i_bc2fl(struct ee_state* ee) { printf("ee: bc2fl unimplemented\n"); exit(1); }
-static inline void ee_i_bc2t(struct ee_state* ee) { printf("ee: bc2t unimplemented\n"); exit(1); }
+static inline void ee_i_bc2t(struct ee_state* ee) { BRANCH(0, EE_D_SI16); }
 static inline void ee_i_bc2tl(struct ee_state* ee) { printf("ee: bc2tl unimplemented\n"); exit(1); }
 static inline void ee_i_beq(struct ee_state* ee) {
     BRANCH(EE_RS == EE_RT, EE_D_SI16);
@@ -2240,9 +2240,7 @@ static inline void ee_i_teq(struct ee_state* ee) {
 static inline void ee_i_teqi(struct ee_state* ee) {
     if (EE_RS == SE6416(EE_D_I16)) ee_exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_tge(struct ee_state* ee) {
-    if (EE_RS >= EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
-}
+static inline void ee_i_tge(struct ee_state* ee) { printf("ee: tge unimplemented\n"); exit(1); }
 static inline void ee_i_tgei(struct ee_state* ee) { printf("ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee) { printf("ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee) { printf("ee: tgeu unimplemented\n"); exit(1); }

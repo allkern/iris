@@ -115,6 +115,9 @@ extern "C" {
 #define GS_VBLANK_SCANS_PAL 26
 #define GS_SCANLINE_PAL 9476
 
+// EE clock: 294.912 MHz, 294912000 clocks/s
+// 294912000/60=4915200 clocks/frame
+
 #define GS_FRAME_NTSC (240 * 9370)
 #define GS_VBLANK_NTSC (22 * 9370)
 #define GS_FRAME_PAL (286 * 9476)

@@ -775,7 +775,9 @@ uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr & ~3);
 
     switch (addr) {
-        case 0x10009000: {
+        case 0x10009000:
+        case 0x1000a000:
+        case 0x10008000: {
             return c->chcr & 0xff;
         }
 
@@ -796,7 +798,8 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 
     switch (addr) {
         case 0x10008000:
-        case 0x10009000: {
+        case 0x10009000:
+        case 0x1000a000: {
             c->chcr &= 0xff00;
             c->chcr |= data & 0xff;
 

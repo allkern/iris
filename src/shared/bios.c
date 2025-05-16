@@ -16,7 +16,7 @@ static int get_file_size(FILE* file) {
 
     size = ftell(file);
 
-    fseek(file, prev, SEEK_SET);
+    fseek(file, 0, SEEK_SET);
 
     return size;
 }
@@ -45,10 +45,11 @@ int ps2_bios_init(struct ps2_bios* bios, const char* path) {
         return 1;
     }
 
+    // "size" is actually a mask
     bios->size = get_file_size(file) - 1;
-    bios->buf = malloc(bios->size);
+    bios->buf = malloc(bios->size + 1);
 
-    if (!fread(bios->buf, 1, bios->size + 1, file)) {
+    if (!fread(bios->buf, 1, bios->size, file)) {
         printf("bios: Couldn't read binary\n");
 
         return 1;

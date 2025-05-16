@@ -22,12 +22,22 @@ static inline void ds_cmd_query_masked(struct ps2_sio2* sio2, struct ds_state* d
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
     queue_push(sio2->out, 0x5a);
-    queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, 0x00);
-    queue_push(sio2->out, 0x00);
-    queue_push(sio2->out, 0x5a);
+
+    if (!ds->mode) {
+        queue_push(sio2->out, 0x00);
+        queue_push(sio2->out, 0x00);
+        queue_push(sio2->out, 0x00);
+        queue_push(sio2->out, 0x00);
+        queue_push(sio2->out, 0x00);
+        queue_push(sio2->out, 0x00);
+    } else {
+        queue_push(sio2->out, ds->mask[0]);
+        queue_push(sio2->out, ds->mask[1]);
+        queue_push(sio2->out, 0x03);
+        queue_push(sio2->out, 0x00);
+        queue_push(sio2->out, 0x00);
+        queue_push(sio2->out, 0x5a);
+    }
 }
 static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_read_data(%04x)\n", ds->buttons);
@@ -145,9 +155,9 @@ static inline void ds_cmd_query_model(struct ps2_sio2* sio2, struct ds_state* ds
     queue_push(sio2->out, 0x00);
 }
 static inline void ds_cmd_query_act(struct ps2_sio2* sio2, struct ds_state* ds) {
-    printf("ds: ds_cmd_query_act\n");
+    printf("ds: ds_cmd_query_act(%02x)\n", sio2->in->buf[3]);
 
-    int index = sio2->in->buf[2];
+    int index = sio2->in->buf[3];
 
     if (!index) {
         queue_push(sio2->out, 0xff);
@@ -187,7 +197,7 @@ static inline void ds_cmd_query_comb(struct ps2_sio2* sio2, struct ds_state* ds)
 static inline void ds_cmd_query_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_query_mode\n");
 
-    int index = sio2->in->buf[2];
+    int index = sio2->in->buf[3];
 
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
@@ -227,6 +237,21 @@ static inline void ds_cmd_set_native_mode(struct ps2_sio2* sio2, struct ds_state
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x5a);
+
+    ds->mask[0] = sio2->in->buf[3];
+    ds->mask[1] = sio2->in->buf[4];
+
+    int value = sio2->in->buf[5];
+
+    if ((value & 1) == 0) {
+        ds->mode = 0;
+    } else if ((value & 2) == 0) {
+        ds->mode = 1;
+    } else {
+        printf("ds: Set native mode to DS2_NATIVE\n");
+
+        ds->mode = 2;
+    }
 }
 
 void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
@@ -268,8 +293,8 @@ struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
     ds->ax_left_y = 0x7f;
     ds->ax_left_x = 0x7f;
     ds->buttons = 0xffff;
-    ds->vibration[0] = 0x00;
-    ds->vibration[1] = 0x01;
+    ds->vibration[0] = 0xff;
+    ds->vibration[1] = 0xff;
 
     // Start in digital mode
     ds->mode = 0;
