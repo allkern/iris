@@ -7,13 +7,101 @@ void mcd_cmd_probe(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     printf("mcd: mcd_cmd_probe\n");
 
     queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x2b);
+    queue_push(sio2->out, mcd->term);
+}
+void mcd_cmd_set_terminator(struct ps2_sio2* sio2, struct mcd_state* mcd) {
+    printf("mcd: mcd_cmd_set_terminator(%02x)\n", sio2->in->buf[2]);
+    
+    queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x2b);
     queue_push(sio2->out, mcd->term);
+
+    mcd->term = sio2->in->buf[2];
+}
+void mcd_cmd_get_terminator(struct ps2_sio2* sio2, struct mcd_state* mcd) {
+    printf("mcd: mcd_cmd_get_terminator\n");
+
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x2b);
+    queue_push(sio2->out, mcd->term);
+    queue_push(sio2->out, 0x55);
+}
+void mcd_cmd_auth_f0(struct ps2_sio2* sio2, struct mcd_state* mcd) {
+    printf("mcd: mcd_cmd_auth_f0\n");
+
+    uint8_t param = sio2->in->buf[2];
+
+    switch (param) {
+        case 0x01:
+        case 0x02:
+        case 0x04:
+        case 0x0f:
+        case 0x11:
+        case 0x13: {
+            // Handle checksum
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x2b);
+
+            uint8_t checksum = 0;
+
+            for (int i = 0; i < 8; i++) {
+                checksum ^= sio2->in->buf[i+3];
+
+                queue_push(sio2->out, 0x00);
+            }
+
+            queue_push(sio2->out, checksum);
+            queue_push(sio2->out, mcd->term);
+        } break;
+
+        case 0x06:
+        case 0x07:
+        case 0x0b: {
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x2b);
+            queue_push(sio2->out, mcd->term);
+        } break;
+
+        default: {
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x2b);
+            queue_push(sio2->out, mcd->term);
+        } break;
+    }
 }
 void mcd_cmd_auth_f3(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     printf("mcd: mcd_cmd_auth_f3\n");
 
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x2b);
+    queue_push(sio2->out, mcd->term);
+}
+void mcd_cmd_auth_f7(struct ps2_sio2* sio2, struct mcd_state* mcd) {
+    printf("mcd: mcd_cmd_auth_f7\n");
+
+    queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x2b);
@@ -27,7 +115,12 @@ void mcd_handle_command(struct ps2_sio2* sio2, void* udata) {
 
     switch (cmd) {
         case 0x11: mcd_cmd_probe(sio2, mcd); return;
+        case 0x27: mcd_cmd_set_terminator(sio2, mcd); return;
+        case 0x28: mcd_cmd_get_terminator(sio2, mcd); return;
+        // case 0x52: mcd_cmd_ps1_read(sio2, mcd); return;
+        case 0xf0: mcd_cmd_auth_f0(sio2, mcd); return;
         case 0xf3: mcd_cmd_auth_f3(sio2, mcd); return;
+        case 0xf7: mcd_cmd_auth_f7(sio2, mcd); return;
     }
 
     printf("mcd: Unhandled command %02x\n", cmd);
@@ -39,12 +132,13 @@ struct mcd_state* mcd_sio2_attach(struct ps2_sio2* sio2, int port) {
     struct mcd_state* mcd = malloc(sizeof(struct mcd_state));
     struct sio2_device dev;
 
+    memset(mcd, 0, sizeof(struct mcd_state));
+
+    // Init card state
     mcd->term = 0x55;
 
     dev.handle_command = mcd_handle_command;
     dev.udata = mcd;
-
-    memset(mcd, 0, sizeof(struct mcd_state));
 
     ps2_sio2_attach_device(sio2, dev, port);
 

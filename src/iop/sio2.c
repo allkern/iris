@@ -78,7 +78,17 @@ static inline void sio2_write_ctrl(struct ps2_sio2* sio2, uint32_t data) {
     int pad = devid == SIO2_DEV_PAD;
     int mcd = devid == SIO2_DEV_MCD;
 
-    if ((devid != SIO2_DEV_PAD) || (p != 0)) {
+    if ((!pad) && (!mcd)) {
+        sio2->recv1 = 0x1d100;
+
+        return;
+    }
+
+    if (pad && (p != 0)) {
+        sio2->recv1 = 0x1d100;
+
+        return;
+    } else if (mcd && (p != 2)) {
         sio2->recv1 = 0x1d100;
 
         return;
@@ -100,19 +110,25 @@ static inline void sio2_write_ctrl(struct ps2_sio2* sio2, uint32_t data) {
     // Device connected, send command
     sio2->recv1 = 0x1100;
 
-    // printf("sio2: Sending command to port %d with devid %02x\n", p, devid);
-
     sio2->port[p].handle_command(sio2, sio2->port[p].udata);
+
+    iop_dma_handle_sio2_out_transfer(sio2->dma);
 }
 
 uint64_t ps2_sio2_read8(struct ps2_sio2* sio2, uint32_t addr) {
     switch (addr) {
         // case 0x1F808260: /* printf("8-bit SIO2_FIFOIN read\n"); */ return 0;
         case 0x1F808264: {
-            if (queue_is_empty(sio2->out))
-                return 0xff;
+            if (queue_is_empty(sio2->out)) {
+                printf("sio2: SIO2_FIFOOUT read %02x\n", 0x00);
+                return 0x00;
+            }
 
-            return queue_pop(sio2->out);
+            uint8_t b = queue_pop(sio2->out);
+
+            printf("sio2: SIO2_FIFOOUT read %02x\n", b);
+
+            return b;
         } break;
         // case 0x1F808268: /* printf("8-bit SIO2_CTRL read\n"); */ return 0; 
         // case 0x1F80826C: /* printf("8-bit SIO2_RECV1 read\n"); */ return 0;
@@ -163,7 +179,7 @@ uint64_t ps2_sio2_read32(struct ps2_sio2* sio2, uint32_t addr) {
 
 void ps2_sio2_write8(struct ps2_sio2* sio2, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x1F808260: /* printf("sio2: FIFOIN write %02x\n", data); */ queue_push(sio2->in, data); return;
+        case 0x1F808260: printf("sio2: FIFOIN write %02x\n", data); queue_push(sio2->in, data); return;
         // case 0x1F808264: /* printf("8-bit SIO2_FIFOOUT write %02x\n", data); */ return;
         case 0x1F808268: sio2_write_ctrl(sio2, data); return;
         // case 0x1F80826C: /* printf("8-bit SIO2_RECV1 write %02x\n", data); */ return;

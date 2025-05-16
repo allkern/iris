@@ -445,66 +445,93 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
     uint32_t size = (dma->sio2_in.bcr & 0xffff) * (dma->sio2_in.bcr >> 16);
 
-    // printf("dma: SIO2 in transfer size=%d\n", size);
+    printf("dma: SIO2 in transfer size=%d\n", size);
 
-    // sio2_dma_reset(dma->sio2);
+    sio2_dma_reset(dma->sio2);
 
-    // for (int i = 0; i < size; i++) {
-    //     uint32_t w = iop_bus_read32(dma->bus, dma->sio2_in.madr);
+    for (int i = 0; i < size; i++) {
+        uint32_t w = iop_bus_read32(dma->bus, dma->sio2_in.madr);
 
-    //     queue_push(dma->sio2->in, (w >> 0) & 0xff);
-    //     queue_push(dma->sio2->in, (w >> 8) & 0xff);
-    //     queue_push(dma->sio2->in, (w >> 16) & 0xff);
-    //     queue_push(dma->sio2->in, (w >> 24) & 0xff);
+        queue_push(dma->sio2->in, (w >> 0) & 0xff);
+        queue_push(dma->sio2->in, (w >> 8) & 0xff);
+        queue_push(dma->sio2->in, (w >> 16) & 0xff);
+        queue_push(dma->sio2->in, (w >> 24) & 0xff);
 
-    //     printf("%02x %02x %02x %02x\n",
-    //         (w >> 0) & 0xff,
-    //         (w >> 8) & 0xff,
-    //         (w >> 16) & 0xff,
-    //         (w >> 24) & 0xff
-    //     );
+        printf("%02x %02x %02x %02x\n",
+            (w >> 0) & 0xff,
+            (w >> 8) & 0xff,
+            (w >> 16) & 0xff,
+            (w >> 24) & 0xff
+        );
 
-    //     dma->sio2_in.madr += 4;
-    // }
+        dma->sio2_in.madr += 4;
+    }
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_IN);
     iop_dma_check_irq(dma);
 
     dma->sio2_in.chcr &= ~0x1000000;
 }
-void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
-    // if (queue_is_empty(dma->sio2->out)) {
-    //     // printf("dma: Waiting for SIO2 out\n");
 
-    //     return;
-    // }
-
-    // // printf("dma: Doing SIO2 out transfer size=%d bcr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr);
-
-    // iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
-    // iop_dma_check_irq(dma);
-
-    // for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
-    //     for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-    //     }
-    // }
-    for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
-        for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
-            iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-            iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-            iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-            iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-        }
-    }
+void dma_handle_sio2_out_irq_event(void* udata, int overshoot) {
+    struct ps2_iop_dma* dma = (struct ps2_iop_dma*)udata;
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
     iop_dma_check_irq(dma);
 
     dma->sio2_out.chcr &= ~0x1000000;
+}
+void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
+    if ((dma->sio2_out.chcr & 0x1000000) == 0) {
+        printf("dma: SIO2_out not requested\n");
+        
+        return;
+    }
+    
+    if (queue_is_empty(dma->sio2->out)) {
+        printf("dma: SIO2_out waiting\n");
+        
+        return;
+    }
+
+    printf("dma: Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
+
+    for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
+        for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
+            for (int j = 0; j < 4; j++) {
+                uint8_t b = iop_bus_read8(dma->bus, 0x1F808264);
+
+                iop_bus_write8(dma->bus, dma->sio2_out.madr++, b);    
+            } 
+
+            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
+        }
+    }
+    // for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
+    //     for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
+    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
+    //     }
+    // }
+
+    struct sched_event event;
+
+    event.callback = dma_handle_sio2_out_irq_event;
+    event.cycles = 10000;
+    event.name = "SIO2 out DMA IRQ";
+    event.udata = dma;
+
+    sched_schedule(dma->sched, event);
+
+    // iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
+    // iop_dma_check_irq(dma);
+
+    // dma->sio2_out.chcr &= ~0x1000000;
 }
 
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {

@@ -315,6 +315,75 @@ static inline void cdvd_s_close_config(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_mechacon_auth_80(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_mechacon_auth_81(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_mechacon_auth_82(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_mechacon_auth_83(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_mechacon_auth_84(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1+8+4);
+
+    cdvd->s_fifo[0] = 0;
+    cdvd->s_fifo[1] = 0x21;
+    cdvd->s_fifo[2] = 0xdc;
+    cdvd->s_fifo[3] = 0x31;
+    cdvd->s_fifo[4] = 0x96;
+    cdvd->s_fifo[5] = 0xce;
+    cdvd->s_fifo[6] = 0x72;
+    cdvd->s_fifo[7] = 0xe0;
+    cdvd->s_fifo[8] = 0xc8;
+    cdvd->s_fifo[9]  = 0x69;
+    cdvd->s_fifo[10] = 0xda;
+    cdvd->s_fifo[11] = 0x34;
+    cdvd->s_fifo[12] = 0x9b;
+}
+static inline void cdvd_s_mechacon_auth_85(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1+4+8);
+
+    cdvd->s_fifo[0] = 0;
+    cdvd->s_fifo[1] = 0xeb;
+    cdvd->s_fifo[2] = 0x01;
+    cdvd->s_fifo[3] = 0xc7;
+    cdvd->s_fifo[4] = 0xa9;
+    cdvd->s_fifo[5] = 0x3f;
+    cdvd->s_fifo[6] = 0x9c;
+    cdvd->s_fifo[7] = 0x5b;
+    cdvd->s_fifo[8] = 0x19;
+    cdvd->s_fifo[9] = 0x31;
+    cdvd->s_fifo[10] = 0xa0;
+    cdvd->s_fifo[11] = 0xb3;
+    cdvd->s_fifo[12] = 0xa3;
+}
+static inline void cdvd_s_mechacon_auth_86(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_mechacon_auth_87(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void cdvd_s_mechacon_auth_88(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 static inline void cdvd_s_mg_write_data(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
 
@@ -378,6 +447,15 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x41: printf("cdvd: read_config\n"); cdvd_s_read_config(cdvd); break;
         case 0x42: printf("cdvd: write_config\n"); cdvd_s_write_config(cdvd); break;
         case 0x43: printf("cdvd: close_config\n"); cdvd_s_close_config(cdvd); break;
+        case 0x80: printf("cdvd: mechacon_auth_80\n"); cdvd_s_mechacon_auth_80(cdvd); break;
+        case 0x81: printf("cdvd: mechacon_auth_81\n"); cdvd_s_mechacon_auth_81(cdvd); break;
+        case 0x82: printf("cdvd: mechacon_auth_82\n"); cdvd_s_mechacon_auth_82(cdvd); break;
+        case 0x83: printf("cdvd: mechacon_auth_83\n"); cdvd_s_mechacon_auth_83(cdvd); break;
+        case 0x84: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_84(cdvd); break;
+        case 0x85: printf("cdvd: mechacon_auth_85\n"); cdvd_s_mechacon_auth_85(cdvd); break;
+        case 0x86: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_86(cdvd); break;
+        case 0x87: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_87(cdvd); break;
+        case 0x88: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_88(cdvd); break;
         case 0x8d: printf("cdvd: mg_write_data\n"); cdvd_s_mg_write_data(cdvd); break;
         case 0x8f: printf("cdvd: mechacon_auth_8f\n"); cdvd_s_mechacon_auth_8f(cdvd); break;
         case 0x90: printf("cdvd: mg_write_hdr_start\n"); cdvd_s_mg_write_hdr_start(cdvd); break;
