@@ -35,6 +35,10 @@ void print_help(iris::instance* iris) {
         "  -i, --disc               Specify a path to a disc image file\n"
         "  -x, --executable         Specify a path to an ELF executable to be\n"
         "                             loaded on system startup\n"
+        "      --slot1              Specify a path to a memory card file to\n"
+        "                             be inserted on slot 1\n"
+        "      --slot2              Specify a path to a memory card file to\n"
+        "                             be inserted on slot 2\n"
         "  -h, --help               Display this help and exit\n"
         "  -v, --version            Output version information and exit\n"
         "\n"
@@ -63,11 +67,13 @@ int parse_toml_settings(iris::instance* iris) {
     iris->bios_path = paths["bios_path"].value_or("");
     iris->rom1_path = paths["rom1_path"].value_or("");
     iris->rom2_path = paths["rom2_path"].value_or("");
+    iris->mcd0_path = paths["mcd0_path"].value_or("");
+    iris->mcd1_path = paths["mcd1_path"].value_or("");
 
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
     iris->window_height = window["window_height"].value_or(720);
-    iris->fullscreen = window["fullscreen"].value_or(false);
+    iris->fullscreen = window["fullscreen"].value_or(0);
     // iris->fullscreen_mode = tbl["fullscreen_mode"].value_or(0);
 
     auto display = tbl["display"];
@@ -153,6 +159,14 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
             iris->disc_path = argv[i+1];
 
             ++i;
+        } else if (a == "--slot1") {
+            iris->mcd0_path = argv[i+1];
+
+            ++i;
+        } else if (a == "--slot2") {
+            iris->mcd1_path = argv[i+1];
+
+            ++i;
         } else {
             iris->disc_path = argv[i];
         }
@@ -209,6 +223,14 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
 
         iris->loaded = iris->disc_path;
     }
+
+    // if (iris->mcd0_path.size()) {
+    //     mcd_sio2_attach(iris->ps2->sio2, 2, iris->mcd0_path.c_str());
+    // }
+
+    // if (iris->mcd1_path.size()) {
+    //     mcd_sio2_attach(iris->ps2->sio2, 3, iris->mcd1_path.c_str());
+    // }
 }
 
 int init_settings(iris::instance* iris, int argc, const char* argv[]) {
@@ -250,6 +272,7 @@ void close_settings(iris::instance* iris) {
             { "scale", iris->scale },
             { "aspect_mode", iris->aspect_mode },
             { "integer_scaling", iris->integer_scaling },
+            { "fullscreen", iris->fullscreen },
             { "bilinear", iris->bilinear },
             { "renderer", iris->renderer_backend }
         } },
@@ -257,6 +280,8 @@ void close_settings(iris::instance* iris) {
             { "bios_path", iris->bios_path },
             { "rom1_path", iris->rom1_path },
             { "rom2_path", iris->rom2_path },
+            { "mcd0_path", iris->mcd0_path },
+            { "mcd1_path", iris->mcd1_path }
         } },
         { "recents", toml::table {
             { "array", toml::array() }

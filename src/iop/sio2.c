@@ -49,6 +49,68 @@ void ps2_sio2_destroy(struct ps2_sio2* sio2) {
     free(sio2);
 }
 
+static inline int sio2_handle_command(struct ps2_sio2* sio2, int idx) {
+    int devid = queue_at(sio2->in, 0);
+    int cmd = queue_at(sio2->in, 1);
+    int p = sio2->send3[idx] & 3;
+    int len = (sio2->send3[idx] >> 18) & 0xff;
+
+    // printf("sio2: Trying command %02x in SEND3[%d] port %d devid %02x (in: %d (%d), len: %d)\n", cmd,
+    //     idx, p, devid, queue_size(sio2->in), queue_size(sio2->in) + 2, len
+    // );
+
+    // If we're sending a pad command, make sure it's only for ports
+    // 0-1, and if it's a memory card command, make sure it's only
+    // for ports 2-3
+    int pad = devid == SIO2_DEV_PAD;
+    int mcd = devid == SIO2_DEV_MCD;
+
+    // if (mcd)
+    //     return 0;
+
+    if ((!pad) && (!mcd))
+        return 0;
+
+    if (pad && (p & 2)) {
+        return 0;
+    } else if (mcd && ((p & 2) == 0)) {
+        return 0;
+    }
+
+    // Check if the port is actually connected
+    if (!sio2->port[p].handle_command)
+        return 0;
+
+    // printf("sio2: Sending command %02x to port %d with devid %02x (in: %d (%d), len: %d)\n",
+    //     cmd, p, devid, queue_size(sio2->in), queue_size(sio2->in) + 2, len
+    // );
+
+    // Send command
+    sio2->port[p].handle_command(sio2, sio2->port[p].udata, cmd);
+
+    // Clear current command parameters (command and devid already popped)
+    for (int i = 0; i < len; i++)
+        queue_pop(sio2->in);
+
+    // Weird behavior, DMA MCD commands are aligned to a 36-word boundary
+    if (mcd) {
+        while (sio2->out->size % 0x90)
+            queue_push(sio2->out, 0);
+
+        if (!queue_is_empty(sio2->in)) {
+            // Remove input padding
+            while (sio2->in->index % 0x90)
+                queue_pop(sio2->in);
+        }
+    }
+
+    // printf("sio2: FIFOOUT size: %d (%x)\n", sio2->out->size, sio2->out->size);
+
+    // if (cmd == 0x81) exit(1);
+
+    return 1;
+}
+
 static inline void sio2_write_ctrl(struct ps2_sio2* sio2, uint32_t data) {
     sio2->ctrl = data & ~1;
 
@@ -62,56 +124,34 @@ static inline void sio2_write_ctrl(struct ps2_sio2* sio2, uint32_t data) {
     if ((data & 1) == 0)
         return;
 
+    // Disconnected by default
+    sio2->recv1 = 0x1d100;
+
+    // Send IRQ no matter what
     sio2->istat |= 1;
 
     ps2_iop_intc_irq(sio2->intc, IOP_INTC_SIO2);
 
-    int devid = sio2->in->buf[0];
-    int cmd = sio2->in->buf[1];
-    int p = sio2->send3[0] & 3;
-    int len = (sio2->send3[0] >> 18) & 0xff;
-
-    // printf("sio2: Sending command %02x to port %d with devid %02x (in: %d)\n",
-    //     cmd, p, devid, queue_size(sio2->in)
+    // printf("sio2: Sending command %02x to port %d with devid %02x (in: %d, len: %d)\n",
+    //     cmd, p, devid, queue_size(sio2->in), len
     // );
 
-    int pad = devid == SIO2_DEV_PAD;
-    int mcd = devid == SIO2_DEV_MCD;
+    for (int i = 0; i < 16; i++) {
+        // Break when we find a null command
+        if (!sio2->send3[i])
+            break;
 
-    if ((!pad) && (!mcd)) {
-        sio2->recv1 = 0x1d100;
-
-        return;
+        // If any of the commands were handled, set RECV1 to 0x1100
+        if (sio2_handle_command(sio2, i)) {
+            sio2->recv1 = 0x1100;
+        }
     }
 
-    if (pad && (p != 0)) {
-        sio2->recv1 = 0x1d100;
-
-        return;
-    } else if (mcd && (p != 2)) {
-        sio2->recv1 = 0x1d100;
-
-        return;
-    }
-
-    sio2->istat |= 1;
-
-    ps2_iop_intc_irq(sio2->intc, IOP_INTC_SIO2);
-
-    // struct sched_event event;
-
-    // event.callback = sio2_send_irq;
-    // event.cycles = 1000;
-    // event.name = "SIO2 Command IRQ";
-    // event.udata = sio2;
-
-    // sched_schedule(sio2->sched, event);
-
-    // Device connected, send command
-    sio2->recv1 = 0x1100;
-
-    sio2->port[p].handle_command(sio2, sio2->port[p].udata);
-
+    // Complete SIO2_out transfer after all commands have executed
+    // For commands that use DMA (mostly MCD commands), this will handle
+    // reading from the output FIFO. Will do nothing on commands
+    // that don't use DMA, because the IOP needs to start a transfer
+    // before sending a DMA command
     iop_dma_handle_sio2_out_transfer(sio2->dma);
 }
 
@@ -120,13 +160,13 @@ uint64_t ps2_sio2_read8(struct ps2_sio2* sio2, uint32_t addr) {
         // case 0x1F808260: /* printf("8-bit SIO2_FIFOIN read\n"); */ return 0;
         case 0x1F808264: {
             if (queue_is_empty(sio2->out)) {
-                printf("sio2: SIO2_FIFOOUT read %02x\n", 0x00);
+                // printf("sio2: SIO2_FIFOOUT read %02x\n", 0x00);
                 return 0x00;
             }
 
             uint8_t b = queue_pop(sio2->out);
 
-            printf("sio2: SIO2_FIFOOUT read %02x\n", b);
+            // printf("sio2: SIO2_FIFOOUT read %02x\n", b);
 
             return b;
         } break;
@@ -179,7 +219,7 @@ uint64_t ps2_sio2_read32(struct ps2_sio2* sio2, uint32_t addr) {
 
 void ps2_sio2_write8(struct ps2_sio2* sio2, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x1F808260: printf("sio2: FIFOIN write %02x\n", data); queue_push(sio2->in, data); return;
+        case 0x1F808260: /* printf("sio2: FIFOIN write %02x\n", data); */ queue_push(sio2->in, data); return;
         // case 0x1F808264: /* printf("8-bit SIO2_FIFOOUT write %02x\n", data); */ return;
         case 0x1F808268: sio2_write_ctrl(sio2, data); return;
         // case 0x1F80826C: /* printf("8-bit SIO2_RECV1 write %02x\n", data); */ return;
@@ -236,6 +276,8 @@ void ps2_sio2_attach_device(struct ps2_sio2* sio2, struct sio2_device dev, int p
 }
 
 void ps2_sio2_detach_device(struct ps2_sio2* sio2, int port) {
+    sio2->port[port].detach(sio2->port[port].udata);
+
     sio2->port[port].handle_command = 0;
     sio2->port[port].udata = NULL;
 }

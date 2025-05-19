@@ -27,6 +27,18 @@ const char* renderer_names[] = {
     "Software (Threaded)"
 };
 
+const char* fullscreen_names[] = {
+    "Windowed",
+    "Fullscreen (Desktop)",
+    "Fullscreen"
+};
+
+int fullscreen_flags[] = {
+    0,
+    SDL_WINDOW_FULLSCREEN_DESKTOP,
+    SDL_WINDOW_FULLSCREEN
+};
+
 void add_recent(iris::instance* iris, std::string file) {
     auto it = std::find(iris->recents.begin(), iris->recents.end(), file);
 
@@ -330,8 +342,16 @@ void show_main_menubar(iris::instance* iris) {
                     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
 
-                if (MenuItem("Fullscreen", "F11", &iris->fullscreen)) {
-                    SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0);
+                if (BeginMenu("Window mode")) {
+                    for (int i = 0; i < 3; i++) {
+                        if (Selectable(fullscreen_names[i], iris->fullscreen == i)) {
+                            iris->fullscreen = i;
+
+                            SDL_SetWindowFullscreen(iris->window, fullscreen_flags[i]);
+                        }
+                    }
+
+                    ImGui::EndMenu();
                 }
 
                 ImGui::EndMenu();
@@ -343,6 +363,11 @@ void show_main_menubar(iris::instance* iris) {
                 SDL_SetClipboardText(iris->pref_path.c_str());
             }
 
+            Separator();
+
+            if (MenuItem(ICON_MS_MANUFACTURING " Settings...")) {
+                iris->show_settings = true;
+            }
 
             ImGui::EndMenu();
         }

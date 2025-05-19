@@ -445,7 +445,7 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
     uint32_t size = (dma->sio2_in.bcr & 0xffff) * (dma->sio2_in.bcr >> 16);
 
-    printf("dma: SIO2 in transfer size=%d\n", size);
+    // printf("dma: SIO2 in transfer size=%d\n", size);
 
     sio2_dma_reset(dma->sio2);
 
@@ -457,12 +457,12 @@ void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
         queue_push(dma->sio2->in, (w >> 16) & 0xff);
         queue_push(dma->sio2->in, (w >> 24) & 0xff);
 
-        printf("%02x %02x %02x %02x\n",
-            (w >> 0) & 0xff,
-            (w >> 8) & 0xff,
-            (w >> 16) & 0xff,
-            (w >> 24) & 0xff
-        );
+        // printf("%02x %02x %02x %02x\n",
+        //     (w >> 0) & 0xff,
+        //     (w >> 8) & 0xff,
+        //     (w >> 16) & 0xff,
+        //     (w >> 24) & 0xff
+        // );
 
         dma->sio2_in.madr += 4;
     }
@@ -483,18 +483,18 @@ void dma_handle_sio2_out_irq_event(void* udata, int overshoot) {
 }
 void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
     if ((dma->sio2_out.chcr & 0x1000000) == 0) {
-        printf("dma: SIO2_out not requested\n");
+        // printf("dma: SIO2_out not requested\n");
         
         return;
     }
     
     if (queue_is_empty(dma->sio2->out)) {
-        printf("dma: SIO2_out waiting\n");
+        // printf("dma: SIO2_out waiting size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
         
         return;
     }
 
-    printf("dma: Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
+    // printf("dma: Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
 
     for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
         for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {

@@ -21,7 +21,8 @@ extern "C" {
 struct ps2_sio2;
 
 struct sio2_device {
-    void (*handle_command)(struct ps2_sio2*, void*);
+    void (*handle_command)(struct ps2_sio2*, void*, int);
+    void (*detach)(void*);
     void* udata;
 };
 

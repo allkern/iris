@@ -91,6 +91,8 @@ struct instance {
     std::string rom2_path = "";
     std::string disc_path = "";
     std::string pref_path = "";
+    std::string mcd0_path = "";
+    std::string mcd1_path = "";
     std::string ini_path = "";
 
     bool core0_mute[24] = { false };
@@ -118,13 +120,15 @@ struct instance {
     bool show_memory_viewer = false;
     bool show_status_bar = true;
     bool show_breakpoints = false;
+    bool show_settings = false;
+    bool show_memory_card_tool = false;
     bool show_imgui_demo = false;
 
     // Special windows
     bool show_bios_setting_window = false;
     bool show_about_window = false;
 
-    bool fullscreen = false;
+    int fullscreen = 0;
     int aspect_mode = RENDERER_ASPECT_AUTO;
     bool bilinear = true;
     bool integer_scaling = false;
@@ -189,6 +193,8 @@ void show_memory_viewer(iris::instance* iris);
 void show_status_bar(iris::instance* iris);
 void show_breakpoints(iris::instance* iris);
 void show_about_window(iris::instance* iris);
+void show_settings(iris::instance* iris);
+void show_memory_card_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
 // void show_gamelist(iris::instance* iris);
 

@@ -48,6 +48,10 @@ uint32_t queue_peek(struct queue_state* queue) {
     return queue->buf[queue->index];
 }
 
+uint32_t queue_at(struct queue_state* queue, int idx) {
+    return queue->buf[queue->index + idx];
+}
+
 int queue_is_empty(struct queue_state* queue) {
     return queue->index == queue->size;
 }
