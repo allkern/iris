@@ -68,10 +68,10 @@ static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) 
     }
 }
 static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
-    printf("ds: ds_cmd_config_mode(%02x)\n", sio2->in->buf[3]);
+    printf("ds: ds_cmd_config_mode(%02x)\n", queue_at(sio2->in, 3));
 
     if (!ds->config_mode) {
-        if (!sio2->in->buf[3]) {
+        if (!queue_at(sio2->in, 3)) {
             queue_push(sio2->out, 0xff);
             queue_push(sio2->out, ds->mode ? 0x73 : 0x41);
             queue_push(sio2->out, 0x5a);
@@ -111,7 +111,7 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
             }
         }
 
-        ds->config_mode = sio2->in->buf[3];
+        ds->config_mode = queue_at(sio2->in, 3);
     } else {
         queue_push(sio2->out, 0xff);
         queue_push(sio2->out, 0xf3);
@@ -127,7 +127,7 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
     }
 }
 static inline void ds_cmd_set_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
-    printf("ds: ds_cmd_set_mode(%02x)\n", sio2->in->buf[3]);
+    printf("ds: ds_cmd_set_mode(%02x)\n", queue_at(sio2->in, 3));
 
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
@@ -139,7 +139,7 @@ static inline void ds_cmd_set_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
 
-    ds->mode = sio2->in->buf[3];
+    ds->mode = queue_at(sio2->in, 3);
 }
 static inline void ds_cmd_query_model(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_query_model\n");
@@ -155,9 +155,9 @@ static inline void ds_cmd_query_model(struct ps2_sio2* sio2, struct ds_state* ds
     queue_push(sio2->out, 0x00);
 }
 static inline void ds_cmd_query_act(struct ps2_sio2* sio2, struct ds_state* ds) {
-    printf("ds: ds_cmd_query_act(%02x)\n", sio2->in->buf[3]);
+    printf("ds: ds_cmd_query_act(%02x)\n", queue_at(sio2->in, 3));
 
-    int index = sio2->in->buf[3];
+    int index = queue_at(sio2->in, 3);
 
     if (!index) {
         queue_push(sio2->out, 0xff);
@@ -197,7 +197,7 @@ static inline void ds_cmd_query_comb(struct ps2_sio2* sio2, struct ds_state* ds)
 static inline void ds_cmd_query_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_query_mode\n");
 
-    int index = sio2->in->buf[3];
+    int index = queue_at(sio2->in, 3);
 
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
@@ -222,8 +222,8 @@ static inline void ds_cmd_vibration_toggle(struct ps2_sio2* sio2, struct ds_stat
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xff);
 
-    ds->vibration[0] = sio2->in->buf[3];
-    ds->vibration[1] = sio2->in->buf[4];
+    ds->vibration[0] = queue_at(sio2->in, 3);
+    ds->vibration[1] = queue_at(sio2->in, 4);
 }
 static inline void ds_cmd_set_native_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_set_native_mode\n");
@@ -238,10 +238,10 @@ static inline void ds_cmd_set_native_mode(struct ps2_sio2* sio2, struct ds_state
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x5a);
 
-    ds->mask[0] = sio2->in->buf[3];
-    ds->mask[1] = sio2->in->buf[4];
+    ds->mask[0] = queue_at(sio2->in, 3);
+    ds->mask[1] = queue_at(sio2->in, 4);
 
-    int value = sio2->in->buf[5];
+    int value = queue_at(sio2->in, 5);
 
     if ((value & 1) == 0) {
         ds->mode = 0;
@@ -254,10 +254,8 @@ static inline void ds_cmd_set_native_mode(struct ps2_sio2* sio2, struct ds_state
     }
 }
 
-void ds_handle_command(struct ps2_sio2* sio2, void* udata) {
+void ds_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
     struct ds_state* ds = (struct ds_state*)udata;
-
-    uint8_t cmd = sio2->in->buf[1];
 
     switch (cmd) {
         case 0x40: ds_cmd_set_vref_param(sio2, ds); return;
@@ -282,6 +280,7 @@ struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
     struct ds_state* ds = malloc(sizeof(struct ds_state));
     struct sio2_device dev;
 
+    dev.detach = ds_sio2_detach;
     dev.handle_command = ds_handle_command;
     dev.udata = ds;
 
@@ -319,4 +318,10 @@ void ds_analog_change(struct ds_state* ds, int axis, uint8_t value) {
         case 2: ds->ax_left_y = value; break;
         case 3: ds->ax_left_x = value; break;
     }
+}
+
+void ds_sio2_detach(void* udata) {
+    struct ds_state* ds = (struct ds_state*)udata;
+
+    free(ds);
 }
