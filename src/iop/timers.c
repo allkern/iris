@@ -131,7 +131,7 @@ uint32_t iop_timer_handle_mode_read(struct ps2_iop_timers* timers, int i) {
 
     timers->timer[i].cmp_irq_set = 0;
     timers->timer[i].ovf_irq_set = 0;
-    timers->timer[i].irq_en = 1;
+    // timers->timer[i].irq_en = 1;
 
     // if (i == 5)
     // printf("iop: Timer %d mode read %08x -> %08x\n", i, r, timers->timer[i].mode);

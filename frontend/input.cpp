@@ -42,13 +42,13 @@ void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key) {
 
     uint16_t mask = map_button(key.keysym.sym);
 
-    ds_button_press(iris->ds, mask);
+    ds_button_press(iris->ds[0], mask);
 }
 
 void handle_keyup_event(iris::instance* iris, SDL_KeyboardEvent& key) {
     uint16_t mask = map_button(key.keysym.sym);
 
-    ds_button_release(iris->ds, mask);
+    ds_button_release(iris->ds[0], mask);
 }
 
 }

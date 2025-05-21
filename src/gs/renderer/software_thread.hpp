@@ -29,23 +29,23 @@ struct software_thread_state {
 
     std::atomic <bool> end_signal;
 
-    unsigned int sbp, dbp;
-    unsigned int sbw, dbw;
-    unsigned int spsm, dpsm;
-    unsigned int ssax, ssay, dsax, dsay;
-    unsigned int rrh, rrw;
-    unsigned int dir, xdir;
-    unsigned int sx, sy;
-    unsigned int dx, dy, px;
+    unsigned int sbp = 0, dbp = 0;
+    unsigned int sbw = 0, dbw = 0;
+    unsigned int spsm = 0, dpsm = 0;
+    unsigned int ssax = 0, ssay = 0, dsax = 0, dsay = 0;
+    unsigned int rrh = 0, rrw = 0;
+    unsigned int dir = 0, xdir = 0;
+    unsigned int sx = 0, sy = 0;
+    unsigned int dx = 0, dy = 0, px = 0;
 
-    uint32_t psmct24_data;
-    uint32_t psmct24_shift;
+    uint32_t psmct24_data = 0;
+    uint32_t psmct24_shift = 0;
 
     SDL_Window* window = nullptr;
-    struct ps2_gs* gs;
+    struct ps2_gs* gs = nullptr;
 
-    unsigned int window_x, window_y;
-    unsigned int window_w, window_h;
+    unsigned int window_x = 0, window_y = 0;
+    unsigned int window_w = 0, window_h = 0;
 
     int tex_w = 0;
     int tex_h = 0;
@@ -61,7 +61,7 @@ struct software_thread_state {
 
     std::vector <GLuint> programs;
 
-    GLuint default_program;
+    GLuint default_program = 0;
 
     GLuint vao = 0;
     GLuint vbo = 0;

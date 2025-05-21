@@ -65,17 +65,8 @@ static inline int sio2_handle_command(struct ps2_sio2* sio2, int idx) {
     int pad = devid == SIO2_DEV_PAD;
     int mcd = devid == SIO2_DEV_MCD;
 
-    // if (mcd)
-    //     return 0;
-
-    if ((!pad) && (!mcd))
+    if (!(pad || mcd))
         return 0;
-
-    if (pad && (p & 2)) {
-        return 0;
-    } else if (mcd && ((p & 2) == 0)) {
-        return 0;
-    }
 
     // Check if the port is actually connected
     if (!sio2->port[p].handle_command)
@@ -88,7 +79,7 @@ static inline int sio2_handle_command(struct ps2_sio2* sio2, int idx) {
     // Send command
     sio2->port[p].handle_command(sio2, sio2->port[p].udata, cmd);
 
-    // Clear current command parameters (command and devid already popped)
+    // Clear current command parameters
     for (int i = 0; i < len; i++)
         queue_pop(sio2->in);
 
@@ -151,8 +142,10 @@ static inline void sio2_write_ctrl(struct ps2_sio2* sio2, uint32_t data) {
     // For commands that use DMA (mostly MCD commands), this will handle
     // reading from the output FIFO. Will do nothing on commands
     // that don't use DMA, because the IOP needs to start a transfer
-    // before sending a DMA command
-    iop_dma_handle_sio2_out_transfer(sio2->dma);
+    // before sending a DMA command, and if a command executed, but
+    // didn't actually put anything in the FIFO, the DMA request
+    // will be cleared. (e.g. when a memory card isn't connected)
+    iop_dma_end_sio2_out_transfer(sio2->dma);
 }
 
 uint64_t ps2_sio2_read8(struct ps2_sio2* sio2, uint32_t addr) {
@@ -276,8 +269,12 @@ void ps2_sio2_attach_device(struct ps2_sio2* sio2, struct sio2_device dev, int p
 }
 
 void ps2_sio2_detach_device(struct ps2_sio2* sio2, int port) {
-    sio2->port[port].detach(sio2->port[port].udata);
+    struct sio2_device* dev = &sio2->port[port];
 
-    sio2->port[port].handle_command = 0;
-    sio2->port[port].udata = NULL;
+    if (dev->detach)
+        dev->detach(dev->udata);
+
+    dev->handle_command = 0;
+    dev->detach = 0;
+    dev->udata = NULL;
 }

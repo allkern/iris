@@ -105,6 +105,7 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma);
 void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma);
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma);
 void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma);
+void iop_dma_end_sio2_out_transfer(struct ps2_iop_dma* dma);
 
 void iop_dma_end_spu1_transfer(struct ps2_iop_dma* dma);
 void iop_dma_end_spu2_transfer(struct ps2_iop_dma* dma);

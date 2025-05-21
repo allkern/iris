@@ -150,9 +150,8 @@ static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_ch
         } break;
 
         case 4: {
-            printf("dmac: Unsupported %ld tag ID\n", c->tag.id);
-
-            exit(1);
+            c->madr = c->tag.addr;
+            c->tadr += 16;
         } break;
 
         case 5: {
@@ -682,14 +681,14 @@ void dmac_handle_sif2_transfer(struct ps2_dmac* dmac) {
     printf("ee: SIF2 channel unimplemented\n"); exit(1);
 }
 void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
-    printf("ee: SPR from channel unimplemented\n"); exit(1);
+    printf("ee: SPR from channel unimplemented\n"); // exit(1);
 
     dmac_set_irq(dmac, DMAC_SPR_FROM);
 
     dmac->spr_from.chcr &= ~0x100;
 }
 void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
-    printf("ee: SPR to channel unimplemented\n"); exit(1);
+    printf("ee: SPR to channel unimplemented\n"); // exit(1);
 
     dmac_set_irq(dmac, DMAC_SPR_TO);
 
