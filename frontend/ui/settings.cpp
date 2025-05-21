@@ -211,6 +211,10 @@ void show_paths_settings(iris::instance* iris) {
         if (f.result().size()) {
             strncpy(dvd_buf, f.result().at(0).c_str(), 512);
         }
+    } SameLine();
+
+    if (Button(ICON_MS_CLEAR "##rom1")) {
+        memset(dvd_buf, 0, 512);
     }
 
     Text("Chinese extensions (rom2)");
@@ -233,43 +237,83 @@ void show_paths_settings(iris::instance* iris) {
         if (f.result().size()) {
             strncpy(rom2_buf, f.result().at(0).c_str(), 512);
         }
+    } SameLine();
+
+    if (Button(ICON_MS_CLEAR "##rom2")) {
+        memset(rom2_buf, 0, 512);
     }
+
+    if (Button(ICON_MS_SAVE " Save")) {
+        std::string bios_path = buf;
+
+        if (bios_path.size()) iris->bios_path = bios_path;
+
+        iris->rom1_path = dvd_buf;
+        iris->rom2_path = rom2_buf;
+    } SameLine();
 
     TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Restart the emulator to apply these changes");
 }
 
-void show_memory_card_settings(iris::instance* iris) {
+void show_memory_card(iris::instance* iris, int slot) {
     using namespace ImGui;
 
-    if (Button(ICON_MS_EDIT " Create memory cards...")) {
-        // Launch memory card utility
-        iris->show_memory_card_tool = true;
-    }
+    char label[9] = "##mcard0";
 
-    Separator();
+    label[7] = '0' + slot;
 
-    if (BeginChild("##mcard0", ImVec2(GetContentRegionAvail().x / 2.0, 0))) {
-        TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Check file");
+    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0), 0))) {
+        const std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
 
-        if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {        
-            if (BeginTooltip()) {
-                Text("Sex");
+        ImVec4 col = GetStyleColorVec4(iris->mcd[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-                EndTooltip();
+        col.w = 1.0;
+
+        InvisibleButton("##pad", ImVec2(10, 10));
+
+        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (iris->memory_card_icon_width / 2.0));
+
+        Image(
+            iris->memory_card_icon_tex,
+            ImVec2(iris->memory_card_icon_width, iris->memory_card_icon_height),
+            ImVec2(0, 0), ImVec2(1, 1),
+            col,
+            ImVec4(0.0, 0.0, 0.0, 0.0)
+        );
+
+        InvisibleButton("##pad", ImVec2(10, 10));
+
+        if (path.size() && !iris->mcd[slot]) {
+            TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Check file");
+
+            if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
+                if (BeginTooltip()) {
+                    Text("Sex");
+    
+                    EndTooltip();
+                }
             }
         }
 
         PushFont(iris->font_heading);
-        Text("Slot 1");
+        Text("Slot %d", slot+1);
         PopFont();
 
         static char buf[512];
-        const char* hint = iris->mcd0_path.size() ? iris->mcd0_path.c_str() : "Not configured";
+        const char* hint = path.size() ? path.c_str() : "Not configured";
 
-        InputTextWithHint("##mcd0", hint, buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+        char it_label[7] = "##mcd0";
+        char bt_label[10] = ICON_MS_FOLDER "##mcd0";
+        char ed_label[10] = ICON_MS_EDIT "##mcd0";
+
+        it_label[5] = '0' + slot;
+        bt_label[8] = '0' + slot;
+        ed_label[8] = '0' + slot;
+
+        InputTextWithHint(it_label, hint, buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
         SameLine();
 
-        if (Button(ICON_MS_FOLDER "##mcd0")) {
+        if (Button(bt_label)) {
             iris->mute = true;
 
             auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->pref_path, {
@@ -283,44 +327,27 @@ void show_memory_card_settings(iris::instance* iris) {
                 strncpy(buf, f.result().at(0).c_str(), 512);
             }
         }
-    } EndChild(); SameLine(0.0, 10.0);
 
-    if (BeginChild("##mcard1", ImVec2(GetContentRegionAvail().x, 0))) {
-        TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Check file");
-
-        if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {        
-            if (BeginTooltip()) {
-                Text("Sex");
-
-                EndTooltip();
-            }
-        }
-
-        PushFont(iris->font_heading);
-        Text("Slot 2");
-        PopFont();
-
-        static char buf[512];
-        const char* hint = iris->mcd1_path.size() ? iris->mcd1_path.c_str() : "Not configured";
-
-        InputTextWithHint("##mcd1", hint, buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
         SameLine();
 
-        if (Button(ICON_MS_FOLDER "##mcd1")) {
-            iris->mute = true;
+        if (Button(ed_label)) {
 
-            auto f = pfd::open_file("Select Memory Card file for Slot 2", iris->pref_path, {
-                "Memory Card files (*.mcd; *.bin)", "*.mcd *.bin",
-                "All Files (*.*)", "*"
-            });
-
-            iris->mute = false;
-
-            if (f.result().size()) {
-                strncpy(buf, f.result().at(0).c_str(), 512);
-            }
         }
     } EndChild();
+}
+
+void show_memory_card_settings(iris::instance* iris) {
+    using namespace ImGui;
+
+    if (Button(ICON_MS_EDIT " Create memory cards...")) {
+        // Launch memory card utility
+        iris->show_memory_card_tool = true;
+    }
+
+    Separator();
+
+    show_memory_card(iris, 0); SameLine(0.0, 10.0);
+    show_memory_card(iris, 1);
 }
 
 void show_settings(iris::instance* iris) {

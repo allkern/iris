@@ -76,6 +76,11 @@ struct instance {
     unsigned int renderer_backend = RENDERER_SOFTWARE_THREAD;
     renderer_state* ctx = nullptr;
 
+    void* memory_card_icon = nullptr;
+    int memory_card_icon_width = 0;
+    int memory_card_icon_height = 0;
+    GLuint memory_card_icon_tex = 0;
+
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
     ImFont* font_small = nullptr;
@@ -157,8 +162,8 @@ struct instance {
     std::vector <iris::breakpoint> breakpoints = {};
     std::deque <iris::notification> notifications = {};
 
-    struct ds_state* ds = nullptr;
-    struct mcd_state* mcd = nullptr;
+    struct ds_state* ds[2] = { nullptr };
+    struct mcd_state* mcd[2] = { nullptr };
 };
 
 iris::instance* create();

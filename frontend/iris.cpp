@@ -31,6 +31,9 @@
 
 #include "config.hpp"
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 // This example can also compile and run with Emscripten! See 'Makefile.emscripten' for details.
 #ifdef __EMSCRIPTEN__
 #include "../libs/emscripten/emscripten_mainloop_stub.h"
@@ -44,10 +47,12 @@
 INCBIN(roboto, "res/Roboto-Regular.ttf");
 INCBIN(symbols, "res/MaterialSymbolsRounded.ttf");
 INCBIN(firacode, "res/FiraCode-Regular.ttf");
+INCBIN(memory_card_icon, "res/mcd.png");
 
 INCBIN_EXTERN(roboto);
 INCBIN_EXTERN(symbols);
 INCBIN_EXTERN(firacode);
+INCBIN_EXTERN(memory_card_icon);
 
 namespace iris {
 
@@ -270,8 +275,8 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, (void (*)(void*))update_window, iris);
     ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_SCISSOR, handle_scissor_event, iris);
 
-    iris->ds = ds_sio2_attach(iris->ps2->sio2, 0);
-    iris->mcd = mcd_sio2_attach(iris->ps2->sio2, 2, "slot1.mcd");
+    iris->ds[0] = ds_sio2_attach(iris->ps2->sio2, 0);
+    iris->mcd[0] = mcd_sio2_attach(iris->ps2->sio2, 2, "slot1.mcd");
 
     iris->ctx = renderer_create();
 
@@ -309,14 +314,37 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
         show_main_menubar(iris);
     }
 
-    if (!iris->mcd) {
-        push_info(iris, "Couldn't load memory card");
-    }
+    // if (!iris->mcd) {
+    //     push_info(iris, "Couldn't load memory card");
+    // }
     if (iris->renderer_backend == RENDERER_NULL) {
         push_info(iris, "Renderer is set to \"Null\", no output will be displayed");
     }
 
     ImGui::EndFrame();
+
+    int comp;
+
+    // Initialize assets
+    iris->memory_card_icon = stbi_load_from_memory(
+        g_memory_card_icon_data,
+        g_memory_card_icon_size,
+        &iris->memory_card_icon_width,
+        &iris->memory_card_icon_height,
+        &comp,
+        4
+    );
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &iris->memory_card_icon_tex);
+    glBindTexture(GL_TEXTURE_2D, iris->memory_card_icon_tex);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iris->memory_card_icon_width, iris->memory_card_icon_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, iris->memory_card_icon);
+
+    stbi_image_free(iris->memory_card_icon);
 }
 
 void destroy(iris::instance* iris);
