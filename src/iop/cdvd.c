@@ -453,9 +453,9 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x83: printf("cdvd: mechacon_auth_83\n"); cdvd_s_mechacon_auth_83(cdvd); break;
         case 0x84: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_84(cdvd); break;
         case 0x85: printf("cdvd: mechacon_auth_85\n"); cdvd_s_mechacon_auth_85(cdvd); break;
-        case 0x86: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_86(cdvd); break;
-        case 0x87: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_87(cdvd); break;
-        case 0x88: printf("cdvd: mechacon_auth_84\n"); cdvd_s_mechacon_auth_88(cdvd); break;
+        case 0x86: printf("cdvd: mechacon_auth_86\n"); cdvd_s_mechacon_auth_86(cdvd); break;
+        case 0x87: printf("cdvd: mechacon_auth_87\n"); cdvd_s_mechacon_auth_87(cdvd); break;
+        case 0x88: printf("cdvd: mechacon_auth_88\n"); cdvd_s_mechacon_auth_88(cdvd); break;
         case 0x8d: printf("cdvd: mg_write_data\n"); cdvd_s_mg_write_data(cdvd); break;
         case 0x8f: printf("cdvd: mechacon_auth_8f\n"); cdvd_s_mechacon_auth_8f(cdvd); break;
         case 0x90: printf("cdvd: mg_write_hdr_start\n"); cdvd_s_mg_write_hdr_start(cdvd); break;

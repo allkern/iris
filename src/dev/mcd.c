@@ -343,13 +343,14 @@ struct mcd_state* mcd_sio2_attach(struct ps2_sio2* sio2, int port, const char* p
     // Init card state
     mcd->term = 0x55;
     mcd->file = file;
-    mcd->size = (mcd->buf_size & ~0x7fffff) >> 9;
+    mcd->size = (1 << (31 - __builtin_clz(mcd->buf_size))) >> 9;
+
     mcd->checksum = 0x02 ^ 0x10;
 
     for (int i = 0; i < 4; i++)
         mcd->checksum ^= (mcd->size >> (i * 8)) & 0xff;
 
-    printf("mcd: Memory card at \'%s\' initialized.\n\tTotal size: %x (%d)\n\tSize (in sectors, rounded to 8 MiB): %x (%d)\n\tChecksum: %02x\n",
+    printf("mcd: Memory card at \'%s\' initialized.\n\tTotal size: %x (%d)\n\tSize (in sectors): %x (%d)\n\tChecksum: %02x\n",
         path, mcd->buf_size, mcd->buf_size,
         mcd->size, mcd->size,
         mcd->checksum

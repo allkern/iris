@@ -47,12 +47,16 @@
 INCBIN(roboto, "res/Roboto-Regular.ttf");
 INCBIN(symbols, "res/MaterialSymbolsRounded.ttf");
 INCBIN(firacode, "res/FiraCode-Regular.ttf");
-INCBIN(memory_card_icon, "res/mcd.png");
+INCBIN(ps1_memory_card_icon, "res/ps1_mcd.png");
+INCBIN(ps2_memory_card_icon, "res/ps2_mcd.png");
+INCBIN(pocketstation_icon, "res/pocketstation.png");
 
 INCBIN_EXTERN(roboto);
 INCBIN_EXTERN(symbols);
 INCBIN_EXTERN(firacode);
-INCBIN_EXTERN(memory_card_icon);
+INCBIN_EXTERN(ps1_memory_card_icon);
+INCBIN_EXTERN(ps2_memory_card_icon);
+INCBIN_EXTERN(pocketstation_icon);
 
 namespace iris {
 
@@ -277,6 +281,9 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     iris->ds[0] = ds_sio2_attach(iris->ps2->sio2, 0);
     iris->mcd[0] = mcd_sio2_attach(iris->ps2->sio2, 2, "slot1.mcd");
+    // iris->mcd[1] = mcd_sio2_attach(iris->ps2->sio2, 3, "slot2.mcd");
+
+    struct ps1_mcd_state* ps1_mcd = ps1_mcd_sio2_attach(iris->ps2->sio2, 3, "slot1_ps1.mcd");
 
     iris->ctx = renderer_create();
 
@@ -323,28 +330,66 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     ImGui::EndFrame();
 
-    int comp;
-
     // Initialize assets
-    iris->memory_card_icon = stbi_load_from_memory(
-        g_memory_card_icon_data,
-        g_memory_card_icon_size,
-        &iris->memory_card_icon_width,
-        &iris->memory_card_icon_height,
-        &comp,
+    stbi_uc* ps2_memory_card_buf = stbi_load_from_memory(
+        g_ps2_memory_card_icon_data,
+        g_ps2_memory_card_icon_size,
+        &iris->ps2_memory_card_icon_width,
+        &iris->ps2_memory_card_icon_height,
+        nullptr,
         4
     );
 
-    glCreateTextures(GL_TEXTURE_2D, 1, &iris->memory_card_icon_tex);
-    glBindTexture(GL_TEXTURE_2D, iris->memory_card_icon_tex);
+    glCreateTextures(GL_TEXTURE_2D, 1, &iris->ps2_memory_card_icon_tex);
+    glBindTexture(GL_TEXTURE_2D, iris->ps2_memory_card_icon_tex);
     // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iris->memory_card_icon_width, iris->memory_card_icon_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, iris->memory_card_icon);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iris->ps2_memory_card_icon_width, iris->ps2_memory_card_icon_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ps2_memory_card_buf);
 
-    stbi_image_free(iris->memory_card_icon);
+    stbi_image_free(ps2_memory_card_buf);
+
+    stbi_uc* ps1_memory_card_buf = stbi_load_from_memory(
+        g_ps1_memory_card_icon_data,
+        g_ps1_memory_card_icon_size,
+        &iris->ps1_memory_card_icon_width,
+        &iris->ps1_memory_card_icon_height,
+        nullptr,
+        4
+    );
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &iris->ps1_memory_card_icon_tex);
+    glBindTexture(GL_TEXTURE_2D, iris->ps1_memory_card_icon_tex);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iris->ps1_memory_card_icon_width, iris->ps1_memory_card_icon_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, ps1_memory_card_buf);
+
+    stbi_image_free(ps1_memory_card_buf);
+
+    stbi_uc* pocketstation_buf = stbi_load_from_memory(
+        g_pocketstation_icon_data,
+        g_pocketstation_icon_size,
+        &iris->pocketstation_icon_width,
+        &iris->pocketstation_icon_height,
+        nullptr,
+        4
+    );
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &iris->pocketstation_icon_tex);
+    glBindTexture(GL_TEXTURE_2D, iris->pocketstation_icon_tex);
+    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iris->pocketstation_icon_width, iris->pocketstation_icon_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pocketstation_buf);
+
+    stbi_image_free(pocketstation_buf);
 }
 
 void destroy(iris::instance* iris);

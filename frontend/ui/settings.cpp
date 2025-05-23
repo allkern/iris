@@ -263,7 +263,7 @@ void show_memory_card(iris::instance* iris, int slot) {
     label[7] = '0' + slot;
 
     if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0), 0))) {
-        const std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
+        std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
 
         ImVec4 col = GetStyleColorVec4(iris->mcd[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
@@ -271,11 +271,15 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         InvisibleButton("##pad", ImVec2(10, 10));
 
-        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (iris->memory_card_icon_width / 2.0));
+        int icon_width = slot ? iris->pocketstation_icon_width : iris->ps1_memory_card_icon_width;
+        int icon_height = slot ? iris->pocketstation_icon_height : iris->ps1_memory_card_icon_height;
+        int icon_tex = slot ? iris->pocketstation_icon_tex : iris->ps1_memory_card_icon_tex;
+
+        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (icon_width / 2.0));
 
         Image(
-            iris->memory_card_icon_tex,
-            ImVec2(iris->memory_card_icon_width, iris->memory_card_icon_height),
+            icon_tex,
+            ImVec2(icon_width, icon_height),
             ImVec2(0, 0), ImVec2(1, 1),
             col,
             ImVec4(0.0, 0.0, 0.0, 0.0)
@@ -317,7 +321,7 @@ void show_memory_card(iris::instance* iris, int slot) {
             iris->mute = true;
 
             auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->pref_path, {
-                "Memory Card files (*.mcd; *.bin)", "*.mcd *.bin",
+                "Memory Card files (*.ps2; *.mcd; *.bin)", "*.ps2 *.mcd *.bin",
                 "All Files (*.*)", "*"
             });
 
@@ -325,6 +329,8 @@ void show_memory_card(iris::instance* iris, int slot) {
 
             if (f.result().size()) {
                 strncpy(buf, f.result().at(0).c_str(), 512);
+
+                path = f.result().at(0);
             }
         }
 

@@ -134,7 +134,11 @@ static inline void sio2_write_ctrl(struct ps2_sio2* sio2, uint32_t data) {
 
         // If any of the commands were handled, set RECV1 to 0x1100
         if (sio2_handle_command(sio2, i)) {
-            sio2->recv1 = 0x1100;
+            if (sio2->recv1 & 0x2000) {
+                sio2->recv1 = 0x1d100;
+            } else {
+                sio2->recv1 = 0x1100;
+            }
         }
     }
 

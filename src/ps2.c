@@ -267,6 +267,8 @@ void ps2_destroy(struct ps2_state* ps2) {
     free(ps2->strtab);
     free(ps2->func);
 
+    ps2_cdvd_destroy(ps2->cdvd);
+
     sched_destroy(ps2->sched);
     ee_destroy(ps2->ee);
     vu_destroy(ps2->vu0);
@@ -287,7 +289,6 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_iop_intc_destroy(ps2->iop_intc);
     ps2_iop_timers_destroy(ps2->iop_timers);
     ps2_ram_destroy(ps2->iop_ram);
-    ps2_cdvd_destroy(ps2->cdvd);
     ps2_sio2_destroy(ps2->sio2);
     ps2_spu2_destroy(ps2->spu2);
     ps2_usb_destroy(ps2->usb);

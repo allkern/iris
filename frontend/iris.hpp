@@ -76,10 +76,15 @@ struct instance {
     unsigned int renderer_backend = RENDERER_SOFTWARE_THREAD;
     renderer_state* ctx = nullptr;
 
-    void* memory_card_icon = nullptr;
-    int memory_card_icon_width = 0;
-    int memory_card_icon_height = 0;
-    GLuint memory_card_icon_tex = 0;
+    int ps2_memory_card_icon_width = 0;
+    int ps1_memory_card_icon_width = 0;
+    int pocketstation_icon_width = 0;
+    int ps2_memory_card_icon_height = 0;
+    int ps1_memory_card_icon_height = 0;
+    int pocketstation_icon_height = 0;
+    GLuint ps2_memory_card_icon_tex = 0;
+    GLuint ps1_memory_card_icon_tex = 0;
+    GLuint pocketstation_icon_tex = 0;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;

@@ -33,6 +33,7 @@ extern "C" {
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
 #include "dev/mcd.h"
+#include "dev/ps1_mcd.h"
 
 #include "sched.h"
 
