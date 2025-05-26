@@ -77,7 +77,11 @@ struct ps2_iop_intc* ps2_iop_intc_create(void);
 void ps2_iop_intc_init(struct ps2_iop_intc* intc, struct iop_state* iop);
 void ps2_iop_intc_irq(struct ps2_iop_intc* intc, int dev);
 void ps2_iop_intc_destroy(struct ps2_iop_intc* intc);
+uint64_t ps2_iop_intc_read8(struct ps2_iop_intc* intc, uint32_t addr);
+uint64_t ps2_iop_intc_read16(struct ps2_iop_intc* intc, uint32_t addr);
 uint64_t ps2_iop_intc_read32(struct ps2_iop_intc* intc, uint32_t addr);
+void ps2_iop_intc_write8(struct ps2_iop_intc* intc, uint32_t addr, uint64_t data);
+void ps2_iop_intc_write16(struct ps2_iop_intc* intc, uint32_t addr, uint64_t data);
 void ps2_iop_intc_write32(struct ps2_iop_intc* intc, uint32_t addr, uint64_t data);
 
 #ifdef __cplusplus

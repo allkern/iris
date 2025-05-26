@@ -30,6 +30,14 @@ void ps2_iop_intc_destroy(struct ps2_iop_intc* intc) {
     free(intc);
 }
 
+uint64_t ps2_iop_intc_read8(struct ps2_iop_intc* intc, uint32_t addr) {
+    printf("intc: IOP intc 8-bit read from address %08x\n", addr); exit(1);
+}
+
+uint64_t ps2_iop_intc_read16(struct ps2_iop_intc* intc, uint32_t addr) {
+    printf("intc: IOP intc 16-bit read from address %08x\n", addr); exit(1);
+}
+
 uint64_t ps2_iop_intc_read32(struct ps2_iop_intc* intc, uint32_t addr) {
     uint32_t ctrl = intc->ctrl;
 
@@ -48,6 +56,14 @@ uint64_t ps2_iop_intc_read32(struct ps2_iop_intc* intc, uint32_t addr) {
     }
 
     return ctrl;
+}
+
+void ps2_iop_intc_write8(struct ps2_iop_intc* intc, uint32_t addr, uint64_t data) {
+    printf("iop: IOP INTC 8-bit write to address %08x (%02lx)\n", addr, data); exit(1);
+}
+
+void ps2_iop_intc_write16(struct ps2_iop_intc* intc, uint32_t addr, uint64_t data) {
+    printf("iop: IOP INTC 8-bit write to address %08x (%04lx)\n", addr, data); exit(1);
 }
 
 void ps2_iop_intc_write32(struct ps2_iop_intc* intc, uint32_t addr, uint64_t data) {
