@@ -1892,13 +1892,40 @@ static inline void ee_i_prot3w(struct ee_state* ee) {
 }
 static inline void ee_i_psllh(struct ee_state* ee) { printf("ee: psllh unimplemented\n"); exit(1); }
 static inline void ee_i_psllvw(struct ee_state* ee) { printf("ee: psllvw unimplemented\n"); exit(1); }
-static inline void ee_i_psllw(struct ee_state* ee) { printf("ee: psllw unimplemented\n"); exit(1); }
+static inline void ee_i_psllw(struct ee_state* ee) {
+    int sa = EE_D_SA;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = ee->r[t].u32[0] << sa;
+    ee->r[d].u32[1] = ee->r[t].u32[1] << sa;
+    ee->r[d].u32[2] = ee->r[t].u32[2] << sa;
+    ee->r[d].u32[3] = ee->r[t].u32[3] << sa;
+}
 static inline void ee_i_psrah(struct ee_state* ee) { printf("ee: psrah unimplemented\n"); exit(1); }
 static inline void ee_i_psravw(struct ee_state* ee) { printf("ee: psravw unimplemented\n"); exit(1); }
-static inline void ee_i_psraw(struct ee_state* ee) { printf("ee: psraw unimplemented\n"); exit(1); }
+static inline void ee_i_psraw(struct ee_state* ee) {
+    int sa = EE_D_SA;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = ((int32_t)ee->r[t].u32[0]) >> sa;
+    ee->r[d].u32[1] = ((int32_t)ee->r[t].u32[1]) >> sa;
+    ee->r[d].u32[2] = ((int32_t)ee->r[t].u32[2]) >> sa;
+    ee->r[d].u32[3] = ((int32_t)ee->r[t].u32[3]) >> sa;
+}
 static inline void ee_i_psrlh(struct ee_state* ee) { printf("ee: psrlh unimplemented\n"); exit(1); }
 static inline void ee_i_psrlvw(struct ee_state* ee) { printf("ee: psrlvw unimplemented\n"); exit(1); }
-static inline void ee_i_psrlw(struct ee_state* ee) { printf("ee: psrlw unimplemented\n"); exit(1); }
+static inline void ee_i_psrlw(struct ee_state* ee) {
+    int sa = EE_D_SA;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = ee->r[t].u32[0] >> sa;
+    ee->r[d].u32[1] = ee->r[t].u32[1] >> sa;
+    ee->r[d].u32[2] = ee->r[t].u32[2] >> sa;
+    ee->r[d].u32[3] = ee->r[t].u32[3] >> sa;
+}
 static inline void ee_i_psubb(struct ee_state* ee) {
     int t = EE_D_RT;
     int s = EE_D_RS;
