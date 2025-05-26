@@ -36,6 +36,13 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_OUT);
 }
 
+void gs_flip_field(void* udata, int overshoot) {
+    struct ps2_gs* gs = (struct ps2_gs*)udata;
+
+    // Toggle field
+    gs->csr ^= 1 << 13;
+}
+
 void gs_handle_vblank_in(void* udata, int overshoot) {
     struct ps2_gs* gs = (struct ps2_gs*)udata;
 
@@ -46,11 +53,15 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
+    struct sched_event field_flip_event;
+
+    field_flip_event.callback = gs_flip_field;
+    field_flip_event.cycles = 30000; 
+    field_flip_event.name = "Field flip event";
+    field_flip_event.udata = gs;
+
     // Set Vblank and Hblank flag
     gs->csr |= 0xf;
-
-    // Toggle field
-    gs->csr ^= 1 << 13;
 
     // Tell backend to render scene
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
@@ -68,6 +79,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
 
     sched_schedule(gs->sched, vblank_out_event);
+    sched_schedule(gs->sched, field_flip_event);
 }
 
 void gs_handle_hblank(void* udata, int overshoot) {
