@@ -79,12 +79,15 @@ struct instance {
     int ps2_memory_card_icon_width = 0;
     int ps1_memory_card_icon_width = 0;
     int pocketstation_icon_width = 0;
+    int iris_icon_width = 0;
     int ps2_memory_card_icon_height = 0;
     int ps1_memory_card_icon_height = 0;
     int pocketstation_icon_height = 0;
+    int iris_icon_height = 0;
     GLuint ps2_memory_card_icon_tex = 0;
     GLuint ps1_memory_card_icon_tex = 0;
     GLuint pocketstation_icon_tex = 0;
+    GLuint iris_icon_tex = 0;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;

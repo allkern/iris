@@ -50,6 +50,7 @@ INCBIN(firacode, "res/FiraCode-Regular.ttf");
 INCBIN(ps1_memory_card_icon, "res/ps1_mcd.png");
 INCBIN(ps2_memory_card_icon, "res/ps2_mcd.png");
 INCBIN(pocketstation_icon, "res/pocketstation.png");
+INCBIN(iris_icon, "res/iris.png");
 
 INCBIN_EXTERN(roboto);
 INCBIN_EXTERN(symbols);
@@ -57,6 +58,7 @@ INCBIN_EXTERN(firacode);
 INCBIN_EXTERN(ps1_memory_card_icon);
 INCBIN_EXTERN(ps2_memory_card_icon);
 INCBIN_EXTERN(pocketstation_icon);
+INCBIN_EXTERN(iris_icon);
 
 namespace iris {
 
@@ -342,7 +344,6 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     glCreateTextures(GL_TEXTURE_2D, 1, &iris->ps2_memory_card_icon_tex);
     glBindTexture(GL_TEXTURE_2D, iris->ps2_memory_card_icon_tex);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -362,7 +363,6 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     glCreateTextures(GL_TEXTURE_2D, 1, &iris->ps1_memory_card_icon_tex);
     glBindTexture(GL_TEXTURE_2D, iris->ps1_memory_card_icon_tex);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -382,7 +382,6 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     glCreateTextures(GL_TEXTURE_2D, 1, &iris->pocketstation_icon_tex);
     glBindTexture(GL_TEXTURE_2D, iris->pocketstation_icon_tex);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
@@ -390,6 +389,25 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iris->pocketstation_icon_width, iris->pocketstation_icon_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pocketstation_buf);
 
     stbi_image_free(pocketstation_buf);
+
+    stbi_uc* iris_buf = stbi_load_from_memory(
+        g_iris_icon_data,
+        g_iris_icon_size,
+        &iris->iris_icon_width,
+        &iris->iris_icon_height,
+        nullptr,
+        4
+    );
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &iris->iris_icon_tex);
+    glBindTexture(GL_TEXTURE_2D, iris->iris_icon_tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, iris->iris_icon_width, iris->iris_icon_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, iris_buf);
+
+    stbi_image_free(iris_buf);
 }
 
 void destroy(iris::instance* iris);
