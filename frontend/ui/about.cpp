@@ -17,7 +17,7 @@ void show_about_window(iris::instance* iris) {
         ImGuiWindowFlags_NoDocking;
 
     if (Begin("About", &iris->show_about_window, flags)) {
-        Text("Hello, world!");
+        Text("Experimental PlayStation 2 emulator available  at https://github.com/allkern/eegs");
     } End();
 }
 
