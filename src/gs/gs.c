@@ -300,6 +300,18 @@ uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
     return 0;
 }
 
+static inline void gs_unpack_dispfb1(struct ps2_gs* gs) {
+    gs->dfbp1 = (gs->dispfb1 & 0x1ff) << 5;
+    gs->dfbw1 = (gs->dispfb1 >> 9) & 0x3f;
+    gs->dfbpsm1 = (gs->dispfb1 >> 15) & 0x1f;
+}
+
+static inline void gs_unpack_dispfb2(struct ps2_gs* gs) {
+    gs->dfbp2 = (gs->dispfb2 & 0x1ff) << 5;
+    gs->dfbw2 = (gs->dispfb2 >> 9) & 0x3f;
+    gs->dfbpsm2 = (gs->dispfb2 >> 15) & 0x1f;
+}
+
 void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
     switch (addr) {
         case 0x12000000: gs->pmode = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
@@ -309,9 +321,9 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
         case 0x12000040: gs->synch1 = data; return;
         case 0x12000050: gs->synch2 = data; return;
         case 0x12000060: gs->syncv = data; return;
-        case 0x12000070: gs->dispfb1 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
+        case 0x12000070: gs->dispfb1 = data; gs_unpack_dispfb1(gs); gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x12000080: gs->display1 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
-        case 0x12000090: gs->dispfb2 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
+        case 0x12000090: gs->dispfb2 = data; gs_unpack_dispfb2(gs); gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x120000A0: gs->display2 = data; gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x120000B0: gs->extbuf = data; return;
         case 0x120000C0: gs->extdata = data; return;

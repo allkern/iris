@@ -346,6 +346,14 @@ struct ps2_gs {
     uint32_t ta0;
     uint32_t ta1;
 
+    // DISPFB1/2
+    uint32_t dfbp1;
+    uint32_t dfbw1;
+    uint32_t dfbpsm1;
+    uint32_t dfbp2;
+    uint32_t dfbw2;
+    uint32_t dfbpsm2;
+
     struct gs_callback events[2];
 
     struct sched_state* sched;
