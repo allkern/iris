@@ -1969,13 +1969,22 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     //     );
     // }
     // if (gs->tme) {
-    //     printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d uv=(%d,%d) TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08lx abe=%d FB format=%d fbw=%d fba=%ld\n",
+    //     printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d uv=(%d,%d)-(%d,%d) fst=%d stq=(%f,%f,%f)-(%f,%f,%f) TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08lx abe=%d FB format=%d fbw=%d fba=%ld\n",
     //         gs->ctx->tbpsm,
     //         gs->ctx->tbpsm,
     //         gs->ctx->tbp0,
     //         gs->ctx->tbw,
     //         v0.u,
     //         v0.v,
+    //         v1.u,
+    //         v1.v,
+    //         gs->fst,
+    //         v0.s,
+    //         v0.t,
+    //         v0.q,
+    //         v1.s,
+    //         v1.t,
+    //         v1.q,
     //         gs->ctx->usize,
     //         gs->ctx->vsize,
     //         gs->ctx->cbpsm,
@@ -2034,21 +2043,28 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
                 float tx = (float)(x - v0.x) / (float)(v1.x - v0.x);
                 float ty = (float)(y - v0.y) / (float)(v1.y - v0.y);
 
+                int iu;
+                int iv;
+
                 if (gs->fst) {
                     u = v0.u + (v1.u - v0.u) * tx;
                     v = v0.v + (v1.v - v0.v) * ty;
+                    iu = u;
+                    iv = v;
                 } else {
                     u = v0.s + (v1.s - v0.s) * tx;
                     v = v0.t + (v1.t - v0.t) * ty;
-                    
+
                     u *= gs->ctx->usize;
                     v *= gs->ctx->vsize;
+                    iu = u * (1 << 4);
+                    iv = v * (1 << 4);
                 }
 
-                u = gs_clamp_u(gs, u);
-                v = gs_clamp_v(gs, v);
+                u = gs_clamp_u(gs, iu);
+                v = gs_clamp_v(gs, iv);
 
-                c = gs_read_tb(gs, u, v);
+                c = gs_read_tb(gs, iu, iv);
                 c = gs_to_rgba32(gs, c, gs->ctx->tbpsm);
                 c = gs_apply_function(gs, c, v1.rgbaq & 0xffffffff);
 
