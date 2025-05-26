@@ -1063,8 +1063,12 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
 
     cdvd->detected_disc_type = disc_get_type(cdvd->disc);
     cdvd->layer2_lba = disc_get_volume_lba(cdvd->disc, 1);
-   
-    printf("cdvd: Opened \'%s\' (%s)\n", path, cdvd_get_type_name(cdvd->disc_type));
+
+    if (cdvd->detected_disc_type == CDVD_DISC_CDDA) {
+        cdvd->detected_disc_type = CDVD_DISC_PS2_CD;
+    }
+
+    printf("cdvd: Opened \'%s\' (%s)\n", path, cdvd_get_type_name(cdvd->detected_disc_type));
 
     switch (cdvd->detected_disc_type) {
         case CDVD_DISC_PS2_CD:
