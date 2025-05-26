@@ -675,9 +675,9 @@ static inline void ee_i_ctc2(struct ee_state* ee) {
         ee->vu0->vi[d] = EE_RT32;
     } else {
         if ((d-16) == 0) {
-            uint32_t status = ee->vu0->cr[0];
-            // ee->vu0->cr[0] &= ~0xfc0;
-            // ee->vu0->cr[0] |= EE_RT32 & 0xfc0;
+            // uint32_t status = ee->vu0->cr[0];
+            ee->vu0->cr[0] &= ~0xfc0;
+            ee->vu0->cr[0] |= EE_RT32 & 0xfc0;
 
             // printf("prev=%08x curr=%08x val=%08x\n", status, ee->vu0->cr[0], EE_RT32);
         } else {
