@@ -55,14 +55,55 @@ static const char* mips_cc_r[] = {
     "t8", "t9", "k0", "k1", "gp", "sp", "fp", "ra"
 };
 
+static const char* vu0i_regs[] = {
+    "vi00",
+    "vi01",
+    "vi02",
+    "vi03",
+    "vi04",
+    "vi05",
+    "vi06",
+    "vi07",
+    "vi08",
+    "vi09",
+    "vi10",
+    "vi11",
+    "vi12",
+    "vi13",
+    "vi14",
+    "vi15",
+    "Status",
+    "MAC",
+    "Clip",
+    "Reserved",
+    "R",
+    "I",
+    "Q",
+    "Reserved",
+    "Reserved",
+    "Reserved",
+    "TPC",
+    "CMSAR0",
+    "FBRST",
+    "VPUSTAT",
+    "Reserved",
+    "CMSAR1"
+};
+
 uint128_t ee_prev[32];
 uint128_t ee_frames[32];
 uint32_t ee_cop0_prev[32];
 uint32_t ee_cop0_frames[32];
+uint32_t vu0i_prev[32];
+uint32_t vu0i_frames[32];
 uint32_t ee_fpu_prev[32];
 uint32_t ee_fpu_frames[32];
+struct vu_reg vu0f_prev[32];
+uint128_t vu0f_frames[32];
 uint32_t iop_prev[32];
 uint32_t iop_frames[32];
+
+bool vu0f_float;
 
 static ImGuiTableFlags ee_table_sizing = ImGuiTableFlags_SizingStretchSame;
 static ImGuiTableFlags iop_table_sizing = ImGuiTableFlags_SizingStretchProp;
@@ -416,6 +457,228 @@ using namespace ImGui;
     PopFont();
 }
 
+static inline void show_vu0_float(iris::instance* iris) {
+    using namespace ImGui;
+
+    struct vu_state* vu0 = iris->ps2->ee->vu0;
+
+    for (int i = 0; i < 32; i++) {
+        for (int j = 0; j < 4; j++) {
+            if (vu0f_prev[i].u32[j] != vu0->vf[i].u32[j])
+                vu0f_frames[i].u32[j] = 60;
+        }
+
+        vu0f_prev[i] = vu0->vf[i];
+    }
+
+    PushFont(iris->font_code);
+
+    if (BeginTable("ee#registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
+        PushFont(iris->font_small_code);
+        TableSetupColumn("Reg");
+        TableSetupColumn("W");
+        TableSetupColumn("Z");
+        TableSetupColumn("Y");
+        TableSetupColumn("X");
+        TableHeadersRow();
+        PopFont();
+
+        for (int i = 0; i < 32; i++) {
+            TableNextRow();
+
+            TableSetColumnIndex(0);
+
+            Text("vf%02d", i);
+
+            for (int j = 0; j < 4; j++) {
+                float a = (float)vu0f_frames[i].u32[j] / 60.0f;
+
+                TableSetColumnIndex(1+(3-j));
+
+                char label[5]; sprintf(label, "##%02x", (i << 2) | j);
+
+                if (Selectable(label, false, ImGuiSelectableFlags_AllowOverlap)) {
+                    OpenPopup("Change register value");
+                } SameLine(0.0, 0.0);
+
+                if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
+                    static char new_value[9];
+
+                    PushFont(iris->font_small_code);
+                    TextDisabled("Edit "); SameLine(0.0, 0.0);
+                    Text("vf%02d", i); SameLine(0.0, 0.0);
+                    TextDisabled(" (%c field)", "XYZW"[j]);
+                    PopFont();
+
+                    PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
+                    PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
+
+                    PushFont(iris->font_body);
+                    PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
+
+                    AlignTextToFramePadding();
+                    Text(ICON_MS_EDIT); SameLine();
+
+                    SetNextItemWidth(100);
+                    PushFont(iris->font_code);
+
+                    if (vu0f_float) {
+                        if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsScientific | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                            if (new_value[0])
+                                vu0->vf[i].f[j] = strtof(new_value, NULL);
+
+                            CloseCurrentPopup();
+                        }
+                    } else {
+                        if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                            if (new_value[0])
+                                vu0->vf[i].u32[j] = strtoul(new_value, NULL, 16);
+
+                            CloseCurrentPopup();
+                        }
+                    }
+
+                    PopFont();
+
+                    if (Button("Change")) {
+                        if (vu0f_float) {
+                            if (new_value[0])
+                                vu0->vf[i].f[j] = strtof(new_value, NULL);
+                        } else {
+                            if (new_value[0])
+                                vu0->vf[i].u32[j] = strtoul(new_value, NULL, 16);
+                        }
+                        CloseCurrentPopup();
+                    } SameLine();
+
+                    if (Button("Cancel"))
+                        CloseCurrentPopup();
+
+                    PopStyleColor();
+                    PopStyleVar(2);
+
+                    PopFont();
+                    EndPopup();
+                }
+
+                if (vu0f_float) {
+                    TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%.7f", vu0->vf[i].f[j]);
+                } else {
+                    TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%08x", vu0->vf[i].u32[j]);
+                }
+            }
+        }
+
+        EndTable();
+    }
+
+    PopFont();
+}
+
+static inline void show_vu0_integer(iris::instance* iris) {
+    using namespace ImGui;
+
+    struct vu_state* vu0 = iris->ps2->ee->vu0;
+
+    for (int i = 0; i < 32; i++) {
+        if (vu0i_prev[i] != (i < 16 ? vu0->vi[i] : vu0->cr[i-16]))
+            vu0i_frames[i] = 60;
+
+        vu0i_prev[i] = i < 16 ? vu0->vi[i] : vu0->cr[i-16];
+    }
+
+    PushFont(iris->font_code);
+
+    if (BeginTable("ee#cop0registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
+        PushFont(iris->font_small_code);
+        TableSetupColumn("Reg");
+        TableSetupColumn("96-127");
+        TableSetupColumn("64-95");
+        TableSetupColumn("32-63");
+        TableSetupColumn("0-31");
+        TableHeadersRow();
+        PopFont();
+
+        for (int i = 0; i < 32; i++) {
+            float a = (float)vu0i_frames[i] / 60.0f;
+
+            TableNextRow();
+
+            TableSetColumnIndex(0);
+
+            Text("%s", vu0i_regs[i]);
+
+            TableSetColumnIndex(4);
+
+            char label[8]; sprintf(label, "##e%d", (i << 2));
+
+            if (Selectable(label, false, ImGuiSelectableFlags_AllowOverlap)) {
+                OpenPopup("Change register value");
+            } SameLine(0.0, 0.0);
+
+            if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
+                static char new_value[9];
+
+                PushFont(iris->font_small_code);
+                TextDisabled("Edit "); SameLine(0.0, 0.0);
+                Text("%s", vu0i_regs[i]);
+                PopFont();
+
+                PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
+                PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
+
+                PushFont(iris->font_body);
+                PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
+
+                AlignTextToFramePadding();
+                Text(ICON_MS_EDIT); SameLine();
+
+                SetNextItemWidth(100);
+                PushFont(iris->font_code);
+
+                if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    if (new_value[0]) {
+                        if (i < 16) {
+                            vu0->vi[i] = strtoul(new_value, NULL, 16);
+                        } else {
+                            vu0->cr[i-16] = strtoul(new_value, NULL, 16);
+                        }
+                    }
+
+                    CloseCurrentPopup();
+                }
+
+                PopFont();
+
+                if (Button("Change")) {
+                    if (i < 16) {
+                        vu0->vi[i] = strtoul(new_value, NULL, 16);
+                    } else {
+                        vu0->cr[i-16] = strtoul(new_value, NULL, 16);
+                    }
+
+                    CloseCurrentPopup();
+                } SameLine();
+
+                if (Button("Cancel"))
+                    CloseCurrentPopup();
+
+                PopStyleColor();
+                PopStyleVar(2);
+
+                PopFont();
+                EndPopup();
+            }
+
+            TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%08x", i < 16 ? vu0->vi[i] : vu0->cr[i-16]);
+        }
+    }
+
+    EndTable();
+
+    PopFont();
+}
+
 static inline void show_iop_main_registers(iris::instance* iris) {
     using namespace ImGui;
 
@@ -532,8 +795,8 @@ static const char* ee_reg_group_names[] = {
     "Main",
     "COP0",
     "FPU",
-    "VU0",
-    "VU1"
+    "VU0f",
+    "VU0i"
 };
 
 static int ee_reg_group = 0;
@@ -554,6 +817,8 @@ void show_ee_state(iris::instance* iris) {
 
                     ImGui::EndMenu();
                 }
+
+                if (MenuItem("Display VU0f as floats", nullptr, &vu0f_float));
 
                 ImGui::EndMenu();
             }
@@ -590,11 +855,11 @@ void show_ee_state(iris::instance* iris) {
                 } break;
 
                 case 3: {
-                    show_work_in_progress(iris);
+                    show_vu0_float(iris);
                 } break;
 
                 case 4: {
-                    show_work_in_progress(iris);
+                    show_vu0_integer(iris);
                 } break;
             }
 
@@ -609,9 +874,16 @@ void show_ee_state(iris::instance* iris) {
         if (ee_cop0_frames[i])
             ee_cop0_frames[i]--;
 
+        if (vu0i_frames[i])
+            vu0i_frames[i]--;
+
         for (int j = 0; j < 4; j++)
             if (ee_frames[i].u32[j])
                 ee_frames[i].u32[j]--;
+
+        for (int j = 0; j < 4; j++)
+            if (vu0f_frames[i].u32[j])
+                vu0f_frames[i].u32[j]--;
     }
 }
 

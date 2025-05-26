@@ -14,6 +14,7 @@ struct vu_reg {
         uint128_t u128;
         uint64_t u64[2];
         uint32_t u32[4];
+        int32_t i32[4];
         float f[4];
 
         // Named fields

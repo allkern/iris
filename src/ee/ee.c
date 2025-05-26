@@ -21,6 +21,7 @@
 #define SSUBOVF64 __builtin_ssubl_overflow
 #endif
 
+// file = fopen("vu.dump", "a"); fprintf(file, #ins "\n"); fclose(file);
 #define VU_LOWER(ins) { ee->vu0->lower = ee->opcode; vu_i_ ## ins(ee->vu0); }
 #define VU_UPPER(ins) { ee->vu0->upper = ee->opcode; vu_i_ ## ins(ee->vu0); }
 
@@ -517,7 +518,7 @@ static inline void ee_i_bc1tl(struct ee_state* ee) {
 }
 static inline void ee_i_bc2f(struct ee_state* ee) { printf("ee: bc2f unimplemented\n"); exit(1); }
 static inline void ee_i_bc2fl(struct ee_state* ee) { printf("ee: bc2fl unimplemented\n"); exit(1); }
-static inline void ee_i_bc2t(struct ee_state* ee) { BRANCH(0, EE_D_SI16); }
+static inline void ee_i_bc2t(struct ee_state* ee) { printf("ee: bc2t unimplemented\n"); exit(1); }
 static inline void ee_i_bc2tl(struct ee_state* ee) { printf("ee: bc2tl unimplemented\n"); exit(1); }
 static inline void ee_i_beq(struct ee_state* ee) {
     BRANCH(EE_RS == EE_RT, EE_D_SI16);
@@ -597,6 +598,38 @@ static inline void ee_i_cfc2(struct ee_state* ee) {
     int d = EE_D_RD;
 
     EE_RT = d < 16 ? ee->vu0->vi[d] : ee->vu0->cr[d - 16];
+
+    if (d == 28) {
+        EE_RT &= 0x0c0c;
+    }
+
+    // static const char* regs[] = {
+    //     "Status flag",
+    //     "MAC flag",
+    //     "clipping flag",
+    //     "reserved",
+    //     "R",
+    //     "I",
+    //     "Q",
+    //     "reserved",
+    //     "reserved",
+    //     "reserved",
+    //     "TPC",
+    //     "CMSAR0",
+    //     "FBRST",
+    //     "VPU-STAT",
+    //     "reserved",
+    //     "CMSAR1",
+    // };
+
+    // if (d >= 16)
+    // printf("ee: cfc2 %d (%s) <- %08x\n", d-16, regs[d-16], ee->vu0->cr[d - 16]);
+
+    // if (d >= 16) {
+    //     file = fopen("vu.dump", "a");
+    //     fprintf(file, "ee: cfc2 %d (%s) <- %08x\n", d-16, regs[d-16], ee->vu0->cr[d - 16]);
+    //     fclose(file);
+    // }
 }
 static inline void ee_i_cle(struct ee_state* ee) {
     if (EE_FS <= EE_FT) {
@@ -619,10 +652,39 @@ static inline void ee_i_ctc2(struct ee_state* ee) {
     // To-do: Handle FBRST, VPU_STAT, CMSAR1
     int d = EE_D_RD;
 
+    static const char* regs[] = {
+        "Status flag",
+        "MAC flag",
+        "clipping flag",
+        "reserved",
+        "R",
+        "I",
+        "Q",
+        "reserved",
+        "reserved",
+        "reserved",
+        "TPC",
+        "CMSAR0",
+        "FBRST",
+        "VPU-STAT",
+        "reserved",
+        "CMSAR1",
+    };
+
     if (d < 16) {
         ee->vu0->vi[d] = EE_RT32;
     } else {
-        ee->vu0->cr[d - 16] = EE_RT32;
+        if ((d-16) == 0) {
+            uint32_t status = ee->vu0->cr[0];
+            // ee->vu0->cr[0] &= ~0xfc0;
+            // ee->vu0->cr[0] |= EE_RT32 & 0xfc0;
+
+            // printf("prev=%08x curr=%08x val=%08x\n", status, ee->vu0->cr[0], EE_RT32);
+        } else {
+            ee->vu0->cr[d - 16] = EE_RT32;
+        }
+
+        // printf("ee: ctc2 %d (%s) -> %08x\n", d-16, regs[d-16], EE_RT32);
     }
 }
 static inline void ee_i_cvts(struct ee_state* ee) {
