@@ -1,38 +1,96 @@
-# 🐣eegs
-An attempt at Sony PlayStation 2 emulation. Right now under early development, expect to see more in the coming months!
+<div align="center" text-align="center" width="100%">
+    <img width="55%" src="https://github.com/user-attachments/assets/d59e2d95-5791-4497-9985-442ca5115ac6">
+</div>
 
-| 3stars.elf | bytheway.elf | Crazy Taxi (SLUS_202.02) |
-| ------------- | ------------- | ------------- |
-| ![](https://github.com/user-attachments/assets/5702f174-24ea-40d0-b404-e26787a151c8) | ![](https://github.com/user-attachments/assets/9b99d4fc-2232-492b-a14d-3d7f472e6928) | ![](https://github.com/user-attachments/assets/887e8c08-e870-44e0-b9ef-ac41903e83d7) |
+# 🐣 Iris
+An experimental Sony PlayStation 2 emulator and debugger
+
+## Screenshots
+<div align="center" class="grid" markdown>
+  <img width="45%" src="https://github.com/user-attachments/assets/39106951-9d45-484f-b4ae-13197305bf06"/>
+  <img width="45%" src="https://github.com/user-attachments/assets/e7d24d24-ccac-4239-baba-80d880db35bf"/>
+  <img width="45%" src="https://github.com/user-attachments/assets/3d2499fd-304e-4f2c-a1ce-677912f13753"/>
+  <img width="45%" src="https://github.com/user-attachments/assets/de37505e-efea-4d3a-94fe-3438b2e9722b"/>
+  <img width="45%" src="https://github.com/user-attachments/assets/d97b16fe-f59f-4174-97eb-f4dadf4c4df0"/>
+  <img width="45%" src="https://github.com/user-attachments/assets/f061db57-96f3-4fad-94ea-8b023a5875ad"/>
+  <img width="45%" src="https://github.com/user-attachments/assets/5ac202f5-eb74-493f-bb35-c6acf752a50b"/>
+  <img width="45%" src="https://github.com/user-attachments/assets/099ddda9-4f7f-4d8d-8071-40741bbd3bfc"/>
+</div>
+
 ## Usage
-
 > [!WARNING]  
-> This emulator is under development, it can't run any commercial games yet
+> This emulator is under development, it can only run a small number of commercial games
 
-### Building (Unix)
+Iris has a graphical user interface and also supports launching from the command line:
 ```
-git clone https://github.com/allkern/eegs
-cd eegs
-make
+Usage: iris [OPTION]... <path-to-disc-image>
+
+  -b, --bios               Specify a PlayStation 2 BIOS dump file
+      --rom1               Specify a DVD player dump file
+      --rom2               Specify a ROM2 dump file
+  -d, --boot               Specify a direct kernel boot path
+  -i, --disc               Specify a path to a disc image file
+  -x, --executable         Specify a path to an ELF executable to be
+                             loaded on system startup
+      --slot1              Specify a path to a memory card file to
+                             be inserted on slot 1
+      --slot2              Specify a path to a memory card file to
+                             be inserted on slot 2
+  -h, --help               Display this help and exit
+  -v, --version            Output version information and exit
 ```
 
-### Running
+Launching a game or executable through the GUI is also very easy, just go to Iris > Open... and pick a disc image or ELF executable.
+
+## Building
+Building the emulator should be pretty straightforward, just recursively clone the repository and follow the steps:
+
+### Linux
 ```
-eegs -b <path-to-bios> -x <path-to-elf> -d <direct-boot-path>
+git clone https://github.com/allkern/iris --recursive
+cd iris
+./setup-gl3w.sh
+make -j8
+```
+
+### Windows
+```
+git clone https://github.com/allkern/iris --recursive
+cd iris
+./build-deps.ps1
+./build-win.ps1
+```
+
+### macOS
+> [!WARNING]  
+> Iris should support macOS but hasn't been fully tested yet
+```
+git clone https://github.com/allkern/iris --recursive
+cd iris
+./setup-gl3w.sh
+./build.sh
 ```
 
 ## Progress
-Booting the `SCPH10000.BIN` BIOS up to the point it starts loading the necessary modules for OSDSYS (the system menu), and the system menu itself.
+### Commercial games
+Booting a small number of commercial games in-game, and a slightly bigger set of games can boot to the title screen. Most of them do nothing though, an the ones that do usually run way too slow to be playable.
 
-When the BIOS gets to this point, it will instruct the IOP to load the system menu executable at path `rom0:OSDSYS`. We can patch this path in memory to make the IOP load and boot any file we want, for example, a game executable stored in CDVD.
+### BIOS
+Pretty much all BIOSes I've tried work just fine, even some obscure ones like the Chinese BIOS and the PSX DESR BIOS (more on this later).
 
-By parsing the filesystem of an ISO 9660 game dump, we can extract the `SYSTEM.CNF` file, this file contains (among other things) a path to the game's executable:
-```
-BOOT2 = cdrom0:\SLUS_210.90;1
-VER = 1.02
-VMODE = NTSC
-```
-We can then replace the OSDSYS path with the path we got from SYSTEM.CNF, which will make the BIOS boot our game instead.
+It is also possible to specify paths to ROM1 (DVD player) and ROM2 (Chinese extensions, required for the Chinese BIOS).
+
+The only caveat is that none of them render any background graphics when booting, and the little orbs and 3D models. This is probably due to my terrible VU emulation and might be fixed soon.
+
+## PSX DESR
+Support for the PSX DESR console is early but somewhat functional. The DESR BIOS plays the boot animation but later fails some sort of diagnostic test. The DESR requires Flash, ATA and MagicGate emulation, which Iris doesn't yet support.
+
+Booting to the XMB should be possible once these features are implemented, and is one of my medium-term goals for this project.
+
+# Special thanks and acknowledgements
+I would like to thank the emudev Discord server, Ziemas, Nelson (ncarrillo), cakehonolulu, PSI-rockin and the PCSX2 team for their kind support.
+
+This project makes use of ImGui, gl3w, toml++, Portable File Dialogs and stb_image
 
 ### Components
 This console is significantly more complex compared to the PS1, here's a rough list of components:
@@ -57,10 +115,10 @@ This console is significantly more complex compared to the PS1, here's a rough l
 - 🟡 DMAC
 - 🟢 INTC
 - 🟡 Timers
-- 🟡 CDVD
-- 🟡 SIO2 (controllers and Memory Cards)
-- 🟡 SPU2
-- 🔴 DEV9
+- 🟢 CDVD
+- 🟢 SIO2 (controllers and Memory Cards)
+- 🟢 SPU2
+- 🟡 DEV9
 - 🟡 USB/FireWire?
 - 🔴 Ethernet
 - 🔴 PS1 backcompat (PS1 hardware)
