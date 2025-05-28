@@ -3,7 +3,7 @@
 </div>
 
 # 🐣 Iris
-An experimental Sony PlayStation 2 emulator and debugger
+Experimental Sony PlayStation 2 emulator and debugger
 
 ## Screenshots
 <div align="center" class="grid" markdown>
@@ -19,7 +19,7 @@ An experimental Sony PlayStation 2 emulator and debugger
 
 ## Usage
 > [!WARNING]  
-> This emulator is under development, it can only run a small number of commercial games
+> This emulator is under development, it can only run a very small number of commercial games
 
 Iris has a graphical user interface and also supports launching from the command line:
 ```
@@ -88,7 +88,7 @@ Support for the PSX DESR console is early but somewhat functional. The DESR BIOS
 Booting to the XMB should be possible once these features are implemented, and is one of my medium-term goals for this project.
 
 # Special thanks and acknowledgements
-I would like to thank the emudev Discord server, Ziemas, Nelson (ncarrillo), cakehonolulu, PSI-rockin and the PCSX2 team for their kind support.
+I would like to thank the emudev Discord server, Ziemas, Nelson (ncarrillo), cakehonolulu, PSI-rockin, noumi and the PCSX2 team for their kind support.
 
 This project makes use of ImGui, gl3w, toml++, Portable File Dialogs and stb_image
 
