@@ -87,6 +87,8 @@ Support for the PSX DESR console is early but somewhat functional. The DESR BIOS
 
 Booting to the XMB should be possible once these features are implemented, and is one of my medium-term goals for this project.
 
+If you want to try it for yourself, you need to dump the BIOS out of your PSX console, then just clone the `desr` branch, build the emulator and set up the BIOS, ROM1 and ROM2 dumps in Settings > BIOS, or through the command line.
+
 # Special thanks and acknowledgements
 I would like to thank the emudev Discord server, Ziemas, Nelson (ncarrillo), cakehonolulu, PSI-rockin, noumi and the PCSX2 team for their kind support.
 
