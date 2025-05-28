@@ -68,6 +68,7 @@ void ee_bus_init_usb(struct ee_bus* bus, struct ps2_usb* usb);
 void ee_bus_init_vu0(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_vu1(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), void* udata);
+void ee_bus_init_fastmem(struct ee_bus* bus);
 
 #ifdef __cplusplus
 }

@@ -165,6 +165,8 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
 
 void ps2_load_bios(struct ps2_state* ps2, const char* path) {
     ps2_bios_init(ps2->bios, path);
+
+    ee_bus_init_fastmem(ps2->ee_bus);
 }
 
 void ps2_load_rom1(struct ps2_state* ps2, const char* path) {

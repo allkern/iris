@@ -5,12 +5,45 @@
 #include "bus.h"
 #include "bus_decl.h"
 
+static void* fastmem_r_table[0x10000] = {
+    NULL
+};
+
+static void* fastmem_w_table[0x10000] = {
+    NULL
+};
+
 struct ee_bus* ee_bus_create(void) {
     return malloc(sizeof(struct ee_bus));
 }
 
 void ee_bus_init(struct ee_bus* bus, const char* bios_path) {
     memset(bus, 0, sizeof(struct ee_bus));
+
+    for (int i = 0; i < 0x10000; i++) {
+        fastmem_r_table[i] = NULL;
+        fastmem_w_table[i] = NULL;
+    }
+}
+
+void ee_bus_init_fastmem(struct ee_bus* bus) {
+    // BIOS
+    for (int i = 0; i < 0x200; i++) {
+        fastmem_r_table[i+0xfe00] = bus->bios->buf + (i * 0x2000);
+        fastmem_w_table[i+0xfe00] = NULL;
+    }
+
+    // Main RAM
+    for (int i = 0; i < 0x1000; i++) {
+        fastmem_r_table[i+0x0000] = bus->ee_ram->buf + (i * 0x2000);
+        fastmem_w_table[i+0x0000] = bus->ee_ram->buf + (i * 0x2000);
+    }
+
+    // IOP RAM
+    for (int i = 0; i < 0x100; i++) {
+        fastmem_r_table[i+0xe000] = bus->iop_ram->buf + (i * 0x2000);
+        fastmem_w_table[i+0xe000] = bus->iop_ram->buf + (i * 0x2000);
+    }
 }
 
 void ee_bus_init_bios(struct ee_bus* bus, struct ps2_bios* bios) {
@@ -102,8 +135,18 @@ void ee_bus_destroy(struct ee_bus* bus) {
 #define MAP_REG_WRITE(b, l, u, d, n) \
     if ((addr >= l) && (addr <= u)) { ps2_ ## d ## _write ## b(bus->n, addr, data); return; }
 
+// Fast ranges:
+// - RAM   00000000-01FFFFFF -> 0000-0fff (1000)
+// - BIOS  1FC00000-1FFFFFFF -> fe00-ffff (200)
+// - VU    11000000-1100FFFF -> 8800-8807 (8)
+// - IOP   1C000000-1C1FFFFF -> e000-e0ff (100)
+
 uint64_t ee_bus_read8(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
+
+    void* ptr = fastmem_r_table[addr >> 13];
+
+    if (ptr) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     MAP_MEM_READ(8, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -125,6 +168,10 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
 
 uint64_t ee_bus_read16(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
+
+    void* ptr = fastmem_r_table[addr >> 13];
+
+    if (ptr) return *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     MAP_MEM_READ(16, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(16, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -152,6 +199,10 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
 
 uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
+
+    void* ptr = fastmem_r_table[addr >> 13];
+
+    if (ptr) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     MAP_MEM_READ(32, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(32, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -219,6 +270,10 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
 uint64_t ee_bus_read64(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
+    void* ptr = fastmem_r_table[addr >> 13];
+
+    if (ptr) return *((uint64_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+
     MAP_MEM_READ(64, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(64, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_READ(64, 0x30000000, 0x31FFFFFF, ram, ee_ram);
@@ -243,6 +298,10 @@ uint64_t ee_bus_read64(void* udata, uint32_t addr) {
 uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
+    void* ptr = fastmem_r_table[addr >> 13];
+
+    if (ptr) return *((uint128_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+
     MAP_MEM_READ(128, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_READ(128, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_READ(128, 0x30000000, 0x31FFFFFF, ram, ee_ram);
@@ -262,6 +321,14 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
 
 void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
     struct ee_bus* bus = (struct ee_bus*)udata;
+
+    void* ptr = fastmem_w_table[addr >> 13];
+
+    if (ptr) {
+        *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
 
     MAP_MEM_WRITE(8, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -283,6 +350,14 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
 void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
+    void* ptr = fastmem_w_table[addr >> 13];
+
+    if (ptr) {
+        *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
+
     MAP_MEM_WRITE(16, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(16, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(16, 0x30000000, 0x31FFFFFF, ram, ee_ram);
@@ -303,6 +378,14 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
 
 void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
     struct ee_bus* bus = (struct ee_bus*)udata;
+
+    void* ptr = fastmem_w_table[addr >> 13];
+
+    if (ptr) {
+        *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
 
     MAP_MEM_WRITE(32, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(32, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -358,6 +441,14 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
 void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
+    void* ptr = fastmem_w_table[addr >> 13];
+
+    if (ptr) {
+        *((uint64_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
+
     MAP_MEM_WRITE(64, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(64, 0x20000000, 0x21FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(64, 0x30000000, 0x31FFFFFF, ram, ee_ram);
@@ -377,6 +468,14 @@ void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
 
 void ee_bus_write128(void* udata, uint32_t addr, uint128_t data) {
     struct ee_bus* bus = (struct ee_bus*)udata;
+
+    void* ptr = fastmem_w_table[addr >> 13];
+
+    if (ptr) {
+        *((uint128_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
 
     MAP_MEM_WRITE(128, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     MAP_MEM_WRITE(128, 0x20000000, 0x21FFFFFF, ram, ee_ram);
