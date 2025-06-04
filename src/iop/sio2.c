@@ -64,6 +64,7 @@ static inline int sio2_handle_command(struct ps2_sio2* sio2, int idx) {
     // for ports 2-3
     int pad = devid == SIO2_DEV_PAD;
     int mcd = devid == SIO2_DEV_MCD;
+    int mtap = devid == SIO2_DEV_MTAP;
 
     if (!(pad || mcd))
         return 0;
