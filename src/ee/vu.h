@@ -54,7 +54,10 @@ struct vu_state {
                 uint32_t u32;
                 float f;
             } r;
-            uint32_t i;
+            union {
+                uint32_t u32;
+                float f;
+            } i;
             union {
                 uint32_t u32;
                 float f;
