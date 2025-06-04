@@ -11,6 +11,24 @@ struct iop_bus* iop_bus_create(void) {
 
 void iop_bus_init(struct iop_bus* bus, const char* bios_path) {
     memset(bus, 0, sizeof(struct iop_bus));
+
+    for (int i = 0; i < 0x10000; i++) {
+        bus->fastmem_r_table[i] = NULL;
+        bus->fastmem_w_table[i] = NULL;
+    }
+}
+
+void iop_bus_init_fastmem(struct iop_bus* bus) {
+    // BIOS
+    for (int i = 0; i < 0x200; i++) {
+        bus->fastmem_r_table[i+0xfe00] = bus->bios->buf + (i * 0x2000);
+    }
+
+    // IOP RAM
+    for (int i = 0; i < 0x100; i++) {
+        bus->fastmem_r_table[i+0x0000] = bus->iop_ram->buf + (i * 0x2000);
+        bus->fastmem_w_table[i+0x0000] = bus->iop_ram->buf + (i * 0x2000);
+    }
 }
 
 void iop_bus_init_bios(struct iop_bus* bus, struct ps2_bios* bios) {
@@ -69,6 +87,10 @@ void iop_bus_init_fw(struct iop_bus* bus, struct ps2_fw* fw) {
     bus->fw = fw;
 }
 
+void iop_bus_init_sbus(struct iop_bus* bus, struct ps2_sbus* sbus) {
+    bus->sbus = sbus;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }
@@ -88,11 +110,16 @@ void iop_bus_destroy(struct iop_bus* bus) {
 uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    MAP_MEM_READ(8, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
+
+    if (ptr) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+
+    // MAP_MEM_READ(8, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    // MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ(8, 0x1F800000, 0x1F8003FF, ram, iop_spr);
+    MAP_REG_READ(8, 0x1F801070, 0x1F80107B, iop_intc, intc);
     MAP_REG_READ(8, 0x1F402004, 0x1F4020FF, cdvd, cdvd);
     MAP_REG_READ(8, 0x1F808200, 0x1F808280, sio2, sio2);
-    MAP_MEM_READ(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
@@ -104,9 +131,14 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
 uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
-    MAP_MEM_READ(16, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
+
+    if (ptr) return *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+
+    // MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    // MAP_MEM_READ(16, 0x00000000, 0x001FFFFF, ram, iop_ram);
     MAP_MEM_READ(16, 0x1F800000, 0x1F8003FF, ram, iop_spr);
+    MAP_REG_READ(16, 0x1F801070, 0x1F80107B, iop_intc, intc);
     MAP_REG_READ(32, 0x1F801100, 0x1F80112F, iop_timers, timers);
     MAP_REG_READ(32, 0x1F801480, 0x1F8014AF, iop_timers, timers);
     MAP_REG_READ(16, 0x1F801080, 0x1F8010EF, iop_dma, dma);
@@ -120,15 +152,7 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     // PCMCIA (CXD9566)
     if (addr == 0x1f80146e) { return 0x30; }
 
-    // if (addr == 0x1f9001b0) {
-    //     return 0xffff;
-    // }
-    // Stub SPU2 status reg?
-    // if ((addr & 0xfff0000f) == 0x1f90000a) {
-    //     return 0xffff;
-    // }
-
-    printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -136,7 +160,12 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
 uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    MAP_MEM_READ(32, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
+
+    if (ptr) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+
+    // MAP_MEM_READ(32, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    // MAP_MEM_READ(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ(32, 0x1F800000, 0x1F8003FF, ram, iop_spr);
     MAP_REG_READ(32, 0x1D000000, 0x1D00006F, sif, sif);
     MAP_REG_READ(32, 0x1F801070, 0x1F80107B, iop_intc, intc);
@@ -147,7 +176,6 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x1F801100, 0x1F80112F, iop_timers, timers);
     MAP_REG_READ(32, 0x1F801480, 0x1F8014AF, iop_timers, timers);
     MAP_REG_READ(32, 0x1F808200, 0x1F808280, sio2, sio2);
-    MAP_MEM_READ(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_REG_READ(32, 0x1F801600, 0x1F8016FF, usb, usb);
     MAP_REG_READ(32, 0x1F808400, 0x1F80854F, fw, fw);
     MAP_MEM_READ(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
@@ -161,8 +189,7 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     // Bloody Roar 4 Wrong IOP CDVD DMA
     // if ((addr & 0xff000000) == 0x0c000000) { *(uint8_t*)0 = 0; }
 
-
-    printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -170,16 +197,24 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
 void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    MAP_MEM_WRITE(8, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    void* ptr = bus->fastmem_w_table[(addr & 0x1fffffff) >> 13];
+
+    if (ptr) {
+        *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
+
+    // MAP_MEM_WRITE(8, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    // MAP_MEM_WRITE(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_WRITE(8, 0x1F800000, 0x1F8003FF, ram, iop_spr);
     MAP_REG_WRITE(8, 0x1F402004, 0x1F4020FF, cdvd, cdvd);
-    MAP_REG_WRITE(32, 0x1F801070, 0x1F80107B, iop_intc, intc);
+    MAP_REG_WRITE(8, 0x1F801070, 0x1F80107B, iop_intc, intc);
     MAP_REG_WRITE(32, 0x1F801080, 0x1F8010EF, iop_dma, dma);
     MAP_REG_WRITE(32, 0x1F801500, 0x1F80155F, iop_dma, dma);
     MAP_REG_WRITE(32, 0x1F801570, 0x1F80157F, iop_dma, dma);
     MAP_REG_WRITE(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_REG_WRITE(8, 0x1F808200, 0x1F808280, sio2, sio2);
-    MAP_MEM_WRITE(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
     printf("iop_bus: Unhandled 8-bit write to physical address 0x%08x (0x%02x)\n", addr, data);
 }
@@ -187,27 +222,45 @@ void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
 void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    MAP_MEM_WRITE(16, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    void* ptr = bus->fastmem_w_table[(addr & 0x1fffffff) >> 13];
+
+    if (ptr) {
+        *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
+
+    // MAP_MEM_WRITE(16, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    // MAP_MEM_WRITE(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_WRITE(16, 0x1F800000, 0x1F8003FF, ram, iop_spr);
     MAP_REG_WRITE(32, 0x1F801100, 0x1F80112F, iop_timers, timers);
     MAP_REG_WRITE(32, 0x1F801480, 0x1F8014AF, iop_timers, timers);
-    MAP_REG_WRITE(32, 0x1F801070, 0x1F80107B, iop_intc, intc);
+    MAP_REG_WRITE(16, 0x1F801070, 0x1F80107B, iop_intc, intc);
     MAP_REG_WRITE(16, 0x1F801080, 0x1F8010EF, iop_dma, dma);
     MAP_REG_WRITE(16, 0x1F801500, 0x1F80155F, iop_dma, dma);
     MAP_REG_WRITE(16, 0x1F801570, 0x1F80157F, iop_dma, dma);
     MAP_REG_WRITE(16, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_REG_WRITE(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
-    MAP_MEM_WRITE(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
 
-    printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
+    // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
 }
 
 void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    MAP_MEM_WRITE(32, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    void* ptr = bus->fastmem_w_table[(addr & 0x1fffffff) >> 13];
+
+    if (ptr) {
+        *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        return;
+    }
+
+    // MAP_MEM_WRITE(32, 0x00000000, 0x001FFFFF, ram, iop_ram);
+    // MAP_MEM_WRITE(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_WRITE(32, 0x1F800000, 0x1F8003FF, ram, iop_spr);
     MAP_REG_WRITE(32, 0x1D000000, 0x1D00006F, sif, sif);
+    MAP_REG_WRITE(32, 0x1F801450, 0x1F801453, sbus, sbus);
     MAP_REG_WRITE(32, 0x1F801070, 0x1F80107B, iop_intc, intc);
     MAP_REG_WRITE(32, 0x1F801080, 0x1F8010EF, iop_dma, dma);
     MAP_REG_WRITE(32, 0x1F801500, 0x1F80155F, iop_dma, dma);
@@ -216,13 +269,10 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x1F801100, 0x1F80112F, iop_timers, timers);
     MAP_REG_WRITE(32, 0x1F801480, 0x1F8014AF, iop_timers, timers);
     MAP_REG_WRITE(32, 0x1F808200, 0x1F808280, sio2, sio2);
-    MAP_MEM_WRITE(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_REG_WRITE(32, 0x1F801600, 0x1F8016FF, usb, usb);
     MAP_REG_WRITE(32, 0x1F808400, 0x1F80854F, fw, fw);
 
-    if (addr == 0x1f801450) return;
-
-    printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);
+    // printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);
 }
 
 #undef MAP_READ

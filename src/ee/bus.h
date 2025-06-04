@@ -19,6 +19,7 @@ extern "C" {
 #include "shared/ram.h"
 #include "shared/sif.h"
 #include "shared/bios.h"
+#include "shared/sbus.h"
 
 struct ee_bus {
     // EE-only
@@ -41,6 +42,10 @@ struct ee_bus {
     struct ps2_bios* rom2;
     struct ps2_ram* iop_ram;
     struct ps2_sif* sif;
+    struct ps2_sbus* sbus;
+
+    void* fastmem_r_table[0x10000];
+    void* fastmem_w_table[0x10000];
 
     uint32_t mch_ricm;
     uint32_t mch_drd;
@@ -65,6 +70,7 @@ void ee_bus_init_iop_ram(struct ee_bus* bus, struct ps2_ram* iop_ram);
 void ee_bus_init_sif(struct ee_bus* bus, struct ps2_sif* sif);
 void ee_bus_init_cdvd(struct ee_bus* bus, struct ps2_cdvd* cdvd);
 void ee_bus_init_usb(struct ee_bus* bus, struct ps2_usb* usb);
+void ee_bus_init_sbus(struct ee_bus* bus, struct ps2_sbus* sbus);
 void ee_bus_init_vu0(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_vu1(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), void* udata);
