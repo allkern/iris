@@ -8,10 +8,11 @@ struct ps2_sif* ps2_sif_create(void) {
     return malloc(sizeof(struct ps2_sif));
 }
 
-void ps2_sif_init(struct ps2_sif* sif) {
+void ps2_sif_init(struct ps2_sif* sif, struct ps2_iop_intc* iop_intc) {
     memset(sif, 0, sizeof(struct ps2_sif));
 
     sif->ctrl = 0xf0000012;
+    sif->iop_intc = iop_intc;
 }
 
 void ps2_sif_destroy(struct ps2_sif* sif) {
@@ -61,7 +62,13 @@ void ps2_sif_write32(struct ps2_sif* sif, uint32_t addr, uint64_t data) {
         case 0x1000f210: sif->smcom = data; return;
         case 0x1000f220: sif->msflg |= data; return;
         case 0x1000f230: sif->smflg &= ~data; return;
-        case 0x1000f240: sif->ctrl = data; return;
+        case 0x1000f240: {
+            if (data & 0x40000) {
+                ps2_iop_intc_irq(sif->iop_intc, IOP_INTC_SBUS);
+            }
+
+            sif->ctrl = data & ~0x40000;
+        }return;
         case 0x1000f260: sif->bd6 = data; return;
     }
 }

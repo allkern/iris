@@ -39,6 +39,10 @@ extern "C" {
 */
 
 #define IOP_INTC_VBLANK_IN  0x00000001
+
+// Bit 1 in PS2 mode is mapped to the SBUS IRQ, in PS1 mode
+// it's mapped to the PS1 GPU
+#define IOP_INTC_SBUS       0x00000002
 #define IOP_INTC_GPU        0x00000002
 #define IOP_INTC_CDVD       0x00000004
 #define IOP_INTC_DMA        0x00000008

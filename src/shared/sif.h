@@ -7,6 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
+#include "iop/intc.h"
 #include "u128.h"
 
 #define SIF_EE_SIDE 0
@@ -28,12 +29,14 @@ struct ps2_sif {
     uint32_t ctrl;
     uint32_t bd6;
 
+    struct ps2_iop_intc* iop_intc;
+
     struct sif_fifo sif0;
     struct sif_fifo sif1;
 };
 
 struct ps2_sif* ps2_sif_create(void);
-void ps2_sif_init(struct ps2_sif* sif);
+void ps2_sif_init(struct ps2_sif* sif, struct ps2_iop_intc* iop_intc);
 void ps2_sif_destroy(struct ps2_sif* sif);
 uint64_t ps2_sif_read32(struct ps2_sif* sif, uint32_t addr);
 void ps2_sif_write32(struct ps2_sif* sif, uint32_t addr, uint64_t data);
