@@ -95,9 +95,9 @@ static inline uint32_t unpack_5551_8888(uint32_t v) {
 #define EE_RT32 ee->r[EE_D_RT].ul32
 #define EE_RD32 ee->r[EE_D_RD].ul32
 #define EE_RS32 ee->r[EE_D_RS].ul32
-#define EE_FT ee->f[EE_D_RT].f
 #define EE_FD ee->f[EE_D_FD].f
-#define EE_FS ee->f[EE_D_FS].f
+#define EE_FT (fpu_cvtf(ee->f[EE_D_RT].f))
+#define EE_FS (fpu_cvtf(ee->f[EE_D_FS].f))
 #define EE_FT32 ee->f[EE_D_RT].u32
 #define EE_FD32 ee->f[EE_D_FD].u32
 #define EE_FS32 ee->f[EE_D_FS].u32
@@ -152,6 +152,26 @@ const uint32_t ee_bus_region_mask_table[] = {
     0x7fffffff, 0x1fffffff, 0xffffffff, 0xffffffff
 };
 
+static inline float fpu_cvtf(float f) {
+    uint32_t u32 = *(uint32_t*)&f;
+
+    switch (u32 & 0x7f800000) {
+        case 0x0: {
+            u32 &= 0x80000000;
+
+            return *(float*)&u32;
+        } break;
+
+        case 0x7f800000: {
+            uint32_t result = (u32 & 0x80000000) | 0x7f7fffff;
+
+            return *(float*)&result;
+        }
+    }
+
+    return *(float*)&u32;
+}
+
 static inline float fpu_cvtsw(union ee_fpu_reg* reg) {
     switch (reg->u32 & 0x7F800000) {
         case 0x0: {
@@ -168,7 +188,7 @@ static inline float fpu_cvtsw(union ee_fpu_reg* reg) {
 
 static inline void fpu_cvtws(union ee_fpu_reg* d, union ee_fpu_reg* s) {
     if ((s->u32 & 0x7F800000) <= 0x4E800000)
-        d->s32 = (int32_t)s->f;
+        d->s32 = (int32_t)fpu_cvtf(s->f);
     else if ((s->u32 & 0x80000000) == 0)
         d->u32 = 0x7FFFFFFF;
     else
@@ -186,7 +206,7 @@ static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t
 static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t* phys) {
     int seg = ee_get_segment(virt);
 
-    // // Assume we're in kernel mode
+    // Assume we're in kernel mode
     if (seg == EE_KSEG0 || seg == EE_KSEG1) {
         *phys = virt & 0x1fffffff;
 
@@ -332,16 +352,16 @@ static inline int ee_skip_fmv(struct ee_state* ee, uint32_t addr) {
 }
 
 static inline void ee_set_pc(struct ee_state* ee, uint32_t addr) {
-    if (ee_skip_fmv(ee, addr))
-        return;
+    // if (ee_skip_fmv(ee, addr))
+    //     return;
 
     ee->pc = addr;
     ee->next_pc = addr + 4;
 }
 
 static inline void ee_set_pc_delayed(struct ee_state* ee, uint32_t addr) {
-    if (ee_skip_fmv(ee, addr))
-        return;
+    // if (ee_skip_fmv(ee, addr))
+    //     return;
 
     ee->next_pc = addr;
     ee->branch = 1;
