@@ -104,7 +104,7 @@ static void show_ee_disassembly_view(iris::instance* iris) {
             PushFont(iris->font_icons);
 
             auto v = std::find_if(iris->breakpoints.begin(), iris->breakpoints.end(), [](breakpoint& a) {
-                return a.addr == g_ee_dis_state.pc;
+                return a.addr == g_ee_dis_state.pc && a.cpu == BKPT_CPU_EE;
             });
 
             if (v != iris->breakpoints.end()) {
@@ -135,7 +135,9 @@ static void show_ee_disassembly_view(iris::instance* iris) {
 
             sprintf(id, "##%d", row);
 
-            if (Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns)) {
+            Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns);
+
+            if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                 breakpoint b;
 
                 b.addr = g_ee_dis_state.pc;
@@ -146,7 +148,15 @@ static void show_ee_disassembly_view(iris::instance* iris) {
                 b.size = 4;
                 b.enabled = true;
 
-                iris->breakpoints.push_back(b);
+                auto addr = std::find_if(iris->breakpoints.begin(), iris->breakpoints.end(), [](breakpoint& a) {
+                    return a.addr == g_ee_dis_state.pc && a.cpu == BKPT_CPU_EE;
+                });
+
+                if (addr == iris->breakpoints.end()) {
+                    iris->breakpoints.push_back(b);
+                } else {
+                    iris->breakpoints.erase(addr);
+                }
             } SameLine();
 
             if (BeginPopupContextItem()) {
@@ -234,6 +244,14 @@ static void show_iop_disassembly_view(iris::instance* iris) {
 
             PushFont(iris->font_icons);
 
+            auto v = std::find_if(iris->breakpoints.begin(), iris->breakpoints.end(), [](breakpoint& a) {
+                return a.addr == g_iop_dis_state.addr && a.cpu == BKPT_CPU_IOP;
+            });
+
+            if (v != iris->breakpoints.end()) {
+                Text(" " ICON_MS_FIBER_MANUAL_RECORD " ");
+            }
+
             TableSetColumnIndex(1);
 
             if (g_iop_dis_state.addr == iris->ps2->iop->pc)
@@ -258,7 +276,9 @@ static void show_iop_disassembly_view(iris::instance* iris) {
 
             sprintf(id, "##%d", row);
 
-            if (Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns)) {
+            Selectable(id, false, ImGuiSelectableFlags_AllowDoubleClick | ImGuiSelectableFlags_SpanAllColumns);
+
+            if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
                 breakpoint b;
 
                 b.addr = g_iop_dis_state.addr;
@@ -269,7 +289,15 @@ static void show_iop_disassembly_view(iris::instance* iris) {
                 b.size = 4;
                 b.enabled = true;
 
-                iris->breakpoints.push_back(b);
+                auto addr = std::find_if(iris->breakpoints.begin(), iris->breakpoints.end(), [](breakpoint& a) {
+                    return a.addr == g_iop_dis_state.addr && a.cpu == BKPT_CPU_IOP;
+                });
+
+                if (addr == iris->breakpoints.end()) {
+                    iris->breakpoints.push_back(b);
+                } else {
+                    iris->breakpoints.erase(addr);
+                }
             } SameLine();
 
             if (BeginPopupContextItem()) {

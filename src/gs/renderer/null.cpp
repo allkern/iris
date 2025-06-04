@@ -18,7 +18,11 @@ void null_get_display_size(void* ctx, int* w, int* h) {
 void null_get_display_format(void* ctx, int* fmt) {
     *fmt = 0;
 }
+void null_get_interlace_mode(void* ctx, int* mode) {
+    *mode = 0;
+}
 void null_set_window_rect(void* ctx, int x, int y, int w, int h) {}
+void* null_get_buffer_data(void* ctx, int* w, int* h, int* bpp) { *w = 0; *h = 0; *bpp = 0; return nullptr; }
 const char* null_get_name(void* ctx) { return "Null"; }
 
 extern "C" void null_render_point(struct ps2_gs* gs, void* udata) {}

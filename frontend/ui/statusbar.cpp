@@ -27,6 +27,7 @@ bool BeginMainStatusBar()
         BeginMenuBar();
     else
         End();
+
     return is_open;
 }
 
@@ -62,17 +63,19 @@ void show_status_bar(iris::instance* iris) {
     using namespace ImGui;
 
     if (BeginMainStatusBar()) {
-        int vp_w, vp_h, disp_w, disp_h, disp_fmt;
+        int vp_w, vp_h, disp_w, disp_h, disp_fmt, mode;
 
         renderer_get_viewport_size(iris->ctx, &vp_w, &vp_h);
         renderer_get_display_size(iris->ctx, &disp_w, &disp_h);
         renderer_get_display_format(iris->ctx, &disp_fmt);
+        renderer_get_interlace_mode(iris->ctx, &mode);
 
         if (vp_w) {
-            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %dbpp | %.1f fps",
+            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
                 renderer_get_name(iris->ctx),
                 disp_w, disp_h,
                 vp_w, vp_h,
+                mode == 3 ? "Interlaced" : "Progressive",
                 get_format_bpp(disp_fmt),
                 iris->fps * 2.0f
             );

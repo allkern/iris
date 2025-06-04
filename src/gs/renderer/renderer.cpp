@@ -20,7 +20,9 @@ void renderer_init_null(renderer_state* renderer, struct ps2_gs* gs, SDL_Window*
     renderer->get_viewport_size = null_get_viewport_size;
     renderer->get_display_size = null_get_display_size;
     renderer->get_display_format = null_get_display_format;
+    renderer->get_interlace_mode = null_get_interlace_mode;
     renderer->set_window_rect = null_set_window_rect;
+    renderer->get_buffer_data = null_get_buffer_data;
     renderer->get_name = null_get_name;
 
     gs->backend.render_point = null_render_point;
@@ -46,7 +48,9 @@ void renderer_init_software(renderer_state* renderer, struct ps2_gs* gs, SDL_Win
     renderer->get_viewport_size = software_get_viewport_size;
     renderer->get_display_size = software_get_display_size;
     renderer->get_display_format = software_get_display_format;
+    renderer->get_interlace_mode = software_get_interlace_mode;
     renderer->set_window_rect = software_set_window_rect;
+    renderer->get_buffer_data = software_get_buffer_data;
     renderer->get_name = software_get_name;
 
     gs->backend.render_point = software_render_point;
@@ -72,7 +76,9 @@ void renderer_init_software_thread(renderer_state* renderer, struct ps2_gs* gs, 
     renderer->get_viewport_size = software_thread_get_viewport_size;
     renderer->get_display_size = software_thread_get_display_size;
     renderer->get_display_format = software_thread_get_display_format;
+    renderer->get_interlace_mode = software_thread_get_interlace_mode;
     renderer->set_window_rect = software_thread_set_window_rect;
+    renderer->get_buffer_data = software_thread_get_buffer_data;
     renderer->get_name = software_thread_get_name;
 
     gs->backend.render_point = software_thread_render_point;
@@ -131,8 +137,14 @@ void renderer_get_display_size(renderer_state* renderer, int* w, int* h) {
 void renderer_get_display_format(renderer_state* renderer, int* fmt) {
     renderer->get_display_format(renderer->udata, fmt);
 }
+void renderer_get_interlace_mode(renderer_state* renderer, int* mode) {
+    renderer->get_interlace_mode(renderer->udata, mode);
+}
 void renderer_set_window_rect(renderer_state* renderer, int x, int y, int w, int h) {
     renderer->set_window_rect(renderer->udata, x, y, w, h);
+}
+void* renderer_get_buffer_data(renderer_state* renderer, int* w, int* h, int* bpp) {
+    return renderer->get_buffer_data(renderer->udata, w, h, bpp);
 }
 const char* renderer_get_name(renderer_state* renderer) {
     return renderer->get_name(renderer->udata);
@@ -156,6 +168,7 @@ void renderer_destroy(renderer_state* renderer) {
     renderer->get_viewport_size = nullptr;
     renderer->get_display_size = nullptr;
     renderer->get_display_format = nullptr;
+    renderer->get_buffer_data = nullptr;
     renderer->get_name = nullptr;
 
     delete renderer;

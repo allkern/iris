@@ -459,6 +459,14 @@ void software_get_display_format(void* udata, int* fmt) {
     *fmt = ctx->disp_fmt;
 }
 
+void* software_get_buffer_data(void* udata, int* w, int* h, int* bpp) {
+    *w = 0;
+    *h = 0;
+    *bpp = 0;
+
+    return nullptr;
+}
+
 void software_set_window_rect(void* udata, int x, int y, int w, int h) {
     return;
 }
@@ -466,7 +474,7 @@ void software_set_window_rect(void* udata, int x, int y, int w, int h) {
 void software_get_interlace_mode(void* udata, int* interlace) {
     software_state* ctx = (software_state*)udata;
 
-    // *interlace = ctx->gs->
+    *interlace = ctx->gs->smode2 & 3;
 }
 
 const char* software_get_name(void* udata) {

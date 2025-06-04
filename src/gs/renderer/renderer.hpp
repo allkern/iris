@@ -41,7 +41,9 @@ struct renderer_state {
     void (*get_viewport_size)(void*, int*, int*) = nullptr;
     void (*get_display_size)(void*, int*, int*) = nullptr;
     void (*get_display_format)(void*, int*) = nullptr;
+    void (*get_interlace_mode)(void*, int*) = nullptr;
     void (*set_window_rect)(void*, int, int, int, int) = nullptr;
+    void* (*get_buffer_data)(void*, int*, int*, int*) = nullptr;
     const char* (*get_name)(void*) = nullptr;
 };
 
@@ -58,7 +60,9 @@ void renderer_set_bilinear(renderer_state* renderer, bool bilinear);
 void renderer_get_viewport_size(renderer_state* renderer, int* w, int* h);
 void renderer_get_display_size(renderer_state* renderer, int* w, int* h);
 void renderer_get_display_format(renderer_state* renderer, int* fmt);
+void renderer_get_interlace_mode(renderer_state* renderer, int* mode);
 void renderer_set_window_rect(renderer_state* renderer, int x, int y, int w, int h);
+void* renderer_get_buffer_data(renderer_state* renderer, int* w, int* h, int* bpp);
 const char* renderer_get_name(renderer_state* renderer);
 void renderer_render(renderer_state* renderer);
 void renderer_destroy(renderer_state* renderer);

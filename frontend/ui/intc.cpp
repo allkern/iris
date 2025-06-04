@@ -93,7 +93,7 @@ void show_ee_intc_interrupts(iris::instance* iris) {
             sprintf(label, "%s##m%x", mask ? ICON_MS_CHECK : "", i);
 
             if (Selectable(label)) {
-                intc->stat ^= 1 << i;
+                intc->mask ^= 1 << i;
             }
         }
 

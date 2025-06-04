@@ -31,6 +31,8 @@ void print_help(iris::instance* iris) {
         "Usage: iris [OPTION]... <path-to-disc-image>\n"
         "\n"
         "  -b, --bios               Specify a PlayStation 2 BIOS dump file\n"
+        "      --rom1               Specify a DVD player dump file\n"
+        "      --rom2               Specify a ROM2 dump file\n"
         "  -d, --boot               Specify a direct kernel boot path\n"
         "  -i, --disc               Specify a path to a disc image file\n"
         "  -x, --executable         Specify a path to an ELF executable to be\n"
@@ -39,10 +41,9 @@ void print_help(iris::instance* iris) {
         "                             be inserted on slot 1\n"
         "      --slot2              Specify a path to a memory card file to\n"
         "                             be inserted on slot 2\n"
+        "      --snap               Specify a directory for storing screenshots\n"
         "  -h, --help               Display this help and exit\n"
         "  -v, --version            Output version information and exit\n"
-        "\n"
-        "Please report any bugs to <https://github.com/allkern/eegs/issues>"
     );
 
     exit(0);

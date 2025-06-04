@@ -77,7 +77,7 @@ void update_title(iris::instance* iris) {
         base = std::filesystem::path(iris->loaded).filename().string();
     }
 
-    sprintf(buf, base.size() ? "Iris (eegs 0.1) | %s" : "Iris (eegs 0.1)",
+    sprintf(buf, base.size() ? "Iris (eegs " STR(_IRIS_VERSION) ") | %s" : "Iris (eegs " STR(_IRIS_VERSION) ")",
         base.c_str()
     );
 
@@ -116,8 +116,6 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     SDL_SetHint(SDL_HINT_IME_SHOW_UI, "1");
 #endif
 
-    gl3wInit();
-
     // Create window with graphics context
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
@@ -126,7 +124,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     cli_check_for_help_version(iris, argc, argv);
 
     iris->window = SDL_CreateWindow(
-        "Iris (eegs 0.1)",
+        "Iris (eegs " STR(_IRIS_VERSION) ")",
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         960, 720,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
@@ -287,6 +285,8 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
 
     struct ps1_mcd_state* ps1_mcd = ps1_mcd_sio2_attach(iris->ps2->sio2, 3, "slot1_ps1.mcd");
 
+    gl3wInit();
+
     iris->ctx = renderer_create();
 
     renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, RENDERER_NULL);
@@ -421,8 +421,15 @@ void update(iris::instance* iris) {
         ps2_cycle(iris->ps2);
 
         for (const breakpoint& b : iris->breakpoints) {
-            if (iris->ps2->ee->pc == b.addr)
-                iris->pause = true;
+            if (b.cpu == BKPT_CPU_EE) {
+                if (iris->ps2->ee->pc == b.addr) {
+                    iris->pause = true;
+                }
+            } else {
+                if (iris->ps2->iop->pc == b.addr) {
+                    iris->pause = true;
+                }
+            }
         }
     } else {
         if (iris->step) {
