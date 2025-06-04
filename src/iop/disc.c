@@ -435,6 +435,9 @@ void disc_close(struct disc_state* disc) {
 }
 
 char* disc_get_serial(struct disc_state* disc, char* serial) {
+    if (!disc)
+        return NULL;
+
     // No game serial
     if (!disc_fetch_system_cnf(disc))
         return NULL;

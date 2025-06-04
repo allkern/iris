@@ -1090,7 +1090,7 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
 
     struct sched_event event;
 
-    event.cycles = 36864000; // IOP clock = 1s
+    event.cycles = 36864000 * 2; // IOP clock * 2 = 2s
     event.udata = cdvd;
     event.name = "CDVD disc detect";
     event.callback = cdvd_set_detected_type;
