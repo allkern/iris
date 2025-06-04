@@ -13,6 +13,9 @@ struct sched_state* sched_create(void) {
 void sched_init(struct sched_state* sched) {
     memset(sched, 0, sizeof(struct sched_state));
 
+    if (sched->events)
+        free(sched->events);
+
     sched->nevents = 0;
     sched->cap = 0;
     sched->events = NULL;

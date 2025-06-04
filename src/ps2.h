@@ -27,6 +27,7 @@ extern "C" {
 #include "shared/bios.h"
 #include "shared/ram.h"
 #include "shared/sif.h"
+#include "shared/sbus.h"
 #include "gs/gs.h"
 #include "ipu/ipu.h"
 
@@ -34,6 +35,7 @@ extern "C" {
 #include "dev/ds.h"
 #include "dev/mcd.h"
 #include "dev/ps1_mcd.h"
+#include "dev/mtap.h"
 
 #include "sched.h"
 
@@ -66,18 +68,19 @@ struct ps2_state {
     struct ps2_iop_dma* iop_dma;
     struct ps2_iop_intc* iop_intc;
     struct ps2_iop_timers* iop_timers;
-    struct ps2_cdvd* cdvd;
     struct ps2_sio2* sio2;
     struct ps2_spu2* spu2;
-    struct ps2_usb* usb;
     struct ps2_fw* fw;
-
+    
     // Shared
     struct ps2_ram* iop_ram;
     struct ps2_bios* bios;
     struct ps2_bios* rom1; // Mapped to 1E000000-1E3FFFFF (DVD firmware)
     struct ps2_bios* rom2; // Mapped to 1E400000-1E7FFFFF (Chinese exts)
+    struct ps2_cdvd* cdvd;
     struct ps2_sif* sif;
+    struct ps2_usb* usb;
+    struct ps2_sbus* sbus;
 
     struct sched_state* sched;
 

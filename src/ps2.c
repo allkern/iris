@@ -43,6 +43,7 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->spu2 = ps2_spu2_create();
     ps2->usb = ps2_usb_create();
     ps2->fw = ps2_fw_create();
+    ps2->sbus = ps2_sbus_create();
 
     // Initialize EE
     ee_bus_init(ps2->ee_bus, NULL);
@@ -97,10 +98,11 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_spu2_init(ps2->spu2, ps2->iop_dma, ps2->iop_intc, ps2->sched);
     ps2_usb_init(ps2->usb);
     ps2_fw_init(ps2->fw, ps2->iop_intc);
+    ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_bios_init(ps2->bios, NULL);
     ps2_bios_init(ps2->rom1, NULL);
     ps2_bios_init(ps2->rom2, NULL);
-    ps2_sif_init(ps2->sif);
+    ps2_sif_init(ps2->sif, ps2->iop_intc);
 
     // Initialize bus pointers
     iop_bus_init_bios(ps2->iop_bus, ps2->bios);
@@ -117,6 +119,7 @@ void ps2_init(struct ps2_state* ps2) {
     iop_bus_init_spu2(ps2->iop_bus, ps2->spu2);
     iop_bus_init_usb(ps2->iop_bus, ps2->usb);
     iop_bus_init_fw(ps2->iop_bus, ps2->fw);
+    iop_bus_init_sbus(ps2->iop_bus, ps2->sbus);
     ee_bus_init_bios(ps2->ee_bus, ps2->bios);
     ee_bus_init_rom1(ps2->ee_bus, ps2->rom1);
     ee_bus_init_rom2(ps2->ee_bus, ps2->rom2);
@@ -133,6 +136,7 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_vu1(ps2->ee_bus, ps2->vu1);
     ee_bus_init_cdvd(ps2->ee_bus, ps2->cdvd);
     ee_bus_init_usb(ps2->ee_bus, ps2->usb);
+    ee_bus_init_sbus(ps2->ee_bus, ps2->sbus);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
 
     ps2->ee_cycles = 7;
@@ -167,6 +171,7 @@ void ps2_load_bios(struct ps2_state* ps2, const char* path) {
     ps2_bios_init(ps2->bios, path);
 
     ee_bus_init_fastmem(ps2->ee_bus);
+    iop_bus_init_fastmem(ps2->iop_bus);
 }
 
 void ps2_load_rom1(struct ps2_state* ps2, const char* path) {
@@ -180,6 +185,19 @@ void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
 void ps2_reset(struct ps2_state* ps2) {
     ee_reset(ps2->ee);
     iop_reset(ps2->iop);
+
+    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->ee_bus);
+    ps2_gif_init(ps2->gif, ps2->gs);
+    ps2_vif_init(ps2->vif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
+    ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
+    ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->sched, ps2->iop_bus);
+    ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
+    ps2_iop_timers_init(ps2->iop_timers, ps2->iop_intc, ps2->sched);
+    ps2_spu2_init(ps2->spu2, ps2->iop_dma, ps2->iop_intc, ps2->sched);
+    ps2_usb_init(ps2->usb);
+    ps2_fw_init(ps2->fw, ps2->iop_intc);
+    ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
 
     ps2_gs_reset(ps2->gs);
     ps2_ram_reset(ps2->ee_ram);
@@ -295,6 +313,7 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_spu2_destroy(ps2->spu2);
     ps2_usb_destroy(ps2->usb);
     ps2_fw_destroy(ps2->fw);
+    ps2_sbus_destroy(ps2->sbus);
     ps2_bios_destroy(ps2->bios);
     ps2_bios_destroy(ps2->rom1);
     ps2_bios_destroy(ps2->rom2);
