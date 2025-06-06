@@ -99,9 +99,9 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_usb_init(ps2->usb);
     ps2_fw_init(ps2->fw, ps2->iop_intc);
     ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
-    ps2_bios_init(ps2->bios, NULL);
-    ps2_bios_init(ps2->rom1, NULL);
-    ps2_bios_init(ps2->rom2, NULL);
+    ps2_bios_init(ps2->bios);
+    ps2_bios_init(ps2->rom1);
+    ps2_bios_init(ps2->rom2);
     ps2_sif_init(ps2->sif, ps2->iop_intc);
 
     // Initialize bus pointers
@@ -168,18 +168,18 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
 }
 
 void ps2_load_bios(struct ps2_state* ps2, const char* path) {
-    ps2_bios_init(ps2->bios, path);
+    ps2_bios_load(ps2->bios, path);
 
     ee_bus_init_fastmem(ps2->ee_bus);
     iop_bus_init_fastmem(ps2->iop_bus);
 }
 
 void ps2_load_rom1(struct ps2_state* ps2, const char* path) {
-    ps2_bios_init(ps2->rom1, path);
+    ps2_bios_load(ps2->rom1, path);
 }
 
 void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
-    ps2_bios_init(ps2->rom2, path);
+    ps2_bios_load(ps2->rom2, path);
 }
 
 void ps2_reset(struct ps2_state* ps2) {

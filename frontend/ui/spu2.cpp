@@ -56,7 +56,7 @@ void show_spu2_core(iris::instance* iris, int c) {
 
             TableSetColumnIndex(0);
 
-            char voice[8]; sprintf(voice, "Voice %d", i);
+            char voice[9]; sprintf(voice, "Voice %d", i);
 
             if (Selectable(voice, i == *selected)) {
                 if (i == *selected) {

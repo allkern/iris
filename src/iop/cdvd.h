@@ -81,8 +81,8 @@ struct ps2_cdvd {
     uint8_t disc_type;
     uint8_t s_cmd;
     uint8_t s_stat;
-    uint8_t n_params[16];
-    uint8_t s_params[16];
+    uint8_t n_params[16] __attribute__((aligned(4)));
+    uint8_t s_params[16] __attribute__((aligned(4)));
     uint8_t* s_fifo;
     int n_param_index;
     int s_param_index;

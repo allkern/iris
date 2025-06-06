@@ -64,7 +64,7 @@ extern "C" int ioman_open(struct iop_state* iop) {
     char buf[256];
 
     for (int i = 0; i < 256; i++) {
-        uint8_t d = iop_read32(iop, iop->r[4] + i);
+        uint8_t d = iop_read8(iop, iop->r[4] + i);
 
         buf[i] = d;
 

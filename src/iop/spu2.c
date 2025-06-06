@@ -120,7 +120,12 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         if (!(data & (1 << i)))
             continue;
 
-        struct spu2_voice* v = &spu2->c[c].v[i+h*16];
+        int idx = i+h*16;
+
+        if (idx >= 24)
+            break;
+
+        struct spu2_voice* v = &spu2->c[c].v[idx];
         struct spu2_core* cr = &spu2->c[c];
 
         // Make sure to clear the internal state of a voice
@@ -128,7 +133,7 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         v->playing = 1;
         v->counter = 0;
         v->h[0] = 0;
-        v->h[1] = 1;
+        v->h[1] = 0;
 
         for (int i = 0; i < 28; i++)
             v->buf[i] = 0;
@@ -154,11 +159,9 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 
         v->playing = 1;
         v->nax = v->ssa;
-        v->f_voll = (float)v->voll / 32767.0f;
-        v->f_volr = (float)v->volr / 32767.0f;
         v->adsr_sustain_level = ((v->adsr1 & 0xf) + 1) * 0x800;
 
-        cr->endx &= ~(1 << (i+h*16));
+        cr->endx &= ~(1u << idx);
 
         printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
 
@@ -175,6 +178,9 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
             continue;
 
         int v = i+h*16;
+
+        if (v >= 24)
+            break;
 
         // spu2->c[c].v[i+h*16].playing = 0;
 
@@ -757,7 +763,7 @@ void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_v
     v->adsr_shift = v->adsr2 & 0x1f;
     v->adsr_step  = -8;
 
-    c->endx |= 1 << i;
+    c->endx |= 1u << i;
 
     adsr_calculate_values(spu2, v);
 }
@@ -890,21 +896,21 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
 
     // Apply 4-point Gaussian interpolation
     uint8_t gauss_index = (v->counter >> 4) & 0xff;
-    int16_t g0 = g_spu_gauss_table[0x0ff - gauss_index];
-    int16_t g1 = g_spu_gauss_table[0x1ff - gauss_index];
-    int16_t g2 = g_spu_gauss_table[0x100 + gauss_index];
-    int16_t g3 = g_spu_gauss_table[0x000 + gauss_index];
-    int16_t out;
+    int32_t g0 = g_spu_gauss_table[0x0ff - gauss_index];
+    int32_t g1 = g_spu_gauss_table[0x1ff - gauss_index];
+    int32_t g2 = g_spu_gauss_table[0x100 + gauss_index];
+    int32_t g3 = g_spu_gauss_table[0x000 + gauss_index];
+    int32_t out;
 
     out  = (g0 * v->s[3]) >> 15;
     out += (g1 * v->s[2]) >> 15;
     out += (g2 * v->s[1]) >> 15;
     out += (g3 * v->s[0]) >> 15;
 
-    float adsr_vol = (float)v->envx / 32767.0f;
-
-    s.s16[0] = ((float)out * v->f_voll) * adsr_vol;
-    s.s16[1] = ((float)out * v->f_volr) * adsr_vol;
+    s.s16[0] = (out * v->voll) >> 15;
+    s.s16[1] = (out * v->volr) >> 15;
+    s.s16[0] = ((int32_t)s.s16[0] * v->envx) >> 15;
+    s.s16[1] = ((int32_t)s.s16[1] * v->envx) >> 15;
 
     v->counter += v->pitch;
 

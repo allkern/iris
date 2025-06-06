@@ -17,7 +17,7 @@ static inline int iop_get_module(struct iop_state* iop, int itable) {
     char buf[9];
 
     for (int i = 0; i < 8; i++)
-        buf[i] = iop_read32(iop, itable + 12 + i);
+        buf[i] = iop_read8(iop, itable + 12 + i);
 
     if (!strncmp(buf, "ioman", 8)) return MODULE_IOMAN;
     if (!strncmp(buf, "loadcore", 8)) return MODULE_LOADCORE;

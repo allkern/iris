@@ -9,9 +9,9 @@ static inline uint128_t dmac_read_qword(struct ps2_dmac* dmac, uint32_t addr, in
     int spr = mem || (addr & 0x80000000);
 
     if (!spr)
-        return ee_bus_read128(dmac->bus, addr);
+        return ee_bus_read128(dmac->bus, addr & 0xfffffff0);
 
-    return ps2_ram_read128(dmac->spr, addr & 0x3fff);
+    return ps2_ram_read128(dmac->spr, addr & 0x3ff0);
 }
 
 struct ps2_dmac* ps2_dmac_create(void) {
@@ -392,7 +392,7 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 
     dmac->gif.chcr &= ~0x100;
 
-    // fprintf(file, "dmac: GIF transfer mode=%d madr=%08x qwc=%d\n", (dmac->gif.chcr >> 2) & 7, dmac->gif.madr, dmac->gif.qwc);
+    // printf("dmac: GIF transfer mode=%d madr=%08x qwc=%d\n", (dmac->gif.chcr >> 2) & 7, dmac->gif.madr, dmac->gif.qwc);
 
     for (int i = 0; i < dmac->gif.qwc; i++) {
         uint128_t q = dmac_read_qword(dmac, dmac->gif.madr, 0);

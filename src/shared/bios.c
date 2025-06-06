@@ -21,36 +21,34 @@ static int get_file_size(FILE* file) {
     return size;
 }
 
-int ps2_bios_init(struct ps2_bios* bios, const char* path) {
+void ps2_bios_init(struct ps2_bios* bios) {
     memset(bios, 0, sizeof(struct ps2_bios));
 
-    if (!path) {
-        bios->buf = malloc(0x400000);
-        bios->size = 0x3fffff;
+    // Initialize dummy data
+    bios->buf = malloc(0x400000);
+    bios->size = 0x3fffff;
 
-        memset(bios->buf, 0, 0x400000);
+    memset(bios->buf, 0, 0x400000);
+}
 
-        return 0;
-    }
+int ps2_bios_load(struct ps2_bios* bios, const char* path) {
+    if (!path)
+        return 1;
 
     FILE* file = fopen(path, "rb");
 
-    if (!file) {
-        // Dummy data
-        bios->buf = malloc(0x400000);
-        bios->size = 0x3fffff;
-
-        memset(bios->buf, 0, 0x400000);
-
+    if (!file)
         return 1;
-    }
+
+    // Free dummy data
+    free(bios->buf);
 
     // "size" is actually a mask
     bios->size = get_file_size(file) - 1;
     bios->buf = malloc(bios->size + 1);
 
     if (!fread(bios->buf, 1, bios->size, file)) {
-        printf("bios: Couldn't read binary\n");
+        printf("bios: Couldn't read binary from \'%s\'\n", path);
 
         return 1;
     }

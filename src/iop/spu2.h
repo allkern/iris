@@ -78,8 +78,6 @@ struct spu2_voice {
 
     // Internal stuff
     int playing;
-    float f_voll;
-    float f_volr;
     unsigned int counter;
     int32_t h[2];
     int16_t buf[28];

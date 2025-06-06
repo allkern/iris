@@ -13,7 +13,8 @@ struct ps2_bios {
 };
 
 struct ps2_bios* ps2_bios_create(void);
-int ps2_bios_init(struct ps2_bios* bios, const char* path);
+void ps2_bios_init(struct ps2_bios* bios);
+int ps2_bios_load(struct ps2_bios* bios, const char* path);
 void ps2_bios_destroy(struct ps2_bios* bios);
 
 uint64_t ps2_bios_read8(struct ps2_bios* bios, uint32_t addr);

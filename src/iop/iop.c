@@ -520,13 +520,6 @@ static inline void iop_i_lw(struct iop_state* iop) {
     if (addr & 0x3) {
         iop_exception(iop, CAUSE_ADEL);
     } else {
-        if (addr == 0xfffe0130) {
-            iop->load_v = 0xffffffff;
-            iop->load_d = T;
-
-            return;
-        }
-
         iop->load_d = T;
         iop->load_v = iop_bus_read32(iop, addr);
     }

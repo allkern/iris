@@ -43,6 +43,10 @@ void ps2_sio2_init(struct ps2_sio2* sio2, struct ps2_iop_dma* dma, struct ps2_io
 }
 
 void ps2_sio2_destroy(struct ps2_sio2* sio2) {
+    // Detach all devices
+    for (int i = 0; i < 4; i++)
+        ps2_sio2_detach_device(sio2, i);
+
     queue_destroy(sio2->in);
     queue_destroy(sio2->out);
 
