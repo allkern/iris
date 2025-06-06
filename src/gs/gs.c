@@ -551,6 +551,25 @@ static inline void gs_unpack_texa(struct ps2_gs* gs) {
     gs->ta1 = (gs->texa >> 32) & 0xff;
 }
 
+static inline void gs_unpack_dimx(struct ps2_gs* gs) {
+    gs->dither[0][0] = ((int32_t)(((gs->dimx >> 0 ) & 7) << 29)) >> 29;
+    gs->dither[0][1] = ((int32_t)(((gs->dimx >> 4 ) & 7) << 29)) >> 29;
+    gs->dither[0][2] = ((int32_t)(((gs->dimx >> 8 ) & 7) << 29)) >> 29;
+    gs->dither[0][3] = ((int32_t)(((gs->dimx >> 12) & 7) << 29)) >> 29;
+    gs->dither[1][0] = ((int32_t)(((gs->dimx >> 16) & 7) << 29)) >> 29;
+    gs->dither[1][1] = ((int32_t)(((gs->dimx >> 20) & 7) << 29)) >> 29;
+    gs->dither[1][2] = ((int32_t)(((gs->dimx >> 24) & 7) << 29)) >> 29;
+    gs->dither[1][3] = ((int32_t)(((gs->dimx >> 28) & 7) << 29)) >> 29;
+    gs->dither[2][0] = ((int32_t)(((gs->dimx >> 32) & 7) << 29)) >> 29;
+    gs->dither[2][1] = ((int32_t)(((gs->dimx >> 36) & 7) << 29)) >> 29;
+    gs->dither[2][2] = ((int32_t)(((gs->dimx >> 40) & 7) << 29)) >> 29;
+    gs->dither[2][3] = ((int32_t)(((gs->dimx >> 44) & 7) << 29)) >> 29;
+    gs->dither[3][0] = ((int32_t)(((gs->dimx >> 48) & 7) << 29)) >> 29;
+    gs->dither[3][1] = ((int32_t)(((gs->dimx >> 52) & 7) << 29)) >> 29;
+    gs->dither[3][2] = ((int32_t)(((gs->dimx >> 56) & 7) << 29)) >> 29;
+    gs->dither[3][3] = ((int32_t)(((gs->dimx >> 60) & 7) << 29)) >> 29;
+}
+
 void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
     switch (reg) {
         case 0x00: /* printf("gs: PRIM <- %016lx\n", data); */ gs->prim = data; gs_start_primitive(gs); return;
@@ -587,7 +606,7 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x41: /* printf("gs: SCISSOR_2 <- %016lx\n", data); */ gs->context[1].scissor = data; gs_unpack_scissor(gs, 1); gs_invoke_event_handler(gs, GS_EVENT_SCISSOR); return;
         case 0x42: /* printf("gs: ALPHA_1 <- %016lx\n", data); */ gs->context[0].alpha = data; gs_unpack_alpha(gs, 0); return;
         case 0x43: /* printf("gs: ALPHA_2 <- %016lx\n", data); */ gs->context[1].alpha = data; gs_unpack_alpha(gs, 1); return;
-        case 0x44: /* printf("gs: DIMX <- %016lx\n", data); */ gs->dimx = data; return;
+        case 0x44: /* printf("gs: DIMX <- %016lx\n", data); */ gs->dimx = data; gs_unpack_dimx(gs); return;
         case 0x45: /* printf("gs: DTHE <- %016lx\n", data); */ gs->dthe = data; return;
         case 0x46: /* printf("gs: COLCLAMP <- %016lx\n", data); */ gs->colclamp = data; return;
         case 0x47: /* printf("gs: TEST_1 <- %016lx\n", data); */ gs->context[0].test = data; gs_unpack_test(gs, 0); return;

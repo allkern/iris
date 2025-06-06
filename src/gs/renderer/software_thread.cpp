@@ -447,6 +447,9 @@ void software_thread_destroy(void* udata) {
     if (ctx->fb_in_tex) glDeleteTextures(1, &ctx->fb_in_tex);
     if (ctx->fb_out_tex) glDeleteTextures(1, &ctx->fb_out_tex);
 
+    if (ctx->buf)
+        free(ctx->buf);
+
     // Should call destructors for our mutex, thread and queue
     delete ctx;
 }

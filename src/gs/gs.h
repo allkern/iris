@@ -354,6 +354,9 @@ struct ps2_gs {
     uint32_t dfbw2;
     uint32_t dfbpsm2;
 
+    // DIMX
+    int dither[4][4];
+
     struct gs_callback events[2];
 
     struct sched_state* sched;
