@@ -292,7 +292,7 @@ void show_memory_card(iris::instance* iris, int slot) {
 
             if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
                 if (BeginTooltip()) {
-                    Text("Sex");
+                    Text("please check files ");
     
                     EndTooltip();
                 }
