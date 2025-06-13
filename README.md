@@ -46,7 +46,7 @@ Launching a game or executable through the GUI is also very easy, just go to Iri
 Building the emulator should be pretty straightforward, just recursively clone the repository and follow the steps:
 
 ### Linux
-Building for Linux targets requires SDL2, you may use `apt` on Debian-based distros to obtain it. You will also need a Python interpreter (and `python3-is-python`)
+Building for Linux targets requires SDL2, you may use `apt` on Debian-based distros to obtain it. You will also need a Python interpreter (and `python-is-python3`)
 ```
 sudo apt update
 sudo apt upgrade
