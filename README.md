@@ -50,7 +50,7 @@ Building for Linux targets requires SDL2, you may use `apt` on Debian-based dist
 ```
 sudo apt update
 sudo apt upgrade
-sudo apt install libsdl2-dev python3 python3-is-python
+sudo apt install libsdl2-dev python3 python-is-python3
 ```
 
 Then just run the following commands:
