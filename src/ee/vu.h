@@ -8,6 +8,8 @@ extern "C" {
 #include <stdint.h>
 
 #include "u128.h"
+#include "vif.h"
+#include "gif.h"
 
 struct vu_reg {
     union {
@@ -42,6 +44,13 @@ struct vu_state {
     uint32_t upper;
     uint32_t lower;
 
+    int i_bit;
+    int e_bit;
+    int m_bit;
+    int d_bit;
+    int t_bit;
+    uint32_t next_tpc;
+
     union {
         uint32_t cr[16];
 
@@ -74,11 +83,13 @@ struct vu_state {
         };
     };
 
+    struct ps2_gif* gif;
+    struct ps2_vif* vif;
     struct vu_state* vu1;
 };
 
 struct vu_state* vu_create(void);
-void vu_init(struct vu_state* vu, int id, struct vu_state* vu1);
+void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* vif, struct vu_state* vu1);
 void vu_destroy(struct vu_state* vu);
 
 // Upper pipeline
@@ -260,6 +271,9 @@ void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data);
 void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data);
 void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data);
 void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data);
+
+void vu_cycle(struct vu_state* vu);
+void vu_execute_program(struct vu_state* vu, uint32_t addr);
 
 #ifdef __cplusplus
 }

@@ -62,8 +62,8 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_data.udata = ps2->ee_bus;
 
     ee_init(ps2->ee, ps2->vu0, ps2->vu1, ee_bus_data);
-    vu_init(ps2->vu0, 0, ps2->vu1);
-    vu_init(ps2->vu1, 1, ps2->vu1);
+    vu_init(ps2->vu0, 0, ps2->gif, ps2->vif, ps2->vu1);
+    vu_init(ps2->vu1, 1, ps2->gif, ps2->vif, ps2->vu1);
 
     // Initialize IOP
     iop_bus_init(ps2->iop_bus, NULL);
@@ -82,8 +82,8 @@ void ps2_init(struct ps2_state* ps2) {
     // Initialize devices
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
-    ps2_gif_init(ps2->gif, ps2->gs);
-    ps2_vif_init(ps2->vif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
+    ps2_vif_init(ps2->vif, ps2->vu0, ps2->vu1, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->ee_timers, ps2->iop_timers, ps2->sched);
     ps2_ipu_init(ps2->ipu, ps2->ee_dma, ps2->ee_intc);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
@@ -185,10 +185,12 @@ void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
 void ps2_reset(struct ps2_state* ps2) {
     ee_reset(ps2->ee);
     iop_reset(ps2->iop);
+    vu_init(ps2->vu0, 0, ps2->gif, ps2->vif, ps2->vu1);
+    vu_init(ps2->vu1, 1, ps2->gif, ps2->vif, ps2->vu1);
 
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->ee_bus);
-    ps2_gif_init(ps2->gif, ps2->gs);
-    ps2_vif_init(ps2->vif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
+    ps2_vif_init(ps2->vif, ps2->vu0, ps2->vu1, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
     ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->sched, ps2->iop_bus);
@@ -237,7 +239,7 @@ void ps2_cycle(struct ps2_state* ps2) {
 
     // Waitloop detection
     // if (ps2->ee->pc == 0x81fc0) {
-    //     while (!sched_tick(ps2->sched, 8)) {
+    //     while (!sched_tick(ps2->sched, 4)) {
     //         --ps2->ee_cycles;
 
     //         if (!ps2->ee_cycles) {

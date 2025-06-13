@@ -11,6 +11,7 @@ extern "C" {
 #include "bus.h"
 
 #include "ee/intc.h"
+#include "ee/vu.h"
 #include "sched.h"
 
 enum {
@@ -97,13 +98,19 @@ struct ps2_vif {
     uint128_t vif1_data;
     uint128_t vif0_data;
 
+    uint32_t vif1_addr;
+    uint32_t vif1_unpack_fmt;
+
+    struct vu_state* vu0;
+    struct vu_state* vu1;
+
     struct sched_state* sched;
     struct ps2_intc* intc;
     struct ee_bus* bus;
 };
 
 struct ps2_vif* ps2_vif_create(void);
-void ps2_vif_init(struct ps2_vif* vif, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus);
+void ps2_vif_init(struct ps2_vif* vif, struct vu_state* vu0, struct vu_state* vu1, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus);
 void ps2_vif_destroy(struct ps2_vif* vif);
 uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr);
 void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data);

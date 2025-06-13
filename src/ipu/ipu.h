@@ -7,6 +7,34 @@ extern "C" {
 
 #include "ee/dmac.h"
 #include "ee/intc.h"
+#include "u128.h"
+
+#include <stdint.h>
+
+struct ipu_fifo {
+    uint128_t buf[8];
+
+    int bp;
+    int wq;
+    int rq;
+};
+
+// struct ps2_ipu {
+//     uint8_t iq[64];
+//     uint8_t vq[32];
+
+//     struct ipu_fifo in;
+//     struct ipu_fifo out;
+
+//     uint64_t result;
+//     uint64_t cmd;
+//     uint32_t ctrl;
+//     uint32_t bp;
+//     uint64_t top;
+
+//     struct ps2_dmac* dmac;
+//     struct ps2_intc* intc;
+// };
 
 struct ps2_ipu;
 

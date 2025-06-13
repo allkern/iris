@@ -17,8 +17,10 @@
 
 #ifdef _WIN32
 #define SSUBOVF64 __builtin_ssubll_overflow
+#define SADDOVF64 __builtin_saddll_overflow
 #else
 #define SSUBOVF64 __builtin_ssubl_overflow
+#define SADDOVF64 __builtin_saddl_overflow
 #endif
 
 // file = fopen("vu.dump", "a"); fprintf(file, #ins "\n"); fclose(file);
@@ -352,16 +354,16 @@ static inline int ee_skip_fmv(struct ee_state* ee, uint32_t addr) {
 }
 
 static inline void ee_set_pc(struct ee_state* ee, uint32_t addr) {
-    // if (ee_skip_fmv(ee, addr))
-    //     return;
+    if (ee_skip_fmv(ee, addr))
+        return;
 
     ee->pc = addr;
     ee->next_pc = addr + 4;
 }
 
 static inline void ee_set_pc_delayed(struct ee_state* ee, uint32_t addr) {
-    // if (ee_skip_fmv(ee, addr))
-    //     return;
+    if (ee_skip_fmv(ee, addr))
+        return;
 
     ee->next_pc = addr;
     ee->branch = 1;
@@ -536,10 +538,10 @@ static inline void ee_i_bc1t(struct ee_state* ee) {
 static inline void ee_i_bc1tl(struct ee_state* ee) {
     BRANCH_LIKELY((ee->fcr & (1 << 23)) != 0, EE_D_SI16);
 }
-static inline void ee_i_bc2f(struct ee_state* ee) { printf("ee: bc2f unimplemented\n"); exit(1); }
-static inline void ee_i_bc2fl(struct ee_state* ee) { printf("ee: bc2fl unimplemented\n"); exit(1); }
-static inline void ee_i_bc2t(struct ee_state* ee) { printf("ee: bc2t unimplemented\n"); exit(1); }
-static inline void ee_i_bc2tl(struct ee_state* ee) { printf("ee: bc2tl unimplemented\n"); exit(1); }
+static inline void ee_i_bc2f(struct ee_state* ee) { BRANCH(1, EE_D_SI16); }
+static inline void ee_i_bc2fl(struct ee_state* ee) { BRANCH_LIKELY(1, EE_D_SI16); }
+static inline void ee_i_bc2t(struct ee_state* ee) { BRANCH(0, EE_D_SI16); }
+static inline void ee_i_bc2tl(struct ee_state* ee) { BRANCH_LIKELY(0, EE_D_SI16); }
 static inline void ee_i_beq(struct ee_state* ee) {
     BRANCH(EE_RS == EE_RT, EE_D_SI16);
 }
@@ -714,8 +716,24 @@ static inline void ee_i_cvts(struct ee_state* ee) {
 static inline void ee_i_cvtw(struct ee_state* ee) {
     fpu_cvtws(&ee->f[EE_D_FD], &ee->f[EE_D_FS]);
 }
-static inline void ee_i_dadd(struct ee_state* ee) { printf("ee: dadd unimplemented\n"); exit(1); }
-static inline void ee_i_daddi(struct ee_state* ee) { printf("ee: daddi unimplemented\n"); exit(1); }
+static inline void ee_i_dadd(struct ee_state* ee) {
+    int64_t r;
+
+    if (SADDOVF64((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
+        ee_exception_level1(ee, CAUSE_EXC1_OV);
+    } else {
+        EE_RD = r;
+    }
+}
+static inline void ee_i_daddi(struct ee_state* ee) {
+    int64_t r;
+
+    if (SADDOVF64((int64_t)EE_RS, SE6416(EE_D_I16), &r)) {
+        ee_exception_level1(ee, CAUSE_EXC1_OV);
+    } else {
+        EE_RT = r;
+    }
+}
 static inline void ee_i_daddiu(struct ee_state* ee) {
     EE_RT = EE_RS + SE6416(EE_D_I16);
 }
@@ -1018,7 +1036,7 @@ static inline void ee_i_maxs(struct ee_state* ee) {
     EE_FD = fmaxf(EE_FS, EE_FT);
 }
 static inline void ee_i_mfc0(struct ee_state* ee) {
-    EE_RT32 = ee->cop0_r[EE_D_RD];
+    EE_RT = SE6432(ee->cop0_r[EE_D_RD]);
 }
 static inline void ee_i_mfc1(struct ee_state* ee) {
     EE_RT = SE6432(EE_FS32);

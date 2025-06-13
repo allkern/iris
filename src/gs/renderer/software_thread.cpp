@@ -2076,6 +2076,7 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
                 if (gs->fst) {
                     u = v0.u + (v1.u - v0.u) * tx;
                     v = v0.v + (v1.v - v0.v) * ty;
+
                     iu = u;
                     iv = v;
                 } else {
@@ -2084,6 +2085,7 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
 
                     u *= gs->ctx->usize;
                     v *= gs->ctx->vsize;
+
                     iu = u * (1 << 4);
                     iv = v * (1 << 4);
                 }

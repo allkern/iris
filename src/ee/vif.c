@@ -10,12 +10,14 @@ struct ps2_vif* ps2_vif_create(void) {
     return malloc(sizeof(struct ps2_vif));
 }
 
-void ps2_vif_init(struct ps2_vif* vif, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus) {
+void ps2_vif_init(struct ps2_vif* vif, struct vu_state* vu0, struct vu_state* vu1, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus) {
     memset(vif, 0, sizeof(struct ps2_vif));
 
     vif->sched = sched;
     vif->intc = intc;
     vif->bus = bus;
+    vif->vu0 = vu0;
+    vif->vu1 = vu1;
 }
 
 void ps2_vif_destroy(struct ps2_vif* vif) {
@@ -27,6 +29,8 @@ void vif1_send_irq(void* udata, int overshoot) {
 
     ps2_intc_irq(vif->intc, EE_INTC_VIF1);
 }
+
+static int loop = 0;
 
 void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
     if (vif->vif1_state == VIF_IDLE) {
@@ -57,17 +61,23 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case VIF_CMD_OFFSET: {
                 // printf("vif1: OFFSET(%04x)\n", data & 0xffff);
 
-                vif->vif1_ofst = data & 0xffff;
+                // Set DBF to 0
+                vif->vif1_stat &= ~0x80;
+
+                // Set TOPS to BASE
+                vif->vif1_tops = vif->vif1_base;
+
+                vif->vif1_ofst = data & 0x3ff;
             } break;
             case VIF_CMD_BASE: {
                 // printf("vif1: BASE(%04x)\n", data & 0xffff);
 
-                vif->vif1_base = data & 0x3f;
+                vif->vif1_base = data & 0x3ff;
             } break;
             case VIF_CMD_ITOP: {
                 // printf("vif1: ITOP(%04x)\n", data & 0xffff);
 
-                vif->vif1_itop = data & 0x3f;
+                vif->vif1_itop = data & 0x3ff;
             } break;
             case VIF_CMD_STMOD: {
                 // printf("vif1: STMOD(%04x)\n", data & 0xffff);
@@ -93,12 +103,28 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             } break;
             case VIF_CMD_MSCAL: {
                 // printf("vif1: MSCAL(%04x)\n", data & 0xffff);
+
+                vif->vif1_top = vif->vif1_tops;
+
+                // Toggle DBF
+                vif->vif1_stat ^= 0x80;
+                vif->vif1_tops = vif->vif1_base;
+
+                if (vif->vif1_stat & 0x80) {
+                    vif->vif1_tops += vif->vif1_ofst;
+                }
+
+                vu_execute_program(vif->vu1, data & 0xffff);
             } break;
             case VIF_CMD_MSCALF: {
-                // printf("vif1: MSCALF(%04x)\n", data & 0xffff);
+                printf("vif1: MSCALF(%04x)\n", data & 0xffff);
+
+                exit(1);
             } break;
             case VIF_CMD_MSCNT: {
-                // printf("vif1: MSCNT\n");
+                printf("vif1: MSCNT\n");
+
+                exit(1);
             } break;
             case VIF_CMD_STMASK: {
                 // printf("vif1: STMASK(%04x)\n", data & 0xffff);
@@ -125,8 +151,10 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
                 if (!num) num = 256;
 
+                vif->vif1_addr = data & 0xffff;
                 vif->vif1_state = VIF_RECV_DATA;
-                vif->vif1_pending_words = (num * 8) / 4;
+                vif->vif1_pending_words = num * 2;
+                vif->vif1_shift = 0;
             } break;
             case VIF_CMD_DIRECT: {
                 // printf("vif1: DIRECT(%04x)\n", data & 0xffff);
@@ -166,27 +194,20 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 if (!num) num = 256;
                 if (flg) addr += vif->vif1_tops;
 
-                // printf("vif: UNPACK %02x cl=%02x wl=%02x vl=%d vn=%d num=%02x\n", data >> 24, cl, wl, vl, vn, num);
+                // printf("vif: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x\n", data >> 24, fmt, flg, num, addr, vif->vif1_tops);
 
                 assert(!filling);
 
                 vif->vif1_pending_words = (((32>>vl) * (vn+1)) * num) / 32;
                 vif->vif1_state = VIF_RECV_DATA;
-
-                // printf("vif: %d pending words\n", vif->vif1_pending_words);
-
-                // switch (fmt) {
-                //     case UNPACK_V2_16: break;
-                //     case UNPACK_V4_32: break;
-                //     case UNPACK_V4_16: break;
-
-                //     default: printf("vif1: Unhandled UNPACK format %d\n", fmt); exit(1);
-                // }
+                vif->vif1_shift = 0;
+                vif->vif1_unpack_fmt = fmt;
+                vif->vif1_addr = addr;
             } break;
             default: {
                 printf("vif1: Unhandled command %02x\n", vif->vif1_cmd);
 
-                // exit(1);
+                exit(1);
             } break;
         }
     } else {
@@ -210,7 +231,15 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 }
             } break;
             case VIF_CMD_MPG: {
-                // printf("vif1: Writing %08x to VU mem\n", data);
+                // printf("vif1: Writing %08x to MicroMem\n", data);
+
+                if (!vif->vif1_shift) {
+                    vif->vif1_data.u32[vif->vif1_shift++] = data;
+                } else {
+                    vif->vif1_data.u32[1] = data;
+                    vif->vu1->micro_mem[vif->vif1_addr++] = vif->vif1_data.u64[0];
+                    vif->vif1_shift = 0;
+                }
 
                 if (!(--vif->vif1_pending_words)) {
                     vif->vif1_state = VIF_IDLE;
@@ -239,6 +268,30 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case 0x74: case 0x75: case 0x76: case 0x77:
             case 0x78: case 0x79: case 0x7a: case 0x7b:
             case 0x7c: case 0x7d: case 0x7e: case 0x7f: {
+                switch (vif->vif1_unpack_fmt) {
+                    // V4-32
+                    case 0x0c: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 4) {
+                            // printf("vif: Writing %08x %08x %08x %08x to VUmem at %08x\n",
+                            //     vif->vif1_data.u32[3],
+                            //     vif->vif1_data.u32[2],
+                            //     vif->vif1_data.u32[1],
+                            //     vif->vif1_data.u32[0],
+                            //     vif->vif1_addr * 16
+                            // );
+
+                            vif->vu1->vu_mem[vif->vif1_addr++] = vif->vif1_data;
+                            vif->vif1_shift = 0;
+                        }
+                    } break;
+
+                    default: {
+                        printf("vif: Unimplemented unpack format %02x\n", vif->vif1_unpack_fmt);
+                    } break;
+                }
+
                 if (!(--vif->vif1_pending_words)) {
                     vif->vif1_state = VIF_IDLE;
                 }
@@ -250,7 +303,7 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
     switch (addr) {
         case 0x10003800: return vif->vif0_stat;
-        case 0x10003810: return vif->vif0_fbrst;
+        // case 0x10003810: return vif->vif0_fbrst;
         case 0x10003820: return vif->vif0_err;
         case 0x10003830: return vif->vif0_mark;
         case 0x10003840: return vif->vif0_cycle;
@@ -269,7 +322,7 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
         case 0x10003960: return vif->vif0_c[2];
         case 0x10003970: return vif->vif0_c[3];
         case 0x10003c00: return vif->vif1_stat;
-        case 0x10003c10: return vif->vif1_fbrst;
+        // case 0x10003c10: return vif->vif1_fbrst;
         case 0x10003c20: return vif->vif1_err;
         case 0x10003c30: return vif->vif1_mark;
         case 0x10003c40: return vif->vif1_cycle;
@@ -300,48 +353,13 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
 
 void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x10003800: vif->vif0_stat = data; break;
+        // case 0x10003800: vif->vif0_stat = data; break;
         case 0x10003810: vif->vif0_fbrst = data; break;
         case 0x10003820: vif->vif0_err = data; break;
         case 0x10003830: vif->vif0_mark = data; break;
-        case 0x10003840: vif->vif0_cycle = data; break;
-        case 0x10003850: vif->vif0_mode = data; break;
-        case 0x10003860: vif->vif0_num = data; break;
-        case 0x10003870: vif->vif0_mask = data; break;
-        case 0x10003880: vif->vif0_code = data; break;
-        case 0x10003890: vif->vif0_itops = data; break;
-        case 0x100038d0: vif->vif0_itop = data; break;
-        case 0x10003900: vif->vif0_r[0] = data; break;
-        case 0x10003910: vif->vif0_r[1] = data; break;
-        case 0x10003920: vif->vif0_r[2] = data; break;
-        case 0x10003930: vif->vif0_r[3] = data; break;
-        case 0x10003940: vif->vif0_c[0] = data; break;
-        case 0x10003950: vif->vif0_c[1] = data; break;
-        case 0x10003960: vif->vif0_c[2] = data; break;
-        case 0x10003970: vif->vif0_c[3] = data; break;
-        case 0x10003c00: vif->vif1_stat = data; break;
         case 0x10003c10: vif->vif1_fbrst = data; break;
         case 0x10003c20: vif->vif1_err = data; break;
         case 0x10003c30: vif->vif1_mark = data; break;
-        case 0x10003c40: vif->vif1_cycle = data; break;
-        case 0x10003c50: vif->vif1_mode = data; break;
-        case 0x10003c60: vif->vif1_num = data; break;
-        case 0x10003c70: vif->vif1_mask = data; break;
-        case 0x10003c80: vif->vif1_code = data; break;
-        case 0x10003c90: vif->vif1_itops = data; break;
-        case 0x10003ca0: vif->vif1_base = data; break;
-        case 0x10003cb0: vif->vif1_ofst = data; break;
-        case 0x10003cc0: vif->vif1_tops = data; break;
-        case 0x10003cd0: vif->vif1_itop = data; break;
-        case 0x10003ce0: vif->vif1_top = data; break;
-        case 0x10003d00: vif->vif1_r[0] = data; break;
-        case 0x10003d10: vif->vif1_r[1] = data; break;
-        case 0x10003d20: vif->vif1_r[2] = data; break;
-        case 0x10003d30: vif->vif1_r[3] = data; break;
-        case 0x10003d40: vif->vif1_c[0] = data; break;
-        case 0x10003d50: vif->vif1_c[1] = data; break;
-        case 0x10003d60: vif->vif1_c[2] = data; break;
-        case 0x10003d70: vif->vif1_c[3] = data; break;
         case 0x10004000: // printf("vif0: FIFO write\n"); break;
         case 0x10005000: vif1_handle_fifo_write(vif, data); break;
     }
