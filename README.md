@@ -46,6 +46,14 @@ Launching a game or executable through the GUI is also very easy, just go to Iri
 Building the emulator should be pretty straightforward, just recursively clone the repository and follow the steps:
 
 ### Linux
+Building for Linux targets requires SDL2, you may use `apt` on Debian-based distros to obtain it. You will also need a Python interpreter (and `python-is-python3`)
+```
+sudo apt update
+sudo apt upgrade
+sudo apt install libsdl2-dev python3 python-is-python3
+```
+
+Then just run the following commands:
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
@@ -54,6 +62,9 @@ make -j8
 ```
 
 ### Windows
+Our Windows build system currently targets GCC only, you can get a toolchain through MSYS2 or MinGW. You will additionally need to install a Python interpreter so `build-deps` can execute the gl3w download script.
+
+Once that's done, just execute the following commands:
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
@@ -64,6 +75,7 @@ cd iris
 ### macOS
 > [!WARNING]  
 > Iris should support macOS but hasn't been fully tested yet
+Building on macOS requires SDL2 and `dylibbundler`, you may install both using `brew` but keep in mind macOS builds aren't actively tested and may not work.
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
@@ -108,9 +120,9 @@ This console is significantly more complex compared to the PS1, here's a rough l
 - 🟡 GS
 - 🟡 VU0
   = 🟡 Macro mode
-  = 🔴 Micro mode
+  = 🟡 Micro mode
   = 🔴 VIF0
-- 🔴 VU1 (always micro mode)
+- 🟡 VU1 (always micro mode)
   = 🟡 VIF1
 - 🟡 IPU
 🟢 IOP (R3000) CPU
