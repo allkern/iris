@@ -91,7 +91,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("VU0 DMEM")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->spu2->ram, 0x1000, 0);
+                editor.DrawContents(ps2->vu0->vu_mem, 0x1000, 0);
 
                 PopFont();
 
@@ -101,7 +101,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("VU1 IMEM")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->spu2->ram, 0x4000, 0);
+                editor.DrawContents(ps2->vu1->micro_mem, 0x4000, 0);
 
                 PopFont();
 
@@ -111,7 +111,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("VU1 DMEM")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->spu2->ram, 0x4000, 0);
+                editor.DrawContents(ps2->vu1->vu_mem, 0x4000, 0);
 
                 PopFont();
 

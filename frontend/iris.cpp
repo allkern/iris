@@ -283,7 +283,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     iris->mcd[0] = mcd_sio2_attach(iris->ps2->sio2, 2, "slot1.mcd");
     // iris->mcd[1] = mcd_sio2_attach(iris->ps2->sio2, 3, "slot2.mcd");
 
-    struct ps1_mcd_state* ps1_mcd = ps1_mcd_sio2_attach(iris->ps2->sio2, 3, "slot1_ps1.mcd");
+    ps1_mcd_sio2_attach(iris->ps2->sio2, 3, "slot1_ps1.mcd");
 
     gl3wInit();
 

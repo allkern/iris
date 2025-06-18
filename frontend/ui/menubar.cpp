@@ -404,6 +404,26 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &iris->show_gs_debugger));
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " SPU2 debugger", NULL, &iris->show_spu2_debugger));
             if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &iris->show_memory_viewer));
+
+            Separator();
+
+            if (MenuItem(ICON_MS_CLOSE " Close all")) {
+                iris->show_ee_control = false;
+                iris->show_ee_state = false;
+                iris->show_ee_logs = false;
+                iris->show_ee_interrupts = false;
+                iris->show_ee_dmac = false;
+                iris->show_iop_control = false;
+                iris->show_iop_state = false;
+                iris->show_iop_logs = false;
+                iris->show_iop_interrupts = false;
+                iris->show_iop_modules = false;
+                iris->show_iop_dma = false;
+                iris->show_gs_debugger = false;
+                iris->show_spu2_debugger = false;
+                iris->show_memory_viewer = false;
+                iris->show_breakpoints = false;
+            }
             
             ImGui::EndMenu();
         }
