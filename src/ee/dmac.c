@@ -321,6 +321,15 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     //     dmac->vif1.tadr
     // );
 
+    // We don't handle VIF1 reads
+    if ((dmac->vif1.chcr & 1) == 0) {
+        dmac->vif1.chcr &= ~0x100;
+
+        dmac_set_irq(dmac, DMAC_VIF1);
+
+        return;
+    }
+
     for (int i = 0; i < dmac->vif1.qwc; i++) {
         uint128_t q = dmac_read_qword(dmac, dmac->vif1.madr, 0);
 
@@ -776,10 +785,12 @@ uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr) {
     switch (addr) {
         case 0x10009000:
         case 0x1000a000:
+        case 0x1000e000:
         case 0x10008000: {
             return c->chcr & 0xff;
         }
 
+        case 0x10009001:
         case 0x1000a001: {
             return (c->chcr >> 8) & 0xff;
         }
