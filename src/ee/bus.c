@@ -311,6 +311,8 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
 
     printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); // exit(1);
 
+    *(int*)0 = 0;
+
     return (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
 }
 
@@ -339,7 +341,7 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
 
     if (addr == 0x1000f180) { bus->kputchar(bus->kputchar_udata, data & 0xff); return; }
 
-    printf("bus: Unhandled 8-bit write to physical address 0x%08x (0x%02lx)\n", addr, data);
+    // printf("bus: Unhandled 8-bit write to physical address 0x%08x (0x%02lx)\n", addr, data);
 }
 
 void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
@@ -368,7 +370,7 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
         case 0x1f801472: return;
     }
 
-    printf("bus: Unhandled 16-bit write to physical address 0x%08x (0x%04lx)\n", addr, data); // exit(1);
+    // printf("bus: Unhandled 16-bit write to physical address 0x%08x (0x%04lx)\n", addr, data); // exit(1);
 }
 
 void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
