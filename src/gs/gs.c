@@ -16,6 +16,16 @@ static inline void gs_invoke_event_handler(struct ps2_gs* gs, int event) {
         gs->events[event].func(gs->events[event].udata);
 }
 
+static inline int gs_assert_vblank(struct ps2_gs* gs) {
+    if ((gs->csr & 8) == 0) {
+        gs->csr |= 8;
+
+        return ((gs->imr >> 8) & 8) == 0;
+    }
+
+    return 0;
+}
+
 void gs_handle_vblank_in(void* udata, int overshoot);
 void gs_handle_hblank(void* udata, int overshoot);
 
@@ -31,7 +41,7 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
 
     sched_schedule(gs->sched, vblank_in_event);
 
-    // Send Vblank IRQ through INTC
+    // Send Vblank IRQs through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_OUT);
 }
@@ -56,27 +66,30 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event field_flip_event;
 
     field_flip_event.callback = gs_flip_field;
-    field_flip_event.cycles = 30000; 
+    field_flip_event.cycles = 30000;
     field_flip_event.name = "Field flip event";
     field_flip_event.udata = gs;
 
     // Set Vblank and Hblank flag
-    gs->csr |= 0xf;
+    if (gs_assert_vblank(gs)) {
+        ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+    }
+
+    gs->csr |= 2;
 
     // Tell backend to render scene
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
 
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
-
-    uint32_t mask = (gs->imr >> 8) & 0x1f;
-    uint32_t stat = gs->csr & 0x1f;
-
-    if (stat & (~mask)) {
-        ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
-    }
-
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
+
+    // uint32_t mask = (gs->imr >> 8) & 0x1f;
+    // uint32_t stat = gs->csr & 0x1f;
+
+    // if (stat & (~mask)) {
+    //     ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+    // }
 
     sched_schedule(gs->sched, vblank_out_event);
     sched_schedule(gs->sched, field_flip_event);
@@ -123,8 +136,6 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     // sched_schedule(gs->sched, hblank_event);
 
     gs->ctx = &gs->context[0];
-
-    gs->csr |= 2;
 }
 
 void ps2_gs_reset(struct ps2_gs* gs) {
@@ -621,8 +632,8 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x50: /* printf("gs: BITBLTBUF <- %016lx\n", data); */ gs->bitbltbuf = data; return;
         case 0x51: /* printf("gs: TRXPOS <- %016lx\n", data); */ gs->trxpos = data; return;
         case 0x52: /* printf("gs: TRXREG <- %016lx\n", data); */ gs->trxreg = data; return;
-        case 0x53: /* printf("gs: TRXDIR <- %016lx\n", data); */ gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return; // gs_start_transfer(gs); return;
-        case 0x54: gs->hwreg = data; gs->backend.transfer_write(gs, gs->backend.udata); return; // gs_transfer_write(gs); return;
+        case 0x53: /* printf("gs: TRXDIR <- %016lx\n", data); */ gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return;
+        case 0x54: gs->hwreg = data; gs->backend.transfer_write(gs, gs->backend.udata); return;
         case 0x60: /* printf("gs: SIGNAL <- %016lx\n", data); */ gs->signal = data; return;
         case 0x61: {
             // Trigger FINISH event
