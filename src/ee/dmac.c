@@ -323,6 +323,12 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
 
     // We don't handle VIF1 reads
     if ((dmac->vif1.chcr & 1) == 0) {
+        // Gran Turismo 3 sends a VIF1 read with QWC=0, presumably to
+        // wait until the GIF FIFO is actually full, so we shouldn't send
+        // and interrupt there.
+        if (dmac->vif1.qwc == 0)
+            return;
+
         dmac->vif1.chcr &= ~0x100;
 
         dmac_set_irq(dmac, DMAC_VIF1);
@@ -690,18 +696,46 @@ void dmac_handle_sif2_transfer(struct ps2_dmac* dmac) {
     printf("ee: SIF2 channel unimplemented\n"); exit(1);
 }
 void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
-    printf("ee: SPR from channel unimplemented\n"); // exit(1);
-
     dmac_set_irq(dmac, DMAC_SPR_FROM);
 
     dmac->spr_from.chcr &= ~0x100;
+
+    // Interleave mode unimplemented yet
+    if (((dmac->spr_from.chcr >> 2) & 3) != 0) {
+        printf("dmac: SPR from interleave/chain mode unimplemented (mod=%d)\n", (dmac->spr_from.chcr >> 2) & 3);
+
+        return;
+    }
+
+    for (int i = 0; i < dmac->spr_from.qwc; i++) {
+        uint128_t q = dmac_read_qword(dmac, dmac->spr_from.sadr, 1);
+
+        ee_bus_write128(dmac->bus, dmac->spr_from.madr, q);
+
+        dmac->spr_from.madr += 0x10;
+        dmac->spr_from.sadr += 0x10;
+    }
 }
 void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
-    printf("ee: SPR to channel unimplemented\n"); // exit(1);
-
     dmac_set_irq(dmac, DMAC_SPR_TO);
 
     dmac->spr_to.chcr &= ~0x100;
+
+    // Interleave mode unimplemented yet
+    if (((dmac->spr_to.chcr >> 2) & 3) != 0) {
+        printf("dmac: SPR to interleave/chain mode unimplemented (mod=%d)\n", (dmac->spr_to.chcr >> 2) & 3);
+
+        return;
+    }
+
+    for (int i = 0; i < dmac->spr_to.qwc; i++) {
+        uint128_t q = dmac_read_qword(dmac, dmac->spr_to.madr, 0);
+
+        ps2_ram_write128(dmac->spr, dmac->spr_to.sadr, q);
+
+        dmac->spr_to.madr += 0x10;
+        dmac->spr_to.sadr += 0x10;
+    }
 }
 
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
@@ -782,10 +816,22 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr & ~3);
 
+    if (!c) {
+        switch (addr) {
+            case 0x1000e000: {
+                return dmac->ctrl & 0xff;
+            } break;
+        }
+
+        printf("dmac: Unknown channel read8 at %08x\n", addr);
+
+        return 0;
+    }
+
     switch (addr) {
         case 0x10009000:
         case 0x1000a000:
-        case 0x1000e000:
+        
         case 0x10008000: {
             return c->chcr & 0xff;
         }
@@ -796,7 +842,7 @@ uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr) {
         }
     }
 
-    printf("dmac: 8-bit read from %08x\n", addr);
+    printf("dmac: Unhandled 8-bit read from %08x\n", addr);
 
     exit(1);
 
@@ -827,6 +873,11 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 
             return;
         } break;
+
+        case 0x1000e000: {
+            dmac->ctrl &= 0xffffff00;
+            dmac->ctrl |= data;
+        } return;
     }
 
     printf("dmac: 8-bit write to %08x (%02x)\n", addr, data);
