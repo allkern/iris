@@ -250,6 +250,8 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
     printf("ee: Unhandled virtual address %08x @ cyc=%ld\n", virt, ee->total_cycles);
 
+    *(int*)0 = 0;
+
     exit(1);
 
     // To-do: MMU mapping
@@ -260,7 +262,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
 #define BUS_READ_FUNC(b)                                                        \
     static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) {  \
-        if ((addr & 0x70000000) == 0x70000000)                                  \
+        if ((addr & 0xf0000000) == 0x70000000)                                  \
             return ps2_ram_read ## b(ee->scratchpad, addr & 0x3fff);            \
         uint32_t phys;                                                          \
         if (ee_translate_virt(ee, addr, &phys)) {                               \
@@ -273,7 +275,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
 #define BUS_WRITE_FUNC(b)                                                                   \
     static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) {  \
-        if ((addr & 0x70000000) == 0x70000000)                                              \
+        if ((addr & 0xf0000000) == 0x70000000)                                              \
             { ps2_ram_write ## b(ee->scratchpad, addr & 0x3fff, data); return; }            \
         uint32_t phys;                                                                      \
         if (ee_translate_virt(ee, addr, &phys)) {                                           \
@@ -290,7 +292,7 @@ BUS_READ_FUNC(32)
 BUS_READ_FUNC(64)
 
 static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
-    if ((addr & 0x70000000) == 0x70000000)
+    if ((addr & 0xf0000000) == 0x70000000)
         return ps2_ram_read128(ee->scratchpad, addr & 0x3ff0);
 
     uint32_t phys;
@@ -312,7 +314,7 @@ BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
 static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
-    if ((addr & 0x70000000) == 0x70000000) {
+    if ((addr & 0xf0000000) == 0x70000000) {
         ps2_ram_write128(ee->scratchpad, addr & 0x3ff0, data);
 
         return;
@@ -891,6 +893,8 @@ static inline void ee_i_lb(struct ee_state* ee) {
     EE_RT = SE648(bus_read8(ee, EE_RS32 + SE3216(EE_D_I16)));
 }
 static inline void ee_i_lbu(struct ee_state* ee) {
+    if (((EE_RS32 + SE3216(EE_D_I16)) & 0x01ffffff) == 0x02000000)
+        printf("ee: lbu @ pc=%08x next=%08x prev=%08x\n", ee->pc, ee->next_pc, ee->prev_pc);
     EE_RT = bus_read8(ee, EE_RS32 + SE3216(EE_D_I16));
 }
 static inline void ee_i_ld(struct ee_state* ee) {
@@ -1765,7 +1769,14 @@ static inline void ee_i_pmfhllw(struct ee_state* ee) {
     ee->r[d].u32[2] = ee->lo.u32[2];
     ee->r[d].u32[3] = ee->hi.u32[2];
 }
-static inline void ee_i_pmfhluw(struct ee_state* ee) { printf("ee: pmfhluw unimplemented\n"); exit(1); }
+static inline void ee_i_pmfhluw(struct ee_state* ee) {
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = ee->lo.u32[1];
+    ee->r[d].u32[1] = ee->hi.u32[1];
+    ee->r[d].u32[2] = ee->lo.u32[3];
+    ee->r[d].u32[3] = ee->hi.u32[3];
+}
 static inline void ee_i_pmfhlslw(struct ee_state* ee) { printf("ee: pmfhlslw unimplemented\n"); exit(1); }
 static inline void ee_i_pmfhllh(struct ee_state* ee) {
     int d = EE_D_RD;
@@ -1817,7 +1828,24 @@ static inline void ee_i_pmthl(struct ee_state* ee) { printf("ee: pmthl unimpleme
 static inline void ee_i_pmtlo(struct ee_state* ee) {
     ee->lo = ee->r[EE_D_RS];
 }
-static inline void ee_i_pmulth(struct ee_state* ee) { printf("ee: pmulth unimplemented\n"); exit(1); }
+static inline void ee_i_pmulth(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->lo.u32[0] = (int32_t)(int16_t)ee->r[s].u16[0] * (int32_t)(int16_t)ee->r[t].u16[0];
+    ee->lo.u32[1] = (int32_t)(int16_t)ee->r[s].u16[1] * (int32_t)(int16_t)ee->r[t].u16[1];
+    ee->hi.u32[0] = (int32_t)(int16_t)ee->r[s].u16[2] * (int32_t)(int16_t)ee->r[t].u16[2];
+    ee->hi.u32[1] = (int32_t)(int16_t)ee->r[s].u16[3] * (int32_t)(int16_t)ee->r[t].u16[3];
+    ee->lo.u32[2] = (int32_t)(int16_t)ee->r[s].u16[4] * (int32_t)(int16_t)ee->r[t].u16[4];
+    ee->lo.u32[3] = (int32_t)(int16_t)ee->r[s].u16[5] * (int32_t)(int16_t)ee->r[t].u16[5];
+    ee->hi.u32[2] = (int32_t)(int16_t)ee->r[s].u16[6] * (int32_t)(int16_t)ee->r[t].u16[6];
+    ee->hi.u32[3] = (int32_t)(int16_t)ee->r[s].u16[7] * (int32_t)(int16_t)ee->r[t].u16[7];
+    ee->r[d].u32[0] = ee->lo.u32[0];
+    ee->r[d].u32[1] = ee->hi.u32[0];
+    ee->r[d].u32[2] = ee->lo.u32[2];
+    ee->r[d].u32[3] = ee->hi.u32[2];
+}
 static inline void ee_i_pmultuw(struct ee_state* ee) { printf("ee: pmultuw unimplemented\n"); exit(1); }
 static inline void ee_i_pmultw(struct ee_state* ee) { printf("ee: pmultw unimplemented\n"); exit(1); }
 static inline void ee_i_pnor(struct ee_state* ee) {
@@ -1953,7 +1981,14 @@ static inline void ee_i_psraw(struct ee_state* ee) {
     ee->r[d].u32[3] = ((int32_t)ee->r[t].u32[3]) >> sa;
 }
 static inline void ee_i_psrlh(struct ee_state* ee) { printf("ee: psrlh unimplemented\n"); exit(1); }
-static inline void ee_i_psrlvw(struct ee_state* ee) { printf("ee: psrlvw unimplemented\n"); exit(1); }
+static inline void ee_i_psrlvw(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->r[d].u64[0] = SE6432(ee->r[t].u32[0] >> (ee->r[s].u32[0] & 31));
+    ee->r[d].u64[1] = SE6432(ee->r[t].u32[2] >> (ee->r[s].u32[2] & 31));
+}
 static inline void ee_i_psrlw(struct ee_state* ee) {
     int sa = EE_D_SA;
     int t = EE_D_RT;
