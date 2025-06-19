@@ -1105,7 +1105,7 @@ static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
         case GS_PSMCT32: {
             uint32_t addr = psmct32_addr(gs->ctx->fbp >> 6, gs->ctx->fbw >> 6, x, y);
 
-            gs->vram[addr] = f;
+            gs->vram[addr & 0xfffff] = f;
             // gs->vram[(gs->ctx->fbp + x + (y * gs->ctx->fbw)) & 0xfffff] = f;
         } break;
 
@@ -2670,7 +2670,7 @@ static inline void gs_store_hwreg_psmct32(struct ps2_gs* gs, software_thread_sta
 }
 
 static inline void gs_write_psmct24(struct ps2_gs* gs, software_thread_state* ctx, uint32_t data) {
-    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy);
+    uint32_t addr = psmct32_addr(ctx->dbp, ctx->dbw, ctx->dx++, ctx->dy) & 0xfffff;
 
     gs->vram[addr] = (gs->vram[addr] & 0xff000000) | (data & 0xffffff);
 
