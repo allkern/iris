@@ -52,6 +52,11 @@ struct vu_state {
     uint32_t next_tpc;
 
     union {
+        uint32_t u32;
+        float f;
+    } p;
+
+    union {
         uint32_t cr[16];
 
         struct {

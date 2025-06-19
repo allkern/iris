@@ -4,8 +4,9 @@
 #include <math.h>
 
 #include "vu.h"
+#include "vu_dis.h"
 
-#define printf(fmt, ...)(0)
+// #define printf(fmt, ...)(0)
 
 #define VU_LD_DEST ((vu->lower >> 21) & 0xf)
 #define VU_LD_DI(i) (vu->lower & (1 << (24 - i)))
@@ -20,6 +21,7 @@
 #define VU_LD_TF ((vu->lower >> 23) & 3)
 #define VU_LD_IMM5 (((int32_t)(VU_LD_D << 27)) >> 27)
 #define VU_LD_IMM11 (((int32_t)((vu->lower & 0x7ff) << 21)) >> 21)
+#define VU_LD_IMM12 ((((vu->lower >> 21) & 0x1) << 11) | (vu->lower & 0x7ff))
 #define VU_LD_IMM15 ((vu->lower & 0x7ff) | ((vu->lower & 0x1e00000) >> 10))
 #define VU_LD_IMM24 (vu->lower & 0xffffff)
 #define VU_ID vu->vi[VU_LD_D]
@@ -199,6 +201,74 @@ static inline float vu_vf_w(struct vu_state* vu, int r) {
 
 static inline float vu_acc_i(struct vu_state* vu, int i) {
     return vu_cvtf(vu->acc.u32[i]);
+}
+
+static inline void vu_mem_write(struct vu_state* vu, uint32_t addr, uint32_t data, int i) {
+    if (!vu->id) {
+        if (addr <= 0x3ff) {
+            vu->vu_mem[addr & 0xff].u32[i] = data;
+        } else {
+            if ((addr >= 0x400) && (addr <= 0x41f)) {
+                vu->vu1->vf[addr & 0x1f].u32[i] = data;
+            } else if ((addr >= 0x420) && (addr <= 0x42f)) {
+                vu->vu1->vi[addr & 0xf] = data;
+            } else if (addr == 0x430) {
+                vu->vu1->status = data;
+            } else if (addr == 0x431) {
+                vu->vu1->mac = data;
+            } else if (addr == 0x432) {
+                vu->vu1->clip = data;
+            } else if (addr == 0x434) {
+                vu->vu1->r.u32 = data;
+            } else if (addr == 0x435) {
+                vu->vu1->i.u32 = data;
+            } else if (addr == 0x436) {
+                vu->vu1->q.u32 = data;
+            } else if (addr == 0x437) {
+                vu->vu1->p.u32 = data;
+            } else if (addr == 0x43a) {
+                vu->vu1->tpc = data;
+            } else {
+                printf("vu: oob write\n");
+
+                exit(1);
+            }
+        }
+    } else {
+        vu->vu_mem[addr & 0x3ff].u32[i] = data;
+    }
+}
+
+static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
+    if (!vu->id) {
+        if (addr <= 0x3ff) {
+            return vu->vu_mem[addr & 0xff];
+        } else {
+            if ((addr >= 0x400) && (addr <= 0x41f)) {
+                return vu->vu1->vf[addr & 0x1f].u128;
+            } else if ((addr >= 0x420) && (addr <= 0x42f)) {
+                return (uint128_t)vu->vu1->vi[addr & 0xf];
+            } else if (addr == 0x430) {
+                return (uint128_t)vu->vu1->status;
+            } else if (addr == 0x431) {
+                return (uint128_t)vu->vu1->mac;
+            } else if (addr == 0x432) {
+                return (uint128_t)vu->vu1->clip;
+            } else if (addr == 0x434) {
+                return (uint128_t)vu->vu1->r.u32;
+            } else if (addr == 0x435) {
+                return (uint128_t)vu->vu1->i.u32;
+            } else if (addr == 0x436) {
+                return (uint128_t)vu->vu1->q.u32;
+            } else if (addr == 0x437) {
+                return (uint128_t)vu->vu1->p.u32;
+            } else if (addr == 0x43a) {
+                return (uint128_t)vu->vu1->tpc;
+            }
+        }
+    }
+
+    return vu->vu_mem[addr & 0x3ff];
 }
 
 // Upper pipeline
@@ -1341,7 +1411,18 @@ void vu_i_max(struct vu_state* vu) {
         }
     }
 }
-void vu_i_maxi(struct vu_state* vu) { printf("vu: maxi unimplemented\n"); exit(1); }
+void vu_i_maxi(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int d = VU_UD_D;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float fs = vu_vf_i(vu, s, i);
+
+            vu_set_vf(vu, d, i, (fs > vu->i.f) ? fs : vu->i.f);
+        }
+    }
+}
 void vu_i_maxx(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1418,15 +1499,13 @@ void vu_i_mini(struct vu_state* vu) {
 }
 void vu_i_minii(struct vu_state* vu) {
     int s = VU_UD_S;
-    int t = VU_UD_T;
     int d = VU_UD_D;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
             float fs = vu_vf_i(vu, s, i);
-            float ft = vu_vf_i(vu, t, i);
 
-            vu_set_vf(vu, d, i, (fs < ft) ? fs : ft);
+            vu_set_vf(vu, d, i, (fs < vu->i.f) ? fs : vu->i.f);
         }
     }
 }
@@ -1635,8 +1714,15 @@ void vu_i_clip(struct vu_state* vu) {
 }
 
 // Lower pipeline
-void vu_i_b(struct vu_state* vu) { printf("vu: b unimplemented\n"); exit(1); }
-void vu_i_bal(struct vu_state* vu) { printf("vu: bal unimplemented\n"); exit(1); }
+void vu_i_b(struct vu_state* vu) {
+    vu->next_tpc = vu->tpc + VU_LD_IMM11;
+}
+void vu_i_bal(struct vu_state* vu) {
+    // Instruction next to the delay slot
+    VU_IT = vu->tpc + 1;
+
+    vu->next_tpc = vu->tpc + VU_LD_IMM11;
+}
 void vu_i_div(struct vu_state* vu) {
     int t = VU_LD_T;
     int s = VU_LD_S;
@@ -1650,31 +1736,72 @@ void vu_i_eatan(struct vu_state* vu) { printf("vu: eatan unimplemented\n"); exit
 void vu_i_eatanxy(struct vu_state* vu) { printf("vu: eatanxy unimplemented\n"); exit(1); }
 void vu_i_eatanxz(struct vu_state* vu) { printf("vu: eatanxz unimplemented\n"); exit(1); }
 void vu_i_eexp(struct vu_state* vu) { printf("vu: eexp unimplemented\n"); exit(1); }
-void vu_i_eleng(struct vu_state* vu) { printf("vu: eleng unimplemented\n"); exit(1); }
-void vu_i_ercpr(struct vu_state* vu) { printf("vu: ercpr unimplemented\n"); exit(1); }
-void vu_i_erleng(struct vu_state* vu) { printf("vu: erleng unimplemented\n"); exit(1); }
+void vu_i_eleng(struct vu_state* vu) {
+    int s = VU_LD_S;
+
+    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
+    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
+    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+
+    vu->p.f = sqrtf(x2 + y2 + z2);
+}
+void vu_i_ercpr(struct vu_state* vu) {
+    vu->p.f = 1.0f / vu_vf_i(vu, VU_LD_S, VU_LD_SF);
+}
+void vu_i_erleng(struct vu_state* vu) {
+    int s = VU_LD_S;
+
+    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
+    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
+    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+
+    vu->p.f = 1.0f / sqrtf(x2 + y2 + z2);
+}
 void vu_i_ersadd(struct vu_state* vu) { printf("vu: ersadd unimplemented\n"); exit(1); }
 void vu_i_ersqrt(struct vu_state* vu) { printf("vu: ersqrt unimplemented\n"); exit(1); }
 void vu_i_esadd(struct vu_state* vu) { printf("vu: esadd unimplemented\n"); exit(1); }
 void vu_i_esin(struct vu_state* vu) { printf("vu: esin unimplemented\n"); exit(1); }
-void vu_i_esqrt(struct vu_state* vu) { printf("vu: esqrt unimplemented\n"); exit(1); }
+void vu_i_esqrt(struct vu_state* vu) {
+    vu->p.f = sqrtf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
+}
 void vu_i_esum(struct vu_state* vu) { printf("vu: esum unimplemented\n"); exit(1); }
 void vu_i_fcand(struct vu_state* vu) {
-    vu->vi[1] = (vu->clip & VU_LD_IMM24) != 0;
+    vu->vi[1] = ((vu->clip & 0xffffff) & VU_LD_IMM24) != 0;
 }
-void vu_i_fceq(struct vu_state* vu) { printf("vu: fceq unimplemented\n"); exit(1); }
-void vu_i_fcget(struct vu_state* vu) { printf("vu: fcget unimplemented\n"); exit(1); }
-void vu_i_fcor(struct vu_state* vu) { printf("vu: fcor unimplemented\n"); exit(1); }
+void vu_i_fceq(struct vu_state* vu) {
+    vu->vi[1] = (vu->clip & 0xffffff) == VU_LD_IMM24;
+}
+void vu_i_fcget(struct vu_state* vu) {
+    vu->vi[VU_LD_T] = vu->clip & 0xfff;
+}
+void vu_i_fcor(struct vu_state* vu) {
+    vu->vi[1] = ((vu->clip & 0xffffff) | VU_LD_IMM24) == 0xffffff;
+}
 void vu_i_fcset(struct vu_state* vu) {
     vu->clip = VU_LD_IMM24;
 }
-void vu_i_fmand(struct vu_state* vu) { printf("vu: fmand unimplemented\n"); exit(1); }
-void vu_i_fmeq(struct vu_state* vu) { printf("vu: fmeq unimplemented\n"); exit(1); }
-void vu_i_fmor(struct vu_state* vu) { printf("vu: fmor unimplemented\n"); exit(1); }
-void vu_i_fsand(struct vu_state* vu) { printf("vu: fsand unimplemented\n"); exit(1); }
-void vu_i_fseq(struct vu_state* vu) { printf("vu: fseq unimplemented\n"); exit(1); }
-void vu_i_fsor(struct vu_state* vu) { printf("vu: fsor unimplemented\n"); exit(1); }
-void vu_i_fsset(struct vu_state* vu) { printf("vu: fsset unimplemented\n"); exit(1); }
+void vu_i_fmand(struct vu_state* vu) {
+    vu_set_vi(vu, VU_LD_T, vu->mac & VU_IS);
+}
+void vu_i_fmeq(struct vu_state* vu) {
+    VU_IT = (VU_IS & 0xffff) == (vu->status & 0xffff);
+}
+void vu_i_fmor(struct vu_state* vu) {
+    VU_IT = (VU_IS & 0xffff) | (vu->status & 0xffff);
+}
+void vu_i_fsand(struct vu_state* vu) {
+    VU_IT = vu->status & VU_LD_IMM12;
+}
+void vu_i_fseq(struct vu_state* vu) {
+    VU_IT = (vu->status & 0xfff) == VU_LD_IMM12;
+}
+void vu_i_fsor(struct vu_state* vu) {
+    VU_IT = (vu->status & 0xfff) | VU_LD_IMM12;
+}
+void vu_i_fsset(struct vu_state* vu) {
+    vu->status &= 0x3f;
+    vu->status |= VU_LD_IMM12 & 0xfc0;
+}
 void vu_i_iadd(struct vu_state* vu) {
     // printf("iadd vi%02u, vi%02u (%04x), vi%02u (%04x)\n", VU_LD_D, VU_LD_S, VU_IS, VU_LD_T, VU_IT);
 
@@ -1686,12 +1813,34 @@ void vu_i_iaddi(struct vu_state* vu) {
 void vu_i_iaddiu(struct vu_state* vu) {
     vu_set_vi(vu, VU_LD_T, VU_IS + VU_LD_IMM15);
 }
-void vu_i_iand(struct vu_state* vu) { printf("vu: iand unimplemented\n"); exit(1); }
-void vu_i_ibeq(struct vu_state* vu) { printf("vu: ibeq unimplemented\n"); exit(1); }
-void vu_i_ibgez(struct vu_state* vu) { printf("vu: ibgez unimplemented\n"); exit(1); }
-void vu_i_ibgtz(struct vu_state* vu) { printf("vu: ibgtz unimplemented\n"); exit(1); }
-void vu_i_iblez(struct vu_state* vu) { printf("vu: iblez unimplemented\n"); exit(1); }
-void vu_i_ibltz(struct vu_state* vu) { printf("vu: ibltz unimplemented\n"); exit(1); }
+void vu_i_iand(struct vu_state* vu) {
+    vu_set_vi(vu, VU_LD_D, VU_IS & VU_IT);
+}
+void vu_i_ibeq(struct vu_state* vu) {
+    if (VU_IT == VU_IS) {
+        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+    }
+}
+void vu_i_ibgez(struct vu_state* vu) {
+    if ((int16_t)VU_IS >= 0) {
+        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+    }
+}
+void vu_i_ibgtz(struct vu_state* vu) {
+    if ((int16_t)VU_IS > 0) {
+        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+    }
+}
+void vu_i_iblez(struct vu_state* vu) {
+    if ((int16_t)VU_IS <= 0) {
+        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+    }
+}
+void vu_i_ibltz(struct vu_state* vu) {
+    if ((int16_t)VU_IS < 0) {
+        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+    }
+}
 void vu_i_ibne(struct vu_state* vu) {
     // printf("ibne vi%02u (%04x), vi%02u (%04x), 0x%08x\n", VU_LD_T, VU_IT, VU_LD_S, VU_IS, vu->tpc + VU_LD_IMM11);
 
@@ -1705,16 +1854,10 @@ void vu_i_ilw(struct vu_state* vu) {
     if (!t) return;
 
     uint32_t addr = VU_IS + VU_LD_IMM11;
-
-    // printf("ilw(%d) vi%02u, %d(vi%02u) # %04x (%08x %08x %08x %08x)\n", VU_LD_DEST, t, VU_LD_IMM11, s, VU_IS,
-    //     vu->vu_mem[addr].u32[3],
-    //     vu->vu_mem[addr].u32[2],
-    //     vu->vu_mem[addr].u32[1],
-    //     vu->vu_mem[addr].u32[0]
-    // );
+    uint128_t data = vu_mem_read(vu, addr);
 
     for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vi[t] = vu->vu_mem[addr].u32[i];
+        if (VU_LD_DI(i)) vu->vi[t] = data.u32[i];
     }
 }
 void vu_i_ilwr(struct vu_state* vu) {
@@ -1723,14 +1866,19 @@ void vu_i_ilwr(struct vu_state* vu) {
 
     if (!t) return;
 
-    uint32_t addr = vu->vi[s] & vu->vu_mem_size;
+    uint32_t addr = vu->vi[s];
+    uint128_t data = vu_mem_read(vu, addr);
 
     for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vi[t] = vu->vu_mem[addr].u32[i];
+        if (VU_LD_DI(i)) vu->vi[t] = data.u32[i];
     }
 }
-void vu_i_ior(struct vu_state* vu) { printf("vu: ior unimplemented\n"); exit(1); }
-void vu_i_isub(struct vu_state* vu) { printf("vu: isub unimplemented\n"); exit(1); }
+void vu_i_ior(struct vu_state* vu) {
+    vu_set_vi(vu, VU_LD_D, VU_IS | VU_IT);
+}
+void vu_i_isub(struct vu_state* vu) {
+    vu_set_vi(vu, VU_LD_D, VU_IS - VU_IT);
+}
 void vu_i_isubiu(struct vu_state* vu) {
     vu_set_vi(vu, VU_LD_T, VU_IS - VU_LD_IMM15);
 }
@@ -1741,27 +1889,33 @@ void vu_i_isw(struct vu_state* vu) {
     uint32_t addr = vu->vi[s] + VU_LD_IMM11;
 
     for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vu_mem[addr].u32[i] = vu->vi[t];
+        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vi[t], i);
     }
 }
 void vu_i_iswr(struct vu_state* vu) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
-    uint32_t addr = vu->vi[s] & vu->vu_mem_size;
+    uint32_t addr = vu->vi[s];
 
     for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vu_mem[addr].u32[i] = vu->vi[t];
+        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vi[t], i);
     }
 }
-void vu_i_jalr(struct vu_state* vu) { printf("vu: jalr unimplemented\n"); exit(1); }
-void vu_i_jr(struct vu_state* vu) { printf("vu: jr unimplemented\n"); exit(1); }
+void vu_i_jalr(struct vu_state* vu) {
+    VU_IT = vu->tpc + 1;
+
+    vu->next_tpc = VU_IS;
+}
+void vu_i_jr(struct vu_state* vu) {
+    vu->next_tpc = VU_IS;
+}
 void vu_i_lq(struct vu_state* vu) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
     uint32_t addr = vu->vi[s] + VU_LD_IMM11;
-    uint128_t data = vu->vu_mem[addr];
+    uint128_t data = vu_mem_read(vu, addr);
 
     if (!t) return;
 
@@ -1769,10 +1923,62 @@ void vu_i_lq(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
     }
 }
-void vu_i_lqd(struct vu_state* vu) { printf("vu: lqd unimplemented\n"); exit(1); }
-void vu_i_lqi(struct vu_state* vu) { printf("vu: lqi unimplemented\n"); exit(1); }
-void vu_i_mfir(struct vu_state* vu) { printf("vu: mfir unimplemented\n"); exit(1); }
-void vu_i_mfp(struct vu_state* vu) { printf("vu: mfp unimplemented\n"); exit(1); }
+void vu_i_lqd(struct vu_state* vu) {
+    int s = VU_LD_S;
+    int t = VU_LD_T;
+
+    vu_set_vi(vu, s, vu->vi[s] - 1);
+
+    uint32_t addr = vu->vi[s];
+    uint128_t data = vu_mem_read(vu, addr);
+
+    if (!t) return;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
+    }
+}
+void vu_i_lqi(struct vu_state* vu) {
+    int s = VU_LD_S;
+    int t = VU_LD_T;
+
+    uint32_t addr = vu->vi[s];
+    uint128_t data = vu_mem_read(vu, addr);
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_LD_DI(i)) if (t) vu->vf[t].u32[i] = data.u32[i];
+    }
+
+    // printf(" vf%02u, (vi%02u++) (%04x) (%f %f %f %f)\n",
+    //     t,
+    //     s,
+    //     VU_IS,
+    //     vu->vf[t].f[0],
+    //     vu->vf[t].f[1],
+    //     vu->vf[t].f[2],
+    //     vu->vf[t].f[3]
+    // );
+
+    if (s) vu->vi[s]++;
+}
+void vu_i_mfir(struct vu_state* vu) {
+    int t = VU_LD_T;
+
+    if (!t) return;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_LD_DI(i)) vu->vf[t].u32[i] = (int32_t)(*((int16_t*)&VU_IS));
+    }
+}
+void vu_i_mfp(struct vu_state* vu) {
+    int t = VU_LD_T;
+
+    if (!t) return;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->p.f;
+    }
+}
 void vu_i_move(struct vu_state* vu) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -1801,7 +2007,9 @@ void vu_i_mr32(struct vu_state* vu) {
     if (VU_LD_DI(2)) vu->vf[t].u32[2] = vu->vf[s].u32[3];
     if (VU_LD_DI(3)) vu->vf[t].u32[3] = x;
 }
-void vu_i_mtir(struct vu_state* vu) { printf("vu: mtir unimplemented\n"); exit(1); }
+void vu_i_mtir(struct vu_state* vu) {
+    vu_set_vi(vu, VU_LD_T, vu->vf[VU_LD_S].u32[VU_LD_SF] & 0xffff);
+}
 void vu_i_rget(struct vu_state* vu) {
     int t = VU_LD_T;
 
@@ -1850,18 +2058,29 @@ void vu_i_sq(struct vu_state* vu) {
     uint32_t addr = vu->vi[t] + VU_LD_IMM11;
 
     for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vu_mem[addr].u32[i] = vu->vf[s].u32[i];
+        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
     }
 }
-void vu_i_sqd(struct vu_state* vu) { printf("vu: sqd unimplemented\n"); exit(1); }
+void vu_i_sqd(struct vu_state* vu) {
+    int s = VU_LD_S;
+    int t = VU_LD_T;
+
+    vu_set_vi(vu, t, vu->vi[t] - 1);
+
+    uint32_t addr = vu->vi[t];
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
+    }
+}
 void vu_i_sqi(struct vu_state* vu) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
-    uint32_t addr = vu->vi[t] & vu->vu_mem_size;
+    uint32_t addr = vu->vi[t];
 
     for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vu_mem[addr].u32[i] = vu->vf[s].u32[i];
+        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
     }
 
     vu_set_vi(vu, t, vu->vi[t] + 1);
@@ -1870,16 +2089,22 @@ void vu_i_sqrt(struct vu_state* vu) {
     vu->q.f = sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
     vu->q.f = vu_cvtf(vu->q.u32);
 }
-void vu_i_waitp(struct vu_state* vu) { printf("vu: waitp unimplemented\n"); exit(1); }
+void vu_i_waitp(struct vu_state* vu) {
+    // No operation
+}
 void vu_i_waitq(struct vu_state* vu) {
     // No operation
 }
+
 void vu_i_xgkick(struct vu_state* vu) {
+    uint16_t addr = VU_IS;
+
     int eop = 0;
-    int addr = VU_IS;
 
     do {
-        uint128_t tag = vu->vu_mem[addr++];
+        uint128_t tag = vu_mem_read(vu, addr++);
+
+        // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
         ps2_gif_write128(vu->gif, 0, tag);
 
@@ -1901,31 +2126,32 @@ void vu_i_xgkick(struct vu_state* vu) {
             } break;
         }
 
-        printf("vu: nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
-            nloop,
-            nregs,
-            eop,
-            flg,
-            qwc
-        );
+        // printf("vu: nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
+        //     nloop,
+        //     nregs,
+        //     eop,
+        //     flg,
+        //     qwc
+        // );
 
         for (int i = 0; i < qwc; i++) {
-            // printf("vu: %08x %08x %08x %08x\n",
+            // printf("vu: %08x: %08x %08x %08x %08x\n",
+            //     addr,
             //     vu->vu_mem[addr].u32[3],
             //     vu->vu_mem[addr].u32[2],
             //     vu->vu_mem[addr].u32[1],
             //     vu->vu_mem[addr].u32[0]
             // );
 
-            ps2_gif_write128(vu->gif, 0, vu->vu_mem[addr++]);
+            ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
         }
     } while (!eop);
 }
-void vu_i_xitop(struct vu_state* vu) { printf("vu: xitop unimplemented\n"); exit(1); }
+void vu_i_xitop(struct vu_state* vu) {
+    vu_set_vi(vu, VU_LD_T, vu->vif->vif1_itop);
+}
 void vu_i_xtop(struct vu_state* vu) {
-    int t = VU_LD_T;
-
-    vu_set_vi(vu, t, vu->vif->vif1_top);
+    vu_set_vi(vu, VU_LD_T, vu->vif->vif1_top);
 }
 
 uint64_t ps2_vu_read8(struct vu_state* vu, uint32_t addr) {
@@ -2051,186 +2277,186 @@ static inline void vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
         // bits 0-1 and bits 6-9 (6 bits) are enough to decode
         // all of the following
         switch (((opcode & 0x3c0) >> 4) | (opcode & 3)) {
-            case 0x00: printf("vu: addax  "); vu_i_addax(vu); return;
-            case 0x01: printf("vu: adday  "); vu_i_adday(vu); return;
-            case 0x02: printf("vu: addaz  "); vu_i_addaz(vu); return;
-            case 0x03: printf("vu: addaw  "); vu_i_addaw(vu); return;
-            case 0x04: printf("vu: subax  "); vu_i_subax(vu); return;
-            case 0x05: printf("vu: subay  "); vu_i_subay(vu); return;
-            case 0x06: printf("vu: subaz  "); vu_i_subaz(vu); return;
-            case 0x07: printf("vu: subaw  "); vu_i_subaw(vu); return;
-            case 0x08: printf("vu: maddax "); vu_i_maddax(vu); return;
-            case 0x09: printf("vu: madday "); vu_i_madday(vu); return;
-            case 0x0A: printf("vu: maddaz "); vu_i_maddaz(vu); return;
-            case 0x0B: printf("vu: maddaw "); vu_i_maddaw(vu); return;
-            case 0x0C: printf("vu: msubax "); vu_i_msubax(vu); return;
-            case 0x0D: printf("vu: msubay "); vu_i_msubay(vu); return;
-            case 0x0E: printf("vu: msubaz "); vu_i_msubaz(vu); return;
-            case 0x0F: printf("vu: msubaw "); vu_i_msubaw(vu); return;
-            case 0x10: printf("vu: itof0  "); vu_i_itof0(vu); return;
-            case 0x11: printf("vu: itof4  "); vu_i_itof4(vu); return;
-            case 0x12: printf("vu: itof12 "); vu_i_itof12(vu); return;
-            case 0x13: printf("vu: itof15 "); vu_i_itof15(vu); return;
-            case 0x14: printf("vu: ftoi0  "); vu_i_ftoi0(vu); return;
-            case 0x15: printf("vu: ftoi4  "); vu_i_ftoi4(vu); return;
-            case 0x16: printf("vu: ftoi12 "); vu_i_ftoi12(vu); return;
-            case 0x17: printf("vu: ftoi15 "); vu_i_ftoi15(vu); return;
-            case 0x18: printf("vu: mulax  "); vu_i_mulax(vu); return;
-            case 0x19: printf("vu: mulay  "); vu_i_mulay(vu); return;
-            case 0x1A: printf("vu: mulaz  "); vu_i_mulaz(vu); return;
-            case 0x1B: printf("vu: mulaw  "); vu_i_mulaw(vu); return;
-            case 0x1C: printf("vu: mulaq  "); vu_i_mulaq(vu); return;
-            case 0x1D: printf("vu: abs    "); vu_i_abs(vu); return;
-            case 0x1E: printf("vu: mulai  "); vu_i_mulai(vu); return;
-            case 0x1F: printf("vu: clip   "); vu_i_clip(vu); return;
-            case 0x20: printf("vu: addaq  "); vu_i_addaq(vu); return;
-            case 0x21: printf("vu: maddaq "); vu_i_maddaq(vu); return;
-            case 0x22: printf("vu: addai  "); vu_i_addai(vu); return;
-            case 0x23: printf("vu: maddai "); vu_i_maddai(vu); return;
-            case 0x24: printf("vu: subaq  "); vu_i_subaq(vu); return;
-            case 0x25: printf("vu: msubaq "); vu_i_msubaq(vu); return;
-            case 0x26: printf("vu: subai  "); vu_i_subai(vu); return;
-            case 0x27: printf("vu: msubai "); vu_i_msubai(vu); return;
-            case 0x28: printf("vu: adda   "); vu_i_adda(vu); return;
-            case 0x29: printf("vu: madda  "); vu_i_madda(vu); return;
-            case 0x2A: printf("vu: mula   "); vu_i_mula(vu); return;
-            case 0x2C: printf("vu: suba   "); vu_i_suba(vu); return;
-            case 0x2D: printf("vu: msuba  "); vu_i_msuba(vu); return;
-            case 0x2E: printf("vu: opmula "); vu_i_opmula(vu); return;
-            case 0x2F: printf("vu: nop    "); vu_i_nop(vu); return;
+            case 0x00: vu_i_addax(vu); return;
+            case 0x01: vu_i_adday(vu); return;
+            case 0x02: vu_i_addaz(vu); return;
+            case 0x03: vu_i_addaw(vu); return;
+            case 0x04: vu_i_subax(vu); return;
+            case 0x05: vu_i_subay(vu); return;
+            case 0x06: vu_i_subaz(vu); return;
+            case 0x07: vu_i_subaw(vu); return;
+            case 0x08: vu_i_maddax(vu); return;
+            case 0x09: vu_i_madday(vu); return;
+            case 0x0A: vu_i_maddaz(vu); return;
+            case 0x0B: vu_i_maddaw(vu); return;
+            case 0x0C: vu_i_msubax(vu); return;
+            case 0x0D: vu_i_msubay(vu); return;
+            case 0x0E: vu_i_msubaz(vu); return;
+            case 0x0F: vu_i_msubaw(vu); return;
+            case 0x10: vu_i_itof0(vu); return;
+            case 0x11: vu_i_itof4(vu); return;
+            case 0x12: vu_i_itof12(vu); return;
+            case 0x13: vu_i_itof15(vu); return;
+            case 0x14: vu_i_ftoi0(vu); return;
+            case 0x15: vu_i_ftoi4(vu); return;
+            case 0x16: vu_i_ftoi12(vu); return;
+            case 0x17: vu_i_ftoi15(vu); return;
+            case 0x18: vu_i_mulax(vu); return;
+            case 0x19: vu_i_mulay(vu); return;
+            case 0x1A: vu_i_mulaz(vu); return;
+            case 0x1B: vu_i_mulaw(vu); return;
+            case 0x1C: vu_i_mulaq(vu); return;
+            case 0x1D: vu_i_abs(vu); return;
+            case 0x1E: vu_i_mulai(vu); return;
+            case 0x1F: vu_i_clip(vu); return;
+            case 0x20: vu_i_addaq(vu); return;
+            case 0x21: vu_i_maddaq(vu); return;
+            case 0x22: vu_i_addai(vu); return;
+            case 0x23: vu_i_maddai(vu); return;
+            case 0x24: vu_i_subaq(vu); return;
+            case 0x25: vu_i_msubaq(vu); return;
+            case 0x26: vu_i_subai(vu); return;
+            case 0x27: vu_i_msubai(vu); return;
+            case 0x28: vu_i_adda(vu); return;
+            case 0x29: vu_i_madda(vu); return;
+            case 0x2A: vu_i_mula(vu); return;
+            case 0x2C: vu_i_suba(vu); return;
+            case 0x2D: vu_i_msuba(vu); return;
+            case 0x2E: vu_i_opmula(vu); return;
+            case 0x2F: vu_i_nop(vu); return;
         }
     } else {
         // Decode 0000003F style instruction
         switch (opcode & 0x3f) {
-            case 0x00: printf("vu: addx   "); vu_i_addx(vu); return;
-            case 0x01: printf("vu: addy   "); vu_i_addy(vu); return;
-            case 0x02: printf("vu: addz   "); vu_i_addz(vu); return;
-            case 0x03: printf("vu: addw   "); vu_i_addw(vu); return;
-            case 0x04: printf("vu: subx   "); vu_i_subx(vu); return;
-            case 0x05: printf("vu: suby   "); vu_i_suby(vu); return;
-            case 0x06: printf("vu: subz   "); vu_i_subz(vu); return;
-            case 0x07: printf("vu: subw   "); vu_i_subw(vu); return;
-            case 0x08: printf("vu: maddx  "); vu_i_maddx(vu); return;
-            case 0x09: printf("vu: maddy  "); vu_i_maddy(vu); return;
-            case 0x0A: printf("vu: maddz  "); vu_i_maddz(vu); return;
-            case 0x0B: printf("vu: maddw  "); vu_i_maddw(vu); return;
-            case 0x0C: printf("vu: msubx  "); vu_i_msubx(vu); return;
-            case 0x0D: printf("vu: msuby  "); vu_i_msuby(vu); return;
-            case 0x0E: printf("vu: msubz  "); vu_i_msubz(vu); return;
-            case 0x0F: printf("vu: msubw  "); vu_i_msubw(vu); return;
-            case 0x10: printf("vu: maxx   "); vu_i_maxx(vu); return;
-            case 0x11: printf("vu: maxy   "); vu_i_maxy(vu); return;
-            case 0x12: printf("vu: maxz   "); vu_i_maxz(vu); return;
-            case 0x13: printf("vu: maxw   "); vu_i_maxw(vu); return;
-            case 0x14: printf("vu: minix  "); vu_i_minix(vu); return;
-            case 0x15: printf("vu: miniy  "); vu_i_miniy(vu); return;
-            case 0x16: printf("vu: miniz  "); vu_i_miniz(vu); return;
-            case 0x17: printf("vu: miniw  "); vu_i_miniw(vu); return;
-            case 0x18: printf("vu: mulx   "); vu_i_mulx(vu); return;
-            case 0x19: printf("vu: muly   "); vu_i_muly(vu); return;
-            case 0x1A: printf("vu: mulz   "); vu_i_mulz(vu); return;
-            case 0x1B: printf("vu: mulw   "); vu_i_mulw(vu); return;
-            case 0x1C: printf("vu: mulq   "); vu_i_mulq(vu); return;
-            case 0x1D: printf("vu: maxi   "); vu_i_maxi(vu); return;
-            case 0x1E: printf("vu: muli   "); vu_i_muli(vu); return;
-            case 0x1F: printf("vu: minii  "); vu_i_minii(vu); return;
-            case 0x20: printf("vu: addq   "); vu_i_addq(vu); return;
-            case 0x21: printf("vu: maddq  "); vu_i_maddq(vu); return;
-            case 0x22: printf("vu: addi   "); vu_i_addi(vu); return;
-            case 0x23: printf("vu: maddi  "); vu_i_maddi(vu); return;
-            case 0x24: printf("vu: subq   "); vu_i_subq(vu); return;
-            case 0x25: printf("vu: msubq  "); vu_i_msubq(vu); return;
-            case 0x26: printf("vu: subi   "); vu_i_subi(vu); return;
-            case 0x27: printf("vu: msubi  "); vu_i_msubi(vu); return;
-            case 0x28: printf("vu: add    "); vu_i_add(vu); return;
-            case 0x29: printf("vu: madd   "); vu_i_madd(vu); return;
-            case 0x2A: printf("vu: mul    "); vu_i_mul(vu); return;
-            case 0x2B: printf("vu: max    "); vu_i_max(vu); return;
-            case 0x2C: printf("vu: sub    "); vu_i_sub(vu); return;
-            case 0x2D: printf("vu: msub   "); vu_i_msub(vu); return;
-            case 0x2E: printf("vu: opmsub "); vu_i_opmsub(vu); return;
-            case 0x2F: printf("vu: mini   "); vu_i_mini(vu); return;
+            case 0x00: vu_i_addx(vu); return;
+            case 0x01: vu_i_addy(vu); return;
+            case 0x02: vu_i_addz(vu); return;
+            case 0x03: vu_i_addw(vu); return;
+            case 0x04: vu_i_subx(vu); return;
+            case 0x05: vu_i_suby(vu); return;
+            case 0x06: vu_i_subz(vu); return;
+            case 0x07: vu_i_subw(vu); return;
+            case 0x08: vu_i_maddx(vu); return;
+            case 0x09: vu_i_maddy(vu); return;
+            case 0x0A: vu_i_maddz(vu); return;
+            case 0x0B: vu_i_maddw(vu); return;
+            case 0x0C: vu_i_msubx(vu); return;
+            case 0x0D: vu_i_msuby(vu); return;
+            case 0x0E: vu_i_msubz(vu); return;
+            case 0x0F: vu_i_msubw(vu); return;
+            case 0x10: vu_i_maxx(vu); return;
+            case 0x11: vu_i_maxy(vu); return;
+            case 0x12: vu_i_maxz(vu); return;
+            case 0x13: vu_i_maxw(vu); return;
+            case 0x14: vu_i_minix(vu); return;
+            case 0x15: vu_i_miniy(vu); return;
+            case 0x16: vu_i_miniz(vu); return;
+            case 0x17: vu_i_miniw(vu); return;
+            case 0x18: vu_i_mulx(vu); return;
+            case 0x19: vu_i_muly(vu); return;
+            case 0x1A: vu_i_mulz(vu); return;
+            case 0x1B: vu_i_mulw(vu); return;
+            case 0x1C: vu_i_mulq(vu); return;
+            case 0x1D: vu_i_maxi(vu); return;
+            case 0x1E: vu_i_muli(vu); return;
+            case 0x1F: vu_i_minii(vu); return;
+            case 0x20: vu_i_addq(vu); return;
+            case 0x21: vu_i_maddq(vu); return;
+            case 0x22: vu_i_addi(vu); return;
+            case 0x23: vu_i_maddi(vu); return;
+            case 0x24: vu_i_subq(vu); return;
+            case 0x25: vu_i_msubq(vu); return;
+            case 0x26: vu_i_subi(vu); return;
+            case 0x27: vu_i_msubi(vu); return;
+            case 0x28: vu_i_add(vu); return;
+            case 0x29: vu_i_madd(vu); return;
+            case 0x2A: vu_i_mul(vu); return;
+            case 0x2B: vu_i_max(vu); return;
+            case 0x2C: vu_i_sub(vu); return;
+            case 0x2D: vu_i_msub(vu); return;
+            case 0x2E: vu_i_opmsub(vu); return;
+            case 0x2F: vu_i_mini(vu); return;
         }
     }
 }
 
 static inline void vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
     switch ((opcode & 0xFE000000) >> 25) {
-        case 0x00: printf("lq\n"); vu_i_lq(vu); return;
-        case 0x01: printf("sq\n"); vu_i_sq(vu); return;
-        case 0x04: printf("ilw\n"); vu_i_ilw(vu); return;
-        case 0x05: printf("isw\n"); vu_i_isw(vu); return;
-        case 0x08: printf("iaddiu\n"); vu_i_iaddiu(vu); return;
-        case 0x09: printf("isubiu\n"); vu_i_isubiu(vu); return;
-        case 0x10: printf("fceq\n"); vu_i_fceq(vu); return;
-        case 0x11: printf("fcset\n"); vu_i_fcset(vu); return;
-        case 0x12: printf("fcand\n"); vu_i_fcand(vu); return;
-        case 0x13: printf("fcor\n"); vu_i_fcor(vu); return;
-        case 0x14: printf("fseq\n"); vu_i_fseq(vu); return;
-        case 0x15: printf("fsset\n"); vu_i_fsset(vu); return;
-        case 0x16: printf("fsand\n"); vu_i_fsand(vu); return;
-        case 0x17: printf("fsor\n"); vu_i_fsor(vu); return;
-        case 0x18: printf("fmeq\n"); vu_i_fmeq(vu); return;
-        case 0x1A: printf("fmand\n"); vu_i_fmand(vu); return;
-        case 0x1B: printf("fmor\n"); vu_i_fmor(vu); return;
-        case 0x1C: printf("fcget\n"); vu_i_fcget(vu); return;
-        case 0x20: printf("b\n"); vu_i_b(vu); return;
-        case 0x21: printf("bal\n"); vu_i_bal(vu); return;
-        case 0x24: printf("jr\n"); vu_i_jr(vu); return;
-        case 0x25: printf("jalr\n"); vu_i_jalr(vu); return;
-        case 0x28: printf("ibeq\n"); vu_i_ibeq(vu); return;
-        case 0x29: printf("ibne\n"); vu_i_ibne(vu); return;
-        case 0x2C: printf("ibltz\n"); vu_i_ibltz(vu); return;
-        case 0x2D: printf("ibgtz\n"); vu_i_ibgtz(vu); return;
-        case 0x2E: printf("iblez\n"); vu_i_iblez(vu); return;
-        case 0x2F: printf("ibgez\n"); vu_i_ibgez(vu); return;
+        case 0x00: vu_i_lq(vu); return;
+        case 0x01: vu_i_sq(vu); return;
+        case 0x04: vu_i_ilw(vu); return;
+        case 0x05: vu_i_isw(vu); return;
+        case 0x08: vu_i_iaddiu(vu); return;
+        case 0x09: vu_i_isubiu(vu); return;
+        case 0x10: vu_i_fceq(vu); return;
+        case 0x11: vu_i_fcset(vu); return;
+        case 0x12: vu_i_fcand(vu); return;
+        case 0x13: vu_i_fcor(vu); return;
+        case 0x14: vu_i_fseq(vu); return;
+        case 0x15: vu_i_fsset(vu); return;
+        case 0x16: vu_i_fsand(vu); return;
+        case 0x17: vu_i_fsor(vu); return;
+        case 0x18: vu_i_fmeq(vu); return;
+        case 0x1A: vu_i_fmand(vu); return;
+        case 0x1B: vu_i_fmor(vu); return;
+        case 0x1C: vu_i_fcget(vu); return;
+        case 0x20: vu_i_b(vu); return;
+        case 0x21: vu_i_bal(vu); return;
+        case 0x24: vu_i_jr(vu); return;
+        case 0x25: vu_i_jalr(vu); return;
+        case 0x28: vu_i_ibeq(vu); return;
+        case 0x29: vu_i_ibne(vu); return;
+        case 0x2C: vu_i_ibltz(vu); return;
+        case 0x2D: vu_i_ibgtz(vu); return;
+        case 0x2E: vu_i_iblez(vu); return;
+        case 0x2F: vu_i_ibgez(vu); return;
         case 0x40: {
             if ((opcode & 0x3C) == 0x3C) {
                 switch (((opcode & 0x7C0) >> 4) | (opcode & 3)) {
-                    case 0x30: printf("move\n"); vu_i_move(vu); return;
-                    case 0x31: printf("mr32\n"); vu_i_mr32(vu); return;
-                    case 0x34: printf("lqi\n"); vu_i_lqi(vu); return;
-                    case 0x35: printf("sqi\n"); vu_i_sqi(vu); return;
-                    case 0x36: printf("lqd\n"); vu_i_lqd(vu); return;
-                    case 0x37: printf("sqd\n"); vu_i_sqd(vu); return;
-                    case 0x38: printf("div\n"); vu_i_div(vu); return;
-                    case 0x39: printf("sqrt\n"); vu_i_sqrt(vu); return;
-                    case 0x3A: printf("rsqrt\n"); vu_i_rsqrt(vu); return;
-                    case 0x3B: printf("waitq\n"); vu_i_waitq(vu); return;
-                    case 0x3C: printf("mtir\n"); vu_i_mtir(vu); return;
-                    case 0x3D: printf("mfir\n"); vu_i_mfir(vu); return;
-                    case 0x3E: printf("ilwr\n"); vu_i_ilwr(vu); return;
-                    case 0x3F: printf("iswr\n"); vu_i_iswr(vu); return;
-                    case 0x40: printf("rnext\n"); vu_i_rnext(vu); return;
-                    case 0x41: printf("rget\n"); vu_i_rget(vu); return;
-                    case 0x42: printf("rinit\n"); vu_i_rinit(vu); return;
-                    case 0x43: printf("rxor\n"); vu_i_rxor(vu); return;
-                    case 0x64: printf("mfp\n"); vu_i_mfp(vu); return;
-                    case 0x68: printf("xtop\n"); vu_i_xtop(vu); return;
-                    case 0x69: printf("xitop\n"); vu_i_xitop(vu); return;
-                    case 0x6C: printf("xgkick\n"); vu_i_xgkick(vu); return;
-                    case 0x70: printf("esadd\n"); vu_i_esadd(vu); return;
-                    case 0x71: printf("ersadd\n"); vu_i_ersadd(vu); return;
-                    case 0x72: printf("eleng\n"); vu_i_eleng(vu); return;
-                    case 0x73: printf("erleng\n"); vu_i_erleng(vu); return;
-                    case 0x74: printf("eatanxy\n"); vu_i_eatanxy(vu); return;
-                    case 0x75: printf("eatanxz\n"); vu_i_eatanxz(vu); return;
-                    case 0x76: printf("esum\n"); vu_i_esum(vu); return;
-                    case 0x78: printf("esqrt\n"); vu_i_esqrt(vu); return;
-                    case 0x79: printf("ersqrt\n"); vu_i_ersqrt(vu); return;
-                    case 0x7A: printf("ercpr\n"); vu_i_ercpr(vu); return;
-                    case 0x7B: printf("waitp\n"); vu_i_waitp(vu); return;
-                    case 0x7C: printf("esin\n"); vu_i_esin(vu); return;
-                    case 0x7D: printf("eatan\n"); vu_i_eatan(vu); return;
-                    case 0x7E: printf("eexp\n"); vu_i_eexp(vu); return;
+                    case 0x30: vu_i_move(vu); return;
+                    case 0x31: vu_i_mr32(vu); return;
+                    case 0x34: vu_i_lqi(vu); return;
+                    case 0x35: vu_i_sqi(vu); return;
+                    case 0x36: vu_i_lqd(vu); return;
+                    case 0x37: vu_i_sqd(vu); return;
+                    case 0x38: vu_i_div(vu); return;
+                    case 0x39: vu_i_sqrt(vu); return;
+                    case 0x3A: vu_i_rsqrt(vu); return;
+                    case 0x3B: vu_i_waitq(vu); return;
+                    case 0x3C: vu_i_mtir(vu); return;
+                    case 0x3D: vu_i_mfir(vu); return;
+                    case 0x3E: vu_i_ilwr(vu); return;
+                    case 0x3F: vu_i_iswr(vu); return;
+                    case 0x40: vu_i_rnext(vu); return;
+                    case 0x41: vu_i_rget(vu); return;
+                    case 0x42: vu_i_rinit(vu); return;
+                    case 0x43: vu_i_rxor(vu); return;
+                    case 0x64: vu_i_mfp(vu); return;
+                    case 0x68: vu_i_xtop(vu); return;
+                    case 0x69: vu_i_xitop(vu); return;
+                    case 0x6C: vu_i_xgkick(vu); return;
+                    case 0x70: vu_i_esadd(vu); return;
+                    case 0x71: vu_i_ersadd(vu); return;
+                    case 0x72: vu_i_eleng(vu); return;
+                    case 0x73: vu_i_erleng(vu); return;
+                    case 0x74: vu_i_eatanxy(vu); return;
+                    case 0x75: vu_i_eatanxz(vu); return;
+                    case 0x76: vu_i_esum(vu); return;
+                    case 0x78: vu_i_esqrt(vu); return;
+                    case 0x79: vu_i_ersqrt(vu); return;
+                    case 0x7A: vu_i_ercpr(vu); return;
+                    case 0x7B: vu_i_waitp(vu); return;
+                    case 0x7C: vu_i_esin(vu); return;
+                    case 0x7D: vu_i_eatan(vu); return;
+                    case 0x7E: vu_i_eexp(vu); return;
                 }
             } else {
                 switch (opcode & 0x3F) {
-                    case 0x30: printf("iadd\n"); vu_i_iadd(vu); return;
-                    case 0x31: printf("isub\n"); vu_i_isub(vu); return;
-                    case 0x32: printf("iaddi\n"); vu_i_iaddi(vu); return;
-                    case 0x34: printf("iand\n"); vu_i_iand(vu); return;
-                    case 0x35: printf("ior\n"); vu_i_ior(vu); return;
+                    case 0x30: vu_i_iadd(vu); return;
+                    case 0x31: vu_i_isub(vu); return;
+                    case 0x32: vu_i_iaddi(vu); return;
+                    case 0x34: vu_i_iand(vu); return;
+                    case 0x35: vu_i_ior(vu); return;
                 }
             }
         } break;
@@ -2238,9 +2464,15 @@ static inline void vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
 }
 
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
-    printf("vu: Executing program at %08x (%08x) TOP=%08x\n", addr, addr << 3, vu->vif->vif1_top);
+    // printf("vu: Executing program at %08x (%08x) TOP=%08x\n", addr, addr << 3, vu->vif->vif1_top);
 
-    printf("vu: upper  lower\n");
+    char ud[128];
+    char ld[128];
+
+    struct vu_dis_state ds;
+
+    ds.print_address = 0;
+    ds.print_opcode = 0;
 
     vu->tpc = addr;
     vu->next_tpc = addr + 1;
@@ -2256,10 +2488,13 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
     int delayed_e_bit = 0;
 
     while (!delayed_e_bit) {
+        uint32_t tpc = vu->tpc;
         uint64_t liw = vu->micro_mem[vu->tpc];
 
         vu->tpc = vu->next_tpc;
         vu->next_tpc = vu->tpc + 1;
+
+        ds.addr = tpc;
 
         delayed_e_bit = vu->e_bit;
 
@@ -2271,13 +2506,20 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         vu->d_bit = vu->upper & 0x10000000;
         vu->t_bit = vu->upper & 0x08000000;
 
-        if (vu->e_bit) printf("--> ");
+        // printf("%04x: %08x %08x ", tpc, vu->upper, vu->lower);
 
-        printf("e=%d %08x %08x ", vu->e_bit != 0, vu->upper, vu->lower);
+        if (vu->i_bit) {
+            // printf("loi %08x\n", vu->lower);
 
-        vu_execute_upper(vu, liw >> 32);
-        vu_execute_lower(vu, liw & 0xffffffff);
+            // LOI
+            vu->i.u32 = vu->lower;
+        } else {
+            // printf("%-40s%-40s\n", vu_disassemble_upper(ud, vu->upper, &ds), vu_disassemble_lower(ld, vu->lower, &ds));
+
+            vu_execute_upper(vu, liw >> 32);
+            vu_execute_lower(vu, liw & 0xffffffff);
+        }
     }
 }
 
-#undef printf
+// #undef printf
