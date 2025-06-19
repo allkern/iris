@@ -6,6 +6,8 @@
 
 #include "vif.h"
 
+// #define printf(fmt, ...)(0)
+
 struct ps2_vif* ps2_vif_create(void) {
     return malloc(sizeof(struct ps2_vif));
 }
@@ -35,19 +37,19 @@ static int loop = 0;
 void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
     if (vif->vif1_state == VIF_IDLE) {
         vif->vif1_cmd = (data >> 24) & 0xff;
-        
-        // if (vif->vif1_cmd & 0x80) {
-        //     struct sched_event event;
 
-        //     event.callback = vif1_send_irq;
-        //     event.cycles = 1000;
-        //     event.name = "VIF1 Interrupt";
-        //     event.udata = vif;
+        if (vif->vif1_cmd & 0x80) {
+            struct sched_event event;
 
-        //     printf("vif1: Requested IRQ\n");
+            event.callback = vif1_send_irq;
+            event.cycles = 1000;
+            event.name = "VIF1 Interrupt";
+            event.udata = vif;
 
-        //     exit(1);
-        // }
+            sched_schedule(vif->sched, event);
+
+            printf("vif1: Requested IRQ\n");
+        }
 
         switch ((data >> 24) & 0x7f) {
             case VIF_CMD_NOP: {
@@ -77,7 +79,7 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case VIF_CMD_ITOP: {
                 // printf("vif1: ITOP(%04x)\n", data & 0xffff);
 
-                vif->vif1_itop = data & 0x3ff;
+                vif->vif1_itops = data & 0x3ff;
             } break;
             case VIF_CMD_STMOD: {
                 // printf("vif1: STMOD(%04x)\n", data & 0xffff);
@@ -109,6 +111,7 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 // Toggle DBF
                 vif->vif1_stat ^= 0x80;
                 vif->vif1_tops = vif->vif1_base;
+                vif->vif1_itop = vif->vif1_itops;
 
                 if (vif->vif1_stat & 0x80) {
                     vif->vif1_tops += vif->vif1_ofst;
@@ -117,14 +120,38 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vu_execute_program(vif->vu1, data & 0xffff);
             } break;
             case VIF_CMD_MSCALF: {
-                printf("vif1: MSCALF(%04x)\n", data & 0xffff);
+                // printf("vif1: MSCALF(%04x)\n", data & 0xffff);
 
-                exit(1);
+                vif->vif1_top = vif->vif1_tops;
+
+                // Toggle DBF
+                vif->vif1_stat ^= 0x80;
+                vif->vif1_tops = vif->vif1_base;
+                vif->vif1_itop = vif->vif1_itops;
+
+                if (vif->vif1_stat & 0x80) {
+                    vif->vif1_tops += vif->vif1_ofst;
+                }
+
+                vu_execute_program(vif->vu1, data & 0xffff);
             } break;
             case VIF_CMD_MSCNT: {
-                printf("vif1: MSCNT\n");
+                // printf("vif1: MSCNT(%08x)\n", vif->vu1->tpc);
 
-                exit(1);
+                vif->vif1_top = vif->vif1_tops;
+
+                // Toggle DBF
+                vif->vif1_stat ^= 0x80;
+                vif->vif1_tops = vif->vif1_base;
+                vif->vif1_itop = vif->vif1_itops;
+
+                if (vif->vif1_stat & 0x80) {
+                    vif->vif1_tops += vif->vif1_ofst;
+                }
+
+                vu_execute_program(vif->vu1, vif->vu1->tpc);
+
+                // exit(1);
             } break;
             case VIF_CMD_STMASK: {
                 // printf("vif1: STMASK(%04x)\n", data & 0xffff);
@@ -197,6 +224,7 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 // printf("vif: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x\n", data >> 24, fmt, flg, num, addr, vif->vif1_tops);
 
                 assert(!filling);
+                assert(cl == wl);
 
                 vif->vif1_pending_words = (((32>>vl) * (vn+1)) * num) / 32;
                 vif->vif1_state = VIF_RECV_DATA;
@@ -207,7 +235,7 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             default: {
                 printf("vif1: Unhandled command %02x\n", vif->vif1_cmd);
 
-                exit(1);
+                // exit(1);
             } break;
         }
     } else {
@@ -269,6 +297,169 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case 0x78: case 0x79: case 0x7a: case 0x7b:
             case 0x7c: case 0x7d: case 0x7e: case 0x7f: {
                 switch (vif->vif1_unpack_fmt) {
+                    // S-32
+                    case 0x00: {
+                        uint128_t q;
+
+                        q.u32[0] = data;
+                        q.u32[1] = data;
+                        q.u32[2] = data;
+                        q.u32[3] = data;
+
+                        vif->vu1->vu_mem[vif->vif1_addr++] = q;
+                    } break;
+
+                    // S-16
+                    case 0x01: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 2) {
+                            uint128_t q0, q1, q2;
+
+                            q0.u32[0] = vif->vif1_data.u32[0] & 0xffff;
+                            q1.u32[0] = vif->vif1_data.u32[0] >> 16;
+                            q2.u32[0] = vif->vif1_data.u32[1] & 0xffff;
+
+                            // Sign-extend if USN is reset
+                            if (!vif->vif1_unpack_usn) {
+                                q0.u32[0] = (int32_t)((int16_t)q0.u32[0]);
+                                q1.u32[0] = (int32_t)((int16_t)q1.u32[0]);
+                                q2.u32[0] = (int32_t)((int16_t)q2.u32[0]);
+                            }
+
+                            q0.u32[1] = q0.u32[0];
+                            q0.u32[2] = q0.u32[0];
+                            q0.u32[3] = q0.u32[0];
+                            q1.u32[1] = q1.u32[0];
+                            q1.u32[2] = q1.u32[0];
+                            q1.u32[3] = q1.u32[0];
+                            q2.u32[1] = q2.u32[0];
+                            q2.u32[2] = q2.u32[0];
+                            q2.u32[3] = q2.u32[0];
+
+                            vif->vu1->vu_mem[vif->vif1_addr++] = q0;
+                            vif->vu1->vu_mem[vif->vif1_addr++] = q1;
+                            vif->vu1->vu_mem[vif->vif1_addr++] = q2;
+                            vif->vif1_shift = 0;
+                        }
+                    } break;
+
+                    // S-8
+                    case 0x02: {
+                        uint128_t q[3];
+
+                        for (int i = 0; i < 3; i++) {
+                            q[i].u32[0] = (data >> (i * 8)) & 0xff;
+
+                            if (!vif->vif1_unpack_usn) {
+                                q[i].u32[0] = (int32_t)((int8_t)q[i].u32[0]);
+                            }
+
+                            q[i].u32[1] = q[i].u32[0];
+                            q[i].u32[2] = q[i].u32[0];
+                            q[i].u32[3] = q[i].u32[0];
+
+                            vif->vu1->vu_mem[vif->vif1_addr++] = q[i];
+                        }
+                    } break;
+
+                    // V2-32
+                    case 0x04: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 2) {
+                            vif->vu1->vu_mem[vif->vif1_addr++] = vif->vif1_data;
+                            vif->vif1_shift = 0;
+                            vif->vif1_data.u32[2] = 0;
+                            vif->vif1_data.u32[3] = 0;
+                        }
+                    } break;
+
+                    // V2-16
+                    case 0x05: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 3) {
+                            uint128_t q[3];
+
+                            for (int i = 0; i < 3; i++) {
+                                for (int j = 0; j < 2; j++) {
+                                    q[i].u32[j] = (data >> (16 * j)) & 0xffff;
+
+                                    if (!vif->vif1_unpack_usn) {
+                                        q[i].u32[j] = (int32_t)((int16_t)q[i].u32[j]);
+                                    }
+                                }
+
+                                vif->vu1->vu_mem[vif->vif1_addr++] = q[i];
+                            }
+
+                            vif->vif1_shift = 0;
+                        }
+                    } break;
+
+                    // V2-8
+                    case 0x06: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 2) {
+                            uint128_t q[3];
+
+                            q[0].u32[0] = vif->vif1_data.u32[0] & 0xff;
+                            q[0].u32[1] = (vif->vif1_data.u32[0] >> 8) & 0xff;
+                            q[1].u32[0] = vif->vif1_data.u32[0] >> 16 & 0xff;
+                            q[1].u32[1] = (vif->vif1_data.u32[0] >> 24) & 0xff;
+                            q[2].u32[0] = vif->vif1_data.u32[1] & 0xff;
+                            q[2].u32[1] = (vif->vif1_data.u32[1] >> 8) & 0xff;
+
+                            if (!vif->vif1_unpack_usn) {
+                                for (int i = 0; i < 3; i++) {
+                                    for (int j = 0; j < 2; j++) {
+                                        q[i].u32[j] = (int32_t)((int8_t)q[i].u32[j]);
+                                    }
+                                }
+                            }
+                        }
+                    } break;
+
+                    // V3-32
+                    case 0x08: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 3) {
+                            vif->vu1->vu_mem[vif->vif1_addr++] = vif->vif1_data;
+                            vif->vif1_shift = 0;
+                            vif->vif1_data.u32[3] = 0;
+                        }
+                    } break;
+
+                    // V3-8
+                    case 0x0a: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 3) {
+                            uint128_t q[3];
+
+                            q[0].u32[0] = vif->vif1_data.u32[0] & 0xff;
+                            q[0].u32[1] = (vif->vif1_data.u32[0] >> 8) & 0xff;
+                            q[0].u32[2] = (vif->vif1_data.u32[0] >> 16) & 0xff;
+                            q[1].u32[0] = (vif->vif1_data.u32[0] >> 24) & 0xff;
+                            q[1].u32[1] = vif->vif1_data.u32[1] & 0xff;
+                            q[1].u32[2] = (vif->vif1_data.u32[1] >> 8) & 0xff;
+                            q[2].u32[0] = (vif->vif1_data.u32[1] >> 16) & 0xff;
+                            q[2].u32[1] = (vif->vif1_data.u32[1] >> 24) & 0xff;
+                            q[2].u32[2] = vif->vif1_data.u32[2] & 0xff;
+
+                            if (!vif->vif1_unpack_usn) {
+                                for (int i = 0; i < 3; i++) {
+                                    for (int j = 0; j < 3; j++) {
+                                        q[i].u32[j] = (int32_t)((int8_t)q[i].u32[j]);
+                                    }
+                                }
+                            }
+                        }
+                    } break;
+
                     // V4-32
                     case 0x0c: {
                         vif->vif1_data.u32[vif->vif1_shift++] = data;
@@ -283,6 +474,54 @@ void vif1_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                             // );
 
                             vif->vu1->vu_mem[vif->vif1_addr++] = vif->vif1_data;
+                            vif->vif1_shift = 0;
+                        }
+                    } break;
+
+                    // V4-16
+                    case 0x0d: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 2) {
+                            uint128_t q;
+
+                            q.u32[0] = vif->vif1_data.u32[0] & 0xffff;
+                            q.u32[1] = vif->vif1_data.u32[0] >> 16;
+                            q.u32[2] = vif->vif1_data.u32[1] & 0xffff;
+                            q.u32[3] = vif->vif1_data.u32[1] >> 16;
+
+                            if (!vif->vif1_unpack_usn) {
+                                q.u32[0] = (int32_t)((int16_t)q.u32[0]);
+                                q.u32[1] = (int32_t)((int16_t)q.u32[1]);
+                                q.u32[2] = (int32_t)((int16_t)q.u32[2]);
+                                q.u32[3] = (int32_t)((int16_t)q.u32[3]);
+                            }
+
+                            vif->vu1->vu_mem[vif->vif1_addr++] = vif->vif1_data;
+                            vif->vif1_shift = 0;
+                        }
+                    } break;
+
+                    // V4-8
+                    case 0x0e: {
+                        vif->vif1_data.u32[vif->vif1_shift++] = data;
+
+                        if (vif->vif1_shift == 3) {
+                            uint128_t q[3];
+
+                            for (int j = 0; j < 3; j++) {
+                                for (int i = 0; i < 4; i++) {
+                                    q[j].u32[i] = (vif->vif1_data.u32[j] >> (i * 8)) & 0xff;
+
+                                    // Sign-extend if USN is reset
+                                    if (!vif->vif1_unpack_usn) {
+                                        q[j].u32[i] = (int32_t)((int8_t)q[j].u32[i]);
+                                    }
+                                }
+
+                                vif->vu1->vu_mem[vif->vif1_addr++] = q[j];
+                            }
+
                             vif->vif1_shift = 0;
                         }
                     } break;
@@ -385,3 +624,5 @@ void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {
         } break;
     }
 }
+
+#undef printf

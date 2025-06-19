@@ -100,6 +100,7 @@ struct ps2_vif {
 
     uint32_t vif1_addr;
     uint32_t vif1_unpack_fmt;
+    uint32_t vif1_unpack_usn;
 
     struct vu_state* vu0;
     struct vu_state* vu1;
