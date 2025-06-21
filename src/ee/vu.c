@@ -70,10 +70,10 @@ void vu_destroy(struct vu_state* vu) {
 static inline void vu_update_status(struct vu_state* vu) {
     vu->status &= ~0x3f;
 
-    vu->status |= (vu->mac & 0x000f) ? 1 : 0;
-    vu->status |= (vu->mac & 0x00f0) ? 2 : 0;
-    vu->status |= (vu->mac & 0x0f00) ? 4 : 0;
-    vu->status |= (vu->mac & 0xf000) ? 8 : 0;
+    vu->status |= (vu->mac_pipeline[3] & 0x000f) ? 1 : 0;
+    vu->status |= (vu->mac_pipeline[3] & 0x00f0) ? 2 : 0;
+    vu->status |= (vu->mac_pipeline[3] & 0x0f00) ? 4 : 0;
+    vu->status |= (vu->mac_pipeline[3] & 0xf000) ? 8 : 0;
 
     vu->status |= (vu->status & 0x3f) << 6;
 }
@@ -421,7 +421,21 @@ void vu_i_adda(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addai(struct vu_state* vu) { printf("vu: addai unimplemented\n"); exit(1); }
+void vu_i_addai(struct vu_state* vu) {
+    int s = VU_UD_S;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float result = vu_vf_i(vu, s, i) + vu->i.f;
+
+            vu->acc.f[i] = vu_update_flags(vu, result, i);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    }
+
+    vu_update_status(vu);
+}
 void vu_i_addaq(struct vu_state* vu) { printf("vu: addaq unimplemented\n"); exit(1); }
 void vu_i_addax(struct vu_state* vu) {
     int s = VU_UD_S;
@@ -636,7 +650,21 @@ void vu_i_suba(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subai(struct vu_state* vu) { printf("vu: subai unimplemented\n"); exit(1); }
+void vu_i_subai(struct vu_state* vu) {
+    int s = VU_UD_S;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float result = vu_vf_i(vu, s, i) - vu->i.f;
+
+            vu->acc.f[i] = vu_update_flags(vu, result, i);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    }
+
+    vu_update_status(vu);
+}
 void vu_i_subaq(struct vu_state* vu) { printf("vu: subaq unimplemented\n"); exit(1); }
 void vu_i_subax(struct vu_state* vu) {
     int s = VU_UD_S;
@@ -1659,8 +1687,22 @@ void vu_i_ftoi4(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.0625f)));
     }
 }
-void vu_i_ftoi12(struct vu_state* vu) { printf("vu: ftoi12 unimplemented\n"); exit(1); }
-void vu_i_ftoi15(struct vu_state* vu) { printf("vu: ftoi15 unimplemented\n"); exit(1); }
+void vu_i_ftoi12(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000244140625f)));
+    }
+}
+void vu_i_ftoi15(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000030517578125f)));
+    }
+}
 void vu_i_itof0(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1757,14 +1799,38 @@ void vu_i_erleng(struct vu_state* vu) {
 
     vu->p.f = 1.0f / sqrtf(x2 + y2 + z2);
 }
-void vu_i_ersadd(struct vu_state* vu) { printf("vu: ersadd unimplemented\n"); exit(1); }
-void vu_i_ersqrt(struct vu_state* vu) { printf("vu: ersqrt unimplemented\n"); exit(1); }
-void vu_i_esadd(struct vu_state* vu) { printf("vu: esadd unimplemented\n"); exit(1); }
-void vu_i_esin(struct vu_state* vu) { printf("vu: esin unimplemented\n"); exit(1); }
+void vu_i_ersadd(struct vu_state* vu) {
+    int s = VU_LD_S;
+
+    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
+    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
+    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+
+    vu->p.f = 1.0f / (x2 + y2 + z2);
+}
+void vu_i_ersqrt(struct vu_state* vu) {
+    vu->p.f = 1.0f / sqrtf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
+}
+void vu_i_esadd(struct vu_state* vu) {
+    int s = VU_LD_S;
+
+    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
+    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
+    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+
+    vu->p.f = x2 + y2 + z2;
+}
+void vu_i_esin(struct vu_state* vu) {
+    vu->p.f = sinf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
+}
 void vu_i_esqrt(struct vu_state* vu) {
     vu->p.f = sqrtf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
 }
-void vu_i_esum(struct vu_state* vu) { printf("vu: esum unimplemented\n"); exit(1); }
+void vu_i_esum(struct vu_state* vu) {
+    int s = VU_LD_S;
+
+    vu->p.f = vu_vf_x(vu, s) + vu_vf_y(vu, s) + vu_vf_z(vu, s) + vu_vf_w(vu, s);
+}
 void vu_i_fcand(struct vu_state* vu) {
     vu->vi[1] = ((vu->clip & 0xffffff) & VU_LD_IMM24) != 0;
 }
@@ -1781,7 +1847,7 @@ void vu_i_fcset(struct vu_state* vu) {
     vu->clip = VU_LD_IMM24;
 }
 void vu_i_fmand(struct vu_state* vu) {
-    vu_set_vi(vu, VU_LD_T, vu->mac & VU_IS);
+    vu_set_vi(vu, VU_LD_T, vu->mac_pipeline[3] & VU_IS);
 }
 void vu_i_fmeq(struct vu_state* vu) {
     VU_IT = (VU_IS & 0xffff) == (vu->status & 0xffff);
@@ -1903,9 +1969,11 @@ void vu_i_iswr(struct vu_state* vu) {
     }
 }
 void vu_i_jalr(struct vu_state* vu) {
+    uint16_t s = VU_IS;
+
     VU_IT = vu->tpc + 1;
 
-    vu->next_tpc = VU_IS;
+    vu->next_tpc = s;
 }
 void vu_i_jr(struct vu_state* vu) {
     vu->next_tpc = VU_IS;
@@ -2148,10 +2216,22 @@ void vu_i_xgkick(struct vu_state* vu) {
     } while (!eop);
 }
 void vu_i_xitop(struct vu_state* vu) {
-    vu_set_vi(vu, VU_LD_T, vu->vif->vif1_itop);
+    if (vu->id == 0) {
+        printf("vu: xitop used in VU0, this is not allowed\n");
+
+        exit(1);
+    }
+
+    vu_set_vi(vu, VU_LD_T, vu->vif->itop);
 }
 void vu_i_xtop(struct vu_state* vu) {
-    vu_set_vi(vu, VU_LD_T, vu->vif->vif1_top);
+    if (vu->id == 0) {
+        printf("vu: xtop used in VU0, this is not allowed\n");
+
+        exit(1);
+    }
+
+    vu_set_vi(vu, VU_LD_T, vu->vif->top);
 }
 
 uint64_t ps2_vu_read8(struct vu_state* vu, uint32_t addr) {
@@ -2466,9 +2546,6 @@ static inline void vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
     // printf("vu: Executing program at %08x (%08x) TOP=%08x\n", addr, addr << 3, vu->vif->vif1_top);
 
-    char ud[128];
-    char ld[128];
-
     struct vu_dis_state ds;
 
     ds.print_address = 0;
@@ -2508,6 +2585,8 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
 
         // printf("%04x: %08x %08x ", tpc, vu->upper, vu->lower);
 
+        vu->status = vu->mac_pipeline[3];
+
         if (vu->i_bit) {
             // printf("loi %08x\n", vu->lower);
 
@@ -2519,6 +2598,24 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
             vu_execute_upper(vu, liw >> 32);
             vu_execute_lower(vu, liw & 0xffffffff);
         }
+
+        vu->mac_pipeline[3] = vu->mac_pipeline[2];
+        vu->mac_pipeline[2] = vu->mac_pipeline[1];
+        vu->mac_pipeline[1] = vu->mac_pipeline[0];
+        vu->mac_pipeline[0] = vu->mac;
+
+        vu->clip_pipeline[3] = vu->clip_pipeline[2];
+        vu->clip_pipeline[2] = vu->clip_pipeline[1];
+        vu->clip_pipeline[1] = vu->clip_pipeline[0];
+        vu->clip_pipeline[0] = vu->clip;
+
+        // printf("mac_pipeline: %08x %08x %08x %08x mac=%08x\n",
+        //     vu->mac_pipeline[0],
+        //     vu->mac_pipeline[1],
+        //     vu->mac_pipeline[2],
+        //     vu->mac_pipeline[3],
+        //     vu->mac
+        // );
     }
 }
 

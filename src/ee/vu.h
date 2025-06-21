@@ -51,6 +51,10 @@ struct vu_state {
     int t_bit;
     uint32_t next_tpc;
 
+    // MAC flags pipeline
+    uint32_t mac_pipeline[4];
+    uint32_t clip_pipeline[4];
+
     union {
         uint32_t u32;
         float f;
