@@ -1,4 +1,5 @@
 #include <filesystem>
+#include <algorithm>
 #include <csignal>
 #include <chrono>
 #include <string>
@@ -67,6 +68,74 @@ static const ImWchar icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 iris::instance* create();
 
 int last_mouse_click = 0;
+
+void add_recent(iris::instance* iris, std::string file) {
+    auto it = std::find(iris->recents.begin(), iris->recents.end(), file);
+
+    if (it != iris->recents.end()) {
+        iris->recents.erase(it);
+        iris->recents.push_front(file);
+
+        return;
+    }
+
+    iris->recents.push_front(file);
+
+    if (iris->recents.size() == 11)
+        iris->recents.pop_back();
+}
+
+int open_file(iris::instance* iris, std::string file) {
+    std::filesystem::path path(file);
+    std::string ext = path.extension().string();
+
+    for (char& c : ext)
+        c = tolower(c);
+
+    // Load disc image
+    if (ext == ".iso" || ext == ".bin" || ext == ".cue") {
+        if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str()))
+            return 1;
+
+        char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
+
+        if (!boot_file)
+            return 2;
+
+        // Temporarily disable window updates
+        struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+        ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+        ps2_boot_file(iris->ps2, boot_file);
+
+        // Re-enable window updates
+        ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
+        iris->loaded = file;
+
+        return 0;
+    }
+
+    // Note: We need the trailing whitespaces here because of IOMAN HLE
+    // Load executable
+    file = "host:  " + file;
+
+    // Temporarily disable window updates
+    struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+    ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+
+    ps2_boot_file(iris->ps2, file.c_str());
+
+    // ps2_elf_load(iris->ps2, file);
+
+    // Re-enable window updates
+    ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+
+    iris->loaded = file;
+
+    return 0;
+}
 
 void update_title(iris::instance* iris) {
     char buf[128];
@@ -592,6 +661,20 @@ void update_window(iris::instance* iris) {
 
             case SDL_KEYUP: {
                 handle_keyup_event(iris, event.key);
+            } break;
+
+            case SDL_DROPFILE: {
+                if (event.drop.file) {
+                    std::string path = event.drop.file;
+
+                    if (open_file(iris, path)) {
+                        push_info(iris, "Failed to open file: " + path);
+                    } else {
+                        add_recent(iris, path);
+                    }
+
+                    SDL_free(event.drop.file);
+                }
             } break;
 
             // case SDL_MOUSEBUTTONDOWN: {

@@ -214,11 +214,15 @@ void show_bios_setting_window(iris::instance* iris);
 void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key);
 void handle_keyup_event(iris::instance* iris, SDL_KeyboardEvent& key);
 void handle_scissor_event(void* udata);
+void handle_drag_and_drop_event(void* udata, const char* path);
 void handle_ee_tty_event(void* udata, char c);
 void handle_iop_tty_event(void* udata, char c);
 
 void handle_animations(iris::instance* iris);
 
 void push_info(iris::instance* iris, std::string text);
+
+void add_recent(iris::instance* iris, std::string file);
+int open_file(iris::instance* iris, std::string file);
 
 }
