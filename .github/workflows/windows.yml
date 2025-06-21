@@ -21,10 +21,7 @@ jobs:
            New-Item -Path "dist" -ItemType Directory
            Copy-Item -Path "iris.exe" "dist"
            Copy-Item "SDL2-2.32.0/x86_64-w64-mingw32/bin/SDL2.dll" "dist"
-           Copy-Item "C:/msys64/mingw64/bin/*.dll" "dist"
-    - name: Run Get-Command c++
-      run: |
-           Get-Command c++
+           Copy-Item "C:\mingw64\bin\*.dll" "dist"
     - uses: actions/upload-artifact@v4
       with:
         name: iris-win-latest
