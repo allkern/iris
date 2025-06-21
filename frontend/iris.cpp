@@ -146,7 +146,7 @@ void update_title(iris::instance* iris) {
         base = std::filesystem::path(iris->loaded).filename().string();
     }
 
-    sprintf(buf, base.size() ? "Iris (eegs " STR(_IRIS_VERSION) ") | %s" : "Iris (eegs " STR(_IRIS_VERSION) ")",
+    sprintf(buf, base.size() ? "Iris (" STR(_IRIS_VERSION) " " STR(_IRIS_COMMIT) ") | %s" : "Iris (" STR(_IRIS_VERSION) " " STR(_IRIS_COMMIT) ")",
         base.c_str()
     );
 

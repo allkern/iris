@@ -1,3 +1,12 @@
+git fetch --all --tags
+
+$VERSION_TAG = git describe --always --tags --abbrev=0
+$COMMIT_HASH = git rev-parse --short HEAD
+$OS_INFO = (Get-WMIObject win32_operatingsystem).caption + " " + `
+           (Get-WMIObject win32_operatingsystem).version + " " + `
+           (Get-WMIObject win32_operatingsystem).OSArchitecture
+$BUILD_DATE = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+
 $CSRC = $(Get-ChildItem -Path "src" -Filter *.c -Recurse).FullName | Resolve-Path -Relative
 $CSRC += $(Get-ChildItem -Path "frontend" -Filter *.c -Recurse).FullName | Resolve-Path -Relative
 $CSRC += $(Get-ChildItem -Path "gl3w" -Filter *.c -Recurse).FullName | Resolve-Path -Relative
@@ -16,6 +25,10 @@ foreach ($SRC in $CSRC) {
         gcc -c $SRC -o $OBJ `
             -O3 -ffast-math -march=native -mtune=native -pedantic `
             -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -g `
+            -D_IRIS_VERSION="$VERSION_TAG" `
+            -D_IRIS_COMMIT="$COMMIT_HASH" `
+            -D_IRIS_BUILD_DATE="$BUILD_DATE" `
+            -D_IRIS_OSVERSION="$OS_INFO" `
             -I"$($IMGUI_DIR)" `
             -I"$($IMGUI_DIR)\backends" `
             -I"$($SDL2_DIR)\include" `
@@ -43,6 +56,10 @@ foreach ($SRC in $CXXSRC) {
         c++ -c $SRC -o $OBJ `
             -O3 -march=native -mtune=native -g `
             -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -Werror=implicit-fallthrough `
+            -D_IRIS_VERSION="$VERSION_TAG" `
+            -D_IRIS_COMMIT="$COMMIT_HASH" `
+            -D_IRIS_BUILD_DATE="$BUILD_DATE" `
+            -D_IRIS_OSVERSION="$OS_INFO" `
             -I"$($IMGUI_DIR)" `
             -I"$($IMGUI_DIR)\backends" `
             -I"$($SDL2_DIR)\include" `
@@ -59,9 +76,13 @@ $OBJS = ($CSRC -replace '.c$',".o")
 $OBJS += ($CXXSRC -replace '.cpp$',".o")
 
 c++ @OBJS main.cpp -o iris `
-    res/icon.res `
+    res/iris.res `
     -O3 -march=native -mtune=native -lcomdlg32 -lole32 -lSDL2main -lSDL2 -g `
     -Wall -mssse3 -msse4 -D_EE_USE_INTRINSICS -Wno-format -ldwmapi -luuid -Werror=implicit-fallthrough `
+    -D_IRIS_VERSION="$VERSION_TAG" `
+    -D_IRIS_COMMIT="$COMMIT_HASH" `
+    -D_IRIS_BUILD_DATE="$BUILD_DATE" `
+    -D_IRIS_OSVERSION="$OS_INFO" `
     -I"$($IMGUI_DIR)" `
     -I"$($IMGUI_DIR)\backends" `
     -I"$($SDL2_DIR)\include" `
