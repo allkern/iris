@@ -56,62 +56,50 @@ enum {
 #define UNPACK_V4_5  15
 
 struct ps2_vif {
-    uint32_t vif0_stat;
-    uint32_t vif0_fbrst;
-    uint32_t vif0_err;
-    uint32_t vif0_mark;
-    uint32_t vif0_cycle;
-    uint32_t vif0_mode;
-    uint32_t vif0_num;
-    uint32_t vif0_mask;
-    uint32_t vif0_code;
-    uint32_t vif0_itops;
-    uint32_t vif0_itop;
-    uint32_t vif0_r[4];
-    uint32_t vif0_c[4];
-    uint32_t vif1_stat;
-    uint32_t vif1_fbrst;
-    uint32_t vif1_err;
-    uint32_t vif1_mark;
-    uint32_t vif1_cycle;
-    uint32_t vif1_mode;
-    uint32_t vif1_num;
-    uint32_t vif1_mask;
-    uint32_t vif1_code;
-    uint32_t vif1_itops;
-    uint32_t vif1_base;
-    uint32_t vif1_ofst;
-    uint32_t vif1_tops;
-    uint32_t vif1_itop;
-    uint32_t vif1_top;
-    uint32_t vif1_r[4];
-    uint32_t vif1_c[4];
+    uint32_t stat;
+    uint32_t fbrst;
+    uint32_t err;
+    uint32_t mark;
+    uint32_t cycle;
+    uint32_t mode;
+    uint32_t num;
+    uint32_t mask;
+    uint32_t code;
+    uint32_t itops;
+    uint32_t base;
+    uint32_t ofst;
+    uint32_t tops;
+    uint32_t itop;
+    uint32_t top;
+    uint32_t r[4];
+    uint32_t c[4];
 
-    int vif0_state;
-    uint32_t vif0_cmd;
-    int vif0_pending_words;
-    int vif1_state;
-    uint32_t vif1_cmd;
-    int vif1_pending_words;
-    int vif1_shift;
-    int vif0_shift;
-    uint128_t vif1_data;
-    uint128_t vif0_data;
+    int state;
+    int pending_words;
+    int shift;
+    uint32_t cmd;
+    uint128_t data;
 
-    uint32_t vif1_addr;
-    uint32_t vif1_unpack_fmt;
-    uint32_t vif1_unpack_usn;
+    uint32_t addr;
+    uint32_t unpack_fmt;
+    uint32_t unpack_usn;
+    uint32_t unpack_cl;
+    uint32_t unpack_wl;
+    uint32_t unpack_skip;
+    uint32_t unpack_wl_count;
+    uint32_t unpack_buf[16];
 
-    struct vu_state* vu0;
-    struct vu_state* vu1;
+    int id;
 
+    struct vu_state* vu;
     struct sched_state* sched;
+    struct ps2_gif* gif;
     struct ps2_intc* intc;
     struct ee_bus* bus;
 };
 
 struct ps2_vif* ps2_vif_create(void);
-void ps2_vif_init(struct ps2_vif* vif, struct vu_state* vu0, struct vu_state* vu1, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus);
+void ps2_vif_init(struct ps2_vif* vif, int id, struct vu_state* vu, struct ps2_gif* gif, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus);
 void ps2_vif_destroy(struct ps2_vif* vif);
 uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr);
 void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data);

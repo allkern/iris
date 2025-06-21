@@ -22,7 +22,8 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->ee_bus = ee_bus_create();
     ps2->iop_bus = iop_bus_create();
     ps2->gif = ps2_gif_create();
-    ps2->vif = ps2_vif_create();
+    ps2->vif0 = ps2_vif_create();
+    ps2->vif1 = ps2_vif_create();
     ps2->gs = ps2_gs_create();
     ps2->ipu = ps2_ipu_create();
     ps2->ee_dma = ps2_dmac_create();
@@ -62,8 +63,8 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_data.udata = ps2->ee_bus;
 
     ee_init(ps2->ee, ps2->vu0, ps2->vu1, ee_bus_data);
-    vu_init(ps2->vu0, 0, ps2->gif, ps2->vif, ps2->vu1);
-    vu_init(ps2->vu1, 1, ps2->gif, ps2->vif, ps2->vu1);
+    vu_init(ps2->vu0, 0, ps2->gif, ps2->vif0, ps2->vu1);
+    vu_init(ps2->vu1, 1, ps2->gif, ps2->vif1, ps2->vu1);
 
     // Initialize IOP
     iop_bus_init(ps2->iop_bus, NULL);
@@ -80,10 +81,11 @@ void ps2_init(struct ps2_state* ps2) {
     iop_init(ps2->iop, iop_bus_data);
 
     // Initialize devices
-    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->ee_bus);
+    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->sched, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
     ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
-    ps2_vif_init(ps2->vif, ps2->vu0, ps2->vu1, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->ee_timers, ps2->iop_timers, ps2->sched);
     ps2_ipu_init(ps2->ipu, ps2->ee_dma, ps2->ee_intc);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
@@ -129,7 +131,8 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_intc(ps2->ee_bus, ps2->ee_intc);
     ee_bus_init_timers(ps2->ee_bus, ps2->ee_timers);
     ee_bus_init_gif(ps2->ee_bus, ps2->gif);
-    ee_bus_init_vif(ps2->ee_bus, ps2->vif);
+    ee_bus_init_vif0(ps2->ee_bus, ps2->vif0);
+    ee_bus_init_vif1(ps2->ee_bus, ps2->vif1);
     ee_bus_init_gs(ps2->ee_bus, ps2->gs);
     ee_bus_init_ipu(ps2->ee_bus, ps2->ipu);
     ee_bus_init_vu0(ps2->ee_bus, ps2->vu0);
@@ -185,12 +188,13 @@ void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
 void ps2_reset(struct ps2_state* ps2) {
     ee_reset(ps2->ee);
     iop_reset(ps2->iop);
-    vu_init(ps2->vu0, 0, ps2->gif, ps2->vif, ps2->vu1);
-    vu_init(ps2->vu1, 1, ps2->gif, ps2->vif, ps2->vu1);
+    vu_init(ps2->vu0, 0, ps2->gif, ps2->vif0, ps2->vu1);
+    vu_init(ps2->vu1, 1, ps2->gif, ps2->vif1, ps2->vu1);
 
-    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->ee_bus);
+    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->sched, ps2->ee_bus);
     ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
-    ps2_vif_init(ps2->vif, ps2->vu0, ps2->vu1, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
     ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->sched, ps2->iop_bus);
@@ -301,7 +305,8 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_gif_destroy(ps2->gif);
     ps2_gs_destroy(ps2->gs);
     ps2_ipu_destroy(ps2->ipu);
-    ps2_vif_destroy(ps2->vif);
+    ps2_vif_destroy(ps2->vif0);
+    ps2_vif_destroy(ps2->vif1);
     ps2_dmac_destroy(ps2->ee_dma);
     ps2_ram_destroy(ps2->ee_ram);
     ps2_intc_destroy(ps2->ee_intc);

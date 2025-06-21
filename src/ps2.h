@@ -54,7 +54,8 @@ struct ps2_state {
     // EE-only
     struct ee_bus* ee_bus;
     struct ps2_gif* gif;
-    struct ps2_vif* vif;
+    struct ps2_vif* vif0;
+    struct ps2_vif* vif1;
     struct ps2_gs* gs;
     struct ps2_ipu* ipu;
     struct ps2_dmac* ee_dma;

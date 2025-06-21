@@ -55,6 +55,8 @@ struct dmac_channel {
     uint32_t asr1;
     uint32_t sadr;
 
+    int dreq;
+
     struct dmac_tag tag;
 };
 
@@ -84,10 +86,11 @@ struct ps2_dmac {
     struct ps2_sif* sif;
     struct ps2_iop_dma* iop_dma;
     struct ee_state* ee;
+    struct sched_state* sched;
 };
 
 struct ps2_dmac* ps2_dmac_create(void);
-void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dma* iop_dma, struct ps2_ram* spr, struct ee_state* ee, struct ee_bus* bus);
+void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dma* iop_dma, struct ps2_ram* spr, struct ee_state* ee, struct sched_state* sched, struct ee_bus* bus);
 void ps2_dmac_destroy(struct ps2_dmac* dmac);
 uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr);
 uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr);
@@ -104,6 +107,9 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac);
 void dmac_handle_sif2_transfer(struct ps2_dmac* dmac);
 void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac);
 void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac);
+
+// IPU
+void dmac_transfer_ipu_to_qword(struct ps2_dmac* dmac);
 
 #ifdef __cplusplus
 }
