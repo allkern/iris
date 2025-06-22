@@ -139,15 +139,13 @@ jobs:
           # Mix in x86_64 files that do not appear in the ARM64 build (e.g. libvulkan)
           cp -v -R -n x86_64/iris.app/* iris.app/ || true
           codesign --force -s - -vvvv iris.app
-          mkdir dist -p
-          mv iris.app dist
       - name: Generate artifact name
         id: generate-name
         run: |
           echo "::set-output name=artifact::iris-${{ github.ref_name }}-macos"
       - name: Zip artifact
         run: |
-          zip -rj ${{ steps.generate-name.outputs.artifact }}.zip dist
+          zip -r ${{ steps.generate-name.outputs.artifact }}.zip iris.app
       - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
