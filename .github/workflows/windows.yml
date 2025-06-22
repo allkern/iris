@@ -25,7 +25,7 @@ jobs:
     - name: Generate artifact name
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}.${{ github.run_id }}-win"
+        echo "::set-output name=artifact::iris-${{ github.event.release.tag_name }}-win"
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
