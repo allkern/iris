@@ -1,0 +1,155 @@
+name: Release CI
+
+on:
+  push:
+    tags:
+    - '0.*'
+
+jobs:
+  windows-build:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+    - name: Run build-deps
+      run: ./build-deps.ps1
+    - name: Run build-win
+      run: |
+        ./build-win.ps1
+        New-Item -Path "dist" -ItemType Directory
+        Copy-Item -Path "iris.exe" "dist"
+        Copy-Item "SDL2-2.32.0/x86_64-w64-mingw32/bin/SDL2.dll" "dist"
+        Copy-Item "C:\mingw64\bin\*.dll" "dist"
+    - name: Generate artifact name
+      id: generate-name
+      run: |
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}-win"
+    - name: Zip artifact
+      run: |
+        $artifactName = "${{ steps.generate-name.outputs.artifact }}"
+        Compress-Archive -Path "dist" -DestinationPath "$artifactName.zip"
+    - name: Upload to release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ steps.generate-name.outputs.artifact }}.zip
+
+  ubuntu-build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+    - name: Install SDL2
+      run: |
+           sudo apt update
+           sudo apt install libsdl2-dev
+    - name: Build Iris
+      run: |
+           git fetch --all --tags
+           ./setup_gl3w.sh
+           make
+    - name: Pack executable
+      run: |
+           chmod +x ./bin/iris
+           mkdir dist
+           mv ./bin/iris ./dist
+    - name: Generate artifact name
+      id: generate-name
+      run: |
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}-ubuntu"
+    - name: Zip artifact
+      run: |
+        zip -r ${{ steps.generate-name.outputs.artifact }}.zip dist
+    - name: Upload to release
+      uses: softprops/action-gh-release@v1
+      with:
+        files: |
+          ${{ steps.generate-name.outputs.artifact }}.zip
+
+  macos-arm64-build:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+    - name: Install SDL2 and dylibbundler
+      run: |
+           brew install sdl2
+           brew install dylibbundler
+    - name: Build and pack Iris
+      run: |
+           git fetch --all --tags
+           ./build.sh
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-macos-arm64-latest
+        path: ./dist
+
+  macos-x86_64-build:
+    runs-on: macos-13
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+    - name: Install SDL2 and dylibbundler
+      run: |
+           brew install sdl2 dylibbundler
+    - name: Build and pack Iris
+      run: |
+           git fetch --all --tags
+           ./build.sh
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-macos-x86_64-latest
+        path: ./dist
+
+  macos-universal-build:
+    name: macos-universal
+    needs: [macos-x86_64-build,macos-arm64-build]
+    runs-on: macos-latest
+
+    steps:
+      - name: Download x86_64
+        uses: actions/download-artifact@v4
+        with:
+          name: iris-macos-x86_64-latest
+          path: x86_64
+      - name: Download ARM64
+        uses: actions/download-artifact@v4
+        with:
+          name: iris-macos-arm64-latest
+          path: arm64
+      - name: Combine app bundles
+        shell: bash
+        run: |
+          set -x
+          lipo {x86_64,arm64}/iris.app/Contents/MacOS/iris -create -output iris
+          cp -v -a arm64/iris.app iris.app
+          cp -v iris iris.app/Contents/MacOS/iris
+          # Mix in x86_64 files that do not appear in the ARM64 build (e.g. libvulkan)
+          cp -v -R -n x86_64/iris.app/* iris.app/ || true
+          codesign --force -s - -vvvv iris.app
+          mkdir dist -p
+          mv iris.app dist
+      - name: Generate artifact name
+        id: generate-name
+        run: |
+          echo "::set-output name=artifact::iris-${{ github.ref_name }}-macos"
+      - name: Zip artifact
+        run: |
+          zip -r ${{ steps.generate-name.outputs.artifact }}.zip dist
+      - name: Upload to release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            ${{ steps.generate-name.outputs.artifact }}.zip
