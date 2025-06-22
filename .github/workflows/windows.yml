@@ -22,7 +22,12 @@ jobs:
            Copy-Item -Path "iris.exe" "dist"
            Copy-Item "SDL2-2.32.0/x86_64-w64-mingw32/bin/SDL2.dll" "dist"
            Copy-Item "C:\mingw64\bin\*.dll" "dist"
-    - uses: actions/upload-artifact@v4
+    - name: Generate artifact name
+      id: generate-name
+      run: |
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}.${{ github.run_id }}-win"
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
       with:
-        name: iris-win-latest
+        name: ${{ steps.generate-name.outputs.artifact }}
         path: dist/
