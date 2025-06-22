@@ -122,7 +122,7 @@ This console is significantly more complex compared to the PS1, here's a rough l
 - 🟡 VU0
   = 🟡 Macro mode
   = 🟡 Micro mode
-  = 🔴 VIF0
+  = 🟡 VIF0
 - 🟡 VU1 (always micro mode)
   = 🟡 VIF1
 - 🟡 IPU
