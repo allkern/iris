@@ -19,7 +19,7 @@ Experimental Sony PlayStation 2 emulator and debugger
 
 ## Usage
 > [!WARNING]  
-> This emulator is under development, it can only run a very small number of commercial games
+> This emulator is under development, most games WILL run at very low/unplayable framerates.
 
 Iris has a graphical user interface and also supports launching from the command line:
 ```
@@ -75,6 +75,7 @@ cd iris
 ### macOS
 > [!WARNING]  
 > Iris should support macOS but hasn't been fully tested yet
+
 Building on macOS requires SDL2 and `dylibbundler`, you may install both using `brew` but keep in mind macOS builds aren't actively tested and may not work.
 ```
 git clone https://github.com/allkern/iris --recursive
