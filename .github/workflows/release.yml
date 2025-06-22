@@ -30,7 +30,7 @@ jobs:
     - name: Zip artifact
       run: |
         $artifactName = "${{ steps.generate-name.outputs.artifact }}"
-        Compress-Archive -Path "dist" -DestinationPath "$artifactName.zip"
+        Compress-Archive -Path "dist\*" -DestinationPath "$artifactName.zip"
     - name: Upload to release
       uses: softprops/action-gh-release@v1
       with:
@@ -65,7 +65,7 @@ jobs:
         echo "::set-output name=artifact::iris-${{ github.ref_name }}-ubuntu"
     - name: Zip artifact
       run: |
-        zip -r ${{ steps.generate-name.outputs.artifact }}.zip dist
+        zip -rj ${{ steps.generate-name.outputs.artifact }}.zip dist
     - name: Upload to release
       uses: softprops/action-gh-release@v1
       with:
@@ -147,7 +147,7 @@ jobs:
           echo "::set-output name=artifact::iris-${{ github.ref_name }}-macos"
       - name: Zip artifact
         run: |
-          zip -r ${{ steps.generate-name.outputs.artifact }}.zip dist
+          zip -rj ${{ steps.generate-name.outputs.artifact }}.zip dist
       - name: Upload to release
         uses: softprops/action-gh-release@v1
         with:
