@@ -652,7 +652,7 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
 
         // VIF1 registers
         case 0x10003c00: return vif->stat;
-        // case 0x10003c10: return vif->fbrst;
+        case 0x10003c10: return vif->fbrst;
         case 0x10003c20: return vif->err;
         case 0x10003c30: return vif->mark;
         case 0x10003c40: return vif->cycle;
@@ -680,7 +680,7 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
         case 0x10005000: // printf("vif%d: 32-bit FIFO read\n", vif->id); exit(1); break;
 
         default: {
-            // printf("vif%d: Unhandled 32-bit read to %08x\n", vif->id, addr);
+            printf("vif%d: Unhandled 32-bit read to %08x\n", vif->id, addr);
 
             exit(1);
         } break;
@@ -707,7 +707,7 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
         case 0x10005000: vif_handle_fifo_write(vif, data); break;
 
         default: {
-            // printf("vif%d: Unhandled 32-bit write to %08x\n", vif->id, addr);
+            printf("vif%d: Unhandled 32-bit write to %08x\n", vif->id, addr);
 
             exit(1);
         } break;
@@ -720,7 +720,7 @@ uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr) {
         case 0x10005000: // printf("vif%d: 128-bit FIFO read\n", vif->id); exit(1); break;
 
         default: {
-            // printf("vif%d: Unhandled 128-bit read to %08x\n", vif->id, addr);
+            printf("vif%d: Unhandled 128-bit read to %08x\n", vif->id, addr);
 
             exit(1);
         } break;
@@ -746,7 +746,7 @@ void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {
         } break;
 
         default: {
-            // printf("vif%d: Unhandled 128-bit write to %08x\n", vif->id, addr);
+            printf("vif%d: Unhandled 128-bit write to %08x\n", vif->id, addr);
 
             exit(1);
         } break;

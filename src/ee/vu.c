@@ -436,7 +436,22 @@ void vu_i_addai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addaq(struct vu_state* vu) { printf("vu: addaq unimplemented\n"); exit(1); }
+void vu_i_addaq(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float result = vu_vf_i(vu, s, i) + vu->q.f;
+
+            vu->acc.f[i] = vu_update_flags(vu, result, i);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    }
+
+    vu_update_status(vu);
+}
 void vu_i_addax(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -665,7 +680,22 @@ void vu_i_subai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subaq(struct vu_state* vu) { printf("vu: subaq unimplemented\n"); exit(1); }
+void vu_i_subaq(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float result = vu_vf_i(vu, s, i) - vu->q.f;
+
+            vu->acc.f[i] = vu_update_flags(vu, result, i);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    }
+
+    vu_update_status(vu);
+}
 void vu_i_subax(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -894,7 +924,22 @@ void vu_i_mulai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulaq(struct vu_state* vu) { printf("vu: mulaq unimplemented\n"); exit(1); }
+void vu_i_mulaq(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float result = vu_vf_i(vu, s, i) * vu->q.f;
+
+            vu->acc.f[i] = vu_update_flags(vu, result, i);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    }
+
+    vu_update_status(vu);
+}
 void vu_i_mulax(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1123,7 +1168,22 @@ void vu_i_maddai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddaq(struct vu_state* vu) { printf("vu: maddaq unimplemented\n"); exit(1); }
+void vu_i_maddaq(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float result = vu->acc.f[i] + vu_vf_i(vu, s, i) * vu->q.f;
+
+            vu->acc.f[i] = vu_update_flags(vu, result, i);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    }
+
+    vu_update_status(vu);
+}
 void vu_i_maddax(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1352,7 +1412,22 @@ void vu_i_msubai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubaq(struct vu_state* vu) { printf("vu: msubaq unimplemented\n"); exit(1); }
+void vu_i_msubaq(struct vu_state* vu) {
+    int s = VU_UD_S;
+    int t = VU_UD_T;
+
+    for (int i = 0; i < 4; i++) {
+        if (VU_UD_DI(i)) {
+            float result = vu->acc.f[i] - vu_vf_i(vu, s, i) * vu->q.f;
+
+            vu->acc.f[i] = vu_update_flags(vu, result, i);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    }
+
+    vu_update_status(vu);
+}
 void vu_i_msubax(struct vu_state* vu) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -2570,6 +2645,8 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
 
         vu->tpc = vu->next_tpc;
         vu->next_tpc = vu->tpc + 1;
+        vu->tpc &= 0x7ff;
+        vu->next_tpc &= 0x7ff;
 
         ds.addr = tpc;
 
