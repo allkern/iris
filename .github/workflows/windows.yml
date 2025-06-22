@@ -1,8 +1,7 @@
 name: Windows CI
 
 on:
-  push:
-    branches: [ "master" ]
+  release:
 
 jobs:
   build:
@@ -25,7 +24,7 @@ jobs:
     - name: Generate artifact name
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ env.GITHUB_REF_NAME }}-win"
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}-win"
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
