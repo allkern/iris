@@ -67,7 +67,7 @@ struct disc_state {
 
     uint64_t layer2_lba;
     int ext;
-    int pvd_cached, system_cnf_cached, root_cached;
+    int pvd_cached, system_cnf_cached, root_cached, boot_path_cached;
     char pvd[2048];
     char root[2048];
     char system_cnf[2048];
@@ -82,6 +82,7 @@ uint64_t disc_get_volume_lba(struct disc_state* disc, int vol);
 int disc_get_sector_size(struct disc_state* disc);
 char* disc_get_serial(struct disc_state* disc, char* buf);
 char* disc_get_boot_path(struct disc_state* disc);
+char* disc_read_boot_elf(struct disc_state* disc, char* buf, int size);
 void disc_close(struct disc_state* disc);
 
 #ifdef __cplusplus

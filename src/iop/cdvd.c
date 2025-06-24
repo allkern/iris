@@ -554,7 +554,7 @@ void cdvd_fetch_sector(struct ps2_cdvd* cdvd) {
 
             uint32_t lba, layer;
 
-            if (cdvd->layer2_lba) {
+            if (cdvd->layer2_lba && (cdvd->read_lba >= cdvd->layer2_lba)) {
                 layer = cdvd->read_lba >= cdvd->layer2_lba;
                 lba = cdvd->read_lba - cdvd->layer2_lba + 0x30000;
             } else {

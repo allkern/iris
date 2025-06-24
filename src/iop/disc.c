@@ -501,6 +501,9 @@ char* disc_get_serial(struct disc_state* disc, char* serial) {
 }
 
 char* disc_get_boot_path(struct disc_state* disc) {
+    if (disc->boot_path_cached)
+        return disc->boot_path;
+
     // No boot path
     if (!disc_fetch_system_cnf(disc))
         return NULL;
@@ -555,5 +558,92 @@ char* disc_get_boot_path(struct disc_state* disc) {
 
     printf("iso: Couldn't find BOOT2 entry in SYSTEM.CNF (PlayStation disc?)\n");
 
+    return NULL;
+}
+
+char* disc_read_boot_elf(struct disc_state* disc, char* buf, int s) {
+    char* boot_path = disc_get_boot_path(disc);
+
+    printf("iso: Reading boot ELF from disc at path \'%s\'...\n", boot_path);
+
+    if (!boot_path) {
+        printf("iso: No boot path found in SYSTEM.CNF\n");
+
+        return NULL;
+    }
+
+    if (!disc_fetch_root(disc)) {
+        printf("iso: Couldn't fetch root directory\n");
+
+        return NULL;
+    }
+
+    char path[256];
+
+    path[0] = '\0';
+
+    char* ptr = boot_path;
+
+    // Go to end of boot path
+    while (*ptr++);
+
+    // Reverse search for a path separator
+    while (*ptr != '/' && *ptr != '\\' && *ptr != ':') {
+        if (*ptr == boot_path)
+            break;
+
+        --ptr;
+    }
+
+    // Skip the path separator
+    ptr += 1;
+
+    // Copy the path to our buffer
+    int i;
+
+    for (i = 0; *ptr; i++) {
+        path[i] = *ptr++;
+    }
+
+    path[i] = '\0';
+
+    struct iso9660_dirent* dir = (struct iso9660_dirent*)disc->root;
+
+    while (dir->dr_len) {
+        if (!strncmp((char*)&dir->id, path, dir->id_len)) {
+            int32_t size = dir->size_le;
+            uint32_t lba = dir->lba_le;
+
+            char* ptr = buf;
+
+            printf("iso: Boot ELF found at lba=%08x size=%08x\n", lba, dir->size_le, dir->size_le);
+
+            while (size > 0) {
+                if (!disc_read_sector(disc, ptr, lba++, DISC_SS_DATA)) {
+                    printf("iso: Couldn't read boot ELF sector %d\n", lba - 1);
+
+                    return NULL;
+                }
+
+                ptr += 2048;
+                size -= 2048;
+            }
+
+            // Read the last sector, which might be smaller than 2048 bytes
+            if (!disc_read_sector(disc, ptr, lba, DISC_SS_DATA)) {
+                printf("iso: Couldn't read boot ELF sector %d\n", lba);
+
+                return NULL;
+            }
+
+            return buf;
+        }
+
+        uint8_t* ptr = (uint8_t*)dir;
+
+        dir = (struct iso9660_dirent*)(ptr + dir->dr_len);
+    }
+
+    // Couldn't find the boot ELF file in the root directory
     return NULL;
 }
