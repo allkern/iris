@@ -21,7 +21,7 @@ mkdir -p Iris.app/Contents/MacOS/Libraries
 mkdir Iris.app/Contents/Resources
 
 # Copy binary into App
-cp ./build/iris Iris.app/Contents/MacOS/iris
+cp ./bin/iris Iris.app/Contents/MacOS/iris
 chmod a+x Iris.app/Contents/Macos/iris
 
 # Copy icons into App
