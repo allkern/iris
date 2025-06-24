@@ -78,6 +78,11 @@ jobs:
         shell: bash
         run: |
           set -x
+          list x86_64
+          list arm64
+          list x86_64/Iris.app
+          list x86_64/Iris.app/Contents
+          list x86_64/Iris.app/Contents/MacOS
           lipo {x86_64,arm64}/Iris.app/Contents/MacOS/iris -create -output iris
           cp -v -a arm64/Iris.app Iris.app
           cp -v iris Iris.app/Contents/MacOS/iris
