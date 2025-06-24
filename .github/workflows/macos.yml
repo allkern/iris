@@ -13,14 +13,15 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Install SDL2 and dylibbundler
+    - name: Setup build
       run: |
-           brew install sdl2
-           brew install dylibbundler
+           brew install sdl2 dylibbundler imagemagick
+           ./setup_gl3w.sh
     - name: Build and pack Iris
       run: |
            git fetch --all --tags
-           ./build.sh
+           make USE_INTRINSICS=0 -j8
+           ./.github/app-bundle.sh
     - uses: actions/upload-artifact@v4
       with:
         name: iris-macos-arm64-latest
@@ -34,13 +35,15 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Install SDL2 and dylibbundler
+    - name: Setup build
       run: |
-           brew install sdl2 dylibbundler
+           brew install sdl2 dylibbundler imagemagick
+           ./setup_gl3w.sh
     - name: Build and pack Iris
       run: |
            git fetch --all --tags
-           ./build.sh
+           make USE_INTRINSICS=0 -j8
+           ./.github/app-bundle.sh
     - uses: actions/upload-artifact@v4
       with:
         name: iris-macos-x86_64-latest
@@ -62,6 +65,9 @@ jobs:
         with:
           name: iris-macos-arm64-latest
           path: arm64
+      - name: Setup dylibbundler and imagemagick
+        run: |
+          brew install dylibbundler imagemagick
       - name: Combine app bundles
         shell: bash
         run: |
