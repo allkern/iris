@@ -23,8 +23,10 @@ jobs:
            git fetch --all --tags
            make USE_INTRINSICS=0 -j8
            ./.github/app-bundle.sh
+           ls -l Iris.app
            mkdir -p dist
            cp -R Iris.app dist
+           ls -l dist
     - uses: actions/upload-artifact@v4
       with:
         name: iris-macos-arm64-latest
@@ -48,8 +50,10 @@ jobs:
            git fetch --all --tags
            make USE_INTRINSICS=0 -j8
            ./.github/app-bundle.sh
+           ls -l Iris.app
            mkdir -p dist
            cp -R Iris.app dist
+           ls -l dist
     - uses: actions/upload-artifact@v4
       with:
         name: iris-macos-x86_64-latest
