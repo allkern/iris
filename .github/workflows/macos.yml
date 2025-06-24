@@ -23,10 +23,8 @@ jobs:
            git fetch --all --tags
            make USE_INTRINSICS=0 -j8
            ./.github/app-bundle.sh
-           ls -l Iris.app
            mkdir -p dist
            cp -R Iris.app dist
-           ls -l dist
     - uses: actions/upload-artifact@v4
       with:
         name: iris-macos-arm64-latest
@@ -50,14 +48,12 @@ jobs:
            git fetch --all --tags
            make USE_INTRINSICS=0 -j8
            ./.github/app-bundle.sh
-           ls -l Iris.app
            mkdir -p dist
            cp -R Iris.app dist
-           ls -l dist
     - uses: actions/upload-artifact@v4
       with:
         name: iris-macos-x86_64-latest
-        path: ./Iris.app
+        path: ./dist
 
   macos-universal-build:
     name: macos-universal
@@ -82,7 +78,6 @@ jobs:
         shell: bash
         run: |
           set -x
-          ls -l .
           lipo {x86_64,arm64}/Iris.app/Contents/MacOS/iris -create -output iris
           cp -v -a arm64/Iris.app Iris.app
           cp -v iris Iris.app/Contents/MacOS/iris
