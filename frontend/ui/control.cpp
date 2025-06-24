@@ -120,18 +120,24 @@ static void show_ee_disassembly_view(iris::instance* iris) {
 
             TableSetColumnIndex(2);
 
+            for (elf_symbol& sym : iris->symbols) {
+                if (sym.addr == g_ee_dis_state.pc) {
+                    PushFont(iris->font_icons);
+                    TextColored(IM_RGB(211, 167, 30), ICON_MS_STAT_0); SameLine();
+                    PopFont();
+                    TextColored(IM_RGB(211, 167, 30), "%s", sym.name);
+
+                    break;
+                }
+            }
+
             uint32_t opcode = ee_bus_read32(iris->ps2->ee_bus, g_ee_dis_state.pc & 0x1fffffff);
 
-            char buf[128];
+            char buf[128], id[16];
 
             char addr_str[9]; sprintf(addr_str, "%08x", g_ee_dis_state.pc);
             char opcode_str[9]; sprintf(opcode_str, "%08x", opcode);
             char* disassembly = ee_disassemble(buf, opcode, &g_ee_dis_state);
-
-            Text("%s ", addr_str); SameLine();
-            TextDisabled("%s ", opcode_str); SameLine();
-
-            char id[16];
 
             sprintf(id, "##%d", row);
 
@@ -209,6 +215,9 @@ static void show_ee_disassembly_view(iris::instance* iris) {
                 PopFont();
                 EndPopup();
             }
+
+            Text("%s ", addr_str); SameLine();
+            TextDisabled("%s ", opcode_str); SameLine();
 
             if (true) {
                 print_highlighted(disassembly);
@@ -377,9 +386,36 @@ void show_ee_control(iris::instance* iris) {
             iris->pause = !iris->pause;
         } SameLine();
 
-        if (Button(ICON_MS_STEP)) {
+        if (Button(ICON_MS_STEP_INTO)) {
             iris->pause = true;
             iris->step = true;
+        } SameLine();
+
+        if (Button(ICON_MS_STEP_OVER)) {
+            iris->step_over = true;
+            iris->step_over_addr = iris->ps2->ee->pc + 4;
+            iris->pause = false;
+        } SameLine();
+
+        if (Button(ICON_MS_STEP_OUT)) {
+            iris->step_out = true;
+            iris->pause = false;
+        }
+
+        if (iris->symbols.size()) {
+            TextDisabled("Current function:"); SameLine();
+
+            const char* func = "<unknown>";
+
+            for (elf_symbol& sym : iris->symbols) {
+                if (iris->ps2->ee->pc >= sym.addr && iris->ps2->ee->pc < (sym.addr + sym.size)) {
+                    func = sym.name;
+
+                    break;
+                }
+            }
+
+            Text("%s", func);
         }
 
         SeparatorText("Disassembly");

@@ -8,6 +8,7 @@
 
 #include "iris.hpp"
 #include "platform.hpp"
+#include "elf.hpp"
 
 #include "ee/ee_dis.h"
 #include "iop/iop_dis.h"
@@ -102,6 +103,8 @@ int open_file(iris::instance* iris, std::string file) {
         if (!boot_file)
             return 2;
 
+        load_elf_symbols_from_disc(iris);
+
         // Temporarily disable window updates
         struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
 
@@ -115,6 +118,8 @@ int open_file(iris::instance* iris, std::string file) {
 
         return 0;
     }
+
+    load_elf_symbols_from_file(iris, file);
 
     // Note: We need the trailing whitespaces here because of IOMAN HLE
     // Load executable
@@ -146,7 +151,7 @@ void update_title(iris::instance* iris) {
         base = std::filesystem::path(iris->loaded).filename().string();
     }
 
-    sprintf(buf, base.size() ? "Iris (" STR(_IRIS_VERSION) " " STR(_IRIS_COMMIT) ") | %s" : "Iris (" STR(_IRIS_VERSION) " " STR(_IRIS_COMMIT) ")",
+    sprintf(buf, base.size() ? IRIS_TITLE " | %s" : IRIS_TITLE,
         base.c_str()
     );
 
@@ -193,7 +198,7 @@ void init(iris::instance* iris, int argc, const char* argv[]) {
     cli_check_for_help_version(iris, argc, argv);
 
     iris->window = SDL_CreateWindow(
-        "Iris (eegs " STR(_IRIS_VERSION) ")",
+        IRIS_TITLE,
         SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
         960, 720,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI
@@ -489,6 +494,24 @@ void update(iris::instance* iris) {
 
         ps2_cycle(iris->ps2);
 
+        if (iris->step_over) {
+            if (iris->ps2->ee->pc == iris->step_over_addr) {
+                iris->step_over = false;
+                iris->pause = true;
+            }
+        }
+
+        if (iris->step_out) {
+            // jr $ra
+            if (iris->ps2->ee->opcode == 0x03e00008) {
+                iris->step_out = false;
+                iris->pause = true;
+
+                // Consume the delay slot
+                ps2_cycle(iris->ps2);
+            }
+        }
+
         for (const breakpoint& b : iris->breakpoints) {
             if (b.cpu == BKPT_CPU_EE) {
                 if (iris->ps2->ee->pc == b.addr) {
@@ -501,6 +524,9 @@ void update(iris::instance* iris) {
             }
         }
     } else {
+        iris->step_out = false;
+        iris->step_over = false;
+
         if (iris->step) {
             ps2_cycle(iris->ps2);
 

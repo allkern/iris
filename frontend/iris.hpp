@@ -59,6 +59,12 @@ struct notification {
     std::string text;
 };
 
+struct elf_symbol {
+    char* name;
+    uint32_t addr;
+    uint32_t size;
+};
+
 struct instance {
     SDL_Window* window = nullptr;
     SDL_Renderer* renderer = nullptr;
@@ -116,6 +122,9 @@ struct instance {
     bool open = false;
     bool pause = true;
     bool step = false;
+    bool step_over = false;
+    bool step_out = false;
+    uint32_t step_over_addr = 0;
 
     bool show_ee_control = false;
     bool show_ee_state = false;
@@ -172,6 +181,10 @@ struct instance {
 
     struct ds_state* ds[2] = { nullptr };
     struct mcd_state* mcd[2] = { nullptr };
+
+    // Debug
+    std::vector <elf_symbol> symbols;
+    std::vector <uint8_t> strtab;
 };
 
 iris::instance* create();
