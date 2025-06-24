@@ -17,6 +17,7 @@ jobs:
       run: |
            brew install sdl2 dylibbundler imagemagick
            ./setup_gl3w.sh
+           chmod a+x ./.github/app-bundle.sh
     - name: Build and pack Iris
       run: |
            git fetch --all --tags
@@ -39,6 +40,7 @@ jobs:
       run: |
            brew install sdl2 dylibbundler imagemagick
            ./setup_gl3w.sh
+           chmod a+x ./.github/app-bundle.sh
     - name: Build and pack Iris
       run: |
            git fetch --all --tags
@@ -72,14 +74,14 @@ jobs:
         shell: bash
         run: |
           set -x
-          lipo {x86_64,arm64}/iris.app/Contents/MacOS/iris -create -output iris
-          cp -v -a arm64/iris.app iris.app
-          cp -v iris iris.app/Contents/MacOS/iris
+          lipo {x86_64,arm64}/Iris.app/Contents/MacOS/iris -create -output iris
+          cp -v -a arm64/Iris.app Iris.app
+          cp -v iris Iris.app/Contents/MacOS/iris
           # Mix in x86_64 files that do not appear in the ARM64 build (e.g. libvulkan)
-          cp -v -R -n x86_64/iris.app/* iris.app/ || true
-          codesign --force -s - -vvvv iris.app
+          cp -v -R -n x86_64/Iris.app/* Iris.app/ || true
+          codesign --force -s - -vvvv Iris.app
           mkdir dist -p
-          mv iris.app dist
+          mv Iris.app dist
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
