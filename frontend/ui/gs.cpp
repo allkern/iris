@@ -440,33 +440,12 @@ void show_gs_registers(iris::instance* iris) {
     } EndChild();
 }
 
-static GLuint tex = 0;
-
-void gen_texture(iris::instance* iris, int w, int h, GLint fmt, void* ptr) {
-    if (tex) {
-        glDeleteTextures(1, &tex);
-    }
-
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0, GL_RED, GL_FLOAT, ptr);
-}
-
 static uint32_t addr = 0, width = 0, height = 0;
 static float scale = 1.0f;
 
 const char* format_names[] = {
     "32-bit/24-bit",
     "16-bit"
-};
-
-GLuint format_enums[] = {
-    GL_UNSIGNED_BYTE,
-    GL_UNSIGNED_SHORT_1_5_5_5_REV
 };
 
 int format = 0;
@@ -529,22 +508,9 @@ void show_gs_memory(iris::instance* iris) {
         addr = strtoul(buf0, NULL, 16);
         width = strtoul(buf1, NULL, 0);
         height = strtoul(buf2, NULL, 0);
-
-        gen_texture(iris, width, height, format_enums[format], &gs->vram[addr]);
     }
 
-    if (tex) {
-        glBindTexture(GL_TEXTURE_2D, tex);
-        // GLint mask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, format_enums[format], &gs->vram[addr]);
-
-        Image((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
-    }
+    // Image((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
 }
 
 void show_gs_debugger(iris::instance* iris) {

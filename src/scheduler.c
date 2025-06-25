@@ -4,7 +4,7 @@
 #include <string.h>
 #include <stdio.h>
 
-#include "sched.h"
+#include "scheduler.h"
 
 struct sched_state* sched_create(void) {
     return malloc(sizeof(struct sched_state));

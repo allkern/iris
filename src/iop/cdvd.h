@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#include "sched.h"
+#include "scheduler.h"
 #include "dma.h"
 #include "disc.h"
 

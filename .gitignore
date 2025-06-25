@@ -1,5 +1,6 @@
 SDL2-2.32.0/
 .vscode/
+build/
 bin/
 tools/
 elf/

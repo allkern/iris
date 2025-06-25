@@ -29,13 +29,11 @@ const char* renderer_names[] = {
 
 const char* fullscreen_names[] = {
     "Windowed",
-    "Fullscreen (Desktop)",
     "Fullscreen"
 };
 
 int fullscreen_flags[] = {
     0,
-    SDL_WINDOW_FULLSCREEN_DESKTOP,
     SDL_WINDOW_FULLSCREEN
 };
 
@@ -275,7 +273,7 @@ void show_main_menubar(iris::instance* iris) {
                 }
 
                 if (BeginMenu("Window mode")) {
-                    for (int i = 0; i < 3; i++) {
+                    for (int i = 0; i < 2; i++) {
                         if (Selectable(fullscreen_names[i], iris->fullscreen == i)) {
                             iris->fullscreen = i;
 

@@ -1,6 +1,6 @@
 #include "../platform.hpp"
 
-#include "SDL_syswm.h"
+#include <SDL3/SDL_syswm.h>
 #include <dwmapi.h>
 
 namespace iris {

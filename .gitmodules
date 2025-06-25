@@ -2,9 +2,9 @@
 	path = imgui
 	url = https://github.com/ocornut/imgui
 	branch = docking
-[submodule "gl3w"]
-	path = gl3w
-	url = https://github.com/skaslev/gl3w
 [submodule "tomlplusplus"]
 	path = tomlplusplus
 	url = https://github.com/marzer/tomlplusplus
+[submodule "SDL"]
+	path = SDL
+	url = https://github.com/libsdl-org/SDL

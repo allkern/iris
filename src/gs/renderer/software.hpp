@@ -3,9 +3,7 @@
 #include <vector>
 #include <cstdio>
 
-#include <SDL.h>
-
-#include "GL/gl3w.h"
+#include <SDL3/SDL.h>
 
 #include "renderer.hpp"
 
@@ -34,23 +32,6 @@ struct software_state {
     bool integer_scaling = false;
     float scale = 1.5;
     bool bilinear = true;
-
-    GLuint vert_shader = 0;
-
-    std::vector <GLuint> programs;
-
-    GLuint default_program;
-
-    GLuint vao = 0;
-    GLuint vbo = 0;
-    GLuint ebo = 0;
-    GLuint tex = 0;
-    GLuint fbo = 0;
-    GLuint fb_vao = 0;
-    GLuint fb_vbo = 0;
-    GLuint fb_ebo = 0;
-    GLuint fb_in_tex = 0;
-    GLuint fb_out_tex = 0;
 
     unsigned int frame = 0;
 };

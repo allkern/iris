@@ -9,7 +9,7 @@ extern "C" {
 
 #include "queue.h"
 #include "intc.h"
-#include "sched.h"
+#include "scheduler.h"
 #include "dma.h"
 
 #define SIO2_DEV_PAD  0x01

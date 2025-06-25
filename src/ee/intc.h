@@ -9,7 +9,7 @@ extern "C" {
 
 #include "u128.h"
 #include "ee.h"
-#include "sched.h"
+#include "scheduler.h"
 
 #define EE_INTC_GS         0
 #define EE_INTC_SBUS       1

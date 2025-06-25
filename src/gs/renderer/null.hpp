@@ -3,9 +3,7 @@
 #include <vector>
 #include <cstdio>
 
-#include <SDL.h>
-
-#include "GL/gl3w.h"
+#include <SDL3/SDL.h>
 
 void null_init(void* ctx, struct ps2_gs* gs, SDL_Window* window);
 void null_destroy(void* ctx);

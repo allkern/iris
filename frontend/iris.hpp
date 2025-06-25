@@ -10,8 +10,7 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 
-#include <SDL.h>
-#include "GL/gl3w.h"
+#include <SDL3/SDL.h>
 
 #include "ps2.h"
 #include "gs/renderer/renderer.hpp"
@@ -67,6 +66,7 @@ struct elf_symbol {
 
 struct instance {
     SDL_Window* window = nullptr;
+    SDL_GPUDevice* gpu_device = nullptr;
     SDL_Renderer* renderer = nullptr;
     SDL_Texture* texture = nullptr;
     SDL_GLContext gl_context = nullptr;
@@ -90,10 +90,6 @@ struct instance {
     int ps1_memory_card_icon_height = 0;
     int pocketstation_icon_height = 0;
     int iris_icon_height = 0;
-    GLuint ps2_memory_card_icon_tex = 0;
-    GLuint ps1_memory_card_icon_tex = 0;
-    GLuint pocketstation_icon_tex = 0;
-    GLuint iris_icon_tex = 0;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
@@ -187,12 +183,6 @@ struct instance {
     std::vector <uint8_t> strtab;
 };
 
-iris::instance* create();
-void init(iris::instance* iris, int argc, const char* argv[]);
-void close(iris::instance* iris);
-void destroy(iris::instance* iris);
-bool is_open(iris::instance* iris);
-
 int init_audio(iris::instance* iris);
 int init_settings(iris::instance* iris, int argc, const char* argv[]);
 void cli_check_for_help_version(iris::instance* iris, int argc, const char* argv[]);
@@ -239,3 +229,9 @@ void add_recent(iris::instance* iris, std::string file);
 int open_file(iris::instance* iris, std::string file);
 
 }
+
+// SDL callbacks interface
+// SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv);
+// SDL_AppResult SDL_AppIterate(void *appstate);
+// SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event);
+// void SDL_AppQuit(void *appstate, SDL_AppResult result);

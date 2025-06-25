@@ -7,7 +7,7 @@ extern "C" {
 
 #include "ee/intc.h"
 #include "iop/intc.h"
-#include "sched.h"
+#include "scheduler.h"
 
 struct ps2_sbus {
     struct ps2_intc* ee_intc;

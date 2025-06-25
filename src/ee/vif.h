@@ -12,7 +12,7 @@ extern "C" {
 
 #include "ee/intc.h"
 #include "ee/vu.h"
-#include "sched.h"
+#include "scheduler.h"
 
 enum {
     VIF_IDLE,

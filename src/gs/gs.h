@@ -8,7 +8,7 @@ extern "C" {
 #include <stdint.h>
 
 #include "u128.h"
-#include "sched.h"
+#include "scheduler.h"
 #include "ee/timers.h"
 #include "iop/timers.h"
 

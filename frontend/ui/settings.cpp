@@ -32,12 +32,10 @@ const char* settings_aspect_mode_names[] = {
 const char* settings_fullscreen_names[] = {
     "Windowed",
     "Fullscreen (Desktop)",
-    "Fullscreen"
 };
 
 int settings_fullscreen_flags[] = {
     0,
-    SDL_WINDOW_FULLSCREEN_DESKTOP,
     SDL_WINDOW_FULLSCREEN
 };
 
@@ -140,7 +138,7 @@ void show_graphics_settings(iris::instance* iris) {
     Text("Window mode");
 
     if (BeginCombo("##windowmode", settings_fullscreen_names[iris->fullscreen])) {
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 2; i++) {
             if (Selectable(settings_fullscreen_names[i], iris->fullscreen == i)) {
                 iris->fullscreen = i;
 
@@ -273,17 +271,17 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         int icon_width = slot ? iris->pocketstation_icon_width : iris->ps1_memory_card_icon_width;
         int icon_height = slot ? iris->pocketstation_icon_height : iris->ps1_memory_card_icon_height;
-        int icon_tex = slot ? iris->pocketstation_icon_tex : iris->ps1_memory_card_icon_tex;
+        // int icon_tex = slot ? iris->pocketstation_icon_tex : iris->ps1_memory_card_icon_tex;
 
         SetCursorPosX((GetContentRegionAvail().x / 2.0) - (icon_width / 2.0));
 
-        Image(
-            icon_tex,
-            ImVec2(icon_width, icon_height),
-            ImVec2(0, 0), ImVec2(1, 1),
-            col,
-            ImVec4(0.0, 0.0, 0.0, 0.0)
-        );
+        // Image(
+        //     icon_tex,
+        //     ImVec2(icon_width, icon_height),
+        //     ImVec2(0, 0), ImVec2(1, 1),
+        //     col,
+        //     ImVec4(0.0, 0.0, 0.0, 0.0)
+        // );
 
         InvisibleButton("##pad", ImVec2(10, 10));
 

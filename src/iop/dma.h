@@ -13,7 +13,7 @@ extern "C" {
 
 #include "intc.h"
 #include "cdvd.h"
-#include "sched.h"
+#include "scheduler.h"
 #include "sio2.h"
 #include "spu2.h"
 

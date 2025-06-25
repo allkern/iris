@@ -37,7 +37,7 @@ extern "C" {
 #include "dev/ps1_mcd.h"
 #include "dev/mtap.h"
 
-#include "sched.h"
+#include "scheduler.h"
 
 struct ps2_elf_function {
     char* name;
