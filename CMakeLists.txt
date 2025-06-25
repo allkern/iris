@@ -30,7 +30,14 @@ message(STATUS "Project Version: ${GIT_VERSION_STRING}")
 # )
 
 add_subdirectory(tomlplusplus)
-add_executable(iris)
+
+set(MACOSX_BUNDLE_ICON_FILE iris.icns)
+
+# And this part tells CMake where to find and install the file itself
+set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
+set_source_files_properties(${OSX_ICON} PROPERTIES
+       MACOSX_PACKAGE_LOCATION "Resources")
+add_executable(iris ${OSX_ICON})
 
 set_property(TARGET iris PROPERTY CXX_STANDARD 20)
 add_definitions("-D_IRIS_VERSION=${GIT_VERSION_STRING}")
@@ -139,3 +146,45 @@ target_link_libraries(iris PUBLIC
   tomlplusplus::tomlplusplus
   SDL3::SDL3
 )
+
+set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
+set_target_properties(iris PROPERTIES 
+    # On macOS, make a proper .app bundle instead of a bare executable
+    MACOSX_BUNDLE TRUE
+    # Set the Info.plist file for Apple Mobile platforms. Without this file, your app
+    # will not launch. 
+    MACOSX_BUNDLE_INFO_PLIST "${CMAKE_CURRENT_SOURCE_DIR}/Info.plist"
+    MACOSX_BUNDLE_ICON_FILE iris.icns
+
+    # in Xcode, create a Scheme in the schemes dropdown for the app.
+    XCODE_GENERATE_SCHEME TRUE
+    # Identification for Xcode
+    XCODE_ATTRIBUTE_BUNDLE_IDENTIFIER "com.allkern.iris"
+    XCODE_ATTRIBUTE_PRODUCT_BUNDLE_IDENTIFIER "com.allkern.iris"
+    XCODE_ATTRIBUTE_CURRENTYEAR "${CURRENTYEAR}"
+    RESOURCE "${RESOURCE_FILES}"
+)
+
+# on Visual Studio, set our app as the default project
+set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "${EXECUTABLE_NAME}")
+
+# On macOS Platforms, ensure that the bundle is valid for distribution by calling fixup_bundle.
+# note that fixup_bundle does not work on iOS, so you will want to use static libraries 
+# or manually copy dylibs and set rpaths
+if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    # tell Install about the target, otherwise fixup won't know about the transitive dependencies
+    install(TARGETS iris
+    	BUNDLE DESTINATION ./install COMPONENT Runtime
+   	    RUNTIME DESTINATION ./install/bin COMPONENT Runtime
+    )
+	
+    set(DEP_DIR "${CMAKE_BINARY_DIR}")  # where to look for dependencies when fixing up
+    INSTALL(CODE 
+        "include(BundleUtilities)
+        fixup_bundle(\"$<TARGET_BUNDLE_DIR:iris>\" \"\" \"${DEP_DIR}\")
+        " 
+    )
+    set(CPACK_GENERATOR "DragNDrop")
+    include(CPack)
+endif()
