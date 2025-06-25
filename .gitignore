@@ -20,3 +20,4 @@ imgui.ini
 *.mec
 *.nvm
 *.o
+.DS_Store
