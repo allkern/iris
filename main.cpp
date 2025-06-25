@@ -123,36 +123,34 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     ImGui_ImplSDLGPU3_Init(&init_info);
 
     // Init fonts
-    // io.Fonts->AddFontDefault();
+    io.Fonts->AddFontDefault();
 
-    // ImFontConfig config;
-    // config.MergeMode = true;
-    // config.GlyphMinAdvanceX = 13.0f;
-    // config.GlyphOffset = ImVec2(0.0f, 4.0f);
-    // config.FontDataOwnedByAtlas = false;
+    ImFontConfig config;
+    config.MergeMode = true;
+    config.GlyphMinAdvanceX = 13.0f;
+    config.GlyphOffset = ImVec2(0.0f, 4.0f);
+    config.FontDataOwnedByAtlas = false;
 
-    // ImFontConfig config_no_own;
-    // config_no_own.FontDataOwnedByAtlas = false;
+    ImFontConfig config_no_own;
+    config_no_own.FontDataOwnedByAtlas = false;
 
-    // printf("iris: Initializing fonts\n");
+    iris->font_small_code = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 12.0F, &config_no_own);
+    iris->font_code       = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 16.0F, &config_no_own);
+    iris->font_small      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 12.0F, &config_no_own);
+    iris->font_heading    = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 20.0F, &config_no_own);
+    iris->font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 16.0F, &config_no_own);
+    iris->font_icons      = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 20.0F, &config, g_icon_range);
+    iris->font_icons_big  = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 50.0F, &config_no_own, g_icon_range);
 
-    // iris->font_small_code = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 12.0F, &config_no_own);
-    // iris->font_code       = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 16.0F, &config_no_own);
-    // iris->font_small      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 12.0F, &config_no_own);
-    // iris->font_heading    = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 20.0F, &config_no_own);
-    // iris->font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 16.0F, &config_no_own);
-    // iris->font_icons      = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 20.0F, &config, g_icon_range);
-    // iris->font_icons_big  = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 50.0F, &config_no_own, g_icon_range);
+    IM_ASSERT(iris->font_small_code != nullptr);
+    IM_ASSERT(iris->font_code != nullptr);
+    IM_ASSERT(iris->font_small != nullptr);
+    IM_ASSERT(iris->font_heading != nullptr);
+    IM_ASSERT(iris->font_body != nullptr);
+    IM_ASSERT(iris->font_icons != nullptr);
+    IM_ASSERT(iris->font_icons_big != nullptr);
 
-    // IM_ASSERT(iris->font_small_code != nullptr);
-    // IM_ASSERT(iris->font_code != nullptr);
-    // IM_ASSERT(iris->font_small != nullptr);
-    // IM_ASSERT(iris->font_heading != nullptr);
-    // IM_ASSERT(iris->font_body != nullptr);
-    // IM_ASSERT(iris->font_icons != nullptr);
-    // IM_ASSERT(iris->font_icons_big != nullptr);
-
-    // io.FontDefault = iris->font_body;
+    io.FontDefault = iris->font_body;
 
     // Init backends
     init_platform(iris);
