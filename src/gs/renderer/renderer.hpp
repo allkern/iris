@@ -31,7 +31,7 @@ struct renderer_state {
     struct ps2_gs* gs = nullptr;
     void* udata = nullptr;
 
-    void (*init)(void*, struct ps2_gs*, SDL_Window*) = nullptr;
+    void (*init)(void*, struct ps2_gs*, SDL_Window*, SDL_GPUDevice*) = nullptr;
     void (*destroy)(void*) = nullptr;
     void (*set_size)(void*, int, int) = nullptr;
     void (*set_scale)(void*, float) = nullptr;
@@ -43,15 +43,21 @@ struct renderer_state {
     void (*get_display_format)(void*, int*) = nullptr;
     void (*get_interlace_mode)(void*, int*) = nullptr;
     void (*set_window_rect)(void*, int, int, int, int) = nullptr;
+    void (*set_render_context)(void*, SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
     void* (*get_buffer_data)(void*, int*, int*, int*) = nullptr;
     const char* (*get_name)(void*) = nullptr;
+
+    // Rendering interface
+    void (*begin_render)(void*, SDL_GPUCommandBuffer*);
+    void (*render)(void*, SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
+    void (*end_render)(void*, SDL_GPUCommandBuffer*);
 };
 
 renderer_state* renderer_create(void);
-void renderer_init_null(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window);
-void renderer_init_software(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window);
-void renderer_init_software_thread(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window);
-void renderer_init_backend(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window, int id);
+void renderer_init_null(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device);
+void renderer_init_software(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device);
+void renderer_init_software_thread(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device);
+void renderer_init_backend(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device, int id);
 void renderer_set_size(renderer_state* renderer, int w, int h);
 void renderer_set_scale(renderer_state* renderer, float scale);
 void renderer_set_aspect_mode(renderer_state* renderer, int mode);
@@ -64,5 +70,8 @@ void renderer_get_interlace_mode(renderer_state* renderer, int* mode);
 void renderer_set_window_rect(renderer_state* renderer, int x, int y, int w, int h);
 void* renderer_get_buffer_data(renderer_state* renderer, int* w, int* h, int* bpp);
 const char* renderer_get_name(renderer_state* renderer);
-void renderer_render(renderer_state* renderer);
 void renderer_destroy(renderer_state* renderer);
+
+void renderer_begin_render(renderer_state* renderer, SDL_GPUCommandBuffer* command_buffer);
+void renderer_render(renderer_state* renderer, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass);
+void renderer_end_render(renderer_state* renderer, SDL_GPUCommandBuffer* command_buffer);

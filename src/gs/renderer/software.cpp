@@ -1030,10 +1030,11 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | (d & 0xff000000);
 }
 
-void software_init(void* udata, struct ps2_gs* gs, SDL_Window* window) {
+void software_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device) {
     software_state* ctx = (software_state*)udata;
 
     ctx->window = window;
+    ctx->gpu_device = device;
     ctx->gs = gs;
     ctx->scale = 1.5f;
 }

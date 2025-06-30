@@ -118,8 +118,8 @@ extern "C" {
 // EE clock: 294.912 MHz, 294912000 clocks/s
 // 294912000/60=4915200 clocks/frame
 
-#define GS_FRAME_NTSC (240 * 9370)
-#define GS_VBLANK_NTSC (22 * 9370)
+#define GS_FRAME_NTSC 4497600 // (240 * 9370)
+#define GS_VBLANK_NTSC 417600 // (22 * 9370)
 #define GS_FRAME_PAL (286 * 9476)
 #define GS_VBLANK_PAL (26 * 9476)
 
@@ -130,7 +130,6 @@ struct gs_renderer {
     void (*render_line)(struct ps2_gs*, void*);
     void (*render_triangle)(struct ps2_gs*, void*);
     void (*render_sprite)(struct ps2_gs*, void*);
-    void (*render)(struct ps2_gs*, void*);
     void (*transfer_start)(struct ps2_gs*, void*);
     void (*transfer_write)(struct ps2_gs*, void*);
     void (*transfer_read)(struct ps2_gs*, void*);
@@ -262,6 +261,8 @@ struct ps2_gs {
 
     uint32_t* vram;
 
+    int vblank;
+
     // 1KB CLUT cache
     uint32_t clut_cache[0x100];
     uint32_t cbp0;
@@ -378,6 +379,7 @@ uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg);
 void ps2_gs_init_callback(struct ps2_gs* gs, int event, void (*func)(void*), void* udata);
 struct gs_callback* ps2_gs_get_callback(struct ps2_gs* gs, int event);
 void ps2_gs_remove_callback(struct ps2_gs* gs, int event);
+int ps2_gs_is_vblank(struct ps2_gs* gs);
 
 void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard);
 

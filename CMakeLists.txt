@@ -1,5 +1,14 @@
 cmake_minimum_required(VERSION 3.16...4.0)
 
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+    set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
+    set_source_files_properties(${OSX_ICON} PROPERTIES
+        MACOSX_PACKAGE_LOCATION "Resources")
+else()
+    set(OSX_ICON "")
+endif()
+
 project(iris LANGUAGES C CXX)
 
 find_package(Git QUIET)
@@ -34,9 +43,6 @@ add_subdirectory(tomlplusplus)
 set(MACOSX_BUNDLE_ICON_FILE iris.icns)
 
 # And this part tells CMake where to find and install the file itself
-set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
-set_source_files_properties(${OSX_ICON} PROPERTIES
-       MACOSX_PACKAGE_LOCATION "Resources")
 add_executable(iris ${OSX_ICON})
 
 set_property(TARGET iris PROPERTY CXX_STANDARD 20)
@@ -141,7 +147,16 @@ target_sources(iris PRIVATE
 
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
-target_include_directories(iris PRIVATE imgui imgui/backends frontend src res SDL/include)
+target_include_directories(iris PRIVATE
+    imgui
+    imgui/backends
+    SDL/include
+    frontend
+    incbin
+    src
+    res
+)
+
 target_link_libraries(iris PUBLIC
   tomlplusplus::tomlplusplus
   SDL3::SDL3
@@ -172,7 +187,7 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "
 # On macOS Platforms, ensure that the bundle is valid for distribution by calling fixup_bundle.
 # note that fixup_bundle does not work on iOS, so you will want to use static libraries 
 # or manually copy dylibs and set rpaths
-if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
+if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     # tell Install about the target, otherwise fixup won't know about the transitive dependencies
     install(TARGETS iris
     	BUNDLE DESTINATION ./install COMPONENT Runtime
@@ -187,4 +202,19 @@ if(CMAKE_SYSTEM_NAME MATCHES "Darwin")
     )
     set(CPACK_GENERATOR "DragNDrop")
     include(CPack)
+endif()
+
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    install(CODE
+        "include(${CMAKE_CURRENT_SOURCE_DIR}/AppImage.cmake)
+        make_appimage(
+            EXE \"${CMAKE_CURRENT_SOURCE_DIR}/build/iris\"
+            NAME \"Iris\"
+            ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
+            DIR_ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
+            OUTPUT_NAME \"${CMAKE_CURRENT_SOURCE_DIR}/build/Iris-${GIT_VERSION_STRING}.AppImage\"
+        )
+        "
+        COMPONENT Runtime
+    )
 endif()

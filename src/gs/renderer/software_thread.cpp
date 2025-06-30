@@ -6,6 +6,18 @@
 #include "gs/gs.h"
 #include "software_thread.hpp"
 
+// INCBIN stuff
+#define INCBIN_PREFIX g_
+#define INCBIN_STYLE INCBIN_STYLE_SNAKE
+
+#include "incbin.h"
+
+INCBIN(vertex_spv, "../shaders/vertex.spv");
+INCBIN(fragment_spv, "../shaders/fragment.spv");
+
+INCBIN_EXTERN(vertex_spv);
+INCBIN_EXTERN(fragment_spv);
+
 #include <SDL3/SDL.h>
 
 int psmct32_block[] = {
@@ -301,42 +313,6 @@ static inline int psmt4_addr(int base, int width, int x, int y) {
     return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
 }
 
-static const char* default_vert_shader =
-    "#version 330 core\n"
-    "layout (location = 0) in vec3 pos;\n"
-    "layout (location = 1) in vec2 uv;\n"
-    "uniform vec2 screen_size;\n"
-    "out vec2 FragCoord;\n"
-    "out vec2 FragTexCoord;\n"
-    "void main() {\n"
-    "    FragCoord = (pos.xy + 1.0) / 2.0;\n"
-    "    FragTexCoord = uv;\n"
-    "    FragCoord.y = 1.0 - FragCoord.y;\n"
-    "    gl_Position = vec4(pos.xy, 0.0, 1.0);\n"
-    "}";
-
-static const char* default_frag_shader =
-    "#version 330 core\n"
-    "in vec2 FragCoord;\n"
-    "in vec2 FragTexCoord;\n"
-    "out vec4 FragColor;\n"
-    "uniform sampler2D input_texture;\n"
-    "uniform vec2 screen_size;\n"
-    "uniform int frame;\n"
-    "void main() {\n"
-    "    vec2 uv = vec2(FragTexCoord.x, 1.0 - FragTexCoord.y);\n"
-    "    FragColor = texture(input_texture, uv);\n"
-    "}";
-
-static const char* frag_header =
-    "#version 330 core\n"
-    "in vec2 FragCoord;\n"
-    "in vec2 FragTexCoord;\n"
-    "out vec4 FragColor;\n"
-    "uniform sampler2D input_texture;\n"
-    "uniform vec2 screen_size;\n"
-    "uniform int frame;\n";
-
 static const int psmt8_clut_block[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -433,6 +409,16 @@ void software_thread_destroy(void* udata) {
     if (ctx->buf)
         free(ctx->buf);
 
+    // release buffers
+    SDL_ReleaseGPUBuffer(ctx->device, ctx->vertex_buffer);
+    SDL_ReleaseGPUBuffer(ctx->device, ctx->index_buffer);
+    SDL_ReleaseGPUSampler(ctx->device, ctx->sampler);
+
+    if (ctx->texture) SDL_ReleaseGPUTexture(ctx->device, ctx->texture);
+    
+    // release the pipeline
+    SDL_ReleaseGPUGraphicsPipeline(ctx->device, ctx->pipeline);
+
     // Should call destructors for our mutex, thread and queue
     delete ctx;
 }
@@ -443,7 +429,7 @@ void software_thread_set_size(void* udata, int width, int height) {
     int en1 = ctx->gs->pmode & 1;
     int en2 = (ctx->gs->pmode >> 1) & 1;
 
-    uint64_t display, dispfb;
+    uint64_t display = 0, dispfb = 0;
 
     if (en1) {
         display = ctx->gs->display1;
@@ -491,6 +477,44 @@ void software_thread_set_size(void* udata, int width, int height) {
     if (ctx->buf) free(ctx->buf);
 
     ctx->buf = (uint32_t*)malloc((ctx->tex_w * sizeof(uint32_t)) * ctx->tex_h);
+
+    SDL_GPUTextureFormat fmt;
+
+    switch (ctx->disp_fmt) {
+        case GS_PSMCT32:
+        case GS_PSMCT24: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+        } break;
+
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B5G5R5A1_UNORM;
+        } break;
+
+        default: {
+            printf("gsr: Unknown framebuffer format %02x\n", ctx->disp_fmt);
+
+            exit(1);
+        } break;
+    }
+
+    if (ctx->texture) {
+        SDL_ReleaseGPUTexture(ctx->device, ctx->texture);
+    }
+
+    // Create a texture to send in our frame data
+    SDL_GPUTextureCreateInfo tci = {
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = fmt,
+        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        .width = tex_w,
+        .height = tex_h,
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
+        .sample_count = SDL_GPU_SAMPLECOUNT_1,
+    };
+
+    ctx->texture = SDL_CreateGPUTexture(ctx->device, &tci);
 }
 
 void software_thread_set_scale(void* udata, float scale) {
@@ -1375,16 +1399,116 @@ static inline void gs_draw_pixel(struct ps2_gs* gs, int x, int y, uint32_t z, ui
     }
 }
 
-void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window) {
+void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
     ctx->window = window;
+    ctx->device = device;
     ctx->gs = gs;
     ctx->scale = 1.5f;
 
     ctx->end_signal = false;
     ctx->render_thr = std::thread(software_thread_render_thread, ctx);
     ctx->render_thr.detach();
+    
+    // create the vertex shader
+    SDL_GPUShaderCreateInfo vsci = {
+        .code_size = g_vertex_spv_size,
+        .code = g_vertex_spv_data,
+        .entrypoint = "main",
+        .format = SDL_GPU_SHADERFORMAT_SPIRV,
+        .stage = SDL_GPU_SHADERSTAGE_VERTEX,
+        .num_samplers = 0,
+        .num_storage_textures = 0,
+        .num_storage_buffers = 0,
+        .num_uniform_buffers = 0,
+    };
+
+    SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(device, &vsci);
+
+    // create the fragment shader
+    SDL_GPUShaderCreateInfo fsci = {
+        .code_size = g_fragment_spv_size,
+        .code = g_fragment_spv_data,
+        .entrypoint = "main",
+        .format = SDL_GPU_SHADERFORMAT_SPIRV,
+        .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+        .num_samplers = 1,
+        .num_storage_textures = 0,
+        .num_storage_buffers = 0,
+        .num_uniform_buffers = 0,
+    };
+
+    SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(device, &fsci);
+
+    // Create graphics pipeline
+    SDL_GPUGraphicsPipelineCreateInfo gpci = {
+        .vertex_shader = vertex_shader,
+        .fragment_shader = fragment_shader,
+        .vertex_input_state = {
+            .vertex_buffer_descriptions = (SDL_GPUVertexBufferDescription[]) {{
+                .slot = 0,
+                .pitch = sizeof(gpu_vertex),
+                .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+                .instance_step_rate = 0,
+            }},
+            .num_vertex_buffers = 1,
+            .vertex_attributes = (SDL_GPUVertexAttribute[]) {{
+                .location = 0,
+                .buffer_slot = 0,
+                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                .offset = 0
+            }, {
+                .location = 1,
+                .buffer_slot = 0,
+                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+                .offset = sizeof(float) * 2
+            }},
+            .num_vertex_attributes = 2,
+        },
+        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+        .target_info = {
+            .color_target_descriptions = (SDL_GPUColorTargetDescription[]) {{
+                .format = SDL_GetGPUSwapchainTextureFormat(device, window)
+            }},
+            .num_color_targets = 1,
+        },
+    };
+
+    ctx->pipeline = SDL_CreateGPUGraphicsPipeline(device, &gpci);
+
+    SDL_assert(ctx->pipeline);
+
+    // we don't need to store the shaders after creating the pipeline
+    SDL_ReleaseGPUShader(device, vertex_shader);
+    SDL_ReleaseGPUShader(device, fragment_shader);
+
+    // create the vertex and index buffers
+    SDL_GPUBufferCreateInfo vbci = {
+        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+        .size = sizeof(gpu_vertex) * 4
+    };
+
+    ctx->vertex_buffer = SDL_CreateGPUBuffer(device, &vbci);
+
+    // We're sending two triangles to make a single quad so we need 6 indices
+    SDL_GPUBufferCreateInfo ibci = {
+        .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+        .size = sizeof(Uint16) * 6
+    };
+
+    ctx->index_buffer = SDL_CreateGPUBuffer(device, &ibci);
+
+    SDL_GPUSamplerCreateInfo sci = {
+		.min_filter = ctx->bilinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST,
+		.mag_filter = ctx->bilinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST,
+		.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+		.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+		.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+		.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+    };
+
+    ctx->sampler = SDL_CreateGPUSampler(ctx->device, &sci);
 }
 
 static inline void software_thread_vram_blit(struct ps2_gs* gs, software_thread_state* ctx) {
@@ -1911,140 +2035,6 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     // gs_draw_wireframe(gs, dv3, dv0);
 }
 
-void render(struct ps2_gs* gs, void* udata) {
-    software_thread_state* ctx = (software_thread_state*)udata;
-
-    int en1 = ctx->gs->pmode & 1;
-    int en2 = (ctx->gs->pmode >> 1) & 1;
-
-    uint32_t dfbp = 0;
-    int dfb = 0;
-
-    if (en1) {
-        dfb = 0;
-        dfbp = ctx->gs->dispfb1;
-    } else if (en2) {
-        dfb = 1;
-        dfbp = ctx->gs->dispfb2;
-    }
-
-    uint32_t* ptr = &gs->vram[dfbp];
-
-    // printf("fbp=%x fbw=%d fbpsm=%d stride=%d dy=%d\n", dfbp, dfbw, dfbpsm, stride, dy);
-
-    if (!ctx->tex_w)
-        return;
-
-    if ((ctx->gs->smode2 & 3) == 3) {
-        // Need to deinterlace
-        int bpp = 0;
-        int odd = ((ctx->gs->csr >> 13) & 1) == 0;
-
-        switch (ctx->disp_fmt) {
-            case GS_PSMCT32:
-            case GS_PSMCT24: {
-                bpp = 4;
-
-                for (int y = 0; y < ctx->tex_h / 2; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint32_t* dst = ctx->buf + x + (((y * 2) + odd) * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-            case GS_PSMCT16:
-            case GS_PSMCT16S: {
-                for (int y = 0; y < ctx->tex_h / 2; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (((y * 2) + odd) * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-        }
-    } else {
-        switch (ctx->disp_fmt) {
-            case GS_PSMCT32:
-            case GS_PSMCT24: {
-                for (int y = 0; y < ctx->tex_h; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint32_t* dst = ctx->buf + x + (y * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-            case GS_PSMCT16:
-            case GS_PSMCT16S: {
-                for (int y = 0; y < ctx->tex_h; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (y * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-        }
-    }
-
-    ptr = ctx->buf;
-
-    SDL_Rect size, rect;
-
-    rect.w = ctx->tex_w;
-    rect.h = ctx->tex_h;
-
-    SDL_GetWindowSize(ctx->window, &size.w, &size.h);
-
-    float scale = ctx->integer_scaling ? floorf(ctx->scale) : ctx->scale;
-
-    switch (ctx->aspect_mode) {
-        case RENDERER_ASPECT_NATIVE: {
-            rect.w *= scale;
-            rect.h *= scale;
-        } break;
-
-        case RENDERER_ASPECT_4_3: {
-            rect.w *= scale;
-            rect.h = (float)rect.w * (3.0f / 4.0f);
-        } break;
-
-        case RENDERER_ASPECT_16_9: {
-            rect.w *= scale;
-            rect.h = (float)rect.w * (9.0f / 16.0f);
-        } break;
-
-        case RENDERER_ASPECT_5_4: {
-            rect.w *= scale;
-            rect.h = (float)rect.w * (4.0f / 5.0f);
-        } break;
-
-        case RENDERER_ASPECT_STRETCH: {
-            rect.w = size.w;
-            rect.h = size.h;
-        } break;
-
-        case RENDERER_ASPECT_AUTO:
-        case RENDERER_ASPECT_STRETCH_KEEP: {
-            rect.h = size.h;
-            rect.w = (float)rect.h * (4.0f / 3.0f);
-        } break;
-    }
-
-    ctx->disp_w = rect.w;
-    ctx->disp_h = rect.h;
-
-    rect.x = (size.w / 2) - (rect.w / 2);
-    rect.y = (size.h / 2) - (rect.h / 2);
-
-    float x0 = (rect.x / ((float)size.w / 2.0f)) - 1.0f;
-    float y0 = (rect.y / ((float)size.h / 2.0f)) - 1.0f;
-    float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;
-    float y1 = ((rect.y + rect.h) / ((float)size.h / 2.0f)) - 1.0f;
-}
-
 static inline int gs_pixels_to_size(int fmt, int px) {
     switch (fmt) {
         case GS_PSMCT32:
@@ -2453,29 +2443,6 @@ extern "C" void software_thread_render_sprite(struct ps2_gs* gs, void* udata) {
     ctx->queue_mtx.unlock();
 }
 
-extern "C" void software_thread_render(struct ps2_gs* gs, void* udata) {
-    software_thread_state* ctx = (software_thread_state*)udata;
-
-    // Block until queue is empty
-    while (true) {
-        ctx->queue_mtx.lock();
-
-        if (ctx->render_queue.empty()) {
-            ctx->queue_mtx.unlock();
-
-            break;
-        }
-
-        ctx->queue_mtx.unlock();
-    }
-
-    ctx->render_mtx.lock();
-
-    render(gs, ctx);
-
-    ctx->render_mtx.unlock();
-}
-
 extern "C" void software_thread_transfer_start(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
@@ -2539,4 +2506,295 @@ extern "C" void software_thread_transfer_read(struct ps2_gs* gs, void* udata) {
     transfer_read(gs, ctx);
 
     ctx->render_mtx.unlock();
+}
+
+// This starts a copy pass and transfers our vertex/index buffers and our
+// display frame
+void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    // Block until queue is empty
+    while (true) {
+        ctx->queue_mtx.lock();
+
+        if (ctx->render_queue.empty()) {
+            ctx->queue_mtx.unlock();
+
+            break;
+        }
+
+        ctx->queue_mtx.unlock();
+    }
+
+    int en1 = ctx->gs->pmode & 1;
+    int en2 = (ctx->gs->pmode >> 1) & 1;
+
+    uint32_t dfbp = 0;
+    int dfb = 0;
+
+    if (en1) {
+        dfb = 0;
+        dfbp = ctx->gs->dispfb1;
+    } else if (en2) {
+        dfb = 1;
+        dfbp = ctx->gs->dispfb2;
+    }
+
+    uint32_t* ptr = &ctx->gs->vram[dfbp];
+
+    // printf("fbp=%x\n", dfbp);
+
+    if (!ctx->tex_w) {
+        return;
+    }
+
+    if ((ctx->gs->smode2 & 3) == 3) {
+        // Need to deinterlace
+        int bpp = 0;
+        int odd = ((ctx->gs->csr >> 13) & 1) == 0;
+
+        switch (ctx->disp_fmt) {
+            case GS_PSMCT32:
+            case GS_PSMCT24: {
+                bpp = 4;
+
+                for (int y = 0; y < ctx->tex_h / 2; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint32_t* dst = ctx->buf + x + (((y * 2) + odd) * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+            case GS_PSMCT16:
+            case GS_PSMCT16S: {
+                for (int y = 0; y < ctx->tex_h / 2; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (((y * 2) + odd) * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+        }
+    } else {
+        switch (ctx->disp_fmt) {
+            case GS_PSMCT32:
+            case GS_PSMCT24: {
+                for (int y = 0; y < ctx->tex_h; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint32_t* dst = ctx->buf + x + (y * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+            case GS_PSMCT16:
+            case GS_PSMCT16S: {
+                for (int y = 0; y < ctx->tex_h; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (y * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+        }
+    }
+
+    ptr = ctx->buf;
+
+    SDL_Rect size, rect;
+
+    rect.w = ctx->tex_w;
+    rect.h = ctx->tex_h;
+
+    SDL_GetWindowSize(ctx->window, &size.w, &size.h);
+
+    float scale = ctx->integer_scaling ? floorf(ctx->scale) : ctx->scale;
+
+    switch (ctx->aspect_mode) {
+        case RENDERER_ASPECT_NATIVE: {
+            rect.w *= scale;
+            rect.h *= scale;
+        } break;
+
+        case RENDERER_ASPECT_4_3: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (3.0f / 4.0f);
+        } break;
+
+        case RENDERER_ASPECT_16_9: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (9.0f / 16.0f);
+        } break;
+
+        case RENDERER_ASPECT_5_4: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (4.0f / 5.0f);
+        } break;
+
+        case RENDERER_ASPECT_STRETCH: {
+            rect.w = size.w;
+            rect.h = size.h;
+        } break;
+
+        case RENDERER_ASPECT_AUTO:
+        case RENDERER_ASPECT_STRETCH_KEEP: {
+            rect.h = size.h;
+            rect.w = (float)rect.h * (4.0f / 3.0f);
+        } break;
+    }
+
+    ctx->disp_w = rect.w;
+    ctx->disp_h = rect.h;
+
+    rect.x = (size.w / 2) - (rect.w / 2);
+    rect.y = (size.h / 2) - (rect.h / 2);
+
+    float x0 = (rect.x / ((float)size.w / 2.0f)) - 1.0f;
+    float y0 = (rect.y / ((float)size.h / 2.0f)) - 1.0f;
+    float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;
+    float y1 = ((rect.y + rect.h) / ((float)size.h / 2.0f)) - 1.0f;
+
+    // Create a transfer buffer to upload our vertex buffer and index buffer
+    SDL_GPUTransferBufferCreateInfo btbci = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = sizeof(gpu_vertex) * 4 + sizeof(Uint16) * 6
+    };
+
+    SDL_GPUTransferBuffer* buffer_tb = SDL_CreateGPUTransferBuffer(ctx->device, &btbci);
+
+    // fill the transfer buffer
+    gpu_vertex* vertices = (gpu_vertex*)SDL_MapGPUTransferBuffer(ctx->device, buffer_tb, false);
+
+    vertices[0] = (gpu_vertex){ x0, y1,  0.0,  1.0 }; // Top left
+    vertices[1] = (gpu_vertex){ x1, y1,  1.0,  1.0 }; // Top right
+    vertices[2] = (gpu_vertex){ x1, y0,  1.0,  0.0 }; // Bottom right
+    vertices[3] = (gpu_vertex){ x0, y0,  0.0,  0.0 }; // Bottom left
+
+    Uint16* indices = (Uint16*)&vertices[4];
+
+    indices[0] = 0;
+    indices[1] = 1;
+    indices[2] = 2;
+    indices[3] = 0;
+    indices[4] = 2;
+    indices[5] = 3;
+
+    SDL_UnmapGPUTransferBuffer(ctx->device, buffer_tb);
+
+    // start a copy pass
+    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(command_buffer);
+
+    // Upload vertex buffer (at offset 0)
+    SDL_GPUTransferBufferLocation tbl = {
+        .transfer_buffer = buffer_tb,
+        .offset = 0
+    };
+
+    SDL_GPUBufferRegion br = {
+        .buffer = ctx->vertex_buffer,
+        .offset = 0,
+        .size = sizeof(gpu_vertex) * 4,
+    };
+
+    SDL_UploadToGPUBuffer(cp, &tbl, &br, false);
+
+    tbl = {
+        .transfer_buffer = buffer_tb,
+        .offset = sizeof(gpu_vertex) * 4
+    };
+
+    br = {
+        .buffer = ctx->index_buffer,
+        .offset = 0,
+        .size = sizeof(Uint16) * 6,
+    };
+
+    // Upload index buffer (right after our vertex data)
+    SDL_UploadToGPUBuffer(cp, &tbl, &br, false);
+
+    int stride;
+
+    switch (ctx->disp_fmt) {
+        case GS_PSMCT32:
+        case GS_PSMCT24: {
+            stride = 4;
+        } break;
+
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            stride = 2;
+        } break;
+    }
+
+    SDL_GPUTransferBufferCreateInfo ttbci = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = ctx->tex_w * ctx->tex_h * stride
+    };
+
+    SDL_GPUTransferBuffer* texture_tb = SDL_CreateGPUTransferBuffer(ctx->device, &ttbci);
+
+    // fill the transfer buffer
+    void* data = SDL_MapGPUTransferBuffer(ctx->device, texture_tb, false);
+
+    SDL_memcpy(data, ptr, (ctx->tex_w * stride) * ctx->tex_h);
+
+    SDL_UnmapGPUTransferBuffer(ctx->device, buffer_tb);
+
+    SDL_GPUTextureTransferInfo tti = {
+        .transfer_buffer = texture_tb,
+        .offset = 0,
+    };
+
+    SDL_GPUTextureRegion tr = {
+        .texture = ctx->texture,
+        .w = ctx->tex_w,
+        .h = ctx->tex_h,
+        .d = 1
+    };
+
+    SDL_UploadToGPUTexture(cp, &tti, &tr, false);
+
+    // end the copy pass
+    SDL_EndGPUCopyPass(cp);
+
+    SDL_ReleaseGPUTransferBuffer(ctx->device, buffer_tb);
+    SDL_ReleaseGPUTransferBuffer(ctx->device, texture_tb);
+}
+
+void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    if (!ctx->texture)
+        return;
+
+    SDL_BindGPUGraphicsPipeline(render_pass, ctx->pipeline);
+
+    // bind the vertex buffer
+    SDL_GPUBufferBinding bb[1]{};
+    bb[0].buffer = ctx->vertex_buffer;
+    bb[0].offset = 0;
+
+    SDL_BindGPUVertexBuffers(render_pass, 0, bb, 1);
+
+    bb[0].buffer = ctx->index_buffer;
+    bb[0].offset = 0;
+
+    SDL_BindGPUIndexBuffer(render_pass, bb, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+
+    SDL_GPUTextureSamplerBinding tsb = {
+        .texture = ctx->texture,
+        .sampler = ctx->sampler
+    };
+
+    SDL_BindGPUFragmentSamplers(render_pass, 0, &tsb, 1);
+
+    // issue a draw call
+    SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
+}
+
+void software_thread_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {
+    // Nothing for now
 }

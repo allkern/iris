@@ -25,7 +25,7 @@
 #define INCBIN_PREFIX g_
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
 
-#include "incbin/incbin.h"
+#include "incbin.h"
 
 INCBIN(roboto, "../res/Roboto-Regular.ttf");
 INCBIN(symbols, "../res/MaterialSymbolsRounded.ttf");
@@ -80,7 +80,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     }
 
     // Create, check and setup GPU device
-    iris->gpu_device = SDL_CreateGPUDevice(
+    iris->device = SDL_CreateGPUDevice(
         SDL_GPU_SHADERFORMAT_SPIRV |
         SDL_GPU_SHADERFORMAT_DXIL |
         SDL_GPU_SHADERFORMAT_METALLIB,
@@ -88,20 +88,20 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         nullptr
     );
 
-    if (!iris->gpu_device) {
+    if (!iris->device) {
         printf("iris: SDL_CreateGPUDevice() failed \'%s\'\n", SDL_GetError());
 
         return SDL_APP_FAILURE;
     }
 
-    if (!SDL_ClaimWindowForGPUDevice(iris->gpu_device, iris->window)) {
+    if (!SDL_ClaimWindowForGPUDevice(iris->device, iris->window)) {
         printf("iris: SDL_ClaimWindowForGPUDevice() failed \'%s\'\n", SDL_GetError());
 
         return SDL_APP_FAILURE;
     }
 
     SDL_SetGPUSwapchainParameters(
-        iris->gpu_device, iris->window,
+        iris->device, iris->window,
         SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
         SDL_GPU_PRESENTMODE_MAILBOX
     );
@@ -117,8 +117,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     ImGui_ImplSDL3_InitForSDLGPU(iris->window);
     ImGui_ImplSDLGPU3_InitInfo init_info = {};
-    init_info.Device = iris->gpu_device;
-    init_info.ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(iris->gpu_device, iris->window);
+    init_info.Device = iris->device;
+    init_info.ColorTargetFormat = SDL_GetGPUSwapchainTextureFormat(iris->device, iris->window);
     init_info.MSAASamples = SDL_GPU_SAMPLECOUNT_1;
     ImGui_ImplSDLGPU3_Init(&init_info);
 
@@ -269,6 +269,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     // Note: Important change, we are NOT going to be using the Vblank callback anymore.
     //       Frame timing will be controlled entirely by the renderer/frontend from now on
+    // ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, (void (*)(void*))iris::update_window, iris);
     ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_SCISSOR, iris::handle_scissor_event, iris);
 
     iris->ds[0] = ds_sio2_attach(iris->ps2->sio2, 0);
@@ -278,14 +279,14 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
     iris->ctx = renderer_create();
 
-    renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, RENDERER_NULL);
+    renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, RENDERER_NULL);
 
     iris->ticks = SDL_GetTicks();
     iris->pause = true;
     
     init_settings(iris, argc, (const char**)argv);
     
-    renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->renderer_backend);
+    renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, iris->renderer_backend);
     renderer_set_scale(iris->ctx, iris->scale);
     renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
     renderer_set_bilinear(iris->ctx, iris->bilinear);
@@ -360,35 +361,47 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         return SDL_APP_CONTINUE;
     }
 
-    // if (iris->step_over) {
-    //     if (iris->ps2->ee->pc == iris->step_over_addr) {
-    //         iris->step_over = false;
-    //         iris->pause = true;
-    //     }
-    // }
+    if (iris->step_over) {
+        if (iris->ps2->ee->pc == iris->step_over_addr) {
+            iris->step_over = false;
+            iris->pause = true;
+        }
+    }
 
-    // if (iris->step_out) {
-    //     // jr $ra
-    //     if (iris->ps2->ee->opcode == 0x03e00008) {
-    //         iris->step_out = false;
-    //         iris->pause = true;
+    // Break on VBlank
+    while (!ps2_gs_is_vblank(iris->ps2->gs)) {
+        ps2_cycle(iris->ps2);
+    }
 
-    //         // Consume the delay slot
-    //         ps2_cycle(iris->ps2);
-    //     }
-    // }
+    if (iris->step_out) {
+        // jr $ra
+        if (iris->ps2->ee->opcode == 0x03e00008) {
+            iris->step_out = false;
+            iris->pause = true;
 
-    // for (const breakpoint& b : iris->breakpoints) {
-    //     if (b.cpu == BKPT_CPU_EE) {
-    //         if (iris->ps2->ee->pc == b.addr) {
-    //             iris->pause = true;
-    //         }
-    //     } else {
-    //         if (iris->ps2->iop->pc == b.addr) {
-    //             iris->pause = true;
-    //         }
-    //     }
-    // }
+            // Consume the delay slot
+            ps2_cycle(iris->ps2);
+        }
+    }
+
+    for (const iris::breakpoint& b : iris->breakpoints) {
+        if (b.cpu == iris::BKPT_CPU_EE) {
+            if (iris->ps2->ee->pc == b.addr) {
+                iris->pause = true;
+            }
+        } else {
+            if (iris->ps2->iop->pc == b.addr) {
+                iris->pause = true;
+            }
+        }
+    }
+
+    iris::update_window(iris);
+
+    // Execute until vblank is over
+    while (ps2_gs_is_vblank(iris->ps2->gs)) {
+        ps2_cycle(iris->ps2);
+    }
 
     return SDL_APP_CONTINUE;
 }
@@ -441,13 +454,13 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
 
     // Cleanup
     // [If using SDL_MAIN_USE_CALLBACKS: all code below would likely be your SDL_AppQuit() function]
-    SDL_WaitForGPUIdle(iris->gpu_device);
+    SDL_WaitForGPUIdle(iris->device);
     ImGui_ImplSDL3_Shutdown();
     ImGui_ImplSDLGPU3_Shutdown();
     ImGui::DestroyContext();
 
-    SDL_ReleaseWindowFromGPUDevice(iris->gpu_device, iris->window);
-    SDL_DestroyGPUDevice(iris->gpu_device);
+    SDL_ReleaseWindowFromGPUDevice(iris->device, iris->window);
+    SDL_DestroyGPUDevice(iris->device);
     SDL_DestroyWindow(iris->window);
 
     ps2_destroy(iris->ps2);

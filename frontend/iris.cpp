@@ -222,15 +222,18 @@ void update_window(iris::instance* iris) {
     ImDrawData* draw_data = ImGui::GetDrawData();
     const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
 
-    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(iris->gpu_device); // Acquire a GPU command buffer
-
+    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(iris->device); // Acquire a GPU command buffer
     SDL_GPUTexture* swapchain_texture;
+
     SDL_AcquireGPUSwapchainTexture(command_buffer, iris->window, &swapchain_texture, nullptr, nullptr); // Acquire a swapchain texture
 
     if (swapchain_texture != nullptr && !is_minimized)
     {
         // This is mandatory: call ImGui_ImplSDLGPU3_PrepareDrawData() to upload the vertex/index buffer!
         ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, command_buffer);
+
+        // Same for our renderer
+        renderer_begin_render(iris->ctx, command_buffer);
 
         // Setup and start a render pass
         SDL_GPUColorTargetInfo target_info = {};
@@ -243,10 +246,14 @@ void update_window(iris::instance* iris) {
         target_info.cycle = false;
         SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(command_buffer, &target_info, 1, nullptr);
 
+        renderer_render(iris->ctx, command_buffer, render_pass);
+
         // Render ImGui
         ImGui_ImplSDLGPU3_RenderDrawData(draw_data, command_buffer, render_pass);
 
         SDL_EndGPURenderPass(render_pass);
+
+        renderer_end_render(iris->ctx, command_buffer);
     }
 
     // Submit the command buffer

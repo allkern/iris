@@ -1,6 +1,6 @@
 #include "null.hpp"
 
-void null_init(void* ctx, struct ps2_gs* gs, SDL_Window* window) {}
+void null_init(void* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device) {}
 void null_destroy(void* ctx) {}
 void null_set_size(void* ctx, int width, int height) {}
 void null_set_scale(void* ctx, float scale) {}

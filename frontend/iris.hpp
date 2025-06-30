@@ -66,10 +66,7 @@ struct elf_symbol {
 
 struct instance {
     SDL_Window* window = nullptr;
-    SDL_GPUDevice* gpu_device = nullptr;
-    SDL_Renderer* renderer = nullptr;
-    SDL_Texture* texture = nullptr;
-    SDL_GLContext gl_context = nullptr;
+    SDL_GPUDevice* device = nullptr;
 
     struct ps2_state* ps2 = nullptr;
 

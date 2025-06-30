@@ -214,7 +214,7 @@ void show_main_menubar(iris::instance* iris) {
                         if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
                             iris->renderer_backend = i;
 
-                            renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, i);
+                            renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
                             renderer_set_scale(iris->ctx, iris->scale);
                             renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
                             renderer_set_bilinear(iris->ctx, iris->bilinear);

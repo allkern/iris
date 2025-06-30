@@ -499,7 +499,7 @@ static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
     long contiguous_cycles = block_timing * cdvd->read_count;
 
     if (!delta)
-        return 0;
+        return 1000;
 
     if (delta < 0) {
         delta = -delta;
@@ -507,14 +507,14 @@ static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
 
     // Small delta
     if (delta < 8)
-        return ((block_timing * delta) + contiguous_cycles);
+        return ((block_timing * delta) + contiguous_cycles) / 4;
 
     // Fast seek: ~30ms
     if (delta < 4371)
-        return (((36864000 / 1000) * 30) + contiguous_cycles);
+        return (((36864000 / 1000) * 30) + contiguous_cycles) / 4;
 
     // Full seek: ~100ms
-    return (((36864000 / 1000) * 100) + contiguous_cycles);
+    return (((36864000 / 1000) * 100) + contiguous_cycles) / 4;
 }
 
 static inline void cdvd_set_status_bits(struct ps2_cdvd* cdvd, uint8_t data) {
@@ -759,7 +759,7 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
     event.name = "CDVD ReadCd";
     event.udata = cdvd;
     event.callback = cdvd_do_read;
-    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba) / 4;
+    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
 
     sched_schedule(cdvd->sched, event);
 
@@ -1090,7 +1090,7 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
 
     struct sched_event event;
 
-    event.cycles = 36864000 * 2; // IOP clock * 2 = 2s
+    event.cycles = 100000; // IOP clock * 2 = 2s
     event.udata = cdvd;
     event.name = "CDVD disc detect";
     event.callback = cdvd_set_detected_type;

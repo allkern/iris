@@ -9,6 +9,7 @@ main2.cpp
 compare
 compare.cpp
 imgui.ini
+*.AppImage
 *.expected
 *.dump
 *.cue

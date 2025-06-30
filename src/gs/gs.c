@@ -44,6 +44,8 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     // Send Vblank IRQs through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_OUT);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_OUT);
+
+    gs->vblank = 0;
 }
 
 void gs_flip_field(void* udata, int overshoot) {
@@ -75,7 +77,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 
-    gs->csr |= 2;
+    gs->csr |= 6;
 
     // Tell backend to render scene
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
@@ -93,6 +95,8 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
 
     sched_schedule(gs->sched, vblank_out_event);
     sched_schedule(gs->sched, field_flip_event);
+
+    gs->vblank = 1;
 }
 
 void gs_handle_hblank(void* udata, int overshoot) {
@@ -734,4 +738,8 @@ struct gs_callback* ps2_gs_get_callback(struct ps2_gs* gs, int event) {
 
 void ps2_gs_remove_callback(struct ps2_gs* gs, int event) {
     gs->events[event].func = NULL;
+}
+
+int ps2_gs_is_vblank(struct ps2_gs* gs) {
+    return gs->vblank;
 }

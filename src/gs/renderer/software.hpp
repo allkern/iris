@@ -21,6 +21,7 @@ struct software_state {
     uint32_t psmct24_shift;
 
     SDL_Window* window = nullptr;
+    SDL_GPUDevice* gpu_device = nullptr;
     struct ps2_gs* gs;
 
     int tex_w = 0;
@@ -36,7 +37,7 @@ struct software_state {
     unsigned int frame = 0;
 };
 
-void software_init(void* ctx, struct ps2_gs* gs, SDL_Window* window);
+void software_init(void* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device);
 void software_destroy(void* ctx);
 void software_set_size(void* ctx, int width, int height);
 void software_set_scale(void* ctx, float scale);
@@ -50,15 +51,15 @@ void software_get_interlace_mode(void* ctx, int* mode);
 void software_set_window_rect(void* udata, int x, int y, int w, int h);
 void* software_get_buffer_data(void* udata, int* w, int* h, int* bpp);
 const char* software_get_name(void* ctx);
-// void software_push_shader(software_state* ctx, const char* path);
-// void software_pop_shader(software_state* ctx);
+void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
+void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass);
+void software_thread_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
 
 extern "C" {
 void software_render_point(struct ps2_gs* gs, void* udata);
 void software_render_line(struct ps2_gs* gs, void* udata);
 void software_render_triangle(struct ps2_gs* gs, void* udata);
 void software_render_sprite(struct ps2_gs* gs, void* udata);
-void software_render(struct ps2_gs* gs, void* udata);
 void software_transfer_start(struct ps2_gs* gs, void* udata);
 void software_transfer_write(struct ps2_gs* gs, void* udata);
 void software_transfer_read(struct ps2_gs* gs, void* udata);
