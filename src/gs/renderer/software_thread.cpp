@@ -14,17 +14,18 @@
 
 #ifdef __APPLE__
 #define SHADER_FORMAT SDL_GPU_SHADERFORMAT_MSL
-INCBIN(vertex_spv, "../shaders/vertex.msl");
-INCBIN(fragment_spv, "../shaders/fragment.msl");
-INCBIN_EXTERN(vertex_spv);
-INCBIN_EXTERN(fragment_spv);
+#define SHADER_ENTRYPOINT "main0"
+INCBIN(vertex_shader, "../shaders/vertex.msl");
+INCBIN(fragment_shader, "../shaders/fragment.msl");
+INCBIN_EXTERN(vertex_shader);
+INCBIN_EXTERN(fragment_shader);
 #else
 #define SHADER_FORMAT SDL_GPU_SHADERFORMAT_SPIRV
-
-INCBIN(vertex_spv, "../shaders/vertex.spv");
-INCBIN(fragment_spv, "../shaders/fragment.spv");
-INCBIN_EXTERN(vertex_spv);
-INCBIN_EXTERN(fragment_spv);
+#define SHADER_ENTRYPOINT "main"
+INCBIN(vertex_shader, "../shaders/vertex.spv");
+INCBIN(fragment_shader, "../shaders/fragment.spv");
+INCBIN_EXTERN(vertex_shader);
+INCBIN_EXTERN(fragment_shader);
 #endif
 
 #include <SDL3/SDL.h>
@@ -1419,12 +1420,12 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
     ctx->end_signal = false;
     ctx->render_thr = std::thread(software_thread_render_thread, ctx);
     ctx->render_thr.detach();
-    
+
     // create the vertex shader
     SDL_GPUShaderCreateInfo vsci = {
-        .code_size = g_vertex_spv_size,
-        .code = g_vertex_spv_data,
-        .entrypoint = "main0",
+        .code_size = g_vertex_shader_size,
+        .code = g_vertex_shader_data,
+        .entrypoint = SHADER_ENTRYPOINT,
         .format = SHADER_FORMAT,
         .stage = SDL_GPU_SHADERSTAGE_VERTEX,
         .num_samplers = 0,
@@ -1437,9 +1438,9 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
 
     // create the fragment shader
     SDL_GPUShaderCreateInfo fsci = {
-        .code_size = g_fragment_spv_size,
-        .code = g_fragment_spv_data,
-        .entrypoint = "main0",
+        .code_size = g_fragment_shader_size,
+        .code = g_fragment_shader_data,
+        .entrypoint = SHADER_ENTRYPOINT,
         .format = SHADER_FORMAT,
         .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
         .num_samplers = 1,
