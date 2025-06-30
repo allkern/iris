@@ -12,11 +12,20 @@
 
 #include "incbin.h"
 
-INCBIN(vertex_spv, "../shaders/vertex.spv");
-INCBIN(fragment_spv, "../shaders/fragment.spv");
-
+#ifdef __APPLE__
+#define SHADER_FORMAT SDL_GPU_SHADERFORMAT_MSL
+INCBIN(vertex_spv, "../shaders/vertex.msl");
+INCBIN(fragment_spv, "../shaders/fragment.msl");
 INCBIN_EXTERN(vertex_spv);
 INCBIN_EXTERN(fragment_spv);
+#else
+#define SHADER_FORMAT SDL_GPU_SHADERFORMAT_SPIRV
+
+INCBIN(vertex_spv, "../shaders/vertex.spv");
+INCBIN(fragment_spv, "../shaders/fragment.spv");
+INCBIN_EXTERN(vertex_spv);
+INCBIN_EXTERN(fragment_spv);
+#endif
 
 #include <SDL3/SDL.h>
 
@@ -1416,7 +1425,7 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
         .code_size = g_vertex_spv_size,
         .code = g_vertex_spv_data,
         .entrypoint = "main",
-        .format = SDL_GPU_SHADERFORMAT_SPIRV,
+        .format = SHADER_FORMAT,
         .stage = SDL_GPU_SHADERSTAGE_VERTEX,
         .num_samplers = 0,
         .num_storage_textures = 0,
@@ -1431,7 +1440,7 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
         .code_size = g_fragment_spv_size,
         .code = g_fragment_spv_data,
         .entrypoint = "main",
-        .format = SDL_GPU_SHADERFORMAT_SPIRV,
+        .format = SHADER_FORMAT,
         .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
         .num_samplers = 1,
         .num_storage_textures = 0,
