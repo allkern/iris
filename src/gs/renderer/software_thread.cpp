@@ -1424,7 +1424,7 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
     SDL_GPUShaderCreateInfo vsci = {
         .code_size = g_vertex_spv_size,
         .code = g_vertex_spv_data,
-        .entrypoint = "main",
+        .entrypoint = "main0",
         .format = SHADER_FORMAT,
         .stage = SDL_GPU_SHADERSTAGE_VERTEX,
         .num_samplers = 0,
@@ -1439,7 +1439,7 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
     SDL_GPUShaderCreateInfo fsci = {
         .code_size = g_fragment_spv_size,
         .code = g_fragment_spv_data,
-        .entrypoint = "main",
+        .entrypoint = "main0",
         .format = SHADER_FORMAT,
         .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
         .num_samplers = 1,
@@ -2740,7 +2740,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
 
     SDL_GPUTransferBufferCreateInfo ttbci = {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = ctx->tex_w * ctx->tex_h * stride
+        .size =  static_cast<Uint32>(ctx->tex_w) *  static_cast<Uint32>(ctx->tex_h) * stride
     };
 
     SDL_GPUTransferBuffer* texture_tb = SDL_CreateGPUTransferBuffer(ctx->device, &ttbci);
@@ -2759,8 +2759,8 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
 
     SDL_GPUTextureRegion tr = {
         .texture = ctx->texture,
-        .w = ctx->tex_w,
-        .h = ctx->tex_h,
+        .w = static_cast<Uint32>(ctx->tex_w),
+        .h = static_cast<Uint32>(ctx->tex_h),
         .d = 1
     };
 

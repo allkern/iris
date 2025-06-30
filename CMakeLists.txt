@@ -1,13 +1,9 @@
 cmake_minimum_required(VERSION 3.16...4.0)
 
-if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
-    set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
-    set_source_files_properties(${OSX_ICON} PROPERTIES
-        MACOSX_PACKAGE_LOCATION "Resources")
-else()
-    set(OSX_ICON "")
-endif()
+message(STATUS "Setting up macOS stuff")
+set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
+set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
 project(iris LANGUAGES C CXX)
 
@@ -40,10 +36,10 @@ message(STATUS "Project Version: ${GIT_VERSION_STRING}")
 
 add_subdirectory(tomlplusplus)
 
-set(MACOSX_BUNDLE_ICON_FILE iris.icns)
+message(STATUS "MacOS icon file: ${OSX_ICON}")
 
 # And this part tells CMake where to find and install the file itself
-add_executable(iris ${OSX_ICON})
+add_executable(iris MACOSX_BUNDLE ${OSX_ICON})
 
 set_property(TARGET iris PROPERTY CXX_STANDARD 20)
 add_definitions("-D_IRIS_VERSION=${GIT_VERSION_STRING}")
@@ -162,8 +158,6 @@ target_link_libraries(iris PUBLIC
   SDL3::SDL3
 )
 
-set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
-
 set_target_properties(iris PROPERTIES 
     # On macOS, make a proper .app bundle instead of a bare executable
     MACOSX_BUNDLE TRUE
@@ -187,11 +181,12 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "
 # On macOS Platforms, ensure that the bundle is valid for distribution by calling fixup_bundle.
 # note that fixup_bundle does not work on iOS, so you will want to use static libraries 
 # or manually copy dylibs and set rpaths
+message(STATUS "CMake System Name: ${CMAKE_SYSTEM_NAME}")
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     # tell Install about the target, otherwise fixup won't know about the transitive dependencies
     install(TARGETS iris
     	BUNDLE DESTINATION ./install COMPONENT Runtime
-   	    RUNTIME DESTINATION ./install/bin COMPONENT Runtime
+   	  RUNTIME DESTINATION ./install/bin COMPONENT Runtime
     )
 	
     set(DEP_DIR "${CMAKE_BINARY_DIR}")  # where to look for dependencies when fixing up
