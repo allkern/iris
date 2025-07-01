@@ -71,12 +71,6 @@ extern "C" {
 #define CDVD_CD_SS_2048 2048
 #define CDVD_DVD_SS 2064
 
-#ifdef _MSC_VER
-#define ALIGNED_U32 __declspec(align(n))
-#else
-#define ALIGNED_U32 __attribute__((aligned(4)))
-#endif
-
 struct ps2_cdvd {
     uint8_t n_cmd;
     uint8_t n_stat;
@@ -87,8 +81,15 @@ struct ps2_cdvd {
     uint8_t disc_type;
     uint8_t s_cmd;
     uint8_t s_stat;
-    uint8_t n_params[16] ALIGNED_U32;
-    uint8_t s_params[16] ALIGNED_U32;
+
+#ifdef _MSC_VER
+    __declspec(align(n)) uint8_t n_params[16];
+    __declspec(align(n)) uint8_t s_params[16];
+#else
+    uint8_t n_params[16] __attribute__((aligned(4)));
+    uint8_t s_params[16] __attribute__((aligned(4)));
+#endif
+
     uint8_t* s_fifo;
     int n_param_index;
     int s_param_index;
