@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 3.16...4.0)
 
 message(STATUS "Setting up macOS stuff")
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
 set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
