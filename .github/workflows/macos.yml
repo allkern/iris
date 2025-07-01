@@ -16,9 +16,8 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G Ninja \
-          -DCMAKE_BUILD_TYPE=Release
-        cmake --build build
+        cmake -S . -B build
+        cmake --build build -j8
         sudo cmake --install build
         mkdir -p ./build/dist
         cp -R ./build/iris.app ./build/dist
