@@ -2,7 +2,7 @@ name: Windows CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "sdl3-cmake" ]
 
 jobs:
   build:
@@ -13,15 +13,14 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Run build-deps
-      run: ./build-deps.ps1
     - name: Run build-win
       run: |
-           ./build-win.ps1
-           New-Item -Path "dist" -ItemType Directory
-           Copy-Item -Path "iris.exe" "dist"
-           Copy-Item "SDL2-2.32.0/x86_64-w64-mingw32/bin/SDL2.dll" "dist"
-           Copy-Item "C:\mingw64\bin\*.dll" "dist"
+        cmake -S . -B build
+        cmake --build build
+        New-Item -Path "dist" -ItemType Directory
+        Copy-Item -Path ".\build\iris.exe" "dist"
+        Copy-Item "SDL2-2.32.0\x86_64-w64-mingw32\bin\SDL2.dll" "dist"
+        Copy-Item "C:\mingw64\bin\*.dll" "dist"
     - name: Generate artifact name
       id: generate-name
       run: |
