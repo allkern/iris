@@ -121,7 +121,11 @@ union ee_fpu_reg {
 };
 
 #ifdef _EE_USE_INTRINSICS
+#ifdef _MSC_VER
+#define EE_ALIGNED16 __declspec(align(16))
+#else
 #define EE_ALIGNED16 __attribute__((aligned(16)))
+#endif
 #else
 #define EE_ALIGNED16
 #endif

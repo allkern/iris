@@ -7,7 +7,15 @@
 #include "disc/iso.h"
 #include "disc/bin.h"
 
-struct __attribute__((packed)) iso9660_pvd {
+#ifdef _MSC_VER
+__pragma(pack(push, 1))
+
+#define PACKED
+#else
+#define PACKED __attribute__((packed))
+#endif
+
+struct PACKED iso9660_pvd {
 	char id[8];
 	char system_id[32];
 	char volume_id[32];
@@ -25,7 +33,7 @@ struct __attribute__((packed)) iso9660_pvd {
 	char copyright_file_id[37], abstract_file_id[37], bibliographical_file_id[37];
 };
 
-struct __attribute__((packed)) iso9660_dirent {
+struct PACKED iso9660_dirent {
     uint8_t dr_len;
     uint8_t ext_dr_len;
     uint32_t lba_le, lba_be;
@@ -38,6 +46,10 @@ struct __attribute__((packed)) iso9660_dirent {
     uint8_t id_len;
     uint8_t id;
 };
+
+#ifdef _MSC_VER
+__pragma(pack(pop))
+#endif
 
 static const char* disc_extensions[] = {
     "iso",
@@ -647,3 +659,5 @@ char* disc_read_boot_elf(struct disc_state* disc, char* buf, int s) {
     // Couldn't find the boot ELF file in the root directory
     return NULL;
 }
+
+#undef PACKED
