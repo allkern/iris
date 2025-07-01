@@ -1467,19 +1467,19 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
                 .location = 0,
                 .buffer_slot = 0,
                 .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-                .offset = 0
+                .offset = 0,
             }, {
                 .location = 1,
                 .buffer_slot = 0,
                 .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-                .offset = sizeof(float) * 2
+                .offset = sizeof(float) * 2,
             }},
             .num_vertex_attributes = 2,
         },
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .target_info = {
             .color_target_descriptions = (SDL_GPUColorTargetDescription[]) {{
-                .format = SDL_GetGPUSwapchainTextureFormat(device, window)
+                .format = SDL_GetGPUSwapchainTextureFormat(device, window),
             }},
             .num_color_targets = 1,
         },
@@ -1496,7 +1496,7 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
     // create the vertex and index buffers
     SDL_GPUBufferCreateInfo vbci = {
         .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
-        .size = sizeof(gpu_vertex) * 4
+        .size = sizeof(gpu_vertex) * 4,
     };
 
     ctx->vertex_buffer = SDL_CreateGPUBuffer(device, &vbci);
@@ -1504,7 +1504,7 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
     // We're sending two triangles to make a single quad so we need 6 indices
     SDL_GPUBufferCreateInfo ibci = {
         .usage = SDL_GPU_BUFFERUSAGE_INDEX,
-        .size = sizeof(Uint16) * 6
+        .size = sizeof(Uint16) * 6,
     };
 
     ctx->index_buffer = SDL_CreateGPUBuffer(device, &ibci);
@@ -2670,7 +2670,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
     // Create a transfer buffer to upload our vertex buffer and index buffer
     SDL_GPUTransferBufferCreateInfo btbci = {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = sizeof(gpu_vertex) * 4 + sizeof(Uint16) * 6
+        .size = sizeof(gpu_vertex) * 4 + sizeof(Uint16) * 6,
     };
 
     SDL_GPUTransferBuffer* buffer_tb = SDL_CreateGPUTransferBuffer(ctx->device, &btbci);
@@ -2700,7 +2700,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
     // Upload vertex buffer (at offset 0)
     SDL_GPUTransferBufferLocation tbl = {
         .transfer_buffer = buffer_tb,
-        .offset = 0
+        .offset = 0,
     };
 
     SDL_GPUBufferRegion br = {
@@ -2713,7 +2713,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
 
     tbl = {
         .transfer_buffer = buffer_tb,
-        .offset = sizeof(gpu_vertex) * 4
+        .offset = sizeof(gpu_vertex) * 4,
     };
 
     br = {
@@ -2762,7 +2762,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
         .texture = ctx->texture,
         .w = static_cast<Uint32>(ctx->tex_w),
         .h = static_cast<Uint32>(ctx->tex_h),
-        .d = 1
+        .d = 1,
     };
 
     SDL_UploadToGPUTexture(cp, &tti, &tr, false);
@@ -2796,7 +2796,7 @@ void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, S
 
     SDL_GPUTextureSamplerBinding tsb = {
         .texture = ctx->texture,
-        .sampler = ctx->sampler
+        .sampler = ctx->sampler,
     };
 
     SDL_BindGPUFragmentSamplers(render_pass, 0, &tsb, 1);
