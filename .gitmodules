@@ -8,3 +8,6 @@
 [submodule "SDL"]
 	path = SDL
 	url = https://github.com/libsdl-org/SDL
+[submodule "incbin"]
+	path = incbin
+	url = https://github.com/graphitemaster/incbin
