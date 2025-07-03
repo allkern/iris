@@ -19,8 +19,7 @@ jobs:
         cmake --build build
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
-        Copy-Item "SDL2-2.32.0\x86_64-w64-mingw32\bin\SDL2.dll" "dist"
-        Copy-Item "C:\mingw64\bin\*.dll" "dist"
+        Copy-Item ".\build\*.dll" "dist"
     - name: Generate artifact name
       id: generate-name
       run: |
