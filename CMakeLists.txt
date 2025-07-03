@@ -230,3 +230,12 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
         COMPONENT Runtime
     )
 endif()
+
+# Copy the runtime DLLs to the output directory on Windows
+if (CMAKE_SYSTEM_NAME MATCHES "Windows")
+    add_custom_command(TARGET iris POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -E copy
+        "$<TARGET_RUNTIME_DLLS:iris>" "$<TARGET_FILE_DIR:iris>"
+        COMMAND_EXPAND_LISTS
+    )
+endif()
