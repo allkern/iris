@@ -51,9 +51,9 @@ void software_get_interlace_mode(void* ctx, int* mode);
 void software_set_window_rect(void* udata, int x, int y, int w, int h);
 void* software_get_buffer_data(void* udata, int* w, int* h, int* bpp);
 const char* software_get_name(void* ctx);
-void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
-void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass);
-void software_thread_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
+void software_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
+void software_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass);
+void software_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
 
 extern "C" {
 void software_render_point(struct ps2_gs* gs, void* udata);

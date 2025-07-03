@@ -83,8 +83,8 @@ struct ps2_cdvd {
     uint8_t s_stat;
 
 #ifdef _MSC_VER
-    __declspec(align(n)) uint8_t n_params[16];
-    __declspec(align(n)) uint8_t s_params[16];
+    __declspec(align(4)) uint8_t n_params[16];
+    __declspec(align(4)) uint8_t s_params[16];
 #else
     uint8_t n_params[16] __attribute__((aligned(4)));
     uint8_t s_params[16] __attribute__((aligned(4)));

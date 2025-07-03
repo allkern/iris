@@ -24,9 +24,9 @@ void renderer_init_null(renderer_state* renderer, struct ps2_gs* gs, SDL_Window*
     renderer->set_window_rect = null_set_window_rect;
     renderer->get_buffer_data = null_get_buffer_data;
     renderer->get_name = null_get_name;
-    renderer->begin_render = software_thread_begin_render;
-    renderer->render = software_thread_render;
-    renderer->end_render = software_thread_end_render;
+    renderer->begin_render = null_begin_render;
+    renderer->render = null_render;
+    renderer->end_render = null_end_render;
 
     gs->backend.render_point = null_render_point;
     gs->backend.render_line = null_render_line;
@@ -54,9 +54,9 @@ void renderer_init_software(renderer_state* renderer, struct ps2_gs* gs, SDL_Win
     renderer->set_window_rect = software_set_window_rect;
     renderer->get_buffer_data = software_get_buffer_data;
     renderer->get_name = software_get_name;
-    renderer->begin_render = software_thread_begin_render;
-    renderer->render = software_thread_render;
-    renderer->end_render = software_thread_end_render;
+    renderer->begin_render = software_begin_render;
+    renderer->render = software_render;
+    renderer->end_render = software_end_render;
 
     gs->backend.render_point = software_render_point;
     gs->backend.render_line = software_render_line;

@@ -35,13 +35,13 @@ INCBIN(ps2_memory_card_icon, "../res/ps2_mcd.png");
 INCBIN(pocketstation_icon, "../res/pocketstation.png");
 INCBIN(iris_icon, "../res/iris.png");
 
-INCBIN_EXTERN(roboto);
-INCBIN_EXTERN(symbols);
-INCBIN_EXTERN(firacode);
-INCBIN_EXTERN(ps1_memory_card_icon);
-INCBIN_EXTERN(ps2_memory_card_icon);
-INCBIN_EXTERN(pocketstation_icon);
-INCBIN_EXTERN(iris_icon);
+// INCBIN_EXTERN(roboto);
+// INCBIN_EXTERN(symbols);
+// INCBIN_EXTERN(firacode);
+// INCBIN_EXTERN(ps1_memory_card_icon);
+// INCBIN_EXTERN(ps2_memory_card_icon);
+// INCBIN_EXTERN(pocketstation_icon);
+// INCBIN_EXTERN(iris_icon);
 
 // stb_image stuff
 #define STB_IMAGE_IMPLEMENTATION

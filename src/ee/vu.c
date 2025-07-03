@@ -247,23 +247,32 @@ static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
             if ((addr >= 0x400) && (addr <= 0x41f)) {
                 return vu->vu1->vf[addr & 0x1f].u128;
             } else if ((addr >= 0x420) && (addr <= 0x42f)) {
-                return (uint128_t)vu->vu1->vi[addr & 0xf];
+                uint128_t result; result.u32[0] = vu->vu1->vi[addr & 0xf];
+                return result;
             } else if (addr == 0x430) {
-                return (uint128_t)vu->vu1->status;
+                uint128_t result; result.u32[0] = vu->vu1->status;
+                return result;
             } else if (addr == 0x431) {
-                return (uint128_t)vu->vu1->mac;
+                uint128_t result; result.u32[0] = vu->vu1->mac;
+                return result;
             } else if (addr == 0x432) {
-                return (uint128_t)vu->vu1->clip;
+                uint128_t result; result.u32[0] = vu->vu1->clip;
+                return result;
             } else if (addr == 0x434) {
-                return (uint128_t)vu->vu1->r.u32;
+                uint128_t result; result.u32[0] = vu->vu1->r.u32;
+                return result;
             } else if (addr == 0x435) {
-                return (uint128_t)vu->vu1->i.u32;
+                uint128_t result; result.u32[0] = vu->vu1->i.u32;
+                return result;
             } else if (addr == 0x436) {
-                return (uint128_t)vu->vu1->q.u32;
+                uint128_t result; result.u32[0] = vu->vu1->q.u32;
+                return result;
             } else if (addr == 0x437) {
-                return (uint128_t)vu->vu1->p.u32;
+                uint128_t result; result.u32[0] = vu->vu1->p.u32;
+                return result;
             } else if (addr == 0x43a) {
-                return (uint128_t)vu->vu1->tpc;
+                uint128_t result; result.u32[0] = vu->vu1->tpc;
+                return result;
             }
         }
     }

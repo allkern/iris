@@ -10,7 +10,14 @@ extern "C" {
 
 #include "ps2.h"
 
-struct __attribute__((packed)) iso9660_pvd {
+#ifdef _MSC_VER
+#pragma pack(push, 1)
+#define PACKED
+#else
+#define PACKED __attribute__((packed))
+#endif
+
+struct PACKED iso9660_pvd {
 	char id[8];
 	char system_id[32];
 	char volume_id[32];
@@ -28,7 +35,7 @@ struct __attribute__((packed)) iso9660_pvd {
 	char copyright_file_id[37], abstract_file_id[37], bibliographical_file_id[37];
 };
 
-struct __attribute__((packed)) iso9660_dirent {
+struct PACKED iso9660_dirent {
     uint8_t dr_len;
     uint8_t ext_dr_len;
     uint32_t lba_le, lba_be;
@@ -42,6 +49,10 @@ struct __attribute__((packed)) iso9660_dirent {
     uint8_t id;
 };
 
+#ifdef _MSC_VER
+#pragma pack(pop)
+#endif
+
 struct iso9660_state {
     char buf[0x800];
     char boot_file[256];
@@ -53,6 +64,8 @@ struct iso9660_state* iso9660_open(const char* path);
 char* iso9660_get_boot_path(struct iso9660_state* iso);
 // void iso9660_load_boot_elf(struct iso9660_state* iso, char* buf);
 void iso9660_close(struct iso9660_state* iso);
+
+#undef PACKED
 
 #ifdef __cplusplus
 }

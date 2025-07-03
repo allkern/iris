@@ -1,10 +1,28 @@
 cmake_minimum_required(VERSION 3.16...4.0)
 
-message(STATUS "Setting up macOS stuff")
+# We need to build release always, unoptimized builds
+# won't cut it.
+set(CMAKE_BUILD_TYPE "Release")
+
+set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
 set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS)
+endif()
+
+# if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
+#     add_custom_command(
+#         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/main_data.c"
+#         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/software_thread_data.c"
+#         COMMAND "cl.exe ${CMAKE_CURRENT_BINARY_DIR}/incbin/incbin.c"
+#         COMMAND "./incbin.exe ${CMAKE_CURRENT_BINARY_DIR}/main.cpp -I\"res\" -o \"${CMAKE_CURRENT_BINARY_DIR}/main_data.c\""
+#         COMMAND "./incbin.exe ${CMAKE_CURRENT_BINARY_DIR}/src/gs/renderer/software_thread.cpp -I\"shaders\" -o \"${CMAKE_CURRENT_BINARY_DIR}/software_thread_data.c\""
+#     )
+# endif()
 
 project(iris LANGUAGES C CXX)
 
@@ -37,10 +55,8 @@ message(STATUS "Project Version: ${GIT_VERSION_STRING}")
 
 add_subdirectory(tomlplusplus)
 
-message(STATUS "MacOS icon file: ${OSX_ICON}")
-
 # And this part tells CMake where to find and install the file itself
-add_executable(iris MACOSX_BUNDLE ${OSX_ICON})
+add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
 set_property(TARGET iris PROPERTY CXX_STANDARD 20)
 add_definitions("-D_IRIS_VERSION=${GIT_VERSION_STRING}")

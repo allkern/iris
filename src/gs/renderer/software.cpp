@@ -1790,3 +1790,7 @@ extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
 extern "C" void software_transfer_read(struct ps2_gs* gs, void* udata) {
     gs->hwreg = 0;
 }
+
+void software_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
+void software_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass) {}
+void software_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}

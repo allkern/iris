@@ -1451,36 +1451,54 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
 
     SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(device, &fsci);
 
+    // Create vertex buffer description and attributes
+    SDL_GPUVertexBufferDescription vbd[1] = {{
+        .slot = 0,
+        .pitch = sizeof(gpu_vertex),
+        .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+        .instance_step_rate = 0,
+    }};
+
+    SDL_GPUVertexAttribute va[2] = {{
+        .location = 0,
+        .buffer_slot = 0,
+        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+        .offset = 0,
+    }, {
+        .location = 1,
+        .buffer_slot = 0,
+        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+        .offset = sizeof(float) * 2,
+    }};
+
+    SDL_GPUColorTargetDescription ctd[1] = {{
+        .format = SDL_GetGPUSwapchainTextureFormat(device, window),
+        .blend_state = {
+            .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+            .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            .color_blend_op = SDL_GPU_BLENDOP_ADD,
+            .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+            .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+            .color_write_mask = SDL_GPU_COLORCOMPONENT_A,
+            .enable_blend = false,
+            .enable_color_write_mask = false,
+        },
+    }};
+
     // Create graphics pipeline
     SDL_GPUGraphicsPipelineCreateInfo gpci = {
         .vertex_shader = vertex_shader,
         .fragment_shader = fragment_shader,
         .vertex_input_state = {
-            .vertex_buffer_descriptions = (SDL_GPUVertexBufferDescription[]) {{
-                .slot = 0,
-                .pitch = sizeof(gpu_vertex),
-                .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
-                .instance_step_rate = 0,
-            }},
+            .vertex_buffer_descriptions = vbd,
             .num_vertex_buffers = 1,
-            .vertex_attributes = (SDL_GPUVertexAttribute[]) {{
-                .location = 0,
-                .buffer_slot = 0,
-                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-                .offset = 0,
-            }, {
-                .location = 1,
-                .buffer_slot = 0,
-                .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
-                .offset = sizeof(float) * 2,
-            }},
+            .vertex_attributes = va,
             .num_vertex_attributes = 2,
         },
         .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
         .target_info = {
-            .color_target_descriptions = (SDL_GPUColorTargetDescription[]) {{
-                .format = SDL_GetGPUSwapchainTextureFormat(device, window),
-            }},
+            .color_target_descriptions = ctd,
             .num_color_targets = 1,
         },
     };
@@ -2678,10 +2696,10 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
     // fill the transfer buffer
     gpu_vertex* vertices = (gpu_vertex*)SDL_MapGPUTransferBuffer(ctx->device, buffer_tb, false);
 
-    vertices[0] = (gpu_vertex){ x0, y1,  0.0,  1.0 }; // Top left
-    vertices[1] = (gpu_vertex){ x1, y1,  1.0,  1.0 }; // Top right
-    vertices[2] = (gpu_vertex){ x1, y0,  1.0,  0.0 }; // Bottom right
-    vertices[3] = (gpu_vertex){ x0, y0,  0.0,  0.0 }; // Bottom left
+    vertices[0] = { x0, y1, 0.0, 1.0 }; // Top left
+    vertices[1] = { x1, y1, 1.0, 1.0 }; // Top right
+    vertices[2] = { x1, y0, 1.0, 0.0 }; // Bottom right
+    vertices[3] = { x0, y0, 0.0, 0.0 }; // Bottom left
 
     Uint16* indices = (Uint16*)&vertices[4];
 

@@ -29,7 +29,10 @@ extern "C" void null_render_point(struct ps2_gs* gs, void* udata) {}
 extern "C" void null_render_line(struct ps2_gs* gs, void* udata) {}
 extern "C" void null_render_triangle(struct ps2_gs* gs, void* udata) {}
 extern "C" void null_render_sprite(struct ps2_gs* gs, void* udata) {}
-extern "C" void null_render(struct ps2_gs* gs, void* udata) {}
 extern "C" void null_transfer_start(struct ps2_gs* gs, void* udata) {}
 extern "C" void null_transfer_write(struct ps2_gs* gs, void* udata) {}
 extern "C" void null_transfer_read(struct ps2_gs* gs, void* udata) {}
+
+void null_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
+void null_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass) {}
+void null_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
