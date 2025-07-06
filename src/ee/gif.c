@@ -292,7 +292,7 @@ void gif_handle_image(struct ps2_gif* gif, uint128_t data) {
 }
 
 void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
-    // Set FQC wgeb getting GIF FIFO writes
+    // Set FQC when getting GIF FIFO writes
     gif->stat |= 0x1f000000;
 
     if (gif->state == GIF_STATE_RECV_TAG) {
