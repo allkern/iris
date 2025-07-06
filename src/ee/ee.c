@@ -3291,3 +3291,24 @@ void ee_destroy(struct ee_state* ee) {
 
     free(ee);
 }
+
+void ee_run_block(struct ee_state* ee, int cycles) {
+    ee->delay_slot = ee->branch;
+
+    ee_check_irq(ee);
+
+    for (int i = 0; i < cycles; i++) {
+        ee->opcode = bus_read32(ee, ee->pc);
+        ee->branch = 0;
+
+        ee->pc = ee->next_pc;
+        ee->next_pc += 4;
+
+        ee_execute(ee);
+
+        ++ee->count;
+
+        ee->r[0].u64[0] = 0;
+        ee->r[0].u64[1] = 0;
+    }
+}

@@ -2,13 +2,15 @@ cmake_minimum_required(VERSION 3.16...4.0)
 
 # We need to build release always, unoptimized builds
 # won't cut it.
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
 set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
+set(CMAKE_CXX_FLAGS "-g")
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
     target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS)

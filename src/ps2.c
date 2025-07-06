@@ -6,7 +6,7 @@
 #include "ps2.h"
 
 #ifndef _PS2_TIMESCALE
-#define _PS2_TIMESCALE 1
+#define _PS2_TIMESCALE 4
 #endif
 
 struct ps2_state* ps2_create(void) {

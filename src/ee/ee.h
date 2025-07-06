@@ -209,6 +209,7 @@ void ee_destroy(struct ee_state* ee);
 void ee_set_int0(struct ee_state* ee, int v);
 void ee_set_int1(struct ee_state* ee, int v);
 void ee_set_cpcond0(struct ee_state* ee, int v);
+void ee_run_block(struct ee_state* ee, int cycles);
 
 #undef EE_ALIGNED16
 

@@ -54,6 +54,8 @@ INCBIN(iris_icon, "../res/iris.png");
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
+    SDL_SetAppMetadata("Iris", STR(_IRIS_VERSION), "com.allkern.iris");
+
     iris::instance* iris = new iris::instance;
 
     // Check if we got --help or --version in the commandline args
@@ -105,6 +107,24 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         SDL_GPU_SWAPCHAINCOMPOSITION_SDR,
         SDL_GPU_PRESENTMODE_MAILBOX
     );
+
+    // Init audio
+    SDL_AudioSpec spec;
+
+    spec.channels = 2;
+    spec.format = SDL_AUDIO_S16;
+    spec.freq = 48000;
+
+    iris->stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, iris::audio_update, iris);
+
+    if (!iris->stream) {
+        SDL_Log("Couldn't create audio stream: %s", SDL_GetError());
+
+        return SDL_APP_FAILURE;
+    }
+
+    /* SDL_OpenAudioDeviceStream starts the device paused. You have to tell it to start! */
+    SDL_ResumeAudioStreamDevice(iris->stream);
 
     // Setup Dear ImGui context
     IMGUI_CHECKVERSION();

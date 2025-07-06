@@ -476,6 +476,8 @@ void software_thread_set_size(void* udata, int width, int height) {
     //     tex_h /= 2;
     // }
 
+    // printf("gsr: Setting framebuffer size to %dx%d fmt=%02x\n", tex_w, tex_h, ctx->disp_fmt);
+
     // Do nothing if the size hasn't changed
     if (tex_w == ctx->tex_w && tex_h == ctx->tex_h) {
         return;
@@ -2743,7 +2745,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
     // Upload index buffer (right after our vertex data)
     SDL_UploadToGPUBuffer(cp, &tbl, &br, false);
 
-    int stride;
+    int stride = 4;
 
     switch (ctx->disp_fmt) {
         case GS_PSMCT32:
@@ -2755,6 +2757,13 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
         case GS_PSMCT16S: {
             stride = 2;
         } break;
+
+        // Ignore unknown formats
+        // default: {
+        //     printf("Unsupported display format %d\n", ctx->disp_fmt);
+            
+        //     exit(1);
+        // } break;
     }
 
     SDL_GPUTransferBufferCreateInfo ttbci = {
@@ -2769,7 +2778,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
 
     SDL_memcpy(data, ptr, (ctx->tex_w * stride) * ctx->tex_h);
 
-    SDL_UnmapGPUTransferBuffer(ctx->device, buffer_tb);
+    SDL_UnmapGPUTransferBuffer(ctx->device, texture_tb);
 
     SDL_GPUTextureTransferInfo tti = {
         .transfer_buffer = texture_tb,

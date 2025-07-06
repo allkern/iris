@@ -283,6 +283,11 @@ static inline void cdvd_s_cancel_pwoff_ready(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_blue_led_ctl(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 static inline void cdvd_s_read_wakeup_time(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 10);
 
@@ -439,6 +444,9 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x17: printf("cdvd: read_ilink_model\n"); cdvd_s_read_ilink_model(cdvd); break;
         case 0x1a: printf("cdvd: certify_boot\n"); cdvd_s_certify_boot(cdvd); break;
         case 0x1b: printf("cdvd: cancel_pwoff_ready\n"); cdvd_s_cancel_pwoff_ready(cdvd); break;
+
+        // Used by Namco System 246 at boot
+        case 0x1c: printf("cdvd: blue_led_ctl\n"); cdvd_s_blue_led_ctl(cdvd); break;
         case 0x1e: printf("cdvd: remote2_read\n"); cdvd_s_remote2_read(cdvd); break;
         case 0x22: printf("cdvd: read_wakeup_time\n"); cdvd_s_read_wakeup_time(cdvd); break;
         case 0x24: printf("cdvd: rc_bypass_ctrl\n"); cdvd_s_rc_bypass_ctrl(cdvd); break;

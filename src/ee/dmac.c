@@ -556,11 +556,11 @@ void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
     //     dmac->ipu_to.tadr
     // );
 
-    // dmac_set_irq(dmac, DMAC_IPU_TO);
+    dmac_set_irq(dmac, DMAC_IPU_TO);
 
-    // dmac->ipu_to.chcr &= ~0x100;
+    dmac->ipu_to.chcr &= ~0x100;
 
-    // return;
+    return;
 
     do {
         uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr, 0);
@@ -955,7 +955,9 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
     switch (addr) {
         case 0x10008000:
         case 0x10009000:
-        case 0x1000a000: {
+        case 0x1000a000:
+        case 0x1000b000:
+        case 0x1000b400: {
             c->chcr &= 0xffffff00;
             c->chcr |= data & 0xff;
 

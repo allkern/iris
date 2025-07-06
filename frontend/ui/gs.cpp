@@ -449,6 +449,9 @@ const char* format_names[] = {
 };
 
 int format = 0;
+static SDL_GPUTexture* tex = nullptr;
+static SDL_GPUSampler* sampler = nullptr;
+static SDL_GPUTextureSamplerBinding tsb;
 
 void show_gs_memory(iris::instance* iris) {
     using namespace ImGui;
@@ -504,13 +507,105 @@ void show_gs_memory(iris::instance* iris) {
         EndCombo();
     }
 
+    SDL_GPUTextureFormat fmt;
+    int stride = 0;
+
+    switch (format) {
+        case GS_PSMCT32:
+        case GS_PSMCT24: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+            stride = 4;
+        } break;
+
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B5G5R5A1_UNORM;
+            stride = 2;
+        } break;
+    }
+
     if (Button("View")) {
         addr = strtoul(buf0, NULL, 16);
         width = strtoul(buf1, NULL, 0);
         height = strtoul(buf2, NULL, 0);
+
+        if (tex) {
+            SDL_ReleaseGPUTexture(iris->device, tex);
+        }
+
+        if (sampler) {
+            SDL_ReleaseGPUSampler(iris->device, sampler);
+        }
+
+        SDL_GPUTextureCreateInfo tci = {};
+
+        tci.format = fmt;
+        tci.type = SDL_GPU_TEXTURETYPE_2D;
+        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width = width;
+        tci.height = height;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels = 1;
+        tci.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+        tex = SDL_CreateGPUTexture(iris->device, &tci);
+
+        SDL_GPUSamplerCreateInfo sci = {
+            .min_filter = SDL_GPU_FILTER_LINEAR,
+            .mag_filter = SDL_GPU_FILTER_LINEAR,
+            .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+            .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+            .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+            .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        };
+
+        sampler = SDL_CreateGPUSampler(iris->device, &sci);
+
+        tsb.texture = tex;
+        tsb.sampler = sampler;
     }
 
-    // Image((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
+    if (!tex)
+        return;
+
+    SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(iris->device);
+
+    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
+
+    SDL_GPUTransferBufferCreateInfo ttbci = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = width * height * stride
+    };
+
+    SDL_GPUTransferBuffer* texture_tb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
+
+    // fill the transfer buffer
+    void* data = SDL_MapGPUTransferBuffer(iris->device, texture_tb, false);
+
+    void* ptr = ((uint8_t*)gs->vram) + addr;
+
+    SDL_memcpy(data, ptr, (width * stride) * height);
+
+    SDL_UnmapGPUTransferBuffer(iris->device, texture_tb);
+
+    SDL_GPUTextureTransferInfo tti = {
+        .transfer_buffer = texture_tb,
+        .offset = 0,
+    };
+
+    SDL_GPUTextureRegion tr = {
+        .texture = tex,
+        .w = width,
+        .h = height,
+        .d = 1,
+    };
+
+    SDL_UploadToGPUTexture(cp, &tti, &tr, false);
+
+    // end the copy pass
+    SDL_EndGPUCopyPass(cp);
+
+    ImageWithBg((ImTextureID)(intptr_t)&tsb, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
 }
 
 void show_gs_debugger(iris::instance* iris) {

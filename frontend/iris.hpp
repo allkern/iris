@@ -67,6 +67,7 @@ struct elf_symbol {
 struct instance {
     SDL_Window* window = nullptr;
     SDL_GPUDevice* device = nullptr;
+    SDL_AudioStream* stream = nullptr;
 
     struct ps2_state* ps2 = nullptr;
 
@@ -225,10 +226,6 @@ void push_info(iris::instance* iris, std::string text);
 void add_recent(iris::instance* iris, std::string file);
 int open_file(iris::instance* iris, std::string file);
 
-}
+void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount);
 
-// SDL callbacks interface
-// SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv);
-// SDL_AppResult SDL_AppIterate(void *appstate);
-// SDL_AppResult SDL_AppEvent(void *appstate, SDL_Event *event);
-// void SDL_AppQuit(void *appstate, SDL_AppResult result);
+}

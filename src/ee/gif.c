@@ -4,6 +4,10 @@
 
 #include "gif.h"
 
+// Burnout games need the FQC field on GIF_STAT to change on
+// GIF DMA transfers, otherwise they'll hang on the initial
+// loading screen.
+
 #define printf(fmt, ...)(0)
 
 static inline const char* gif_get_reg_name(uint8_t r) {
@@ -83,7 +87,14 @@ void ps2_gif_destroy(struct ps2_gif* gif) {
 
 uint64_t ps2_gif_read32(struct ps2_gif* gif, uint32_t addr) {
     switch (addr) {
-        case 0x10003020: return gif->stat;
+        case 0x10003020: {
+            // Clear FQC when reading GIF_STAT
+            uint32_t v = gif->stat;
+
+            gif->stat &= ~0x1f000000;
+
+            return v;
+        } break;
         case 0x10003040: return gif->tag0;
         case 0x10003050: return gif->tag1;
         case 0x10003060: return gif->tag2;
@@ -281,6 +292,9 @@ void gif_handle_image(struct ps2_gif* gif, uint128_t data) {
 }
 
 void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
+    // Set FQC wgeb getting GIF FIFO writes
+    gif->stat |= 0x1f000000;
+
     if (gif->state == GIF_STATE_RECV_TAG) {
         gif_handle_tag(gif, data);
 

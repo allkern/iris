@@ -262,4 +262,22 @@ void update_window(iris::instance* iris) {
     iris->frames++;
 }
 
+void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
+    iris::instance* iris = (iris::instance*)userdata;
+
+    if (!additional_amount)
+        return;
+
+    if (iris->pause || iris->mute)
+        return;
+
+    spu2_sample* buf = (spu2_sample*)malloc(additional_amount * sizeof(spu2_sample));
+
+    for (int i = 0; i < additional_amount; i++) {
+        buf[i] = ps2_spu2_get_sample(iris->ps2->spu2);
+    }
+
+    SDL_PutAudioStreamData(stream, buf, additional_amount * sizeof(spu2_sample));
+}
+
 }
