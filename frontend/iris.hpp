@@ -179,6 +179,8 @@ struct instance {
     // Debug
     std::vector <elf_symbol> symbols;
     std::vector <uint8_t> strtab;
+
+    std::vector <spu2_sample> audio_buf;
 };
 
 int init_audio(iris::instance* iris);
