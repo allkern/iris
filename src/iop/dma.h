@@ -49,7 +49,7 @@ struct iop_dma_channel {
     int irq;
     int eot;
     int extra;
-    uint32_t transfer_size;
+    int32_t transfer_size;
 };
 
 struct ps2_iop_dma {

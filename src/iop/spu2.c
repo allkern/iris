@@ -91,12 +91,12 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
 }
 
 void spu2_irq(struct ps2_spu2* spu2, int c) {
-    if (spu2->spdif_irq & (4 << c))
-        return;
+    // if (spu2->spdif_irq & (4 << c))
+    //     return;
 
-    spu2->spdif_irq |= 4 << c;
+    // spu2->spdif_irq |= 4 << c;
 
-    printf("spu2: IRQ fired\n");
+    // printf("spu2: IRQ fired\n");
 
     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
 }
@@ -163,7 +163,7 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 
         cr->endx &= ~(1u << idx);
 
-        printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
+        // printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
 
         adsr_load_attack(spu2, cr, v);
         spu2_decode_adpcm_block(spu2, v);
@@ -195,11 +195,12 @@ void adma_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
         spu2->ram[(c ? 0x2400 : 0x2000) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
     } else if (spu2->c[c].memin_write_addr < 0x200) {
         spu2->ram[(c ? 0x2600 : 0x2200) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
-    } else if (spu2->c[c].memin_write_addr < 0x300) {
-        spu2->ram[(c ? 0x2500 : 0x2100) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
-    } else if (spu2->c[c].memin_write_addr < 0x400) {
-        spu2->ram[(c ? 0x2700 : 0x2300) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
     }
+    // } else if (spu2->c[c].memin_write_addr < 0x300) {
+    //     spu2->ram[(c ? 0x2500 : 0x2100) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
+    // } else if (spu2->c[c].memin_write_addr < 0x400) {
+    //     spu2->ram[(c ? 0x2700 : 0x2300) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
+    // }
 }
 
 void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
@@ -641,8 +642,6 @@ static const int ps_adpcm_coefs_i[5][2] = {
 void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
     uint16_t hdr = spu2->ram[v->nax];
 
-    spu2_check_irq(spu2, v->nax);
-
     // if (v->nax == spu2->c[0].irqa || v->nax == spu2->c[1].irqa)
     //     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
 
@@ -866,12 +865,16 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         // }
 
         if (v->loop_start) {
+            spu2_check_irq(spu2, v->nax);
+
             v->lsax = v->nax;
 
             v->nax += 8;
         } else if (v->loop_end) {
             // printf("spu2: Voice %d loop end at 0x%08x (lsax=%08x ssa=%08x) loop=%d\n", vc, v->nax, v->lsax, v->ssa, v->loop);
             v->nax = v->lsax;
+
+            spu2_check_irq(spu2, v->nax);
 
             if (!v->loop) {
                 adsr_load_release(spu2, c, v, vc);
@@ -880,6 +883,8 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
                 v->playing = 0;
             }
         } else {
+            spu2_check_irq(spu2, v->nax);
+
             v->nax += 8;
         }
 
@@ -920,11 +925,10 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
 }
 
 static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
-    if ((spu2->c[c].admas & (1 << c)) == 0)
-        return silence;
-
     if (spu2->c[c].memin_write_addr < 0x200)
         return silence;
+
+    spu2->c[c].adma_playing = 1;
 
     struct spu2_sample s = silence;
 
@@ -933,25 +937,16 @@ static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int
 
     spu2->c[c].memin_read_addr++;
 
-    if (spu2->c[c].memin_read_addr == 0x200) {
+    if (spu2->c[c].memin_read_addr == 0x100) {
         spu2->c[c].memin_read_addr = 0;
         spu2->c[c].memin_write_addr = 0;
+        spu2->c[c].adma_playing = 0;
 
-        if (c) {
-            iop_dma_end_spu2_transfer(spu2->dma);
+        // Request more data
+        if (c == 0) {
+            iop_dma_handle_spu1_transfer(spu2->dma);
         } else {
-            iop_dma_end_spu1_transfer(spu2->dma);
-        }
-    }
-
-    if (spu2->c[c].memin_read_addr == 0x200) {
-        spu2->c[c].memin_read_addr = 0;
-        spu2->c[c].memin_write_addr = 0;
-
-        if (c) {
-            iop_dma_end_spu2_transfer(spu2->dma);
-        } else {
-            iop_dma_end_spu1_transfer(spu2->dma);
+            iop_dma_handle_spu2_transfer(spu2->dma);
         }
     }
 
@@ -992,4 +987,14 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
 
 struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v) {
     return spu2_get_voice_sample(spu2, c, v);
+}
+
+int spu2_is_adma_active(struct ps2_spu2* spu2, int c) {
+    return spu2->c[c].memin_write_addr >= 0x200;
+}
+
+void spu2_start_adma(struct ps2_spu2* spu2, int c) {
+    spu2->c[c].adma_playing = 0;
+    spu2->c[c].memin_read_addr = 0;
+    spu2->c[c].memin_write_addr = 0;
 }

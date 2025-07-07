@@ -171,6 +171,7 @@ struct spu2_core {
     uint32_t memin_write_addr;
     uint32_t memin_read_addr;
 
+    int adma_playing;
     int16_t adma_ringbuf[4096];
     uint32_t adma_ringbuf_write_idx;
     uint32_t adma_ringbuf_read_idx;
@@ -211,6 +212,8 @@ void ps2_spu2_destroy(struct ps2_spu2* spu2);
 struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu);
 struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v);
 struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c);
+void spu2_start_adma(struct ps2_spu2* spu2, int c);
+int spu2_is_adma_active(struct ps2_spu2* spu2, int c);
 
 #ifdef __cplusplus
 }
