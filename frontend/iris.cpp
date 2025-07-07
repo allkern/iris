@@ -271,13 +271,13 @@ void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount
     if (iris->pause || iris->mute)
         return;
 
-    spu2_sample* buf = (spu2_sample*)malloc(additional_amount * sizeof(spu2_sample));
+    iris->audio_buf.resize(additional_amount);
 
     for (int i = 0; i < additional_amount; i++) {
-        buf[i] = ps2_spu2_get_sample(iris->ps2->spu2);
+        iris->audio_buf[i] = ps2_spu2_get_sample(iris->ps2->spu2);
     }
 
-    SDL_PutAudioStreamData(stream, buf, additional_amount * sizeof(spu2_sample));
+    SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), additional_amount * sizeof(spu2_sample));
 }
 
 }
