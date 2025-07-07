@@ -449,7 +449,7 @@ void software_thread_set_size(void* udata, int width, int height) {
         dispfb = ctx->gs->dispfb2;
     }
 
-    ctx->disp_fmt = (dispfb >> 15) & 0x1f;
+    uint32_t tex_fmt = (dispfb >> 15) & 0x1f;
 
     int magh = ((display >> 23) & 0xf) + 1;
     int magv = ((display >> 27) & 3) + 1;
@@ -479,12 +479,13 @@ void software_thread_set_size(void* udata, int width, int height) {
     // printf("gsr: Setting framebuffer size to %dx%d fmt=%02x\n", tex_w, tex_h, ctx->disp_fmt);
 
     // Do nothing if the size hasn't changed
-    if (tex_w == ctx->tex_w && tex_h == ctx->tex_h) {
+    if (tex_w == ctx->tex_w && tex_h == ctx->tex_h && tex_fmt == ctx->disp_fmt) {
         return;
     }
 
     ctx->tex_w = tex_w;
     ctx->tex_h = tex_h;
+    ctx->disp_fmt = tex_fmt;
 
     if (ctx->buf) free(ctx->buf);
 
