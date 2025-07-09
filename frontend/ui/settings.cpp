@@ -178,7 +178,7 @@ void show_paths_settings(iris::instance* iris) {
         iris->mute = true;
 
         auto f = pfd::open_file("Select BIOS file", "", {
-            "BIOS dumps (*.bin)", "*.bin",
+            "BIOS dumps (*.bin; *.rom0)", "*.bin *.rom0",
             "All Files (*.*)", "*"
         });
 
@@ -200,7 +200,7 @@ void show_paths_settings(iris::instance* iris) {
         iris->mute = true;
 
         auto f = pfd::open_file("Select DVD BIOS file", "", {
-            "DVD BIOS dumps (*.bin)", "*.bin",
+            "DVD BIOS dumps (*.bin; *.rom1)", "*.bin *.rom1",
             "All Files (*.*)", "*"
         });
 
@@ -226,7 +226,7 @@ void show_paths_settings(iris::instance* iris) {
         iris->mute = true;
 
         auto f = pfd::open_file("Select ROM2 file", "", {
-            "ROM2 dumps (*.bin)", "*.bin",
+            "ROM2 dumps (*.bin; *.rom2)", "*.bin *.rom2",
             "All Files (*.*)", "*"
         });
 

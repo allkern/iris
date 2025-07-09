@@ -211,6 +211,7 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "
 # note that fixup_bundle does not work on iOS, so you will want to use static libraries 
 # or manually copy dylibs and set rpaths
 message(STATUS "CMake System Name: ${CMAKE_SYSTEM_NAME}")
+
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     # tell Install about the target, otherwise fixup won't know about the transitive dependencies
     install(TARGETS iris
