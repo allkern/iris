@@ -13,21 +13,21 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Install SDL2
+    - name: Build and pack Iris
       run: |
-           sudo apt update
-           sudo apt install libsdl2-dev
-    - name: Build Iris
-      run: |
-           git fetch --all --tags
-           ./setup_gl3w.sh
-           make
-    - name: Pack executable
-      run: |
-           chmod +x ./bin/iris
-           mkdir dist
-           mv ./bin/iris ./dist
+        git fetch --all --tags
+        cmake -S . -B build
+        cmake --build build -j8
+        sudo cmake --install build
+        mkdir dist
+        mv ./build/iris ./dist
+        mkdir appimage
+        mv ./build/*.AppImage ./appimage
     - uses: actions/upload-artifact@v4
       with:
         name: iris-ubuntu-latest
         path: ./dist
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-ubuntu-appimage-latest
+        path: ./appimage
