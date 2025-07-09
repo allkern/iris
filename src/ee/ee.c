@@ -1901,8 +1901,32 @@ static inline void ee_i_pmulth(struct ee_state* ee) {
     ee->r[d].u32[2] = ee->lo.u32[2];
     ee->r[d].u32[3] = ee->hi.u32[2];
 }
-static inline void ee_i_pmultuw(struct ee_state* ee) { printf("ee: pmultuw unimplemented\n"); exit(1); }
-static inline void ee_i_pmultw(struct ee_state* ee) { printf("ee: pmultw unimplemented\n"); exit(1); }
+static inline void ee_i_pmultuw(struct ee_state* ee) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    ee->r[d].u64[0] = (uint64_t)ee->r[s].u32[0] * (uint64_t)ee->r[t].u32[0];
+    ee->r[d].u64[1] = (uint64_t)ee->r[s].u32[2] * (uint64_t)ee->r[t].u32[2];
+
+    ee->lo.u64[0] = SE6432(ee->r[d].u32[0]);
+    ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
+    ee->hi.u64[0] = SE6432(ee->r[d].u32[1]);
+    ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
+}
+static inline void ee_i_pmultw(struct ee_state* ee) {
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u64[0] = SE6432(ee->r[s].u32[0]) * SE6432(ee->r[t].u32[0]);
+    ee->r[d].u64[1] = SE6432(ee->r[s].u32[2]) * SE6432(ee->r[t].u32[2]);
+
+    ee->lo.u64[0] = SE6432(ee->r[d].u32[0]);
+    ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
+    ee->hi.u64[0] = SE6432(ee->r[d].u32[1]);
+    ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
+}
 static inline void ee_i_pnor(struct ee_state* ee) {
     uint128_t rs = ee->r[EE_D_RS];
     uint128_t rt = ee->r[EE_D_RT];
@@ -2035,7 +2059,20 @@ static inline void ee_i_psraw(struct ee_state* ee) {
     ee->r[d].u32[2] = ((int32_t)ee->r[t].u32[2]) >> sa;
     ee->r[d].u32[3] = ((int32_t)ee->r[t].u32[3]) >> sa;
 }
-static inline void ee_i_psrlh(struct ee_state* ee) { printf("ee: psrlh unimplemented\n"); exit(1); }
+static inline void ee_i_psrlh(struct ee_state* ee) {
+    int sa = EE_D_SA & 0xf;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = ee->r[t].u16[0] >> sa;
+    ee->r[d].u16[1] = ee->r[t].u16[1] >> sa;
+    ee->r[d].u16[2] = ee->r[t].u16[2] >> sa;
+    ee->r[d].u16[3] = ee->r[t].u16[3] >> sa;
+    ee->r[d].u16[4] = ee->r[t].u16[4] >> sa;
+    ee->r[d].u16[5] = ee->r[t].u16[5] >> sa;
+    ee->r[d].u16[6] = ee->r[t].u16[6] >> sa;
+    ee->r[d].u16[7] = ee->r[t].u16[7] >> sa;
+}
 static inline void ee_i_psrlvw(struct ee_state* ee) {
     int d = EE_D_RD;
     int s = EE_D_RS;
