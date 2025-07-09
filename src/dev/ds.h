@@ -45,6 +45,7 @@ struct ds_state {
     int mode;
     int vibration[2];
     int mask[2];
+    int lock;
 };
 
 struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port);

@@ -62,19 +62,22 @@ static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) 
         queue_push(sio2->out, ds->ax_left_x);
 
         // Push pressure bytes (only in DualShock 2 mode)
+        // Note: Some games (e.g. OutRun 2 SP/2006) won't register inputs
+        //       if the pressure  values are 0, so we push the max value
+        //       instead
         if (ds->mode == 2) {
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
-            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
+            queue_push(sio2->out, 0xff);
         }
     }
 }
@@ -114,7 +117,7 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
     ds->config_mode = queue_at(sio2->in, 3);
 }
 static inline void ds_cmd_set_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
-    printf("ds: ds_cmd_set_mode(%02x)\n", queue_at(sio2->in, 3));
+    printf("ds: ds_cmd_set_mode(%02x, %02x)\n", queue_at(sio2->in, 3), queue_at(sio2->in, 4));
 
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
@@ -126,7 +129,14 @@ static inline void ds_cmd_set_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     queue_push(sio2->out, 0x00);
     queue_push(sio2->out, 0x00);
 
-    ds->mode = queue_at(sio2->in, 3);
+    int mode = queue_at(sio2->in, 3);
+    int lock = queue_at(sio2->in, 4);
+
+    if (mode < 2 && !ds->lock) {
+        ds->mode = mode ? 1 : 0;
+    }
+
+    ds->lock = lock == 3;
 }
 static inline void ds_cmd_query_model(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_query_model\n");
@@ -290,6 +300,7 @@ struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
 
     // Start in digital mode
     ds->mode = 0;
+    ds->lock = 0;
 
     ps2_sio2_attach_device(sio2, dev, port);
 
