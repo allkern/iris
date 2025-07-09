@@ -48,7 +48,7 @@ int open_file(iris::instance* iris, std::string file) {
 
     // Load disc image
     if (ext == ".iso" || ext == ".bin" || ext == ".cue") {
-        if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str()))
+        if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str(), 0))
             return 1;
 
         char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);

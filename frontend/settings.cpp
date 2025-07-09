@@ -212,7 +212,7 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     }
 
     if (iris->disc_path.size()) {
-        if (ps2_cdvd_open(iris->ps2->cdvd, iris->disc_path.c_str()))
+        if (ps2_cdvd_open(iris->ps2->cdvd, iris->disc_path.c_str(), 0))
             return;
 
         char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);

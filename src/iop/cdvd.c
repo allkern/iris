@@ -1053,10 +1053,12 @@ void ps2_cdvd_destroy(struct ps2_cdvd* cdvd) {
 void cdvd_set_detected_type(void* udata, int overshoot) {
     struct ps2_cdvd* cdvd = (struct ps2_cdvd*)udata;
 
+    cdvd->status &= ~(CDVD_STATUS_SPINNING | CDVD_STATUS_TRAY_OPEN);
+
     cdvd->disc_type = cdvd->detected_disc_type;
 }
 
-int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
+int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay) {
     ps2_cdvd_close(cdvd);
 
     cdvd->layer2_lba = 0;
@@ -1076,6 +1078,14 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
         cdvd->detected_disc_type = CDVD_DISC_PS2_CD;
     }
 
+    if (!delay) {
+        cdvd->status &= ~CDVD_STATUS_TRAY_OPEN;
+
+        cdvd->disc_type = cdvd->detected_disc_type;
+
+        return 0;
+    }
+
     printf("cdvd: Opened \'%s\' (%s)\n", path, cdvd_get_type_name(cdvd->detected_disc_type));
 
     switch (cdvd->detected_disc_type) {
@@ -1093,12 +1103,11 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
         } break;
     }
 
-    cdvd->status &= ~CDVD_STATUS_TRAY_OPEN;
-    cdvd->status |= CDVD_STATUS_SPINNING;
+    cdvd->status |= CDVD_STATUS_TRAY_OPEN | CDVD_STATUS_SPINNING;
 
     struct sched_event event;
 
-    event.cycles = 100000; // IOP clock * 2 = 2s
+    event.cycles = delay; // IOP clock * 2 = 2s
     event.udata = cdvd;
     event.name = "CDVD disc detect";
     event.callback = cdvd_set_detected_type;

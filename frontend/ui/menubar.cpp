@@ -193,7 +193,8 @@ void show_main_menubar(iris::instance* iris) {
                 iris->mute = false;
 
                 if (f.result().size()) {
-                    if (!ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str())) {
+                    // 2-second delay to allow the disc to spin up
+                    if (!ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str(), 38860800*2)) {
                         iris->loaded = f.result().at(0);
                     }
                 }

@@ -126,7 +126,7 @@ struct ps2_cdvd {
 struct ps2_cdvd* ps2_cdvd_create(void);
 void ps2_cdvd_init(struct ps2_cdvd* cdvd, struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct sched_state* sched);
 void ps2_cdvd_destroy(struct ps2_cdvd* cdvd);
-int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path);
+int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay);
 void ps2_cdvd_close(struct ps2_cdvd* cdvd);
 void ps2_cdvd_power_off(struct ps2_cdvd* cdvd);
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr);
