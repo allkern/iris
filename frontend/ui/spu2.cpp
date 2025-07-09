@@ -35,6 +35,8 @@ void show_spu2_core(iris::instance* iris, int c) {
     int* solo = c ? &iris->core1_solo : &iris->core0_solo;
     int* selected = c ? &core1_selected : &core0_selected;
 
+    Text("IRQ address: %08x", core->irqa);
+
     char id[] = "##spu2coreX";
 
     id[10] = '0' + c;
@@ -44,10 +46,10 @@ void show_spu2_core(iris::instance* iris, int c) {
         TableSetupColumn("Voice");
         TableSetupColumn("ENVX");
         TableSetupColumn("NAX");
+        TableSetupColumn("SSA");
+        TableSetupColumn("LSAX");
         TableSetupColumn("Stage");
         TableSetupColumn("Cycles");
-        TableSetupColumn("Mute");
-        TableSetupColumn("Solo");
         TableHeadersRow();
         PopFont();
 
@@ -70,39 +72,25 @@ void show_spu2_core(iris::instance* iris, int c) {
 
             PushFont(iris->font_code);
             Text("%04x", core->v[i].envx);
-            
+
             TableSetColumnIndex(2);
-            
+
             Text("%08x", core->v[i].nax);
-
+            
             TableSetColumnIndex(3);
-
-            PopFont();
-
-            Text("%s", get_adsr_stage_name(core->v[i].adsr_phase));
-
+            
+            Text("%08x", core->v[i].ssa);
+            
             TableSetColumnIndex(4);
-
-            Text("%d", core->v[i].adsr_cycles);
-
+            
+            Text("%08x", core->v[i].lsax);
+            
             TableSetColumnIndex(5);
-
-            char label[16]; sprintf(label, "%s##m%d", mute[i] ? ICON_MS_CHECK : " ", i);
-
-            if (Selectable(label))
-                mute[i] = !mute[i];
-
+            PopFont();
+            Text("%s", get_adsr_stage_name(core->v[i].adsr_phase));
+            
             TableSetColumnIndex(6);
-
-            sprintf(label, "%s##s%d", (*solo == i) ? ICON_MS_CHECK : " ", i);
-
-            if (Selectable(label)) {
-                if (*solo == i) {
-                    *solo = -1;
-                } else {
-                    *solo = i;
-                }
-            }
+            Text("%d", core->v[i].adsr_cycles);
         }
 
         EndTable();

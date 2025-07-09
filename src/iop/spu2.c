@@ -944,9 +944,9 @@ static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int
 
         // Request more data
         if (c == 0) {
-            iop_dma_handle_spu1_transfer(spu2->dma);
+            iop_dma_handle_spu1_adma(spu2->dma);
         } else {
-            iop_dma_handle_spu2_transfer(spu2->dma);
+            iop_dma_handle_spu2_adma(spu2->dma);
         }
     }
 
