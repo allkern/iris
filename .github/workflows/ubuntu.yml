@@ -13,6 +13,9 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
+    - name: Install X11 and Wayland libs
+      run: |
+        sudo apt install libx11-dev libwayland-dev
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
