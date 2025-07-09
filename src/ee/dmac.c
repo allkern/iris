@@ -748,8 +748,10 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
     int mode = (dmac->spr_from.chcr >> 2) & 3;
 
     // Interleave mode unimplemented yet
-    if (mode != 0) {
-        printf("dmac: SPR from interleave/chain mode unimplemented (mod=%d)\n", mode);
+    if (mode == 2) {
+        printf("dmac: SPR from interleave mode unimplemented (mod=%d)\n", mode);
+
+        dmac->spr_from.qwc = 0;
 
         return;
     }
@@ -764,13 +766,66 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
     }
 
     dmac->spr_from.qwc = 0;
+
+    if (mode == 0) {
+        return;
+    }
+
+    // Chain mode
+    int loop = 0;
+    do {
+        uint128_t tag = dmac_read_qword(dmac, dmac->spr_from.sadr, 1);
+
+        dmac->spr_from.sadr += 0x10;
+        dmac->spr_from.sadr &= 0x3fff;
+
+        dmac->spr_from.tag.qwc = tag.u32[0] & 0xffff;
+        dmac->spr_from.tag.id = (tag.u32[0] >> 28) & 0x7;
+        dmac->spr_from.tag.irq = tag.u32[0] & 0x80000000;
+        dmac->spr_from.tag.end = dmac->spr_from.tag.id == 7;
+        dmac->spr_from.madr = tag.u32[1];
+
+        // printf("ee: spr_from tag qwc=%08lx madr=%08lx sadr=%08x tadr=%08lx id=%ld addr=%08lx mem=%ld data=%016lx irq=%d end=%d tte=%d\n",
+        //     dmac->spr_from.tag.qwc,
+        //     dmac->spr_from.madr,
+        //     dmac->spr_from.sadr,
+        //     dmac->spr_from.tadr,
+        //     dmac->spr_from.tag.id,
+        //     dmac->spr_from.tag.addr,
+        //     dmac->spr_from.tag.mem,
+        //     dmac->spr_from.tag.data,
+        //     dmac->spr_from.tag.irq,
+        //     dmac->spr_from.tag.end,
+        //     (dmac->spr_from.chcr >> 7) & 1
+        // );
+
+        for (int i = 0; i < dmac->spr_from.tag.qwc; i++) {
+            uint128_t q = dmac_read_qword(dmac, dmac->spr_from.sadr, 1);
+
+            ee_bus_write128(dmac->bus, dmac->spr_from.madr, q);
+
+            dmac->spr_from.madr += 0x10;
+            dmac->spr_from.sadr += 0x10;
+            dmac->spr_from.sadr &= 0x3fff;
+        }
+    } while (!channel_is_done(&dmac->spr_from));
 }
 void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
     dmac_set_irq(dmac, DMAC_SPR_TO);
 
     dmac->spr_to.chcr &= ~0x100;
 
-    int mode = (dmac->spr_from.chcr >> 2) & 3;
+    int mode = (dmac->spr_to.chcr >> 2) & 3;
+
+    // printf("ee: spr_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
+    //     dmac->spr_to.chcr,
+    //     dmac->spr_to.chcr & 1,
+    //     (dmac->spr_to.chcr >> 2) & 3,
+    //     !!(dmac->spr_to.chcr & 0x40),
+    //     dmac->spr_to.madr,
+    //     dmac->spr_to.qwc,
+    //     dmac->spr_to.tadr
+    // );
 
     // Interleave mode unimplemented yet
     if (mode == 2) {
