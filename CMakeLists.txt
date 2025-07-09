@@ -57,8 +57,18 @@ message(STATUS "Project Version: ${GIT_VERSION_STRING}")
 
 add_subdirectory(tomlplusplus)
 
+include(CheckIPOSupported)
+check_ipo_supported(RESULT supported OUTPUT error)
+
 # And this part tells CMake where to find and install the file itself
 add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
+
+if (supported)
+    message(STATUS "IPO/LTO enabled")
+    set_property(TARGET iris PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+else()
+    message(STATUS "IPO/LTO not supported: ${error}")
+endif()
 
 set_property(TARGET iris PROPERTY CXX_STANDARD 20)
 add_definitions("-D_IRIS_VERSION=${GIT_VERSION_STRING}")
