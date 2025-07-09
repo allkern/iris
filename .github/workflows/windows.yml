@@ -20,6 +20,7 @@ jobs:
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
         Copy-Item ".\build\*.dll" "dist"
+        Copy-Item "C:\mingw64\bin\*.dll" "dist"
     - name: Generate artifact name
       id: generate-name
       run: |
