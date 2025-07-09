@@ -363,35 +363,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult SDL_AppIterate(void* appstate) {
-    iris::instance* iris = (iris::instance*)appstate;
-
-    if (iris->pause) {
-        iris->step_out = false;
-        iris->step_over = false;
-
-        if (iris->step) {
-            ps2_cycle(iris->ps2);
-
-            iris->step = false;
-        }
-
-        update_window(iris);
-
-        return SDL_APP_CONTINUE;
-    }
-
-    if (iris->step_over) {
-        if (iris->ps2->ee->pc == iris->step_over_addr) {
-            iris->step_over = false;
-            iris->pause = true;
-        }
-    }
-
-    // Break on VBlank
-    while (!ps2_gs_is_vblank(iris->ps2->gs)) {
-        ps2_cycle(iris->ps2);
-    }
+static inline void do_cycle(iris::instance* iris) {
+    ps2_cycle(iris->ps2);
 
     if (iris->step_out) {
         // jr $ra
@@ -401,6 +374,13 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
             // Consume the delay slot
             ps2_cycle(iris->ps2);
+        }
+    }
+
+    if (iris->step_over) {
+        if (iris->ps2->ee->pc == iris->step_over_addr) {
+            iris->step_over = false;
+            iris->pause = true;
         }
     }
 
@@ -415,12 +395,46 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
             }
         }
     }
+}
+
+SDL_AppResult SDL_AppIterate(void* appstate) {
+    iris::instance* iris = (iris::instance*)appstate;
+
+    if (iris->pause) {
+        iris->step_out = false;
+        iris->step_over = false;
+
+        if (iris->step) {
+            ps2_cycle(iris->ps2);
+
+            iris->step = false;
+        }
+
+        iris::update_window(iris);
+
+        return SDL_APP_CONTINUE;
+    }
+    
+    // Execute until vblank is over
+    while (ps2_gs_is_vblank(iris->ps2->gs)) {
+        do_cycle(iris);
+
+        if (iris->pause) {
+            iris::update_window(iris);
+
+            return SDL_APP_CONTINUE;
+        }
+    }
 
     iris::update_window(iris);
 
-    // Execute until vblank is over
-    while (ps2_gs_is_vblank(iris->ps2->gs)) {
-        ps2_cycle(iris->ps2);
+    // Break on VBlank
+    while (!ps2_gs_is_vblank(iris->ps2->gs)) {
+        do_cycle(iris);
+
+        if (iris->pause) {
+            return SDL_APP_CONTINUE;
+        }
     }
 
     return SDL_APP_CONTINUE;
