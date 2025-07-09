@@ -16,7 +16,7 @@ jobs:
     - name: Run build-win
       run: |
         cmake -S . -B build -G "MinGW Makefiles"
-        cmake --build build
+        cmake --build build -j8
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
         Copy-Item ".\build\*.dll" "dist"
