@@ -3,6 +3,13 @@
 #include <stdlib.h>
 #include <string.h>
 
+static inline uint8_t ds_get_model_byte(struct ds_state* ds) {
+    switch (ds->mode) {
+        case 0: return 0x41;
+        case 1: return 0x73;
+        case 2: return 0x79;
+    }
+}
 static inline void ds_cmd_set_vref_param(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_set_vref_param\n");
 
@@ -43,7 +50,7 @@ static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) 
     printf("ds: ds_cmd_read_data(%04x)\n", ds->buttons);
 
     queue_push(sio2->out, 0xff);
-    queue_push(sio2->out, ds->mode ? 0x79 : 0x41);
+    queue_push(sio2->out, ds_get_model_byte(ds));
     queue_push(sio2->out, 0x5a);
     queue_push(sio2->out, ds->buttons & 0xff);
     queue_push(sio2->out, ds->buttons >> 8);
@@ -53,65 +60,45 @@ static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) 
         queue_push(sio2->out, ds->ax_right_x);
         queue_push(sio2->out, ds->ax_left_y);
         queue_push(sio2->out, ds->ax_left_x);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
-        queue_push(sio2->out, 0x00);
+
+        // Push pressure bytes (only in DualShock 2 mode)
+        if (ds->mode == 2) {
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+            queue_push(sio2->out, 0x00);
+        }
     }
 }
 static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_config_mode(%02x)\n", queue_at(sio2->in, 3));
 
+    // Same as read_data, but without pressure data in DualShock 2 mode
     if (!ds->config_mode) {
-        if (!queue_at(sio2->in, 3)) {
-            queue_push(sio2->out, 0xff);
-            queue_push(sio2->out, ds->mode ? 0x73 : 0x41);
-            queue_push(sio2->out, 0x5a);
-            queue_push(sio2->out, ds->buttons & 0xff);
-            queue_push(sio2->out, ds->buttons >> 8);
+        queue_push(sio2->out, 0xff);
 
-            if (ds->mode) {
-                queue_push(sio2->out, ds->ax_right_y);
-                queue_push(sio2->out, ds->ax_right_x);
-                queue_push(sio2->out, ds->ax_left_y);
-                queue_push(sio2->out, ds->ax_left_x);
-            }
-        } else {
-            queue_push(sio2->out, 0xff);
-            queue_push(sio2->out, ds->mode ? 0x79 : 0x41);
-            queue_push(sio2->out, 0x5a);
-            queue_push(sio2->out, ds->buttons & 0xff);
-            queue_push(sio2->out, ds->buttons >> 8);
+        // We don't use the model byte here because
+        // config_mode returns the same data as analog (DS1)
+        // when not in config mode regardless of the model
+        queue_push(sio2->out, ds->mode ? 0x73 : 0x41);
+        queue_push(sio2->out, 0x5a);
+        queue_push(sio2->out, ds->buttons & 0xff);
+        queue_push(sio2->out, ds->buttons >> 8);
 
-            if (ds->mode) {
-                queue_push(sio2->out, ds->ax_right_y);
-                queue_push(sio2->out, ds->ax_right_x);
-                queue_push(sio2->out, ds->ax_left_y);
-                queue_push(sio2->out, ds->ax_left_x);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-                queue_push(sio2->out, 0x00);
-            }
+        if (ds->mode) {
+            queue_push(sio2->out, ds->ax_right_y);
+            queue_push(sio2->out, ds->ax_right_x);
+            queue_push(sio2->out, ds->ax_left_y);
+            queue_push(sio2->out, ds->ax_left_x);
         }
-
-        ds->config_mode = queue_at(sio2->in, 3);
     } else {
         queue_push(sio2->out, 0xff);
         queue_push(sio2->out, 0xf3);
@@ -122,9 +109,9 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
         queue_push(sio2->out, 0x00);
         queue_push(sio2->out, 0x00);
         queue_push(sio2->out, 0x00);
-
-        ds->config_mode = 0;
     }
+
+    ds->config_mode = queue_at(sio2->in, 3);
 }
 static inline void ds_cmd_set_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
     printf("ds: ds_cmd_set_mode(%02x)\n", queue_at(sio2->in, 3));
@@ -149,7 +136,7 @@ static inline void ds_cmd_query_model(struct ps2_sio2* sio2, struct ds_state* ds
     queue_push(sio2->out, 0x5a);
     queue_push(sio2->out, 0x03); // Model (01=Dualshock/Digital 03=Dualshock 2)
     queue_push(sio2->out, 0x02);
-    queue_push(sio2->out, ds->mode); // Analog (00=no 01=yes)
+    queue_push(sio2->out, !!ds->mode); // Analog (00=no 01=yes)
     queue_push(sio2->out, 0x02);
     queue_push(sio2->out, 0x01);
     queue_push(sio2->out, 0x00);
@@ -226,7 +213,12 @@ static inline void ds_cmd_vibration_toggle(struct ps2_sio2* sio2, struct ds_stat
     ds->vibration[1] = queue_at(sio2->in, 4);
 }
 static inline void ds_cmd_set_native_mode(struct ps2_sio2* sio2, struct ds_state* ds) {
-    printf("ds: ds_cmd_set_native_mode\n");
+    printf("ds: ds_cmd_set_native_mode(%02x, %02x, %02x, %02x)\n",
+        queue_at(sio2->in, 3),
+        queue_at(sio2->in, 4),
+        queue_at(sio2->in, 5),
+        queue_at(sio2->in, 6)
+    );
 
     queue_push(sio2->out, 0xff);
     queue_push(sio2->out, 0xf3);
@@ -244,12 +236,13 @@ static inline void ds_cmd_set_native_mode(struct ps2_sio2* sio2, struct ds_state
     int value = queue_at(sio2->in, 5);
 
     if ((value & 1) == 0) {
+        // Digital mode
         ds->mode = 0;
     } else if ((value & 2) == 0) {
+        // Analog mode
         ds->mode = 1;
     } else {
-        printf("ds: Set native mode to DS2_NATIVE\n");
-
+        // DualShock 2 mode
         ds->mode = 2;
     }
 }
