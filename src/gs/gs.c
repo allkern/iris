@@ -302,6 +302,9 @@ void gs_write_vertex_no_fog(struct ps2_gs* gs, uint64_t data, int discard) {
 }
 
 uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
+    // Hack toggle between FIFO empty and FIFO "Neither Empty nor Almost Full"
+    gs->csr ^= 0x4000;
+
     switch (addr) {
         case 0x12000000: return gs->csr | 0x551b0000;
         case 0x12000010: return gs->csr | 0x551b0000;

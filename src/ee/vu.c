@@ -2301,18 +2301,18 @@ void vu_i_xgkick(struct vu_state* vu) {
 }
 void vu_i_xitop(struct vu_state* vu) {
     if (vu->id == 0) {
-        printf("vu: xitop used in VU0, this is not allowed\n");
+        printf("vu: xitop used in VU0\n");
 
-        exit(1);
+        // exit(1);
     }
 
     vu_set_vi(vu, VU_LD_T, vu->vif->itop);
 }
 void vu_i_xtop(struct vu_state* vu) {
     if (vu->id == 0) {
-        printf("vu: xtop used in VU0, this is not allowed\n");
+        printf("vu: xtop used in VU0\n");
 
-        exit(1);
+        // exit(1);
     }
 
     vu_set_vi(vu, VU_LD_T, vu->vif->top);

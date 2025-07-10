@@ -1173,7 +1173,7 @@ uint32_t ImageProcessingUnit::read_BP()
     }
     reg |= in_FIFO.bit_pointer;
     reg |= fifo_size << 8;
-    printf("ipu: Read BP: $%08X\n", reg);
+   //  printf("ipu: Read BP: $%08X\n", reg);
     return reg;
 }
 

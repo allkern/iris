@@ -505,9 +505,7 @@ void software_thread_set_size(void* udata, int width, int height) {
         } break;
 
         default: {
-            printf("gsr: Unknown framebuffer format %02x\n", ctx->disp_fmt);
-
-            exit(1);
+            // printf("gsr: Unknown framebuffer format %02x\n", ctx->disp_fmt);
         } break;
     }
 
