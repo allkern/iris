@@ -15,10 +15,12 @@ imgui.ini
 *.cue
 *.bin
 *.elf
-*.ELF
 *.exe
 *.iso
 *.mec
 *.nvm
+*.mcd
+*.wav
+*.irx
 *.o
 .DS_Store
