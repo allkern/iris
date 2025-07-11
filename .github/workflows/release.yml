@@ -103,15 +103,13 @@ jobs:
         cmake -S . -B build
         cmake --build build -j8
         sudo cmake --install build
-        mkdir -p ./build/dist
-        cp -R ./build/iris.app ./build/dist
     - name: Generate artifact name
       id: generate-name
       run: |
         echo "::set-output name=artifact::iris-${{ github.ref_name }}-macos-universal"
     - name: Zip artifact
       run: |
-        zip -r ${{ steps.generate-name.outputs.artifact }}.zip ./build/dist
+        cd build; zip -r ../${{ steps.generate-name.outputs.artifact }}.zip ./iris.app; cd ..
     - name: Upload to release
       uses: softprops/action-gh-release@v1
       with:
