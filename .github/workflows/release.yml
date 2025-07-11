@@ -74,13 +74,16 @@ jobs:
         echo "::set-output name=artifact::iris-${{ github.ref_name }}-ubuntu-appimage"
     - name: Zip artifact
       run: |
-        zip -rj ${{ steps.generate-name.outputs.artifact }}.zip appimage
-    - name: Upload to release
+        zip -rj ${{ steps.generate-name.outputs.artifact }}.zip dist
+    - name: Zip AppImage
+      run: |
+        zip -rj ${{ steps.generate-name-appimage.outputs.artifact }}.zip appimage
+    - name: Upload normal binary to release
       uses: softprops/action-gh-release@v1
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
-    - name: Upload to release
+    - name: Upload AppImage to release
       uses: softprops/action-gh-release@v1
       with:
         files: |
