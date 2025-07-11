@@ -13,20 +13,17 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Run build-win
+    - name: Build and pack Iris
       run: |
+        git fetch --all --tags
         cmake -S . -B build -G "MinGW Makefiles"
         cmake --build build -j8
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
         Copy-Item ".\build\*.dll" "dist"
         Copy-Item "C:\mingw64\bin\*.dll" "dist"
-    - name: Generate artifact name
-      id: generate-name
-      run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-win"
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.generate-name.outputs.artifact }}
+        name: iris-latest-win
         path: dist/
