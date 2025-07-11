@@ -5,7 +5,7 @@ on:
     branches: [ "sdl3-cmake" ]
 
 jobs:
-  macos-arm64-build:
+  macos-universal-build:
     runs-on: macos-latest
 
     steps:
@@ -23,5 +23,5 @@ jobs:
         cp -R ./build/iris.app ./build/dist
     - uses: actions/upload-artifact@v4
       with:
-        name: iris-macos-arm64-latest
+        name: iris-macos-universal-latest
         path: ./build/dist
