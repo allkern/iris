@@ -80,14 +80,14 @@ struct instance {
     unsigned int renderer_backend = RENDERER_SOFTWARE_THREAD;
     renderer_state* ctx = nullptr;
 
-    int ps2_memory_card_icon_width = 0;
-    int ps1_memory_card_icon_width = 0;
-    int pocketstation_icon_width = 0;
-    int iris_icon_width = 0;
-    int ps2_memory_card_icon_height = 0;
-    int ps1_memory_card_icon_height = 0;
-    int pocketstation_icon_height = 0;
-    int iris_icon_height = 0;
+    uint32_t ps2_memory_card_icon_width = 0;
+    uint32_t ps1_memory_card_icon_width = 0;
+    uint32_t pocketstation_icon_width = 0;
+    uint32_t iris_icon_width = 0;
+    uint32_t ps2_memory_card_icon_height = 0;
+    uint32_t ps1_memory_card_icon_height = 0;
+    uint32_t pocketstation_icon_height = 0;
+    uint32_t iris_icon_height = 0;
     SDL_GPUTextureSamplerBinding ps2_memory_card_icon_tsb = {};
     SDL_GPUTextureSamplerBinding ps1_memory_card_icon_tsb = {};
     SDL_GPUTextureSamplerBinding pocketstation_icon_tsb = {};

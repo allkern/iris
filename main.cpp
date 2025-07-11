@@ -53,10 +53,10 @@ INCBIN(iris_icon, "../res/iris.png");
 // Icon range (for our fonts)
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
-SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass* cp, void* buf, size_t size, int* width, int* height) {
+SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass* cp, void* buf, size_t size, uint32_t* width, uint32_t* height) {
     SDL_GPUTextureSamplerBinding tsb = {};
 
-    stbi_uc* tex = stbi_load_from_memory((stbi_uc*)buf, size, width, height, nullptr, 4);
+    stbi_uc* tex = stbi_load_from_memory((stbi_uc*)buf, size, (int*)width, (int*)height, nullptr, 4);
 
     if (!tex) {
         printf("Error: stbi_load_from_memory() failed: %s\n", stbi_failure_reason());
@@ -90,7 +90,7 @@ SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass*
     // Transfer the texture
     SDL_GPUTransferBufferCreateInfo ttbci = {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = (((Uint32)*width) * 4) * ((Uint32)*height)
+        .size = ((*width) * 4) * (*height)
     };
 
     SDL_GPUTransferBuffer* ttb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
@@ -98,7 +98,7 @@ SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass*
     // fill the transfer buffer
     void* data = SDL_MapGPUTransferBuffer(iris->device, ttb, false);
 
-    SDL_memcpy(data, tex, (((Uint32)*width) * 4) * ((Uint32)*height));
+    SDL_memcpy(data, tex, ((*width) * 4) * (*height));
 
     SDL_UnmapGPUTransferBuffer(iris->device, ttb);
 
