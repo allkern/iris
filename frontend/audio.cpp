@@ -67,23 +67,23 @@ void audio_update(void* ud, uint8_t* buf, int size) {
 }
 
 int init_audio(iris::instance* iris) {
-    SDL_AudioDeviceID dev;
-    SDL_AudioSpec obtained, desired;
+    // SDL_AudioDeviceID dev;
+    // SDL_AudioSpec obtained, desired;
 
-    desired.freq     = 48000;
-    desired.format   = AUDIO_S16SYS;
-    desired.channels = 2;
-    desired.samples  = 512;
-    desired.callback = &audio_update;
-    desired.userdata = iris;
+    // desired.freq     = 48000;
+    // desired.format   = AUDIO_S16SYS;
+    // desired.channels = 2;
+    // desired.samples  = 512;
+    // desired.callback = &audio_update;
+    // desired.userdata = iris;
 
-    dev = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
+    // dev = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
 
-    if (dev) {
-        SDL_PauseAudioDevice(dev, 0);
+    // if (dev) {
+    //     SDL_PauseAudioDevice(dev, 0);
 
-        return 0;
-    }
+    //     return 0;
+    // }
 
     return 1;
 }

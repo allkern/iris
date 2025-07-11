@@ -1,5 +1,6 @@
 SDL2-2.32.0/
 .vscode/
+build/
 bin/
 tools/
 elf/
@@ -8,14 +9,18 @@ main2.cpp
 compare
 compare.cpp
 imgui.ini
+*.AppImage
 *.expected
 *.dump
 *.cue
 *.bin
 *.elf
-*.ELF
 *.exe
 *.iso
 *.mec
 *.nvm
+*.mcd
+*.wav
+*.irx
 *.o
+.DS_Store

@@ -104,7 +104,7 @@ void ps2_intc_irq(struct ps2_intc* intc, int dev) {
     struct sched_event event;
 
     event.callback = intc_check_irq_event;
-    event.cycles = 32;
+    event.cycles = 64;
     event.name = "INTC IRQ check";
     event.udata = intc;
 

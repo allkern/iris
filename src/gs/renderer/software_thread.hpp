@@ -8,9 +8,7 @@
 #include <queue>
 #include <mutex>
 
-#include <SDL.h>
-
-#include "GL/gl3w.h"
+#include <SDL3/SDL.h>
 
 #include "gs/gs.h"
 
@@ -19,6 +17,10 @@
 struct render_data {
     int prim;
     struct ps2_gs gs;
+};
+
+struct gpu_vertex {
+    float x, y, u, v;
 };
 
 struct software_thread_state {
@@ -41,7 +43,19 @@ struct software_thread_state {
     uint32_t psmct24_data = 0;
     uint32_t psmct24_shift = 0;
 
+    // SDL stuff
     SDL_Window* window = nullptr;
+    SDL_GPUDevice* device = nullptr;
+    SDL_GPUBuffer* vertex_buffer = nullptr;
+    SDL_GPUBuffer* index_buffer = nullptr;
+    SDL_GPUTexture* texture = nullptr;
+    SDL_GPUSampler* sampler = nullptr;
+    SDL_GPUGraphicsPipeline* pipeline = nullptr;
+
+    // Context
+    SDL_GPUCommandBuffer* cb = nullptr;
+    SDL_GPURenderPass* rp = nullptr;
+
     struct ps2_gs* gs = nullptr;
 
     unsigned int window_x = 0, window_y = 0;
@@ -57,29 +71,12 @@ struct software_thread_state {
     float scale = 1.5;
     bool bilinear = true;
 
-    GLuint vert_shader = 0;
-
-    std::vector <GLuint> programs;
-
-    GLuint default_program = 0;
-
-    GLuint vao = 0;
-    GLuint vbo = 0;
-    GLuint ebo = 0;
-    GLuint tex = 0;
-    GLuint fbo = 0;
-    GLuint fb_vao = 0;
-    GLuint fb_vbo = 0;
-    GLuint fb_ebo = 0;
-    GLuint fb_in_tex = 0;
-    GLuint fb_out_tex = 0;
-
     unsigned int frame = 0;
 
     uint32_t* buf = nullptr;
 };
 
-void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window);
+void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device);
 void software_thread_destroy(void* udata);
 void software_thread_set_size(void* udata, int width, int height);
 void software_thread_set_scale(void* udata, float scale);
@@ -93,15 +90,15 @@ void software_thread_get_interlace_mode(void* udata, int* mode);
 void software_thread_set_window_rect(void* udata, int x, int y, int w, int h);
 void* software_thread_get_buffer_data(void* udata, int* w, int* h, int* bpp);
 const char* software_thread_get_name(void* udata);
-// void software_push_shader(software_state* ctx, const char* path);
-// void software_pop_shader(software_state* ctx);
+void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
+void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass);
+void software_thread_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
 
 extern "C" {
 void software_thread_render_point(struct ps2_gs* gs, void* udata);
 void software_thread_render_line(struct ps2_gs* gs, void* udata);
 void software_thread_render_triangle(struct ps2_gs* gs, void* udata);
 void software_thread_render_sprite(struct ps2_gs* gs, void* udata);
-void software_thread_render(struct ps2_gs* gs, void* udata);
 void software_thread_transfer_start(struct ps2_gs* gs, void* udata);
 void software_thread_transfer_write(struct ps2_gs* gs, void* udata);
 void software_thread_transfer_read(struct ps2_gs* gs, void* udata);

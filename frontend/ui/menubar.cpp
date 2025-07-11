@@ -3,7 +3,6 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
-#include "tfd/tinyfiledialogs.h"
 #include "pfd/pfd.h"
 
 #include "ps2_elf.h"
@@ -29,13 +28,11 @@ const char* renderer_names[] = {
 
 const char* fullscreen_names[] = {
     "Windowed",
-    "Fullscreen (Desktop)",
     "Fullscreen"
 };
 
 int fullscreen_flags[] = {
     0,
-    SDL_WINDOW_FULLSCREEN_DESKTOP,
     SDL_WINDOW_FULLSCREEN
 };
 
@@ -195,7 +192,8 @@ void show_main_menubar(iris::instance* iris) {
                 iris->mute = false;
 
                 if (f.result().size()) {
-                    if (!ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str())) {
+                    // 2-second delay to allow the disc to spin up
+                    if (!ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str(), 38860800*2)) {
                         iris->loaded = f.result().at(0);
                     }
                 }
@@ -216,7 +214,7 @@ void show_main_menubar(iris::instance* iris) {
                         if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
                             iris->renderer_backend = i;
 
-                            renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, i);
+                            renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
                             renderer_set_scale(iris->ctx, iris->scale);
                             renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
                             renderer_set_bilinear(iris->ctx, iris->bilinear);
@@ -275,7 +273,7 @@ void show_main_menubar(iris::instance* iris) {
                 }
 
                 if (BeginMenu("Window mode")) {
-                    for (int i = 0; i < 3; i++) {
+                    for (int i = 0; i < 2; i++) {
                         if (Selectable(fullscreen_names[i], iris->fullscreen == i)) {
                             iris->fullscreen = i;
 

@@ -30,10 +30,10 @@ void ps2_vif_destroy(struct ps2_vif* vif) {
 static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
     if (vif->unpack_cl == vif->unpack_wl) {
         // Write data normally
-        vif->vu->vu_mem[vif->addr++] = data;
+        vif->vu->vu_mem[(vif->addr++) & 0x3ff] = data;
     } else if (vif->unpack_cl > vif->unpack_wl) {
         // Write data until unpack_wl is reached, then skip unpack_skip
-        vif->vu->vu_mem[vif->addr++] = data;
+        vif->vu->vu_mem[(vif->addr++) & 0x3ff] = data;
 
         vif->unpack_wl_count++;
 
@@ -112,7 +112,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vif->mode = data & 3;
             } break;
             case VIF_CMD_MSKPATH3: {
-                printf("vif%d: MSKPATH3(%04x)\n", vif->id, data & 0xffff);
+                // printf("vif%d: MSKPATH3(%04x)\n", vif->id, data & 0xffff);
 
                 if (data & 0x8000) {
                     vif->gif->stat |= 2;
@@ -299,7 +299,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                     vif->data.u32[vif->shift++] = data;
                 } else {
                     vif->data.u32[1] = data;
-                    vif->vu->micro_mem[vif->addr++] = vif->data.u64[0];
+                    vif->vu->micro_mem[(vif->addr++) & 0x7ff] = vif->data.u64[0];
                     vif->shift = 0;
                 }
 

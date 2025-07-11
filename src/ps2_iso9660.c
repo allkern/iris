@@ -6,7 +6,10 @@
 
 #include "ps2_iso9660.h"
 
-#ifdef _WIN32
+#ifdef _MSC_VER
+#define fseek64 _fseeki64
+#define ftell64 _ftelli64
+#elif defined(_WIN32)
 #define fseek64 fseeko64
 #define ftell64 ftello64
 #else

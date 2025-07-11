@@ -5,6 +5,10 @@
 
 #include "ps2.h"
 
+#ifndef _PS2_TIMESCALE
+#define _PS2_TIMESCALE 4
+#endif
+
 struct ps2_state* ps2_create(void) {
     return malloc(sizeof(struct ps2_state));
 }
@@ -259,7 +263,7 @@ void ps2_cycle(struct ps2_state* ps2) {
     //     return;
     // }
 
-    sched_tick(ps2->sched, 4);
+    sched_tick(ps2->sched, 2 * _PS2_TIMESCALE);
     ee_cycle(ps2->ee);
     ps2_ee_timers_tick(ps2->ee_timers);
 

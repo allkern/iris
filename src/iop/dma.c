@@ -4,6 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <ctype.h>
+#include <signal.h>
 
 #include "dma.h"
 
@@ -219,36 +220,63 @@ void spu1_dma_irq_event_handler(void* udata, int overshoot) {
     dma->spu1.chcr &= ~0x1000000;
 }
 
-static FILE* file;
-
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
-    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x adma=%d\n", dma->spu1.chcr, dma->spu1.madr, dma->spu1.bcr, dma->spu->c[0].admas);
+    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr,
+    //     (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, dma->spu->c[1].admas
+    // );
 
-    unsigned int size = (dma->spu1.bcr & 0xffff) * (dma->spu1.bcr >> 16);
+    // If ADMA is off, then transfer all the data at once and trigger
+    // an IRQ event to signal the end of the transfer
+    if (!(dma->spu->c[0].admas & 1)) {
+        unsigned int size = (dma->spu1.bcr & 0xffff) * (dma->spu1.bcr >> 16);
 
-    for (int i = 0; i < size; i++) {
+        for (int i = 0; i < size; i++) {
+            uint32_t d = iop_bus_read32(dma->bus, dma->spu1.madr);
+
+            iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
+            iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
+
+            dma->spu1.madr += 4;
+        }
+
+        struct sched_event spu1_dma_irq_event;
+
+        spu1_dma_irq_event.callback = spu1_dma_irq_event_handler;
+        spu1_dma_irq_event.cycles = 1000000;
+        spu1_dma_irq_event.name = "SPU1 DMA IRQ event";
+        spu1_dma_irq_event.udata = dma;
+
+        sched_schedule(dma->sched, spu1_dma_irq_event);
+
+        return;
+    }
+
+    if ((dma->spu1.chcr & 0x1000000) == 0)
+        return;
+
+    // else we need to do an ADMA transfer
+    spu2_start_adma(dma->spu, 0);
+
+    // Transfer data as long as the SPU2 isn't streaming ADMA
+    // samples and we still have data to transfer
+    while (dma->spu1.transfer_size && !spu2_is_adma_active(dma->spu, 0)) {
         uint32_t d = iop_bus_read32(dma->bus, dma->spu1.madr);
 
         iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
         iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
 
         dma->spu1.madr += 4;
+        dma->spu1.transfer_size -= 4;
     }
 
-    // If ADMA is on, then the transfer will be ended by the SPU2
-    // whenever all samples were played
-    if (dma->spu->c[0].admas & 1)
-        return;
+    // if (!dma->spu1.transfer_size) {
+    //     // If we have no more data to transfer, then we can end the transfer
+    //     // and trigger an IRQ event
+    //     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
+    //     iop_dma_check_irq(dma);
 
-    // Else we need to end the transfer ourselves
-    struct sched_event spu1_dma_irq_event;
-
-    spu1_dma_irq_event.callback = spu1_dma_irq_event_handler;
-    spu1_dma_irq_event.cycles = 1000000;
-    spu1_dma_irq_event.name = "SPU1 DMA IRQ event";
-    spu1_dma_irq_event.udata = dma;
-
-    sched_schedule(dma->sched, spu1_dma_irq_event);
+    //     dma->spu1.chcr &= ~0x1000000;
+    // }
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
     printf("iop: PIO channel unimplemented\n"); exit(1);
@@ -267,64 +295,80 @@ void spu2_dma_irq_event_handler(void* udata, int overshoot) {
 }
 
 void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
+    if ((dma->spu2.chcr & 0x1000000) == 0)
+        return;
+
     // printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr,
     //     (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, dma->spu->c[1].admas
     // );
 
-    unsigned int size = (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16);
+    if (!dma->spu2.transfer_size)
+        return;
 
-    // file = fopen("core1.adma", "ab");
+    // If ADMA is off, then transfer all the data at once and trigger
+    // an IRQ event to signal the end of the transfer
+    if (!(dma->spu->c[1].admas & 2)) {
+        unsigned int size = (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16);
 
-    // uint16_t buf[0x400];
-    // uint16_t* ptr = buf;
+        for (int i = 0; i < size; i++) {
+            uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
 
-    for (int i = 0; i < size; i++) {
+            iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
+            iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
+
+            dma->spu2.madr += 4;
+        }
+
+        struct sched_event spu2_dma_irq_event;
+
+        spu2_dma_irq_event.callback = spu2_dma_irq_event_handler;
+        spu2_dma_irq_event.cycles = 1000000;
+        spu2_dma_irq_event.name = "SPU2 DMA IRQ event";
+        spu2_dma_irq_event.udata = dma;
+
+        sched_schedule(dma->sched, spu2_dma_irq_event);
+
+        return;
+    }
+
+    if ((dma->spu2.chcr & 0x01000000) == 0)
+        return;
+
+    // printf("spu2 core1: transfer start (%d bytes pending)\n", dma->spu2.transfer_size);
+
+    // else we need to do an ADMA transfer
+    spu2_start_adma(dma->spu, 1);
+
+    // Transfer data as long as the SPU2 isn't streaming ADMA
+    // samples and we still have data to transfer
+    while (dma->spu2.transfer_size && !spu2_is_adma_active(dma->spu, 1)) {
         uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
 
-        // *ptr++ = d & 0xffff;
-        // *ptr++ = d >> 16;
+        // int transfer_size = dma->spu2.transfer_size;
 
         iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
         iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
 
+        // if (dma->spu2.transfer_size != transfer_size) {
+        //     printf("iop: SPU2 transfer size changed from %d to %d (loop=%d)\n", transfer_size, dma->spu2.transfer_size, loop);
+        //     *(int*)0 = 0;
+        //     dma->spu2.transfer_size = transfer_size;
+        // }
+
         dma->spu2.madr += 4;
+        dma->spu2.transfer_size -= 4;
     }
 
-    // for (int i = 0; i < 0x100; i++) {
-    //     uint16_t s0 = buf[i+0x000];
-    //     uint16_t s1 = buf[i+0x100];
+    // if (!dma->spu2.transfer_size) {
+    //     // If we have no more data to transfer, then we can end the transfer
+    //     // and trigger an IRQ event
+    //     printf("spu2 core1: ending transfer\n");
 
-    //     iop_bus_write16(dma->bus, 0x1f9005ac, s0);
-    //     iop_bus_write16(dma->bus, 0x1f9005ac, s1);
+    //     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
+    //     iop_dma_check_irq(dma);
 
-    //     fwrite(&s0, sizeof(uint16_t), 1, file);
-    //     fwrite(&s1, sizeof(uint16_t), 1, file);
+    //     dma->spu2.chcr &= ~0x1000000;
     // }
-
-    // for (int i = 0; i < 0x100; i++) {
-    //     uint16_t s0 = buf[i+0x200];
-    //     uint16_t s1 = buf[i+0x300];
-
-    //     fwrite(&s0, sizeof(uint16_t), 1, file);
-    //     fwrite(&s1, sizeof(uint16_t), 1, file);
-    // }
-
-    // fclose(file);
-
-    // If ADMA is on, then the transfer will be ended by the SPU2
-    // whenever all samples were played
-    if (dma->spu->c[1].admas & 2)
-        return;
-
-    // Else we need to end the transfer ourselves
-    struct sched_event spu2_dma_irq_event;
-
-    spu2_dma_irq_event.callback = spu2_dma_irq_event_handler;
-    spu2_dma_irq_event.cycles = 1000000;
-    spu2_dma_irq_event.name = "SPU2 DMA IRQ event";
-    spu2_dma_irq_event.udata = dma;
-
-    sched_schedule(dma->sched, spu2_dma_irq_event);
 }
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     printf("iop: DEV9 channel unimplemented\n"); exit(1);
@@ -637,6 +681,14 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
             case 0x0: c->madr = data; return;
             case 0x4: c->bcr = data; return;
             case 0x8: {
+                if ((c->chcr & 0x1000000) && (data & 0x1000000)) {
+                    printf("iop: SPU2 channel already started, ignoring\n");
+
+                    exit(1);
+
+                    return;
+                }
+
                 c->chcr = data;
 
                 if (!(c->chcr & 0x1000000)) {
@@ -772,4 +824,61 @@ void iop_dma_end_spu2_transfer(struct ps2_iop_dma* dma) {
     iop_dma_check_irq(dma);
 
     dma->spu2.chcr &= ~0x1000000;
+}
+
+void iop_dma_handle_spu1_adma(struct ps2_iop_dma* dma) {
+    if (!dma->spu1.transfer_size) {
+        // If we have no more data to transfer, then we can end the transfer
+        // and trigger an IRQ event
+        iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
+        iop_dma_check_irq(dma);
+        
+        dma->spu1.chcr &= ~0x1000000;
+
+        // printf("spu2 core0: transfer done (chcr=%08x)\n", dma->spu1.chcr);
+
+        return;
+    }
+
+    // printf("spu2 core0: transfer update (%d bytes pending)\n", dma->spu1.transfer_size);
+
+    // Transfer data as long as the spu1 isn't streaming ADMA
+    // samples and we still have data to transfer
+    while (dma->spu1.transfer_size && !spu2_is_adma_active(dma->spu, 0)) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->spu1.madr);
+
+        iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
+        iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
+
+        dma->spu1.madr += 4;
+        dma->spu1.transfer_size -= 4;
+    }
+}
+void iop_dma_handle_spu2_adma(struct ps2_iop_dma* dma) {
+    if (!dma->spu2.transfer_size) {
+        // If we have no more data to transfer, then we can end the transfer
+        // and trigger an IRQ event
+        iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
+        iop_dma_check_irq(dma);
+        
+        dma->spu2.chcr &= ~0x1000000;
+
+        // printf("spu2 core1: transfer done (chcr=%08x)\n", dma->spu2.chcr);
+
+        return;
+    }
+    
+    // printf("spu2 core1: transfer update (%d bytes pending)\n", dma->spu2.transfer_size);
+
+    // Transfer data as long as the SPU2 isn't streaming ADMA
+    // samples and we still have data to transfer
+    while (dma->spu2.transfer_size && !spu2_is_adma_active(dma->spu, 1)) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
+
+        iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
+        iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
+
+        dma->spu2.madr += 4;
+        dma->spu2.transfer_size -= 4;
+    }
 }

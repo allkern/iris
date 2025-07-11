@@ -2,7 +2,7 @@ name: Ubuntu CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "sdl3-cmake" ]
 
 jobs:
   build:
@@ -13,21 +13,30 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Install SDL2
+    - name: Install deps
       run: |
-           sudo apt update
-           sudo apt install libsdl2-dev
-    - name: Build Iris
+        sudo add-apt-repository universe
+        sudo apt-get install build-essential git make \
+        pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
+        libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev \
+        libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+        libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
+        libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libfuse2t64
+    - name: Build and pack Iris
       run: |
-           git fetch --all --tags
-           ./setup_gl3w.sh
-           make
-    - name: Pack executable
-      run: |
-           chmod +x ./bin/iris
-           mkdir dist
-           mv ./bin/iris ./dist
+        git fetch --all --tags
+        cmake -S . -B build
+        cmake --build build -j8
+        sudo cmake --install build
+        mkdir dist
+        mv ./build/iris ./dist
+        mkdir appimage
+        mv ./build/*.AppImage ./appimage
     - uses: actions/upload-artifact@v4
       with:
-        name: iris-ubuntu-latest
+        name: iris-latest-ubuntu
         path: ./dist
+    - uses: actions/upload-artifact@v4
+      with:
+        name: iris-latest-ubuntu-appimage
+        path: ./appimage

@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#include "sched.h"
+#include "scheduler.h"
 #include "intc.h"
 
 struct ee_timer {

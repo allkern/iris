@@ -4,7 +4,7 @@
 
 #include "timers.h"
 #include "intc.h"
-#include "sched.h"
+#include "scheduler.h"
 
 struct ps2_iop_timers* ps2_iop_timers_create(void) {
     return malloc(sizeof(struct ps2_iop_timers));

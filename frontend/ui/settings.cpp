@@ -32,12 +32,10 @@ const char* settings_aspect_mode_names[] = {
 const char* settings_fullscreen_names[] = {
     "Windowed",
     "Fullscreen (Desktop)",
-    "Fullscreen"
 };
 
 int settings_fullscreen_flags[] = {
     0,
-    SDL_WINDOW_FULLSCREEN_DESKTOP,
     SDL_WINDOW_FULLSCREEN
 };
 
@@ -65,7 +63,7 @@ void show_graphics_settings(iris::instance* iris) {
             if (Selectable(settings_renderer_names[i], i == iris->renderer_backend)) {
                 iris->renderer_backend = i;
 
-                renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, i);
+                renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
                 renderer_set_scale(iris->ctx, iris->scale);
                 renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
                 renderer_set_bilinear(iris->ctx, iris->bilinear);
@@ -140,7 +138,7 @@ void show_graphics_settings(iris::instance* iris) {
     Text("Window mode");
 
     if (BeginCombo("##windowmode", settings_fullscreen_names[iris->fullscreen])) {
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < 2; i++) {
             if (Selectable(settings_fullscreen_names[i], iris->fullscreen == i)) {
                 iris->fullscreen = i;
 
@@ -180,7 +178,7 @@ void show_paths_settings(iris::instance* iris) {
         iris->mute = true;
 
         auto f = pfd::open_file("Select BIOS file", "", {
-            "BIOS dumps (*.bin)", "*.bin",
+            "BIOS dumps (*.bin; *.rom0)", "*.bin *.rom0",
             "All Files (*.*)", "*"
         });
 
@@ -202,7 +200,7 @@ void show_paths_settings(iris::instance* iris) {
         iris->mute = true;
 
         auto f = pfd::open_file("Select DVD BIOS file", "", {
-            "DVD BIOS dumps (*.bin)", "*.bin",
+            "DVD BIOS dumps (*.bin; *.rom1)", "*.bin *.rom1",
             "All Files (*.*)", "*"
         });
 
@@ -228,7 +226,7 @@ void show_paths_settings(iris::instance* iris) {
         iris->mute = true;
 
         auto f = pfd::open_file("Select ROM2 file", "", {
-            "ROM2 dumps (*.bin)", "*.bin",
+            "ROM2 dumps (*.bin; *.rom2)", "*.bin *.rom2",
             "All Files (*.*)", "*"
         });
 
@@ -271,14 +269,14 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         InvisibleButton("##pad", ImVec2(10, 10));
 
-        int icon_width = slot ? iris->pocketstation_icon_width : iris->ps1_memory_card_icon_width;
-        int icon_height = slot ? iris->pocketstation_icon_height : iris->ps1_memory_card_icon_height;
-        int icon_tex = slot ? iris->pocketstation_icon_tex : iris->ps1_memory_card_icon_tex;
+        int icon_width = iris->ps2_memory_card_icon_width;
+        int icon_height = iris->ps2_memory_card_icon_height;
+        SDL_GPUTextureSamplerBinding* icon_tsb = &iris->ps2_memory_card_icon_tsb;
 
         SetCursorPosX((GetContentRegionAvail().x / 2.0) - (icon_width / 2.0));
 
         Image(
-            icon_tex,
+            (ImTextureID)(intptr_t)icon_tsb,
             ImVec2(icon_width, icon_height),
             ImVec2(0, 0), ImVec2(1, 1),
             col,

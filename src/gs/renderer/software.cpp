@@ -6,9 +6,7 @@
 #include "gs/gs.h"
 #include "software.hpp"
 
-#include <SDL.h>
-
-#include "GL/gl3w.h"
+#include <SDL3/SDL.h>
 
 int software_psmct32_block[] = {
     0 , 1 , 4 , 5 , 16, 17, 20, 21,
@@ -342,21 +340,6 @@ static const int psmt8_clut_block[] = {
 void software_destroy(void* udata) {
     software_state* ctx = (software_state*)udata;
 
-    for (GLuint p : ctx->programs)
-        if (p) glDeleteProgram(p);
-
-    if (ctx->default_program) glDeleteProgram(ctx->default_program);
-    if (ctx->vao) glDeleteVertexArrays(1, &ctx->vao);
-    if (ctx->vbo) glDeleteBuffers(1, &ctx->vbo);
-    if (ctx->ebo) glDeleteBuffers(1, &ctx->ebo);
-    if (ctx->tex) glDeleteTextures(1, &ctx->tex);
-    if (ctx->fbo) glDeleteFramebuffers(1, &ctx->fbo);
-    if (ctx->fb_vao) glDeleteVertexArrays(1, &ctx->fb_vao);
-    if (ctx->fb_vbo) glDeleteBuffers(1, &ctx->fb_vbo);
-    if (ctx->fb_ebo) glDeleteBuffers(1, &ctx->fb_ebo);
-    if (ctx->fb_in_tex) glDeleteTextures(1, &ctx->fb_in_tex);
-    if (ctx->fb_out_tex) glDeleteTextures(1, &ctx->fb_out_tex);
-
     delete ctx;
 }
 
@@ -394,25 +377,6 @@ void software_set_size(void* udata, int width, int height) {
     if ((ctx->gs->smode2 & 3) == 3) {
         ctx->tex_h /= 2;
     }
-
-    if (ctx->tex) {
-        glDeleteTextures(1, &ctx->tex);
-    }
-
-    glGenTextures(1, &ctx->tex);
-    glBindTexture(GL_TEXTURE_2D, ctx->tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->tex_w, ctx->tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-
-    // printf("software: width=%d height=%d format=%d display=%08x\n",
-    //     ((display >> 32) & 0xfff),
-    //     ((display >> 44) & 0x7ff),
-    //     format, display
-    // );
 }
 
 void software_set_scale(void* udata, float scale) {
@@ -1066,160 +1030,13 @@ static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t 
     return (rr & 0xff) | ((rg & 0xff) << 8) | ((rb & 0xff) << 16) | (d & 0xff000000);
 }
 
-int software_compile_shader(const char* src, GLint type) {
-    unsigned int shader = glCreateShader(type);
-
-    glShaderSource(shader, 1, &src, NULL);
-    glCompileShader(shader);
-
-    int success;
-    char infolog[512];
-
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-
-    if (!success) {
-        glGetShaderInfoLog(shader, 512, NULL, infolog);
-
-        printf("gs_opengl: Shader compilation failed\n%s", infolog);
-
-        exit(1);
-
-        return 0;
-    }
-
-    return shader;
-}
-
-char* software_read_file(const char* path) {
-    FILE* file = fopen(path, "rb");
-
-    unsigned int size;
-
-    fseek(file, 0, SEEK_END);
-
-    size = ftell(file);
-
-    fseek(file, 0, SEEK_SET);
-
-    char* buf = (char*)malloc(size + 1);
-
-    buf[size] = '\0';
-
-    if (!fread(buf, 1, size, file)) {
-        printf("software: Couldn't read shader source\n");
-
-        return buf;
-    }
-
-    return buf;
-}
-
-void software_init_default_shader(software_state* ctx) {
-    ctx->vert_shader = software_compile_shader(default_vert_shader, GL_VERTEX_SHADER);
-    GLuint frag_shader = software_compile_shader(default_frag_shader, GL_FRAGMENT_SHADER);
-
-    char infolog[512];
-    int success;
-
-    ctx->default_program = glCreateProgram();
-
-    glAttachShader(ctx->default_program, ctx->vert_shader);
-    glAttachShader(ctx->default_program, frag_shader);
-    glLinkProgram(ctx->default_program);
-    glGetProgramiv(ctx->default_program, GL_LINK_STATUS, &success);
-
-    if (!success) {
-        glGetProgramInfoLog(ctx->default_program, 512, NULL, infolog);
-
-        printf("opengl: Program linking failed\n%s", infolog);
-
-        exit(1);
-    }
-}
-
-void software_push_shader(software_state* ctx, const char* path) {
-    char* src = software_read_file(path);
-    char* hdr = (char*)malloc(strlen(src) + strlen(frag_header) + 1);
-
-    strcpy(hdr, frag_header);
-    strcat(hdr, src);
-
-    int shader = software_compile_shader(hdr, GL_FRAGMENT_SHADER);
-
-    char infolog[512];
-    int success;
-
-    GLuint program = glCreateProgram();
-
-    glAttachShader(program, ctx->vert_shader);
-    glAttachShader(program, shader);
-    glLinkProgram(program);
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-
-    if (!success) {
-        glGetProgramInfoLog(program, 512, NULL, infolog);
-
-        printf("opengl: Program linking failed\n%s", infolog);
-
-        exit(1);
-    }
-
-    ctx->programs.push_back(program);
-
-    free(src);
-    free(hdr);
-}
-
-void software_init(void* udata, struct ps2_gs* gs, SDL_Window* window) {
+void software_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device) {
     software_state* ctx = (software_state*)udata;
 
-    gl3wInit();
-
     ctx->window = window;
+    ctx->gpu_device = device;
     ctx->gs = gs;
     ctx->scale = 1.5f;
-
-    // Initialize default shaders
-    software_init_default_shader(ctx);
-
-    // software_push_shader(ctx, "shaders/flip.frag");
-    // software_push_shader(ctx, "shaders/encoder.frag");
-    // software_push_shader(ctx, "shaders/decoder.frag");
-    // software_push_shader(ctx, "shaders/smooth.frag");
-
-    // Initialize framebuffer VAO
-    static const GLfloat fb_vertices[] = {
-        // positions         // texture coords
-         1.0f,  1.0f, 0.0f,  1.0f, 1.0f,   // top right
-         1.0f, -1.0f, 0.0f,  1.0f, 0.0f,   // bottom right
-        -1.0f, -1.0f, 0.0f,  0.0f, 0.0f,   // bottom left
-        -1.0f,  1.0f, 0.0f,  0.0f, 1.0f    // top left 
-    };
-
-    static const GLuint fb_indices[] = {
-        0, 1, 3, // first triangle
-        1, 2, 3  // second triangle
-    };
-
-    glGenVertexArrays(1, &ctx->fb_vao);
-    glGenBuffers(1, &ctx->fb_vbo);
-    glGenBuffers(1, &ctx->fb_ebo);
-
-    glBindVertexArray(ctx->fb_vao);
-
-    glBindBuffer(GL_ARRAY_BUFFER, ctx->fb_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(fb_vertices), fb_vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->fb_ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(fb_indices), fb_indices, GL_STATIC_DRAW);
-
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // texture coord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
 }
 
 static inline void software_vram_blit(struct ps2_gs* gs, software_state* ctx) {
@@ -1672,205 +1489,6 @@ extern "C" void software_render(struct ps2_gs* gs, void* udata) {
     float y0 = (rect.y / ((float)size.h / 2.0f)) - 1.0f;
     float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;
     float y1 = ((rect.y + rect.h) / ((float)size.h / 2.0f)) - 1.0f;
-
-    GLfloat vertices[] = {
-        // positions   // texture coords
-        x1, y1, 0.0f,  1.0f, 1.0f,   // top right
-        x1, y0, 0.0f,  1.0f, 0.0f,   // bottom right
-        x0, y0, 0.0f,  0.0f, 0.0f,   // bottom left
-        x0, y1, 0.0f,  0.0f, 1.0f    // top left 
-    };
-
-    GLuint indices[] = {
-        0, 1, 3, // first triangle
-        1, 2, 3  // second triangle
-    };
-
-    glGenVertexArrays(1, &ctx->vao);
-    glGenBuffers(1, &ctx->vbo);
-    glGenBuffers(1, &ctx->ebo);
-
-    glBindVertexArray(ctx->vao);
-
-    glBindBuffer(GL_ARRAY_BUFFER, ctx->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_DYNAMIC_DRAW);
-
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // texture coord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    int internal_format, format;
-
-    switch (ctx->disp_fmt) {
-        case GS_PSMCT32:
-        case GS_PSMCT24: {
-            internal_format = GL_RGBA;
-            format = GL_UNSIGNED_BYTE;
-        } break;
-        case GS_PSMCT16:
-        case GS_PSMCT16S: {
-            internal_format = GL_RGBA;
-            format = GL_UNSIGNED_SHORT_1_5_5_5_REV;
-        } break;
-    }
-
-    // Update screen texture
-    glBindTexture(GL_TEXTURE_2D, ctx->tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, ctx->tex_w, ctx->tex_h, 0, internal_format, format, ptr);
-
-    if (!ctx->programs.size()) {
-        // No shaders present, use default shader
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, ctx->tex);
-
-        glViewport(0, 0, size.w, size.h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glUseProgram(ctx->default_program);
-
-        glUniform1i(glGetUniformLocation(ctx->default_program, "input_texture"), 0);
-        glUniform2f(glGetUniformLocation(ctx->default_program, "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->default_program, "frame"), ctx->frame++);
-
-        glBindVertexArray(ctx->vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        glBindVertexArray(0);
-
-        return;
-    } else if (ctx->programs.size() == 1) {
-        // Only 1 shader present, use default framebuffer
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, ctx->tex);
-
-        glViewport(0, 0, size.w, size.h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glUseProgram(ctx->programs[0]);
-
-        glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
-        glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), ctx->frame++);
-
-        glBindVertexArray(ctx->vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        glBindVertexArray(0);
-
-        return;
-    }
-
-    // More than 1 shader present, create framebuffer and do render graph
-    if (ctx->fb_out_tex) {
-        glDeleteTextures(1, &ctx->fb_out_tex);
-    }
-
-    glGenTextures(1, &ctx->fb_out_tex);
-    glBindTexture(GL_TEXTURE_2D, ctx->fb_out_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, rect.w, rect.h, 0, internal_format, format, NULL);
-
-    if (ctx->fb_in_tex) {
-        glDeleteTextures(1, &ctx->fb_in_tex);
-    }
-
-    glGenTextures(1, &ctx->fb_in_tex);
-    glBindTexture(GL_TEXTURE_2D, ctx->fb_in_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, rect.w, rect.h, 0, internal_format, format, NULL);
-
-    if (ctx->fbo) {
-        glDeleteFramebuffers(1, &ctx->fbo);
-    }
-
-    glGenFramebuffers(1, &ctx->fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->fb_out_tex, 0); 
-
-    // first pass
-    // Bind screen texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, ctx->tex);
-
-    glViewport(0, 0, rect.w, rect.h);
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    glUseProgram(ctx->programs[0]);
-
-    glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
-    glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)ctx->tex_w, (float)ctx->tex_h);
-    glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), ctx->frame);
-
-    glBindVertexArray(ctx->fb_vao);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-    int output_tex, input_tex;
-
-    // "middle" passes
-    for (int i = 1; i < (int)ctx->programs.size() - 1; i++) {
-        // Bind framebuffer texture for middle and last passes
-        input_tex = (i & 1) ? ctx->fb_out_tex : ctx->fb_in_tex;
-        output_tex = (i & 1) ? ctx->fb_in_tex : ctx->fb_out_tex;
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, input_tex);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, output_tex, 0);
-    
-        glUseProgram(ctx->programs[i]);
-
-        glUniform1i(glGetUniformLocation(ctx->programs[i], "input_texture"), 0);
-        glUniform2f(glGetUniformLocation(ctx->programs[i], "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->programs[i], "frame"), ctx->frame);
-
-        glBindVertexArray(ctx->fb_vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    }
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, output_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-
-    // last pass
-    glViewport(0, 0, size.w, size.h);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glUseProgram(ctx->programs.back());
-
-    glUniform1i(glGetUniformLocation(ctx->programs.back(), "input_texture"), 0);
-    glUniform2f(glGetUniformLocation(ctx->programs.back(), "screen_size"), (float)rect.w, (float)rect.h);
-    glUniform1i(glGetUniformLocation(ctx->programs.back(), "frame"), ctx->frame++);
-
-    glBindVertexArray(ctx->vao);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-    glBindVertexArray(0);
 }
 
 static inline int gs_pixels_to_size(int fmt, int px) {
@@ -2172,3 +1790,7 @@ extern "C" void software_transfer_write(struct ps2_gs* gs, void* udata) {
 extern "C" void software_transfer_read(struct ps2_gs* gs, void* udata) {
     gs->hwreg = 0;
 }
+
+void software_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
+void software_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass) {}
+void software_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}

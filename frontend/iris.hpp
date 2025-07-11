@@ -10,8 +10,7 @@
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
 
-#include <SDL.h>
-#include "GL/gl3w.h"
+#include <SDL3/SDL.h>
 
 #include "ps2.h"
 #include "gs/renderer/renderer.hpp"
@@ -67,9 +66,8 @@ struct elf_symbol {
 
 struct instance {
     SDL_Window* window = nullptr;
-    SDL_Renderer* renderer = nullptr;
-    SDL_Texture* texture = nullptr;
-    SDL_GLContext gl_context = nullptr;
+    SDL_GPUDevice* device = nullptr;
+    SDL_AudioStream* stream = nullptr;
 
     struct ps2_state* ps2 = nullptr;
 
@@ -82,18 +80,18 @@ struct instance {
     unsigned int renderer_backend = RENDERER_SOFTWARE_THREAD;
     renderer_state* ctx = nullptr;
 
-    int ps2_memory_card_icon_width = 0;
-    int ps1_memory_card_icon_width = 0;
-    int pocketstation_icon_width = 0;
-    int iris_icon_width = 0;
-    int ps2_memory_card_icon_height = 0;
-    int ps1_memory_card_icon_height = 0;
-    int pocketstation_icon_height = 0;
-    int iris_icon_height = 0;
-    GLuint ps2_memory_card_icon_tex = 0;
-    GLuint ps1_memory_card_icon_tex = 0;
-    GLuint pocketstation_icon_tex = 0;
-    GLuint iris_icon_tex = 0;
+    uint32_t ps2_memory_card_icon_width = 0;
+    uint32_t ps1_memory_card_icon_width = 0;
+    uint32_t pocketstation_icon_width = 0;
+    uint32_t iris_icon_width = 0;
+    uint32_t ps2_memory_card_icon_height = 0;
+    uint32_t ps1_memory_card_icon_height = 0;
+    uint32_t pocketstation_icon_height = 0;
+    uint32_t iris_icon_height = 0;
+    SDL_GPUTextureSamplerBinding ps2_memory_card_icon_tsb = {};
+    SDL_GPUTextureSamplerBinding ps1_memory_card_icon_tsb = {};
+    SDL_GPUTextureSamplerBinding pocketstation_icon_tsb = {};
+    SDL_GPUTextureSamplerBinding iris_icon_tsb = {};
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
@@ -185,13 +183,9 @@ struct instance {
     // Debug
     std::vector <elf_symbol> symbols;
     std::vector <uint8_t> strtab;
-};
 
-iris::instance* create();
-void init(iris::instance* iris, int argc, const char* argv[]);
-void close(iris::instance* iris);
-void destroy(iris::instance* iris);
-bool is_open(iris::instance* iris);
+    std::vector <spu2_sample> audio_buf;
+};
 
 int init_audio(iris::instance* iris);
 int init_settings(iris::instance* iris, int argc, const char* argv[]);
@@ -237,5 +231,7 @@ void push_info(iris::instance* iris, std::string text);
 
 void add_recent(iris::instance* iris, std::string file);
 int open_file(iris::instance* iris, std::string file);
+
+void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount);
 
 }

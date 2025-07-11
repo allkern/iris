@@ -283,6 +283,11 @@ static inline void cdvd_s_cancel_pwoff_ready(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_blue_led_ctl(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 static inline void cdvd_s_read_wakeup_time(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 10);
 
@@ -439,6 +444,9 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x17: printf("cdvd: read_ilink_model\n"); cdvd_s_read_ilink_model(cdvd); break;
         case 0x1a: printf("cdvd: certify_boot\n"); cdvd_s_certify_boot(cdvd); break;
         case 0x1b: printf("cdvd: cancel_pwoff_ready\n"); cdvd_s_cancel_pwoff_ready(cdvd); break;
+
+        // Used by Namco System 246 at boot
+        case 0x1c: printf("cdvd: blue_led_ctl\n"); cdvd_s_blue_led_ctl(cdvd); break;
         case 0x1e: printf("cdvd: remote2_read\n"); cdvd_s_remote2_read(cdvd); break;
         case 0x22: printf("cdvd: read_wakeup_time\n"); cdvd_s_read_wakeup_time(cdvd); break;
         case 0x24: printf("cdvd: rc_bypass_ctrl\n"); cdvd_s_rc_bypass_ctrl(cdvd); break;
@@ -499,7 +507,7 @@ static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
     long contiguous_cycles = block_timing * cdvd->read_count;
 
     if (!delta)
-        return 0;
+        return 1000;
 
     if (delta < 0) {
         delta = -delta;
@@ -507,14 +515,14 @@ static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
 
     // Small delta
     if (delta < 8)
-        return ((block_timing * delta) + contiguous_cycles);
+        return ((block_timing * delta) + contiguous_cycles) / 4;
 
     // Fast seek: ~30ms
     if (delta < 4371)
-        return (((36864000 / 1000) * 30) + contiguous_cycles);
+        return (((36864000 / 1000) * 30) + contiguous_cycles) / 4;
 
     // Full seek: ~100ms
-    return (((36864000 / 1000) * 100) + contiguous_cycles);
+    return (((36864000 / 1000) * 100) + contiguous_cycles) / 4;
 }
 
 static inline void cdvd_set_status_bits(struct ps2_cdvd* cdvd, uint8_t data) {
@@ -759,7 +767,7 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
     event.name = "CDVD ReadCd";
     event.udata = cdvd;
     event.callback = cdvd_do_read;
-    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba) / 4;
+    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
 
     sched_schedule(cdvd->sched, event);
 
@@ -1045,10 +1053,12 @@ void ps2_cdvd_destroy(struct ps2_cdvd* cdvd) {
 void cdvd_set_detected_type(void* udata, int overshoot) {
     struct ps2_cdvd* cdvd = (struct ps2_cdvd*)udata;
 
+    cdvd->status &= ~(CDVD_STATUS_SPINNING | CDVD_STATUS_TRAY_OPEN);
+
     cdvd->disc_type = cdvd->detected_disc_type;
 }
 
-int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
+int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay) {
     ps2_cdvd_close(cdvd);
 
     cdvd->layer2_lba = 0;
@@ -1068,6 +1078,14 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
         cdvd->detected_disc_type = CDVD_DISC_PS2_CD;
     }
 
+    if (!delay) {
+        cdvd->status &= ~CDVD_STATUS_TRAY_OPEN;
+
+        cdvd->disc_type = cdvd->detected_disc_type;
+
+        return 0;
+    }
+
     printf("cdvd: Opened \'%s\' (%s)\n", path, cdvd_get_type_name(cdvd->detected_disc_type));
 
     switch (cdvd->detected_disc_type) {
@@ -1085,12 +1103,11 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path) {
         } break;
     }
 
-    cdvd->status &= ~CDVD_STATUS_TRAY_OPEN;
-    cdvd->status |= CDVD_STATUS_SPINNING;
+    cdvd->status |= CDVD_STATUS_TRAY_OPEN | CDVD_STATUS_SPINNING;
 
     struct sched_event event;
 
-    event.cycles = 36864000 * 2; // IOP clock * 2 = 2s
+    event.cycles = delay; // IOP clock * 2 = 2s
     event.udata = cdvd;
     event.name = "CDVD disc detect";
     event.callback = cdvd_set_detected_type;

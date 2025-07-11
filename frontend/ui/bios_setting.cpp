@@ -1,7 +1,7 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
-#include "tfd/tinyfiledialogs.h"
+#include "pfd/pfd.h"
 
 namespace iris {
 
@@ -42,19 +42,17 @@ void show_bios_stage(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER)) {
-        const char* patterns[1] = { "*.bin" };
+        iris->mute = true;
 
-        const char* file = tinyfd_openFileDialog(
-            "Select BIOS file",
-            "",
-            1,
-            patterns,
-            "BIOS files",
-            0
-        );
+        auto f = pfd::open_file("Select BIOS file", "", {
+            "All File Types (*.bin; *.rom0)", "*.bin *.rom0",
+            "All Files (*.*)", "*"
+        });
 
-        if (file) {
-            strncpy(buf, file, 512);
+        iris->mute = false;
+
+        if (f.result().size()) {
+            strncpy(buf, f.result().at(0).c_str(), 512);
         }
     }
 

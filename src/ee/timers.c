@@ -106,7 +106,7 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->mode |= 0x400;
 
         if (t->mode & 0x100) {
-            printf("ee: timer %d compare IRQ\n", timer);
+            // printf("ee: timer %d compare IRQ\n", timer);
 
             ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }
@@ -121,7 +121,7 @@ void ee_timer_tick(struct ps2_ee_timers* timers, int timer) {
         t->counter -= 0xffff;
 
         if (t->mode & 0x200) {
-            printf("ee: timer %d overflow IRQ\n", timer);
+            // printf("ee: timer %d overflow IRQ\n", timer);
 
             ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + timer);
         }

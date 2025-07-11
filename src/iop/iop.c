@@ -171,7 +171,7 @@ static inline void iop_print_disassembly(struct iop_state* iop) {
 
 static inline void iop_exception(struct iop_state* iop, uint32_t cause) {
     if ((cause != CAUSE_SYSCALL) && (cause != CAUSE_INT))
-        printf("iop: Crashed with cause %x at pc=%08x next=%08x saved=%08x\n", iop->pc, iop->saved_pc, iop->saved_pc);
+        printf("iop: Crashed with cause %02x at pc=%08x next=%08x saved=%08x\n", cause >> 2, iop->pc, iop->saved_pc, iop->saved_pc);
 
     // Set excode and clear 3 LSBs
     iop->cop0_r[COP0_CAUSE] &= 0xffffff80;

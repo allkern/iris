@@ -15,4 +15,4 @@
 #define STR1(m) #m
 #define STR(m) STR1(m)
 
-#define IRIS_TITLE "Iris (" STR(_IRIS_VERSION) " " STR(_IRIS_COMMIT) ")"
+#define IRIS_TITLE "Iris (" STR(_IRIS_VERSION) ")"

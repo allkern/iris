@@ -440,23 +440,8 @@ void show_gs_registers(iris::instance* iris) {
     } EndChild();
 }
 
-static GLuint tex = 0;
-
-void gen_texture(iris::instance* iris, int w, int h, GLint fmt, void* ptr) {
-    if (tex) {
-        glDeleteTextures(1, &tex);
-    }
-
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RED, w, h, 0, GL_RED, GL_FLOAT, ptr);
-}
-
 static uint32_t addr = 0, width = 0, height = 0;
+static bool unswizzle = false;
 static float scale = 1.0f;
 
 const char* format_names[] = {
@@ -464,12 +449,10 @@ const char* format_names[] = {
     "16-bit"
 };
 
-GLuint format_enums[] = {
-    GL_UNSIGNED_BYTE,
-    GL_UNSIGNED_SHORT_1_5_5_5_REV
-};
-
 int format = 0;
+static SDL_GPUTexture* tex = nullptr;
+static SDL_GPUSampler* sampler = nullptr;
+static SDL_GPUTextureSamplerBinding tsb;
 
 void show_gs_memory(iris::instance* iris) {
     using namespace ImGui;
@@ -525,26 +508,123 @@ void show_gs_memory(iris::instance* iris) {
         EndCombo();
     }
 
+    SDL_GPUTextureFormat fmt;
+    int stride = 0;
+
+    switch (format) {
+        case 0: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+            stride = 4;
+        } break;
+
+        case 1: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B5G5R5A1_UNORM;
+            stride = 2;
+        } break;
+    }
+
     if (Button("View")) {
         addr = strtoul(buf0, NULL, 16);
         width = strtoul(buf1, NULL, 0);
         height = strtoul(buf2, NULL, 0);
 
-        gen_texture(iris, width, height, format_enums[format], &gs->vram[addr]);
+        if (tex) {
+            SDL_ReleaseGPUTexture(iris->device, tex);
+        }
+
+        if (sampler) {
+            SDL_ReleaseGPUSampler(iris->device, sampler);
+        }
+
+        SDL_GPUTextureCreateInfo tci = {};
+
+        tci.format = fmt;
+        tci.type = SDL_GPU_TEXTURETYPE_2D;
+        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+        tci.width = width;
+        tci.height = height;
+        tci.layer_count_or_depth = 1;
+        tci.num_levels = 1;
+        tci.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+        tex = SDL_CreateGPUTexture(iris->device, &tci);
+
+        SDL_GPUSamplerCreateInfo sci = {
+            .min_filter = SDL_GPU_FILTER_NEAREST,
+            .mag_filter = SDL_GPU_FILTER_NEAREST,
+            .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+            .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+            .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+            .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+        };
+
+        sampler = SDL_CreateGPUSampler(iris->device, &sci);
+
+        tsb.texture = tex;
+        tsb.sampler = sampler;
     }
 
-    if (tex) {
-        glBindTexture(GL_TEXTURE_2D, tex);
-        // GLint mask[] = { GL_ONE, GL_ONE, GL_ONE, GL_RED };
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, format_enums[format], &gs->vram[addr]);
+    if (!tex)
+        return;
 
-        Image((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
+    SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(iris->device);
+    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
+
+    SDL_GPUTransferBufferCreateInfo ttbci = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = (width * stride) * height
+    };
+
+    SDL_GPUTransferBuffer* ttb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
+
+    // fill the transfer buffer
+    switch (format) {
+        case 0: {
+            uint32_t* ptr = (uint32_t*)(((uint8_t*)gs->vram) + addr);
+            uint32_t* data = (uint32_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    data[x + (y * width)] = ptr[x + (y * width)] | 0xff000000;
+                }
+            }
+        } break;
+
+        case 1: {
+            uint16_t* ptr = (uint16_t*)(((uint8_t*)gs->vram) + addr);
+            uint16_t* data = (uint16_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
+
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    data[x + (y * width)] = ptr[x + (y * width)] | 0x8000;
+                }
+            }
+        } break;
     }
+
+    // SDL_memcpy(data, ptr, (width * stride) * height);
+
+    SDL_UnmapGPUTransferBuffer(iris->device, ttb);
+
+    SDL_GPUTextureTransferInfo tti = {
+        .transfer_buffer = ttb,
+        .offset = 0,
+    };
+
+    SDL_GPUTextureRegion tr = {
+        .texture = tex,
+        .w = width,
+        .h = height,
+        .d = 1,
+    };
+
+    SDL_UploadToGPUTexture(cp, &tti, &tr, false);
+
+    // end the copy pass
+    SDL_EndGPUCopyPass(cp);
+    SDL_SubmitGPUCommandBuffer(cb);
+
+    ImageWithBg((ImTextureID)(intptr_t)&tsb, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
 }
 
 void show_gs_debugger(iris::instance* iris) {

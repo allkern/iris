@@ -2,7 +2,7 @@ name: Windows CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "sdl3-cmake" ]
 
 jobs:
   build:
@@ -13,21 +13,17 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Run build-deps
-      run: ./build-deps.ps1
-    - name: Run build-win
+    - name: Build and pack Iris
       run: |
-           ./build-win.ps1
-           New-Item -Path "dist" -ItemType Directory
-           Copy-Item -Path "iris.exe" "dist"
-           Copy-Item "SDL2-2.32.0/x86_64-w64-mingw32/bin/SDL2.dll" "dist"
-           Copy-Item "C:\mingw64\bin\*.dll" "dist"
-    - name: Generate artifact name
-      id: generate-name
-      run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-win"
+        git fetch --all --tags
+        cmake -S . -B build -G "MinGW Makefiles"
+        cmake --build build -j8
+        New-Item -Path "dist" -ItemType Directory
+        Copy-Item -Path ".\build\iris.exe" "dist"
+        Copy-Item ".\build\*.dll" "dist"
+        Copy-Item "C:\mingw64\bin\*.dll" "dist"
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: ${{ steps.generate-name.outputs.artifact }}
+        name: iris-latest-win
         path: dist/

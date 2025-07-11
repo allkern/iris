@@ -6,9 +6,29 @@
 #include "gs/gs.h"
 #include "software_thread.hpp"
 
-#include <SDL.h>
+// INCBIN stuff
+#define INCBIN_PREFIX g_
+#define INCBIN_STYLE INCBIN_STYLE_SNAKE
 
-#include "GL/gl3w.h"
+#include "incbin.h"
+
+#ifdef __APPLE__
+#define SHADER_FORMAT SDL_GPU_SHADERFORMAT_MSL
+#define SHADER_ENTRYPOINT "main0"
+INCBIN(vertex_shader, "../shaders/vertex.msl");
+INCBIN(fragment_shader, "../shaders/fragment.msl");
+INCBIN_EXTERN(vertex_shader);
+INCBIN_EXTERN(fragment_shader);
+#else
+#define SHADER_FORMAT SDL_GPU_SHADERFORMAT_SPIRV
+#define SHADER_ENTRYPOINT "main"
+INCBIN(vertex_shader, "../shaders/vertex.spv");
+INCBIN(fragment_shader, "../shaders/fragment.spv");
+INCBIN_EXTERN(vertex_shader);
+INCBIN_EXTERN(fragment_shader);
+#endif
+
+#include <SDL3/SDL.h>
 
 int psmct32_block[] = {
     0 , 1 , 4 , 5 , 16, 17, 20, 21,
@@ -303,42 +323,6 @@ static inline int psmt4_addr(int base, int width, int x, int y) {
     return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
 }
 
-static const char* default_vert_shader =
-    "#version 330 core\n"
-    "layout (location = 0) in vec3 pos;\n"
-    "layout (location = 1) in vec2 uv;\n"
-    "uniform vec2 screen_size;\n"
-    "out vec2 FragCoord;\n"
-    "out vec2 FragTexCoord;\n"
-    "void main() {\n"
-    "    FragCoord = (pos.xy + 1.0) / 2.0;\n"
-    "    FragTexCoord = uv;\n"
-    "    FragCoord.y = 1.0 - FragCoord.y;\n"
-    "    gl_Position = vec4(pos.xy, 0.0, 1.0);\n"
-    "}";
-
-static const char* default_frag_shader =
-    "#version 330 core\n"
-    "in vec2 FragCoord;\n"
-    "in vec2 FragTexCoord;\n"
-    "out vec4 FragColor;\n"
-    "uniform sampler2D input_texture;\n"
-    "uniform vec2 screen_size;\n"
-    "uniform int frame;\n"
-    "void main() {\n"
-    "    vec2 uv = vec2(FragTexCoord.x, 1.0 - FragTexCoord.y);\n"
-    "    FragColor = texture(input_texture, uv);\n"
-    "}";
-
-static const char* frag_header =
-    "#version 330 core\n"
-    "in vec2 FragCoord;\n"
-    "in vec2 FragTexCoord;\n"
-    "out vec4 FragColor;\n"
-    "uniform sampler2D input_texture;\n"
-    "uniform vec2 screen_size;\n"
-    "uniform int frame;\n";
-
 static const int psmt8_clut_block[] = {
     0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
     0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
@@ -432,23 +416,18 @@ void software_thread_destroy(void* udata) {
 
     ctx->queue_mtx.unlock();
 
-    for (GLuint p : ctx->programs)
-        if (p) glDeleteProgram(p);
-
-    if (ctx->default_program) glDeleteProgram(ctx->default_program);
-    if (ctx->vao) glDeleteVertexArrays(1, &ctx->vao);
-    if (ctx->vbo) glDeleteBuffers(1, &ctx->vbo);
-    if (ctx->ebo) glDeleteBuffers(1, &ctx->ebo);
-    if (ctx->tex) glDeleteTextures(1, &ctx->tex);
-    if (ctx->fbo) glDeleteFramebuffers(1, &ctx->fbo);
-    if (ctx->fb_vao) glDeleteVertexArrays(1, &ctx->fb_vao);
-    if (ctx->fb_vbo) glDeleteBuffers(1, &ctx->fb_vbo);
-    if (ctx->fb_ebo) glDeleteBuffers(1, &ctx->fb_ebo);
-    if (ctx->fb_in_tex) glDeleteTextures(1, &ctx->fb_in_tex);
-    if (ctx->fb_out_tex) glDeleteTextures(1, &ctx->fb_out_tex);
-
     if (ctx->buf)
         free(ctx->buf);
+
+    // release buffers
+    SDL_ReleaseGPUBuffer(ctx->device, ctx->vertex_buffer);
+    SDL_ReleaseGPUBuffer(ctx->device, ctx->index_buffer);
+    SDL_ReleaseGPUSampler(ctx->device, ctx->sampler);
+
+    if (ctx->texture) SDL_ReleaseGPUTexture(ctx->device, ctx->texture);
+    
+    // release the pipeline
+    SDL_ReleaseGPUGraphicsPipeline(ctx->device, ctx->pipeline);
 
     // Should call destructors for our mutex, thread and queue
     delete ctx;
@@ -460,7 +439,7 @@ void software_thread_set_size(void* udata, int width, int height) {
     int en1 = ctx->gs->pmode & 1;
     int en2 = (ctx->gs->pmode >> 1) & 1;
 
-    uint64_t display, dispfb;
+    uint64_t display = 0, dispfb = 0;
 
     if (en1) {
         display = ctx->gs->display1;
@@ -470,7 +449,7 @@ void software_thread_set_size(void* udata, int width, int height) {
         dispfb = ctx->gs->dispfb2;
     }
 
-    ctx->disp_fmt = (dispfb >> 15) & 0x1f;
+    uint32_t tex_fmt = (dispfb >> 15) & 0x1f;
 
     int magh = ((display >> 23) & 0xf) + 1;
     int magv = ((display >> 27) & 3) + 1;
@@ -497,57 +476,56 @@ void software_thread_set_size(void* udata, int width, int height) {
     //     tex_h /= 2;
     // }
 
+    // printf("gsr: Setting framebuffer size to %dx%d fmt=%02x\n", tex_w, tex_h, ctx->disp_fmt);
+
     // Do nothing if the size hasn't changed
-    if (tex_w == ctx->tex_w && tex_h == ctx->tex_h) {
+    if (tex_w == ctx->tex_w && tex_h == ctx->tex_h && tex_fmt == ctx->disp_fmt) {
         return;
     }
 
     ctx->tex_w = tex_w;
     ctx->tex_h = tex_h;
+    ctx->disp_fmt = tex_fmt;
 
     if (ctx->buf) free(ctx->buf);
 
     ctx->buf = (uint32_t*)malloc((ctx->tex_w * sizeof(uint32_t)) * ctx->tex_h);
 
-    if (ctx->tex) {
-        glDeleteTextures(1, &ctx->tex);
+    SDL_GPUTextureFormat fmt;
+
+    switch (ctx->disp_fmt) {
+        case GS_PSMCT32:
+        case GS_PSMCT24: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
+        } break;
+
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            fmt = SDL_GPU_TEXTUREFORMAT_B5G5R5A1_UNORM;
+        } break;
+
+        default: {
+            // printf("gsr: Unknown framebuffer format %02x\n", ctx->disp_fmt);
+        } break;
     }
 
-    glGenTextures(1, &ctx->tex);
-    glBindTexture(GL_TEXTURE_2D, ctx->tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, ctx->tex_w, ctx->tex_h, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
+    if (ctx->texture) {
+        SDL_ReleaseGPUTexture(ctx->device, ctx->texture);
+    }
 
-    // if ((ctx->gs->smode2 & 3) != 3)
-    //     return;
+    // Create a texture to send in our frame data
+    SDL_GPUTextureCreateInfo tci = {
+        .type = SDL_GPU_TEXTURETYPE_2D,
+        .format = fmt,
+        .usage = SDL_GPU_TEXTUREUSAGE_SAMPLER,
+        .width = tex_w,
+        .height = tex_h,
+        .layer_count_or_depth = 1,
+        .num_levels = 1,
+        .sample_count = SDL_GPU_SAMPLECOUNT_1,
+    };
 
-    // if (ctx->buf)
-    //     free(ctx->buf);
-
-    // int bpp = 0;
-
-    // switch (ctx->disp_fmt) {
-    //     case GS_PSMCT32:
-    //     case GS_PSMCT24: {
-    //         bpp = 4;
-    //     } break;
-    //     case GS_PSMCT16:
-    //     case GS_PSMCT16S: {
-    //         bpp = 2;
-    //     } break;
-    // }
-
-    // ctx->buf = (uint32_t*)malloc((ctx->tex_w * bpp) * ctx->tex_h);
-
-    // printf("software: width=%d height=%d format=%d display=%08x\n",
-    //     ((display >> 32) & 0xfff),
-    //     ((display >> 44) & 0x7ff),
-    //     format, display
-    // );
+    ctx->texture = SDL_CreateGPUTexture(ctx->device, &tci);
 }
 
 void software_thread_set_scale(void* udata, float scale) {
@@ -1432,168 +1410,134 @@ static inline void gs_draw_pixel(struct ps2_gs* gs, int x, int y, uint32_t z, ui
     }
 }
 
-int software_thread_compile_shader(const char* src, GLint type) {
-    unsigned int shader = glCreateShader(type);
-
-    glShaderSource(shader, 1, &src, NULL);
-    glCompileShader(shader);
-
-    int success;
-    char infolog[512];
-
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &success);
-
-    if (!success) {
-        glGetShaderInfoLog(shader, 512, NULL, infolog);
-
-        printf("software: Shader compilation failed\n%s", infolog);
-
-        exit(1);
-
-        return 0;
-    }
-
-    return shader;
-}
-
-char* software_thread_read_file(const char* path) {
-    FILE* file = fopen(path, "rb");
-
-    unsigned int size;
-
-    fseek(file, 0, SEEK_END);
-
-    size = ftell(file);
-
-    fseek(file, 0, SEEK_SET);
-
-    char* buf = (char*)malloc(size + 1);
-
-    buf[size] = '\0';
-
-    if (!fread(buf, 1, size, file)) {
-        printf("software: Couldn't read shader source\n");
-
-        return buf;
-    }
-
-    return buf;
-}
-
-void software_thread_init_default_shader(software_thread_state* ctx) {
-    ctx->vert_shader = software_thread_compile_shader(default_vert_shader, GL_VERTEX_SHADER);
-    GLuint frag_shader = software_thread_compile_shader(default_frag_shader, GL_FRAGMENT_SHADER);
-
-    char infolog[512];
-    int success;
-
-    ctx->default_program = glCreateProgram();
-
-    glAttachShader(ctx->default_program, ctx->vert_shader);
-    glAttachShader(ctx->default_program, frag_shader);
-    glLinkProgram(ctx->default_program);
-    glGetProgramiv(ctx->default_program, GL_LINK_STATUS, &success);
-
-    if (!success) {
-        glGetProgramInfoLog(ctx->default_program, 512, NULL, infolog);
-
-        printf("opengl: Program linking failed\n%s", infolog);
-
-        exit(1);
-    }
-}
-
-void software_thread_push_shader(software_thread_state* ctx, const char* path) {
-    char* src = software_thread_read_file(path);
-    char* hdr = (char*)malloc(strlen(src) + strlen(frag_header) + 1);
-
-    strcpy(hdr, frag_header);
-    strcat(hdr, src);
-
-    int shader = software_thread_compile_shader(hdr, GL_FRAGMENT_SHADER);
-
-    char infolog[512];
-    int success;
-
-    GLuint program = glCreateProgram();
-
-    glAttachShader(program, ctx->vert_shader);
-    glAttachShader(program, shader);
-    glLinkProgram(program);
-    glGetProgramiv(program, GL_LINK_STATUS, &success);
-
-    if (!success) {
-        glGetProgramInfoLog(program, 512, NULL, infolog);
-
-        printf("opengl: Program linking failed\n%s", infolog);
-
-        exit(1);
-    }
-
-    ctx->programs.push_back(program);
-
-    free(src);
-    free(hdr);
-}
-
-void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window) {
+void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
-    gl3wInit();
-
     ctx->window = window;
+    ctx->device = device;
     ctx->gs = gs;
     ctx->scale = 1.5f;
-
-    // Initialize default shaders
-    software_thread_init_default_shader(ctx);
-
-    // software_thread_push_shader(ctx, "shaders/flip.frag");
-    // software_thread_push_shader(ctx, "shaders/encoder.frag");
-    // software_thread_push_shader(ctx, "shaders/decoder.frag");
-    // software_thread_push_shader(ctx, "shaders/smooth.frag");
-
-    // Initialize framebuffer VAO
-    static const GLfloat fb_vertices[] = {
-        // positions         // texture coords
-         1.0f,  1.0f, 0.0f,  1.0f, 1.0f,   // top right
-         1.0f, -1.0f, 0.0f,  1.0f, 0.0f,   // bottom right
-        -1.0f, -1.0f, 0.0f,  0.0f, 0.0f,   // bottom left
-        -1.0f,  1.0f, 0.0f,  0.0f, 1.0f    // top left 
-    };
-
-    static const GLuint fb_indices[] = {
-        0, 1, 3, // first triangle
-        1, 2, 3  // second triangle
-    };
-
-    glGenVertexArrays(1, &ctx->fb_vao);
-    glGenBuffers(1, &ctx->fb_vbo);
-    glGenBuffers(1, &ctx->fb_ebo);
-
-    glBindVertexArray(ctx->fb_vao);
-
-    glBindBuffer(GL_ARRAY_BUFFER, ctx->fb_vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(fb_vertices), fb_vertices, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->fb_ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(fb_indices), fb_indices, GL_STATIC_DRAW);
-
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // texture coord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    glGenVertexArrays(1, &ctx->vao);
-    glGenBuffers(1, &ctx->vbo);
-    glGenBuffers(1, &ctx->ebo);
 
     ctx->end_signal = false;
     ctx->render_thr = std::thread(software_thread_render_thread, ctx);
     ctx->render_thr.detach();
+
+    // create the vertex shader
+    SDL_GPUShaderCreateInfo vsci = {
+        .code_size = g_vertex_shader_size,
+        .code = g_vertex_shader_data,
+        .entrypoint = SHADER_ENTRYPOINT,
+        .format = SHADER_FORMAT,
+        .stage = SDL_GPU_SHADERSTAGE_VERTEX,
+        .num_samplers = 0,
+        .num_storage_textures = 0,
+        .num_storage_buffers = 0,
+        .num_uniform_buffers = 0,
+    };
+
+    SDL_GPUShader* vertex_shader = SDL_CreateGPUShader(device, &vsci);
+
+    // create the fragment shader
+    SDL_GPUShaderCreateInfo fsci = {
+        .code_size = g_fragment_shader_size,
+        .code = g_fragment_shader_data,
+        .entrypoint = SHADER_ENTRYPOINT,
+        .format = SHADER_FORMAT,
+        .stage = SDL_GPU_SHADERSTAGE_FRAGMENT,
+        .num_samplers = 1,
+        .num_storage_textures = 0,
+        .num_storage_buffers = 0,
+        .num_uniform_buffers = 0,
+    };
+
+    SDL_GPUShader* fragment_shader = SDL_CreateGPUShader(device, &fsci);
+
+    // Create vertex buffer description and attributes
+    SDL_GPUVertexBufferDescription vbd[1] = {{
+        .slot = 0,
+        .pitch = sizeof(gpu_vertex),
+        .input_rate = SDL_GPU_VERTEXINPUTRATE_VERTEX,
+        .instance_step_rate = 0,
+    }};
+
+    SDL_GPUVertexAttribute va[2] = {{
+        .location = 0,
+        .buffer_slot = 0,
+        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+        .offset = 0,
+    }, {
+        .location = 1,
+        .buffer_slot = 0,
+        .format = SDL_GPU_VERTEXELEMENTFORMAT_FLOAT2,
+        .offset = sizeof(float) * 2,
+    }};
+
+    SDL_GPUColorTargetDescription ctd[1] = {{
+        .format = SDL_GetGPUSwapchainTextureFormat(device, window),
+        .blend_state = {
+            .src_color_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+            .dst_color_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            .color_blend_op = SDL_GPU_BLENDOP_ADD,
+            .src_alpha_blendfactor = SDL_GPU_BLENDFACTOR_SRC_ALPHA,
+            .dst_alpha_blendfactor = SDL_GPU_BLENDFACTOR_ONE_MINUS_SRC_ALPHA,
+            .alpha_blend_op = SDL_GPU_BLENDOP_ADD,
+            .color_write_mask = SDL_GPU_COLORCOMPONENT_A,
+            .enable_blend = false,
+            .enable_color_write_mask = false,
+        },
+    }};
+
+    // Create graphics pipeline
+    SDL_GPUGraphicsPipelineCreateInfo gpci = {
+        .vertex_shader = vertex_shader,
+        .fragment_shader = fragment_shader,
+        .vertex_input_state = {
+            .vertex_buffer_descriptions = vbd,
+            .num_vertex_buffers = 1,
+            .vertex_attributes = va,
+            .num_vertex_attributes = 2,
+        },
+        .primitive_type = SDL_GPU_PRIMITIVETYPE_TRIANGLELIST,
+        .target_info = {
+            .color_target_descriptions = ctd,
+            .num_color_targets = 1,
+        },
+    };
+
+    ctx->pipeline = SDL_CreateGPUGraphicsPipeline(device, &gpci);
+
+    SDL_assert(ctx->pipeline);
+
+    // we don't need to store the shaders after creating the pipeline
+    SDL_ReleaseGPUShader(device, vertex_shader);
+    SDL_ReleaseGPUShader(device, fragment_shader);
+
+    // create the vertex and index buffers
+    SDL_GPUBufferCreateInfo vbci = {
+        .usage = SDL_GPU_BUFFERUSAGE_VERTEX,
+        .size = sizeof(gpu_vertex) * 4,
+    };
+
+    ctx->vertex_buffer = SDL_CreateGPUBuffer(device, &vbci);
+
+    // We're sending two triangles to make a single quad so we need 6 indices
+    SDL_GPUBufferCreateInfo ibci = {
+        .usage = SDL_GPU_BUFFERUSAGE_INDEX,
+        .size = sizeof(Uint16) * 6,
+    };
+
+    ctx->index_buffer = SDL_CreateGPUBuffer(device, &ibci);
+
+    SDL_GPUSamplerCreateInfo sci = {
+		.min_filter = ctx->bilinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST,
+		.mag_filter = ctx->bilinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST,
+		.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+		.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+		.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+		.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+    };
+
+    ctx->sampler = SDL_CreateGPUSampler(ctx->device, &sci);
 }
 
 static inline void software_thread_vram_blit(struct ps2_gs* gs, software_thread_state* ctx) {
@@ -2120,335 +2064,6 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     // gs_draw_wireframe(gs, dv3, dv0);
 }
 
-void render(struct ps2_gs* gs, void* udata) {
-    software_thread_state* ctx = (software_thread_state*)udata;
-
-    int en1 = ctx->gs->pmode & 1;
-    int en2 = (ctx->gs->pmode >> 1) & 1;
-
-    uint32_t dfbp = 0;
-    int dfb = 0;
-
-    if (en1) {
-        dfb = 0;
-        dfbp = ctx->gs->dispfb1;
-    } else if (en2) {
-        dfb = 1;
-        dfbp = ctx->gs->dispfb2;
-    }
-
-    uint32_t* ptr = &gs->vram[dfbp];
-
-    // printf("fbp=%x fbw=%d fbpsm=%d stride=%d dy=%d\n", dfbp, dfbw, dfbpsm, stride, dy);
-
-    if (!ctx->tex_w)
-        return;
-
-    if ((ctx->gs->smode2 & 3) == 3) {
-        // Need to deinterlace
-        int bpp = 0;
-        int odd = ((ctx->gs->csr >> 13) & 1) == 0;
-
-        switch (ctx->disp_fmt) {
-            case GS_PSMCT32:
-            case GS_PSMCT24: {
-                bpp = 4;
-
-                for (int y = 0; y < ctx->tex_h / 2; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint32_t* dst = ctx->buf + x + (((y * 2) + odd) * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-            case GS_PSMCT16:
-            case GS_PSMCT16S: {
-                for (int y = 0; y < ctx->tex_h / 2; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (((y * 2) + odd) * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-        }
-    } else {
-        switch (ctx->disp_fmt) {
-            case GS_PSMCT32:
-            case GS_PSMCT24: {
-                for (int y = 0; y < ctx->tex_h; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint32_t* dst = ctx->buf + x + (y * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-            case GS_PSMCT16:
-            case GS_PSMCT16S: {
-                for (int y = 0; y < ctx->tex_h; y++) {
-                    for (int x = 0; x < ctx->tex_w; x++) {
-                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (y * ctx->tex_w);
-
-                        *dst = gs_read_dispfb(gs, x, y, dfb);
-                    }
-                }
-            } break;
-        }
-    }
-
-    ptr = ctx->buf;
-
-    SDL_Rect size, rect;
-
-    rect.w = ctx->tex_w;
-    rect.h = ctx->tex_h;
-
-    SDL_GetWindowSize(ctx->window, &size.w, &size.h);
-
-    float scale = ctx->integer_scaling ? floorf(ctx->scale) : ctx->scale;
-
-    switch (ctx->aspect_mode) {
-        case RENDERER_ASPECT_NATIVE: {
-            rect.w *= scale;
-            rect.h *= scale;
-        } break;
-
-        case RENDERER_ASPECT_4_3: {
-            rect.w *= scale;
-            rect.h = (float)rect.w * (3.0f / 4.0f);
-        } break;
-
-        case RENDERER_ASPECT_16_9: {
-            rect.w *= scale;
-            rect.h = (float)rect.w * (9.0f / 16.0f);
-        } break;
-
-        case RENDERER_ASPECT_5_4: {
-            rect.w *= scale;
-            rect.h = (float)rect.w * (4.0f / 5.0f);
-        } break;
-
-        case RENDERER_ASPECT_STRETCH: {
-            rect.w = size.w;
-            rect.h = size.h;
-        } break;
-
-        case RENDERER_ASPECT_AUTO:
-        case RENDERER_ASPECT_STRETCH_KEEP: {
-            rect.h = size.h;
-            rect.w = (float)rect.h * (4.0f / 3.0f);
-        } break;
-    }
-
-    ctx->disp_w = rect.w;
-    ctx->disp_h = rect.h;
-
-    rect.x = (size.w / 2) - (rect.w / 2);
-    rect.y = (size.h / 2) - (rect.h / 2);
-
-    float x0 = (rect.x / ((float)size.w / 2.0f)) - 1.0f;
-    float y0 = (rect.y / ((float)size.h / 2.0f)) - 1.0f;
-    float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;
-    float y1 = ((rect.y + rect.h) / ((float)size.h / 2.0f)) - 1.0f;
-
-    GLfloat vertices[] = {
-        // positions   // texture coords
-        x1, y1, 0.0f,  1.0f, 1.0f,   // top right
-        x1, y0, 0.0f,  1.0f, 0.0f,   // bottom right
-        x0, y0, 0.0f,  0.0f, 0.0f,   // bottom left
-        x0, y1, 0.0f,  0.0f, 1.0f    // top left 
-    };
-
-    GLuint indices[] = {
-        0, 1, 3, // first triangle
-        1, 2, 3  // second triangle
-    };
-
-    glBindVertexArray(ctx->vao);
-
-    glBindBuffer(GL_ARRAY_BUFFER, ctx->vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_DYNAMIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, ctx->ebo);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_DYNAMIC_DRAW);
-
-    // position attribute
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
-
-    // texture coord attribute
-    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
-    glEnableVertexAttribArray(1);
-
-    int internal_format, format;
-
-    switch (ctx->disp_fmt) {
-        case GS_PSMCT32:
-        case GS_PSMCT24: {
-            internal_format = GL_RGBA;
-            format = GL_UNSIGNED_BYTE;
-        } break;
-        case GS_PSMCT16:
-        case GS_PSMCT16S: {
-            internal_format = GL_RGBA;
-            format = GL_UNSIGNED_SHORT_1_5_5_5_REV;
-        } break;
-    }
-
-    // Update screen texture
-    glBindTexture(GL_TEXTURE_2D, ctx->tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, ctx->tex_w, ctx->tex_h, 0, internal_format, format, ptr);
-
-    if (!ctx->programs.size()) {
-        // No shaders present, use default shader
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, ctx->tex);
-
-        glViewport(0, 0, size.w, size.h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glUseProgram(ctx->default_program);
-
-        glUniform1i(glGetUniformLocation(ctx->default_program, "input_texture"), 0);
-        glUniform2f(glGetUniformLocation(ctx->default_program, "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->default_program, "frame"), (ctx->gs->csr >> 12) & 1);
-
-        glBindVertexArray(ctx->vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        glBindVertexArray(0);
-
-        return;
-    } else if (ctx->programs.size() == 1) {
-        // Only 1 shader present, use default framebuffer
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, ctx->tex);
-
-        glViewport(0, 0, size.w, size.h);
-        glBindFramebuffer(GL_FRAMEBUFFER, 0);
-        glUseProgram(ctx->programs[0]);
-
-        glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
-        glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), (ctx->gs->csr >> 12) & 1);
-
-        glBindVertexArray(ctx->vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-        glBindVertexArray(0);
-
-        return;
-    }
-
-    // More than 1 shader present, create framebuffer and do render graph
-    if (ctx->fb_out_tex) {
-        glDeleteTextures(1, &ctx->fb_out_tex);
-    }
-
-    glGenTextures(1, &ctx->fb_out_tex);
-    glBindTexture(GL_TEXTURE_2D, ctx->fb_out_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, rect.w, rect.h, 0, internal_format, format, NULL);
-
-    if (ctx->fb_in_tex) {
-        glDeleteTextures(1, &ctx->fb_in_tex);
-    }
-
-    glGenTextures(1, &ctx->fb_in_tex);
-    glBindTexture(GL_TEXTURE_2D, ctx->fb_in_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexImage2D(GL_TEXTURE_2D, 0, internal_format, rect.w, rect.h, 0, internal_format, format, NULL);
-
-    if (ctx->fbo) {
-        glDeleteFramebuffers(1, &ctx->fbo);
-    }
-
-    glGenFramebuffers(1, &ctx->fbo);
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, ctx->fb_out_tex, 0); 
-
-    // first pass
-    // Bind screen texture
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, ctx->tex);
-
-    glViewport(0, 0, rect.w, rect.h);
-    glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-    glUseProgram(ctx->programs[0]);
-
-    glUniform1i(glGetUniformLocation(ctx->programs[0], "input_texture"), 0);
-    glUniform2f(glGetUniformLocation(ctx->programs[0], "screen_size"), (float)ctx->tex_w, (float)ctx->tex_h);
-    glUniform1i(glGetUniformLocation(ctx->programs[0], "frame"), (ctx->gs->csr >> 12) & 1);
-
-    glBindVertexArray(ctx->fb_vao);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-    int output_tex, input_tex;
-
-    // "middle" passes
-    for (int i = 1; i < (int)ctx->programs.size() - 1; i++) {
-        // Bind framebuffer texture for middle and last passes
-        input_tex = (i & 1) ? ctx->fb_out_tex : ctx->fb_in_tex;
-        output_tex = (i & 1) ? ctx->fb_in_tex : ctx->fb_out_tex;
-
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, input_tex);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-
-        glBindFramebuffer(GL_FRAMEBUFFER, ctx->fbo);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, output_tex, 0);
-    
-        glUseProgram(ctx->programs[i]);
-
-        glUniform1i(glGetUniformLocation(ctx->programs[i], "input_texture"), 0);
-        glUniform2f(glGetUniformLocation(ctx->programs[i], "screen_size"), (float)rect.w, (float)rect.h);
-        glUniform1i(glGetUniformLocation(ctx->programs[i], "frame"), (ctx->gs->csr >> 12) & 1);
-
-        glBindVertexArray(ctx->fb_vao);
-        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-    }
-
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, output_tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_SWIZZLE_A, GL_ONE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, ctx->bilinear ? GL_LINEAR : GL_NEAREST);
-
-    // last pass
-    glViewport(0, 0, size.w, size.h);
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glUseProgram(ctx->programs.back());
-
-    glUniform1i(glGetUniformLocation(ctx->programs.back(), "input_texture"), 0);
-    glUniform2f(glGetUniformLocation(ctx->programs.back(), "screen_size"), (float)rect.w, (float)rect.h);
-    glUniform1i(glGetUniformLocation(ctx->programs.back(), "frame"), (ctx->gs->csr >> 12) & 1);
-
-    glBindVertexArray(ctx->vao);
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-    glBindVertexArray(0);
-}
-
 static inline int gs_pixels_to_size(int fmt, int px) {
     switch (fmt) {
         case GS_PSMCT32:
@@ -2857,29 +2472,6 @@ extern "C" void software_thread_render_sprite(struct ps2_gs* gs, void* udata) {
     ctx->queue_mtx.unlock();
 }
 
-extern "C" void software_thread_render(struct ps2_gs* gs, void* udata) {
-    software_thread_state* ctx = (software_thread_state*)udata;
-
-    // Block until queue is empty
-    while (true) {
-        ctx->queue_mtx.lock();
-
-        if (ctx->render_queue.empty()) {
-            ctx->queue_mtx.unlock();
-
-            break;
-        }
-
-        ctx->queue_mtx.unlock();
-    }
-
-    ctx->render_mtx.lock();
-
-    render(gs, ctx);
-
-    ctx->render_mtx.unlock();
-}
-
 extern "C" void software_thread_transfer_start(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
@@ -2943,4 +2535,302 @@ extern "C" void software_thread_transfer_read(struct ps2_gs* gs, void* udata) {
     transfer_read(gs, ctx);
 
     ctx->render_mtx.unlock();
+}
+
+// This starts a copy pass and transfers our vertex/index buffers and our
+// display frame
+void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    // Block until queue is empty
+    while (true) {
+        ctx->queue_mtx.lock();
+
+        if (ctx->render_queue.empty()) {
+            ctx->queue_mtx.unlock();
+
+            break;
+        }
+
+        ctx->queue_mtx.unlock();
+    }
+
+    int en1 = ctx->gs->pmode & 1;
+    int en2 = (ctx->gs->pmode >> 1) & 1;
+
+    uint32_t dfbp = 0;
+    int dfb = 0;
+
+    if (en1) {
+        dfb = 0;
+        dfbp = ctx->gs->dispfb1;
+    } else if (en2) {
+        dfb = 1;
+        dfbp = ctx->gs->dispfb2;
+    }
+
+    uint32_t* ptr = &ctx->gs->vram[dfbp];
+
+    // printf("fbp=%x\n", dfbp);
+
+    if (!ctx->tex_w) {
+        return;
+    }
+
+    if ((ctx->gs->smode2 & 3) == 3) {
+        // Need to deinterlace
+        int bpp = 0;
+        int odd = ((ctx->gs->csr >> 13) & 1) == 0;
+
+        switch (ctx->disp_fmt) {
+            case GS_PSMCT32:
+            case GS_PSMCT24: {
+                bpp = 4;
+
+                for (int y = 0; y < ctx->tex_h / 2; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint32_t* dst = ctx->buf + x + (((y * 2) + odd) * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+            case GS_PSMCT16:
+            case GS_PSMCT16S: {
+                for (int y = 0; y < ctx->tex_h / 2; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (((y * 2) + odd) * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+        }
+    } else {
+        switch (ctx->disp_fmt) {
+            case GS_PSMCT32:
+            case GS_PSMCT24: {
+                for (int y = 0; y < ctx->tex_h; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint32_t* dst = ctx->buf + x + (y * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+            case GS_PSMCT16:
+            case GS_PSMCT16S: {
+                for (int y = 0; y < ctx->tex_h; y++) {
+                    for (int x = 0; x < ctx->tex_w; x++) {
+                        uint16_t* dst = ((uint16_t*)ctx->buf) + x + (y * ctx->tex_w);
+
+                        *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
+                    }
+                }
+            } break;
+        }
+    }
+
+    ptr = ctx->buf;
+
+    SDL_Rect size, rect;
+
+    rect.w = ctx->tex_w;
+    rect.h = ctx->tex_h;
+
+    SDL_GetWindowSize(ctx->window, &size.w, &size.h);
+
+    float scale = ctx->integer_scaling ? floorf(ctx->scale) : ctx->scale;
+
+    switch (ctx->aspect_mode) {
+        case RENDERER_ASPECT_NATIVE: {
+            rect.w *= scale;
+            rect.h *= scale;
+        } break;
+
+        case RENDERER_ASPECT_4_3: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (3.0f / 4.0f);
+        } break;
+
+        case RENDERER_ASPECT_16_9: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (9.0f / 16.0f);
+        } break;
+
+        case RENDERER_ASPECT_5_4: {
+            rect.w *= scale;
+            rect.h = (float)rect.w * (4.0f / 5.0f);
+        } break;
+
+        case RENDERER_ASPECT_STRETCH: {
+            rect.w = size.w;
+            rect.h = size.h;
+        } break;
+
+        case RENDERER_ASPECT_AUTO:
+        case RENDERER_ASPECT_STRETCH_KEEP: {
+            rect.h = size.h;
+            rect.w = (float)rect.h * (4.0f / 3.0f);
+        } break;
+    }
+
+    ctx->disp_w = rect.w;
+    ctx->disp_h = rect.h;
+
+    rect.x = (size.w / 2) - (rect.w / 2);
+    rect.y = (size.h / 2) - (rect.h / 2);
+
+    float x0 = (rect.x / ((float)size.w / 2.0f)) - 1.0f;
+    float y0 = (rect.y / ((float)size.h / 2.0f)) - 1.0f;
+    float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;
+    float y1 = ((rect.y + rect.h) / ((float)size.h / 2.0f)) - 1.0f;
+
+    // Create a transfer buffer to upload our vertex buffer and index buffer
+    SDL_GPUTransferBufferCreateInfo btbci = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = sizeof(gpu_vertex) * 4 + sizeof(Uint16) * 6,
+    };
+
+    SDL_GPUTransferBuffer* buffer_tb = SDL_CreateGPUTransferBuffer(ctx->device, &btbci);
+
+    // fill the transfer buffer
+    gpu_vertex* vertices = (gpu_vertex*)SDL_MapGPUTransferBuffer(ctx->device, buffer_tb, false);
+
+    vertices[0] = { x0, y1, 0.0, 1.0 }; // Top left
+    vertices[1] = { x1, y1, 1.0, 1.0 }; // Top right
+    vertices[2] = { x1, y0, 1.0, 0.0 }; // Bottom right
+    vertices[3] = { x0, y0, 0.0, 0.0 }; // Bottom left
+
+    Uint16* indices = (Uint16*)&vertices[4];
+
+    indices[0] = 0;
+    indices[1] = 1;
+    indices[2] = 2;
+    indices[3] = 0;
+    indices[4] = 2;
+    indices[5] = 3;
+
+    SDL_UnmapGPUTransferBuffer(ctx->device, buffer_tb);
+
+    // start a copy pass
+    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(command_buffer);
+
+    // Upload vertex buffer (at offset 0)
+    SDL_GPUTransferBufferLocation tbl = {
+        .transfer_buffer = buffer_tb,
+        .offset = 0,
+    };
+
+    SDL_GPUBufferRegion br = {
+        .buffer = ctx->vertex_buffer,
+        .offset = 0,
+        .size = sizeof(gpu_vertex) * 4,
+    };
+
+    SDL_UploadToGPUBuffer(cp, &tbl, &br, false);
+
+    tbl = {
+        .transfer_buffer = buffer_tb,
+        .offset = sizeof(gpu_vertex) * 4,
+    };
+
+    br = {
+        .buffer = ctx->index_buffer,
+        .offset = 0,
+        .size = sizeof(Uint16) * 6,
+    };
+
+    // Upload index buffer (right after our vertex data)
+    SDL_UploadToGPUBuffer(cp, &tbl, &br, false);
+
+    int stride = 4;
+
+    switch (ctx->disp_fmt) {
+        case GS_PSMCT32:
+        case GS_PSMCT24: {
+            stride = 4;
+        } break;
+
+        case GS_PSMCT16:
+        case GS_PSMCT16S: {
+            stride = 2;
+        } break;
+
+        // Ignore unknown formats
+        // default: {
+        //     printf("Unsupported display format %d\n", ctx->disp_fmt);
+            
+        //     exit(1);
+        // } break;
+    }
+
+    SDL_GPUTransferBufferCreateInfo ttbci = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = static_cast<Uint32>(ctx->tex_w) * static_cast<Uint32>(ctx->tex_h) * stride
+    };
+
+    SDL_GPUTransferBuffer* texture_tb = SDL_CreateGPUTransferBuffer(ctx->device, &ttbci);
+
+    // fill the transfer buffer
+    void* data = SDL_MapGPUTransferBuffer(ctx->device, texture_tb, false);
+
+    SDL_memcpy(data, ptr, (ctx->tex_w * stride) * ctx->tex_h);
+
+    SDL_UnmapGPUTransferBuffer(ctx->device, texture_tb);
+
+    SDL_GPUTextureTransferInfo tti = {
+        .transfer_buffer = texture_tb,
+        .offset = 0,
+    };
+
+    SDL_GPUTextureRegion tr = {
+        .texture = ctx->texture,
+        .w = static_cast<Uint32>(ctx->tex_w),
+        .h = static_cast<Uint32>(ctx->tex_h),
+        .d = 1,
+    };
+
+    SDL_UploadToGPUTexture(cp, &tti, &tr, false);
+
+    // end the copy pass
+    SDL_EndGPUCopyPass(cp);
+
+    SDL_ReleaseGPUTransferBuffer(ctx->device, buffer_tb);
+    SDL_ReleaseGPUTransferBuffer(ctx->device, texture_tb);
+}
+
+void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    if (!ctx->texture)
+        return;
+
+    SDL_BindGPUGraphicsPipeline(render_pass, ctx->pipeline);
+
+    // bind the vertex buffer
+    SDL_GPUBufferBinding bb[1]{};
+    bb[0].buffer = ctx->vertex_buffer;
+    bb[0].offset = 0;
+
+    SDL_BindGPUVertexBuffers(render_pass, 0, bb, 1);
+
+    bb[0].buffer = ctx->index_buffer;
+    bb[0].offset = 0;
+
+    SDL_BindGPUIndexBuffer(render_pass, bb, SDL_GPU_INDEXELEMENTSIZE_16BIT);
+
+    SDL_GPUTextureSamplerBinding tsb = {
+        .texture = ctx->texture,
+        .sampler = ctx->sampler,
+    };
+
+    SDL_BindGPUFragmentSamplers(render_pass, 0, &tsb, 1);
+
+    // issue a draw call
+    SDL_DrawGPUIndexedPrimitives(render_pass, 6, 1, 0, 0, 0);
+}
+
+void software_thread_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {
+    // Nothing for now
 }

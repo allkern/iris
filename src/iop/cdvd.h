@@ -7,7 +7,7 @@ extern "C" {
 
 #include <stdint.h>
 
-#include "sched.h"
+#include "scheduler.h"
 #include "dma.h"
 #include "disc.h"
 
@@ -81,8 +81,15 @@ struct ps2_cdvd {
     uint8_t disc_type;
     uint8_t s_cmd;
     uint8_t s_stat;
+
+#ifdef _MSC_VER
+    __declspec(align(4)) uint8_t n_params[16];
+    __declspec(align(4)) uint8_t s_params[16];
+#else
     uint8_t n_params[16] __attribute__((aligned(4)));
     uint8_t s_params[16] __attribute__((aligned(4)));
+#endif
+
     uint8_t* s_fifo;
     int n_param_index;
     int s_param_index;
@@ -119,11 +126,13 @@ struct ps2_cdvd {
 struct ps2_cdvd* ps2_cdvd_create(void);
 void ps2_cdvd_init(struct ps2_cdvd* cdvd, struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct sched_state* sched);
 void ps2_cdvd_destroy(struct ps2_cdvd* cdvd);
-int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path);
+int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay);
 void ps2_cdvd_close(struct ps2_cdvd* cdvd);
 void ps2_cdvd_power_off(struct ps2_cdvd* cdvd);
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr);
 void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data);
+
+#undef ALIGNED_U32
 
 #ifdef __cplusplus
 }

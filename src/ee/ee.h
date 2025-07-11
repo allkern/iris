@@ -121,7 +121,11 @@ union ee_fpu_reg {
 };
 
 #ifdef _EE_USE_INTRINSICS
+#ifdef _MSC_VER
+#define EE_ALIGNED16 __declspec(align(16))
+#else
 #define EE_ALIGNED16 __attribute__((aligned(16)))
+#endif
 #else
 #define EE_ALIGNED16
 #endif
@@ -205,6 +209,7 @@ void ee_destroy(struct ee_state* ee);
 void ee_set_int0(struct ee_state* ee, int v);
 void ee_set_int1(struct ee_state* ee, int v);
 void ee_set_cpcond0(struct ee_state* ee, int v);
+void ee_run_block(struct ee_state* ee, int cycles);
 
 #undef EE_ALIGNED16
 
