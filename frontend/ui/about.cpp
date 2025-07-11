@@ -20,7 +20,7 @@ void show_about_window(iris::instance* iris) {
 
     if (Begin("About", &iris->show_about_window, flags)) {
         if (BeginChild("##iconchild", ImVec2(100.0, 210.0), ImGuiChildFlags_AutoResizeY)) {
-            // Image(iris->iris_icon_tex, ImVec2(100.0, 100.0));
+            Image((ImTextureID)(intptr_t)&iris->iris_icon_tsb, ImVec2(100.0, 100.0));
         } EndChild(); SameLine(0.0, 10.0);
 
         if (BeginChild("##textchild", ImVec2(350.0, 0.0))) {
@@ -37,7 +37,7 @@ void show_about_window(iris::instance* iris) {
             Text("");
             TextWrapped(
                 "Special thanks to: The emudev Discord server, Ziemas, "
-                "ncarrillo, cakehonolulu, and the PCSX2 team "
+                "ncarrillo, cakehonolulu, Layle, and the PCSX2 team "
                 "for their kind support."
             );
             Text("");

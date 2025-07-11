@@ -88,6 +88,10 @@ struct instance {
     int ps1_memory_card_icon_height = 0;
     int pocketstation_icon_height = 0;
     int iris_icon_height = 0;
+    SDL_GPUTextureSamplerBinding ps2_memory_card_icon_tsb = {};
+    SDL_GPUTextureSamplerBinding ps1_memory_card_icon_tsb = {};
+    SDL_GPUTextureSamplerBinding pocketstation_icon_tsb = {};
+    SDL_GPUTextureSamplerBinding iris_icon_tsb = {};
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;

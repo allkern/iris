@@ -10,9 +10,7 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
 set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
-set(CMAKE_CXX_FLAGS "-g")
-
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS)
 endif()
 
@@ -58,16 +56,16 @@ message(STATUS "Project Version: ${GIT_VERSION_STRING}")
 add_subdirectory(tomlplusplus)
 
 include(CheckIPOSupported)
-check_ipo_supported(RESULT supported OUTPUT error)
+check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
 
 # And this part tells CMake where to find and install the file itself
 add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
-if (supported)
+if (LTO_SUPPORTED)
     message(STATUS "IPO/LTO enabled")
     set_property(TARGET iris PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 else()
-    message(STATUS "IPO/LTO not supported: ${error}")
+    message(STATUS "IPO/LTO not supported: ${LTO_ERROR}")
 endif()
 
 set_property(TARGET iris PROPERTY CXX_STANDARD 20)
@@ -83,7 +81,6 @@ target_sources(iris PRIVATE
   frontend/notifications.cpp
   frontend/settings.cpp
   frontend/platform/stub.cpp
-  frontend/tfd/tinyfiledialogs.c
   frontend/ui/about.cpp
   frontend/ui/bios_setting.cpp
   frontend/ui/breakpoints.cpp

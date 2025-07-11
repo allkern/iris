@@ -2767,7 +2767,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
 
     SDL_GPUTransferBufferCreateInfo ttbci = {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size =  static_cast<Uint32>(ctx->tex_w) *  static_cast<Uint32>(ctx->tex_h) * stride
+        .size = static_cast<Uint32>(ctx->tex_w) * static_cast<Uint32>(ctx->tex_h) * stride
     };
 
     SDL_GPUTransferBuffer* texture_tb = SDL_CreateGPUTransferBuffer(ctx->device, &ttbci);

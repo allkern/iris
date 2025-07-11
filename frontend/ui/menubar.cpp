@@ -3,7 +3,6 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
-#include "tfd/tinyfiledialogs.h"
 #include "pfd/pfd.h"
 
 #include "ps2_elf.h"

@@ -850,7 +850,7 @@ static inline void ee_i_dsrl32(struct ee_state* ee) {
 static inline void ee_i_dsrlv(struct ee_state* ee) {
     EE_RD = EE_RT >> (EE_RS & 0x3f);
 }
-static inline void ee_i_dsub(struct ee_state* ee) {// printf("ee: dsub unimplemented\n"); exit(1);
+static inline void ee_i_dsub(struct ee_state* ee) {
     int64_t r;
 
     if (SSUBOVF64((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
@@ -962,18 +962,16 @@ static const uint32_t LWR_MASK[4] = { 0x00000000, 0xff000000, 0xffff0000, 0xffff
 static const int LWL_SHIFT[4] = { 24, 16, 8, 0 };
 static const int LWR_SHIFT[4] = { 0, 8, 16, 24 };
 
-static inline void ee_i_lwl(struct ee_state* ee) { // printf("ee: lwl unimplemented\n"); exit(1);
+static inline void ee_i_lwl(struct ee_state* ee) {
     uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
     uint32_t shift = addr & 3;
     uint32_t mem = bus_read32(ee, addr & ~3);
 
     // ensure the compiler does correct sign extension into 64 bits by using s32
     EE_RT = (int32_t)((EE_RT32 & LWL_MASK[shift]) | (mem << LWL_SHIFT[shift]));
-
-    // printf("lwl mem=%08x reg=%016lx addr=%08x shift=%d rs=%08x i16=%04x\n", mem, ee->r[EE_D_RT].u64[0], addr, shift, EE_RS32, EE_D_I16);
 }
 
-static inline void ee_i_lwr(struct ee_state* ee) { // printf("ee: lwr unimplemented\n"); exit(1);
+static inline void ee_i_lwr(struct ee_state* ee) {
     uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
     uint32_t shift = addr & 3;
     uint32_t data = bus_read32(ee, addr & ~3);

@@ -53,6 +53,74 @@ INCBIN(iris_icon, "../res/iris.png");
 // Icon range (for our fonts)
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
+SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass* cp, void* buf, size_t size, int* width, int* height) {
+    SDL_GPUTextureSamplerBinding tsb = {};
+
+    stbi_uc* tex = stbi_load_from_memory((stbi_uc*)buf, size, width, height, nullptr, 4);
+
+    if (!tex) {
+        printf("Error: stbi_load_from_memory() failed: %s\n", stbi_failure_reason());
+
+        return tsb;
+    }
+
+    SDL_GPUTextureCreateInfo tci = {};
+
+    tci.format = SDL_GPU_TEXTUREFORMAT_R8G8B8A8_UNORM;
+    tci.type = SDL_GPU_TEXTURETYPE_2D;
+    tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    tci.width = *width;
+    tci.height = *height;
+    tci.layer_count_or_depth = 1;
+    tci.num_levels = 1;
+    tci.sample_count = SDL_GPU_SAMPLECOUNT_1;
+
+    SDL_GPUSamplerCreateInfo sci = {};
+
+    sci.min_filter = SDL_GPU_FILTER_LINEAR;
+    sci.mag_filter = SDL_GPU_FILTER_LINEAR;
+    sci.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST;
+    sci.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    sci.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+    sci.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
+
+    tsb.texture = SDL_CreateGPUTexture(iris->device, &tci);
+    tsb.sampler = SDL_CreateGPUSampler(iris->device, &sci);
+
+    // Transfer the texture
+    SDL_GPUTransferBufferCreateInfo ttbci = {
+        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+        .size = (((Uint32)*width) * 4) * ((Uint32)*height)
+    };
+
+    SDL_GPUTransferBuffer* ttb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
+
+    // fill the transfer buffer
+    void* data = SDL_MapGPUTransferBuffer(iris->device, ttb, false);
+
+    SDL_memcpy(data, tex, (((Uint32)*width) * 4) * ((Uint32)*height));
+
+    SDL_UnmapGPUTransferBuffer(iris->device, ttb);
+
+    SDL_GPUTextureTransferInfo tti = {
+        .transfer_buffer = ttb,
+        .offset = 0,
+    };
+
+    SDL_GPUTextureRegion tr = {
+        .texture = tsb.texture,
+        .w = *width,
+        .h = *height,
+        .d = 1,
+    };
+
+    SDL_UploadToGPUTexture(cp, &tti, &tr, false);
+
+    stbi_image_free(tex);
+
+    return tsb;
+}
+
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     SDL_SetAppMetadata("Iris", STR(_IRIS_VERSION), "com.allkern.iris");
 
@@ -72,7 +140,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     iris->window = SDL_CreateWindow(
         IRIS_TITLE,
         iris->window_width, iris->window_height,
-        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY
+        SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN
     );
 
     if (!iris->window) {
@@ -101,6 +169,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 
         return SDL_APP_FAILURE;
     }
+
+    SDL_ShowWindow(iris->window);
 
     SDL_SetGPUSwapchainParameters(
         iris->device, iris->window,
@@ -313,49 +383,43 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
 
     // Initialize assets
-    stbi_uc* ps2_memory_card_buf = stbi_load_from_memory(
-        g_ps2_memory_card_icon_data,
+    SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(iris->device);
+    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
+
+    iris->ps2_memory_card_icon_tsb = load_texture(
+        iris, cp,
+        (void*)g_ps2_memory_card_icon_data,
         g_ps2_memory_card_icon_size,
         &iris->ps2_memory_card_icon_width,
-        &iris->ps2_memory_card_icon_height,
-        nullptr,
-        4
+        &iris->ps2_memory_card_icon_height
     );
 
-    stbi_image_free(ps2_memory_card_buf);
-
-    stbi_uc* ps1_memory_card_buf = stbi_load_from_memory(
-        g_ps1_memory_card_icon_data,
+    iris->ps1_memory_card_icon_tsb = load_texture(
+        iris, cp,
+        (void*)g_ps1_memory_card_icon_data,
         g_ps1_memory_card_icon_size,
         &iris->ps1_memory_card_icon_width,
-        &iris->ps1_memory_card_icon_height,
-        nullptr,
-        4
+        &iris->ps1_memory_card_icon_height
     );
 
-    stbi_image_free(ps1_memory_card_buf);
-
-    stbi_uc* pocketstation_buf = stbi_load_from_memory(
-        g_pocketstation_icon_data,
+    iris->pocketstation_icon_tsb = load_texture(
+        iris, cp,
+        (void*)g_pocketstation_icon_data,
         g_pocketstation_icon_size,
         &iris->pocketstation_icon_width,
-        &iris->pocketstation_icon_height,
-        nullptr,
-        4
+        &iris->pocketstation_icon_height
     );
 
-    stbi_image_free(pocketstation_buf);
-
-    stbi_uc* iris_buf = stbi_load_from_memory(
-        g_iris_icon_data,
+    iris->iris_icon_tsb = load_texture(
+        iris, cp,
+        (void*)g_iris_icon_data,
         g_iris_icon_size,
         &iris->iris_icon_width,
-        &iris->iris_icon_height,
-        nullptr,
-        4
+        &iris->iris_icon_height
     );
 
-    stbi_image_free(iris_buf);
+    SDL_EndGPUCopyPass(cp);
+    SDL_SubmitGPUCommandBuffer(cb);
 
     // Initialize appstate
     *appstate = iris;
@@ -492,6 +556,16 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     ImGui_ImplSDL3_Shutdown();
     ImGui_ImplSDLGPU3_Shutdown();
     ImGui::DestroyContext();
+
+    // Release resources
+    SDL_ReleaseGPUTexture(iris->device, iris->ps2_memory_card_icon_tsb.texture);
+    SDL_ReleaseGPUTexture(iris->device, iris->ps1_memory_card_icon_tsb.texture);
+    SDL_ReleaseGPUTexture(iris->device, iris->pocketstation_icon_tsb.texture);
+    SDL_ReleaseGPUTexture(iris->device, iris->iris_icon_tsb.texture);
+    SDL_ReleaseGPUSampler(iris->device, iris->ps2_memory_card_icon_tsb.sampler);
+    SDL_ReleaseGPUSampler(iris->device, iris->ps1_memory_card_icon_tsb.sampler);
+    SDL_ReleaseGPUSampler(iris->device, iris->pocketstation_icon_tsb.sampler);
+    SDL_ReleaseGPUSampler(iris->device, iris->iris_icon_tsb.sampler);
 
     SDL_ReleaseWindowFromGPUDevice(iris->device, iris->window);
     SDL_DestroyGPUDevice(iris->device);

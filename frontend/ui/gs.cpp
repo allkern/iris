@@ -441,6 +441,7 @@ void show_gs_registers(iris::instance* iris) {
 }
 
 static uint32_t addr = 0, width = 0, height = 0;
+static bool unswizzle = false;
 static float scale = 1.0f;
 
 const char* format_names[] = {
@@ -511,14 +512,12 @@ void show_gs_memory(iris::instance* iris) {
     int stride = 0;
 
     switch (format) {
-        case GS_PSMCT32:
-        case GS_PSMCT24: {
+        case 0: {
             fmt = SDL_GPU_TEXTUREFORMAT_B8G8R8A8_UNORM;
             stride = 4;
         } break;
 
-        case GS_PSMCT16:
-        case GS_PSMCT16S: {
+        case 1: {
             fmt = SDL_GPU_TEXTUREFORMAT_B5G5R5A1_UNORM;
             stride = 2;
         } break;
@@ -551,8 +550,8 @@ void show_gs_memory(iris::instance* iris) {
         tex = SDL_CreateGPUTexture(iris->device, &tci);
 
         SDL_GPUSamplerCreateInfo sci = {
-            .min_filter = SDL_GPU_FILTER_LINEAR,
-            .mag_filter = SDL_GPU_FILTER_LINEAR,
+            .min_filter = SDL_GPU_FILTER_NEAREST,
+            .mag_filter = SDL_GPU_FILTER_NEAREST,
             .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
             .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
             .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
@@ -569,27 +568,46 @@ void show_gs_memory(iris::instance* iris) {
         return;
 
     SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(iris->device);
-
     SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
 
     SDL_GPUTransferBufferCreateInfo ttbci = {
         .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = width * height * stride
+        .size = (width * stride) * height
     };
 
-    SDL_GPUTransferBuffer* texture_tb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
+    SDL_GPUTransferBuffer* ttb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
 
     // fill the transfer buffer
-    void* data = SDL_MapGPUTransferBuffer(iris->device, texture_tb, false);
+    switch (format) {
+        case 0: {
+            uint32_t* ptr = (uint32_t*)(((uint8_t*)gs->vram) + addr);
+            uint32_t* data = (uint32_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
 
-    void* ptr = ((uint8_t*)gs->vram) + addr;
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    data[x + (y * width)] = ptr[x + (y * width)] | 0xff000000;
+                }
+            }
+        } break;
 
-    SDL_memcpy(data, ptr, (width * stride) * height);
+        case 1: {
+            uint16_t* ptr = (uint16_t*)(((uint8_t*)gs->vram) + addr);
+            uint16_t* data = (uint16_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
 
-    SDL_UnmapGPUTransferBuffer(iris->device, texture_tb);
+            for (int y = 0; y < height; y++) {
+                for (int x = 0; x < width; x++) {
+                    data[x + (y * width)] = ptr[x + (y * width)] | 0x8000;
+                }
+            }
+        } break;
+    }
+
+    // SDL_memcpy(data, ptr, (width * stride) * height);
+
+    SDL_UnmapGPUTransferBuffer(iris->device, ttb);
 
     SDL_GPUTextureTransferInfo tti = {
-        .transfer_buffer = texture_tb,
+        .transfer_buffer = ttb,
         .offset = 0,
     };
 
@@ -604,8 +622,9 @@ void show_gs_memory(iris::instance* iris) {
 
     // end the copy pass
     SDL_EndGPUCopyPass(cp);
+    SDL_SubmitGPUCommandBuffer(cb);
 
-    ImageWithBg((ImTextureID)(intptr_t)&tsb, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(1, 1, 1, 1), ImVec4(1, 1, 1, 1));
+    ImageWithBg((ImTextureID)(intptr_t)&tsb, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
 }
 
 void show_gs_debugger(iris::instance* iris) {
