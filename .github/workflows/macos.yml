@@ -2,10 +2,10 @@ name: macOS CI
 
 on:
   push:
-    branches: [ "sdl3-cmake" ]
+    branches: [ "hw-renderer" ]
 
 jobs:
-  macos-universal-build:
+  build:
     runs-on: macos-latest
 
     steps:

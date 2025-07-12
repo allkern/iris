@@ -23,7 +23,8 @@ const char* aspect_mode_names[] = {
 const char* renderer_names[] = {
     "Null",
     "Software",
-    "Software (Threaded)"
+    "Software (Threaded)",
+    "Hardware"
 };
 
 const char* fullscreen_names[] = {
@@ -210,7 +211,7 @@ void show_main_menubar(iris::instance* iris) {
         if (BeginMenu("Settings")) {
             if (BeginMenu(ICON_MS_MONITOR " Display")) {
                 if (BeginMenu(ICON_MS_BRUSH " Renderer")) {
-                    for (int i = 0; i < 3; i++) {
+                    for (int i = 0; i < 4; i++) {
                         if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
                             iris->renderer_backend = i;
 
