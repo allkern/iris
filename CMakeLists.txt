@@ -5,9 +5,9 @@ cmake_minimum_required(VERSION 3.16...4.0)
 set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
+set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
-set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
@@ -122,6 +122,7 @@ target_sources(iris PRIVATE
   src/gs/renderer/renderer.cpp
   src/gs/renderer/software.cpp
   src/gs/renderer/software_thread.cpp
+  src/gs/renderer/hardware.cpp
   src/iop/bus.c
   src/iop/cdvd.c
   src/iop/disc.c
@@ -212,8 +213,8 @@ message(STATUS "CMake System Name: ${CMAKE_SYSTEM_NAME}")
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     # tell Install about the target, otherwise fixup won't know about the transitive dependencies
     install(TARGETS iris
-    	BUNDLE DESTINATION ./install COMPONENT Runtime
-   	  RUNTIME DESTINATION ./install/bin COMPONENT Runtime
+        BUNDLE DESTINATION ./install COMPONENT Runtime
+   	    RUNTIME DESTINATION ./install/bin COMPONENT Runtime
     )
 	
     set(DEP_DIR "${CMAKE_BINARY_DIR}")  # where to look for dependencies when fixing up

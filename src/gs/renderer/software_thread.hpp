@@ -49,7 +49,7 @@ struct software_thread_state {
     SDL_GPUBuffer* vertex_buffer = nullptr;
     SDL_GPUBuffer* index_buffer = nullptr;
     SDL_GPUTexture* texture = nullptr;
-    SDL_GPUSampler* sampler = nullptr;
+    SDL_GPUSampler* sampler[2] = { nullptr };
     SDL_GPUGraphicsPipeline* pipeline = nullptr;
 
     // Context
