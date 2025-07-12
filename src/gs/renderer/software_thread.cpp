@@ -422,8 +422,7 @@ void software_thread_destroy(void* udata) {
     // release buffers
     SDL_ReleaseGPUBuffer(ctx->device, ctx->vertex_buffer);
     SDL_ReleaseGPUBuffer(ctx->device, ctx->index_buffer);
-    SDL_ReleaseGPUSampler(ctx->device, ctx->sampler[0]);
-    SDL_ReleaseGPUSampler(ctx->device, ctx->sampler[1]);
+    SDL_ReleaseGPUSampler(ctx->device, ctx->sampler);
 
     if (ctx->texture) SDL_ReleaseGPUTexture(ctx->device, ctx->texture);
     
@@ -1529,26 +1528,16 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
 
     ctx->index_buffer = SDL_CreateGPUBuffer(device, &ibci);
 
-    SDL_GPUSamplerCreateInfo nearest_sci = {
-		.min_filter = SDL_GPU_FILTER_NEAREST,
-		.mag_filter = SDL_GPU_FILTER_NEAREST,
+    SDL_GPUSamplerCreateInfo sci = {
+		.min_filter = ctx->bilinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST,
+		.mag_filter = ctx->bilinear ? SDL_GPU_FILTER_LINEAR : SDL_GPU_FILTER_NEAREST,
 		.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
 		.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
 		.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
 		.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
     };
 
-    SDL_GPUSamplerCreateInfo linear_sci = {
-		.min_filter = SDL_GPU_FILTER_LINEAR,
-		.mag_filter = SDL_GPU_FILTER_LINEAR,
-		.mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
-		.address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-		.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-		.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-    };
-
-    ctx->sampler[0] = SDL_CreateGPUSampler(ctx->device, &nearest_sci);
-    ctx->sampler[1] = SDL_CreateGPUSampler(ctx->device, &linear_sci);
+    ctx->sampler = SDL_CreateGPUSampler(ctx->device, &sci);
 }
 
 static inline void software_thread_vram_blit(struct ps2_gs* gs, software_thread_state* ctx) {
@@ -2833,7 +2822,7 @@ void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, S
 
     SDL_GPUTextureSamplerBinding tsb = {
         .texture = ctx->texture,
-        .sampler = ctx->bilinear ? ctx->sampler[1] : ctx->sampler[0],
+        .sampler = ctx->sampler,
     };
 
     SDL_BindGPUFragmentSamplers(render_pass, 0, &tsb, 1);
