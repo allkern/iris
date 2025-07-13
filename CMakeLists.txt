@@ -122,6 +122,7 @@ target_sources(iris PRIVATE
   src/gs/renderer/renderer.cpp
   src/gs/renderer/software.cpp
   src/gs/renderer/software_thread.cpp
+  src/gs/renderer/hardware.cpp
   src/iop/bus.c
   src/iop/cdvd.c
   src/iop/disc.c
