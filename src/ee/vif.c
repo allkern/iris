@@ -90,19 +90,17 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
     } else if (vif->unpack_cl > vif->unpack_wl) {
         // Write data until unpack_wl is reached, then skip unpack_skip
         vif->vu->vu_mem[(vif->addr++) & 0x3ff] = data;
-
-        vif->unpack_wl_count++;
-
-        if (vif->unpack_wl_count == vif->unpack_wl) {
-            vif->unpack_wl_count = 0;
-            vif->addr += vif->unpack_skip;
-        }
     } else {
         printf("vif%d: Unpack error: unpack_cl (%d) < unpack_wl (%d)\n", vif->id, vif->unpack_cl, vif->unpack_wl);
         exit(1);
     }
 
     vif->unpack_cycle++;
+
+    if (vif->unpack_cycle == vif->unpack_wl) {
+        vif->addr += vif->unpack_skip;
+        vif->unpack_cycle = 0;
+    }
 }
 
 void vif0_send_irq(void* udata, int overshoot) {
@@ -313,7 +311,9 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
                 if (filling) {
                     printf("vif%d: Filling mode unimplemented\n", vif->id);
-                    exit(1);
+
+                    return;
+                    // exit(1);
                 }
 
                 // To-do: Handle for filling
