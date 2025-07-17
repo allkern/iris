@@ -2,6 +2,8 @@
 #include <cstdlib>
 #include "dct_coeff_table1.hpp"
 
+// #define printf(fmt, ...)(0)
+
 VLC_Entry DCT_Coeff_Table1::table[] =
 {
     {0x2, 0, 2},

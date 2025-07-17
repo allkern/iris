@@ -108,9 +108,6 @@ void dmac_handle_sif2_transfer(struct ps2_dmac* dmac);
 void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac);
 void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac);
 
-// IPU
-void dmac_transfer_ipu_to_qword(struct ps2_dmac* dmac);
-
 #ifdef __cplusplus
 }
 #endif

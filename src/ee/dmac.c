@@ -5,6 +5,8 @@
 
 #include "dmac.h"
 
+// #define printf(fmt, ...)(0)
+
 static inline uint128_t dmac_read_qword(struct ps2_dmac* dmac, uint32_t addr, int mem) {
     int spr = mem || (addr & 0x80000000);
 
@@ -12,6 +14,18 @@ static inline uint128_t dmac_read_qword(struct ps2_dmac* dmac, uint32_t addr, in
         return ee_bus_read128(dmac->bus, addr & 0xfffffff0);
 
     return ps2_ram_read128(dmac->spr, addr & 0x3ff0);
+}
+
+static inline void dmac_write_qword(struct ps2_dmac* dmac, uint32_t addr, int mem, uint128_t value) {
+    int spr = mem || (addr & 0x80000000);
+
+    if (!spr) {
+        ee_bus_write128(dmac->bus, addr & 0xfffffff0, value);
+
+        return;
+    }
+
+    ps2_ram_write128(dmac->spr, addr & 0x3ff0, value);
 }
 
 struct ps2_dmac* ps2_dmac_create(void) {
@@ -196,7 +210,7 @@ static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_ch
         } break;
     }
 
-    // If TIE is set, then end transfer
+    // If TIE and TAG.IRQ are set, then end transfer
     if ((c->chcr & 0x80) && c->tag.irq)
         c->tag.end = 1;
 }
@@ -493,107 +507,156 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
         }
     } while (!channel_is_done(&dmac->gif));
 }
-
 void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
-    // printf("ee: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
-    //     dmac->ipu_to.chcr,
-    //     dmac->ipu_to.chcr & 1,
-    //     (dmac->ipu_to.chcr >> 2) & 3,
-    //     !!(dmac->ipu_to.chcr & 0x40),
-    //     dmac->ipu_to.madr,
-    //     dmac->ipu_to.qwc,
-    //     dmac->ipu_to.tadr
-    // );
+    if ((dmac->ipu_from.chcr & 0x100) == 0) {
+        // printf("dmac: ipu_from channel not started\n");
 
-    // dmac_set_irq(dmac, DMAC_IPU_TO);
+        return;
+    }
 
-    // dmac->ipu_to.chcr &= ~0x100;
+    int mode = (dmac->ipu_from.chcr >> 2) & 3;
 
-    // return;
+    printf("dmac: ipu_from start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x dreq=%d\n",
+        dmac->ipu_from.chcr,
+        dmac->ipu_from.chcr & 1,
+        (dmac->ipu_from.chcr >> 2) & 3,
+        !!(dmac->ipu_from.chcr & 0x40),
+        dmac->ipu_from.madr,
+        dmac->ipu_from.qwc,
+        dmac->ipu_from.tadr,
+        dmac->ipu_from.dreq
+    );
 
-    do {
-        uint128_t tag = ee_bus_read128(dmac->bus, 0x10007000);
-
-        dmac_process_dest_tag(dmac, &dmac->ipu_from, tag);
-
-        printf("ee: ipu_from tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx end=%d tte=%d\n",
-            dmac->ipu_to.tag.qwc,
-            dmac->ipu_to.tag.id,
-            dmac->ipu_to.tag.irq,
-            dmac->ipu_to.tag.addr,
-            dmac->ipu_to.tag.mem,
-            dmac->ipu_to.tag.data,
-            dmac->ipu_to.tag.end,
-            (dmac->ipu_to.chcr >> 7) & 1
-        );
+    if (mode != 0) {
+        printf("dmac: ipu_from mode %d not supported\n", mode);
 
         exit(1);
-    
-        for (int i = 0; i < dmac->ipu_from.tag.qwc; i++) {
-            uint128_t q = ee_bus_read128(dmac->bus, 0x10007000);
 
-            ee_bus_write128(dmac->bus, dmac->ipu_from.madr, q);
+        return;
+    }
 
-            dmac->ipu_from.madr += 16;
-        }
-    } while (!channel_is_done(&dmac->ipu_from));
+    while (dmac->ipu_from.dreq && dmac->ipu_from.qwc) {
+        uint128_t q = ee_bus_read128(dmac->bus, 0x10007000);
 
-    // exit(1);
+        dmac_write_qword(dmac, dmac->ipu_from.madr, 0, q);
 
-    dmac_set_irq(dmac, DMAC_IPU_FROM);
+        dmac->ipu_from.madr += 16;
+        dmac->ipu_from.qwc--;
+    }
 
-    dmac->ipu_from.chcr &= ~0x100;
-    dmac->ipu_from.qwc = 0;
+    if (dmac->ipu_from.qwc == 0) {
+        dmac_set_irq(dmac, DMAC_IPU_FROM);
+
+        dmac->ipu_from.chcr &= ~0x100;
+        dmac->ipu_from.qwc = 0;
+
+        printf("dmac: ipu_from channel done\n");
+    }
 }
-void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
-    // printf("ee: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
-    //     dmac->ipu_to.chcr,
-    //     dmac->ipu_to.chcr & 1,
-    //     (dmac->ipu_to.chcr >> 2) & 3,
-    //     !!(dmac->ipu_to.chcr & 0x40),
-    //     dmac->ipu_to.madr,
-    //     dmac->ipu_to.qwc,
-    //     dmac->ipu_to.tadr
+int dmac_transfer_ipu_to_qword(struct ps2_dmac* dmac) {
+    if ((dmac->ipu_to.chcr & 0x100) == 0) {
+        // printf("dmac: ipu_to channel not started\n");
+
+        return 0;
+    }
+
+    if (!dmac->ipu_to.dreq) {
+        // printf("dmac: ipu_to dreq cleared\n");
+
+        return 0;
+    }
+
+    if (dmac->ipu_to.tag.qwc) {
+        uint128_t q = dmac_read_qword(dmac, dmac->ipu_to.madr, dmac->ipu_to.tag.mem);
+
+        ee_bus_write128(dmac->bus, 0x10007010, q);
+
+        dmac->ipu_to.madr += 16;
+        dmac->ipu_to.tag.qwc--;
+
+        return 1;
+    }
+
+    if (channel_is_done(&dmac->ipu_to)) {
+        printf("dmac: ipu_to channel done\n");
+
+        dmac_set_irq(dmac, DMAC_IPU_TO);
+
+        dmac->ipu_to.chcr &= ~0x100;
+        dmac->ipu_to.qwc = 0;
+
+        exit(1);
+
+        return 0;
+    }
+
+    uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr, 0);
+
+    dmac_process_source_tag(dmac, &dmac->ipu_to, tag);
+
+    // printf("dmac: ipu_to tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx end=%d tte=%d\n",
+    //     dmac->ipu_to.tag.qwc,
+    //     dmac->ipu_to.tag.id,
+    //     dmac->ipu_to.tag.irq,
+    //     dmac->ipu_to.tag.addr,
+    //     dmac->ipu_to.tag.mem,
+    //     dmac->ipu_to.tag.data,
+    //     dmac->ipu_to.tag.end,
+    //     (dmac->ipu_to.chcr >> 7) & 1
     // );
 
-    dmac_set_irq(dmac, DMAC_IPU_TO);
+    return 1;
+}
+void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
+    if ((dmac->ipu_to.chcr & 0x100) == 0) {
+        // printf("dmac: ipu_to channel not started\n");
 
-    dmac->ipu_to.chcr &= ~0x100;
+        return;
+    }
 
-    return;
+    printf("dmac: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
+        dmac->ipu_to.chcr,
+        dmac->ipu_to.chcr & 1,
+        (dmac->ipu_to.chcr >> 2) & 3,
+        !!(dmac->ipu_to.chcr & 0x40),
+        dmac->ipu_to.madr,
+        dmac->ipu_to.qwc,
+        dmac->ipu_to.tadr
+    );
 
-    do {
-        uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr, 0);
+    while (dmac_transfer_ipu_to_qword(dmac)) {
+        // Keep transferring until we run out of QWC or DREQ is cleared
+    }
 
-        dmac_process_source_tag(dmac, &dmac->ipu_to, tag);
+    // while (dmac->ipu_to.dreq && dmac->ipu_to.qwc) {
+    //     uint128_t q = dmac_read_qword(dmac, dmac->ipu_to.madr, dmac->ipu_to.tag.mem);
 
-        // printf("ee: ipu_to tag qwc=%08lx id=%ld irq=%ld addr=%08lx mem=%ld data=%016lx end=%d tte=%d\n",
-        //     dmac->ipu_to.tag.qwc,
-        //     dmac->ipu_to.tag.id,
-        //     dmac->ipu_to.tag.irq,
-        //     dmac->ipu_to.tag.addr,
-        //     dmac->ipu_to.tag.mem,
-        //     dmac->ipu_to.tag.data,
-        //     dmac->ipu_to.tag.end,
-        //     (dmac->ipu_to.chcr >> 7) & 1
-        // );
-        // printf("ee: SIF1 tag madr=%08x\n", dmac->sif1.madr);
+    //     ee_bus_write128(dmac->bus, 0x10007010, q);
 
-        for (int i = 0; i < dmac->ipu_to.tag.qwc; i++) {
-            uint128_t q = dmac_read_qword(dmac, dmac->ipu_to.madr, dmac->ipu_to.tag.mem);
+    //     dmac->ipu_to.madr += 16;
+    //     dmac->ipu_to.tag.qwc--;
+    // }
 
-            ee_bus_write128(dmac->bus, 0x10007010, q);
+    // if (dmac->ipu_to.tag.qwc == 0) {
+    //     if (channel_is_done(&dmac->ipu_to)) {
+    //         dmac_set_irq(dmac, DMAC_IPU_TO);
 
-            dmac->ipu_to.madr += 16;
-        }
-    } while (!channel_is_done(&dmac->ipu_to));
+    //         dmac->ipu_to.chcr &= ~0x100;
+    //         dmac->ipu_to.qwc = 0;
 
-    // exit(1);
+    //         printf("dmac: ipu_to channel done\n");
 
-    dmac_set_irq(dmac, DMAC_IPU_TO);
+    //         return;
+    //     }
 
-    dmac->ipu_to.chcr &= ~0x100;
-    dmac->ipu_to.qwc = 0;
+    //     uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr, 0);
+
+    //     dmac_process_source_tag(dmac, &dmac->ipu_to, tag);
+    // }
+
+    // if (!dmac->ipu_to.dreq) {
+    //     return;
+    // }
 }
 void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
     // SIF FIFO is empty, keep waiting
@@ -656,7 +719,7 @@ void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
 
             // printf("ee: Writing %016lx %016lx to %08x\n", q.u64[1], q.u64[0], dmac->sif0.madr);
 
-            ee_bus_write128(dmac->bus, dmac->sif0.madr, q);
+            dmac_write_qword(dmac, dmac->sif0.madr, dmac->sif0.tag.mem, q);
 
             dmac->sif0.madr += 16;
         }
@@ -961,7 +1024,7 @@ static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t add
         case 0x9000: dmac_handle_vif1_transfer(dmac); return;
         case 0xA000: dmac_handle_gif_transfer(dmac); return;
         case 0xB000: dmac_handle_ipu_from_transfer(dmac); return;
-        case 0xB400: dmac_handle_ipu_to_transfer(dmac); return;
+        case 0xB400: dmac->ipu_to.dreq = 1; dmac_handle_ipu_to_transfer(dmac); return;
         case 0xC000: dmac_handle_sif0_transfer(dmac); return;
         case 0xC400: dmac_handle_sif1_transfer(dmac); return;
         case 0xC800: dmac_handle_sif2_transfer(dmac); return;
