@@ -81,6 +81,7 @@ struct ps2_vif {
     uint128_t data;
 
     uint32_t addr;
+    uint32_t unpack_num;
     uint32_t unpack_fmt;
     uint32_t unpack_usn;
     uint32_t unpack_cl;
@@ -88,6 +89,10 @@ struct ps2_vif {
     uint32_t unpack_skip;
     uint32_t unpack_wl_count;
     uint32_t unpack_buf[16];
+    uint32_t unpack_shift;
+    uint32_t unpack_data;
+    int unpack_mask;
+    int unpack_cycle;
 
     int id;
 
