@@ -28,6 +28,62 @@ void ps2_vif_destroy(struct ps2_vif* vif) {
 }
 
 static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
+    // Process mask
+    if (vif->unpack_mask) {
+        int cycle = (vif->unpack_cycle > 3) ? 3 : vif->unpack_cycle;
+        int m[4], shift = (cycle & 3) * 8;
+        uint32_t mask = (vif->mask >> shift) & 0xff;
+        m[0] = (mask >> 0) & 3;
+        m[1] = (mask >> 2) & 3;
+        m[2] = (mask >> 4) & 3;
+        m[3] = (mask >> 6) & 3;
+
+        // Note: Mode 3 is undocumented, it sets the row registers
+        //       to the value of the unpacked data, without changing
+        //       the unpacked data itself.
+        for (int i = 0; i < 4; i++) {
+            if (m[i] == 0) {
+                // Normal mode, m==0 -> write value as is
+                if (vif->mode == 0) {
+                    continue;
+                } else if (vif->mode == 1) {
+                    // Addition decompression
+                    data.u32[i] = vif->r[i] + data.u32[i];
+                } else if (vif->mode == 2) {
+                    // Subtraction decompression
+                    data.u32[i] = vif->r[i] + data.u32[i];
+                    vif->r[i] = data.u32[i];
+                } else if (vif->mode == 3) {
+                    vif->r[i] = data.u32[i];
+                }
+            } else if (m[i] == 1) {
+                data.u32[i] = vif->r[i];
+            } else if (m[i] == 2) {
+                data.u32[i] = vif->c[cycle];
+            } else {
+                // m=3 masks this fields' write, so we fetch
+                // the value from VU mem instead
+                data.u32[i] = vif->vu->vu_mem[vif->addr & 0x3ff].u32[i];
+            }
+        }
+    } else {
+        // Do mode processing only
+        for (int i = 0; i < 4; i++) {
+            if (vif->mode == 0) {
+                continue;
+            } else if (vif->mode == 1) {
+                // Offset decompression
+                data.u32[i] = vif->r[i] + data.u32[i];
+            } else if (vif->mode == 2) {
+                // Difference decompression
+                data.u32[i] = vif->r[i] + data.u32[i];
+                vif->r[i] = data.u32[i];
+            } else if (vif->mode == 3) {
+                vif->r[i] = data.u32[i];
+            }
+        }
+    }
+
     if (vif->unpack_cl == vif->unpack_wl) {
         // Write data normally
         vif->vu->vu_mem[(vif->addr++) & 0x3ff] = data;
@@ -45,6 +101,8 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
         printf("vif%d: Unpack error: unpack_cl (%d) < unpack_wl (%d)\n", vif->id, vif->unpack_cl, vif->unpack_wl);
         exit(1);
     }
+
+    vif->unpack_cycle++;
 }
 
 void vif0_send_irq(void* udata, int overshoot) {
@@ -238,33 +296,45 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case 0x7c: case 0x7d: case 0x7e: case 0x7f: {
                 vif->unpack_fmt = (data >> 24) & 0xf;
                 vif->unpack_usn = (data >> 14) & 1;
-
+                vif->unpack_num = (data >> 16) & 0xff;
                 vif->unpack_cl = vif->cycle & 0xff;
                 vif->unpack_wl = (vif->cycle >> 8) & 0xff;
+                vif->unpack_mask = (data >> 28) & 1;
+                vif->unpack_cycle = 0;
+
                 int vl = (data >> 24) & 3;
                 int vn = (data >> 26) & 3;
-                int num = (data >> 16) & 0xff;
                 int flg = (data >> 15) & 1;
                 int addr = data & 0x3ff;
                 int filling = vif->unpack_cl < vif->unpack_wl;
 
-                if (!num) num = 256;
+                if (!vif->unpack_num) vif->unpack_num = 256;
                 if (flg) addr += vif->tops;
 
-                // printf("vif%d: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x\n", vif->id, data >> 24, vif->unpack_fmt, flg, num, addr, vif->tops);
-
-                assert(!filling);
-                // assert(vif->unpack_cl == vif->unpack_wl);
-                assert(!vif->mode);
+                if (filling) {
+                    printf("vif%d: Filling mode unimplemented\n", vif->id);
+                    exit(1);
+                }
 
                 // To-do: Handle for filling
                 vif->unpack_skip = vif->unpack_cl - vif->unpack_wl;
                 vif->unpack_wl_count = 0;
 
-                vif->pending_words = (((32>>vl) * (vn+1)) * num) / 32;
+                uint32_t pack_size = 16;
+
+                if ((vl == 3 && vn == 3) == 0)
+                    pack_size = (32 >> vl) * (vn + 1);
+
+                vif->pending_words = pack_size * vif->unpack_num;
+                vif->pending_words = (vif->pending_words + 0x1F) & ~0x1F;
+                vif->pending_words /= 32;
+
+                vif->unpack_shift = 0;
                 vif->state = VIF_RECV_DATA;
                 vif->shift = 0;
                 vif->addr = addr;
+
+                // printf("vif%d: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x usn=%d wr=%d mode=%d\n", vif->id, data >> 24, vif->unpack_fmt, flg, vif->unpack_num, addr, vif->tops, vif->unpack_usn, vif->pending_words, vif->mode);
             } break;
             default: {
                 // printf("vif%d: Unhandled command %02x\n", vif->id, vif->cmd);
@@ -343,56 +413,49 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
                     // S-16
                     case 0x01: {
-                        vif->unpack_buf[vif->shift++] = data;
+                        for (int i = 0; i < 2; i++) {
+                            uint128_t q = { 0 };
 
-                        if (vif->shift == 2) {
-                            uint128_t q[3];
+                            q.u32[0] = (data >> (i * 16)) & 0xffff;
 
-                            q[0].u32[0] = vif->unpack_buf[0] & 0xffff;
-                            q[1].u32[0] = vif->unpack_buf[0] >> 16;
-                            q[2].u32[0] = vif->unpack_buf[1] & 0xffff;
-
-                            // Sign-extend if USN is reset
                             if (!vif->unpack_usn) {
-                                q[0].u32[0] = (int32_t)((int16_t)q[0].u32[0]);
-                                q[1].u32[0] = (int32_t)((int16_t)q[1].u32[0]);
-                                q[2].u32[0] = (int32_t)((int16_t)q[2].u32[0]);
+                                q.u32[0] = (int32_t)((int16_t)q.u32[0]);
                             }
 
-                            q[0].u32[1] = q[0].u32[0];
-                            q[0].u32[2] = q[0].u32[0];
-                            q[0].u32[3] = q[0].u32[0];
-                            q[1].u32[1] = q[1].u32[0];
-                            q[1].u32[2] = q[1].u32[0];
-                            q[1].u32[3] = q[1].u32[0];
-                            q[2].u32[1] = q[2].u32[0];
-                            q[2].u32[2] = q[2].u32[0];
-                            q[2].u32[3] = q[2].u32[0];
+                            q.u32[1] = q.u32[0];
+                            q.u32[2] = q.u32[0];
+                            q.u32[3] = q.u32[0];
 
-                            vif_write_vu_mem(vif, q[0]);
-                            vif_write_vu_mem(vif, q[1]);
-                            vif_write_vu_mem(vif, q[2]);
+                            vif_write_vu_mem(vif, q);
 
-                            vif->shift = 0;
+                            vif->unpack_num--;
+
+                            if (!vif->unpack_num)
+                                break;
                         }
                     } break;
 
                     // S-8
                     case 0x02: {
-                        uint128_t q[3];
+                        for (int i = 0; i < 4; i++) {
+                            uint128_t q = { 0 };
 
-                        for (int i = 0; i < 3; i++) {
-                            q[i].u32[0] = (data >> (i * 8)) & 0xff;
+                            q.u32[0] = (data >> (i * 8)) & 0xff;
 
                             if (!vif->unpack_usn) {
-                                q[i].u32[0] = (int32_t)((int8_t)q[i].u32[0]);
+                                q.u32[0] = (int32_t)((int8_t)q.u32[0]);
                             }
 
-                            q[i].u32[1] = q[i].u32[0];
-                            q[i].u32[2] = q[i].u32[0];
-                            q[i].u32[3] = q[i].u32[0];
+                            q.u32[1] = q.u32[0];
+                            q.u32[2] = q.u32[0];
+                            q.u32[3] = q.u32[0];
 
-                            vif_write_vu_mem(vif, q[i]);
+                            vif_write_vu_mem(vif, q);
+
+                            vif->unpack_num--;
+
+                            if (!vif->unpack_num)
+                                break;
                         }
                     } break;
 
@@ -401,63 +464,62 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                         vif->unpack_buf[vif->shift++] = data;
 
                         if (vif->shift == 2) {
-                            vif->data.u32[0] = vif->unpack_buf[0];
-                            vif->data.u32[1] = vif->unpack_buf[1];
+                            uint128_t q = { 0 };
 
-                            vif_write_vu_mem(vif, vif->data);
+                            q.u32[0] = vif->unpack_buf[0];
+                            q.u32[1] = vif->unpack_buf[1];
+
+                            vif_write_vu_mem(vif, q);
 
                             vif->shift = 0;
+
+                            vif->unpack_num--;
+
+                            if (!vif->unpack_num)
+                                break;
                         }
                     } break;
 
                     // V2-16
                     case 0x05: {
-                        vif->unpack_buf[vif->shift++] = data;
+                        uint128_t q = { 0 };
 
-                        if (vif->shift == 3) {
-                            uint128_t q[3];
+                        q.u32[0] = data & 0xffff;
+                        q.u32[1] = data >> 16;
 
-                            for (int i = 0; i < 3; i++) {
-                                for (int j = 0; j < 2; j++) {
-                                    q[i].u32[j] = (vif->unpack_buf[i] >> (16 * j)) & 0xffff;
-
-                                    if (!vif->unpack_usn) {
-                                        q[i].u32[j] = (int32_t)((int16_t)q[i].u32[j]);
-                                    }
-                                }
-
-                                vif_write_vu_mem(vif, q[i]);
-                            }
-
-                            vif->shift = 0;
+                        if (!vif->unpack_usn) {
+                            q.u32[0] = (int32_t)((int16_t)q.u32[0]);
+                            q.u32[1] = (int32_t)((int16_t)q.u32[1]);
                         }
+
+                        vif_write_vu_mem(vif, q);
+
+                        vif->unpack_num--;
+
+                        if (!vif->unpack_num)
+                            break;
                     } break;
 
                     // V2-8
                     case 0x06: {
-                        vif->unpack_buf[vif->shift++] = data;
+                        for (int i = 0; i < 2; i++) {
+                            uint128_t q = { 0 };
+                            uint16_t d = data >> (i * 16);
 
-                        if (vif->shift == 2) {
-                            uint128_t q[3];
-
-                            q[0].u32[0] = vif->unpack_buf[0] & 0xff;
-                            q[0].u32[1] = (vif->unpack_buf[0] >> 8) & 0xff;
-                            q[1].u32[0] = vif->unpack_buf[0] >> 16 & 0xff;
-                            q[1].u32[1] = (vif->unpack_buf[0] >> 24) & 0xff;
-                            q[2].u32[0] = vif->unpack_buf[1] & 0xff;
-                            q[2].u32[1] = (vif->unpack_buf[1] >> 8) & 0xff;
+                            q.u32[0] = d & 0xff;
+                            q.u32[1] = d >> 8;
 
                             if (!vif->unpack_usn) {
-                                for (int i = 0; i < 3; i++) {
-                                    for (int j = 0; j < 2; j++) {
-                                        q[i].u32[j] = (int32_t)((int8_t)q[i].u32[j]);
-                                    }
-
-                                    vif_write_vu_mem(vif, q[i]);
-                                }
+                                q.u32[0] = (int32_t)((int8_t)q.u32[0]);
+                                q.u32[1] = (int32_t)((int8_t)q.u32[1]);
                             }
 
-                            vif->shift = 0;
+                            vif_write_vu_mem(vif, q);
+
+                            vif->unpack_num--;
+
+                            if (!vif->unpack_num)
+                                break;
                         }
                     } break;
 
@@ -466,13 +528,19 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                         vif->unpack_buf[vif->shift++] = data;
 
                         if (vif->shift == 3) {
-                            vif->data.u32[0] = vif->unpack_buf[0];
-                            vif->data.u32[1] = vif->unpack_buf[1];
-                            vif->data.u32[2] = vif->unpack_buf[2];
+                            uint128_t q = { 0 };
 
-                            vif_write_vu_mem(vif, vif->data);
+                            q.u32[0] = vif->unpack_buf[0];
+                            q.u32[1] = vif->unpack_buf[1];
+                            q.u32[2] = vif->unpack_buf[2];
+
+                            vif_write_vu_mem(vif, q);
 
                             vif->shift = 0;
+                            vif->unpack_num--;
+
+                            if (!vif->unpack_num)
+                                break;
                         }
                     } break;
 
@@ -480,62 +548,126 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                     case 0x09: {
                         vif->unpack_buf[vif->shift++] = data;
 
-                        if (vif->shift == 5) {
-                            uint128_t q[3];
+                        if (vif->shift == (vif->unpack_shift ? 1 : 2)) {
+                            uint128_t q = { 0 };
 
-                            q[0].u32[0] = vif->unpack_buf[0] & 0xffff;
-                            q[0].u32[1] = vif->unpack_buf[0] >> 16;
-                            q[0].u32[2] = vif->unpack_buf[1] & 0xffff;
-                            q[1].u32[0] = vif->unpack_buf[1] >> 16;
-                            q[1].u32[1] = vif->unpack_buf[2] & 0xffff;
-                            q[1].u32[2] = vif->unpack_buf[2] >> 16;
-                            q[2].u32[0] = vif->unpack_buf[3] & 0xffff;
-                            q[2].u32[1] = vif->unpack_buf[3] >> 16;
-                            q[2].u32[2] = vif->unpack_buf[4] & 0xffff;
-
-                            for (int i = 0; i < 3; i++) {
-                                // Sign-extend if USN is reset
-                                if (!vif->unpack_usn) {
-                                    q[i].u32[0] = (int32_t)((int16_t)q[i].u32[0]);
-                                    q[i].u32[1] = (int32_t)((int16_t)q[i].u32[1]);
-                                    q[i].u32[2] = (int32_t)((int16_t)q[i].u32[2]);
-                                }
-
-                                vif_write_vu_mem(vif, q[i]);
+                            if (!vif->unpack_shift) {
+                                q.u32[0] = vif->unpack_buf[0] & 0xffff;
+                                q.u32[1] = (vif->unpack_buf[0] >> 16) & 0xffff;
+                                q.u32[2] = vif->unpack_buf[1] & 0xffff;
+                            } else {
+                                q.u32[0] = vif->unpack_data;
+                                q.u32[1] = vif->unpack_buf[0] & 0xffff;
+                                q.u32[2] = vif->unpack_buf[0] >> 16;
                             }
 
+                            if (!vif->unpack_usn) {
+                                q.u32[0] = (int32_t)((int16_t)q.u32[0]);
+                                q.u32[1] = (int32_t)((int16_t)q.u32[1]);
+                                q.u32[2] = (int32_t)((int16_t)q.u32[2]);
+                            }
+
+                            vif_write_vu_mem(vif, q);
+
                             vif->shift = 0;
+                            vif->unpack_num--;
+                            vif->unpack_shift ^= 1;
+                            vif->unpack_data = vif->unpack_buf[1] >> 16;
+
+                            if (!vif->unpack_num)
+                                break;
                         }
                     } break;
 
-                    // V3-8
+                    // V3-8 (disgusting)
                     case 0x0a: {
-                        vif->unpack_buf[vif->shift++] = data;
+                        uint128_t q = { 0 };
 
-                        if (vif->shift == 3) {
-                            uint128_t q[3];
+                        switch (vif->unpack_shift) {
+                            case 0: {
+                                q.u32[0] = data & 0xff;
+                                q.u32[1] = (data >> 8) & 0xff;
+                                q.u32[2] = (data >> 16) & 0xff;
 
-                            q[0].u32[0] = vif->unpack_buf[0] & 0xff;
-                            q[0].u32[1] = (vif->unpack_buf[0] >> 8) & 0xff;
-                            q[0].u32[2] = (vif->unpack_buf[0] >> 16) & 0xff;
-                            q[1].u32[0] = (vif->unpack_buf[0] >> 24) & 0xff;
-                            q[1].u32[1] = vif->unpack_buf[1] & 0xff;
-                            q[1].u32[2] = (vif->unpack_buf[1] >> 8) & 0xff;
-                            q[2].u32[0] = (vif->unpack_buf[1] >> 16) & 0xff;
-                            q[2].u32[1] = (vif->unpack_buf[1] >> 24) & 0xff;
-                            q[2].u32[2] = vif->unpack_buf[2] & 0xff;
+                                vif->unpack_data = data >> 24;
+                                vif->unpack_shift++;
 
-                            for (int i = 0; i < 3; i++) {
-                                for (int j = 0; j < 3; j++) {
-                                    if (!vif->unpack_usn) {
-                                        q[i].u32[j] = (int32_t)((int8_t)q[i].u32[j]);
-                                    }
+                                if (!vif->unpack_usn) {
+                                    q.u32[0] = (int32_t)((int8_t)q.u32[0]);
+                                    q.u32[1] = (int32_t)((int8_t)q.u32[1]);
+                                    q.u32[2] = (int32_t)((int8_t)q.u32[2]);
                                 }
 
-                                vif_write_vu_mem(vif, q[i]);
-                            }
+                                vif_write_vu_mem(vif, q);
 
-                            vif->shift = 0;
+                                vif->unpack_num--;
+
+                                if (!vif->unpack_num)
+                                    break;
+                            } break;
+
+                            case 1: {
+                                q.u32[0] = vif->unpack_data;
+                                q.u32[1] = data & 0xff;
+                                q.u32[2] = (data >> 8) & 0xff;
+
+                                vif->unpack_data = data >> 16;
+                                vif->unpack_shift++;
+
+                                if (!vif->unpack_usn) {
+                                    q.u32[0] = (int32_t)((int8_t)q.u32[0]);
+                                    q.u32[1] = (int32_t)((int8_t)q.u32[1]);
+                                    q.u32[2] = (int32_t)((int8_t)q.u32[2]);
+                                }
+
+                                vif_write_vu_mem(vif, q);
+
+                                vif->unpack_num--;
+
+                                if (!vif->unpack_num)
+                                    break;
+                            } break;
+
+                            case 2: {
+                                q.u32[0] = vif->unpack_data & 0xff;
+                                q.u32[1] = (vif->unpack_data >> 8) & 0xff;
+                                q.u32[2] = data & 0xff;
+
+                                vif->unpack_data = (data >> 8) & 0xffffff;
+                                vif->unpack_shift++;
+
+                                if (!vif->unpack_usn) {
+                                    q.u32[0] = (int32_t)((int8_t)q.u32[0]);
+                                    q.u32[1] = (int32_t)((int8_t)q.u32[1]);
+                                    q.u32[2] = (int32_t)((int8_t)q.u32[2]);
+                                }
+
+                                vif_write_vu_mem(vif, q);
+
+                                vif->unpack_num--;
+
+                                if (!vif->unpack_num)
+                                    break;
+
+                                q.u32[0] = (data >> 8) & 0xff;
+                                q.u32[1] = (data >> 16) & 0xff;
+                                q.u32[2] = (data >> 24) & 0xff;
+
+                                vif->unpack_shift = 0;
+
+                                if (!vif->unpack_usn) {
+                                    q.u32[0] = (int32_t)((int8_t)q.u32[0]);
+                                    q.u32[1] = (int32_t)((int8_t)q.u32[1]);
+                                    q.u32[2] = (int32_t)((int8_t)q.u32[2]);
+                                }
+
+                                vif_write_vu_mem(vif, q);
+
+                                vif->unpack_num--;
+
+                                if (!vif->unpack_num)
+                                    break;
+                            } break;
                         }
                     } break;
 
@@ -544,20 +676,14 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                         vif->unpack_buf[vif->shift++] = data;
 
                         if (vif->shift == 4) {
-                            // // printf("vif: Writing %08x %08x %08x %08x to VUmem at %08x\n",
-                            //     vif->data.u32[3],
-                            //     vif->data.u32[2],
-                            //     vif->data.u32[1],
-                            //     vif->data.u32[0],
-                            //     vif->addr * 16
-                            // );
+                            uint128_t q = { 0 };
 
-                            vif->data.u32[0] = vif->unpack_buf[0];
-                            vif->data.u32[1] = vif->unpack_buf[1];
-                            vif->data.u32[2] = vif->unpack_buf[2];
-                            vif->data.u32[3] = vif->unpack_buf[3];
+                            q.u32[0] = vif->unpack_buf[0];
+                            q.u32[1] = vif->unpack_buf[1];
+                            q.u32[2] = vif->unpack_buf[2];
+                            q.u32[3] = vif->unpack_buf[3];
 
-                            vif_write_vu_mem(vif, vif->data);
+                            vif_write_vu_mem(vif, q);
 
                             vif->shift = 0;
                         }
@@ -568,7 +694,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                         vif->unpack_buf[vif->shift++] = data;
 
                         if (vif->shift == 2) {
-                            uint128_t q;
+                            uint128_t q = { 0 };
 
                             q.u32[0] = vif->unpack_buf[0] & 0xffff;
                             q.u32[1] = vif->unpack_buf[0] >> 16;
@@ -590,25 +716,41 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
                     // V4-8
                     case 0x0e: {
-                        vif->unpack_buf[vif->shift++] = data;
+                        uint128_t q = { 0 };
 
-                        if (vif->shift == 3) {
-                            uint128_t q[3];
+                        q.u32[0] = data & 0xff;
+                        q.u32[1] = (data >> 8) & 0xff;
+                        q.u32[2] = (data >> 16) & 0xff;
+                        q.u32[3] = (data >> 24) & 0xff;
 
-                            for (int i = 0; i < 3; i++) {
-                                for (int j = 0; j < 4; j++) {
-                                    q[i].u32[j] = (vif->unpack_buf[i] >> (j * 8)) & 0xff;
+                        if (!vif->unpack_usn) {
+                            q.u32[0] = (int32_t)((int8_t)q.u32[0]);
+                            q.u32[1] = (int32_t)((int8_t)q.u32[1]);
+                            q.u32[2] = (int32_t)((int8_t)q.u32[2]);
+                            q.u32[3] = (int32_t)((int8_t)q.u32[3]);
+                        }
 
-                                    // Sign-extend if USN is reset
-                                    if (!vif->unpack_usn) {
-                                        q[i].u32[j] = (int32_t)((int8_t)q[i].u32[j]);
-                                    }
-                                }
+                        vif_write_vu_mem(vif, q);
+                    } break;
 
-                                vif_write_vu_mem(vif, q[i]);
-                            }
+                    // V4-5
+                    case 0x0f: {
+                        uint128_t q = { 0 };
 
-                            vif->shift = 0;
+                        for (int i = 0; i < 2; i++) {
+                            uint16_t c = (data >> (i * 16)) & 0xffff;
+
+                            q.u32[0] = ((c >> 0) & 0x1f) << 3;
+                            q.u32[1] = ((c >> 5) & 0x1f) << 3;
+                            q.u32[2] = ((c >> 10) & 0x1f) << 3;
+                            q.u32[3] = ((c >> 15) & 1) << 7;
+
+                            vif_write_vu_mem(vif, q);
+
+                            vif->unpack_num--;
+
+                            if (!vif->unpack_num)
+                                break;
                         }
                     } break;
 
@@ -692,13 +834,27 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
 void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
     switch (addr) {
         // VIF0 registers
-        case 0x10003810: vif->fbrst = data; break;
+        case 0x10003810: {
+            vif->fbrst = data;
+            vif->state = VIF_IDLE;
+            vif->pending_words = 0;
+            vif->unpack_shift = 0;
+            vif->shift = 0;
+        } break;
+
         case 0x10003820: vif->err = data; break;
         case 0x10003830: vif->mark = data; break;
 
         // VIF1 registers
         case 0x10003c00: vif->stat &= 0x800000; vif->stat |= data & 0x800000; break;
-        case 0x10003c10: vif->fbrst = data; break;
+        case 0x10003c10: {
+            vif->fbrst = data;
+            vif->state = VIF_IDLE;
+            vif->pending_words = 0;
+            vif->unpack_shift = 0;
+            vif->shift = 0;
+        } break;
+
         case 0x10003c20: vif->err = data; break;
         case 0x10003c30: vif->mark = data; break;
 

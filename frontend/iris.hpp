@@ -180,6 +180,11 @@ struct instance {
     struct ds_state* ds[2] = { nullptr };
     struct mcd_state* mcd[2] = { nullptr };
 
+    float drop_file_alpha = 0.0f;
+    float drop_file_alpha_delta = 0.0f;
+    float drop_file_alpha_target = 0.0f;
+    bool drop_file_active = false;
+
     // Debug
     std::vector <elf_symbol> symbols;
     std::vector <uint8_t> strtab;

@@ -168,6 +168,55 @@ void update_window(iris::instance* iris) {
 
     DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
+    // Drop file fade animation
+    if (iris->drop_file_active) {
+        iris->drop_file_alpha += iris->drop_file_alpha_delta;
+
+        if (iris->drop_file_alpha_delta > 0.0f) {
+            if (iris->drop_file_alpha >= 1.0f) {
+                iris->drop_file_alpha = 1.0f;
+                iris->drop_file_alpha_delta = 0.0f;
+            }
+        } else {
+            if (iris->drop_file_alpha <= 0.0f) {
+                iris->drop_file_alpha = 0.0f;
+                iris->drop_file_alpha_delta = 0.0f;
+                iris->drop_file_active = false;
+            }
+        }
+
+        GetForegroundDrawList()->AddRectFilled(
+            ImVec2(0, 0),
+            ImVec2(iris->window_width, iris->window_height),
+            ImColor(0.0f, 0.0f, 0.0f, iris->drop_file_alpha * 0.35f)
+        );
+
+        ImVec2 text_size = CalcTextSize("Drop file here to launch");
+
+        PushFont(iris->font_icons_big);
+
+        ImVec2 icon_size = CalcTextSize(ICON_MS_DOWNLOAD);
+
+        ImVec2 total_size = ImVec2(
+            std::max(icon_size.x, text_size.x),
+            icon_size.y + text_size.y
+        );
+
+        GetForegroundDrawList()->AddText(
+            ImVec2(iris->window_width / 2 - icon_size.x / 2, iris->window_height / 2 - icon_size.y),
+            ImColor(1.0f, 1.0f, 1.0f, iris->drop_file_alpha),
+            ICON_MS_DOWNLOAD
+        );
+
+        PopFont();
+
+        GetForegroundDrawList()->AddText(
+            ImVec2(iris->window_width / 2 - text_size.x / 2, iris->window_height / 2),
+            ImColor(1.0f, 1.0f, 1.0f, iris->drop_file_alpha),
+            "Drop file here to launch"
+        );
+    }
+
     if (iris->show_ee_control) show_ee_control(iris);
     if (iris->show_ee_state) show_ee_state(iris);
     if (iris->show_ee_logs) show_ee_logs(iris);

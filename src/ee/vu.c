@@ -67,6 +67,24 @@ void vu_destroy(struct vu_state* vu) {
     free(vu);
 }
 
+static inline float vu_atan(float t) {
+    //In reality, VU1 uses an approximation to derive the result. This is shown here.
+    const static float atan_const[] = {
+        0.999999344348907f, -0.333298563957214f,
+        0.199465364217758f, -0.139085337519646f,
+        0.096420042216778f, -0.055909886956215f,
+        0.021861229091883f, -0.004054057877511f
+    };
+
+    float result = 0.785398185253143f; // pi/4
+
+    for (int i = 0; i < 8; i++) {
+        result += atan_const[i] * powf(t, (i * 2) + 1);
+    }
+
+    return result;
+}
+
 static inline void vu_update_status(struct vu_state* vu) {
     vu->status &= ~0x3f;
 
@@ -1858,10 +1876,68 @@ void vu_i_div(struct vu_state* vu) {
     vu->q.f = vu_vf_i(vu, s, sf) / vu_vf_i(vu, t, tf);
     vu->q.f = vu_cvtf(vu->q.u32);
 }
-void vu_i_eatan(struct vu_state* vu) { printf("vu: eatan unimplemented\n"); exit(1); }
-void vu_i_eatanxy(struct vu_state* vu) { printf("vu: eatanxy unimplemented\n"); exit(1); }
-void vu_i_eatanxz(struct vu_state* vu) { printf("vu: eatanxz unimplemented\n"); exit(1); }
-void vu_i_eexp(struct vu_state* vu) { printf("vu: eexp unimplemented\n"); exit(1); }
+void vu_i_eatan(struct vu_state* vu) {
+    float x = vu_vf_i(vu, VU_LD_S, VU_LD_SF);
+
+    if (x == -1.0f) {
+        vu->p.u32 = 0xFF7FFFFF;
+    } else {
+        x = (x - 1.0f) / (x + 1.0f);
+
+        vu->p.f = vu_atan(x);
+    }
+}
+void vu_i_eatanxy(struct vu_state* vu) {
+    int s = VU_LD_S;
+    float x = vu_vf_x(vu, s);
+    float y = vu_vf_y(vu, s);
+
+    if (y + x == 0.0f) {
+        vu->p.u32 = 0x7F7FFFFF | (vu->vf[s].u32[1] & 0x80000000);
+    } else {
+        x = (y - 1.0f) / (y + x);
+
+        vu->p.f = vu_atan(x);
+    }
+}
+void vu_i_eatanxz(struct vu_state* vu) {
+    int s = VU_LD_S;
+    float x = vu_vf_x(vu, s);
+    float z = vu_vf_z(vu, s);
+
+    //P = atan(z/x)
+    if (z + x == 0.0f) {
+        vu->p.u32 = 0x7F7FFFFF | (vu->vf[s].u32[2] & 0x80000000);
+    } else {
+        x = (z - x) / (z + x);
+
+        vu->p.f = vu_atan(x);
+    }
+}
+void vu_i_eexp(struct vu_state* vu) {
+    const static float coeffs[] = {
+        0.249998688697815f, 0.031257584691048f,
+        0.002591371303424f, 0.000171562001924f,
+        0.000005430199963f, 0.000000690600018f
+    };
+
+    int s = VU_LD_S;
+    int sf = VU_LD_SF;
+
+    if (vu->vf[s].u32[sf] & 0x80000000) {
+        vu->p.f = vu_vf_i(vu, s, sf);
+
+        return;
+    }
+
+    float value = 1;
+    float x = vu_vf_i(vu, s, sf);
+
+    for (int exp = 1; exp <= 6; exp++)
+        value += coeffs[exp - 1] * pow(x, exp);
+
+    vu->p.f = 1.0 / value;
+}
 void vu_i_eleng(struct vu_state* vu) {
     int s = VU_LD_S;
 
