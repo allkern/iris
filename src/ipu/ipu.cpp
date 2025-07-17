@@ -7,6 +7,8 @@
 #include "ee/dmac.h"
 #include "ee/intc.h"
 
+// #define printf(fmt, ...)(0)
+
 /**
   * The majority of this code is based upon Play!'s implementation of the IPU.
   * All the relevant files are located in the following links:
@@ -204,10 +206,16 @@ void ImageProcessingUnit::run()
             finish_command();
         }
     }
-    // if (can_write_FIFO())
-    //     dmac->set_DMA_request(IPU_TO);
-    // if (can_read_FIFO())
-    //     dmac->set_DMA_request(IPU_FROM);
+    if (can_write_FIFO()) {
+        dmac->ipu_to.dreq = 1;
+        printf("ipu: set ipu_to dreq\n");
+        dmac_handle_ipu_to_transfer(dmac);
+    }
+    if (can_read_FIFO()) {
+        dmac->ipu_from.dreq = 1;
+        printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
+        dmac_handle_ipu_from_transfer(dmac);
+    }
 }
 
 void ImageProcessingUnit::finish_command()
@@ -1016,9 +1024,11 @@ bool ImageProcessingUnit::process_CSC()
                         out_FIFO.f.push_back(quad);
                     }
                 }
-                // dmac->set_DMA_request(IPU_FROM);
                 csc.macroblocks--;
                 csc.state = CSC_STATE::BEGIN;
+                dmac->ipu_from.dreq = 1;
+                printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
+                dmac_handle_ipu_from_transfer(dmac);
             }
                 break;
             case CSC_STATE::DONE:
@@ -1123,9 +1133,11 @@ bool ImageProcessingUnit::process_PACK()
                         out_FIFO.f.push_back(quad);
                     }
                 }
-                // dmac->set_DMA_request(IPU_FROM);
                 pack.macroblocks--;
                 pack.state = PACK_STATE::BEGIN;
+                dmac->ipu_from.dreq = 1;
+                printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
+                dmac_handle_ipu_from_transfer(dmac);
             }
                 break;
             case PACK_STATE::DONE:
@@ -1140,6 +1152,9 @@ uint64_t ImageProcessingUnit::read_command()
     uint64_t reg = 0;
     reg |= command_output;
     reg |= (uint64_t)command_decoding << 63UL;
+
+    printf("ipu: Read command: $%08X\n", command_output);
+
     return reg;
 }
 
@@ -1173,7 +1188,7 @@ uint32_t ImageProcessingUnit::read_BP()
     }
     reg |= in_FIFO.bit_pointer;
     reg |= fifo_size << 8;
-   //  printf("ipu: Read BP: $%08X\n", reg);
+    //  printf("ipu: Read BP: $%08X\n", reg);
     return reg;
 }
 
@@ -1325,15 +1340,16 @@ uint128_t ImageProcessingUnit::read_FIFO()
 {
     uint128_t quad = out_FIFO.f.front();
     out_FIFO.f.pop_front();
-    // if (!out_FIFO.f.size())
-    //     dmac->clear_DMA_request(IPU_FROM);
+    if (!out_FIFO.f.size()) {
+        printf("ipu: clear ipu_from dreq\n");
+        dmac->ipu_from.dreq = 0;
+    }
     return quad;
 }
 
 void ImageProcessingUnit::write_FIFO(uint128_t quad)
 {
-    // printf("ipu: Write FIFO: $%08X_%08X_%08X_%08X\n", quad.u32[3], quad.u32[2], quad.u32[1], quad.u32[0]);
-    
+    printf("ipu: Write FIFO: $%08X_%08X_%08X_%08X\n", quad.u32[3], quad.u32[2], quad.u32[1], quad.u32[0]);
 
     //Certain games (Theme Park, Neo Contra, etc) read command output without sending a command.
     //They expect to read the first word of a newly started IPU_TO transfer.
@@ -1345,7 +1361,7 @@ void ImageProcessingUnit::write_FIFO(uint128_t quad)
     }
     if (in_FIFO.f.size() == 7)
     {
-        // dmac->clear_DMA_request(IPU_TO);
+        dmac->ipu_to.dreq = 0;
     }
     if (in_FIFO.f.size() >= 8)
     {
@@ -1380,7 +1396,7 @@ extern "C" uint64_t ps2_ipu_read64(struct ps2_ipu* ipu, uint32_t addr) {
 
     printf("ipu: Unhandled IPU read address %08x\n", addr);
 
-    exit(1);
+    return 0;
 }
 
 extern "C" void ps2_ipu_write64(struct ps2_ipu* ipu, uint32_t addr, uint64_t data) {
@@ -1404,7 +1420,7 @@ extern "C" uint128_t ps2_ipu_read128(struct ps2_ipu* ipu, uint32_t addr) {
 
     printf("ipu: Unhandled IPU read address %08x\n", addr);
 
-    exit(1);
+    return { 0 }; // Return a zeroed quad if the address is unhandled
 }
 
 extern "C" void ps2_ipu_write128(struct ps2_ipu* ipu, uint32_t addr, uint128_t data) {
