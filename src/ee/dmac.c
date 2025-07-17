@@ -747,7 +747,7 @@ void dmac_spr_from_interleave(struct ps2_dmac* dmac) {
 
     // Note: When TQWC=0, it is set to QWC instead (undocumented)
     if (tqwc == 0)
-        tqwc = dmac->spr_to.qwc;
+        tqwc = dmac->spr_from.qwc;
 
     while (dmac->spr_from.qwc) {
         for (int i = 0; i < tqwc && dmac->spr_from.qwc; i++) {
@@ -762,9 +762,6 @@ void dmac_spr_from_interleave(struct ps2_dmac* dmac) {
         }
 
         dmac->spr_from.madr += sqwc * 16;
-
-        if (dmac->spr_from.qwc == 0)
-            return;
     }
 }
 void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
@@ -785,7 +782,6 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
 
     int mode = (dmac->spr_from.chcr >> 2) & 3;
 
-    // Interleave mode unimplemented yet
     if (mode == 2) {
         dmac_spr_from_interleave(dmac);
 
@@ -869,9 +865,6 @@ void dmac_spr_to_interleave(struct ps2_dmac* dmac) {
         }
 
         dmac->spr_to.madr += sqwc * 16;
-
-        if (dmac->spr_to.qwc == 0)
-            return;
     }
 }
 void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
