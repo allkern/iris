@@ -522,6 +522,20 @@ SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
             handle_keyup_event(iris, event->key);
         } break;
 
+        case SDL_EVENT_DROP_BEGIN: {
+            iris->drop_file_active = true;
+            iris->drop_file_alpha = 0.0f;
+            iris->drop_file_alpha_delta = 1.0f / 10.0f;
+            iris->drop_file_alpha_target = 1.0f;
+        } break;
+        
+        case SDL_EVENT_DROP_COMPLETE: {
+            iris->drop_file_active = true;
+            iris->drop_file_alpha = iris->drop_file_alpha_target;
+            iris->drop_file_alpha_delta = -(1.0f / 10.0f);
+            iris->drop_file_alpha_target = 0.0f;
+        } break;
+
         case SDL_EVENT_DROP_FILE: {
             if (!event->drop.data)
                 break;
