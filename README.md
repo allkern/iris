@@ -40,49 +40,52 @@ Usage: iris [OPTION]... <path-to-disc-image>
   -v, --version            Output version information and exit
 ```
 
-Launching a game or executable through the GUI is also very easy, just go to Iris > Open... and pick a disc image or ELF executable.
+Launching a game or executable through the GUI is also very easy, you can either go to Iris > Open... and pick a disc image or ELF executable, or just drop a file into Iris' window to launch it!
 
 ## Building
-Building the emulator should be pretty straightforward, just recursively clone the repository and follow the steps:
+> [!WARNING]  
+> Building requires CMake on all supported platforms
 
 ### Linux
-Building for Linux targets requires SDL2, you may use `apt` on Debian-based distros to obtain it. You will also need a Python interpreter (and `python-is-python3`)
+Building on Linux requires installing SDL3 dependencies and FUSE if you wish to generate AppImages.
 ```
 sudo apt update
 sudo apt upgrade
-sudo apt install libsdl2-dev python3 python-is-python3
+sudo add-apt-repository universe
+sudo apt-get install build-essential git make \
+    pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
+    libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev \
+    libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+    libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
+    libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libfuse2t64
 ```
-
-Then just run the following commands:
+Then just clone the repository and run CMake:
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
-./setup-gl3w.sh
-make -j8
+cmake -S . -B build
+cmake --build build -j8
 ```
+Optionally run `cmake --install build` to generate an AppImage.
 
 ### Windows
-Our Windows build system currently targets GCC only, you can get a toolchain through MSYS2 or MinGW. You will additionally need to install a Python interpreter so `build-deps` can execute the gl3w download script.
-
-Once that's done, just execute the following commands:
+We currently only support GCC as a compiler on Windows, this is because MSVC doesn't have an inline assembler, which we need to embed resources into the executable. This might eventually be fixed though!
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
-./build-deps.ps1
-./build-win.ps1
+cmake -S . -B build -G "MinGW Makefiles"
+cmake --build build -j8
 ```
 
 ### macOS
-> [!WARNING]  
-> Iris should support macOS but hasn't been fully tested yet
-
-Building on macOS requires SDL2 and `dylibbundler`, you may install both using `brew` but keep in mind macOS builds aren't actively tested and may not work.
+Iris finally got working macOS builds!
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
-./setup-gl3w.sh
-./build.sh
+cmake -S . -B build
+cmake --build build -j8
 ```
+Optionally run `sudo cmake --install build` to generate a macOS App Bundle
 
 ## Progress
 ### Commercial games
@@ -137,5 +140,5 @@ This console is significantly more complex compared to the PS1, here's a rough l
 - 🟡 USB/FireWire?
 - 🔴 Ethernet
 - 🔴 PS1 backcompat (PS1 hardware)
-🟡 SIF
+🟢 SIF
 ```
