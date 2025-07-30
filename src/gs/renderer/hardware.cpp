@@ -124,6 +124,12 @@ void hardware_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDe
         },
     };
 
+    gpci.depth_stencil_state.enable_depth_test = true;
+    gpci.depth_stencil_state.enable_depth_write = false;
+    gpci.depth_stencil_state.enable_stencil_test = false;
+    gpci.depth_stencil_state.compare_op = SDL_GPU_COMPAREOP_LESS;
+    gpci.depth_stencil_state.write_mask = 0xFF;
+
     ctx->pipeline = SDL_CreateGPUGraphicsPipeline(device, &gpci);
 
     SDL_assert(ctx->pipeline);
@@ -133,6 +139,24 @@ void hardware_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDe
     SDL_ReleaseGPUShader(device, fragment_shader);
 
     ctx->vertex_buffer = nullptr;
+
+    // SDL_GPUBufferCreateInfo bci = { 0 };
+
+    // bci.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ | SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE;
+    // bci.size = 0x400000;
+
+    // ctx->vram = SDL_CreateGPUBuffer(ctx->device, &bci);
+
+    // SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(ctx->device);
+
+    // SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
+
+    // SDL_GPUTransferBufferCreateInfo tbci = {};
+
+    // tbci.size = 0x400000;
+    // tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
+
+    // SDL_GPUTransferBuffer* tb = 
 }
 
 void hardware_destroy(void* udata) {
@@ -166,6 +190,10 @@ extern "C" void hardware_render_line(struct ps2_gs* gs, void* udata) {}
 extern "C" void hardware_render_triangle(struct ps2_gs* gs, void* udata) {
     hardware_state* ctx = (hardware_state*)udata;
 
+    // printf("triangle: v0=%08x v1=%08x v2=%08x\n",
+    //     gs->vq[0].z, gs->vq[1].z, gs->vq[2].z
+    // );
+
     for (int i = 0; i < 3; i++) {
         hw_vertex hw_v;
 
@@ -176,7 +204,7 @@ extern "C" void hardware_render_triangle(struct ps2_gs* gs, void* udata) {
         hw_v.u = gs->vq[i].u;
         hw_v.v = gs->vq[i].v;
         hw_v.x = gs->vq[i].x - ctx->gs->ctx->ofx;
-        hw_v.y = (224 - (gs->vq[i].y - ctx->gs->ctx->ofy)) * 2.0;
+        hw_v.y = (224 - (gs->vq[i].y - ctx->gs->ctx->ofy)) * 2;
         hw_v.z = gs->vq[i].z;
         hw_v.s = gs->vq[i].s;
         hw_v.t = gs->vq[i].t;
@@ -184,12 +212,6 @@ extern "C" void hardware_render_triangle(struct ps2_gs* gs, void* udata) {
 
         ctx->vertices.push_back(hw_v);
     }
-
-    // printf("triangle: v0=(%04x, %04x) v1=(%04x, %04x) v2=(%04x, %04x)\n",
-    //     v0.x, v0.y,
-    //     v1.x, v1.y,
-    //     v2.x, v2.y
-    // );
 }
 extern "C" void hardware_render_sprite(struct ps2_gs* gs, void* udata) {
     hardware_state* ctx = (hardware_state*)udata;
@@ -197,41 +219,39 @@ extern "C" void hardware_render_sprite(struct ps2_gs* gs, void* udata) {
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
 
-    uint32_t v0_x = v0.x - gs->ctx->ofx;
-    uint32_t v0_y = (224 - (v0.y - gs->ctx->ofy)) * 2.0;
-    uint32_t v1_x = v1.x - gs->ctx->ofx;
-    uint32_t v1_y = (224 - (v1.y - gs->ctx->ofy)) * 2.0;
-
-    hw_vertex hw_v[6];
-
-    hw_v[0].x = v0_x; // Top-left
-    hw_v[0].y = v0_y;
-    hw_v[1].x = v1_x; // Top-right
-    hw_v[1].y = v0_y;
-    hw_v[2].x = v0_x; // Bottom-left
-    hw_v[2].y = v1_y;
-    hw_v[3].x = v1_x; // Top-right
-    hw_v[3].y = v0_y;
-    hw_v[4].x = v1_x; // Bottom-right
-    hw_v[4].y = v1_y;
-    hw_v[5].x = v0_x; // Bottom-left
-    hw_v[5].y = v1_y;
-
-    for (int i = 0; i < 6; i++) {
-        hw_v[i].r = v1.r;
-        hw_v[i].g = v1.g;
-        hw_v[i].b = v1.b;
-        hw_v[i].a = v1.a;
-
-        ctx->vertices.push_back(hw_v[i]);
-    }
-    
     // printf("sprite: v0=(%04x, %04x) v1=(%04x, %04x)\n",
     //     v0.x, v0.y,
     //     v1.x, v1.y
     // );
 }
-extern "C" void hardware_transfer_start(struct ps2_gs* gs, void* udata) {}
+extern "C" void hardware_transfer_start(struct ps2_gs* gs, void* udata) {
+    hardware_state* ctx = (hardware_state*)udata;
+
+    uint32_t dbp = (gs->bitbltbuf >> 32) & 0x3fff;
+    uint32_t dbw = (gs->bitbltbuf >> 48) & 0x3f;
+    uint32_t dpsm = (gs->bitbltbuf >> 56) & 0x3f;
+    uint32_t sbp = (gs->bitbltbuf >> 0) & 0x3fff;
+    uint32_t sbw = (gs->bitbltbuf >> 16) & 0x3f;
+    uint32_t spsm = (gs->bitbltbuf >> 24) & 0x3f;
+    uint32_t dsax = (gs->trxpos >> 32) & 0x7ff;
+    uint32_t dsay = (gs->trxpos >> 48) & 0x7ff;
+    uint32_t ssax = (gs->trxpos >> 0) & 0x7ff;
+    uint32_t ssay = (gs->trxpos >> 16) & 0x7ff;
+    uint32_t dir = (gs->trxpos >> 59) & 3;
+    uint32_t rrw = (gs->trxreg >> 0) & 0xfff;
+    uint32_t rrh = (gs->trxreg >> 32) & 0xfff;
+    uint32_t xdir = gs->trxdir & 3;
+
+    if (xdir) {
+        printf("gs: Unsupported local/host or local/local transfer\n");
+    }
+
+    printf("gs: dbp=%04x dbw=%02x dpsm=%02x dsa=(%04x, %04x) sbp=%04x sbw=%02x spsm=%02x ssa=(%04x, %04x) dir=%d rr=(%d, %d) xdir=%d\n",
+        dbp, dbw, dpsm, dsax, dsay,
+        sbp, sbw, spsm, ssax, ssay,
+        dir, rrw, rrh, xdir
+    );
+}
 extern "C" void hardware_transfer_write(struct ps2_gs* gs, void* udata) {}
 extern "C" void hardware_transfer_read(struct ps2_gs* gs, void* udata) {}
 

@@ -12,7 +12,9 @@ layout (location = 2) out vec3 out_stq;
 void main() {
     vec2 ndc = ((vec3(xyz).xy / vec2(640.0, 448.0)) * 2.0) - 1.0;
 
-    gl_Position = vec4(ndc, 0.0, 1.0);
+    float z = float(xyz.z & 0xffffff) / 16777215.0f;
+
+    gl_Position = vec4(ndc, z, 1.0);
 
     out_uv = vec2(in_uv.x, 1.0 - in_uv.y);
     out_rgba = in_rgba / vec4(255.0);

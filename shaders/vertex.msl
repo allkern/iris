@@ -23,7 +23,8 @@ vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
     float2 ndc = ((float3(in.xyz).xy / float2(640.0, 448.0)) * 2.0) - float2(1.0);
-    out.gl_Position = float4(ndc, 0.0, 1.0);
+    float z = float(in.xyz.z & 16777215u) / 16777215.0;
+    out.gl_Position = float4(ndc, z, 1.0);
     out.out_uv = float2(float(in.in_uv.x), 1.0 - float(in.in_uv.y));
     out.out_rgba = float4(in.in_rgba) / float4(255.0);
     out.out_stq = in.in_stq;
