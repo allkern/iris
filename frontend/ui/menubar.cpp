@@ -302,38 +302,39 @@ void show_main_menubar(iris::instance* iris) {
             ImGui::EndMenu();
         }
         if (BeginMenu("Tools")) {
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " ImGui Demo", NULL, &iris->show_imgui_demo));
+            if (MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->show_imgui_demo));
 
             ImGui::EndMenu();
         }
         if (BeginMenu("Debug")) {
             SeparatorText("EE");
             // if (BeginMenu(ICON_MS_BUG_REPORT " EE")) {
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##ee", NULL, &iris->show_ee_control));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##ee", NULL, &iris->show_ee_state));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##ee", NULL, &iris->show_ee_logs));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##ee", NULL, &iris->show_ee_interrupts));
+                if (MenuItem(ICON_MS_SETTINGS " Control##ee", NULL, &iris->show_ee_control));
+                if (MenuItem(ICON_MS_EDIT_NOTE " State##ee", NULL, &iris->show_ee_state));
+                if (MenuItem(ICON_MS_TERMINAL " Logs##ee", NULL, &iris->show_ee_logs));
+                if (MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->show_ee_interrupts));
 
                 // ImGui::EndMenu();
             // }
 
             SeparatorText("IOP");
             // if (BeginMenu(ICON_MS_BUG_REPORT " IOP")) {
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Control##iop", NULL, &iris->show_iop_control));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " State##iop", NULL, &iris->show_iop_state));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Logs##iop", NULL, &iris->show_iop_logs));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Interrupts##iop", NULL, &iris->show_iop_interrupts));
-                if (MenuItem(ICON_MS_LINE_START_CIRCLE " Modules##iop", NULL, &iris->show_iop_modules));
+                if (MenuItem(ICON_MS_SETTINGS " Control##iop", NULL, &iris->show_iop_control));
+                if (MenuItem(ICON_MS_EDIT_NOTE " State##iop", NULL, &iris->show_iop_state));
+                if (MenuItem(ICON_MS_TERMINAL " Logs##iop", NULL, &iris->show_iop_logs));
+                if (MenuItem(ICON_MS_BOLT " Interrupts##iop", NULL, &iris->show_iop_interrupts));
+                if (MenuItem(ICON_MS_EXTENSION " Modules##iop", NULL, &iris->show_iop_modules));
 
             //     ImGui::EndMenu();
             // }
 
             Separator();
 
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Breakpoints", NULL, &iris->show_breakpoints));
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " GS debugger", NULL, &iris->show_gs_debugger));
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " SPU2 debugger", NULL, &iris->show_spu2_debugger));
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " Memory viewer", NULL, &iris->show_memory_viewer));
+            if (MenuItem(ICON_MS_BUG_REPORT " Breakpoints", NULL, &iris->show_breakpoints));
+            if (MenuItem(ICON_MS_BRUSH " GS debugger", NULL, &iris->show_gs_debugger));
+            if (MenuItem(ICON_MS_MUSIC_NOTE " SPU2 debugger", NULL, &iris->show_spu2_debugger));
+            if (MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->show_memory_viewer));
+            if (MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->show_vu_disassembler));
 
             Separator();
 
@@ -352,13 +353,14 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_gs_debugger = false;
                 iris->show_spu2_debugger = false;
                 iris->show_memory_viewer = false;
+                iris->show_vu_disassembler = false;
                 iris->show_breakpoints = false;
             }
             
             ImGui::EndMenu();
         }
         if (BeginMenu("Help")) {
-            if (MenuItem(ICON_MS_LINE_START_CIRCLE " About")) {
+            if (MenuItem(ICON_MS_INFO " About")) {
                 iris->show_about_window = true;
             }
 
