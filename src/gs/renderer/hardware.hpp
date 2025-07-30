@@ -31,6 +31,8 @@ struct hardware_state {
     struct ps2_gs* gs;
 
     std::vector <hw_vertex> vertices;
+
+    int tex_w, tex_h;
 };
 
 void hardware_init(void* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device);

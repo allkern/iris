@@ -144,7 +144,50 @@ void hardware_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDe
 void hardware_destroy(void* udata) {
     hardware_state* ctx = (hardware_state*)udata;
 }
-void hardware_set_size(void* udata, int width, int height) {}
+void hardware_set_size(void* udata, int width, int height) {
+    hardware_state* ctx = (hardware_state*)udata;
+
+    int en1 = ctx->gs->pmode & 1;
+    int en2 = (ctx->gs->pmode >> 1) & 1;
+
+    uint64_t display = 0, dispfb = 0;
+
+    if (en1) {
+        display = ctx->gs->display1;
+        dispfb = ctx->gs->dispfb1;
+    } else if (en2) {
+        display = ctx->gs->display2;
+        dispfb = ctx->gs->dispfb2;
+    }
+
+    uint32_t tex_fmt = (dispfb >> 15) & 0x1f;
+
+    int magh = ((display >> 23) & 0xf) + 1;
+    int magv = ((display >> 27) & 3) + 1;
+
+    if (((display >> 32) & 0xfff) == 0) {
+        ctx->tex_w = 0;
+        ctx->tex_h = 0;
+
+        return;
+    }
+
+    if (((display >> 44) & 0x7ff) == 0) {
+        ctx->tex_w = 0;
+        ctx->tex_h = 0;
+        
+        return;
+    }
+
+    uint32_t tex_w = (((display >> 32) & 0xfff) / magh) + 1;
+    uint32_t tex_h = (((display >> 44) & 0x7ff) / magv) + 1;
+
+    ctx->tex_w = tex_w;
+    ctx->tex_h = tex_h;
+
+    if ((ctx->gs->smode2 & 3) == 3)
+        ctx->tex_h /= 2;
+}
 void hardware_set_scale(void* udata, float scale) {}
 void hardware_set_aspect_mode(void* udata, int aspect_mode) {}
 void hardware_set_integer_scaling(void* udata, bool integer_scaling) {}
@@ -176,6 +219,8 @@ extern "C" void hardware_render_triangle(struct ps2_gs* gs, void* udata) {
     //     gs->vq[0].z, gs->vq[1].z, gs->vq[2].z
     // );
 
+    int interlace = ((gs->smode2 & 3) == 3) ? 2 : 1;
+
     for (int i = 0; i < 3; i++) {
         hw_vertex hw_v;
 
@@ -186,7 +231,7 @@ extern "C" void hardware_render_triangle(struct ps2_gs* gs, void* udata) {
         hw_v.u = gs->vq[i].u;
         hw_v.v = gs->vq[i].v;
         hw_v.x = gs->vq[i].x - ctx->gs->ctx->ofx;
-        hw_v.y = (224 - (gs->vq[i].y - ctx->gs->ctx->ofy)) * 2;
+        hw_v.y = (ctx->tex_h - (gs->vq[i].y - ctx->gs->ctx->ofy)) * interlace;
         hw_v.z = gs->vq[i].z;
         hw_v.s = gs->vq[i].s;
         hw_v.t = gs->vq[i].t;
@@ -201,10 +246,12 @@ extern "C" void hardware_render_sprite(struct ps2_gs* gs, void* udata) {
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
 
+    int interlace = ((gs->smode2 & 3) == 3) ? 2 : 1;
+
     uint32_t v0_x = v0.x - gs->ctx->ofx;
-    uint32_t v0_y = (224 - (v0.y - gs->ctx->ofy)) * 2.0;
+    uint32_t v0_y = (ctx->tex_h - (v0.y - gs->ctx->ofy)) * interlace;
     uint32_t v1_x = v1.x - gs->ctx->ofx;
-    uint32_t v1_y = (224 - (v1.y - gs->ctx->ofy)) * 2.0;
+    uint32_t v1_y = (ctx->tex_h - (v1.y - gs->ctx->ofy)) * interlace;
 
     hw_vertex hw_v[6];
 
