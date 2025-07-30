@@ -398,7 +398,7 @@ void software_thread_render_thread(software_thread_state* ctx) {
             ctx->render_mtx.unlock();
         }
 
-        std::this_thread::yield();
+        // std::this_thread::yield();
     }
 }
 
