@@ -93,8 +93,10 @@ struct ps2_dmac* ps2_dmac_create(void);
 void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dma* iop_dma, struct ps2_ram* spr, struct ee_state* ee, struct sched_state* sched, struct ee_bus* bus);
 void ps2_dmac_destroy(struct ps2_dmac* dmac);
 uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr);
+uint64_t ps2_dmac_read16(struct ps2_dmac* dmac, uint32_t addr);
 uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr);
 void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data);
+void ps2_dmac_write16(struct ps2_dmac* dmac, uint32_t addr, uint64_t data);
 void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data);
 
 void dmac_handle_vif0_transfer(struct ps2_dmac* dmac);

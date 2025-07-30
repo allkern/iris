@@ -134,3 +134,37 @@ void ps2_ee_timers_tick(struct ps2_ee_timers* timers) {
     for (int i = 0; i < 4; i++)
         ee_timer_tick(timers, i);
 }
+
+void ps2_ee_timers_write16(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data) {
+    int t = (addr >> 11) & 3;
+
+    switch (addr & 0xff) {
+        case 0x00: timers->timer[t].counter = data & 0xffff; return;
+        case 0x10: ee_timers_write_mode(timers, data & 0xffff, t); return;
+        case 0x20: timers->timer[t].compare = data; return;
+        case 0x30: timers->timer[t].hold = data & 0xffff; return;
+    }
+
+    printf("ee: timer %d write %08x to %02x\n", t, data, addr & 0xff);
+
+    exit(1);
+}
+
+uint64_t ps2_ee_timers_read16(struct ps2_ee_timers* timers, uint32_t addr) {
+    int t = (addr >> 11) & 3;
+
+    // printf("ee: timer %d read %08x\n", t, addr & 0xff);
+
+    switch (addr & 0xff) {
+        case 0x00: return timers->timer[t].counter & 0xffff;
+        case 0x10: return timers->timer[t].mode & 0xffff;
+        case 0x20: return timers->timer[t].compare & 0xffff;
+        case 0x30: return timers->timer[t].hold & 0xffff;
+    }
+
+    printf("ee: timers read16 %08x\n", addr);
+
+    exit(1);
+
+    return 0;
+}

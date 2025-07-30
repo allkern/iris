@@ -177,11 +177,13 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
     // MAP_MEM_READ(16, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_READ(16, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_REG_READ(16, 0x10008000, 0x1000EFFF, dmac, dmac);
+    MAP_REG_READ(16, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_READ(16, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(16, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_READ(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
-    MAP_REG_READ(32, 0x10000000, 0x10001FFF, ee_timers, timers);
+    MAP_REG_READ(16, 0x10000000, 0x10001FFF, ee_timers, timers);
 
     if (addr == 0x1a000010) return 0xffff;
 
@@ -262,7 +264,7 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
         } break;
     }
 
-    printf("bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    // printf("bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
     
     if ((addr & 0xffff0000) == 0xfffe0000)
         exit(1);
@@ -369,9 +371,12 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
     // MAP_MEM_WRITE(16, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_WRITE(16, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_REG_WRITE(16, 0x10008000, 0x1000EFFF, dmac, dmac);
+    MAP_REG_WRITE(16, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_WRITE(16, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(16, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_WRITE(16, 0x1000F000, 0x1000F01F, intc, intc);
+    MAP_REG_WRITE(16, 0x10000000, 0x10001FFF, ee_timers, timers);
 
     switch (addr) {
         case 0x1a000008:

@@ -22,6 +22,7 @@ struct gif_tag {
     int fmt;
     int nregs;
     uint64_t reg;
+    uint64_t qwc;
 
     int index;
     int remaining;

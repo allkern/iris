@@ -143,6 +143,7 @@ struct instance {
     bool show_settings = false;
     bool show_memory_card_tool = false;
     bool show_imgui_demo = false;
+    bool show_vu_disassembler = false;
 
     // Special windows
     bool show_bios_setting_window = false;
@@ -215,6 +216,7 @@ void show_iop_dma(iris::instance* iris);
 void show_gs_debugger(iris::instance* iris);
 void show_spu2_debugger(iris::instance* iris);
 void show_memory_viewer(iris::instance* iris);
+void show_vu_disassembler(iris::instance* iris);
 void show_status_bar(iris::instance* iris);
 void show_breakpoints(iris::instance* iris);
 void show_about_window(iris::instance* iris);

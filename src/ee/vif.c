@@ -269,17 +269,29 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vif->shift = 0;
             } break;
             case VIF_CMD_DIRECT: {
-                // printf("vif%d: DIRECT(%04x)\n", vif->id, data & 0xffff);
+                //printf("vif%d: DIRECT(%04x)\n", vif->id, data & 0xffff);
+
+                int imm = data & 0xffff;
+
+                if (imm == 0) {
+                    imm = 0x10000;
+                }
 
                 vif->state = VIF_RECV_DATA;
-                vif->pending_words = (data & 0xffff) * 4;
+                vif->pending_words = imm * 4;
                 vif->shift = 0;
             } break;
             case VIF_CMD_DIRECTHL: {
                 // printf("vif%d: DIRECTHL(%04x)\n", vif->id, data & 0xffff);
 
+                int imm = data & 0xffff;
+
+                if (imm == 0) {
+                    imm = 0x10000;
+                }
+
                 vif->state = VIF_RECV_DATA;
-                vif->pending_words = (data & 0xffff) * 4;
+                vif->pending_words = imm * 4;
                 vif->shift = 0;
             } break;
 

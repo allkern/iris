@@ -91,10 +91,10 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
 }
 
 void spu2_irq(struct ps2_spu2* spu2, int c) {
-    // if (spu2->spdif_irq & (4 << c))
-    //     return;
+    if (spu2->spdif_irq & (8 << c))
+        return;
 
-    // spu2->spdif_irq |= 4 << c;
+    spu2->spdif_irq |= 8 << c;
 
     // printf("spu2: IRQ fired\n");
 
@@ -428,7 +428,7 @@ uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
         case 0x7ac: return spu2->c[1].in_coef_l;
         case 0x7ae: return spu2->c[1].in_coef_r;
         case 0x7C0: return spu2->spdif_out;
-        // case 0x7C2: return spu2->spdif_irq;
+        case 0x7C2: return spu2->spdif_irq;
         case 0x7C6: return spu2->spdif_mode;
         case 0x7C8: return spu2->spdif_media;
         case 0x7CA: return spu2->spdif_copy;
@@ -614,7 +614,7 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         case 0x7ac: spu2->c[1].in_coef_l = data; return;
         case 0x7ae: spu2->c[1].in_coef_r = data; return;
         case 0x7C0: spu2->spdif_out = data; return;
-        // case 0x7C2: spu2->spdif_irq = data; return;
+        case 0x7C2: printf("spdif irq write %04x", data); spu2->spdif_irq = data; return;
         case 0x7C6: spu2->spdif_mode = data; return;
         case 0x7C8: spu2->spdif_media = data; return;
         case 0x7CA: spu2->spdif_copy = data; return;

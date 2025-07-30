@@ -4,6 +4,7 @@
 #include <string.h>
 #include <math.h>
 #include <signal.h>
+#include <fenv.h>
 
 #ifdef _EE_USE_INTRINSICS
 #include <immintrin.h>
@@ -14,6 +15,9 @@
 
 #include "ee.h"
 #include "ee_dis.h"
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
 
 #ifdef _WIN32
 #define SSUBOVF64 __builtin_ssubll_overflow
@@ -208,6 +212,60 @@ static inline void fpu_cvtws(union ee_fpu_reg* d, union ee_fpu_reg* s) {
         d->u32 = 0x80000000;
 }
 
+static inline int fpu_check_overflow(struct ee_state* ee, union ee_fpu_reg* reg) {
+    if ((reg->u32 & ~0x80000000) == 0x7f800000) {
+        reg->u32 = (reg->u32 & 0x80000000) | 0x7f7fffff;
+        ee->fcr |= FPU_FLG_O | FPU_FLG_SO;
+
+        return 1;
+    }
+
+    ee->fcr &= ~FPU_FLG_O;
+
+    return 0;
+}
+
+static inline int fpu_check_underflow(struct ee_state* ee, union ee_fpu_reg* reg) {
+    if (((reg->u32 & 0x7F800000) == 0) && ((reg->u32 & 0x007FFFFF) != 0)) {
+        reg->u32 &= 0x80000000;
+        ee->fcr |= FPU_FLG_U | FPU_FLG_SU;
+
+        return 1;
+	}
+
+    ee->fcr &= ~FPU_FLG_U;
+
+    return 0;
+}
+
+static inline int fpu_check_overflow_no_flags(struct ee_state* ee, union ee_fpu_reg* reg) {
+    if ((reg->u32 & ~0x80000000) == 0x7f800000) {
+        reg->u32 = (reg->u32 & 0x80000000) | 0x7f7fffff;
+
+        return 1;
+    }
+
+    return 0;
+}
+
+static inline int fpu_check_underflow_no_flags(struct ee_state* ee, union ee_fpu_reg* reg) {
+    if (((reg->u32 & 0x7F800000) == 0) && ((reg->u32 & 0x007FFFFF) != 0)) {
+        reg->u32 &= 0x80000000;
+
+        return 1;
+	}
+
+    return 0;
+}
+
+static inline int fpu_max(int32_t a, int32_t b) {
+    return (a < 0 && b < 0) ? min(a, b) : max(a, b);
+}
+
+static inline int fpu_min(int32_t a, int32_t b) {
+    return (a < 0 && b < 0) ? max(a, b) : min(a, b);
+}
+
 static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t virt) {
     struct ee_vtlb_entry* entry = NULL;
 
@@ -259,11 +317,11 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
     *phys = virt & ee_bus_region_mask_table[virt >> 29];
 
-    printf("ee: Unhandled virtual address %08x @ cyc=%ld\n", virt, ee->total_cycles);
+    // printf("ee: Unhandled virtual address %08x @ cyc=%ld\n", virt, ee->total_cycles);
 
-    *(int*)0 = 0;
+    // *(int*)0 = 0;
 
-    exit(1);
+    // exit(1);
 
     // To-do: MMU mapping
     *phys = virt & 0x1fffffff;
@@ -483,7 +541,8 @@ void ee_set_cpcond0(struct ee_state* ee, int v) {
 }
 
 static inline void ee_i_abss(struct ee_state* ee) {
-    EE_FD = fabsf(EE_FS);
+    ee->f[EE_D_FD].u32 = ee->f[EE_D_FS].u32 & 0x7fffffff;
+    // EE_FD = fabsf(EE_FS);
 }
 static inline void ee_i_add(struct ee_state* ee) {
     int32_t s = EE_RS;
@@ -500,6 +559,11 @@ static inline void ee_i_add(struct ee_state* ee) {
 }
 static inline void ee_i_addas(struct ee_state* ee) {
     ee->a.f = EE_FS + EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->a))
+        return;
+
+    fpu_check_underflow(ee, &ee->a);
 }
 static inline void ee_i_addi(struct ee_state* ee) {
     int32_t s = EE_RS;
@@ -516,7 +580,14 @@ static inline void ee_i_addiu(struct ee_state* ee) {
     EE_RT = SE6432(EE_RS32 + SE3216(EE_D_I16));
 }
 static inline void ee_i_adds(struct ee_state* ee) {
-    EE_FD = EE_FS + EE_FT;
+    int d = EE_D_FD;
+
+    ee->f[d].f = EE_FS + EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->f[d]))
+        return;
+
+    fpu_check_underflow(ee, &ee->f[d]);
 }
 static inline void ee_i_addu(struct ee_state* ee) {
     EE_RD = SE6432(EE_RS + EE_RT);
@@ -624,47 +695,14 @@ static inline void ee_i_ceq(struct ee_state* ee) {
         ee->fcr &= ~(1 << 23);
     }
 }
-static inline void ee_i_cf(struct ee_state* ee) { printf("ee: cf unimplemented\n"); exit(1); }
+static inline void ee_i_cf(struct ee_state* ee) {
+    ee->fcr &= ~(1 << 23);
+}
 static inline void ee_i_cfc1(struct ee_state* ee) {
-    EE_RT = EE_D_FS ? ee->fcr : 0x2e00;
+    EE_RT = (EE_D_FS >= 16) ? ee->fcr : 0x2e30;
 }
 static inline void ee_i_cfc2(struct ee_state* ee) {
-    // To-do: Handle FBRST, VPU_STAT, CMSAR1
-    int d = EE_D_RD;
-
-    EE_RT = d < 16 ? ee->vu0->vi[d] : ee->vu0->cr[d - 16];
-
-    if (d == 28) {
-        EE_RT &= 0x0c0c;
-    }
-
-    // static const char* regs[] = {
-    //     "Status flag",
-    //     "MAC flag",
-    //     "clipping flag",
-    //     "reserved",
-    //     "R",
-    //     "I",
-    //     "Q",
-    //     "reserved",
-    //     "reserved",
-    //     "reserved",
-    //     "TPC",
-    //     "CMSAR0",
-    //     "FBRST",
-    //     "VPU-STAT",
-    //     "reserved",
-    //     "CMSAR1",
-    // };
-
-    // if (d >= 16)
-    // printf("ee: cfc2 %d (%s) <- %08x\n", d-16, regs[d-16], ee->vu0->cr[d - 16]);
-
-    // if (d >= 16) {
-    //     file = fopen("vu.dump", "a");
-    //     fprintf(file, "ee: cfc2 %d (%s) <- %08x\n", d-16, regs[d-16], ee->vu0->cr[d - 16]);
-    //     fclose(file);
-    // }
+    EE_RT = SE6432(ps2_vu_read_vi(ee->vu0, EE_D_RD));
 }
 static inline void ee_i_cle(struct ee_state* ee) {
     if (EE_FS <= EE_FT) {
@@ -681,7 +719,10 @@ static inline void ee_i_clt(struct ee_state* ee) {
     }
 }
 static inline void ee_i_ctc1(struct ee_state* ee) {
-    ee->fcr = EE_RT;
+    if (EE_D_FS < 16)
+        return;
+
+    ee->fcr = (ee->fcr & ~(0x83c078)) | (EE_RT & 0x83c078);
 }
 static inline void ee_i_ctc2(struct ee_state* ee) {
     // To-do: Handle FBRST, VPU_STAT, CMSAR1
@@ -706,21 +747,7 @@ static inline void ee_i_ctc2(struct ee_state* ee) {
         "CMSAR1",
     };
 
-    if (d < 16) {
-        ee->vu0->vi[d] = EE_RT32;
-    } else {
-        if ((d-16) == 0) {
-            // uint32_t status = ee->vu0->cr[0];
-            ee->vu0->cr[0] &= ~0xfc0;
-            ee->vu0->cr[0] |= EE_RT32 & 0xfc0;
-
-            // printf("prev=%08x curr=%08x val=%08x\n", status, ee->vu0->cr[0], EE_RT32);
-        } else {
-            ee->vu0->cr[d - 16] = EE_RT32;
-        }
-
-        // printf("ee: ctc2 %d (%s) -> %08x\n", d-16, regs[d-16], EE_RT32);
-    }
+    ps2_vu_write_vi(ee->vu0, d, EE_RT32);
 }
 static inline void ee_i_cvts(struct ee_state* ee) {
     EE_FD = (float)ee->f[EE_D_FS].s32;
@@ -793,7 +820,32 @@ static inline void ee_i_div1(struct ee_state* ee) {
 	}
 }
 static inline void ee_i_divs(struct ee_state* ee) {
-    EE_FD = EE_FS / EE_FT;
+    int t = EE_D_RT;
+    int d = EE_D_FD;
+    int s = EE_D_FS;
+
+    ee->fcr &= ~(FPU_FLG_I | FPU_FLG_D);
+
+    // If both the dividend and divisor are zero, set I/SI,
+    // else set D/SD
+	if ((ee->f[t].u32 & 0x7F800000) == 0) {
+        if ((ee->f[s].u32 & 0x7F800000) == 0) {
+            ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
+        } else {
+            ee->fcr |= FPU_FLG_D | FPU_FLG_SD;
+        }
+
+		ee->f[d].u32 = ((ee->f[t].u32 ^ ee->f[s].u32) & 0x80000000) | 0x7f7fffff;
+
+        return;
+	}
+
+    ee->f[d].f = EE_FS / EE_FT;
+
+    if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
+        return;
+
+    fpu_check_underflow_no_flags(ee, &ee->f[d]);
 }
 static inline void ee_i_divu(struct ee_state* ee) {
     int t = EE_D_RT;
@@ -945,6 +997,10 @@ static inline void ee_i_lq(struct ee_state* ee) {
     ee->r[EE_D_RT] = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
 }
 static inline void ee_i_lqc2(struct ee_state* ee) {
+    int d = EE_D_RT;
+
+    if (!d) return;
+
     ee->vu0->vf[EE_D_RT].u128 = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
 }
 static inline void ee_i_lui(struct ee_state* ee) {
@@ -1017,9 +1073,25 @@ static inline void ee_i_madd1(struct ee_state* ee) {
 }
 static inline void ee_i_maddas(struct ee_state* ee) {
     ee->a.f += EE_FS * EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->a))
+        return;
+
+    fpu_check_underflow(ee, &ee->a);
 }
 static inline void ee_i_madds(struct ee_state* ee) {
-    EE_FD = ee->a.f + EE_FS * EE_FT;
+    int t = EE_D_RT;
+	int d = EE_D_FD;
+    int s = EE_D_FS;
+
+    float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
+
+	ee->f[d].f = fpu_cvtf(ee->a.f) + fpu_cvtf(temp);
+
+    if (fpu_check_overflow(ee, &ee->f[d]))
+        return;
+
+    fpu_check_underflow(ee, &ee->f[d]);
 }
 static inline void ee_i_maddu(struct ee_state* ee) {
     uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
@@ -1044,7 +1116,9 @@ static inline void ee_i_maddu1(struct ee_state* ee) {
     EE_RD = EE_LO1;
 }
 static inline void ee_i_maxs(struct ee_state* ee) {
-    EE_FD = fmaxf(EE_FS, EE_FT);
+    ee->f[EE_D_FD].u32 = fpu_max(ee->f[EE_D_FS].u32, ee->f[EE_D_RT].u32);
+
+    ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
 }
 static inline void ee_i_mfc0(struct ee_state* ee) {
     EE_RT = SE6432(ee->cop0_r[EE_D_RD]);
@@ -1068,7 +1142,9 @@ static inline void ee_i_mfsa(struct ee_state* ee) {
     EE_RD = ee->sa & 0xf;
 }
 static inline void ee_i_mins(struct ee_state* ee) {
-    EE_FD = fminf(EE_FS, EE_FT);
+    ee->f[EE_D_FD].u32 = fpu_min(ee->f[EE_D_FS].u32, ee->f[EE_D_RT].u32);
+
+    ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
 }
 static inline void ee_i_movn(struct ee_state* ee) {
     if (EE_RT) EE_RD = EE_RS;
@@ -1081,9 +1157,25 @@ static inline void ee_i_movz(struct ee_state* ee) {
 }
 static inline void ee_i_msubas(struct ee_state* ee) {
     ee->a.f -= EE_FS * EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->a))
+        return;
+
+    fpu_check_underflow(ee, &ee->a);
 }
 static inline void ee_i_msubs(struct ee_state* ee) {
-    EE_FD = ee->a.f - (EE_FS * EE_FT);
+    int t = EE_D_RT;
+	int d = EE_D_FD;
+    int s = EE_D_FS;
+
+    float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
+
+	ee->f[d].f = fpu_cvtf(ee->a.f) - fpu_cvtf(temp);
+
+    if (fpu_check_overflow(ee, &ee->f[d]))
+        return;
+
+    fpu_check_underflow(ee, &ee->f[d]);
 }
 static inline void ee_i_mtc0(struct ee_state* ee) {
     ee->cop0_r[EE_D_RD] = EE_RT32;
@@ -1114,9 +1206,21 @@ static inline void ee_i_mtsah(struct ee_state* ee) {
 }
 static inline void ee_i_mulas(struct ee_state* ee) {
     ee->a.f = EE_FS * EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->a))
+        return;
+
+    fpu_check_underflow(ee, &ee->a);
 }
 static inline void ee_i_muls(struct ee_state* ee) {
-    EE_FD = EE_FS * EE_FT;
+    int d = EE_D_FD;
+
+    ee->f[d].f = EE_FS * EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->f[d]))
+        return;
+
+    fpu_check_underflow(ee, &ee->f[d]);
 }
 static inline void ee_i_mult(struct ee_state* ee) {
     uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
@@ -1151,7 +1255,9 @@ static inline void ee_i_multu1(struct ee_state* ee) {
     EE_RD = EE_LO1;
 }
 static inline void ee_i_negs(struct ee_state* ee) {
-    EE_FD = -EE_FS;
+    ee->f[EE_D_FD].u32 = ee->f[EE_D_FS].u32 ^ 0x80000000;
+
+    ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
 }
 static inline void ee_i_nor(struct ee_state* ee) {
     EE_RD = ~(EE_RS | EE_RT);
@@ -2033,7 +2139,20 @@ static inline void ee_i_prot3w(struct ee_state* ee) {
     ee->r[d].u32[2] = rt.u32[0];
     ee->r[d].u32[3] = rt.u32[3];
 }
-static inline void ee_i_psllh(struct ee_state* ee) { printf("ee: psllh unimplemented\n"); exit(1); }
+static inline void ee_i_psllh(struct ee_state* ee) {
+    int sa = EE_D_SA & 0xf;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = ee->r[t].u16[0] << sa;
+    ee->r[d].u16[1] = ee->r[t].u16[1] << sa;
+    ee->r[d].u16[2] = ee->r[t].u16[2] << sa;
+    ee->r[d].u16[3] = ee->r[t].u16[3] << sa;
+    ee->r[d].u16[4] = ee->r[t].u16[4] << sa;
+    ee->r[d].u16[5] = ee->r[t].u16[5] << sa;
+    ee->r[d].u16[6] = ee->r[t].u16[6] << sa;
+    ee->r[d].u16[7] = ee->r[t].u16[7] << sa;
+}
 static inline void ee_i_psllvw(struct ee_state* ee) { printf("ee: psllvw unimplemented\n"); exit(1); }
 static inline void ee_i_psllw(struct ee_state* ee) {
     int sa = EE_D_SA;
@@ -2045,7 +2164,20 @@ static inline void ee_i_psllw(struct ee_state* ee) {
     ee->r[d].u32[2] = ee->r[t].u32[2] << sa;
     ee->r[d].u32[3] = ee->r[t].u32[3] << sa;
 }
-static inline void ee_i_psrah(struct ee_state* ee) { printf("ee: psrah unimplemented\n"); exit(1); }
+static inline void ee_i_psrah(struct ee_state* ee) {
+    int sa = EE_D_SA & 0xf;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u16[0] = ((int16_t)ee->r[t].u16[0]) >> sa;
+    ee->r[d].u16[1] = ((int16_t)ee->r[t].u16[1]) >> sa;
+    ee->r[d].u16[2] = ((int16_t)ee->r[t].u16[2]) >> sa;
+    ee->r[d].u16[3] = ((int16_t)ee->r[t].u16[3]) >> sa;
+    ee->r[d].u16[4] = ((int16_t)ee->r[t].u16[4]) >> sa;
+    ee->r[d].u16[5] = ((int16_t)ee->r[t].u16[5]) >> sa;
+    ee->r[d].u16[6] = ((int16_t)ee->r[t].u16[6]) >> sa;
+    ee->r[d].u16[7] = ((int16_t)ee->r[t].u16[7]) >> sa;
+}
 static inline void ee_i_psravw(struct ee_state* ee) { printf("ee: psravw unimplemented\n"); exit(1); }
 static inline void ee_i_psraw(struct ee_state* ee) {
     int sa = EE_D_SA;
@@ -2338,10 +2470,33 @@ static inline void ee_i_qmtc2(struct ee_state* ee) {
     int t = EE_D_RT;
     int d = EE_D_RD;
 
+    if (!d) return;
+
     ee->vu0->vf[d].u128 = ee->r[t];
 }
 static inline void ee_i_rsqrts(struct ee_state* ee) {
-    EE_FD = EE_FS / sqrtf(EE_FT);
+    int t = EE_D_RT;
+    int d = EE_D_FD;
+
+    ee->fcr &= ~(FPU_FLG_I | FPU_FLG_D);
+
+    if ((ee->f[t].u32 & 0x7f800000) == 0) {
+        ee->fcr |= FPU_FLG_D | FPU_FLG_SD;
+        ee->f[d].u32 = (ee->f[t].u32 & 0x80000000) | 0x7f7fffff;
+        
+        return;
+    } else if (ee->f[t].u32 & 0x80000000) {
+        ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
+
+        ee->f[d].f = EE_FS / sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
+    } else {
+        ee->f[d].f = EE_FS / sqrtf(fpu_cvtf(ee->f[t].f));
+    }
+
+    if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
+        return;
+
+    fpu_check_underflow_no_flags(ee, &ee->f[d]);
 }
 static inline void ee_i_sb(struct ee_state* ee) {
     bus_write8(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
@@ -2403,7 +2558,20 @@ static inline void ee_i_sqc2(struct ee_state* ee) {
     bus_write128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf, ee->vu0->vf[EE_D_RT].u128);
 }
 static inline void ee_i_sqrts(struct ee_state* ee) {
-    EE_FD = sqrtf(EE_FT);
+    int t = EE_D_RT;
+    int d = EE_D_FD;
+
+    ee->fcr &= ~(FPU_FLG_I | FPU_FLG_D);
+
+    if ((ee->f[t].u32 & 0x7f800000) == 0) {
+        ee->f[d].u32 = ee->f[t].u32 & 0x80000000;
+    } else if (ee->f[t].u32 & 0x80000000) {
+        ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
+
+        ee->f[d].f = sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
+    } else {
+        ee->f[d].f = sqrtf(fpu_cvtf(ee->f[t].f));
+    }
 }
 static inline void ee_i_sra(struct ee_state* ee) {
     EE_RD = SE6432(((int32_t)EE_RT32) >> EE_D_SA);
@@ -2430,9 +2598,21 @@ static inline void ee_i_sub(struct ee_state* ee) {
 }
 static inline void ee_i_subas(struct ee_state* ee) {
     ee->a.f = EE_FS - EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->a))
+        return;
+
+    fpu_check_underflow(ee, &ee->a);
 }
 static inline void ee_i_subs(struct ee_state* ee) {
-    EE_FD = EE_FS - EE_FT;
+    int d = EE_D_FD;
+
+    ee->f[d].f = EE_FS - EE_FT;
+
+    if (fpu_check_overflow(ee, &ee->f[d]))
+        return;
+
+    fpu_check_underflow(ee, &ee->f[d]);
 }
 static inline void ee_i_subu(struct ee_state* ee) {
     EE_RD = SE6432(EE_RS - EE_RT);
@@ -2666,6 +2846,11 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, st
 
     ee->scratchpad = ps2_ram_create();
     ps2_ram_init(ee->scratchpad, 0x4000);
+
+    // EE's FPU uses round to zero by default
+    fesetround(FE_TOWARDZERO);
+
+    ee->fcr = 0x01000001;
 }
 
 static inline void ee_execute(struct ee_state* ee) {
@@ -3305,7 +3490,6 @@ void ee_reset(struct ee_state* ee) {
         ee->cop0_r[i] = 0;
 
     ee->a.u32 = 0;
-    ee->fcr = 0;
 
     ee->hi = (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
     ee->lo = (uint128_t){ .u64[0] = 0, .u64[1] = 0 };
@@ -3319,6 +3503,10 @@ void ee_reset(struct ee_state* ee) {
     ee->prid = 0x2e20;
     ee->pc = EE_VEC_RESET;
     ee->next_pc = ee->pc + 4;
+
+    fesetround(FE_TOWARDZERO);
+
+    ee->fcr = 0x01000001;
 }
 
 void ee_destroy(struct ee_state* ee) {

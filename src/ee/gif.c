@@ -172,14 +172,22 @@ void gif_handle_tag(struct ps2_gif* gif, uint128_t data) {
     gif->tag.reg = data.u64[1];
     gif->tag.index = 0;
 
+    if (gif->tag.nregs == 0)
+        gif->tag.nregs = 16;
+
     switch (gif->tag.fmt) {
-        case 0:
+        case 0: {
+            gif->tag.remaining = gif->tag.nregs * gif->tag.nloop;
+            gif->tag.qwc = gif->tag.nloop * gif->tag.nregs;
+        } break;
         case 1: {
             gif->tag.remaining = gif->tag.nregs * gif->tag.nloop;
+            gif->tag.qwc = (gif->tag.nloop * gif->tag.nregs + 1) / 2;
         } break;
         case 2:
         case 3: {
             gif->tag.remaining = gif->tag.nloop;
+            gif->tag.qwc = gif->tag.nloop;
         } break;
     }
 
@@ -227,8 +235,9 @@ void gif_handle_packed(struct ps2_gif* gif, uint128_t data) {
         default: printf("gif: PACKED format for reg %d unimplemented\n", r); exit(1); break;
     }
 
-    // Note: This handles odd NREGS*NLOOP case
-    if (gif->tag.index == gif->tag.remaining) {
+    gif->tag.qwc--;
+
+    if (gif->tag.qwc == 0) {
         gif->state = GIF_STATE_RECV_TAG;
 
         return;
@@ -267,11 +276,13 @@ void gif_handle_reglist(struct ps2_gif* gif, uint128_t data) {
         if (gif->tag.index == gif->tag.remaining) {
             gif->state = GIF_STATE_RECV_TAG;
 
-            return;
+            break;
         }
     }
 
-    if (gif->tag.index == gif->tag.remaining) {
+    gif->tag.qwc--;
+
+    if (gif->tag.qwc == 0) {
         gif->state = GIF_STATE_RECV_TAG;
 
         return;
@@ -282,13 +293,11 @@ void gif_handle_image(struct ps2_gif* gif, uint128_t data) {
     ps2_gs_write_internal(gif->gs, GS_HWREG, data.u64[0]);
     ps2_gs_write_internal(gif->gs, GS_HWREG, data.u64[1]);
     
-    ++gif->tag.index;
+    gif->tag.qwc--;
 
-    if (gif->tag.index == gif->tag.remaining) {
+    if (gif->tag.qwc == 0) {
         gif->state = GIF_STATE_RECV_TAG;
     }
-
-    return;
 }
 
 void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
@@ -301,7 +310,7 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
         return;
     }
 
-    if (gif->tag.index != gif->tag.remaining) {
+    if (gif->tag.qwc) {
         switch (gif->tag.fmt) {
             case 0: gif_handle_packed(gif, data); return;
             case 1: gif_handle_reglist(gif, data); return;

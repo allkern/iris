@@ -78,6 +78,16 @@ struct ee_bus_s {
 #define EE_VEC_COMMON  0x00000180
 #define EE_VEC_IRQ     0x00000200
 
+#define FPU_FLG_C 0x00800000
+#define FPU_FLG_I 0x00020000
+#define FPU_FLG_D 0x00010000
+#define FPU_FLG_O 0x00008000
+#define FPU_FLG_U 0x00004000
+#define FPU_FLG_SI 0x00000040
+#define FPU_FLG_SD 0x00000020
+#define FPU_FLG_SO 0x00000010
+#define FPU_FLG_SU 0x00000008
+
 /*
     1       V0 - Even page valid. When not set, the memory referenced in this entry is not mapped.
     2       D0 - Even page dirty. When not set, writes cause an exception.

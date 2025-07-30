@@ -16,7 +16,7 @@ struct vu_reg {
         uint128_t u128;
         uint64_t u64[2];
         uint32_t u32[4];
-        int32_t i32[4];
+        int32_t s32[4];
         float f[4];
 
         // Named fields
@@ -57,6 +57,18 @@ struct vu_state {
 
     union {
         uint32_t u32;
+        uint32_t s32;
+        float f;
+    } prev_q;
+
+    int q_delay;
+
+    uint16_t ialu_prev_v;
+    uint16_t ialu_prev_i;
+    int ialu_delay;
+
+    union {
+        uint32_t u32;
         float f;
     } p;
 
@@ -70,14 +82,17 @@ struct vu_state {
             uint32_t rsv0;
             union {
                 uint32_t u32;
+                uint32_t s32;
                 float f;
             } r;
             union {
                 uint32_t u32;
+                uint32_t s32;
                 float f;
             } i;
             union {
                 uint32_t u32;
+                uint32_t s32;
                 float f;
             } q;
             uint32_t rsv1;
@@ -280,6 +295,9 @@ void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data);
 void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data);
 void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data);
 void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data);
+void ps2_vu_write_vi(struct vu_state* vu, int index, uint32_t value);
+uint32_t ps2_vu_read_vi(struct vu_state* vu, int index);
+void ps2_vu_reset(struct vu_state* vu);
 
 void vu_cycle(struct vu_state* vu);
 void vu_execute_program(struct vu_state* vu, uint32_t addr);
