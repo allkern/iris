@@ -96,8 +96,6 @@ Pretty much all BIOSes I've tried work just fine, even some obscure ones like th
 
 It is also possible to specify paths to ROM1 (DVD player) and ROM2 (Chinese extensions, required for the Chinese BIOS).
 
-The only caveat is that none of them render any background graphics when booting, and the little orbs and 3D models. This is probably due to my terrible VU emulation and might be fixed soon.
-
 ## PSX DESR
 Support for the PSX DESR console is early but somewhat functional. The DESR BIOS plays the boot animation but later fails some sort of diagnostic test. The DESR requires Flash, ATA and MagicGate emulation, which Iris doesn't yet support.
 

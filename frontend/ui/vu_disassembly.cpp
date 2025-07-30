@@ -140,8 +140,13 @@ static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t
             vu_disassemble_lower(lower, l, &g_vu_dis_state);
 
             if (add_padding && !compact_view) {
+#ifdef __STDC_LIB_EXT1__
                 sprintf_s(upper, "%-40s", upper);
                 sprintf_s(lower, "%-40s", lower);
+#else
+                sprintf(upper, "%-40s", upper);
+                sprintf(lower, "%-40s", lower);
+#endif
             }
 
             print_highlighted_vu1(upper);
@@ -180,8 +185,13 @@ void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
         vu_disassemble_lower(lower, l, &g_vu_dis_state);
 
         if (add_padding && !compact_view) {
+#ifdef __STDC_LIB_EXT1__
             sprintf_s(upper, "%-40s", upper);
             sprintf_s(lower, "%-40s", lower);
+#else
+            sprintf(upper, "%-40s", upper);
+            sprintf(lower, "%-40s", lower);
+#endif
         }
 
         if (compact_view) {
