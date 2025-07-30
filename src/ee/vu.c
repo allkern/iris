@@ -2,6 +2,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <fenv.h>
 
 #include "vu.h"
 #include "vu_dis.h"
@@ -61,10 +62,24 @@ void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* v
     vu->vf[0].y = 0.0;
     vu->vf[0].z = 0.0;
     vu->vf[0].w = 1.0;
+
+    // VU uses round to zero by default
+    fesetround(FE_TOWARDZERO);
 }
 
 void vu_destroy(struct vu_state* vu) {
     free(vu);
+}
+
+#define max(a, b) ((a) > (b) ? (a) : (b))
+#define min(a, b) ((a) < (b) ? (a) : (b))
+
+static inline uint32_t vu_max(int32_t a, int32_t b) {
+    return (a < 0 && b < 0) ? min(a, b) : max(a, b);
+}
+
+static inline uint32_t vu_min(int32_t a, int32_t b) {
+    return (a < 0 && b < 0) ? max(a, b) : min(a, b);
 }
 
 static inline float vu_atan(float t) {
@@ -174,7 +189,7 @@ static inline void vu_set_vf(struct vu_state* vu, int r, int f, float v) {
 }
 
 static inline void vu_set_vfu(struct vu_state* vu, int r, int f, int32_t v) {
-    if (r) vu->vf[r].i32[f] = v;
+    if (r) vu->vf[r].s32[f] = v;
 }
 
 static inline void vu_set_vf_x(struct vu_state* vu, int r, float v) {
@@ -1532,12 +1547,11 @@ void vu_i_max(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
+    if (!d) return;
+
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-            float ft = vu_vf_i(vu, t, i);
-
-            vu_set_vf(vu, d, i, (fs > ft) ? fs : ft);
+            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], vu->vf[t].s32[i]);
         }
     }
 }
@@ -1545,11 +1559,11 @@ void vu_i_maxi(struct vu_state* vu) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
+    if (!d) return;
+
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu_set_vf(vu, d, i, (fs > vu->i.f) ? fs : vu->i.f);
+            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], vu->i.s32);
         }
     }
 }
@@ -1558,13 +1572,15 @@ void vu_i_maxx(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_x(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[0];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
             float fs = vu_vf_i(vu, s, i);
 
-            vu_set_vf(vu, d, i, (fs > bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1573,13 +1589,15 @@ void vu_i_maxy(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_y(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[1];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
             float fs = vu_vf_i(vu, s, i);
 
-            vu_set_vf(vu, d, i, (fs > bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1588,13 +1606,15 @@ void vu_i_maxz(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_z(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[2];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
             float fs = vu_vf_i(vu, s, i);
 
-            vu_set_vf(vu, d, i, (fs > bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1603,13 +1623,15 @@ void vu_i_maxw(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_w(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[3];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
             float fs = vu_vf_i(vu, s, i);
 
-            vu_set_vf(vu, d, i, (fs > bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1618,12 +1640,11 @@ void vu_i_mini(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
+    if (!d) return;
+
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-            float ft = vu_vf_i(vu, t, i);
-
-            vu_set_vf(vu, d, i, (fs < ft) ? fs : ft);
+            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], vu->vf[t].s32[i]);
         }
     }
 }
@@ -1631,11 +1652,11 @@ void vu_i_minii(struct vu_state* vu) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
+    if (!d) return;
+
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu_set_vf(vu, d, i, (fs < vu->i.f) ? fs : vu->i.f);
+            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], vu->i.s32);
         }
     }
 }
@@ -1644,13 +1665,13 @@ void vu_i_minix(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_x(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[0];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu_set_vf(vu, d, i, (fs < bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1659,13 +1680,13 @@ void vu_i_miniy(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_y(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[1];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu_set_vf(vu, d, i, (fs < bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1674,13 +1695,13 @@ void vu_i_miniz(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_z(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[2];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu_set_vf(vu, d, i, (fs < bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1689,13 +1710,13 @@ void vu_i_miniw(struct vu_state* vu) {
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    float bc = vu_vf_w(vu, t);
+    if (!d) return;
+
+    int32_t bc = vu->vf[t].s32[3];
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu_set_vf(vu, d, i, (fs < bc) ? fs : bc);
+            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
     }
 }
@@ -1810,7 +1831,7 @@ void vu_i_itof0(struct vu_state* vu) {
     int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)vu->vf[s].i32[i]);
+        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)vu->vf[s].s32[i]);
     }
 }
 void vu_i_itof4(struct vu_state* vu) {
@@ -1818,7 +1839,7 @@ void vu_i_itof4(struct vu_state* vu) {
     int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].i32[i]) * 0.0625f));
+        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.0625f));
     }
 }
 void vu_i_itof12(struct vu_state* vu) {
@@ -1826,7 +1847,7 @@ void vu_i_itof12(struct vu_state* vu) {
     int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].i32[i]) * 0.000244140625f));
+        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000244140625f));
     }
 }
 void vu_i_itof15(struct vu_state* vu) {
@@ -1834,7 +1855,7 @@ void vu_i_itof15(struct vu_state* vu) {
     int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].i32[i]) * 0.000030517578125f));
+        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000030517578125f));
     }
 }
 void vu_i_clip(struct vu_state* vu) {
@@ -1998,6 +2019,10 @@ void vu_i_fceq(struct vu_state* vu) {
     vu->vi[1] = (vu->clip & 0xffffff) == VU_LD_IMM24;
 }
 void vu_i_fcget(struct vu_state* vu) {
+    int t = VU_LD_T;
+
+    if (!t) return;
+
     vu->vi[VU_LD_T] = vu->clip & 0xfff;
 }
 void vu_i_fcor(struct vu_state* vu) {
@@ -2010,19 +2035,19 @@ void vu_i_fmand(struct vu_state* vu) {
     vu_set_vi(vu, VU_LD_T, vu->mac_pipeline[3] & VU_IS);
 }
 void vu_i_fmeq(struct vu_state* vu) {
-    VU_IT = (VU_IS & 0xffff) == (vu->status & 0xffff);
+    vu_set_vi(vu, VU_LD_T, (VU_IS & 0xffff) == (vu->mac_pipeline[3] & 0xffff));
 }
 void vu_i_fmor(struct vu_state* vu) {
-    VU_IT = (VU_IS & 0xffff) | (vu->status & 0xffff);
+    vu_set_vi(vu, VU_LD_T, (VU_IS & 0xffff) | (vu->mac_pipeline[3] & 0xffff));
 }
 void vu_i_fsand(struct vu_state* vu) {
-    VU_IT = vu->status & VU_LD_IMM12;
+    vu_set_vi(vu, VU_LD_T, vu->status & VU_LD_IMM12);
 }
 void vu_i_fseq(struct vu_state* vu) {
-    VU_IT = (vu->status & 0xfff) == VU_LD_IMM12;
+    vu_set_vi(vu, VU_LD_T, (vu->status & 0xfff) == VU_LD_IMM12);
 }
 void vu_i_fsor(struct vu_state* vu) {
-    VU_IT = (vu->status & 0xfff) | VU_LD_IMM12;
+    vu_set_vi(vu, VU_LD_T, (vu->status & 0xfff) | VU_LD_IMM12);
 }
 void vu_i_fsset(struct vu_state* vu) {
     vu->status &= 0x3f;
@@ -2322,15 +2347,18 @@ void vu_i_waitp(struct vu_state* vu) {
 }
 void vu_i_waitq(struct vu_state* vu) {
     // No operation
+    vu->q_delay = 0;
 }
 
 void vu_i_xgkick(struct vu_state* vu) {
     uint16_t addr = VU_IS;
 
-    int eop = 0;
+    int eop = 1;
 
     do {
         uint128_t tag = vu_mem_read(vu, addr++);
+
+        addr &= 0x7ff;
 
         // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
@@ -2341,12 +2369,21 @@ void vu_i_xgkick(struct vu_state* vu) {
         int nloop = tag.u64[0] & 0x7fff;
         int flg = (tag.u64[0] >> 58) & 3;
         int nregs = (tag.u64[0] >> 60) & 0xf;
+
+        if (!nloop)
+            continue;
+
+        if (!nregs)
+            nregs = 16;
+
         int qwc = 0;
 
         switch (flg) {
-            case 0:
-            case 1: {
+            case 0: {
                 qwc = nregs * nloop;
+            } break;
+            case 1: {
+                qwc = (nregs * nloop + 1) / 2; // Round up for odd cases
             } break;
             case 2:
             case 3: {
@@ -2360,7 +2397,7 @@ void vu_i_xgkick(struct vu_state* vu) {
         //     eop,
         //     flg,
         //     qwc
-        // );
+        // ); 
 
         for (int i = 0; i < qwc; i++) {
             // printf("vu: %08x: %08x %08x %08x %08x\n",
@@ -2372,16 +2409,12 @@ void vu_i_xgkick(struct vu_state* vu) {
             // );
 
             ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
+
+            addr &= 0x7ff;
         }
     } while (!eop);
 }
 void vu_i_xitop(struct vu_state* vu) {
-    if (vu->id == 0) {
-        printf("vu: xitop used in VU0\n");
-
-        // exit(1);
-    }
-
     vu_set_vi(vu, VU_LD_T, vu->vif->itop);
 }
 void vu_i_xtop(struct vu_state* vu) {
@@ -2704,7 +2737,10 @@ static inline void vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
 }
 
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
-    // printf("vu: Executing program at %08x (%08x) TOP=%08x\n", addr, addr << 3, vu->vif->vif1_top);
+    // printf("vu%d: Executing program at %08x (%08x) TOP=%08x\n", vu->id, addr, addr << 3, vu->vif->top);
+    // Disable VU1
+    // if (vu->id == 1)
+    //     return;
 
     struct vu_dis_state ds;
 
@@ -2735,37 +2771,44 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
 
         ds.addr = tpc;
 
-        delayed_e_bit = vu->e_bit;
+        delayed_e_bit = vu->e_bit != 0;
 
         vu->upper = liw >> 32;
         vu->lower = liw & 0xffffffff;
-        vu->i_bit = vu->upper & 0x80000000;
-        vu->e_bit = vu->upper & 0x40000000;
-        vu->m_bit = vu->upper & 0x20000000;
-        vu->d_bit = vu->upper & 0x10000000;
-        vu->t_bit = vu->upper & 0x08000000;
+        vu->i_bit = (vu->upper & 0x80000000) != 0;
+        vu->e_bit = (vu->upper & 0x40000000) != 0;
+        vu->m_bit = (vu->upper & 0x20000000) != 0;
+        vu->d_bit = (vu->upper & 0x10000000) != 0;
+        vu->t_bit = (vu->upper & 0x08000000) != 0;
 
-        // printf("%04x: %08x %08x ", tpc, vu->upper, vu->lower);
+        vu->q_delay--;
 
-        vu->status = vu->mac_pipeline[3];
+        vu_update_status(vu);
 
+        // printf("%04x: %08x %08x %s", tpc, vu->upper, vu->lower, vu->e_bit ? "[e] " : " ");
+
+        // vu->status = vu->mac_pipeline[3];
+
+        vu_execute_upper(vu, vu->upper & 0x7ffffff);
+        
         if (vu->i_bit) {
             // printf("loi %08x\n", vu->lower);
 
             // LOI
             vu->i.u32 = vu->lower;
         } else {
+            // char ud[512], ld[512];
+
             // printf("%-40s%-40s\n", vu_disassemble_upper(ud, vu->upper, &ds), vu_disassemble_lower(ld, vu->lower, &ds));
 
-            vu_execute_upper(vu, liw >> 32);
-            vu_execute_lower(vu, liw & 0xffffffff);
+            vu_execute_lower(vu, vu->lower);
         }
 
         vu->mac_pipeline[3] = vu->mac_pipeline[2];
         vu->mac_pipeline[2] = vu->mac_pipeline[1];
         vu->mac_pipeline[1] = vu->mac_pipeline[0];
         vu->mac_pipeline[0] = vu->mac;
-
+        
         vu->clip_pipeline[3] = vu->clip_pipeline[2];
         vu->clip_pipeline[2] = vu->clip_pipeline[1];
         vu->clip_pipeline[1] = vu->clip_pipeline[0];
@@ -2779,6 +2822,130 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         //     vu->mac
         // );
     }
+}
+
+void ps2_vu_write_vi(struct vu_state* vu, int index, uint32_t value) {
+    switch (index) {
+        case 0: return;
+        case 1: case 2: case 3:
+        case 4: case 5: case 6: case 7:
+        case 8: case 9: case 10: case 11:
+        case 12: case 13: case 14: case 15: {
+            vu->vi[index] = value & 0xffff;
+        } break;
+
+        case 16: {
+            vu->status &= ~0xfc0;
+            vu->status |= value & 0xfc0;
+        } break;
+
+        case 17: return; // MAC flag register, read-only
+        case 18: {
+            vu->clip = value & 0xffffff;
+        } break;
+        
+        case 19: return; // VU revision register? read-only
+
+        case 20: {
+            vu->r.u32 = value & 0x7fffff;
+        } break;
+        case 21: {
+            vu->i.u32 = value;
+        } break;
+        case 22: {
+            vu->q.u32 = value;
+        } break;
+        case 23: return;
+        case 24: {
+            vu->cr[8] = value & 0xc0c;
+        } break;
+        case 25: return;
+        case 26: return; // VU TPC register, read-only
+        case 27: {
+            vu->cmsar0 = value & 0xffff;
+        } break;
+        case 28: {
+            // To-do: Handle FBRST
+            vu->fbrst = value & 0xc0c;
+
+            if (value & 2) {
+                // Reset VU0
+                ps2_vu_reset(vu);
+            }
+
+            if (value & 0x200) {
+                // Reset VU1
+                ps2_vu_reset(vu->vu1);
+            }
+        } break;
+        case 29: return; // VU VPU-STAT register, read-only
+        case 30: return; // VU reserved register, read-only
+        case 31: {
+            vu->cmsar1 = value & 0xffff;
+
+            vu_execute_program(vu->vu1, vu->cmsar1 >> 3);
+        } break;
+    }
+}
+
+uint32_t ps2_vu_read_vi(struct vu_state* vu, int index) {
+    switch (index) {
+        case 0: case 1: case 2: case 3:
+        case 4: case 5: case 6: case 7:
+        case 8: case 9: case 10: case 11:
+        case 12: case 13: case 14: case 15: {
+            return vu->vi[index];
+        } break;
+
+        case 19: { // VU revision register
+            return 0x2e30;
+        } break;
+
+        default: {
+            return vu->cr[index - 16];
+        } break;
+    }
+}
+
+void ps2_vu_reset(struct vu_state* vu) {
+    for (int i = 0; i < 16; i++)
+        vu->vi[i] = 0;
+
+    for (int i = 0; i < 32; i++) {
+        vu->vf[i].u32[0] = 0;
+        vu->vf[i].u32[1] = 0;
+        vu->vf[i].u32[2] = 0;
+        vu->vf[i].u32[3] = 0;
+    }
+
+    vu->r.u32 = 0x3f800000;
+    vu->i.u32 = 0;
+    vu->q.u32 = 0;
+    vu->clip = 0;
+    vu->status = 0;
+    vu->fbrst = 0;
+    vu->cmsar0 = 0;
+    vu->cmsar1 = 0;
+    vu->mac = 0;
+    vu->mac_pipeline[0] = 0;
+    vu->mac_pipeline[1] = 0;
+    vu->mac_pipeline[2] = 0;
+    vu->mac_pipeline[3] = 0;
+    vu->clip_pipeline[0] = 0;
+    vu->clip_pipeline[1] = 0;
+    vu->clip_pipeline[2] = 0;
+    vu->clip_pipeline[3] = 0;
+    vu->tpc = 0;
+    vu->next_tpc = 1;
+    vu->upper = 0;
+    vu->lower = 0;
+    vu->i_bit = 0;
+    vu->e_bit = 0;
+    vu->m_bit = 0;
+    vu->d_bit = 0;
+    vu->t_bit = 0;
+
+    vu->vf[0].w = 1.0;
 }
 
 // #undef printf
