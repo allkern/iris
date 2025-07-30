@@ -15,7 +15,24 @@ struct ee_timer {
     uint16_t mode;
     uint32_t compare;
     uint16_t hold;
+    
+    // Internal state
     uint32_t internal;
+    uint32_t delta;
+    uint32_t delta_reload;
+    uint32_t cycles_until_check;
+    uint32_t check_reload;
+    int check_enabled;
+
+    // Mode fields
+    int clks;
+    int gate;
+    int gats;
+    int gatm;
+    int zret;
+    int cue;
+    int cmpe;
+    int ovfe;
 };
 
 struct ps2_ee_timers {
