@@ -478,9 +478,9 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
         return SDL_APP_CONTINUE;
     }
-    
-    // Execute until vblank is over
-    while (ps2_gs_is_vblank(iris->ps2->gs)) {
+
+    // Execute until VBlank
+    while (!ps2_gs_is_vblank(iris->ps2->gs)) {
         do_cycle(iris);
 
         if (iris->pause) {
@@ -490,13 +490,16 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
         }
     }
 
+    // Draw frame
     iris::update_window(iris);
-
-    // Break on VBlank
-    while (!ps2_gs_is_vblank(iris->ps2->gs)) {
+    
+    // Execute until vblank is over
+    while (ps2_gs_is_vblank(iris->ps2->gs)) {
         do_cycle(iris);
 
         if (iris->pause) {
+            iris::update_window(iris);
+
             return SDL_APP_CONTINUE;
         }
     }
