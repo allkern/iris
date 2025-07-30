@@ -139,24 +139,6 @@ void hardware_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDe
     SDL_ReleaseGPUShader(device, fragment_shader);
 
     ctx->vertex_buffer = nullptr;
-
-    // SDL_GPUBufferCreateInfo bci = { 0 };
-
-    // bci.usage = SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_READ | SDL_GPU_BUFFERUSAGE_COMPUTE_STORAGE_WRITE;
-    // bci.size = 0x400000;
-
-    // ctx->vram = SDL_CreateGPUBuffer(ctx->device, &bci);
-
-    // SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(ctx->device);
-
-    // SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
-
-    // SDL_GPUTransferBufferCreateInfo tbci = {};
-
-    // tbci.size = 0x400000;
-    // tbci.usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD;
-
-    // SDL_GPUTransferBuffer* tb = 
 }
 
 void hardware_destroy(void* udata) {
@@ -219,6 +201,35 @@ extern "C" void hardware_render_sprite(struct ps2_gs* gs, void* udata) {
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
 
+    uint32_t v0_x = v0.x - gs->ctx->ofx;
+    uint32_t v0_y = (224 - (v0.y - gs->ctx->ofy)) * 2.0;
+    uint32_t v1_x = v1.x - gs->ctx->ofx;
+    uint32_t v1_y = (224 - (v1.y - gs->ctx->ofy)) * 2.0;
+
+    hw_vertex hw_v[6];
+
+    hw_v[0].x = v0_x; // Top-left
+    hw_v[0].y = v0_y;
+    hw_v[1].x = v1_x; // Top-right
+    hw_v[1].y = v0_y;
+    hw_v[2].x = v0_x; // Bottom-left
+    hw_v[2].y = v1_y;
+    hw_v[3].x = v1_x; // Top-right
+    hw_v[3].y = v0_y;
+    hw_v[4].x = v1_x; // Bottom-right
+    hw_v[4].y = v1_y;
+    hw_v[5].x = v0_x; // Bottom-left
+    hw_v[5].y = v1_y;
+
+    for (int i = 0; i < 6; i++) {
+        hw_v[i].r = v1.r;
+        hw_v[i].g = v1.g;
+        hw_v[i].b = v1.b;
+        hw_v[i].a = v1.a;
+
+        ctx->vertices.push_back(hw_v[i]);
+    }
+    
     // printf("sprite: v0=(%04x, %04x) v1=(%04x, %04x)\n",
     //     v0.x, v0.y,
     //     v1.x, v1.y
