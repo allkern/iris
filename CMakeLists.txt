@@ -61,11 +61,13 @@ check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
 # And this part tells CMake where to find and install the file itself
 add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
-if (LTO_SUPPORTED)
-    message(STATUS "IPO/LTO enabled")
-    set_property(TARGET iris PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
-else()
-    message(STATUS "IPO/LTO not supported: ${LTO_ERROR}")
+if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
+    if (LTO_SUPPORTED)
+        message(STATUS "IPO/LTO enabled")
+        set_property(TARGET iris PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    else()
+        message(STATUS "IPO/LTO not supported: ${LTO_ERROR}")
+    endif()
 endif()
 
 set_property(TARGET iris PROPERTY CXX_STANDARD 20)
@@ -97,6 +99,7 @@ target_sources(iris PRIVATE
   frontend/ui/spu2.cpp
   frontend/ui/state.cpp
   frontend/ui/statusbar.cpp
+  frontend/ui/vu_disassembly.cpp
   src/ps2.c
   src/ps2_elf.c
   src/ps2_iso9660.c
