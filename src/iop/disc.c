@@ -226,6 +226,10 @@ struct disc_state* disc_open(const char* path) {
     return NULL;
 }
 
+#define CD_EXTRA_SIZE 800000000
+#define CDX_MAX_SIZE 734003200
+#define CD_MAX_SIZE 681574400
+
 int disc_detect_media(struct disc_state* disc) {
     uint64_t size = disc_get_size(disc);
 
@@ -235,13 +239,13 @@ int disc_detect_media(struct disc_state* disc) {
     uint64_t volume_size = *(uint32_t*)&disc->pvd[0x50];
     uint64_t path_table_lba = *(uint32_t*)&disc->pvd[0x8c];
 
-    // printf("sector_size=%lx volume_size=%lx (%ld) in bytes=%lx (%ld) path_table_lba=%lx (%ld) size=%lx (%ld)\n",
-    //     sector_size,
-    //     volume_size, volume_size,
-    //     volume_size * sector_size, volume_size * sector_size,
-    //     path_table_lba, path_table_lba,
-    //     size, size
-    // );
+    printf("sector_size=%lx volume_size=%lx (%ld) in bytes=%lx (%ld) path_table_lba=%lx (%ld) size=%lx (%ld)\n",
+        sector_size,
+        volume_size, volume_size,
+        volume_size * sector_size, volume_size * sector_size,
+        path_table_lba, path_table_lba,
+        size, size
+    );
 
     // DVD is dual-layer
     if ((volume_size * sector_size) < size) {
@@ -250,7 +254,7 @@ int disc_detect_media(struct disc_state* disc) {
         return DISC_MEDIA_DVD;
     }
 
-    if ((volume_size * sector_size) <= 681574400 || path_table_lba != 257) {
+    if (((volume_size * sector_size) <= CD_EXTRA_SIZE) && (path_table_lba != 257)) {
         return DISC_MEDIA_CD;
     }
 
@@ -601,7 +605,7 @@ char* disc_read_boot_elf(struct disc_state* disc, char* buf, int s) {
 
     // Reverse search for a path separator
     while (*ptr != '/' && *ptr != '\\' && *ptr != ':') {
-        if (*ptr == boot_path)
+        if (ptr == boot_path)
             break;
 
         --ptr;
