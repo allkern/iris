@@ -169,8 +169,8 @@ void gs_start_primitive(struct ps2_gs* gs) {
 }
 
 static inline void gs_unpack_vertex(struct ps2_gs* gs, struct gs_vertex* v) {
-    v->x = (v->xyz & 0xffff) >> 4;
-    v->y = ((v->xyz >> 16) & 0xffff) >> 4;
+    v->x = v->xyz & 0xffff;
+    v->y = (v->xyz >> 16) & 0xffff;
     v->z = v->xyz >> 32;
     v->r = v->rgbaq & 0xff;
     v->g = (v->rgbaq >> 8) & 0xff;
@@ -198,6 +198,7 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
     gs->vq[gs->vqi].st = gs->st;
     gs->vq[gs->vqi].uv = gs->uv;
     gs->vq[gs->vqi].rgbaq = gs->rgbaq;
+
     gs->attr = (gs->prmodecont & 1) ? gs->prim : gs->prmode;
 
     // Cache PRIM/PRMODE fields
@@ -217,8 +218,8 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
     // for (int c = 0; c < 2; c++) {
     //     uint32_t fbp = (gs->context[c].frame & 0x1ff) << 11;
     //     uint32_t fbw = ((gs->context[c].frame >> 16) & 0x3f) << 6;
-    //     uint32_t xoff = (gs->context[c].xyoffset & 0xffff) >> 4;
-    //     uint32_t yoff = ((gs->context[c].xyoffset >> 32) & 0xffff) >> 4;
+    //     uint32_t xoff = (gs->context[c].xyoffset & 0xffff);
+    //     uint32_t yoff = ((gs->context[c].xyoffset >> 32) & 0xffff);
     //     int scax0 = gs->context[c].scissor & 0x3ff;
     //     int scay0 = (gs->context[c].scissor >> 32) & 0x3ff;
     //     int scax1 = (gs->context[c].scissor >> 16) & 0x3ff;
@@ -496,8 +497,8 @@ static inline void gs_unpack_tex2(struct ps2_gs* gs, int i) {
 }
 
 static inline void gs_unpack_xyoffset(struct ps2_gs* gs, int i) {
-    gs->context[i].ofx = (gs->context[i].xyoffset & 0xffff) >> 4;
-    gs->context[i].ofy = ((gs->context[i].xyoffset >> 32) & 0xffff) >> 4;
+    gs->context[i].ofx = gs->context[i].xyoffset & 0xffff;
+    gs->context[i].ofy = (gs->context[i].xyoffset >> 32) & 0xffff;
 }
 
 static inline void gs_unpack_miptbp1(struct ps2_gs* gs, int i) {
