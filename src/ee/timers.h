@@ -17,11 +17,14 @@ struct ee_timer {
     uint16_t hold;
     
     // Internal state
+    int id;
     uint32_t internal;
     uint32_t delta;
     uint32_t delta_reload;
-    uint32_t cycles_until_check;
     uint32_t check_reload;
+    int cycles_until_compare;
+    int cycles_until_overflow;
+    int cycles_until_check;
     int check_enabled;
 
     // Mode fields
