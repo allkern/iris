@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <thread>
 
 // Iris includes
 #include "iris.hpp"
@@ -132,7 +133,9 @@ void sleep_limiter(iris::instance* iris) {
     uint32_t ticks = (1.0f / iris->fps_cap) * 1000.0f;
     uint32_t now = SDL_GetTicks();
 
-    while ((SDL_GetTicks() - now) < ticks);
+    while ((SDL_GetTicks() - now) < ticks) {
+        std::this_thread::yield();
+    }
 }
 
 void update_window(iris::instance* iris) {
@@ -318,13 +321,15 @@ void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount
     if (!additional_amount)
         return;
 
-    if (iris->pause || iris->mute)
+    if (iris->pause)
         return;
 
     iris->audio_buf.resize(additional_amount);
 
     for (int i = 0; i < additional_amount; i++) {
         iris->audio_buf[i] = ps2_spu2_get_sample(iris->ps2->spu2);
+        iris->audio_buf[i].s16[0] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
+        iris->audio_buf[i].s16[1] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
     }
 
     SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), additional_amount * sizeof(spu2_sample));
