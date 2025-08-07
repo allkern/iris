@@ -9,6 +9,7 @@
 #include "elf.hpp"
 #include "config.hpp"
 #include "platform.hpp"
+#include "ee/ee_def.hpp"
 
 // ImGui includes
 #include "imgui.h"

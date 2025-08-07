@@ -110,7 +110,7 @@ target_sources(iris PRIVATE
   src/dev/mtap.c
   src/dev/ps1_mcd.c
   src/dev/ps1_mcd.c
-  src/ee/ee.c
+  src/ee/ee_cached.cpp
   src/ee/bus.c
   src/ee/dmac.c
   src/ee/ee_dis.c
