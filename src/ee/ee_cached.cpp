@@ -20,12 +20,17 @@
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
 
-#ifdef _WIN32
-#define SSUBOVF64 __builtin_ssubll_overflow
+#if defined(__has_builtin)
+#if __has_builtin(__builtin_saddll_overflow) && __has_builtin(__builtin_saddll_overflow)
 #define SADDOVF64 __builtin_saddll_overflow
+#define SSUBOVF64 __builtin_ssubll_overflow
 #else
-#define SSUBOVF64 __builtin_ssubl_overflow
 #define SADDOVF64 __builtin_saddl_overflow
+#define SSUBOVF64 __builtin_ssubl_overflow
+#endif
+#else
+#define SADDOVF64 __builtin_saddll_overflow
+#define SSUBOVF64 __builtin_ssubll_overflow
 #endif
 
 // file = fopen("vu.dump", "a"); fprintf(file, #ins "\n"); fclose(file);
