@@ -2,7 +2,7 @@ name: macOS CI
 
 on:
   push:
-    branches: [ "sdl3-cmake" ]
+    branches: [ "master" ]
 
 jobs:
   macos-universal-build:
@@ -25,3 +25,4 @@ jobs:
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
