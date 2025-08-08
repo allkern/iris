@@ -2,7 +2,7 @@ name: Ubuntu CI
 
 on:
   push:
-    branches: [ "hw-renderer" ]
+    branches: [ "sdl3-cmake" ]
 
 jobs:
   build:

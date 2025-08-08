@@ -10,13 +10,13 @@ struct main0_out
 
 struct main0_in
 {
-    float4 in_rgba [[user(locn0)]];
+    float2 TexCoord [[user(locn0)]];
 };
 
-fragment main0_out main0(main0_in in [[stage_in]])
+fragment main0_out main0(main0_in in [[stage_in]], texture2d<float> input_tex [[texture(0)]], sampler input_texSmplr [[sampler(0)]])
 {
     main0_out out = {};
-    out.FragColor = in.in_rgba;
+    out.FragColor = input_tex.sample(input_texSmplr, in.TexCoord).zyxw;
     return out;
 }
 

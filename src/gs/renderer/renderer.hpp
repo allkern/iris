@@ -24,8 +24,7 @@ enum : int {
 enum : int {
     RENDERER_NULL = 0,
     RENDERER_SOFTWARE,
-    RENDERER_SOFTWARE_THREAD,
-    RENDERER_HARDWARE
+    RENDERER_SOFTWARE_THREAD
 };
 
 struct renderer_state {

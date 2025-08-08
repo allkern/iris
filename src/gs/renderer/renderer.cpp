@@ -3,7 +3,6 @@
 #include "null.hpp"
 #include "software.hpp"
 #include "software_thread.hpp"
-#include "hardware.hpp"
 
 renderer_state* renderer_create(void) {
     return new renderer_state;
@@ -99,36 +98,6 @@ void renderer_init_software_thread(renderer_state* renderer, struct ps2_gs* gs, 
     gs->backend.udata = renderer->udata;
 }
 
-void renderer_init_hardware(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device) {
-    renderer->udata = new hardware_state;
-    renderer->init = hardware_init;
-    renderer->destroy = hardware_destroy;
-    renderer->set_size = hardware_set_size;
-    renderer->set_scale = hardware_set_scale;
-    renderer->set_aspect_mode = hardware_set_aspect_mode;
-    renderer->set_integer_scaling = hardware_set_integer_scaling;
-    renderer->set_bilinear = hardware_set_bilinear;
-    renderer->get_viewport_size = hardware_get_viewport_size;
-    renderer->get_display_size = hardware_get_display_size;
-    renderer->get_display_format = hardware_get_display_format;
-    renderer->get_interlace_mode = hardware_get_interlace_mode;
-    renderer->set_window_rect = hardware_set_window_rect;
-    renderer->get_buffer_data = hardware_get_buffer_data;
-    renderer->get_name = hardware_get_name;
-    renderer->begin_render = hardware_begin_render;
-    renderer->render = hardware_render;
-    renderer->end_render = hardware_end_render;
-
-    gs->backend.render_point = hardware_render_point;
-    gs->backend.render_line = hardware_render_line;
-    gs->backend.render_triangle = hardware_render_triangle;
-    gs->backend.render_sprite = hardware_render_sprite;
-    gs->backend.transfer_start = hardware_transfer_start;
-    gs->backend.transfer_write = hardware_transfer_write;
-    gs->backend.transfer_read = hardware_transfer_read;
-    gs->backend.udata = renderer->udata;
-}
-
 void renderer_init_backend(renderer_state* renderer, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device, int id) {
     renderer->gs = gs;
 
@@ -142,7 +111,6 @@ void renderer_init_backend(renderer_state* renderer, struct ps2_gs* gs, SDL_Wind
         case RENDERER_NULL: renderer_init_null(renderer, gs, window, device); break;
         case RENDERER_SOFTWARE: renderer_init_software(renderer, gs, window, device); break;
         case RENDERER_SOFTWARE_THREAD: renderer_init_software_thread(renderer, gs, window, device); break;
-        case RENDERER_HARDWARE: renderer_init_hardware(renderer, gs, window, device); break;
         default: {
             printf("renderer: Unknown backend %d\n", id);
         } break;
