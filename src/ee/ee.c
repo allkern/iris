@@ -13,7 +13,7 @@
 #include <smmintrin.h>
 #endif
 
-#include "ee_uncached.h"
+#include "ee.h"
 #include "ee_dis.h"
 
 #define max(a, b) ((a) > (b) ? (a) : (b))

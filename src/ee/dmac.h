@@ -34,7 +34,6 @@ extern "C" {
 #define DMAC_SIF2 7
 #define DMAC_SPR_FROM 8
 #define DMAC_SPR_TO 9
-#define DMAC_MEIS 14
 
 struct dmac_tag {
     uint64_t qwc;

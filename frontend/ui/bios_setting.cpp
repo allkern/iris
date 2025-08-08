@@ -42,8 +42,6 @@ void show_bios_stage(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER)) {
-        bool mute = iris->mute;
-
         iris->mute = true;
 
         auto f = pfd::open_file("Select BIOS file", "", {
@@ -51,9 +49,7 @@ void show_bios_stage(iris::instance* iris) {
             "All Files (*.*)", "*"
         });
 
-        while (!f.ready());
-
-        iris->mute = mute;
+        iris->mute = false;
 
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 512);

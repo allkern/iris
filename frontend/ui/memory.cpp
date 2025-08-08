@@ -3,7 +3,6 @@
 #include <cctype>
 
 #include "iris.hpp"
-#include "ee/ee_def.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "memory_viewer.h"

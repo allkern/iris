@@ -70,41 +70,6 @@ static inline int psmct32_addr(int base, int width, int x, int y) {
     return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
 }
 
-int psmz32_block[] = {
-    24, 25, 28, 29, 8 , 9 , 12, 13,
-    26, 27, 30, 31, 10, 11, 14, 15,
-    16, 17, 20, 21, 0 , 1 , 4 , 5 ,
-    18, 19, 22, 23, 2 , 3 , 6 , 7
-};
-
-static inline int psmz32_addr(int base, int width, int x, int y) {
-    // base expressed in blocks
-    // 1 page = 64x32 = 8 KiB = 2048 words
-    // 1 block = 8x8 = 256 B = 64 words
-    // 1 column = 8x2 = 64 B = 16 words
-
-    int page = (x >> 6) + ((y >> 5) * width);
-    int blkx = (x >> 3) & 7;
-    int blky = (y >> 3) & 3;
-    int blk = blkx + (blky * 8);
-    int col = (y >> 1) & 3;
-    int idx = (x & 7) + ((y & 1) * 8);
-
-    // Unswizzle block
-    blk = psmz32_block[blk];
-
-    // Unswizzle column
-    idx = psmct32_column[idx];
-
-    // printf("(%x, %d, %d, %d) -> p=%d b=%d c=%d addr=%08x\n",
-    //     base, width, x, y,
-    //     page, blk, cl,
-    //     (page * 2048) + (base * 64) + (blk * 64) + cl
-    // );
-
-    return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
-}
-
 int psmct16_block[] = {
     0 , 2 , 8 , 10,
     1 , 3 , 9 , 11,
@@ -114,17 +79,6 @@ int psmct16_block[] = {
     17, 19, 25, 27,
     20, 22, 28, 30,
     21, 23, 29, 31
-};
-
-int psmz16_block[] = {
-    24, 26, 16, 18,
-    25, 27, 17, 19,
-    28, 30, 20, 22,
-    29, 31, 21, 23,
-    8 , 10, 0 , 2 ,
-    9 , 11, 1 , 3 ,
-    12, 14, 4 , 6 ,
-    13, 15, 5 , 7
 };
 
 int psmct16_column[] = {
@@ -171,36 +125,6 @@ static inline int psmct16_addr(int base, int width, int x, int y) {
     return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
 }
 
-static inline int psmz16_addr(int base, int width, int x, int y) {
-    // page            block          column
-    // 64 x 64 pixels  16 x 8 pixels  16 x 2 pixels
-    // base expressed in blocks
-    // 1 page = 64x32 = 8 KiB = 2048 words
-    // 1 block = 8x8 = 256 B = 64 words
-    // 1 column = 8x2 = 64 B = 16 words
-
-    int page = (x >> 6) + ((y >> 6) * width);
-    int blkx = (x >> 4) & 3;
-    int blky = (y >> 3) & 7;
-    int blk = blkx + (blky * 4);
-    int col = (y >> 1) & 3;
-    int idx = (x & 15) + ((y & 1) * 16);
-
-    // Unswizzle block
-    blk = psmz16_block[blk];
-
-    // Unswizzle column
-    idx = psmct16_column[idx];
-
-    // printf("(%x, %d, %d, %d) -> p=%d b=%d c=%d addr=%08x\n",
-    //     base, width, x, y,
-    //     page, blk, cl,
-    //     (page * 2048) + (base * 64) + (blk * 64) + cl
-    // );
-
-    return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
-}
-
 int psmct16s_block[] = {
     0 , 2 , 16, 18,
     1 , 3 , 17, 19,
@@ -212,48 +136,7 @@ int psmct16s_block[] = {
     13, 15, 29, 31
 };
 
-int psmz16s_block[] = {
-    24, 26, 8 , 10,
-    25, 27, 9 , 11,
-    16, 18, 0 , 2 ,
-    17, 19, 1 , 3 ,
-    28, 30, 12, 14,
-    29, 31, 13, 15,
-    20, 22, 4 , 6 ,
-    21, 23, 5 , 7
-};
-
 static inline int psmct16s_addr(int base, int width, int x, int y) {
-    // page            block          column
-    // 64 x 64 pixels  16 x 8 pixels  16 x 2 pixels
-    // base expressed in blocks
-    // 1 page = 64x32 = 8 KiB = 2048 words
-    // 1 block = 8x8 = 256 B = 64 words
-    // 1 column = 8x2 = 64 B = 16 words
-
-    int page = (x >> 6) + ((y >> 6) * width);
-    int blkx = (x >> 4) & 3;
-    int blky = (y >> 3) & 7;
-    int blk = blkx + (blky * 4);
-    int col = (y >> 1) & 3;
-    int idx = (x & 15) + ((y & 1) * 16);
-
-    // Unswizzle block
-    blk = psmct16s_block[blk];
-
-    // Unswizzle column
-    idx = psmct16_column[idx];
-
-    // printf("(%x, %d, %d, %d) -> p=%d b=%d c=%d addr=%08x\n",
-    //     base, width, x, y,
-    //     page, blk, cl,
-    //     (page * 2048) + (base * 64) + (blk * 64) + cl
-    // );
-
-    return (page * 2048) + ((base + blk) * 64) + (col * 16) + idx;
-}
-
-static inline int psmz16s_addr(int base, int width, int x, int y) {
     // page            block          column
     // 64 x 64 pixels  16 x 8 pixels  16 x 2 pixels
     // base expressed in blocks
@@ -798,56 +681,6 @@ static inline uint32_t gs_apply_function(struct ps2_gs* gs, uint32_t t, uint32_t
     return (pr & 0xff) | ((pg & 0xff) << 8) | ((pb & 0xff) << 16) | ((pa & 0xff) << 24);
 }
 
-static inline int gs_clamp_u(struct ps2_gs* gs, int u) {
-    switch (gs->ctx->wms) {
-        case 0: {
-            u %= gs->ctx->usize;
-        } break;
-
-        case 1: {
-            u = (u < 0) ? 0 : ((u > (int)gs->ctx->usize) ? gs->ctx->usize : u);
-        } break;
-
-        case 2: {
-            u = (u < (int)gs->ctx->minu) ? gs->ctx->minu : ((u > (int)gs->ctx->maxu) ? gs->ctx->maxu : u);
-        } break;
-
-        case 3: {
-            int umsk = gs->ctx->minu;
-            int ufix = gs->ctx->maxu;
-
-            u = (u & umsk) | ufix;
-        } break;
-    }
-
-    return u;
-}
-
-static inline int gs_clamp_v(struct ps2_gs* gs, int v) {
-    switch (gs->ctx->wmt) {
-        case 0: {
-            v %= gs->ctx->vsize;
-        } break;
-
-        case 1: {
-            v = (v < 0) ? 0 : ((v > (int)gs->ctx->vsize) ? gs->ctx->vsize : v);
-        } break;
-
-        case 2: {
-            v = (v < (int)gs->ctx->minv) ? gs->ctx->minv : ((v > (int)gs->ctx->maxv) ? gs->ctx->maxv : v);
-        } break;
-
-        case 3: {
-            int vmsk = gs->ctx->minv;
-            int vfix = gs->ctx->maxv;
-
-            v = (v & vmsk) | vfix;
-        } break;
-    }
-
-    return v;
-}
-
 enum : int {
     TR_FAIL,
     TR_PASS,
@@ -863,6 +696,7 @@ static inline uint32_t gs_read_fb(struct ps2_gs* gs, int x, int y) {
 
             return gs->vram[addr & 0xfffff];
         }
+            // return gs->vram[gs->ctx->fbp + x + (y * gs->ctx->fbw)];
         case GS_PSMCT24: {
             uint32_t addr = psmct32_addr(gs->ctx->fbp >> 6, gs->ctx->fbw >> 6, x, y);
 
@@ -926,8 +760,8 @@ static inline uint32_t gs_read_dispfb(struct ps2_gs* gs, int x, int y, int dfb) 
             return vram[psmct16_shift[idx] & 0xfffff];
         } break;
         default: {
-            // printf("Unsupported PSMT %02x for dispfb read\n", dfbpsm);
-            // exit(1);
+            printf("Unsupported PSMT %02x for dispfb read\n", dfbpsm);
+            exit(1);
         } break;
     }
 
@@ -936,35 +770,21 @@ static inline uint32_t gs_read_dispfb(struct ps2_gs* gs, int x, int y, int dfb) 
 
 static inline uint32_t gs_read_zb(struct ps2_gs* gs, int x, int y) {
     switch (gs->ctx->zbpsm) {
-        case GS_PSMCT32: {
-            uint32_t addr = psmz32_addr(gs->ctx->zbp >> 6, gs->ctx->fbw >> 6, x, y);
+        case GS_ZSMZ32:
+            return gs->vram[(gs->ctx->zbp + x + (y * gs->ctx->fbw)) & 0xfffff];
+        case GS_ZSMZ24:
+            return gs->vram[(gs->ctx->zbp + x + (y * gs->ctx->fbw) & 0xfffff)] & 0xffffff;
+        case GS_ZSMZ16:
+        case GS_ZSMZ16S: {
+            int shift = (x & 1) << 4;
+            uint32_t mask = 0xffff << shift;
+            uint32_t data = gs->vram[(gs->ctx->zbp + (x >> 1) + (y * (gs->ctx->fbw >> 1))) & 0xfffff];
 
-            return gs->vram[addr & 0xfffff];
+            return (data & mask) >> shift;
         }
-        case GS_PSMCT24: {
-            uint32_t addr = psmz32_addr(gs->ctx->zbp >> 6, gs->ctx->fbw >> 6, x, y);
-
-            return gs->vram[addr & 0xfffff] & 0xffffff;
-        }
-        case GS_PSMCT16: {
-            uint32_t addr = psmz16_addr(gs->ctx->zbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
-
-            int idx = (x & 15) + ((y & 1) * 16);
-
-            return vram[psmct16_shift[idx] & 0xfffff];
-        } break;
-        case GS_PSMCT16S: {
-            uint32_t addr = psmz16s_addr(gs->ctx->zbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
-
-            int idx = (x & 15) + ((y & 1) * 16);
-
-            return vram[psmct16_shift[idx] & 0xfffff];
-        } break;
         default: {
-            // printf("Unsupported PSMT %02x for fb read\n", gs->ctx->fbpsm);
-            // exit(1);
+            printf("Unsupported PSMT %02x for zb read\n", gs->ctx->zbpsm);
+            exit(1);
         } break;
     }
 
@@ -1167,9 +987,6 @@ static inline uint32_t gs_from_rgba32(struct ps2_gs* gs, uint32_t c, int fmt) {
 }
 
 static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
-    u = gs_clamp_u(gs, u);
-    v = gs_clamp_v(gs, v);
-
     switch (gs->ctx->tbpsm) {
         case GS_PSMCT32:
             return gs->vram[psmct32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v) & 0xfffff];
@@ -1224,32 +1041,6 @@ static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
 
             return gs_read_cb(gs, data >> 28);
         } break;
-        case GS_PSMZ32: {
-            uint32_t addr = psmz32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
-
-            return gs->vram[addr & 0xfffff];
-        } break;
-        case GS_PSMZ24: {
-            uint32_t addr = psmz32_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
-
-            return gs->vram[addr & 0xfffff] & 0xffffff;
-        } break;
-        case GS_PSMZ16: {
-            uint32_t addr = psmz16_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
-
-            int idx = (u & 15) + ((v & 1) * 16);
-
-            return vram[psmct16_shift[idx] & 0xfffff];
-        } break;
-        case GS_PSMZ16S: {
-            uint32_t addr = psmz16s_addr(gs->ctx->tbp0, gs->ctx->tbw, u, v);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
-
-            int idx = (u & 15) + ((v & 1) * 16);
-
-            return vram[psmct16_shift[idx] & 0xfffff];
-        } break;
         default: {
             // printf("Unsupported PSMT %02x for tb read\n", gs->ctx->tbpsm);
             // exit(1);
@@ -1260,12 +1051,17 @@ static inline uint32_t gs_read_tb_impl(struct ps2_gs* gs, int u, int v) {
 }
 
 static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
-    if (gs->ctx->mmag) {
-        float a = ((u - 8) & 0xf) * 0.0625;
-        float b = ((v - 8) & 0xf) * 0.0625;
+    if ((gs->ctx->xyoffset >> 32) & 0xf)
+        v += 0x10;
 
-        int iu0 = (u - 8) >> 4;
-        int iv0 = (v - 8) >> 4;
+    // return gs_read_tb_impl(gs, u >> 4, v >> 4);
+
+    if (gs->ctx->mmag) {
+        float a = (u & 0xf) * 0.0625;
+        float b = (v & 0xf) * 0.0625;
+
+        int iu0 = u >> 4;
+        int iv0 = v >> 4;
         int iu1 = iu0 + 1;
         int iv1 = iv0 + 1;
 
@@ -1307,9 +1103,9 @@ static inline uint32_t gs_read_tb(struct ps2_gs* gs, int u, int v) {
         aa = CLAMP(aa, 0, 255);
 
         return gs_from_rgba32(gs, rr | (gg << 8) | (bb << 16) | (aa << 24), gs->ctx->tbpsm);
+    } else {
+        return gs_read_tb_impl(gs, u >> 4, v >> 4);
     }
-
-    return gs_read_tb_impl(gs, u >> 4, v >> 4);
 }
 
 static inline void gs_write_fb(struct ps2_gs* gs, int x, int y, uint32_t c) {
@@ -1360,38 +1156,24 @@ static inline void gs_write_fb_no_alpha(struct ps2_gs* gs, int x, int y, uint32_
     // To-do: Implement FBMSK
     switch (gs->ctx->fbpsm) {
         case GS_PSMCT32: {
-            uint32_t addr = psmct32_addr(gs->ctx->fbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint32_t p = gs->vram[addr & 0xfffff];
+            uint32_t p = gs->vram[(gs->ctx->fbp + x + (y * gs->ctx->fbw)) & 0xfffff];
 
-            gs->vram[addr & 0xfffff] = (f & 0xffffff) | (p & 0xff000000);
+            gs->vram[(gs->ctx->fbp + x + (y * gs->ctx->fbw)) & 0xfffff] = (f & 0xffffff) | (p & 0xff000000);
         } break;
 
         case GS_PSMCT24: {
-            uint32_t addr = psmct32_addr(gs->ctx->fbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint32_t p = gs->vram[addr];
+            uint32_t p = gs->vram[(gs->ctx->fbp + x + (y * gs->ctx->fbw)) & 0xfffff];
 
-            gs->vram[addr] = (f & 0xffffff) | (p & 0xff000000);
+            gs->vram[gs->ctx->fbp + x + (y * gs->ctx->fbw)] = (f & 0xffffff) | (p & 0xff000000);
         } break;
-        case GS_PSMCT16: {
-            uint32_t addr = psmct16_addr(gs->ctx->fbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
-            uint16_t p = gs->vram[addr];
-
-            int idx = (x & 15) + ((y & 1) * 16);
-
-            vram[psmct16_shift[idx]] = (f & 0x7fff) | (p & 0x8000);
-        } break;
+        case GS_PSMCT16:
         case GS_PSMCT16S: {
-            uint32_t addr = psmct16s_addr(gs->ctx->fbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
-            uint16_t p = gs->vram[addr];
+            uint16_t* ptr = ((uint16_t*)&gs->vram[gs->ctx->fbp]) + x + (y * gs->ctx->fbw);
 
-            int idx = (x & 15) + ((y & 1) * 16);
-
-            vram[psmct16_shift[idx]] = (f & 0x7fff) | (p & 0x8000);
+            *ptr = (c & 0x7fff) | (*ptr & 0x8000);
         } break;
         default: {
-            // printf("Unsupported PSMT %02x for fb write\n", gs->ctx->fbpsm);
+            // printf("Unsupported PSMT %02x for fb no alpha write\n", gs->ctx->fbpsm);
             // exit(1);
         } break;
     }
@@ -1411,26 +1193,18 @@ static inline void gs_write_zb(struct ps2_gs* gs, int x, int y, uint32_t z) {
     }
 
     switch (gs->ctx->zbpsm) {
-        case GS_ZSMZ32:
-        case GS_ZSMZ24: {
-            gs->vram[psmz32_addr(gs->ctx->zbp >> 6, gs->ctx->fbw >> 6, x, y)] = z;
+        case GS_ZSMZ32: {
+            gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)] = z;
         } break;
 
-        case GS_ZSMZ16: {
-            uint32_t addr = psmz16_addr(gs->ctx->zbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
-
-            int idx = (x & 15) + ((y & 1) * 16);
-
-            vram[psmct16_shift[idx]] = z;
-        }
+        case GS_ZSMZ24: {
+            gs->vram[gs->ctx->zbp + x + (y * gs->ctx->fbw)] = z;
+        } break;
+        case GS_ZSMZ16:
         case GS_ZSMZ16S: {
-            uint32_t addr = psmz16s_addr(gs->ctx->zbp >> 6, gs->ctx->fbw >> 6, x, y);
-            uint16_t* vram = (uint16_t*)(&gs->vram[addr]);
+            uint16_t* ptr = (uint16_t*)&gs->vram[gs->ctx->zbp];
 
-            int idx = (x & 15) + ((y & 1) * 16);
-
-            vram[psmct16_shift[idx]] = z;
+            *(ptr + x + (y * gs->ctx->fbw)) = z;
         } break;
         default: {
             // printf("Unsupported PSMT %02x for zb write\n", gs->ctx->zbpsm);
@@ -1513,6 +1287,60 @@ static inline int gs_test_pixel(struct ps2_gs* gs, int x, int y, uint32_t z, uin
     }
 
     return tr;
+}
+
+static inline int gs_clamp_u(struct ps2_gs* gs, int u) {
+    int iu = u >> 4;
+
+    switch (gs->ctx->wms) {
+        case 0: {
+            iu %= gs->ctx->usize;
+        } break;
+
+        case 1: {
+            iu = (iu < 0) ? 0 : ((iu > (int)gs->ctx->usize) ? gs->ctx->usize : iu);
+        } break;
+
+        case 2: {
+            iu = (iu < (int)gs->ctx->minu) ? gs->ctx->minu : ((iu > (int)gs->ctx->maxu) ? gs->ctx->maxu : iu);
+        } break;
+
+        case 3: {
+            int umsk = gs->ctx->minu;
+            int ufix = gs->ctx->maxu;
+
+            iu = (iu & umsk) | ufix;
+        } break;
+    }
+
+    return (iu << 4) | (u & 0xf);
+}
+
+static inline int gs_clamp_v(struct ps2_gs* gs, int v) {
+    int iv = v >> 4;
+
+    switch (gs->ctx->wmt) {
+        case 0: {
+            iv %= gs->ctx->vsize;
+        } break;
+
+        case 1: {
+            iv = (iv < 0) ? 0 : ((iv > (int)gs->ctx->vsize) ? gs->ctx->vsize : iv);
+        } break;
+
+        case 2: {
+            iv = (iv < (int)gs->ctx->minv) ? gs->ctx->minv : ((iv > (int)gs->ctx->maxv) ? gs->ctx->maxv : iv);
+        } break;
+
+        case 3: {
+            int vmsk = gs->ctx->minv;
+            int vfix = gs->ctx->maxv;
+
+            iv = (iv & vmsk) | vfix;
+        } break;
+    }
+
+    return (iv << 4) | (v & 0xf);
 }
 
 static inline uint32_t gs_alpha_blend(struct ps2_gs* gs, int x, int y, uint32_t s) {
@@ -1767,8 +1595,8 @@ void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SD
     ctx->sampler[1] = SDL_CreateGPUSampler(ctx->device, &linear_sci);
 }
 
-static inline uint32_t gs_generic_read(struct ps2_gs* gs, uint32_t bp, uint32_t bw, uint32_t bpsm, uint32_t u, uint32_t v) {
-    switch (bpsm) {
+static inline uint32_t gs_generic_read(struct ps2_gs* gs, uint32_t bp, uint32_t bw, uint32_t u, uint32_t v) {
+    switch (gs->ctx->tbpsm) {
         case GS_PSMCT32:
             return gs->vram[psmct32_addr(bp, bw, u, v) & 0xfffff];
         case GS_PSMCT24:
@@ -1829,8 +1657,8 @@ static inline uint32_t gs_generic_read(struct ps2_gs* gs, uint32_t bp, uint32_t 
     }
 }
 
-static inline void gs_generic_write(struct ps2_gs* gs, uint32_t bp, uint32_t bw, uint32_t bpsm, uint32_t u, uint32_t v, uint32_t data) {
-    switch (bpsm) {
+static inline void gs_generic_write(struct ps2_gs* gs, uint32_t bp, uint32_t bw, uint32_t u, uint32_t v, uint32_t data) {
+    switch (gs->ctx->tbpsm) {
         case GS_PSMCT32:
             gs->vram[psmct32_addr(bp, bw, u, v) & 0xfffff] = data;
         break;
@@ -1894,27 +1722,27 @@ static inline void gs_generic_write(struct ps2_gs* gs, uint32_t bp, uint32_t bw,
 }
 
 static inline void software_thread_vram_blit(struct ps2_gs* gs, software_thread_state* ctx) {
-    // printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) sbp=%x (%x) sbw=%d (%d) spsm=%02x ssa=(%d,%d) rr=(%d,%d) xdir=%d\n",
-    //     ctx->dbp, ctx->dbp,
-    //     ctx->dbw, ctx->dbw,
-    //     ctx->dpsm,
-    //     ctx->dsax,
-    //     ctx->dsay,
-    //     ctx->sbp, ctx->sbp,
-    //     ctx->sbw, ctx->sbw,
-    //     ctx->spsm,
-    //     ctx->ssax,
-    //     ctx->ssay,
-    //     ctx->rrw,
-    //     ctx->rrh,
-    //     ctx->xdir
-    // );
+    printf("dbp=%x (%x) dbw=%d (%d) dpsm=%02x dsa=(%d,%d) sbp=%x (%x) sbw=%d (%d) spsm=%02x ssa=(%d,%d) rr=(%d,%d) xdir=%d\n",
+        ctx->dbp, ctx->dbp,
+        ctx->dbw, ctx->dbw,
+        ctx->dpsm,
+        ctx->dsax,
+        ctx->dsay,
+        ctx->sbp, ctx->sbp,
+        ctx->sbw, ctx->sbw,
+        ctx->spsm,
+        ctx->ssax,
+        ctx->ssay,
+        ctx->rrw,
+        ctx->rrh,
+        ctx->xdir
+    );
 
     for (int y = 0; y < ctx->rrh; y++) {
         for (int x = 0; x < ctx->rrw; x++) {
-            uint32_t s = gs_generic_read(gs, ctx->sbp, ctx->sbw, ctx->spsm, ctx->ssax + x, ctx->ssay + y);
+            uint32_t s = gs_generic_read(gs, ctx->sbp, ctx->sbw, ctx->ssax + x, ctx->ssay + y);
 
-            gs_generic_write(gs, ctx->dbp, ctx->dbw, ctx->dpsm, ctx->dsax + x, ctx->dsay + y, s);
+            gs_generic_write(gs, ctx->dbp, ctx->dbw, ctx->dsax + x, ctx->dsay + y, s);
         }
     }
 }
@@ -1982,11 +1810,6 @@ void gs_draw_wireframe(struct ps2_gs* gs, struct gs_vertex v0, struct gs_vertex 
     int sy = v0.y < v1.y ? 1 : -1;
     int error = dx + dy;
 
-    v0.x >>= 4;
-    v0.y >>= 4;
-    v1.x >>= 4;
-    v1.y >>= 4;
-
     while (1) {
         if (gs_test_scissor(gs, v0.x, v0.y))
             gs_write_fb(gs, v0.x, v0.y, 0xff0000ff);
@@ -2022,13 +1845,9 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
     struct gs_vertex v1 = gs->vq[1];
     struct gs_vertex v2 = gs->vq[2];
 
-    int area = EDGE(v0, v1, v2);
-
-    if (area < 0) {
+    if (EDGE(v0, v1, v2) < 0) {
         v1 = gs->vq[2];
         v2 = gs->vq[1];
-
-        area = EDGE(v0, v1, v2);
     }
 
     v0.x -= gs->ctx->ofx;
@@ -2037,58 +1856,110 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
     v0.y -= gs->ctx->ofy;
     v1.y -= gs->ctx->ofy;
     v2.y -= gs->ctx->ofy;
+    v0.x -= 1;
+    v1.x -= 1;
+    v2.x -= 1;
+    v0.y -= 1;
+    v1.y -= 1;
+    v2.y -= 1;
 
-    int32_t scax0 = gs->ctx->scax0 << 4;
-    int32_t scay0 = gs->ctx->scay0 << 4;
-    int32_t scax1 = gs->ctx->scax1 << 4;
-    int32_t scay1 = gs->ctx->scay1 << 4;
+    int xmin = MIN3(v0.x, v1.x, v2.x);
+    int ymin = MIN3(v0.y, v1.y, v2.y);
+    int xmax = MAX3(v0.x, v1.x, v2.x);
+    int ymax = MAX3(v0.y, v1.y, v2.y);
 
-    int32_t xmin = ((MAX2(MIN3(v0.x, v1.x, v2.x), scax0) + 0) >> 4) << 4;
-    int32_t ymin = ((MAX2(MIN3(v0.y, v1.y, v2.y), scay0) + 0) >> 4) << 4;
-    int32_t xmax = ((MIN2(MAX3(v0.x, v1.x, v2.x), scax1) + 16) >> 4) << 4;
-    int32_t ymax = ((MIN2(MAX3(v0.y, v1.y, v2.y), scay1) + 16) >> 4) << 4;
+    xmin = MAX2(xmin, gs->ctx->scax0);
+    ymin = MAX2(ymin, gs->ctx->scay0);
+    xmax = MIN2(xmax, gs->ctx->scax1);
+    ymax = MIN2(ymax, gs->ctx->scay1);
 
-    int a01 = (v0.y - v1.y) * 16, b01 = (v1.x - v0.x) * 16;
-    int a12 = (v1.y - v2.y) * 16, b12 = (v2.x - v1.x) * 16;
-    int a20 = (v2.y - v0.y) * 16, b20 = (v0.x - v2.x) * 16;
+    int a01 = (int)v0.y - (int)v1.y, b01 = (int)v1.x - (int)v0.x;
+    int a12 = (int)v1.y - (int)v2.y, b12 = (int)v2.x - (int)v1.x;
+    int a20 = (int)v2.y - (int)v0.y, b20 = (int)v0.x - (int)v2.x;
 
-    int fogr = gs->fogcol & 0xff;
-    int fogg = (gs->fogcol >> 8) & 0xff;
-    int fogb = (gs->fogcol >> 16) & 0xff;
-
-    struct {
-        int x, y;
-    } p;
-
+    struct gs_vertex p;
     p.x = xmin;
     p.y = ymin;
 
-    int bias0 = IS_TOPLEFT(v1, v2) ? -1 : 0;
-    int bias1 = IS_TOPLEFT(v2, v0) ? -1 : 0;
-    int bias2 = IS_TOPLEFT(v0, v1) ? -1 : 0;
-    int w0_row = EDGE(v1, v2, p);
-    int w1_row = EDGE(v2, v0, p);
-    int w2_row = EDGE(v0, v1, p);
+    int bias0 = IS_TOPLEFT(v1, v2) ? 0 : -1;
+    int bias1 = IS_TOPLEFT(v2, v0) ? 0 : -1;
+    int bias2 = IS_TOPLEFT(v0, v1) ? 0 : -1;
+    int w0_row = EDGE(v1, v2, p); // + bias0;
+    int w1_row = EDGE(v2, v0, p); // + bias1;
+    int w2_row = EDGE(v0, v1, p); // + bias2;
 
-    // if (gs->fge)
-    // printf("triangle: v0=(%x,%x,%02x) v1=(%x,%x,%02x) v2=(%x,%x,%02x) min=(%d,%d) max=(%d,%d) fge=%d fogcol=%06x\n",
-    //     v0.x, v0.y, v0.fog,
-    //     v1.x, v1.y, v1.fog,
-    //     v2.x, v2.y, v2.fog,
+    // printf("triangle: v0=(%d,%d,%08x) v1=(%d,%d,%08x) v2=(%d,%d,%08x) min=(%d,%d) max=(%d,%d) iip=%d tme=%d fst=%d abe=%d tfx=%d tcc=%d zte=%d\n",
+    //     v0.x, v0.y, v0.z,
+    //     v1.x, v1.y, v1.z,
+    //     v2.x, v2.y, v2.z,
     //     xmin, ymin,
     //     xmax, ymax,
-    //     gs->fge,
-    //     gs->fogcol
+    //     gs->iip,
+    //     gs->tme,
+    //     gs->fst,
+    //     gs->abe,
+    //     gs->ctx->tfx,
+    //     gs->ctx->tcc,
+    //     gs->ctx->zte
     // );
 
-    for (p.y = ymin; p.y < ymax; p.y += 16) {
+    // if (gs->tme) {
+    //     printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d uv=(%d,%d) TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08lx abe=%d FB format=%d fbw=%d fba=%ld\n",
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbp0,
+    //         gs->ctx->tbw,
+    //         v0.u,
+    //         v0.v,
+    //         gs->ctx->usize,
+    //         gs->ctx->vsize,
+    //         gs->ctx->cbpsm,
+    //         gs->ctx->cbp,
+    //         gs->ctx->csm,
+    //         gs->ctx->tfx,
+    //         v1.rgbaq & 0xffffffff,
+    //         gs->abe,
+    //         gs->ctx->fbpsm,
+    //         gs->ctx->fbw,
+    //         gs->ctx->fba// ,
+    //         // gs->ctx->a,
+    //         // gs->ctx->b,
+    //         // gs->ctx->c,
+    //         // gs->ctx->d,
+    //         // gs->ctx->tcc,
+    //         // gs->ctx->fix
+    //     );
+    // }
+
+    // printf("triangle: v0=(%d,%d,%d) v1=(%d,%d,%d) v2=(%d,%d,%d) min=(%d,%d) max=(%d,%d) sca0=(%d,%d) sca1=(%d,%d) offset=(%d,%d)\n",
+    //     v0.x, v0.y, v0.z,
+    //     v1.x, v1.y, v1.z,
+    //     v2.x, v2.y, v2.z,
+    //     xmin, ymin,
+    //     xmax, ymax,
+    //     gs->ctx->scax0, gs->ctx->scay0,
+    //     gs->ctx->scax1, gs->ctx->scay1,
+    //     gs->ctx->ofx, gs->ctx->ofy
+    // );
+
+    // printf("ZB format=%x zbp=%x zmsk=%d zte=%d ztst=%d\n",
+    //     gs->ctx->zbpsm,
+    //     gs->ctx->zbp,
+    //     gs->ctx->zbmsk,
+    //     gs->ctx->zte,
+    //     gs->ctx->ztst
+    // );
+
+    int area = EDGE(v0, v1, v2);
+
+    for (p.y = ymin; p.y <= ymax; p.y++) {
         // Barycentric coordinates at start of row
         int w0 = w0_row;
         int w1 = w1_row;
         int w2 = w2_row;
 
-        for (p.x = xmin; p.x < xmax; p.x += 16) {
-            // If p is on or inside all edges, render pixel
+        for (p.x = xmin; p.x <= xmax; p.x++) {
+            // If p is on or inside all edges, render pixel.
             if (((w0 + bias0) | (w1 + bias1) | (w2 + bias2)) < 0) {
                 w0 += a12;
                 w1 += a20;
@@ -2136,8 +2007,10 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
                     v = vf * (1 << 4);
                 }
 
-                uint32_t f = fr | (fg << 8) | (fb << 16) | (fa << 24);
+                u = gs_clamp_u(gs, u);
+                v = gs_clamp_v(gs, v);
 
+                uint32_t f = fr | (fg << 8) | (fb << 16) | (fa << 24);
                 uint32_t t = gs_read_tb(gs, u, v);
                 t = gs_to_rgba32(gs, t, gs->ctx->tbpsm);
                 t = gs_apply_function(gs, t, f);
@@ -2148,18 +2021,21 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
                 fa = t >> 24;
             }
 
-            if (gs->fge) {
-                int f = v0.fog * iw0 + v1.fog * iw1 + v2.fog * iw2;
+            uint32_t fz = (uint32_t)floorf((double)v0.z * iw0 + (double)v1.z * iw1 + (double)v2.z * iw2);
 
-                fr = ((f * fr) >> 8) + (((255 - f) * fogr) >> 8);
-                fg = ((f * fg) >> 8) + (((255 - f) * fogg) >> 8);
-                fb = ((f * fb) >> 8) + (((255 - f) * fogb) >> 8);
+            int tr = gs_test_pixel(gs, p.x, p.y, fz, fa);
+
+            if (tr == TR_FAIL) {
+                w0 += a12;
+                w1 += a20;
+                w2 += a01;
+
+                continue;
             }
 
-            uint32_t fz = (uint64_t)v0.z * iw0 + (uint64_t)v1.z * iw1 + (uint64_t)v2.z * iw2;
             uint32_t fc = fr | (fg << 8) | (fb << 16) | (fa << 24);
 
-            gs_draw_pixel(gs, p.x >> 4, p.y >> 4, fz, fc);
+            gs_draw_pixel(gs, p.x, p.y, fz, fc);
 
             // One step to the right
             w0 += a12;
@@ -2178,43 +2054,27 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
     // gs_draw_wireframe(gs, gs->vq[2], gs->vq[0]);
 }
 
-int32_t gs_lerp(int32_t x, int32_t u1, int32_t x1, int32_t u2, int32_t x2) {
-    if (!(x2 - x1))
-        return u1;
-
-    int64_t b = (int64_t)u1 * (x2 - x);
-    b += (int64_t)u2 * (x - x1);
-    return b / (x2 - x1);
-}
-
-int32_t gs_step(int32_t u1, int32_t x1, int32_t u2, int32_t x2, int64_t mult) {
-    if (!(x2 - x1))
-        return ((u2 - u1) * mult);
-    return ((u2 - u1) * mult)/(x2 - x1);
-}
-
-float gs_lerpf(int32_t x, float u1, int32_t x1, float u2, int32_t x2) {
-    if (x2 < x1) {
-        int temp = x1;
-
-        x1 = x2;
-        x2 = temp;
-    }
-
-    float b = u1 * (x2 - x);
-    b += u2 * (x - x1);
-    if (!(x2 - x1))
-        return u1;
-    return b / (x2 - x1);
-}
-
-float gs_stepf(float u1, int32_t x1, float u2, int32_t x2, int64_t mult) {
-    if (!(x2 - x1))
-        return ((u2 - u1) * mult);
-    return ((u2 - u1) * mult)/(x2 - x1);
-}
-
 void render_sprite(struct ps2_gs* gs, void* udata) {
+    // gs_draw_wireframe(gs, dv0, dv2);
+
+    // if (gs->tme) {
+    //     struct gs_vertex dv0 = gs->vq[0];
+    //     struct gs_vertex dv1 = gs->vq[0];
+    //     struct gs_vertex dv2 = gs->vq[1];
+    //     struct gs_vertex dv3 = gs->vq[1];
+
+    //     dv1.x = gs->vq[1].x;
+    //     dv1.y = gs->vq[0].y;
+    //     dv3.x = gs->vq[0].x;
+    //     dv3.y = gs->vq[1].y;
+
+    //     gs_draw_wireframe(gs, dv0, dv1);
+    //     gs_draw_wireframe(gs, dv1, dv2);
+    //     gs_draw_wireframe(gs, dv2, dv3);
+    //     gs_draw_wireframe(gs, dv3, dv0);
+    //     return;
+    // }
+
     struct gs_vertex v0 = gs->vq[0];
     struct gs_vertex v1 = gs->vq[1];
 
@@ -2223,73 +2083,153 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     v0.y -= gs->ctx->ofy;
     v1.y -= gs->ctx->ofy;
 
-    int32_t scax0 = gs->ctx->scax0 << 4;
-    int32_t scay0 = gs->ctx->scay0 << 4;
-    int32_t scax1 = (gs->ctx->scax1 + 1) << 4;
-    int32_t scay1 = (gs->ctx->scay1 + 1) << 4;
+    int xmin = (int32_t)std::min(v0.x, v1.x);
+    int ymin = (int32_t)std::min(v0.y, v1.y);
+    int xmax = (int32_t)std::max(v0.x, v1.x);
+    int ymax = (int32_t)std::max(v0.y, v1.y);
 
-    int32_t xmin = ((std::max(std::min(v0.x, v1.x), scax0) + 8) >> 4) << 4;
-    int32_t ymin = ((std::max(std::min(v0.y, v1.y), scay0) + 8) >> 4) << 4;
-    int32_t xmax = ((std::min(std::max(v0.x, v1.x), scax1) + 8) >> 4) << 4;
-    int32_t ymax = ((std::min(std::max(v0.y, v1.y), scay1) + 8) >> 4) << 4;
-
-    // printf("sprite: v0=(%04x,%04x) v1=(%04x,%04x) tnbpsm=%02x tbw=%x tbp=%x cbpsm=%d mode=%d\n",
-    //     v0.x, v0.y,
-    //     v1.x, v1.y,
-    //     gs->ctx->tbpsm,
-    //     gs->ctx->tbw,
-    //     gs->ctx->tbp0,
-    //     gs->ctx->cbpsm,
-    //     gs->ctx->csm
-    // );
-
-    // U and S values at the start of a row
-    float row_u = gs_lerpf(xmin, v0.u, v0.x, v1.u, v1.x);
-    float row_s = gs_lerpf(xmin, v0.s, v0.x, v1.s, v1.x);
-
-    // V and T values at the start of the entire quad
-    float v = gs_lerpf(ymin, v0.v, v0.y, v1.v, v1.y);
-    float t = gs_lerpf(ymin, v0.t, v0.y, v1.t, v1.y);
-
-    // Step values for U and V
-    float u_step = gs_stepf(v0.u, v0.x, v1.u, v1.x, 16);
-    float v_step = gs_stepf(v0.v, v0.y, v1.v, v1.y, 16);
-    float s_step = gs_stepf(v0.s, v0.x, v1.s, v1.x, 16);
-    float t_step = gs_stepf(v0.t, v0.y, v1.t, v1.y, 16);
-
-    // Static values
-    const float q = v1.q;
-    const int z = v1.z;
+    int z = v1.z;
     int a = v1.a;
 
-    for (int y = ymin; y < ymax; y += 16) {
-        float u = row_u;
-        float s = row_s;
+    // printf("gs: Sprite at (%d,%d-%d,%d) min=(%d,%d) max=(%d,%d) fbp=%x fbpsm=%x tme=%d tbp=%x rgba=%08lx scissor=(%d,%d-%d,%d) ctx=%d\n",
+    //     v0.x, v0.y,
+    //     v1.x, v1.y,
+    //     xmin, ymin,
+    //     xmax, ymax,
+    //     gs->ctx->fbp,
+    //     gs->ctx->fbpsm,
+    //     gs->tme,
+    //     gs->ctx->tbp0,
+    //     v1.rgbaq & 0xffffffff,
+    //     gs->ctx->scax0, gs->ctx->scay0,
+    //     gs->ctx->scax1, gs->ctx->scay1,
+    //     gs->ctxt
+    // );
 
-        for (int x = xmin; x < xmax; x += 16) {
+    // if (gs->tme && gs->abe) {
+    //     printf("gs: Sprite at (%d,%d-%d,%d) tcc=%d tfx=%d rgba=%08x a=%d b=%d c=%d d=%d fix=%02x tbpsm=%02x\n",
+    //         v0.x, v0.y,
+    //         v1.x, v1.y,
+    //         gs->ctx->tcc,
+    //         gs->ctx->tfx,
+    //         v1.rgbaq & 0xffffffff,
+    //         gs->ctx->a,
+    //         gs->ctx->b,
+    //         gs->ctx->c,
+    //         gs->ctx->d,
+    //         gs->ctx->fix,
+    //         gs->ctx->tbpsm
+    //     );
+    // }
+    // if (gs->tme) {
+    //     printf("gs: TB format=%d (0x%02x) tbp=%x tbw=%d uv=(%d,%d)-(%d,%d) fst=%d stq=(%f,%f,%f)-(%f,%f,%f) TEX w=%d h=%d CB format=%d cbp=%x csm=%d tfx=%d rgba=%08lx abe=%d FB format=%d fbw=%d fba=%ld\n",
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbpsm,
+    //         gs->ctx->tbp0,
+    //         gs->ctx->tbw,
+    //         v0.u,
+    //         v0.v,
+    //         v1.u,
+    //         v1.v,
+    //         gs->fst,
+    //         v0.s,
+    //         v0.t,
+    //         v0.q,
+    //         v1.s,
+    //         v1.t,
+    //         v1.q,
+    //         gs->ctx->usize,
+    //         gs->ctx->vsize,
+    //         gs->ctx->cbpsm,
+    //         gs->ctx->cbp,
+    //         gs->ctx->csm,
+    //         gs->ctx->tfx,
+    //         v1.rgbaq & 0xffffffff,
+    //         gs->abe,
+    //         gs->ctx->fbpsm,
+    //         gs->ctx->fbw,
+    //         gs->ctx->fba// ,
+    //         // gs->ctx->a,
+    //         // gs->ctx->b,
+    //         // gs->ctx->c,
+    //         // gs->ctx->d,
+    //         // gs->ctx->tcc,
+    //         // gs->ctx->fix
+    //     );
+    // }
+
+    // if (gs->tme) {
+    //     printf("gs: (%d,%d)-(%d,%d) (%d,%d)-(%d,%d)\n",
+    //         v0.x, v0.y,
+    //         v1.x, v1.y,
+    //         v0.u, v0.v,
+    //         v1.u, v1.v
+    //     );
+    // }
+
+    // if (!gs->fst) {
+    //     printf("gs: stq0=(%f,%f,%f) stq1=(%f,%f,%f)\n",
+    //         v0.s, v0.t, v0.q,
+    //         v1.s, v1.t, v1.q
+    //     );
+    // } else {
+    //     printf("gs: uv0=(%d,%d) uv1=(%d,%d)\n",
+    //         v0.u, v0.v,
+    //         v1.u, v1.v
+    //     );
+    // }
+
+    // if (!gs->tme)
+    //     return;
+
+    float u = v0.u;
+    float v = v0.v;
+    float ut = v0.u < v1.u ? v0.u : v1.u;
+    float vt = v0.v < v1.v ? v0.v : v1.v;
+
+    for (int y = ymin; y < ymax; y++) {
+        for (int x = xmin; x < xmax; x++) {
+            if (!gs_test_scissor(gs, x, y))
+                continue;
+
             uint32_t c = v1.rgbaq & 0xffffffff;
 
             if (gs->tme) {
-                if (!gs->fst) {
-                    u = ((s / q) * gs->ctx->usize) * 16.0;
-                    v = ((t / q) * gs->ctx->vsize) * 16.0;
+                float tx = (float)(x - v0.x) / (float)(v1.x - v0.x);
+                float ty = (float)(y - v0.y) / (float)(v1.y - v0.y);
+
+                int iu;
+                int iv;
+
+                if (gs->fst) {
+                    u = v0.u + ((int)v1.u - (int)v0.u) * tx;
+                    v = v0.v + ((int)v1.v - (int)v0.v) * ty;
+
+                    iu = u;
+                    iv = v;
+                } else {
+                    u = v0.s + (v1.s - v0.s) * tx;
+                    v = v0.t + (v1.t - v0.t) * ty;
+
+                    u *= gs->ctx->usize;
+                    v *= gs->ctx->vsize;
+
+                    iu = u * (1 << 4);
+                    iv = v * (1 << 4);
                 }
 
-                c = gs_read_tb(gs, u, v);
+                u = gs_clamp_u(gs, iu);
+                v = gs_clamp_v(gs, iv);
+
+                c = gs_read_tb(gs, iu, iv);
                 c = gs_to_rgba32(gs, c, gs->ctx->tbpsm);
                 c = gs_apply_function(gs, c, v1.rgbaq & 0xffffffff);
 
                 a = c >> 24;
             }
 
-            gs_draw_pixel(gs, x >> 4, y >> 4, z, c);
-
-            u += u_step;
-            s += s_step;
+            gs_draw_pixel(gs, x, y, z, c);
         }
-
-        v += v_step;
-        t += t_step;
     }
 
     // struct gs_vertex dv0 = gs->vq[0];

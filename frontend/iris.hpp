@@ -110,7 +110,6 @@ struct instance {
     std::string pref_path = "";
     std::string mcd0_path = "";
     std::string mcd1_path = "";
-    std::string snap_path = "";
     std::string ini_path = "";
 
     bool core0_mute[24] = { false };
@@ -167,7 +166,6 @@ struct instance {
     unsigned int ticks = 0;
     int menubar_height = 0;
     bool mute = false;
-    float volume = 1.0f;
 
     bool limit_fps = true;
     float fps_cap = 60.0f;
@@ -193,10 +191,6 @@ struct instance {
     std::vector <uint8_t> strtab;
 
     std::vector <spu2_sample> audio_buf;
-
-    float avg_fps;
-    float avg_frames;
-    int screenshot_counter = 0;
 };
 
 int init_audio(iris::instance* iris);
@@ -244,9 +238,6 @@ void push_info(iris::instance* iris, std::string text);
 
 void add_recent(iris::instance* iris, std::string file);
 int open_file(iris::instance* iris, std::string file);
-
-bool save_screenshot(iris::instance* iris, std::string path);
-std::string get_default_screenshot_filename(iris::instance* iris);
 
 void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount);
 

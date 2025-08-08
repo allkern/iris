@@ -249,10 +249,7 @@ static inline void dmac_test_cpcond0(struct ps2_dmac* dmac) {
 static inline void dmac_test_irq(struct ps2_dmac* dmac) {
     dmac_test_cpcond0(dmac);
 
-    int meis = ((dmac->stat >> 14) & 1) & ((dmac->stat >> 30) & 1);
-    int chirq = (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff);
-
-    ee_set_int1(dmac->ee, chirq || meis);
+    ee_set_int1(dmac->ee, (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff));
 }
 
 static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
@@ -350,29 +347,15 @@ void dmac_send_vif1_irq(void* udata, int overshoot) {
 }
 
 void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
-    // printf("dmac: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
+    // printf("ee: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
     //     dmac->vif1.chcr & 1,
     //     (dmac->vif1.chcr >> 2) & 3,
     //     (dmac->vif1.chcr >> 6) & 1,
     //     (dmac->vif1.chcr >> 7) & 1,
     //     dmac->vif1.qwc,
     //     dmac->vif1.madr,
-    //     dmac->vif1.tadr,
-    //     dmac->rbor,
-    //     dmac->rbsr,
-    //     dmac->spr_from.madr
+    //     dmac->vif1.tadr
     // );
-
-    uint32_t spr_from_madr = dmac->spr_from.madr;
-    int mfifo_drain = (dmac->ctrl >> 2) & 3;
-
-    if (mfifo_drain == 2) {
-        if (dmac->vif1.tadr == dmac->spr_from.madr) {
-            dmac_set_irq(dmac, DMAC_MEIS);
-
-            return;
-        }
-    }
 
     int tte = (dmac->vif1.chcr >> 6) & 1;
     int mode = (dmac->vif1.chcr >> 2) & 3;
@@ -859,7 +842,7 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
 
     dmac->spr_from.chcr &= ~0x100;
 
-    // printf("dmac: spr_from start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x sadr=%08x rbor=%08x rbsr=%08x\n",
+    // printf("ee: spr_from start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x sadr=%08x\n",
     //     dmac->spr_from.chcr,
     //     dmac->spr_from.chcr & 1,
     //     (dmac->spr_from.chcr >> 2) & 3,
@@ -867,25 +850,8 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
     //     dmac->spr_from.madr,
     //     dmac->spr_from.qwc,
     //     dmac->spr_from.tadr,
-    //     dmac->spr_from.sadr,
-    //     dmac->rbor,
-    //     dmac->rbsr
+    //     dmac->spr_from.sadr
     // );
-
-    // int mfifo_enabled = (dmac->ctrl >> 2) & 3;
-
-    // if (mfifo_enabled) {
-    //     dmac->spr_from.madr |= dmac->rbor & dmac->rbsr;
-    //     for (int i = 0; i < dmac->spr_from.qwc; i++) {
-    //         uint128_t q = dmac_read_qword(dmac, dmac->spr_from.sadr, 1);
-
-    //         ee_bus_write128(dmac->bus, dmac->spr_from.madr, q);
-
-    //         dmac->spr_from.madr += 0x10;
-    //         dmac->spr_from.sadr += 0x10;
-    //         dmac->spr_from.sadr &= 0x3ff0;
-    //     }
-    // }
 
     int mode = (dmac->spr_from.chcr >> 2) & 3;
 
@@ -1058,7 +1024,18 @@ void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
-    // printf("dmac: %s start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x rbsr=%08x rbor=%08x\n",
+    if (c == &dmac->ipu_to)
+        printf("dmac: ipu_to start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
+            dmac->ipu_to.chcr,
+            dmac->ipu_to.chcr & 1,
+            (dmac->ipu_to.chcr >> 2) & 3,
+            !!(dmac->ipu_to.chcr & 0x40),
+            dmac->ipu_to.madr,
+            dmac->ipu_to.qwc,
+            dmac->ipu_to.tadr
+        );
+
+    // printf("ee: %s start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x\n",
     //     dmac_get_channel_name(dmac, addr),
     //     c->chcr,
     //     c->chcr & 1,
@@ -1066,9 +1043,7 @@ static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t add
     //     !!(c->chcr & 0x40),
     //     c->madr,
     //     c->qwc,
-    //     c->tadr,
-    //     dmac->rbsr,
-    //     dmac->rbor
+    //     c->tadr
     // );
 
     // if (c == &dmac->ipu_to && c->qwc != 0) {
@@ -1105,8 +1080,6 @@ void dmac_write_stat(struct ps2_dmac* dmac, uint32_t data) {
 
     dmac->stat &= ~istat;
     dmac->stat ^= imask;
-
-    // printf("dmac: stat=%08x istat=%08x imask=%08x\n", dmac->stat, istat, imask);
 
     dmac_test_irq(dmac);
 }
@@ -1145,23 +1118,23 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                 if (c == &dmac->ipu_to)
                     printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
 
-                c->chcr = data;
+                // c->chcr = data;
 
-                if (data & 0x100) {
-                    dmac_handle_channel_start(dmac, addr);
-                }
+                // if (data & 0x100) {
+                //     dmac_handle_channel_start(dmac, addr);
+                // }
 
                 // Behavior required for IPU FMVs to work
-                // if ((c->chcr & 0x100) == 0) {
-                //     c->chcr = data;
+                if ((c->chcr & 0x100) == 0) {
+                    c->chcr = data;
 
-                //     if (data & 0x100) {
-                //         dmac_handle_channel_start(dmac, addr);
-                //     }
-                // } else {
-                //     printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
-                //     c->chcr &= (data & 0x100) | 0xfffffeff;
-                // }
+                    if (data & 0x100) {
+                        dmac_handle_channel_start(dmac, addr);
+                    }
+                } else {
+                    printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
+                    c->chcr &= (data & 0x100) | 0xfffffeff;
+                }
             } return;
             case 0x10: {
                 c->madr = data;

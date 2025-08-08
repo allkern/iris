@@ -175,8 +175,6 @@ void show_paths_settings(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom0")) {
-        bool mute = iris->mute;
-
         iris->mute = true;
 
         auto f = pfd::open_file("Select BIOS file", "", {
@@ -184,9 +182,7 @@ void show_paths_settings(iris::instance* iris) {
             "All Files (*.*)", "*"
         });
 
-        while (!f.ready());
-
-        iris->mute = mute;
+        iris->mute = false;
 
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 512);
@@ -201,8 +197,6 @@ void show_paths_settings(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom1")) {
-        bool mute = iris->mute;
-
         iris->mute = true;
 
         auto f = pfd::open_file("Select DVD BIOS file", "", {
@@ -210,9 +204,7 @@ void show_paths_settings(iris::instance* iris) {
             "All Files (*.*)", "*"
         });
 
-        while (!f.ready());
-
-        iris->mute = mute;
+        iris->mute = false;
 
         if (f.result().size()) {
             strncpy(dvd_buf, f.result().at(0).c_str(), 512);
@@ -231,8 +223,6 @@ void show_paths_settings(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom2")) {
-        bool mute = iris->mute;
-
         iris->mute = true;
 
         auto f = pfd::open_file("Select ROM2 file", "", {
@@ -240,9 +230,7 @@ void show_paths_settings(iris::instance* iris) {
             "All Files (*.*)", "*"
         });
 
-        while (!f.ready());
-
-        iris->mute = mute;
+        iris->mute = false;
 
         if (f.result().size()) {
             strncpy(rom2_buf, f.result().at(0).c_str(), 512);
@@ -328,8 +316,6 @@ void show_memory_card(iris::instance* iris, int slot) {
         SameLine();
 
         if (Button(bt_label)) {
-            bool mute = iris->mute;
-
             iris->mute = true;
 
             auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->pref_path, {
@@ -337,9 +323,7 @@ void show_memory_card(iris::instance* iris, int slot) {
                 "All Files (*.*)", "*"
             });
 
-            while (!f.ready());
-
-            iris->mute = mute;
+            iris->mute = false;
 
             if (f.result().size()) {
                 strncpy(buf, f.result().at(0).c_str(), 512);

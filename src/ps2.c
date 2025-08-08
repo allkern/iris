@@ -85,7 +85,7 @@ void ps2_init(struct ps2_state* ps2) {
     iop_init(ps2->iop, iop_bus_data);
 
     // Initialize devices
-    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->ee, ps2->sched, ps2->ee_bus);
+    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->sched, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
     ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
     ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
@@ -157,7 +157,7 @@ void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), 
 void ps2_boot_file(struct ps2_state* ps2, const char* path) {
     ps2_reset(ps2);
 
-    while (ee_get_pc(ps2->ee) != 0x00082000)
+    while (ps2->ee->pc != 0x00082000)
         ps2_cycle(ps2);
 
     uint32_t i;
@@ -195,7 +195,7 @@ void ps2_reset(struct ps2_state* ps2) {
     vu_init(ps2->vu0, 0, ps2->gif, ps2->vif0, ps2->vu1);
     vu_init(ps2->vu1, 1, ps2->gif, ps2->vif1, ps2->vu1);
 
-    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->ee, ps2->sched, ps2->ee_bus);
+    ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ps2->ee->scratchpad, ps2->ee, ps2->sched, ps2->ee_bus);
     ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
     ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
@@ -212,32 +212,32 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_gs_reset(ps2->gs);
     ps2_ram_reset(ps2->ee_ram);
     ps2_ram_reset(ps2->iop_ram);
-    ps2_ram_reset(ee_get_spr(ps2->ee));
+    ps2_ram_reset(ps2->ee->scratchpad);
 }
 
 // To-do: This will soon be useless, need to integrate
 // the tracer into our debugging UI
-// static int depth = 0;
+static int depth = 0;
 
-// static inline void ps2_trace(struct ps2_state* ps2) {
-//     for (int i = 0; i < ps2->nfuncs; i++) {
-//         if (ps2->ee->pc == ps2->func[i].addr) {
-//             printf("trace: ");
+static inline void ps2_trace(struct ps2_state* ps2) {
+    for (int i = 0; i < ps2->nfuncs; i++) {
+        if (ps2->ee->pc == ps2->func[i].addr) {
+            printf("trace: ");
 
-//             for (int i = 0; i < depth; i++)
-//                 putchar(' ');
+            for (int i = 0; i < depth; i++)
+                putchar(' ');
 
-//             printf("%s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
+            printf("%s @ 0x%08x\n", ps2->func[i].name, ps2->func[i].addr);
 
-//             ++depth;
+            ++depth;
 
-//             break;
-//         }
-//     }
+            break;
+        }
+    }
 
-//     if (ps2->ee->opcode == 0x03e00008)
-//         if (depth > 0) --depth;
-// }
+    if (ps2->ee->opcode == 0x03e00008)
+        if (depth > 0) --depth;
+}
 
 void ps2_cycle(struct ps2_state* ps2) {
     // if (ps2->ee->pc == 0xe0040)
@@ -263,41 +263,34 @@ void ps2_cycle(struct ps2_state* ps2) {
     //     return;
     // }
 
-    int cycles = ee_run_block(ps2->ee, 128);
+    sched_tick(ps2->sched, 2 * _PS2_TIMESCALE);
+    ee_cycle(ps2->ee);
+    ps2_ee_timers_tick(ps2->ee_timers);
 
-    while (!cycles) {
-        cycles = ee_run_block(ps2->ee, 128);
-    }
+    --ps2->ee_cycles;
 
-    ps2->ee_cycles += cycles;
-
-    sched_tick(ps2->sched, 8 * cycles);
-
-    for (int i = 0; i < cycles; i++)
-        ps2_ee_timers_tick(ps2->ee_timers);
-
-    while (ps2->ee_cycles > 8) {
+    if (!ps2->ee_cycles) {
         iop_cycle(ps2->iop);
 
         ps2_iop_timers_tick(ps2->iop_timers);
 
-        ps2->ee_cycles -= 8;
+        ps2->ee_cycles = 7;
     }
 }
 
 void ps2_iop_cycle(struct ps2_state* ps2) {
-    // while (ps2->ee_cycles) {
-    //     sched_tick(ps2->sched, 1);
-    //     ee_cycle(ps2->ee);
-    //     ps2_ee_timers_tick(ps2->ee_timers);
+    while (ps2->ee_cycles) {
+        sched_tick(ps2->sched, 1);
+        ee_cycle(ps2->ee);
+        ps2_ee_timers_tick(ps2->ee_timers);
 
-    //     --ps2->ee_cycles;
-    // }
+        --ps2->ee_cycles;
+    }
 
-    // iop_cycle(ps2->iop);
-    // ps2_iop_timers_tick(ps2->iop_timers);
+    iop_cycle(ps2->iop);
+    ps2_iop_timers_tick(ps2->iop_timers);
 
-    // ps2->ee_cycles = 7;
+    ps2->ee_cycles = 7;
 }
 
 void ps2_destroy(struct ps2_state* ps2) {
