@@ -1925,10 +1925,10 @@ void render_point(struct ps2_gs* gs, void* udata) {
     vert.x -= gs->ctx->ofx;
     vert.y -= gs->ctx->ofy;
 
-    if (!gs_test_scissor(gs, vert.x, vert.y))
+    if (!gs_test_scissor(gs, vert.x >> 4, vert.y >> 4))
         return;
 
-    gs_draw_pixel(gs, vert.x, vert.y, vert.z, vert.rgbaq & 0xffffffff);
+    gs_draw_pixel(gs, vert.x >> 4, vert.y >> 4, vert.z, vert.rgbaq & 0xffffffff);
 }
 
 void render_line(struct ps2_gs* gs, void* udata) {
@@ -1949,8 +1949,8 @@ void render_line(struct ps2_gs* gs, void* udata) {
     int error = dx + dy;
 
     while (1) {
-        if (gs_test_scissor(gs, v0.x, v0.y))
-            gs_draw_pixel(gs, v0.x, v0.y, v0.z, v1.rgbaq & 0xffffffff);
+        if (gs_test_scissor(gs, v0.x >> 4, v0.y >> 4))
+            gs_draw_pixel(gs, v0.x >> 4, v0.y >> 4, v0.z, v1.rgbaq & 0xffffffff);
 
         int e2 = error << 1;
     
@@ -2232,6 +2232,14 @@ void render_sprite(struct ps2_gs* gs, void* udata) {
     int32_t ymin = ((std::max(std::min(v0.y, v1.y), scay0) + 8) >> 4) << 4;
     int32_t xmax = ((std::min(std::max(v0.x, v1.x), scax1) + 8) >> 4) << 4;
     int32_t ymax = ((std::min(std::max(v0.y, v1.y), scay1) + 8) >> 4) << 4;
+
+    // printf("sprite: v0=(%d,%d) v1=(%d,%d) sca1=(%04x,%04x) rsca1=(%04x,%04x)\n",
+    //     v0.x, v0.y,
+    //     v1.x, v1.y,
+    //     scax1, scay1,
+    //     gs->ctx->scax1 << 4,
+    //     gs->ctx->scay1 << 4
+    // );
 
     // printf("sprite: v0=(%04x,%04x) v1=(%04x,%04x) tnbpsm=%02x tbw=%x tbp=%x cbpsm=%d mode=%d\n",
     //     v0.x, v0.y,

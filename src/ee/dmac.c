@@ -1142,9 +1142,6 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
     if (c) {
         switch (addr & 0xff) {
             case 0x00: {
-                if (c == &dmac->ipu_to)
-                    printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
-
                 c->chcr = data;
 
                 if (data & 0x100) {
