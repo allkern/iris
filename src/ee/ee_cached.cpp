@@ -775,7 +775,7 @@ static inline void ee_i_cvtw(struct ee_state* ee, const ee_instruction& i) {
     fpu_cvtws(&ee->f[EE_D_FD], &ee->f[EE_D_FS]);
 }
 static inline void ee_i_dadd(struct ee_state* ee, const ee_instruction& i) {
-    int64_t r;
+    long long r;
 
     if (SADDOVF64((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
         ee_exception_level1(ee, CAUSE_EXC1_OV);
@@ -784,7 +784,7 @@ static inline void ee_i_dadd(struct ee_state* ee, const ee_instruction& i) {
     }
 }
 static inline void ee_i_daddi(struct ee_state* ee, const ee_instruction& i) {
-    int64_t r;
+    long long r;
 
     if (SADDOVF64((int64_t)EE_RS, SE6416(EE_D_I16), &r)) {
         ee_exception_level1(ee, CAUSE_EXC1_OV);
@@ -921,7 +921,7 @@ static inline void ee_i_dsrlv(struct ee_state* ee, const ee_instruction& i) {
     EE_RD = EE_RT >> (EE_RS & 0x3f);
 }
 static inline void ee_i_dsub(struct ee_state* ee, const ee_instruction& i) {
-    int64_t r;
+    long long r;
 
     if (SSUBOVF64((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
         ee_exception_level1(ee, CAUSE_EXC1_OV);
