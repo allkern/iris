@@ -2,10 +2,10 @@ name: macOS CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "hw-renderer" ]
 
 jobs:
-  macos-universal-build:
+  build:
     runs-on: macos-latest
 
     steps:
