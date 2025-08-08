@@ -169,8 +169,8 @@ void gs_start_primitive(struct ps2_gs* gs) {
 }
 
 static inline void gs_unpack_vertex(struct ps2_gs* gs, struct gs_vertex* v) {
-    v->x = v->xyz & 0xffff;
-    v->y = (v->xyz >> 16) & 0xffff;
+    v->x = (v->xyz & 0xffff) >> 4;
+    v->y = ((v->xyz >> 16) & 0xffff) >> 4;
     v->z = v->xyz >> 32;
     v->r = v->rgbaq & 0xff;
     v->g = (v->rgbaq >> 8) & 0xff;
@@ -497,8 +497,8 @@ static inline void gs_unpack_tex2(struct ps2_gs* gs, int i) {
 }
 
 static inline void gs_unpack_xyoffset(struct ps2_gs* gs, int i) {
-    gs->context[i].ofx = gs->context[i].xyoffset & 0xffff;
-    gs->context[i].ofy = (gs->context[i].xyoffset >> 32) & 0xffff;
+    gs->context[i].ofx = (gs->context[i].xyoffset & 0xffff) >> 4;
+    gs->context[i].ofy = ((gs->context[i].xyoffset >> 32) & 0xffff) >> 4;
 }
 
 static inline void gs_unpack_miptbp1(struct ps2_gs* gs, int i) {
