@@ -83,7 +83,7 @@ void hardware_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDe
     }, {
         .location = 2,
         .buffer_slot = 0,
-        .format = SDL_GPU_VERTEXELEMENTFORMAT_UINT3,
+        .format = SDL_GPU_VERTEXELEMENTFORMAT_INT3,
         .offset = sizeof(uint32_t) * 6,
     }, {
         .location = 3,

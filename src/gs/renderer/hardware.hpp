@@ -14,9 +14,9 @@ struct hw_vertex {
     uint32_t a;
     uint32_t u;
     uint32_t v;
-    uint32_t x;
-    uint32_t y;
-    uint32_t z;
+    int32_t x;
+    int32_t y;
+    int32_t z;
     float s;
     float t;
     float q;

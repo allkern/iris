@@ -1,8 +1,8 @@
 #version 460
 
-layout (location = 2) in uvec3 xyz;
 layout (location = 0) in uvec4 in_rgba;
 layout (location = 1) in uvec2 in_uv;
+layout (location = 2) in ivec3 xyz;
 layout (location = 3) in vec3 in_stq;
 
 layout (location = 0) out vec4 out_rgba;
