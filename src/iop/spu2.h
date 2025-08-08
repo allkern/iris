@@ -172,13 +172,10 @@ struct spu2_core {
     uint32_t memin_read_addr;
 
     int adma_playing;
-
-    struct spu2_sample* adma_buf[2];
-    unsigned int adma_buf_size;
-    int adma_buf_w_index;
-    int adma_buf_r_index;
-    unsigned int adma_buf_w;
-    unsigned int adma_buf_r;
+    int16_t adma_ringbuf[4096];
+    uint32_t adma_ringbuf_write_idx;
+    uint32_t adma_ringbuf_read_idx;
+    int adma_ringbuf_full;
 };
 
 struct ps2_spu2 {

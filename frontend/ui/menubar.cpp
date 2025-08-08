@@ -23,8 +23,7 @@ const char* aspect_mode_names[] = {
 const char* renderer_names[] = {
     "Null",
     "Software",
-    "Software (Threaded)",
-    "Hardware"
+    "Software (Threaded)"
 };
 
 const char* fullscreen_names[] = {
@@ -50,6 +49,8 @@ void show_main_menubar(iris::instance* iris) {
 
         if (BeginMenu("Iris")) {
             if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Open...")) {
+                int prev_mute = iris->mute;
+
                 iris->mute = true;
 
                 auto f = pfd::open_file("Select a file to load", "", {
@@ -59,7 +60,9 @@ void show_main_menubar(iris::instance* iris) {
                     "All Files (*.*)", "*"
                 });
 
-                iris->mute = false;
+                while (!f.ready());
+
+                iris->mute = prev_mute;
 
                 if (f.result().size()) {
                     open_file(iris, f.result().at(0));
@@ -183,6 +186,8 @@ void show_main_menubar(iris::instance* iris) {
             }
 
             if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
+                bool mute = iris->mute;
+
                 iris->mute = true;
 
                 auto f = pfd::open_file("Select CD/DVD image", "", {
@@ -190,7 +195,9 @@ void show_main_menubar(iris::instance* iris) {
                     "All Files (*.*)", "*"
                 });
 
-                iris->mute = false;
+                while (!f.ready());
+
+                iris->mute = mute;
 
                 if (f.result().size()) {
                     // 2-second delay to allow the disc to spin up
@@ -211,7 +218,7 @@ void show_main_menubar(iris::instance* iris) {
         if (BeginMenu("Settings")) {
             if (BeginMenu(ICON_MS_MONITOR " Display")) {
                 if (BeginMenu(ICON_MS_BRUSH " Renderer")) {
-                    for (int i = 0; i < 4; i++) {
+                    for (int i = 0; i < 3; i++) {
                         if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
                             iris->renderer_backend = i;
 
@@ -288,6 +295,29 @@ void show_main_menubar(iris::instance* iris) {
                 ImGui::EndMenu();
             }
 
+            if (BeginMenu(ICON_MS_MUSIC_NOTE " Audio")) {
+                PushStyleVarY(ImGuiStyleVar_FramePadding, 0.0f);
+                AlignTextToFramePadding();
+
+                const char* icon = ICON_MS_VOLUME_UP;
+
+                if (iris->volume == 0.0f) {
+                    icon = ICON_MS_VOLUME_MUTE;
+                } else if (iris->volume <= 0.5f) {
+                    icon = ICON_MS_VOLUME_DOWN;
+                }
+
+                Text(icon); SameLine();
+                
+                SetNextItemWidth(100.0f);
+                SliderFloat("Volume", &iris->volume, 0.0f, 1.0f, "%.1f");
+                PopStyleVar();
+ 
+                MenuItem(ICON_MS_VOLUME_OFF " Mute", nullptr, &iris->mute);
+
+                ImGui::EndMenu();
+            }
+
             MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar);
 
             if (MenuItem(ICON_MS_CONTENT_COPY " Copy data path to clipboard")) {
@@ -304,6 +334,26 @@ void show_main_menubar(iris::instance* iris) {
         }
         if (BeginMenu("Tools")) {
             if (MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->show_imgui_demo));
+            if (MenuItem(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
+                bool mute = iris->mute;
+
+                iris->mute = true;
+
+                std::string filename = get_default_screenshot_filename(iris);
+
+                auto f = pfd::save_file("Save screenshot", filename, {
+                    "PNG (*.png)", "*.png",
+                    "All Files (*.*)", "*"
+                });
+
+                while (!f.ready());
+
+                iris->mute = mute;
+
+                if (f.result().size()) {
+                    save_screenshot(iris, f.result());
+                }
+            }
 
             ImGui::EndMenu();
         }

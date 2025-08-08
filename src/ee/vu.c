@@ -2373,8 +2373,8 @@ void vu_i_xgkick(struct vu_state* vu) {
         if (!nloop)
             continue;
 
-        if (!nregs)
-            nregs = 16;
+        // if (!nregs)
+        //     nregs = 16;
 
         int qwc = 0;
 

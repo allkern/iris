@@ -70,6 +70,7 @@ int parse_toml_settings(iris::instance* iris) {
     iris->rom2_path = paths["rom2_path"].value_or("");
     iris->mcd0_path = paths["mcd0_path"].value_or("");
     iris->mcd1_path = paths["mcd1_path"].value_or("");
+    iris->snap_path = paths["snap_path"].value_or("snap");
 
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
@@ -83,6 +84,10 @@ int parse_toml_settings(iris::instance* iris) {
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);
     iris->renderer_backend = display["renderer"].value_or(RENDERER_SOFTWARE_THREAD);
+
+    auto audio = tbl["audio"];
+    iris->mute = audio["mute"].value_or(false);
+    iris->volume = audio["volume"].value_or(1.0);
 
     auto debugger = tbl["debugger"];
     iris->show_ee_control = debugger["show_ee_control"].value_or(false);
@@ -279,12 +284,17 @@ void close_settings(iris::instance* iris) {
             { "bilinear", iris->bilinear },
             { "renderer", iris->renderer_backend }
         } },
+        { "audio", toml::table {
+            { "mute", iris->mute },
+            { "volume", iris->volume },
+        } },
         { "paths", toml::table {
             { "bios_path", iris->bios_path },
             { "rom1_path", iris->rom1_path },
             { "rom2_path", iris->rom2_path },
             { "mcd0_path", iris->mcd0_path },
-            { "mcd1_path", iris->mcd1_path }
+            { "mcd1_path", iris->mcd1_path },
+            { "snap_path", iris->snap_path }
         } },
         { "recents", toml::table {
             { "array", toml::array() }

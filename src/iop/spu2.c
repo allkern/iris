@@ -88,19 +88,6 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
     spu2->c[1].stat = 0x80;
     spu2->c[0].endx = 0x00ffffff;
     spu2->c[1].endx = 0x00ffffff;
-
-    for (int i = 0; i < 2; i++) {
-        spu2->c[i].adma_buf_size = 0x4000;
-        spu2->c[i].adma_buf[0] = malloc(sizeof(struct spu2_sample) * spu2->c[i].adma_buf_size);
-        spu2->c[i].adma_buf[1] = malloc(sizeof(struct spu2_sample) * spu2->c[i].adma_buf_size);
-        spu2->c[i].adma_buf_r_index = 0;
-        spu2->c[i].adma_buf_w_index = 0;
-        spu2->c[i].adma_buf_r = 0;
-        spu2->c[i].adma_buf_w = 0;
-
-        memset(spu2->c[i].adma_buf[0], 0, sizeof(struct spu2_sample) * spu2->c[i].adma_buf_size);
-        memset(spu2->c[i].adma_buf[1], 0, sizeof(struct spu2_sample) * spu2->c[i].adma_buf_size);
-    }
 }
 
 void spu2_irq(struct ps2_spu2* spu2, int c) {
@@ -977,12 +964,13 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
     s.u16[1] = 0;
 
     // ADMA
-    for (int i = 0; i < 2; i++) {
-        struct spu2_sample admas = spu2_get_adma_sample(spu2, i);
+    struct spu2_sample c0_adma = spu2_get_adma_sample(spu2, 0);
+    struct spu2_sample c1_adma = spu2_get_adma_sample(spu2, 1);
 
-        s.s16[0] += admas.s16[0];
-        s.s16[1] += admas.s16[1];
-    }
+    s.s16[0] += c0_adma.s16[0];
+    s.s16[1] += c0_adma.s16[1];
+    s.s16[0] += c1_adma.s16[0];
+    s.s16[1] += c1_adma.s16[1];
 
     for (int i = 0; i < 24; i++) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);

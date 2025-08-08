@@ -1,3 +1,6 @@
+#include <filesystem>
+#include <string>
+
 #include "iris.hpp"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -26,24 +29,106 @@ uint32_t map_button(SDL_Keycode k) {
     return 0;
 }
 
-bool save_screenshot(iris::instance* iris, std::string path) {
+std::string get_default_screenshot_filename(iris::instance* iris) {
+    SDL_Time t;
+    SDL_DateTime dt;
+
+    SDL_GetCurrentTime(&t);
+    SDL_TimeToDateTime(t, &dt, true);
+
+    char buf[512];
+
+    sprintf(buf, "Screenshot-%04d-%02d-%02d_%02d-%02d-%02d-%d.png",
+            dt.year, dt.month, dt.day,
+            dt.hour, dt.minute, dt.second,
+            iris->screenshot_counter + 1
+    );
+
+    return buf;
+}
+
+bool save_screenshot(iris::instance* iris, std::string path = "") {
+    std::filesystem::path fn(path);
+
+    std::string directory = iris->snap_path;
+    
+    if (iris->snap_path.empty()) {
+        directory = "snap";
+    }
+
+    std::filesystem::path p(directory);
+    std::string absolute_path;
+    std::string filename;
+
+    if (path.size()) {
+        filename = path;
+    } else {
+        filename = get_default_screenshot_filename(iris);
+    }
+
+    if (p.is_absolute()) {
+        absolute_path = p.string();
+    } else {
+        absolute_path = iris->pref_path + p.string();
+    }
+
+    absolute_path += "/" + filename;
+
+    if (fn.is_absolute()) {
+        absolute_path = fn.string();
+    }
+
     int w, h, bpp;
 
     void* ptr = renderer_get_buffer_data(iris->ctx, &w, &h, &bpp);
 
-    if (!ptr) return false;
+    if (!ptr) {
+        push_info(iris, "Couldn't save screenshot");
 
-    uint32_t* buf = (uint32_t*)malloc((w * bpp) * h);
+        return false;
+    }
 
-    memcpy(buf, ptr, (w * bpp) * h);
+    uint32_t* buf = (uint32_t*)malloc((w * 4) * h);
 
-    for (int y = 0; y < h; y++) {
-        for (int x = 0; x < w; x++) {
-            buf[x + (y * w)] |= 0xff000000;
+    memcpy(buf, ptr, (w * 4) * h);
+
+    if (bpp == 4) {
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                buf[x + (y * w)] |= 0xff000000;
+            }
+        }
+    } else {
+        uint16_t* ptr16 = (uint16_t*)ptr;
+
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                uint32_t c = ptr16[x + (y * w)];
+
+                buf[x + (y * w)] =
+                    ((c & 0x001f) << 3) |
+                    ((c & 0x03e0) << 6) |
+                    ((c & 0x7c00) << 9) |
+                    0xff000000;
+            }
         }
     }
 
-    stbi_write_png(path.c_str(), w, h, 4, buf, w * bpp);
+    int r = stbi_write_png(absolute_path.c_str(), w, h, 4, buf, w * 4);
+
+    // printf("Saving screenshot to '%s' (%dx%d, %d bpp): %s\n",
+    //        absolute_path.c_str(), w, h, bpp, r ? "Success" : "Failure"
+    // );
+
+    if (!r) {
+        push_info(iris, "Couldn't save screenshot");
+
+        return false;
+    }
+
+    iris->screenshot_counter++;
+
+    push_info(iris, "Screenshot saved as '" + filename + "'");
 
     return true;
 }
@@ -52,13 +137,7 @@ void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key) {
     switch (key.key) {
         case SDLK_SPACE: iris->pause = !iris->pause; break;
         case SDLK_F9: {
-            bool saved = save_screenshot(iris, "screenshot.png");
-
-            if (saved) {
-                push_info(iris, "Screenshot saved to \'screenshot.png\'");
-            } else {
-                push_info(iris, "Couldn't save screenshot");
-            }
+            bool saved = save_screenshot(iris);
         } break;
         case SDLK_F11: {
             iris->fullscreen = !iris->fullscreen;

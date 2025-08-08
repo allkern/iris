@@ -148,8 +148,8 @@ struct gs_vertex {
     uint32_t g;
     uint32_t b;
     uint32_t a;
-    int16_t x;
-    int16_t y;
+    int32_t x;
+    int32_t y;
     uint32_t z;
     uint32_t u;
     uint32_t v;

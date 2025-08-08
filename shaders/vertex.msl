@@ -5,29 +5,21 @@ using namespace metal;
 
 struct main0_out
 {
-    float4 out_rgba [[user(locn0)]];
-    float2 out_uv [[user(locn1)]];
-    float3 out_stq [[user(locn2)]];
+    float2 out_uv [[user(locn0)]];
     float4 gl_Position [[position]];
 };
 
 struct main0_in
 {
-    uint4 in_rgba [[attribute(0)]];
-    uint2 in_uv [[attribute(1)]];
-    uint3 xyz [[attribute(2)]];
-    float3 in_stq [[attribute(3)]];
+    float2 position [[attribute(0)]];
+    float2 in_uv [[attribute(1)]];
 };
 
 vertex main0_out main0(main0_in in [[stage_in]])
 {
     main0_out out = {};
-    float2 ndc = ((float3(in.xyz).xy / float2(640.0, 448.0)) * 2.0) - float2(1.0);
-    float z = float(in.xyz.z & 16777215u) / 16777215.0;
-    out.gl_Position = float4(ndc, z, 1.0);
-    out.out_uv = float2(float(in.in_uv.x), 1.0 - float(in.in_uv.y));
-    out.out_rgba = float4(in.in_rgba) / float4(255.0);
-    out.out_stq = in.in_stq;
+    out.gl_Position = float4(in.position, 0.0, 1.0);
+    out.out_uv = float2(in.in_uv.x, 1.0 - in.in_uv.y);
     return out;
 }
 
