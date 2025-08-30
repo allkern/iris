@@ -146,6 +146,8 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_sbus(ps2->ee_bus, ps2->sbus);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
 
+    ps2_ipu_reset(ps2->ipu);
+
     ps2->ee_cycles = 7;
 }
 
@@ -271,7 +273,9 @@ void ps2_cycle(struct ps2_state* ps2) {
 
     ps2->ee_cycles += cycles;
 
-    sched_tick(ps2->sched, 8 * cycles);
+    sched_tick(ps2->sched, (2 * _PS2_TIMESCALE) * cycles);
+
+    ps2_ipu_run(ps2->ipu);
 
     for (int i = 0; i < cycles; i++)
         ps2_ee_timers_tick(ps2->ee_timers);

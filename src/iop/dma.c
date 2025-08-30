@@ -684,8 +684,6 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
                 if ((c->chcr & 0x1000000) && (data & 0x1000000)) {
                     printf("iop: SPU2 channel already started, ignoring\n");
 
-                    exit(1);
-
                     return;
                 }
 
@@ -832,7 +830,7 @@ void iop_dma_handle_spu1_adma(struct ps2_iop_dma* dma) {
         // and trigger an IRQ event
         iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
         iop_dma_check_irq(dma);
-        
+
         dma->spu1.chcr &= ~0x1000000;
 
         // printf("spu2 core0: transfer done (chcr=%08x)\n", dma->spu1.chcr);
@@ -860,7 +858,7 @@ void iop_dma_handle_spu2_adma(struct ps2_iop_dma* dma) {
         // and trigger an IRQ event
         iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
         iop_dma_check_irq(dma);
-        
+
         dma->spu2.chcr &= ~0x1000000;
 
         // printf("spu2 core1: transfer done (chcr=%08x)\n", dma->spu2.chcr);

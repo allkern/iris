@@ -7,7 +7,7 @@
 #include "ee/dmac.h"
 #include "ee/intc.h"
 
-// #define printf(fmt, ...)(0)
+#define printf(fmt, ...)(0)
 
 /**
   * The majority of this code is based upon Play!'s implementation of the IPU.
@@ -202,18 +202,21 @@ void ImageProcessingUnit::run()
         }
         catch (VLC_Error& e)
         {
+            printf("ipu: VLC error: %s\n", e.what());
+
             ctrl.error_code = true;
             finish_command();
         }
     }
     if (can_write_FIFO()) {
         dmac->ipu_to.dreq = 1;
-        printf("ipu: set ipu_to dreq\n");
+        // printf("ipu: set ipu_to dreq\n");
         dmac_handle_ipu_to_transfer(dmac);
     }
     if (can_read_FIFO()) {
         dmac->ipu_from.dreq = 1;
-        printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
+        printf("ipu: Output FIFO ready\n");
+        // printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
         dmac_handle_ipu_from_transfer(dmac);
     }
 }
@@ -883,7 +886,7 @@ void ImageProcessingUnit::process_VDEC()
                     vdec_state = VDEC_STATE::DONE;
                 break;
             case VDEC_STATE::DONE:
-                printf("ipu: VDEC done! Output: $%08X\n", command_output);
+                printf("ipu: VDEC done! Output: $%08X infifo=%d\n", command_output, in_FIFO.f.size());
                 finish_command();
                 return;
         }
@@ -1188,7 +1191,7 @@ uint32_t ImageProcessingUnit::read_BP()
     }
     reg |= in_FIFO.bit_pointer;
     reg |= fifo_size << 8;
-    //  printf("ipu: Read BP: $%08X\n", reg);
+    printf("ipu: Read BP: $%08X\n", reg);
     return reg;
 }
 
@@ -1258,13 +1261,13 @@ void ImageProcessingUnit::write_command(uint32_t value)
                 command_decoding = true;
                 vdec_state = VDEC_STATE::ADVANCE;
                 process_VDEC();
-                return;
+                break;
             case 0x04:
                 printf("ipu: FDEC\n");
                 command_decoding = true;
                 fdec_state = VDEC_STATE::ADVANCE;
                 process_FDEC();
-                return;
+                break;
             case 0x05:
                 printf("ipu: SETIQ\n");
                 bytes_left = 64;
@@ -1296,13 +1299,6 @@ void ImageProcessingUnit::write_command(uint32_t value)
                 break;
         }
     }
-    else
-    {
-    }
-
-    while (ctrl.busy) {
-        run();
-    }
 }
 
 void ImageProcessingUnit::write_control(uint32_t value)
@@ -1319,9 +1315,11 @@ void ImageProcessingUnit::write_control(uint32_t value)
         command = 0;
         in_FIFO.reset();
         out_FIFO.reset();
-        // Note: A control reset does a forced command end, meaning it will force the procedure of a command stopping
-        // even if there is no command currently active, causing an interrupt to the core.
-        // Fightbox relies on this behaviour to boot and play its first two videos.
+        // Note: A control reset does a forced command end, meaning it will
+        //       force the procedure of a command stopping even if there is
+        //       no command currently active, causing an interrupt to the core.
+        //       Fightbox relies on this behaviour to boot and play its first
+        //       two videos.
         finish_command();
     }
 }
@@ -1432,6 +1430,10 @@ extern "C" void ps2_ipu_write128(struct ps2_ipu* ipu, uint32_t addr, uint128_t d
     printf("ipu: Unhandled IPU write address %08x\n", addr);
 
     exit(1);
+}
+
+void ps2_ipu_run(struct ps2_ipu* ipu) {
+    ipu->ipu->run();
 }
 
 extern "C" void ps2_ipu_destroy(struct ps2_ipu* ipu) {

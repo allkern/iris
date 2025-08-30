@@ -93,9 +93,9 @@ uint64_t ps2_dmac_read32(struct ps2_dmac* dmac, uint32_t addr) {
 
     if (c) {
         switch (addr & 0xff) {
-            case 0x00: if (c == &dmac->ipu_to) printf("dmac: Read channel %s chcr=%08x\n", dmac_get_channel_name(dmac, addr), c->chcr); return c->chcr;
-            case 0x10: if (c == &dmac->ipu_to) printf("dmac: Read channel %s madr=%08x\n", dmac_get_channel_name(dmac, addr), c->madr); return c->madr;
-            case 0x20: if (c == &dmac->ipu_to) printf("dmac: Read channel %s qwc=%08x\n", dmac_get_channel_name(dmac, addr), c->qwc); return c->qwc;
+            case 0x00: return c->chcr;
+            case 0x10: return c->madr;
+            case 0x20: return c->qwc;
             case 0x30: return c->tadr;
             case 0x40: return c->asr0;
             case 0x50: return c->asr1;
@@ -377,6 +377,9 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     int tte = (dmac->vif1.chcr >> 6) & 1;
     int mode = (dmac->vif1.chcr >> 2) & 3;
 
+    if (mode == 3)
+        mode = 1;
+
     struct sched_event event;
 
     event.name = "VIF1 DMA IRQ";
@@ -410,6 +413,14 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     }
 
     if (mode == 0) {
+        sched_schedule(dmac->sched, event);
+
+        return;
+    }
+
+    int id = (dmac->vif1.chcr >> 28) & 7;
+
+    if (mode == 1 && (id == 0 || id == 7) && dmac->vif1.qwc) {
         sched_schedule(dmac->sched, event);
 
         return;
@@ -504,9 +515,15 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
         dmac->gif.madr += 16;
     }
 
-    if (mode == 0) {
+    if (dmac->gif.tag.end) {
         return;
     }
+
+    // int id = (dmac->gif.chcr >> 28) & 7;
+
+    // if ((mode == 1) && (id == 0 || id == 7) && dmac->gif.qwc) {
+    //     return;
+    // }
 
     // Chain mode
     do {
@@ -514,7 +531,7 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 
         dmac_process_source_tag(dmac, &dmac->gif, tag);
 
-        // printf("ee: gif tag qwc=%08x madr=%08x tadr=%08x\n", dmac->gif.tag.qwc, dmac->gif.madr, dmac->gif.tadr);
+        // printf("ee: gif tag qwc=%08x madr=%08x tadr=%08x mem=%d\n", dmac->gif.qwc, dmac->gif.madr, dmac->gif.tadr, dmac->gif.tag.mem);
 
         for (int i = 0; i < dmac->gif.qwc; i++) {
             uint128_t q = dmac_read_qword(dmac, dmac->gif.madr, dmac->gif.tag.mem);
@@ -534,6 +551,7 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
         }
     } while (!channel_is_done(&dmac->gif));
 }
+
 void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
     if ((dmac->ipu_from.chcr & 0x100) == 0) {
         // printf("dmac: ipu_from channel not started\n");
@@ -576,8 +594,6 @@ void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
 
         dmac->ipu_from.chcr &= ~0x100;
         dmac->ipu_from.qwc = 0;
-
-        // printf("dmac: ipu_from channel done\n");
     }
 }
 
@@ -606,8 +622,6 @@ int dmac_transfer_ipu_to_qword(struct ps2_dmac* dmac) {
     }
 
     if (channel_is_done(&dmac->ipu_to)) {
-        printf("dmac: ipu_to channel done\n");
-
         dmac_set_irq(dmac, DMAC_IPU_TO);
 
         dmac->ipu_to.chcr &= ~0x100;
@@ -654,36 +668,6 @@ void dmac_handle_ipu_to_transfer(struct ps2_dmac* dmac) {
     while (dmac_transfer_ipu_to_qword(dmac)) {
         // Keep transferring until we run out of QWC or DREQ is cleared
     }
-
-    // while (dmac->ipu_to.dreq && dmac->ipu_to.qwc) {
-    //     uint128_t q = dmac_read_qword(dmac, dmac->ipu_to.madr, dmac->ipu_to.tag.mem);
-
-    //     ee_bus_write128(dmac->bus, 0x10007010, q);
-
-    //     dmac->ipu_to.madr += 16;
-    //     dmac->ipu_to.tag.qwc--;
-    // }
-
-    // if (dmac->ipu_to.tag.qwc == 0) {
-    //     if (channel_is_done(&dmac->ipu_to)) {
-    //         dmac_set_irq(dmac, DMAC_IPU_TO);
-
-    //         dmac->ipu_to.chcr &= ~0x100;
-    //         dmac->ipu_to.qwc = 0;
-
-    //         printf("dmac: ipu_to channel done\n");
-
-    //         return;
-    //     }
-
-    //     uint128_t tag = dmac_read_qword(dmac, dmac->ipu_to.tadr, 0);
-
-    //     dmac_process_source_tag(dmac, &dmac->ipu_to, tag);
-    // }
-
-    // if (!dmac->ipu_to.dreq) {
-    //     return;
-    // }
 }
 void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
     // SIF FIFO is empty, keep waiting
@@ -922,7 +906,7 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
         dmac->spr_from.qwc = tag.u32[0] & 0xffff;
         dmac->spr_from.tag.id = (tag.u32[0] >> 28) & 0x7;
         dmac->spr_from.tag.irq = tag.u32[0] & 0x80000000;
-        dmac->spr_from.tag.end = dmac->spr_from.tag.id == 7;
+        dmac->spr_from.tag.end = dmac->spr_from.tag.id == 0 || dmac->spr_from.tag.id == 7;
         dmac->spr_from.madr = tag.u32[1];
 
         // printf("ee: spr_from tag qwc=%08lx madr=%08lx sadr=%08x tadr=%08lx id=%ld addr=%08lx mem=%ld data=%016lx irq=%d end=%d tte=%d\n",
@@ -1054,10 +1038,10 @@ void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
         }
     } while (!channel_is_done(&dmac->spr_to));
 }
-
 static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t addr) {
     struct dmac_channel* c = dmac_get_channel(dmac, addr);
 
+    // if (c == &dmac->ipu_to || c == &dmac->ipu_from)
     // printf("dmac: %s start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x rbsr=%08x rbor=%08x\n",
     //     dmac_get_channel_name(dmac, addr),
     //     c->chcr,
@@ -1085,12 +1069,30 @@ static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t add
     //     }
     // }
 
+    int mode = (c->chcr >> 2) & 3;
+
+    if (mode != 1) {
+        c->tag.end = 1;
+    } else if (c->qwc != 0) {
+        int id = c->chcr >> 28 & 7;
+        int tie = (c->chcr >> 7) & 1;
+        int irq = c->chcr & 0x80000000;
+
+        c->tag.end = (id == 0 || id == 7) || (tie && irq);
+
+        // printf("dmac: %s qwc != 0, madr=%08x tadr=%08x qwc=%08x tag=%08x end=%d\n", dmac_get_channel_name(dmac, addr),
+        //     c->madr, c->tadr, c->qwc, c->chcr >> 16, c->tag.end
+        // );
+    } else {
+        c->tag.end = 0;
+    }
+
     switch (addr & 0xff00) {
         case 0x8000: dmac_handle_vif0_transfer(dmac); return;
         case 0x9000: dmac_handle_vif1_transfer(dmac); return;
         case 0xA000: dmac_handle_gif_transfer(dmac); return;
         case 0xB000: dmac_handle_ipu_from_transfer(dmac); return;
-        case 0xB400: dmac->ipu_to.dreq = 1; dmac_handle_ipu_to_transfer(dmac); return;
+        case 0xB400: dmac_handle_ipu_to_transfer(dmac); return;
         case 0xC000: dmac_handle_sif0_transfer(dmac); return;
         case 0xC400: dmac_handle_sif1_transfer(dmac); return;
         case 0xC800: dmac_handle_sif2_transfer(dmac); return;
@@ -1127,7 +1129,7 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                     mfifo_drain, stall_ctrl, stall_drain
                 );
 
-                // exit(1);
+                exit(1);
             }
         } return;
         case 0x1000E010: dmac_write_stat(dmac, data); return;
@@ -1142,23 +1144,23 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
     if (c) {
         switch (addr & 0xff) {
             case 0x00: {
-                c->chcr = data;
+                // c->chcr = data;
 
-                if (data & 0x100) {
-                    dmac_handle_channel_start(dmac, addr);
-                }
+                // if (data & 0x100) {
+                //     dmac_handle_channel_start(dmac, addr);
+                // }
 
                 // Behavior required for IPU FMVs to work
-                // if ((c->chcr & 0x100) == 0) {
-                //     c->chcr = data;
+                if ((c->chcr & 0x100) == 0) {
+                    c->chcr = data;
 
-                //     if (data & 0x100) {
-                //         dmac_handle_channel_start(dmac, addr);
-                //     }
-                // } else {
-                //     printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
-                //     c->chcr &= (data & 0x100) | 0xfffffeff;
-                // }
+                    if (data & 0x100) {
+                        dmac_handle_channel_start(dmac, addr);
+                    }
+                } else {
+                    // printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
+                    c->chcr &= (data & 0x100) | 0xfffffeff;
+                }
             } return;
             case 0x10: {
                 c->madr = data;
@@ -1235,7 +1237,8 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
         case 0x10009000:
         case 0x1000a000:
         case 0x1000b000:
-        case 0x1000b400: {
+        case 0x1000b400:
+        case 0x1000d400: {
             c->chcr &= 0xffffff00;
             c->chcr |= data & 0xff;
 
@@ -1258,6 +1261,18 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
         case 0x1000e000: {
             dmac->ctrl &= 0xffffff00;
             dmac->ctrl |= data;
+
+            int mfifo_drain = (dmac->ctrl >> 2) & 3;
+            int stall_ctrl = (dmac->ctrl >> 4) & 3;
+            int stall_drain = (dmac->ctrl >> 6) & 3;
+
+            if (mfifo_drain || stall_ctrl || stall_drain) {
+                printf("dmac: mfifo_drain=%d stall_ctrl=%d stall_drain=%d\n",
+                    mfifo_drain, stall_ctrl, stall_drain
+                );
+
+                exit(1);
+            }
         } return;
     }
 
@@ -1275,6 +1290,25 @@ uint64_t ps2_dmac_read16(struct ps2_dmac* dmac, uint32_t addr) {
 }
 
 void ps2_dmac_write16(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
+    struct dmac_channel* c = dmac_get_channel(dmac, addr & ~3);
+
+    switch (addr) {
+        case 0x10008000:
+        case 0x10009000: {
+            if ((c->chcr & 0x100) == 0) {
+                c->chcr &= 0xffff0000;
+                c->chcr |= data & 0xffff;
+
+                if (data & 0x100) {
+                    dmac_handle_channel_start(dmac, addr);
+                }
+            } else {
+                // printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
+                c->chcr &= (data & 0x100) | 0xfffffeff;
+            }
+        } return;
+    }
+
     printf("dmac: 16-bit write to %08x (%04x)\n", addr, data & 0xffff);
 
     exit(1);

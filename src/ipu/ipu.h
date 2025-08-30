@@ -45,6 +45,7 @@ uint64_t ps2_ipu_read64(struct ps2_ipu* ipu, uint32_t addr);
 uint128_t ps2_ipu_read128(struct ps2_ipu* ipu, uint32_t addr);
 void ps2_ipu_write64(struct ps2_ipu* ipu, uint32_t addr, uint64_t data);
 void ps2_ipu_write128(struct ps2_ipu* ipu, uint32_t addr, uint128_t data);
+void ps2_ipu_run(struct ps2_ipu* ipu);
 void ps2_ipu_destroy(struct ps2_ipu* ipu);
 
 #ifdef __cplusplus
