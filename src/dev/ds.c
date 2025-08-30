@@ -297,6 +297,8 @@ struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
     ds->buttons = 0xffff;
     ds->vibration[0] = 0xff;
     ds->vibration[1] = 0xff;
+    ds->mask[0] = 0xff;
+    ds->mask[1] = 0xff;
 
     // Start in digital mode
     ds->mode = 0;
