@@ -44,7 +44,11 @@ void show_breakpoints_table(iris::instance* iris) {
 
             PushFont(iris->font_code);
 
-            Text("%08x", b.addr);
+            if (b.symbol) {
+                Text("%s", b.symbol);
+            } else {
+                Text("%08x", b.addr);
+            }
 
             PopFont();
 
@@ -93,6 +97,27 @@ void show_breakpoints_table(iris::instance* iris) {
     }
 }
 
+uint32_t parse_address(iris::instance* iris, const char* buf, const char** name) {
+    if (!buf || !buf[0])
+        return 0;
+
+    if (isalpha(buf[0]) || buf[0] == '_') {
+        for (iris::elf_symbol& sym : iris->symbols) {
+            if (strcmp(sym.name, buf) == 0) {
+                *name = sym.name;
+
+                return sym.addr;
+            }
+        }
+    } else {
+        *name = nullptr;
+
+        return strtoul(buf, NULL, 16);
+    }
+
+    return 0;
+}
+
 void show_breakpoint_editor(iris::instance* iris) {
     using namespace ImGui;
 
@@ -106,14 +131,12 @@ void show_breakpoint_editor(iris::instance* iris) {
         EndCombo();
     }
 
-    static char buf[32];
+    static char buf[512];
 
     PushFont(iris->font_code);
 
-    if (InputText("##address", buf, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-        if (buf[0]) {
-            editable.addr = strtoul(buf, NULL, 16);
-        }
+    if (InputText("##address", buf, 512, ImGuiInputTextFlags_EnterReturnsTrue)) {
+        editable.addr = parse_address(iris, buf, &editable.symbol);
     } SameLine();
 
     PopFont();
@@ -128,7 +151,7 @@ void show_breakpoint_editor(iris::instance* iris) {
     BeginDisabled(!selected);
 
     if (Button("Edit breakpoint")) {
-        editable.addr = strtoul(buf, NULL, 16);
+        editable.addr = parse_address(iris, buf, &editable.symbol);
 
         *selected = editable;
     } SameLine();
@@ -136,9 +159,10 @@ void show_breakpoint_editor(iris::instance* iris) {
     EndDisabled();
 
     if (Button("New breakpoint")) {
-        editable.addr = strtoul(buf, NULL, 16);
+        editable.addr = parse_address(iris, buf, &editable.symbol);
 
         iris->breakpoints.push_back(editable);
+
         selected = &iris->breakpoints.back();
     }
 }
