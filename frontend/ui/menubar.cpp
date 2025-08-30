@@ -280,16 +280,8 @@ void show_main_menubar(iris::instance* iris) {
                     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
 
-                if (BeginMenu("Window mode")) {
-                    for (int i = 0; i < 2; i++) {
-                        if (Selectable(fullscreen_names[i], iris->fullscreen == i)) {
-                            iris->fullscreen = i;
-
-                            SDL_SetWindowFullscreen(iris->window, fullscreen_flags[i]);
-                        }
-                    }
-
-                    ImGui::EndMenu();
+                if (MenuItem("Fullscreen", "F11", &iris->fullscreen)) {
+                    SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
                 }
 
                 ImGui::EndMenu();
@@ -365,6 +357,12 @@ void show_main_menubar(iris::instance* iris) {
                 if (MenuItem(ICON_MS_TERMINAL " Logs##ee", NULL, &iris->show_ee_logs));
                 if (MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->show_ee_interrupts));
 
+                BeginDisabled(iris->symbols.empty());
+                if (MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->show_symbols));
+                EndDisabled();
+
+                if (MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->show_threads));
+
                 // ImGui::EndMenu();
             // }
 
@@ -386,8 +384,14 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_MUSIC_NOTE " SPU2 debugger", NULL, &iris->show_spu2_debugger));
             if (MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->show_memory_viewer));
             if (MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->show_vu_disassembler));
+            if (MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->show_pad_debugger));
 
             Separator();
+
+            if (MenuItem(ICON_MS_SKIP_NEXT " Skip FMVs", NULL, &iris->skip_fmv)) {
+                printf("Skip FMVs: %d\n", iris->skip_fmv);
+                ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
+            }
 
             if (MenuItem(ICON_MS_CLOSE " Close all")) {
                 iris->show_ee_control = false;
@@ -405,6 +409,9 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_spu2_debugger = false;
                 iris->show_memory_viewer = false;
                 iris->show_vu_disassembler = false;
+                iris->show_pad_debugger = false;
+                iris->show_symbols = false;
+                iris->show_threads = false;
                 iris->show_breakpoints = false;
             }
             

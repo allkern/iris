@@ -97,7 +97,11 @@ static void show_ee_disassembly_view(iris::instance* iris) {
         TableSetupColumn("c", ImGuiTableColumnFlags_NoResize);
 
         for (int row = -64; row < 64; row++) {
-            g_ee_dis_state.pc = iris->ps2->ee->pc + (row * 4);
+            if (iris->ee_control_follow_pc) {
+                g_ee_dis_state.pc = iris->ps2->ee->pc + (row * 4);
+            } else {
+                g_ee_dis_state.pc = iris->ee_control_address + (row * 4);
+            }
 
             TableNextRow();
             TableSetColumnIndex(0);
@@ -226,8 +230,13 @@ static void show_ee_disassembly_view(iris::instance* iris) {
                 Text("%s", disassembly);
             }
 
-            if (g_ee_dis_state.pc == iris->ps2->ee->pc)
-                SetScrollHereY(0.5f);
+            if (iris->ee_control_follow_pc) {
+                if (g_ee_dis_state.pc == iris->ps2->ee->pc)
+                    SetScrollHereY(0.5f);
+            } else {
+                if (g_ee_dis_state.pc == iris->ee_control_address)
+                    SetScrollHereY(0.5f);
+            }
         }
 
         EndTable();
@@ -247,7 +256,11 @@ static void show_iop_disassembly_view(iris::instance* iris) {
         TableSetupColumn("c", ImGuiTableColumnFlags_NoResize);
 
         for (int row = -64; row < 64; row++) {
-            g_iop_dis_state.addr = iris->ps2->iop->pc + (row * 4);
+            if (iris->iop_control_follow_pc) {
+                g_iop_dis_state.addr = iris->ps2->iop->pc + (row * 4);
+            } else {
+                g_iop_dis_state.addr = iris->iop_control_address + (row * 4);
+            }
 
             TableNextRow();
             TableSetColumnIndex(0);
@@ -367,11 +380,14 @@ static void show_iop_disassembly_view(iris::instance* iris) {
                 Text("%s", disassembly);
             }
 
-            if (g_iop_dis_state.addr == iris->ps2->iop->pc)
-                SetScrollHereY(0.5f);
-        }
-
-        EndTable();
+            if (iris->iop_control_follow_pc) {
+                if (g_iop_dis_state.addr == iris->ps2->iop->pc)
+                    SetScrollHereY(0.5f);
+            } else {
+                if (g_iop_dis_state.addr == iris->iop_control_address)
+                    SetScrollHereY(0.5f);
+            }
+        } EndTable();
     }
 
     PopFont();
@@ -401,6 +417,10 @@ void show_ee_control(iris::instance* iris) {
         if (Button(ICON_MS_STEP_OUT)) {
             iris->step_out = true;
             iris->pause = false;
+        } SameLine();
+
+        if (Button(ICON_MS_MOVE_DOWN)) {
+            iris->ee_control_follow_pc = true;
         }
 
         if (iris->symbols.size()) {
@@ -424,9 +444,7 @@ void show_ee_control(iris::instance* iris) {
         if (BeginChild("ee##disassembly")) {
             show_ee_disassembly_view(iris);
         } EndChild();
-
-        End();
-    }
+    } End();
 
     PopFont();
 }
@@ -452,9 +470,7 @@ void show_iop_control(iris::instance* iris) {
         if (BeginChild("iop##disassembly")) {
             show_iop_disassembly_view(iris);
         } EndChild();
-
-        End();
-    }
+    } End();
 
     PopFont();
 }

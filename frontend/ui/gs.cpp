@@ -451,8 +451,6 @@ const char* format_names[] = {
 
 int format = 0;
 static SDL_GPUTexture* tex = nullptr;
-static SDL_GPUSampler* sampler = nullptr;
-static SDL_GPUTextureSamplerBinding tsb;
 
 void show_gs_memory(iris::instance* iris) {
     using namespace ImGui;
@@ -532,10 +530,6 @@ void show_gs_memory(iris::instance* iris) {
             SDL_ReleaseGPUTexture(iris->device, tex);
         }
 
-        if (sampler) {
-            SDL_ReleaseGPUSampler(iris->device, sampler);
-        }
-
         SDL_GPUTextureCreateInfo tci = {};
 
         tci.format = fmt;
@@ -557,11 +551,6 @@ void show_gs_memory(iris::instance* iris) {
             .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
             .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
         };
-
-        sampler = SDL_CreateGPUSampler(iris->device, &sci);
-
-        tsb.texture = tex;
-        tsb.sampler = sampler;
     }
 
     if (!tex)
@@ -624,7 +613,7 @@ void show_gs_memory(iris::instance* iris) {
     SDL_EndGPUCopyPass(cp);
     SDL_SubmitGPUCommandBuffer(cb);
 
-    ImageWithBg((ImTextureID)(intptr_t)&tsb, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
+    ImageWithBg((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
 }
 
 void show_gs_debugger(iris::instance* iris) {

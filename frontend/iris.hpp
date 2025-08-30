@@ -24,6 +24,7 @@ enum : int {
 
 struct breakpoint {
     uint32_t addr;
+    const char* symbol = nullptr;
     int cpu;
     bool cond_r, cond_w, cond_x;
     int size;
@@ -88,10 +89,10 @@ struct instance {
     uint32_t ps1_memory_card_icon_height = 0;
     uint32_t pocketstation_icon_height = 0;
     uint32_t iris_icon_height = 0;
-    SDL_GPUTextureSamplerBinding ps2_memory_card_icon_tsb = {};
-    SDL_GPUTextureSamplerBinding ps1_memory_card_icon_tsb = {};
-    SDL_GPUTextureSamplerBinding pocketstation_icon_tsb = {};
-    SDL_GPUTextureSamplerBinding iris_icon_tsb = {};
+    SDL_GPUTexture* ps2_memory_card_icon_tex = nullptr;
+    SDL_GPUTexture* ps1_memory_card_icon_tex = nullptr;
+    SDL_GPUTexture* pocketstation_icon_tex = nullptr;
+    SDL_GPUTexture* iris_icon_tex = nullptr;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
@@ -142,6 +143,9 @@ struct instance {
     bool show_status_bar = true;
     bool show_breakpoints = false;
     bool show_settings = false;
+    bool show_pad_debugger = false;
+    bool show_symbols = false;
+    bool show_threads = false;
     bool show_memory_card_tool = false;
     bool show_imgui_demo = false;
     bool show_vu_disassembler = false;
@@ -150,12 +154,17 @@ struct instance {
     bool show_bios_setting_window = false;
     bool show_about_window = false;
 
-    int fullscreen = 0;
+    bool fullscreen = 0;
     int aspect_mode = RENDERER_ASPECT_AUTO;
     bool bilinear = true;
     bool integer_scaling = false;
     float scale = 1.5f;
     int window_mode = 0;
+    bool ee_control_follow_pc = true;
+    bool iop_control_follow_pc = true;
+    uint32_t ee_control_address = 0;
+    uint32_t iop_control_address = 0;
+    bool skip_fmv = false;
 
     std::deque <std::string> recents;
 
@@ -227,6 +236,9 @@ void show_status_bar(iris::instance* iris);
 void show_breakpoints(iris::instance* iris);
 void show_about_window(iris::instance* iris);
 void show_settings(iris::instance* iris);
+void show_pad_debugger(iris::instance* iris);
+void show_symbols(iris::instance* iris);
+void show_threads(iris::instance* iris);
 void show_memory_card_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
 // void show_gamelist(iris::instance* iris);

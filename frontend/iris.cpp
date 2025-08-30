@@ -10,6 +10,7 @@
 #include "elf.hpp"
 #include "config.hpp"
 #include "platform.hpp"
+#include "ee/ee_def.hpp"
 
 // ImGui includes
 #include "imgui.h"
@@ -239,6 +240,9 @@ void update_window(iris::instance* iris) {
     if (iris->show_breakpoints) show_breakpoints(iris);
     if (iris->show_about_window) show_about_window(iris);
     if (iris->show_settings) show_settings(iris);
+    if (iris->show_pad_debugger) show_pad_debugger(iris);
+    if (iris->show_symbols) show_symbols(iris);
+    if (iris->show_threads) show_threads(iris);
     if (iris->show_memory_card_tool) show_memory_card_tool(iris);
     // if (iris->show_gamelist) show_gamelist(iris);
     if (iris->show_imgui_demo) ShowDemoWindow(&iris->show_imgui_demo);

@@ -283,12 +283,12 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         int icon_width = iris->ps2_memory_card_icon_width;
         int icon_height = iris->ps2_memory_card_icon_height;
-        SDL_GPUTextureSamplerBinding* icon_tsb = &iris->ps2_memory_card_icon_tsb;
+        SDL_GPUTexture* icon_tex = iris->ps2_memory_card_icon_tex;
 
         SetCursorPosX((GetContentRegionAvail().x / 2.0) - (icon_width / 2.0));
 
         Image(
-            (ImTextureID)(intptr_t)icon_tsb,
+            (ImTextureID)(intptr_t)icon_tex,
             ImVec2(icon_width, icon_height),
             ImVec2(0, 0), ImVec2(1, 1),
             col,

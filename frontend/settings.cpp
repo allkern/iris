@@ -106,8 +106,12 @@ int parse_toml_settings(iris::instance* iris) {
     iris->show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
     iris->show_vu_disassembler = debugger["show_vu_disassembler"].value_or(false);
     iris->show_status_bar = debugger["show_status_bar"].value_or(true);
+    iris->show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
+    iris->show_threads = debugger["show_threads"].value_or(false);
+    // iris->show_symbols = debugger["show_symbols"].value_or(false);
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
+    iris->skip_fmv = debugger["skip_fmv"].value_or(false);
 
     toml::array* recents = tbl["recents"]["array"].as_array();
 
@@ -118,6 +122,8 @@ int parse_toml_settings(iris::instance* iris) {
     renderer_set_bilinear(iris->ctx, iris->bilinear);
     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
     renderer_set_scale(iris->ctx, iris->scale);
+
+    ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
 
     return 0;
 }
@@ -274,7 +280,9 @@ void close_settings(iris::instance* iris) {
             { "show_vu_disassembler", iris->show_vu_disassembler },
             { "show_status_bar", iris->show_status_bar },
             { "show_breakpoints", iris->show_breakpoints },
-            { "show_imgui_demo", iris->show_imgui_demo }
+            { "show_threads", iris->show_threads },
+            { "show_imgui_demo", iris->show_imgui_demo },
+            { "skip_fmv", iris->skip_fmv }
         } },
         { "display", toml::table {
             { "scale", iris->scale },
