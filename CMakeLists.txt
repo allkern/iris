@@ -95,10 +95,13 @@ target_sources(iris PRIVATE
   frontend/ui/memory_card_tool.cpp
   frontend/ui/menubar.cpp
   frontend/ui/modules.cpp
+  frontend/ui/pad.cpp
   frontend/ui/settings.cpp
   frontend/ui/spu2.cpp
   frontend/ui/state.cpp
   frontend/ui/statusbar.cpp
+  frontend/ui/symbols.cpp
+  frontend/ui/threads.cpp
   frontend/ui/vu_disassembly.cpp
   src/ps2.c
   src/ps2_elf.c
