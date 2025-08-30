@@ -10,6 +10,48 @@
 
 #include "ee/vu_dis.h"
 
+#include <algorithm> 
+#include <cctype>
+#include <locale>
+
+// Trim from the start (in place)
+inline void ltrim_impl(std::string &s) {
+    s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }));
+}
+
+// Trim from the end (in place)
+inline void rtrim_impl(std::string &s) {
+    s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+        return !std::isspace(ch);
+    }).base(), s.end());
+}
+
+// Trim from both ends (in place)
+inline void trim_impl(std::string &s) {
+    rtrim_impl(s);
+    ltrim_impl(s);
+}
+
+// Trim from the start (copying)
+inline std::string ltrim(std::string s) {
+    ltrim_impl(s);
+    return s;
+}
+
+// Trim from the end (copying)
+inline std::string rtrim(std::string s) {
+    rtrim_impl(s);
+    return s;
+}
+
+// Trim from both ends (copying)
+inline std::string trim(std::string s) {
+    trim_impl(s);
+    return s;
+}
+
 #define IM_RGB(r, g, b) ImVec4(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), 1.0)
 
 namespace iris {
@@ -77,12 +119,22 @@ void print_highlighted_vu1(const char* buf) {
     }
 
     for (const std::string& t : tokens) {
-        if (isalpha(t[0])) {
+        if (t[0] == 'v' && (t[1] == 'f' || t[1] == 'i')) {
+            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+        } else if (rtrim(t) == "acc") {
+            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+        } else if (rtrim(t) == "q") {
+            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+        } else if (rtrim(t) == "p") {
+            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+        } else if (rtrim(t) == "i") {
+            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+        } else if (rtrim(t) == "r") {
+            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+        } else if (isalpha(t[0])) {
             TextColored(IM_RGB(211, 167, 30), "%s", t.c_str());
         } else if (isdigit(t[0]) || t[0] == '-') {
             TextColored(IM_RGB(138, 143, 226), "%s", t.c_str());
-        } else if (t[0] == '$') {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
         } else if (t[0] == '<') {
             TextColored(IM_RGB(89, 89, 89), "%s", t.c_str());
         } else {
