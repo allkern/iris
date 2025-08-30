@@ -176,10 +176,10 @@ extern "C" int ioman_write(struct iop_state* iop) {
     while (c && ((cnt++) != size)) {
         iop->kputchar(iop->kputchar_udata, c);
 
-        fflush(stdout);
-
         c = iop_read8(iop, ptr++);
     }
+
+    fflush(stdout);
 
     iop_return(iop, size);
 
