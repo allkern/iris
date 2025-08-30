@@ -142,6 +142,7 @@ void ee_set_cpcond0(struct ee_state* ee, int v);
 uint32_t ee_get_pc(struct ee_state* ee);
 struct ps2_ram* ee_get_spr(struct ee_state* ee);
 int ee_run_block(struct ee_state* ee, int cycles);
+void ee_set_fmv_skip(struct ee_state* ee, int v);
 
 #undef EE_ALIGNED16
 

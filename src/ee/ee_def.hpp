@@ -56,6 +56,7 @@ struct ee_state {
 
     int exception;
 
+    int fmv_skip;
     uint32_t prev_pc;
     uint32_t pc;
     uint32_t next_pc;
@@ -107,6 +108,8 @@ struct ee_state {
         };
     };
 
+    uint32_t thread_list_base;
+
     union ee_fpu_reg f[32];
     union ee_fpu_reg a;
 
@@ -116,4 +119,34 @@ struct ee_state {
     struct vu_state* vu1;
 
     struct ee_vtlb_entry vtlb[48];
+};
+
+#define THS_RUN 0x01
+#define THS_READY 0x02
+#define THS_WAIT 0x04
+#define THS_SUSPEND 0x08
+#define THS_WAITSUSPEND 0x0C //THS_WAIT | THS_SUSPEND
+#define THS_DORMANT 0x10
+
+struct ee_thread {
+    uint32_t prev; // TCB*
+    uint32_t next; // TCB*
+    int status;
+    uint32_t func; // void*
+    uint32_t current_stack; // void*
+    uint32_t gp_reg; // void*
+    short current_priority;
+    short init_priority;
+    int wait_type; //0=not waiting, 1=sleeping, 2=waiting on semaphore
+    int sema_id;
+    int wakeup_count;
+    int attr;
+    int option;
+    uint32_t func_; // void* ??? 
+    int argc;
+    uint32_t argv; // char**
+    uint32_t initial_stack; // void*
+    int stack_size;
+    uint32_t root; // int* function to return to when exiting thread? 
+    uint32_t heap_base; // void*
 };

@@ -329,7 +329,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
     *phys = virt & ee_bus_region_mask_table[virt >> 29];
 
-    printf("ee: Unhandled virtual address %08x @ cyc=%ld pc=%08x\n", virt, ee->total_cycles, ee->pc);
+    // printf("ee: Unhandled virtual address %08x @ cyc=%ld pc=%08x\n", virt, ee->total_cycles, ee->pc);
 
     // *(int*)0 = 0;
 
@@ -437,16 +437,18 @@ static inline int ee_skip_fmv(struct ee_state* ee, uint32_t addr) {
 }
 
 static inline void ee_set_pc(struct ee_state* ee, uint32_t addr) {
-    if (ee_skip_fmv(ee, addr))
-        return;
+    if (ee->fmv_skip) {
+        if (ee_skip_fmv(ee, addr)) return;
+    }
 
     ee->pc = addr;
     ee->next_pc = addr + 4;
 }
 
 static inline void ee_set_pc_delayed(struct ee_state* ee, uint32_t addr) {
-    if (ee_skip_fmv(ee, addr))
-        return;
+    if (ee->fmv_skip) {
+        if (ee_skip_fmv(ee, addr)) return;
+    }
 
     ee->next_pc = addr;
     ee->branch = 1;
@@ -1828,7 +1830,20 @@ static inline void ee_i_pextuw(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u32[2] = rt.u32[3];
     ee->r[d].u32[3] = rs.u32[3];
 }
-static inline void ee_i_phmadh(struct ee_state* ee, const ee_instruction& i) { printf("ee: phmadh unimplemented\n"); exit(1); }
+static inline void ee_i_phmadh(struct ee_state* ee, const ee_instruction& i) {
+    uint128_t rt = ee->r[EE_D_RT];
+    uint128_t rs = ee->r[EE_D_RS];
+    int d = EE_D_RD;
+
+    ee->r[d].u32[0] = ((int16_t)rs.u16[1] * (int16_t)rt.u16[1]) + ((int16_t)rs.u16[0] * (int16_t)rt.u16[0]);
+    ee->r[d].u32[1] = ((int16_t)rs.u16[3] * (int16_t)rt.u16[3]) + ((int16_t)rs.u16[2] * (int16_t)rt.u16[2]);
+    ee->r[d].u32[2] = ((int16_t)rs.u16[5] * (int16_t)rt.u16[5]) + ((int16_t)rs.u16[4] * (int16_t)rt.u16[4]);
+    ee->r[d].u32[3] = ((int16_t)rs.u16[7] * (int16_t)rt.u16[7]) + ((int16_t)rs.u16[6] * (int16_t)rt.u16[6]);
+    ee->lo.u32[0] = ee->r[d].u32[0];
+    ee->hi.u32[0] = ee->r[d].u32[1];
+    ee->lo.u32[2] = ee->r[d].u32[2];
+    ee->hi.u32[2] = ee->r[d].u32[3];
+}
 static inline void ee_i_phmsbh(struct ee_state* ee, const ee_instruction& i) { printf("ee: phmsbh unimplemented\n"); exit(1); }
 static inline void ee_i_pinteh(struct ee_state* ee, const ee_instruction& i) {
     uint128_t rt = ee->r[EE_D_RT];
@@ -2178,7 +2193,14 @@ static inline void ee_i_psllh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ee->r[t].u16[6] << sa;
     ee->r[d].u16[7] = ee->r[t].u16[7] << sa;
 }
-static inline void ee_i_psllvw(struct ee_state* ee, const ee_instruction& i) { printf("ee: psllvw unimplemented\n"); exit(1); }
+static inline void ee_i_psllvw(struct ee_state* ee, const ee_instruction& i) {
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+
+    ee->r[d].u64[0] = SE6432(ee->r[t].u32[0] << (ee->r[s].u32[0] & 31));
+    ee->r[d].u64[1] = SE6432(ee->r[t].u32[2] << (ee->r[s].u32[2] & 31));
+}
 static inline void ee_i_psllw(struct ee_state* ee, const ee_instruction& i) {
     int sa = EE_D_SA;
     int t = EE_D_RT;
@@ -2681,16 +2703,42 @@ static inline void ee_i_sync(struct ee_state* ee, const ee_instruction& i) {
 // #include "syscall.h"
 
 static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
-    uint32_t n = ee->r[3].ul64;
+    uint32_t id = ee->r[3].ul64;
 
-    if (n & 0x80000000) {
-        n = (~n) + 1;
+    if (id & 0x80000000) {
+        id = (~id) + 1;
     }
 
     // printf("ee: %s (%d, %08x) a0=%08x (%d)\n", ee_get_syscall(n), ee->r[3].ul32, ee->r[3].ul32, ee->r[4].ul32, ee->r[4].ul32);
 
+    // ChangeThreadPriority
+    if (id == 0x29 && !ee->thread_list_base) {
+        uint32_t offset = 0;
+
+        while (offset < 0x5000) {
+            uint32_t inst[3];
+            uint32_t addr = 0x80000000 + offset;
+
+            inst[0] = bus_read32(ee, addr);
+            inst[1] = bus_read32(ee, addr + 4);
+            inst[2] = bus_read32(ee, addr + 8);
+
+            if (inst[0] == 0xac420000 && inst[1] == 0 && inst[2] == 0) {
+                uint32_t op = bus_read32(ee, 0x80000000 + offset + (4 * 6));
+
+                ee->thread_list_base = 0x80010000 + (op & 0xffff) - 8;
+
+                printf("ee: Found thread list base at %08x\n", ee->thread_list_base);
+
+                break;
+            }
+
+            offset += 4;
+        }
+    }
+
     // FlushCache
-    if (n == 0x64) {
+    if (id == 0x64) {
         // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
 
         ee->block_cache.clear();
@@ -3543,4 +3591,8 @@ uint32_t ee_get_pc(struct ee_state* ee) {
 
 struct ps2_ram* ee_get_spr(struct ee_state* ee) {
     return ee->scratchpad;
+}
+
+void ee_set_fmv_skip(struct ee_state* ee, int v) {
+    ee->fmv_skip = v;
 }
