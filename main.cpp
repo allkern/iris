@@ -54,15 +54,15 @@ INCBIN(iris_icon, "../res/iris.png");
 // Icon range (for our fonts)
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
-SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass* cp, void* buf, size_t size, uint32_t* width, uint32_t* height) {
-    SDL_GPUTextureSamplerBinding tsb = {};
+SDL_GPUTexture* load_texture(iris::instance* iris, SDL_GPUCopyPass* cp, void* buf, size_t size, uint32_t* width, uint32_t* height) {
+    SDL_GPUTexture* texture = nullptr;
 
-    stbi_uc* tex = stbi_load_from_memory((stbi_uc*)buf, size, (int*)width, (int*)height, nullptr, 4);
+    stbi_uc* data = stbi_load_from_memory((stbi_uc*)buf, size, (int*)width, (int*)height, nullptr, 4);
 
-    if (!tex) {
+    if (!data) {
         printf("Error: stbi_load_from_memory() failed: %s\n", stbi_failure_reason());
 
-        return tsb;
+        return texture;
     }
 
     SDL_GPUTextureCreateInfo tci = {};
@@ -85,8 +85,7 @@ SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass*
     sci.address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
     sci.address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE;
 
-    tsb.texture = SDL_CreateGPUTexture(iris->device, &tci);
-    tsb.sampler = SDL_CreateGPUSampler(iris->device, &sci);
+    texture = SDL_CreateGPUTexture(iris->device, &tci);
 
     // Transfer the texture
     SDL_GPUTransferBufferCreateInfo ttbci = {
@@ -97,9 +96,9 @@ SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass*
     SDL_GPUTransferBuffer* ttb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
 
     // fill the transfer buffer
-    void* data = SDL_MapGPUTransferBuffer(iris->device, ttb, false);
+    void* ptr = SDL_MapGPUTransferBuffer(iris->device, ttb, false);
 
-    SDL_memcpy(data, tex, ((*width) * 4) * (*height));
+    SDL_memcpy(ptr, data, ((*width) * 4) * (*height));
 
     SDL_UnmapGPUTransferBuffer(iris->device, ttb);
 
@@ -109,7 +108,7 @@ SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass*
     };
 
     SDL_GPUTextureRegion tr = {
-        .texture = tsb.texture,
+        .texture = texture,
         .w = *width,
         .h = *height,
         .d = 1,
@@ -117,9 +116,9 @@ SDL_GPUTextureSamplerBinding load_texture(iris::instance* iris, SDL_GPUCopyPass*
 
     SDL_UploadToGPUTexture(cp, &tti, &tr, false);
 
-    stbi_image_free(tex);
+    stbi_image_free(data);
 
-    return tsb;
+    return texture;
 }
 
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
@@ -387,7 +386,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(iris->device);
     SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
 
-    iris->ps2_memory_card_icon_tsb = load_texture(
+    iris->ps2_memory_card_icon_tex = load_texture(
         iris, cp,
         (void*)g_ps2_memory_card_icon_data,
         g_ps2_memory_card_icon_size,
@@ -395,7 +394,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         &iris->ps2_memory_card_icon_height
     );
 
-    iris->ps1_memory_card_icon_tsb = load_texture(
+    iris->ps1_memory_card_icon_tex = load_texture(
         iris, cp,
         (void*)g_ps1_memory_card_icon_data,
         g_ps1_memory_card_icon_size,
@@ -403,7 +402,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         &iris->ps1_memory_card_icon_height
     );
 
-    iris->pocketstation_icon_tsb = load_texture(
+    iris->pocketstation_icon_tex = load_texture(
         iris, cp,
         (void*)g_pocketstation_icon_data,
         g_pocketstation_icon_size,
@@ -411,7 +410,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         &iris->pocketstation_icon_height
     );
 
-    iris->iris_icon_tsb = load_texture(
+    iris->iris_icon_tex = load_texture(
         iris, cp,
         (void*)g_iris_icon_data,
         g_iris_icon_size,
@@ -576,14 +575,10 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     ImGui::DestroyContext();
 
     // Release resources
-    SDL_ReleaseGPUTexture(iris->device, iris->ps2_memory_card_icon_tsb.texture);
-    SDL_ReleaseGPUTexture(iris->device, iris->ps1_memory_card_icon_tsb.texture);
-    SDL_ReleaseGPUTexture(iris->device, iris->pocketstation_icon_tsb.texture);
-    SDL_ReleaseGPUTexture(iris->device, iris->iris_icon_tsb.texture);
-    SDL_ReleaseGPUSampler(iris->device, iris->ps2_memory_card_icon_tsb.sampler);
-    SDL_ReleaseGPUSampler(iris->device, iris->ps1_memory_card_icon_tsb.sampler);
-    SDL_ReleaseGPUSampler(iris->device, iris->pocketstation_icon_tsb.sampler);
-    SDL_ReleaseGPUSampler(iris->device, iris->iris_icon_tsb.sampler);
+    SDL_ReleaseGPUTexture(iris->device, iris->ps2_memory_card_icon_tex);
+    SDL_ReleaseGPUTexture(iris->device, iris->ps1_memory_card_icon_tex);
+    SDL_ReleaseGPUTexture(iris->device, iris->pocketstation_icon_tex);
+    SDL_ReleaseGPUTexture(iris->device, iris->iris_icon_tex);
 
     SDL_ReleaseWindowFromGPUDevice(iris->device, iris->window);
     SDL_DestroyGPUDevice(iris->device);
