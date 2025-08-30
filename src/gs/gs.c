@@ -11,6 +11,15 @@ struct ps2_gs* ps2_gs_create(void) {
     return malloc(sizeof(struct ps2_gs));
 }
 
+static inline void gs_test_gs_irq(struct ps2_gs* gs) {
+    uint32_t mask = (gs->imr >> 8) & 0x1f;
+    uint32_t stat = gs->csr & 0x1f;
+
+    if (stat & (~mask)) {
+        ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+    }
+}
+
 static inline void gs_invoke_event_handler(struct ps2_gs* gs, int event) {
     if (gs->events[event].func)
         gs->events[event].func(gs->events[event].udata);
@@ -68,7 +77,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event field_flip_event;
 
     field_flip_event.callback = gs_flip_field;
-    field_flip_event.cycles = 30000;
+    field_flip_event.cycles = 30000 * 4;
     field_flip_event.name = "Field flip event";
     field_flip_event.udata = gs;
 
@@ -77,7 +86,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 
-    gs->csr |= 6;
+    gs->csr |= 2;
 
     // Tell backend to render scene
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);
@@ -213,6 +222,10 @@ void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard) {
 
     gs_unpack_vertex(gs, &gs->vq[gs->vqi]);
 
+    // printf("gs: Pushing vertex (%04x,%04x) to VQ[%d] discard=%d\n",
+    //     gs->vq[gs->vqi].x, gs->vq[gs->vqi].y, gs->vqi, discard
+    // );
+
     gs->vqi++;
 
     // for (int c = 0; c < 2; c++) {
@@ -328,6 +341,8 @@ uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
         case 0x12001080: return gs->siglblid;
     }
 
+    printf("gs: Unhandled read from %08x\n", addr);
+
     return 0;
 }
 
@@ -360,11 +375,29 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
         case 0x120000C0: gs->extdata = data; return;
         case 0x120000D0: gs->extwrite = data; return;
         case 0x120000E0: gs->bgcolor = data; return;
-        case 0x12001000: gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf)); return;
-        case 0x12001010: gs->imr = data; return;
+        case 0x12001000: {
+            gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
+
+            if (gs->signal_pending && ((gs->csr & 1) == 0)) {
+                gs->csr |= 1;
+            }
+        } return;
+        case 0x12001010: {
+            gs->imr = data;
+
+            if (gs->signal_pending && (((gs->imr >> 8) & 1) == 0)) {
+                gs->signal_pending = 0;
+
+                ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+            }
+        } return;
         case 0x12001040: gs->busdir = data; return;
         case 0x12001080: gs->siglblid = data; return;
     }
+
+    printf("gs: Unhandled write to %08x with data %016lx\n", addr, data);
+
+    exit(1);
 }
 
 // static inline void gs_load_clut_cache(struct ps2_gs* gs, int i) {
@@ -642,19 +675,38 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x52: /* printf("gs: TRXREG <- %016lx\n", data); */ gs->trxreg = data; return;
         case 0x53: /* printf("gs: TRXDIR <- %016lx\n", data); */ gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return;
         case 0x54: gs->hwreg = data; gs->backend.transfer_write(gs, gs->backend.udata); return;
-        case 0x60: /* printf("gs: SIGNAL <- %016lx\n", data); */ gs->signal = data; return;
+        case 0x60: /* printf("gs: SIGNAL <- %016lx\n", data); */ {
+            if (gs->csr & 1) {
+                gs->signal_pending = 1;
+
+                return;
+            }
+
+            gs->signal_pending = 0;
+            gs->signal = data;
+
+            uint64_t mask = data >> 32;
+
+            gs->csr |= 1;
+            gs->siglblid &= ~mask;
+            gs->siglblid |= data & mask;
+
+            gs_test_gs_irq(gs);
+        } return;
         case 0x61: {
             // Trigger FINISH event
             gs->csr |= 2;
 
-            uint32_t mask = (gs->imr >> 8) & 0x1f;
-            uint32_t stat = gs->csr & 0x1f;
-
-            if (stat & (~mask)) {
-                ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
-            }
+            gs_test_gs_irq(gs);
         } return;
-        case 0x62: /* printf("gs: LABEL <- %016lx\n", data); */ gs->label = data; return;
+        case 0x62: {
+            gs->label = data;
+
+            uint64_t mask = data >> 32;
+
+            gs->siglblid &= (~mask) << 32;
+            gs->siglblid |= (data & mask) << 32;
+        } break;
         default: {
             // printf("gs: Invalid privileged register %02x write %016lx\n", reg, data);
 
