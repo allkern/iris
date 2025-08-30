@@ -577,7 +577,7 @@ char* disc_get_boot_path(struct disc_state* disc) {
     return NULL;
 }
 
-char* disc_read_boot_elf(struct disc_state* disc, char* buf, int s) {
+char* disc_read_boot_elf(struct disc_state* disc, int s) {
     char* boot_path = disc_get_boot_path(disc);
 
     printf("iso: Reading boot ELF from disc at path \'%s\'...\n", boot_path);
@@ -630,6 +630,7 @@ char* disc_read_boot_elf(struct disc_state* disc, char* buf, int s) {
             int32_t size = dir->size_le;
             uint32_t lba = dir->lba_le;
 
+            char* buf = malloc(((size >> 11) + 2) << 11);
             char* ptr = buf;
 
             printf("iso: Boot ELF found at lba=%08x size=%08x\n", lba, dir->size_le, dir->size_le);
@@ -645,11 +646,13 @@ char* disc_read_boot_elf(struct disc_state* disc, char* buf, int s) {
                 size -= 2048;
             }
 
-            // Read the last sector, which might be smaller than 2048 bytes
-            if (!disc_read_sector(disc, ptr, lba, DISC_SS_DATA)) {
-                printf("iso: Couldn't read boot ELF sector %d\n", lba);
+            if (size != 0) {
+                // Read the last sector, which might be smaller than 2048 bytes
+                if (!disc_read_sector(disc, ptr, lba, DISC_SS_DATA)) {
+                    printf("iso: Couldn't read boot ELF sector %d\n", lba);
 
-                return NULL;
+                    return NULL;
+                }
             }
 
             return buf;

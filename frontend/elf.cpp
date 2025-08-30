@@ -98,13 +98,11 @@ void load_elf_symbols_from_disc(iris::instance* iris) {
         return;
     }
 
-    char* elf = new char[0x2000000];
-
-    disc_read_boot_elf(iris->ps2->cdvd->disc, elf, 0);
+    char* elf = disc_read_boot_elf(iris->ps2->cdvd->disc, 0);
 
     load_elf_symbols_from_memory(iris, elf);
 
-    delete[] elf;
+    free(elf);
 }
 
 void load_elf_symbols_from_file(iris::instance* iris, std::string path) {

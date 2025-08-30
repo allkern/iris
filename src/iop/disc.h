@@ -82,7 +82,7 @@ uint64_t disc_get_volume_lba(struct disc_state* disc, int vol);
 int disc_get_sector_size(struct disc_state* disc);
 char* disc_get_serial(struct disc_state* disc, char* buf);
 char* disc_get_boot_path(struct disc_state* disc);
-char* disc_read_boot_elf(struct disc_state* disc, char* buf, int size);
+char* disc_read_boot_elf(struct disc_state* disc, int size);
 void disc_close(struct disc_state* disc);
 
 #ifdef __cplusplus
