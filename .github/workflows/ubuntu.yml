@@ -2,7 +2,7 @@ name: Ubuntu CI
 
 on:
   push:
-    branches: [ "sdl3-cmake" ]
+    branches: [ "master" ]
 
 jobs:
   build:
