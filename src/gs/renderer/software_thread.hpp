@@ -29,6 +29,10 @@ struct software_thread_state {
     std::mutex queue_mtx;
     std::mutex render_mtx;
 
+    std::vector <uint64_t> transfer_buffer;
+    int transfer_index = 0;
+    int transfer_size = 0;
+
     std::atomic <bool> end_signal;
 
     unsigned int sbp = 0, dbp = 0;
