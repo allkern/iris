@@ -25,11 +25,57 @@ void ps2_ee_timers_init(struct ps2_ee_timers* timers, struct ps2_intc* intc, str
     }
 }
 
+static inline int ee_timers_update_event(struct ee_timer* t) {
+    int counter = t->counter & 0xffff;
+
+    unsigned int cycles_until_compare;
+    unsigned int cycles_until_overflow = 0x10000 - counter;
+
+    if (counter < t->compare) {
+        cycles_until_compare = t->compare - counter;
+    } else {
+        cycles_until_compare = 0x10000 - counter + t->compare;
+    }
+
+    // Arbitrary unreachable value
+    if (!t->cmpe) cycles_until_compare = 0x80000000;
+    if (!t->ovfe) cycles_until_overflow = 0x80000000;
+
+    t->cycles_until_check = min(cycles_until_compare, cycles_until_overflow);
+
+    // printf("timer %d: cycles_until_check=%04x counter=%04x compare=%04x until_compare=%04x until_overflow=%04x\n",
+    //     t, t->cycles_until_check, t->counter, t->compare, cycles_until_compare, cycles_until_overflow
+    // );
+}
+
 void ee_timers_write_counter(struct ps2_ee_timers* timers, int t, uint32_t data) {
     struct ee_timer* timer = &timers->timer[t];
 
-    timer->cycles_until_check += timer->counter - (data & 0xffff);
-    timer->counter = data & 0xffff;
+    // printf("timer %d: write counter=%04x data=%04x\n", t, timer->counter, data);
+
+    timer->cycles_until_check += timer->counter - data;
+    timer->counter = data;
+}
+
+void ee_timers_write_compare(struct ps2_ee_timers* timers, int t, uint32_t data) {
+    struct ee_timer* timer = &timers->timer[t];
+
+    // printf("timer %d: write counter=%04x data=%04x\n", t, timer->counter, data);
+
+    if (data < timer->counter) {
+        // printf("timer %d: compare %04x >= counter %04x\n", t, data, timer->counter);
+
+        // exit(1);
+    } else if (data == timer->counter) {
+        // printf("timer %d: compare %04x == counter %04x\n", t, data, timer->counter);
+
+        // exit(1);
+    }
+
+    // timer->cycles_until_check = data - timer->counter;
+    timer->compare = data;
+
+    ee_timers_update_event(timer);
 }
 
 void ps2_ee_timers_destroy(struct ps2_ee_timers* timers) {
@@ -49,28 +95,6 @@ uint64_t ps2_ee_timers_read32(struct ps2_ee_timers* timers, uint32_t addr) {
     }
 
     return 0;
-}
-
-static inline int ee_timers_update_event(struct ee_timer* t) {
-    int counter = t->counter & 0xffff;
-
-    unsigned int cycles_until_compare;
-    unsigned int cycles_until_overflow = 0x10000 - counter;
-
-    if (counter < t->compare) {
-        cycles_until_compare = t->compare - counter;
-    } else {
-        cycles_until_compare = 0x10000 - counter + t->compare;
-    }
-
-    if (!t->cmpe) cycles_until_compare = 0x80000000;
-    if (!t->ovfe) cycles_until_overflow = 0x80000000;
-
-    t->cycles_until_check = min(cycles_until_compare, cycles_until_overflow);
-
-    // printf("timer %d: cycles_until_check=%04x counter=%04x compare=%04x until_compare=%04x until_overflow=%04x\n",
-    //     t, t->cycles_until_check, t->counter, t->compare, cycles_until_compare, cycles_until_overflow
-    // );
 }
 
 static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uint32_t data) {
@@ -130,7 +154,7 @@ void ps2_ee_timers_write32(struct ps2_ee_timers* timers, uint32_t addr, uint64_t
     switch (addr & 0xff) {
         case 0x00: ee_timers_write_counter(timers, t, data & 0xffff); return;
         case 0x10: ee_timers_write_mode(timers, t, data & 0xffff); return;
-        case 0x20: timers->timer[t].compare = data & 0xffff; return;
+        case 0x20: ee_timers_write_compare(timers, t, data & 0xffff); return;
         case 0x30: timers->timer[t].hold = data & 0xffff; return;
     }
 }
@@ -212,7 +236,7 @@ void ps2_ee_timers_write16(struct ps2_ee_timers* timers, uint32_t addr, uint64_t
     switch (addr & 0xff) {
         case 0x00: ee_timers_write_counter(timers, t, data & 0xffff); return;
         case 0x10: ee_timers_write_mode(timers, t, data & 0xffff); return;
-        case 0x20: timers->timer[t].compare = data; return;
+        case 0x20: ee_timers_write_compare(timers, t, data & 0xffff); return;
         case 0x30: timers->timer[t].hold = data & 0xffff; return;
     }
 
