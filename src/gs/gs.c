@@ -86,7 +86,7 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 
-    gs->csr |= 2;
+    gs->csr |= 6;
 
     // Tell backend to render scene
     gs_invoke_event_handler(gs, GS_EVENT_VBLANK);

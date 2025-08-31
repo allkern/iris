@@ -926,8 +926,8 @@ static inline uint32_t gs_read_dispfb(struct ps2_gs* gs, int x, int y, int dfb) 
             return vram[psmct16_shift[idx] & 0xfffff];
         } break;
         default: {
-            // printf("Unsupported PSMT %02x for dispfb read\n", dfbpsm);
-            // exit(1);
+            printf("Unsupported PSMT %02x for dispfb read\n", dfbpsm);
+            exit(1);
         } break;
     }
 
@@ -2880,7 +2880,7 @@ void gs_blit_dispfb_deinterlace_frame(software_thread_state* ctx, int dfb) {
     }
 }
 
-void gs_blit_dispfb_deinterlace_field(software_thread_state* ctx) {
+void gs_blit_dispfb_deinterlace_field(software_thread_state* ctx, int dfb) {
     // Get current field
     int odd = ((ctx->gs->csr >> 13) & 1) == 0;
 
@@ -2891,7 +2891,7 @@ void gs_blit_dispfb_deinterlace_field(software_thread_state* ctx) {
                 for (int x = 0; x < ctx->tex_w; x++) {
                     uint32_t* dst = ctx->buf + x + (((y * 2) + odd) * ctx->tex_w);
 
-                    *dst = gs_read_dispfb(ctx->gs, x, (y * 2) + odd, ctx->disp_fmt);
+                    *dst = gs_read_dispfb(ctx->gs, x, (y * 2) + odd, dfb);
                 }
             }
         } break;
@@ -2901,14 +2901,14 @@ void gs_blit_dispfb_deinterlace_field(software_thread_state* ctx) {
                 for (int x = 0; x < ctx->tex_w; x++) {
                     uint16_t* dst = ((uint16_t*)ctx->buf) + x + (((y * 2) + odd) * ctx->tex_w);
 
-                    *dst = gs_read_dispfb(ctx->gs, x, (y * 2) + odd, ctx->disp_fmt);
+                    *dst = gs_read_dispfb(ctx->gs, x, (y * 2) + odd, dfb);
                 }
             }
         } break;
     }
 }
 
-void gs_blit_dispfb_no_deinterlace(software_thread_state* ctx) {
+void gs_blit_dispfb_no_deinterlace(software_thread_state* ctx, int dfb) {
     switch (ctx->disp_fmt) {
         case GS_PSMCT32:
         case GS_PSMCT24: {
@@ -2916,7 +2916,7 @@ void gs_blit_dispfb_no_deinterlace(software_thread_state* ctx) {
                 for (int x = 0; x < ctx->tex_w; x++) {
                     uint32_t* dst = ctx->buf + x + (y * ctx->tex_w);
 
-                    *dst = gs_read_dispfb(ctx->gs, x, y, ctx->disp_fmt);
+                    *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
                 }
             }
         } break;
@@ -2926,7 +2926,7 @@ void gs_blit_dispfb_no_deinterlace(software_thread_state* ctx) {
                 for (int x = 0; x < ctx->tex_w; x++) {
                     uint16_t* dst = ((uint16_t*)ctx->buf) + x + (y * ctx->tex_w);
 
-                    *dst = gs_read_dispfb(ctx->gs, x, y, ctx->disp_fmt);
+                    *dst = gs_read_dispfb(ctx->gs, x, y, dfb);
                 }
             }
         } break;
@@ -2978,10 +2978,10 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
         if (ctx->gs->smode2 & 2) {
             gs_blit_dispfb_deinterlace_frame(ctx, dfb);
         } else {
-            gs_blit_dispfb_no_deinterlace(ctx);
+            gs_blit_dispfb_deinterlace_field(ctx, dfb);
         }
     } else {
-        gs_blit_dispfb_no_deinterlace(ctx);
+        gs_blit_dispfb_no_deinterlace(ctx, dfb);
     }
 
     ptr = ctx->buf;
