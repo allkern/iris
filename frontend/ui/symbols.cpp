@@ -214,13 +214,13 @@ void show_symbols(iris::instance* iris) {
 
                     PushFont(iris->font_body);
 
-                    if (Selectable(ICON_MS_ARROW_RIGHT " Go to this address")) {
+                    if (Selectable(ICON_MS_ARROW_FORWARD " Go to this address")) {
                         iris->show_ee_control = true;
                         iris->ee_control_follow_pc = false;
                         iris->ee_control_address = symbol.addr;
                     }
 
-                    if (Selectable(ICON_MS_CIRCLE " Set a breakpoint here")) {
+                    if (Selectable(ICON_MS_ADD_CIRCLE " Set a breakpoint here")) {
                         breakpoint b;
 
                         b.addr = symbol.addr;
