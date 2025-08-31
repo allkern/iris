@@ -74,6 +74,7 @@ struct ps2_dmac {
     struct dmac_channel sif2;
     struct dmac_channel spr_from;
     struct dmac_channel spr_to;
+    struct dmac_channel* mfifo_drain;
 
     uint32_t ctrl;
     uint32_t stat;

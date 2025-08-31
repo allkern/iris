@@ -5,7 +5,7 @@
 
 #include "dmac.h"
 
-// #define printf(fmt, ...)(0)
+#define printf(fmt, ...)(0)
 
 static inline uint128_t dmac_read_qword(struct ps2_dmac* dmac, uint32_t addr, int mem) {
     int spr = mem || (addr & 0x80000000);
@@ -134,15 +134,16 @@ static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_ch
     c->tag.mem = TAG_MEM(tag);
     c->tag.data = TAG_DATA(tag);
 
-    // printf("ee: dmac tag %016lx %016lx qwc=%08x id=%d irq=%d addr=%08x mem=%d data=%016lx\n",
-    //     tag.u64[1], tag.u64[0],
-    //     c->tag.qwc,
-    //     c->tag.id,
-    //     c->tag.irq,
-    //     c->tag.addr,
-    //     c->tag.mem,
-    //     c->tag.data
-    // );
+    if (dmac->mfifo_drain)
+    printf("ee: dmac tag %016lx %016lx qwc=%08x id=%d irq=%d addr=%08x mem=%d data=%016lx\n",
+        tag.u64[1], tag.u64[0],
+        c->tag.qwc,
+        c->tag.id,
+        c->tag.irq,
+        c->tag.addr,
+        c->tag.mem,
+        c->tag.data
+    );
 
     c->tag.end = 0;
     c->qwc = c->tag.qwc;
@@ -349,29 +350,91 @@ void dmac_send_vif1_irq(void* udata, int overshoot) {
     dmac_set_irq(dmac, DMAC_VIF1);
 }
 
-void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
-    // printf("dmac: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
-    //     dmac->vif1.chcr & 1,
-    //     (dmac->vif1.chcr >> 2) & 3,
-    //     (dmac->vif1.chcr >> 6) & 1,
-    //     (dmac->vif1.chcr >> 7) & 1,
-    //     dmac->vif1.qwc,
-    //     dmac->vif1.madr,
-    //     dmac->vif1.tadr,
-    //     dmac->rbor,
-    //     dmac->rbsr,
-    //     dmac->spr_from.madr
-    // );
+void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
+    struct dmac_channel* c = dmac->mfifo_drain;
 
-    uint32_t spr_from_madr = dmac->spr_from.madr;
-    int mfifo_drain = (dmac->ctrl >> 2) & 3;
+    if (c->qwc) {
+        uint128_t q = dmac_read_qword(dmac, c->madr, c->tag.mem);
 
-    if (mfifo_drain == 2) {
-        if (dmac->vif1.tadr == dmac->spr_from.madr) {
-            dmac_set_irq(dmac, DMAC_MEIS);
+        if (c == &dmac->vif1) {
+            // VIF1 FIFO
+            ee_bus_write128(dmac->bus, 0x10007010, q);
+        } else {
+            // GIF FIFO
+            ee_bus_write128(dmac->bus, 0x10006000, q);
+        }
+
+        c->madr += 16;
+        c->qwc--;
+
+        printf("dmac: mfifo channel qwc=%d\n", c->qwc);
+
+        if (channel_is_done(c)) {
+            printf("dmac: mfifo channel done end=%d tte-irq=%d\n", c->tag.end, c->tag.irq && (c->chcr & 0x80));
+            dmac_set_irq(dmac, c == &dmac->vif1 ? DMAC_VIF1 : DMAC_GIF);
+
+            c->chcr &= ~0x100;
+            c->qwc = 0;
 
             return;
         }
+
+        return;
+    }
+
+    if (channel_is_done(c)) {
+        printf("dmac: mfifo channel done end=%d tte-irq=%d\n", c->tag.end, c->tag.irq && (c->chcr & 0x80));
+        dmac_set_irq(dmac, c == &dmac->vif1 ? DMAC_VIF1 : DMAC_GIF);
+
+        c->chcr &= ~0x100;
+        c->qwc = 0;
+
+        return;
+    }
+
+    uint128_t tag = dmac_read_qword(dmac, c->tadr, 0);
+
+    dmac_process_source_tag(dmac, c, tag);
+
+    c->tadr = dmac->rbor | (c->tadr & dmac->rbsr);
+
+    switch (c->tag.id) {
+        case 1:
+        case 2:
+        case 5:
+        case 6:
+        case 7: {
+            c->madr = dmac->rbor | (c->madr & dmac->rbsr);
+        } break;
+    }
+
+    printf("dmac: tadr=%08x madr=%08x\n", c->tadr, c->madr);
+
+    if (c->tadr == dmac->spr_from.madr) {
+        printf("dmac: MFIFO empty\n");
+
+        exit(1);
+    }
+}
+
+void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
+    printf("dmac: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
+        dmac->vif1.chcr & 1,
+        (dmac->vif1.chcr >> 2) & 3,
+        (dmac->vif1.chcr >> 6) & 1,
+        (dmac->vif1.chcr >> 7) & 1,
+        dmac->vif1.qwc,
+        dmac->vif1.madr,
+        dmac->vif1.tadr,
+        dmac->rbor,
+        dmac->rbsr,
+        dmac->spr_from.madr
+    );
+
+    int mfifo_drain = (dmac->ctrl >> 2) & 3;
+
+    if (mfifo_drain == 2) {
+        return;
     }
 
     int tte = (dmac->vif1.chcr >> 6) & 1;
@@ -395,6 +458,8 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
         if (dmac->vif1.qwc == 0)
             return;
 
+        dmac->vif1.qwc = 0;
+
         sched_schedule(dmac->sched, event);
 
         return;
@@ -412,7 +477,9 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
         dmac->vif1.madr += 16;
     }
 
-    if (mode == 0) {
+    dmac->vif1.qwc = 0;
+
+    if (dmac->vif1.tag.end) {
         sched_schedule(dmac->sched, event);
 
         return;
@@ -490,6 +557,24 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
     event.cycles = 1000;
 
     sched_schedule(dmac->sched, event);
+
+    printf("dmac: GIF DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
+        dmac->gif.chcr & 1,
+        (dmac->gif.chcr >> 2) & 3,
+        (dmac->gif.chcr >> 6) & 1,
+        (dmac->gif.chcr >> 7) & 1,
+        dmac->gif.qwc,
+        dmac->gif.madr,
+        dmac->gif.tadr,
+        dmac->rbor,
+        dmac->rbsr,
+        dmac->spr_from.madr
+    );
+
+    int mfifo_drain = (dmac->ctrl >> 2) & 3;
+
+    if (mfifo_drain == 3)
+        return;
 
     // printf("ee: GIF DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
     //     dmac->gif.chcr & 1,
@@ -843,35 +928,42 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
 
     dmac->spr_from.chcr &= ~0x100;
 
-    // printf("dmac: spr_from start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x sadr=%08x rbor=%08x rbsr=%08x\n",
-    //     dmac->spr_from.chcr,
-    //     dmac->spr_from.chcr & 1,
-    //     (dmac->spr_from.chcr >> 2) & 3,
-    //     !!(dmac->spr_from.chcr & 0x40),
-    //     dmac->spr_from.madr,
-    //     dmac->spr_from.qwc,
-    //     dmac->spr_from.tadr,
-    //     dmac->spr_from.sadr,
-    //     dmac->rbor,
-    //     dmac->rbsr
-    // );
-
-    // int mfifo_enabled = (dmac->ctrl >> 2) & 3;
-
-    // if (mfifo_enabled) {
-    //     dmac->spr_from.madr |= dmac->rbor & dmac->rbsr;
-    //     for (int i = 0; i < dmac->spr_from.qwc; i++) {
-    //         uint128_t q = dmac_read_qword(dmac, dmac->spr_from.sadr, 1);
-
-    //         ee_bus_write128(dmac->bus, dmac->spr_from.madr, q);
-
-    //         dmac->spr_from.madr += 0x10;
-    //         dmac->spr_from.sadr += 0x10;
-    //         dmac->spr_from.sadr &= 0x3ff0;
-    //     }
-    // }
+    printf("dmac: spr_from start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x sadr=%08x rbor=%08x rbsr=%08x\n",
+        dmac->spr_from.chcr,
+        dmac->spr_from.chcr & 1,
+        (dmac->spr_from.chcr >> 2) & 3,
+        !!(dmac->spr_from.chcr & 0x40),
+        dmac->spr_from.madr,
+        dmac->spr_from.qwc,
+        dmac->spr_from.tadr,
+        dmac->spr_from.sadr,
+        dmac->rbor,
+        dmac->rbsr
+    );
 
     int mode = (dmac->spr_from.chcr >> 2) & 3;
+
+    if (dmac->mfifo_drain) {
+        assert(mode == 0);
+
+        dmac->spr_from.madr = dmac->rbor | (dmac->spr_from.madr & dmac->rbsr);
+
+        for (int i = 0; i < dmac->spr_from.qwc; i++) {
+            uint128_t q = dmac_read_qword(dmac, dmac->spr_from.sadr, 1);
+
+            ee_bus_write128(dmac->bus, dmac->spr_from.madr, q);
+            
+            mfifo_write_qword(dmac, q);
+
+            dmac->spr_from.madr = dmac->rbor | ((dmac->spr_from.madr + 0x10) & dmac->rbsr);
+            dmac->spr_from.sadr += 0x10;
+            dmac->spr_from.sadr &= 0x3ff0;
+        }
+
+        dmac->spr_from.qwc = 0;
+
+        return;
+    }
 
     if (mode == 2) {
         dmac_spr_from_interleave(dmac);
@@ -891,7 +983,7 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
 
     dmac->spr_from.qwc = 0;
 
-    if (mode == 0) {
+    if (dmac->spr_from.tag.end) {
         return;
     }
 
@@ -1071,7 +1163,8 @@ static inline void dmac_handle_channel_start(struct ps2_dmac* dmac, uint32_t add
 
     int mode = (c->chcr >> 2) & 3;
 
-    if (mode != 1) {
+    // Modes 1 and 3 are chain modes
+    if ((mode & 1) == 0) {
         c->tag.end = 1;
     } else if (c->qwc != 0) {
         int id = c->chcr >> 28 & 7;
@@ -1129,7 +1222,12 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                     mfifo_drain, stall_ctrl, stall_drain
                 );
 
-                exit(1);
+                switch (mfifo_drain) {
+                    case 0: dmac->mfifo_drain = NULL; break;
+                    case 2: dmac->mfifo_drain = &dmac->vif1; break;
+                    case 3: dmac->mfifo_drain = &dmac->gif; break;
+                    default: printf("dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
+                }
             }
         } return;
         case 0x1000E010: dmac_write_stat(dmac, data); return;
@@ -1271,7 +1369,12 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                     mfifo_drain, stall_ctrl, stall_drain
                 );
 
-                exit(1);
+                switch (mfifo_drain) {
+                    case 0: dmac->mfifo_drain = NULL; break;
+                    case 2: dmac->mfifo_drain = &dmac->vif1; break;
+                    case 3: dmac->mfifo_drain = &dmac->gif; break;
+                    default: printf("dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
+                }
             }
         } return;
     }
