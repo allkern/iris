@@ -2727,6 +2727,8 @@ void transfer_start(struct ps2_gs* gs, void* udata) {
     if (ctx->xdir == 2) {
         ctx->render_mtx.lock();
 
+        ctx->stats.texture_blits++;
+
         software_thread_vram_blit(gs, ctx);
 
         ctx->render_mtx.unlock();
@@ -2734,6 +2736,8 @@ void transfer_start(struct ps2_gs* gs, void* udata) {
         printf("gs: Read transfer requested\n");
 
         // exit(1);
+    } else {
+        ctx->stats.texture_uploads++;
     }
 }
 
@@ -2755,6 +2759,9 @@ void transfer_read(struct ps2_gs* gs, void* udata) {
 extern "C" void software_thread_render_point(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
+    ctx->stats.points++;
+    ctx->stats.primitives++;
+
     ctx->queue_mtx.lock();
     ctx->render_queue.push(render_data());
 
@@ -2767,6 +2774,9 @@ extern "C" void software_thread_render_point(struct ps2_gs* gs, void* udata) {
 
 extern "C" void software_thread_render_line(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->stats.lines++;
+    ctx->stats.primitives++;
 
     ctx->queue_mtx.lock();
     ctx->render_queue.push(render_data());
@@ -2781,6 +2791,9 @@ extern "C" void software_thread_render_line(struct ps2_gs* gs, void* udata) {
 extern "C" void software_thread_render_triangle(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
 
+    ctx->stats.triangles++;
+    ctx->stats.primitives++;
+
     ctx->queue_mtx.lock();
     ctx->render_queue.push(render_data());
 
@@ -2793,6 +2806,9 @@ extern "C" void software_thread_render_triangle(struct ps2_gs* gs, void* udata) 
 
 extern "C" void software_thread_render_sprite(struct ps2_gs* gs, void* udata) {
     software_thread_state* ctx = (software_thread_state*)udata;
+
+    ctx->stats.sprites++;
+    ctx->stats.primitives++;
 
     ctx->queue_mtx.lock();
     ctx->render_queue.push(render_data());
@@ -2978,7 +2994,7 @@ void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buf
         if (ctx->gs->smode2 & 2) {
             gs_blit_dispfb_deinterlace_frame(ctx, dfb);
         } else {
-            gs_blit_dispfb_deinterlace_field(ctx, dfb);
+            gs_blit_dispfb_no_deinterlace(ctx, dfb);
         }
     } else {
         gs_blit_dispfb_no_deinterlace(ctx, dfb);
@@ -3159,6 +3175,16 @@ void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, S
     if (!ctx->texture)
         return;
 
+    ctx->stats.frames_rendered++;
+    ctx->last_frame_stats = ctx->stats;
+    ctx->stats.lines = 0;
+    ctx->stats.points = 0;
+    ctx->stats.triangles = 0;
+    ctx->stats.sprites = 0;
+    ctx->stats.primitives = 0;
+    ctx->stats.texture_uploads = 0;
+    ctx->stats.texture_blits = 0;
+
     SDL_BindGPUGraphicsPipeline(render_pass, ctx->pipeline);
 
     // bind the vertex buffer
@@ -3186,4 +3212,10 @@ void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, S
 
 void software_thread_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {
     // Nothing for now
+}
+
+renderer_stats* software_thread_get_debug_stats(void* udata) {
+    software_thread_state* ctx = (software_thread_state*)udata;
+
+    return &ctx->last_frame_stats;
 }

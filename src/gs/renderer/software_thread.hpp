@@ -78,6 +78,9 @@ struct software_thread_state {
     unsigned int frame = 0;
 
     uint32_t* buf = nullptr;
+
+    renderer_stats stats = { 0 };
+    renderer_stats last_frame_stats = { 0 };
 };
 
 void software_thread_init(void* udata, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device);
@@ -93,6 +96,7 @@ void software_thread_get_display_format(void* udata, int* fmt);
 void software_thread_get_interlace_mode(void* udata, int* mode);
 void software_thread_set_window_rect(void* udata, int x, int y, int w, int h);
 void* software_thread_get_buffer_data(void* udata, int* w, int* h, int* bpp);
+renderer_stats* software_thread_get_debug_stats(void* udata);
 const char* software_thread_get_name(void* udata);
 void software_thread_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
 void software_thread_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass);

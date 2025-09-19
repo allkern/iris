@@ -27,6 +27,18 @@ enum : int {
     RENDERER_SOFTWARE_THREAD
 };
 
+struct renderer_stats {
+    unsigned int primitives = 0;
+    unsigned int triangles = 0;
+    unsigned int lines = 0;
+    unsigned int points = 0;
+    unsigned int sprites = 0;
+    unsigned int texture_uploads = 0;
+    unsigned int texture_blits = 0;
+    unsigned int frames_rendered = 0;
+    float frame_latency = 0.0f;
+};
+
 struct renderer_state {
     struct ps2_gs* gs = nullptr;
     void* udata = nullptr;
@@ -46,6 +58,7 @@ struct renderer_state {
     void (*set_render_context)(void*, SDL_GPUCommandBuffer*, SDL_GPURenderPass*);
     void* (*get_buffer_data)(void*, int*, int*, int*) = nullptr;
     const char* (*get_name)(void*) = nullptr;
+    renderer_stats* (*get_debug_stats)(void*) = nullptr;
 
     // Rendering interface
     void (*begin_render)(void*, SDL_GPUCommandBuffer*);
@@ -69,6 +82,7 @@ void renderer_get_display_format(renderer_state* renderer, int* fmt);
 void renderer_get_interlace_mode(renderer_state* renderer, int* mode);
 void renderer_set_window_rect(renderer_state* renderer, int x, int y, int w, int h);
 void* renderer_get_buffer_data(renderer_state* renderer, int* w, int* h, int* bpp);
+renderer_stats* renderer_get_debug_stats(renderer_state* renderer);
 const char* renderer_get_name(renderer_state* renderer);
 void renderer_destroy(renderer_state* renderer);
 
