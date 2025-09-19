@@ -134,16 +134,16 @@ static inline void dmac_process_source_tag(struct ps2_dmac* dmac, struct dmac_ch
     c->tag.mem = TAG_MEM(tag);
     c->tag.data = TAG_DATA(tag);
 
-    if (dmac->mfifo_drain)
-    printf("ee: dmac tag %016lx %016lx qwc=%08x id=%d irq=%d addr=%08x mem=%d data=%016lx\n",
-        tag.u64[1], tag.u64[0],
-        c->tag.qwc,
-        c->tag.id,
-        c->tag.irq,
-        c->tag.addr,
-        c->tag.mem,
-        c->tag.data
-    );
+    // if (dmac->mfifo_drain)
+    // printf("ee: dmac tag %016lx %016lx qwc=%08x id=%d irq=%d addr=%08x mem=%d data=%016lx\n",
+    //     tag.u64[1], tag.u64[0],
+    //     c->tag.qwc,
+    //     c->tag.id,
+    //     c->tag.irq,
+    //     c->tag.addr,
+    //     c->tag.mem,
+    //     c->tag.data
+    // );
 
     c->tag.end = 0;
     c->qwc = c->tag.qwc;
@@ -418,24 +418,23 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
 }
 
 void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
-    printf("dmac: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
-        dmac->vif1.chcr & 1,
-        (dmac->vif1.chcr >> 2) & 3,
-        (dmac->vif1.chcr >> 6) & 1,
-        (dmac->vif1.chcr >> 7) & 1,
-        dmac->vif1.qwc,
-        dmac->vif1.madr,
-        dmac->vif1.tadr,
-        dmac->rbor,
-        dmac->rbsr,
-        dmac->spr_from.madr
-    );
+    // printf("dmac: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
+    //     dmac->vif1.chcr & 1,
+    //     (dmac->vif1.chcr >> 2) & 3,
+    //     (dmac->vif1.chcr >> 6) & 1,
+    //     (dmac->vif1.chcr >> 7) & 1,
+    //     dmac->vif1.qwc,
+    //     dmac->vif1.madr,
+    //     dmac->vif1.tadr,
+    //     dmac->rbor,
+    //     dmac->rbsr,
+    //     dmac->spr_from.madr
+    // );
 
     int mfifo_drain = (dmac->ctrl >> 2) & 3;
 
-    if (mfifo_drain == 2) {
+    if (mfifo_drain == 2)
         return;
-    }
 
     int tte = (dmac->vif1.chcr >> 6) & 1;
     int mode = (dmac->vif1.chcr >> 2) & 3;
@@ -558,18 +557,18 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 
     sched_schedule(dmac->sched, event);
 
-    printf("dmac: GIF DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
-        dmac->gif.chcr & 1,
-        (dmac->gif.chcr >> 2) & 3,
-        (dmac->gif.chcr >> 6) & 1,
-        (dmac->gif.chcr >> 7) & 1,
-        dmac->gif.qwc,
-        dmac->gif.madr,
-        dmac->gif.tadr,
-        dmac->rbor,
-        dmac->rbsr,
-        dmac->spr_from.madr
-    );
+    // printf("dmac: GIF DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
+    //     dmac->gif.chcr & 1,
+    //     (dmac->gif.chcr >> 2) & 3,
+    //     (dmac->gif.chcr >> 6) & 1,
+    //     (dmac->gif.chcr >> 7) & 1,
+    //     dmac->gif.qwc,
+    //     dmac->gif.madr,
+    //     dmac->gif.tadr,
+    //     dmac->rbor,
+    //     dmac->rbsr,
+    //     dmac->spr_from.madr
+    // );
 
     int mfifo_drain = (dmac->ctrl >> 2) & 3;
 
@@ -843,6 +842,7 @@ void dmac_handle_sif0_transfer(struct ps2_dmac* dmac) {
 }
 void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
     assert(!dmac->sif1.qwc);
+    assert(((dmac->sif1.chcr >> 2) & 3) == 1);
 
     // This should be ok?
     // if (!ps2_sif_fifo_is_empty(dmac->sif)) {
@@ -928,18 +928,18 @@ void dmac_handle_spr_from_transfer(struct ps2_dmac* dmac) {
 
     dmac->spr_from.chcr &= ~0x100;
 
-    printf("dmac: spr_from start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x sadr=%08x rbor=%08x rbsr=%08x\n",
-        dmac->spr_from.chcr,
-        dmac->spr_from.chcr & 1,
-        (dmac->spr_from.chcr >> 2) & 3,
-        !!(dmac->spr_from.chcr & 0x40),
-        dmac->spr_from.madr,
-        dmac->spr_from.qwc,
-        dmac->spr_from.tadr,
-        dmac->spr_from.sadr,
-        dmac->rbor,
-        dmac->rbsr
-    );
+    // printf("dmac: spr_from start data=%08x dir=%d mod=%d tte=%d madr=%08x qwc=%08x tadr=%08x sadr=%08x rbor=%08x rbsr=%08x\n",
+    //     dmac->spr_from.chcr,
+    //     dmac->spr_from.chcr & 1,
+    //     (dmac->spr_from.chcr >> 2) & 3,
+    //     !!(dmac->spr_from.chcr & 0x40),
+    //     dmac->spr_from.madr,
+    //     dmac->spr_from.qwc,
+    //     dmac->spr_from.tadr,
+    //     dmac->spr_from.sadr,
+    //     dmac->rbor,
+    //     dmac->rbsr
+    // );
 
     int mode = (dmac->spr_from.chcr >> 2) & 3;
 
@@ -1087,32 +1087,30 @@ void dmac_handle_spr_to_transfer(struct ps2_dmac* dmac) {
     dmac->spr_to.qwc = 0;
 
     // We're done
-    if (mode == 0) {
+    if (dmac->spr_to.tag.end)
         return;
-    }
 
     // Chain mode
     do {
         uint128_t tag = dmac_read_qword(dmac, dmac->spr_to.tadr, 0);
 
-        dmac_process_source_tag(dmac, &dmac->spr_to, tag);
-
         if ((dmac->spr_to.chcr >> 6) & 1) {
             ps2_ram_write128(dmac->spr, dmac->spr_to.sadr, tag);
 
-            dmac->spr_to.madr += 0x10;
+            dmac->spr_to.sadr += 0x10;
         }
 
-        // printf("ee: spr_to tag qwc=%08lx madr=%08lx tadr=%08lx id=%ld addr=%08lx mem=%ld data=%016lx end=%d tte=%d\n",
+        dmac_process_source_tag(dmac, &dmac->spr_to, tag);
+        
+        // printf("ee: spr_to tag qwc=%08lx madr=%08lx tadr=%08lx id=%ld addr=%08lx mem=%ld end=%d data=%08x%08x\n",
         //     dmac->spr_to.tag.qwc,
         //     dmac->spr_to.madr,
         //     dmac->spr_to.tadr,
         //     dmac->spr_to.tag.id,
         //     dmac->spr_to.tag.addr,
         //     dmac->spr_to.tag.mem,
-        //     dmac->spr_to.tag.data,
         //     dmac->spr_to.tag.end,
-        //     (dmac->spr_to.chcr >> 7) & 1
+        //     tag.u32[1], tag.u32[0]
         // );
 
         for (int i = 0; i < dmac->spr_to.qwc; i++) {
@@ -1377,11 +1375,17 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                 }
             }
         } return;
+
+        // ENABLEW (byte 2)
+        case 0x1000f592: {
+            dmac->enable &= 0xff00ffff;
+            dmac->enable |= (data & 0xff) << 16;
+        } return;
     }
 
     printf("dmac: 8-bit write to %08x (%02x)\n", addr, data);
 
-    exit(1);
+    // exit(1);
 
     return;
 }
