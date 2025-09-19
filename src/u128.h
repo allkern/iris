@@ -14,6 +14,10 @@ typedef union {
     uint32_t u32[4];
     uint16_t u16[8];
     uint8_t u8[16];
+    int64_t s64[2];
+    int32_t s32[4];
+    int16_t s16[8];
+    int8_t s8[16];
     uint64_t ul64;
     uint32_t ul32;
     uint16_t ul16;
