@@ -2,8 +2,9 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include <signal.h>
+#include <assert.h>
+#include <math.h>
 #include <fenv.h>
 
 #ifdef _EE_USE_INTRINSICS
@@ -56,6 +57,16 @@ static inline int16_t saturate16(int32_t word) {
         return 0x8000;
     } else {
         return (int16_t)word;
+    }
+}
+
+static inline int32_t saturate32(int64_t word) {
+    if (word > (int32_t)0x7FFFFFFF) {
+        return 0x7FFFFFFF;
+    } else if (word < (int32_t)0x80000000) {
+        return 0x80000000;
+    } else {
+        return (int32_t)word;
     }
 }
 
@@ -1682,9 +1693,78 @@ static inline void ee_i_pcpyud(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u64[0] = rs.u64[1];
     ee->r[d].u64[1] = rt.u64[1];
 }
-static inline void ee_i_pdivbw(struct ee_state* ee, const ee_instruction& i) { printf("ee: pdivbw unimplemented\n"); exit(1); }
-static inline void ee_i_pdivuw(struct ee_state* ee, const ee_instruction& i) { printf("ee: pdivuw unimplemented\n"); exit(1); }
-static inline void ee_i_pdivw(struct ee_state* ee, const ee_instruction& i) { printf("ee: pdivw unimplemented\n"); exit(1); }
+static inline void ee_i_pdivbw(struct ee_state* ee, const ee_instruction& i) {
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    for (int i = 0; i < 4; i++) {
+        if (ee->r[s].u32[i] == 0x80000000 && ee->r[t].u16[0] == 0xffff) {
+            ee->lo.u32[i] = 0x80000000;
+            ee->hi.u32[i] = 0;
+        } else if (ee->r[t].u16[0] != 0) {
+            ee->lo.u32[i] = ee->r[s].s32[i] / ee->r[t].s16[0];
+            ee->hi.u32[i] = ee->r[s].s32[i] % ee->r[t].s16[0];
+        } else {
+            if (ee->r[s].s32[i] < 0) {
+                ee->lo.u32[i] = 1;
+            } else {
+                ee->lo.u32[i] = -1;
+            }
+
+            ee->hi.u32[i] = ee->r[s].s32[i];
+        }
+    }
+
+    // ee->hi.u32[0] = SE3216(ee->r[s].s32[0] % ee->r[t].s16[0]);
+    // ee->hi.u32[1] = SE3216(ee->r[s].s32[1] % ee->r[t].s16[0]);
+    // ee->hi.u32[2] = SE3216(ee->r[s].s32[2] % ee->r[t].s16[0]);
+    // ee->hi.u32[3] = SE3216(ee->r[s].s32[3] % ee->r[t].s16[0]);
+    // ee->lo.u32[0] = ee->r[s].s32[0] / ee->r[t].s16[0];
+    // ee->lo.u32[1] = ee->r[s].s32[1] / ee->r[t].s16[0];
+    // ee->lo.u32[2] = ee->r[s].s32[2] / ee->r[t].s16[0];
+    // ee->lo.u32[3] = ee->r[s].s32[3] / ee->r[t].s16[0];
+}
+static inline void ee_i_pdivuw(struct ee_state* ee, const ee_instruction& i) {
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    for (int i = 0; i < 4; i += 2) {
+        if (ee->r[t].u32[i] != 0) {
+            ee->lo.u64[i/2] = SE6432(ee->r[s].u32[i] / ee->r[t].u32[i]);
+            ee->hi.u64[i/2] = SE6432(ee->r[s].u32[i] % ee->r[t].u32[i]);
+        } else {
+            ee->lo.u64[i/2] = (int64_t)-1;
+            ee->hi.u64[i/2] = (int64_t)ee->r[s].s32[i];
+        }
+    }
+}
+static inline void ee_i_pdivw(struct ee_state* ee, const ee_instruction& i) {
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    for (int i = 0; i < 4; i += 2) {
+        if (ee->r[s].u32[i] == 0x80000000 && ee->r[t].u32[i] == 0xffffffff) {
+            ee->lo.u64[i/2] = (int64_t)(int32_t)0x80000000;
+            ee->hi.u64[i/2] = 0;
+        } else if (ee->r[t].u32[i] != 0) {
+            ee->lo.u64[i/2] = SE6432(ee->r[s].s32[i] / ee->r[t].s32[i]);
+            ee->hi.u64[i/2] = SE6432(ee->r[s].s32[i] % ee->r[t].s32[i]);
+        } else {
+            if (ee->r[s].s32[i] < 0) {
+                ee->lo.u64[i/2] = 1;
+            } else {
+                ee->lo.u64[i/2] = (int64_t)-1;
+            }
+
+            ee->hi.u64[i/2] = (int64_t)ee->r[s].s32[i];
+        }
+    }
+
+    // ee->hi.u64[0] = SE6432(ee->r[s].s32[0] % ee->r[t].s32[0]);
+    // ee->hi.u64[1] = SE6432(ee->r[s].s32[2] % ee->r[t].s32[2]);
+    // ee->lo.u64[0] = SE6432(ee->r[s].s32[0] / ee->r[t].s32[0]);
+    // ee->lo.u64[1] = SE6432(ee->r[s].s32[2] / ee->r[t].s32[2]);
+}
 static inline void ee_i_pexch(struct ee_state* ee, const ee_instruction& i) {
     uint128_t rt = ee->r[EE_D_RT];
     int d = EE_D_RD;
@@ -1835,16 +1915,47 @@ static inline void ee_i_phmadh(struct ee_state* ee, const ee_instruction& i) {
     uint128_t rs = ee->r[EE_D_RS];
     int d = EE_D_RD;
 
-    ee->r[d].u32[0] = ((int16_t)rs.u16[1] * (int16_t)rt.u16[1]) + ((int16_t)rs.u16[0] * (int16_t)rt.u16[0]);
-    ee->r[d].u32[1] = ((int16_t)rs.u16[3] * (int16_t)rt.u16[3]) + ((int16_t)rs.u16[2] * (int16_t)rt.u16[2]);
-    ee->r[d].u32[2] = ((int16_t)rs.u16[5] * (int16_t)rt.u16[5]) + ((int16_t)rs.u16[4] * (int16_t)rt.u16[4]);
-    ee->r[d].u32[3] = ((int16_t)rs.u16[7] * (int16_t)rt.u16[7]) + ((int16_t)rs.u16[6] * (int16_t)rt.u16[6]);
+    int32_t r0 = (int32_t)(rs.s16[1] * rt.s16[1]);
+    int32_t r1 = (int32_t)(rs.s16[3] * rt.s16[3]);
+    int32_t r2 = (int32_t)(rs.s16[5] * rt.s16[5]);
+    int32_t r3 = (int32_t)(rs.s16[7] * rt.s16[7]);
+
+    ee->r[d].u32[0] = r0 + ((int16_t)rs.u16[0] * (int16_t)rt.u16[0]);
+    ee->r[d].u32[1] = r1 + ((int16_t)rs.u16[2] * (int16_t)rt.u16[2]);
+    ee->r[d].u32[2] = r2 + ((int16_t)rs.u16[4] * (int16_t)rt.u16[4]);
+    ee->r[d].u32[3] = r3 + ((int16_t)rs.u16[6] * (int16_t)rt.u16[6]);
     ee->lo.u32[0] = ee->r[d].u32[0];
+    ee->lo.u32[1] = r0;
     ee->hi.u32[0] = ee->r[d].u32[1];
+    ee->hi.u32[1] = r1;
     ee->lo.u32[2] = ee->r[d].u32[2];
+    ee->lo.u32[3] = r2;
     ee->hi.u32[2] = ee->r[d].u32[3];
+    ee->hi.u32[3] = r3;
 }
-static inline void ee_i_phmsbh(struct ee_state* ee, const ee_instruction& i) { printf("ee: phmsbh unimplemented\n"); exit(1); }
+static inline void ee_i_phmsbh(struct ee_state* ee, const ee_instruction& i) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    int32_t r1 = ee->r[s].s16[1] * ee->r[t].s16[1];
+    int32_t r3 = ee->r[s].s16[3] * ee->r[t].s16[3];
+    int32_t r5 = ee->r[s].s16[5] * ee->r[t].s16[5];
+    int32_t r7 = ee->r[s].s16[7] * ee->r[t].s16[7];
+
+    ee->r[d].u32[0] = (int32_t)(r1 - (ee->r[s].s16[0] * ee->r[t].s16[0]));
+    ee->r[d].u32[1] = (int32_t)(r3 - (ee->r[s].s16[2] * ee->r[t].s16[2]));
+    ee->r[d].u32[2] = (int32_t)(r5 - (ee->r[s].s16[4] * ee->r[t].s16[4]));
+    ee->r[d].u32[3] = (int32_t)(r7 - (ee->r[s].s16[6] * ee->r[t].s16[6]));
+    ee->lo.u32[0] = ee->r[d].u32[0];
+    ee->lo.u32[1] = ~r1;
+    ee->hi.u32[0] = ee->r[d].u32[1];
+    ee->hi.u32[1] = ~r3;
+    ee->lo.u32[2] = ee->r[d].u32[2];
+    ee->lo.u32[3] = ~r5;
+    ee->hi.u32[2] = ee->r[d].u32[3];
+    ee->hi.u32[3] = ~r7;
+}
 static inline void ee_i_pinteh(struct ee_state* ee, const ee_instruction& i) {
     uint128_t rt = ee->r[EE_D_RT];
     uint128_t rs = ee->r[EE_D_RS];
@@ -1920,8 +2031,36 @@ static inline void ee_i_pmaddh(struct ee_state* ee, const ee_instruction& i) {
     ee->lo.u32[2] = ee->r[d].u32[2];
     ee->hi.u32[2] = ee->r[d].u32[3];
 }
-static inline void ee_i_pmadduw(struct ee_state* ee, const ee_instruction& i) { printf("ee: pmadduw unimplemented\n"); exit(1); }
-static inline void ee_i_pmaddw(struct ee_state* ee, const ee_instruction& i) { printf("ee: pmaddw unimplemented\n"); exit(1); }
+static inline void ee_i_pmadduw(struct ee_state* ee, const ee_instruction& i) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    uint64_t r0 = (uint64_t)ee->r[s].u32[0] * (uint64_t)ee->r[t].u32[0];
+    uint64_t r1 = (uint64_t)ee->r[s].u32[2] * (uint64_t)ee->r[t].u32[2];
+
+    ee->r[d].u64[0] = r0 + ((ee->hi.u64[0] << 32) | (uint64_t)ee->lo.u32[0]);
+    ee->r[d].u64[1] = r1 + ((ee->hi.u64[1] << 32) | (uint64_t)ee->lo.u32[2]);
+    ee->lo.u64[0] = SE6432(ee->r[d].u32[0]);
+    ee->hi.u64[0] = SE6432(ee->r[d].u32[1]);
+    ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
+    ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
+}
+static inline void ee_i_pmaddw(struct ee_state* ee, const ee_instruction& i) {
+    int d = EE_D_RD;
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+
+    uint64_t r0 = (int64_t)ee->r[s].s32[0] * (int64_t)ee->r[t].s32[0];
+    uint64_t r1 = (int64_t)ee->r[s].s32[2] * (int64_t)ee->r[t].s32[2];
+
+    ee->r[d].u64[0] = r0 + ((((uint64_t)ee->hi.u32[0]) << 32) | (uint64_t)ee->lo.u32[0]);
+    ee->r[d].u64[1] = r1 + ((((uint64_t)ee->hi.u32[2]) << 32) | (uint64_t)ee->lo.u32[2]);
+    ee->lo.u64[0] = SE6432(ee->r[d].u32[0]);
+    ee->hi.u64[0] = SE6432(ee->r[d].u32[1]);
+    ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
+    ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
+}
 static inline void ee_i_pmaxh(struct ee_state* ee, const ee_instruction& i) {
     int d = EE_D_RD;
     int s = EE_D_RS;
@@ -1965,7 +2104,12 @@ static inline void ee_i_pmfhluw(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u32[2] = ee->lo.u32[3];
     ee->r[d].u32[3] = ee->hi.u32[3];
 }
-static inline void ee_i_pmfhlslw(struct ee_state* ee, const ee_instruction& i) { printf("ee: pmfhlslw unimplemented\n"); exit(1); }
+static inline void ee_i_pmfhlslw(struct ee_state* ee, const ee_instruction& i) {
+    int d = EE_D_RD;
+
+    ee->r[d].u64[0] = SE6432(saturate32(((uint64_t)ee->lo.u32[0]) | (ee->hi.u64[0] << 32)));
+    ee->r[d].u64[1] = SE6432(saturate32(((uint64_t)ee->lo.u32[2]) | (ee->hi.u64[1] << 32)));
+}
 static inline void ee_i_pmfhllh(struct ee_state* ee, const ee_instruction& i) {
     int d = EE_D_RD;
 
@@ -2013,17 +2157,91 @@ static inline void ee_i_pminw(struct ee_state* ee, const ee_instruction& i) {
     int s = EE_D_RS;
     int t = EE_D_RT;
 
-    ee->r[d].u32[0] = ((int32_t)ee->r[s].u32[0] < (int32_t)ee->r[t].u32[0]) ? ee->r[s].u32[0] : ee->r[t].u32[0];
-    ee->r[d].u32[1] = ((int32_t)ee->r[s].u32[1] < (int32_t)ee->r[t].u32[1]) ? ee->r[s].u32[1] : ee->r[t].u32[1];
-    ee->r[d].u32[2] = ((int32_t)ee->r[s].u32[2] < (int32_t)ee->r[t].u32[2]) ? ee->r[s].u32[2] : ee->r[t].u32[2];
-    ee->r[d].u32[3] = ((int32_t)ee->r[s].u32[3] < (int32_t)ee->r[t].u32[3]) ? ee->r[s].u32[3] : ee->r[t].u32[3];
+    ee->r[d].u32[0] = (ee->r[s].s32[0] < ee->r[t].s32[0]) ? ee->r[s].u32[0] : ee->r[t].u32[0];
+    ee->r[d].u32[1] = (ee->r[s].s32[1] < ee->r[t].s32[1]) ? ee->r[s].u32[1] : ee->r[t].u32[1];
+    ee->r[d].u32[2] = (ee->r[s].s32[2] < ee->r[t].s32[2]) ? ee->r[s].u32[2] : ee->r[t].u32[2];
+    ee->r[d].u32[3] = (ee->r[s].s32[3] < ee->r[t].s32[3]) ? ee->r[s].u32[3] : ee->r[t].u32[3];
 }
-static inline void ee_i_pmsubh(struct ee_state* ee, const ee_instruction& i) { printf("ee: pmsubh unimplemented\n"); exit(1); }
-static inline void ee_i_pmsubw(struct ee_state* ee, const ee_instruction& i) { printf("ee: pmsubw unimplemented\n"); exit(1); }
+static inline void ee_i_pmsubh(struct ee_state* ee, const ee_instruction& i) {
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    int32_t r0 = (int32_t)ee->r[s].s16[0] * (int32_t)ee->r[t].s16[0];
+    int32_t r1 = (int32_t)ee->r[s].s16[1] * (int32_t)ee->r[t].s16[1];
+    int32_t r2 = (int32_t)ee->r[s].s16[2] * (int32_t)ee->r[t].s16[2];
+    int32_t r3 = (int32_t)ee->r[s].s16[3] * (int32_t)ee->r[t].s16[3];
+    int32_t r4 = (int32_t)ee->r[s].s16[4] * (int32_t)ee->r[t].s16[4];
+    int32_t r5 = (int32_t)ee->r[s].s16[5] * (int32_t)ee->r[t].s16[5];
+    int32_t r6 = (int32_t)ee->r[s].s16[6] * (int32_t)ee->r[t].s16[6];
+    int32_t r7 = (int32_t)ee->r[s].s16[7] * (int32_t)ee->r[t].s16[7];
+
+    ee->r[d].u32[0] = ee->lo.u32[0] - r0;
+    ee->r[d].u32[1] = ee->hi.u32[0] - r2;
+    ee->r[d].u32[2] = ee->lo.u32[2] - r4;
+    ee->r[d].u32[3] = ee->hi.u32[2] - r6;
+    ee->lo.u32[0] = ee->r[d].u32[0];
+    ee->hi.u32[0] = ee->r[d].u32[1];
+    ee->lo.u32[2] = ee->r[d].u32[2];
+    ee->hi.u32[2] = ee->r[d].u32[3];
+
+    ee->lo.u32[1] = ee->lo.u32[1] - r1;
+    ee->lo.u32[3] = ee->lo.u32[3] - r5;
+    ee->hi.u32[1] = ee->hi.u32[1] - r3;
+    ee->hi.u32[3] = ee->hi.u32[3] - r7;
+}
+static inline void ee_i_pmsubw(struct ee_state* ee, const ee_instruction& i) {
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    // int64_t r0 = ee->r[s].s32[0] * ee->r[t].s32[0];
+    // int64_t r1 = ee->r[s].s32[2] * ee->r[t].s32[2];
+
+    // ee->r[d].u64[0] = ((ee->hi.u64[0] << 32) | (uint64_t)ee->lo.u32[0]) - r0;
+    // ee->r[d].u64[1] = ((ee->hi.u64[1] << 32) | (uint64_t)ee->lo.u32[2]) - r0;
+
+    // ee->lo.u64[0] = SE6432(ee->r[d].u32[0]);
+    // ee->hi.u64[0] = SE6432(ee->r[d].u32[1]);
+    // ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
+    // ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
+
+    int64_t op1 = (int64_t)ee->r[s].s32[0];
+    int64_t op2 = (int64_t)ee->r[t].s32[0];
+    int64_t result = op1 * op2;
+    int64_t result2 = ((int64_t)ee->hi.s32[0] << 32) - result;
+
+    result2 = (int32_t)(result2 / 4294967295);
+
+    ee->lo.s64[0] = ee->lo.s32[0] - (int32_t)(result & 0xffffffff);
+    ee->hi.s64[0] = (int32_t)result2;
+
+    op1 = (int64_t)ee->r[s].s32[2];
+    op2 = (int64_t)ee->r[t].s32[2];
+    result = op1 * op2;
+
+    result2 = ((int64_t)ee->hi.s32[2] << 32) - result;
+    result2 = (int32_t)(result2 / 4294967295);
+
+    ee->lo.s64[1] = ee->lo.s32[2] - (int32_t)(result & 0xffffffff);
+    ee->hi.s64[1] = (int32_t)result2;
+
+    ee->r[d].u32[0] = ee->lo.u32[0];
+    ee->r[d].u32[1] = ee->hi.u32[0];
+    ee->r[d].u32[2] = ee->lo.u32[2];
+    ee->r[d].u32[3] = ee->hi.u32[2];
+}
 static inline void ee_i_pmthi(struct ee_state* ee, const ee_instruction& i) {
     ee->hi = ee->r[EE_D_RS];
 }
-static inline void ee_i_pmthl(struct ee_state* ee, const ee_instruction& i) { printf("ee: pmthl unimplemented\n"); exit(1); }
+static inline void ee_i_pmthl(struct ee_state* ee, const ee_instruction& i) {
+    int s = EE_D_RS;
+
+    ee->lo.u32[0] = ee->r[s].u32[0];
+    ee->lo.u32[2] = ee->r[s].u32[2];
+    ee->hi.u32[0] = ee->r[s].u32[1];
+    ee->hi.u32[2] = ee->r[s].u32[3];
+}
 static inline void ee_i_pmtlo(struct ee_state* ee, const ee_instruction& i) {
     ee->lo = ee->r[EE_D_RS];
 }
@@ -2225,7 +2443,14 @@ static inline void ee_i_psrah(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ((int16_t)ee->r[t].u16[6]) >> sa;
     ee->r[d].u16[7] = ((int16_t)ee->r[t].u16[7]) >> sa;
 }
-static inline void ee_i_psravw(struct ee_state* ee, const ee_instruction& i) { printf("ee: psravw unimplemented\n"); exit(1); }
+static inline void ee_i_psravw(struct ee_state* ee, const ee_instruction& i) {
+    int s = EE_D_RS;
+    int t = EE_D_RT;
+    int d = EE_D_RD;
+
+    ee->r[d].u64[0] = SE6432((int32_t)ee->r[t].u32[0] >> (ee->r[s].u32[0] & 31));
+    ee->r[d].u64[1] = SE6432((int32_t)ee->r[t].u32[2] >> (ee->r[s].u32[2] & 31));
+}
 static inline void ee_i_psraw(struct ee_state* ee, const ee_instruction& i) {
     int sa = EE_D_SA;
     int t = EE_D_RT;
@@ -2752,7 +2977,9 @@ static inline void ee_i_teq(struct ee_state* ee, const ee_instruction& i) {
 static inline void ee_i_teqi(struct ee_state* ee, const ee_instruction& i) {
     if (EE_RS == SE6416(EE_D_I16)) ee_exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_tge(struct ee_state* ee, const ee_instruction& i) { printf("ee: tge unimplemented\n"); exit(1); }
+static inline void ee_i_tge(struct ee_state* ee, const ee_instruction& i) {
+    if (EE_RS >= EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
+}
 static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { printf("ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { printf("ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { printf("ee: tgeu unimplemented\n"); exit(1); }
@@ -2994,183 +3221,184 @@ ee_instruction ee_decode(uint32_t opcode) {
     i.i26 = opcode & 0x3ffffff;
 
     i.branch = 0;
+    i.cycles = 0;
 
     switch ((opcode & 0xFC000000) >> 26) {
         case 0x00000000 >> 26: { // special
             switch (opcode & 0x0000003F) {
-                case 0x00000000: i.func = ee_i_sll; return i;
-                case 0x00000002: i.func = ee_i_srl; return i;
-                case 0x00000003: i.func = ee_i_sra; return i;
-                case 0x00000004: i.func = ee_i_sllv; return i;
-                case 0x00000006: i.func = ee_i_srlv; return i;
-                case 0x00000007: i.func = ee_i_srav; return i;
-                case 0x00000008: i.branch = 1; i.func = ee_i_jr; return i;
-                case 0x00000009: i.branch = 1; i.func = ee_i_jalr; return i;
-                case 0x0000000A: i.func = ee_i_movz; return i;
-                case 0x0000000B: i.func = ee_i_movn; return i;
-                case 0x0000000C: i.branch = 2; i.func = ee_i_syscall; return i;
-                case 0x0000000D: i.branch = 2; i.func = ee_i_break; return i;
-                case 0x0000000F: i.func = ee_i_sync; return i;
-                case 0x00000010: i.func = ee_i_mfhi; return i;
-                case 0x00000011: i.func = ee_i_mthi; return i;
-                case 0x00000012: i.func = ee_i_mflo; return i;
-                case 0x00000013: i.func = ee_i_mtlo; return i;
-                case 0x00000014: i.func = ee_i_dsllv; return i;
-                case 0x00000016: i.func = ee_i_dsrlv; return i;
-                case 0x00000017: i.func = ee_i_dsrav; return i;
-                case 0x00000018: i.func = ee_i_mult; return i;
-                case 0x00000019: i.func = ee_i_multu; return i;
-                case 0x0000001A: i.func = ee_i_div; return i;
-                case 0x0000001B: i.func = ee_i_divu; return i;
-                case 0x00000020: i.branch = 4; i.func = ee_i_add; return i;
-                case 0x00000021: i.func = ee_i_addu; return i;
-                case 0x00000022: i.branch = 4; i.func = ee_i_sub; return i;
-                case 0x00000023: i.func = ee_i_subu; return i;
-                case 0x00000024: i.func = ee_i_and; return i;
-                case 0x00000025: i.func = ee_i_or; return i;
-                case 0x00000026: i.func = ee_i_xor; return i;
-                case 0x00000027: i.func = ee_i_nor; return i;
-                case 0x00000028: i.func = ee_i_mfsa; return i;
-                case 0x00000029: i.func = ee_i_mtsa; return i;
-                case 0x0000002A: i.func = ee_i_slt; return i;
-                case 0x0000002B: i.func = ee_i_sltu; return i;
-                case 0x0000002C: i.branch = 4; i.func = ee_i_dadd; return i;
-                case 0x0000002D: i.func = ee_i_daddu; return i;
-                case 0x0000002E: i.branch = 4; i.func = ee_i_dsub; return i;
-                case 0x0000002F: i.func = ee_i_dsubu; return i;
-                case 0x00000030: i.branch = 4; i.func = ee_i_tge; return i;
-                case 0x00000031: i.branch = 4; i.func = ee_i_tgeu; return i;
-                case 0x00000032: i.branch = 4; i.func = ee_i_tlt; return i;
-                case 0x00000033: i.branch = 4; i.func = ee_i_tltu; return i;
-                case 0x00000034: i.branch = 4; i.func = ee_i_teq; return i;
-                case 0x00000036: i.branch = 4; i.func = ee_i_tne; return i;
-                case 0x00000038: i.func = ee_i_dsll; return i;
-                case 0x0000003A: i.func = ee_i_dsrl; return i;
-                case 0x0000003B: i.func = ee_i_dsra; return i;
-                case 0x0000003C: i.func = ee_i_dsll32; return i;
-                case 0x0000003E: i.func = ee_i_dsrl32; return i;
-                case 0x0000003F: i.func = ee_i_dsra32; return i;
+                case 0x00000000: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_sll; return i;
+                case 0x00000002: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_srl; return i;
+                case 0x00000003: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_sra; return i;
+                case 0x00000004: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_sllv; return i;
+                case 0x00000006: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_srlv; return i;
+                case 0x00000007: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_srav; return i;
+                case 0x00000008: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.func = ee_i_jr; return i;
+                case 0x00000009: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.func = ee_i_jalr; return i;
+                case 0x0000000A: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_movz; return i;
+                case 0x0000000B: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_movn; return i;
+                case 0x0000000C: i.cycles = EE_CYC_DEFAULT; i.branch = 2; i.func = ee_i_syscall; return i;
+                case 0x0000000D: i.cycles = EE_CYC_DEFAULT; i.branch = 2; i.func = ee_i_break; return i;
+                case 0x0000000F: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_sync; return i;
+                case 0x00000010: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mfhi; return i;
+                case 0x00000011: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mthi; return i;
+                case 0x00000012: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mflo; return i;
+                case 0x00000013: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mtlo; return i;
+                case 0x00000014: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsllv; return i;
+                case 0x00000016: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsrlv; return i;
+                case 0x00000017: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsrav; return i;
+                case 0x00000018: i.cycles = EE_CYC_MULT; i.func = ee_i_mult; return i;
+                case 0x00000019: i.cycles = EE_CYC_MULT; i.func = ee_i_multu; return i;
+                case 0x0000001A: i.cycles = EE_CYC_DIV; i.func = ee_i_div; return i;
+                case 0x0000001B: i.cycles = EE_CYC_DIV; i.func = ee_i_divu; return i;
+                case 0x00000020: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.func = ee_i_add; return i;
+                case 0x00000021: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_addu; return i;
+                case 0x00000022: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.func = ee_i_sub; return i;
+                case 0x00000023: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_subu; return i;
+                case 0x00000024: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_and; return i;
+                case 0x00000025: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_or; return i;
+                case 0x00000026: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_xor; return i;
+                case 0x00000027: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_nor; return i;
+                case 0x00000028: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mfsa; return i;
+                case 0x00000029: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mtsa; return i;
+                case 0x0000002A: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_slt; return i;
+                case 0x0000002B: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_sltu; return i;
+                case 0x0000002C: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.func = ee_i_dadd; return i;
+                case 0x0000002D: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_daddu; return i;
+                case 0x0000002E: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.func = ee_i_dsub; return i;
+                case 0x0000002F: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsubu; return i;
+                case 0x00000030: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tge; return i;
+                case 0x00000031: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tgeu; return i;
+                case 0x00000032: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tlt; return i;
+                case 0x00000033: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tltu; return i;
+                case 0x00000034: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_teq; return i;
+                case 0x00000036: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tne; return i;
+                case 0x00000038: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsll; return i;
+                case 0x0000003A: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsrl; return i;
+                case 0x0000003B: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsra; return i;
+                case 0x0000003C: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsll32; return i;
+                case 0x0000003E: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsrl32; return i;
+                case 0x0000003F: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_dsra32; return i;
             }
         } break;
         case 0x04000000 >> 26: { // regimm
             switch ((opcode & 0x001F0000) >> 16) {
-                case 0x00000000 >> 16: i.branch = 1; i.func = ee_i_bltz; return i;
-                case 0x00010000 >> 16: i.branch = 1; i.func = ee_i_bgez; return i;
-                case 0x00020000 >> 16: i.branch = 3; i.func = ee_i_bltzl; return i;
-                case 0x00030000 >> 16: i.branch = 3; i.func = ee_i_bgezl; return i;
-                case 0x00080000 >> 16: i.branch = 4; i.func = ee_i_tgei; return i;
-                case 0x00090000 >> 16: i.branch = 4; i.func = ee_i_tgeiu; return i;
-                case 0x000A0000 >> 16: i.branch = 4; i.func = ee_i_tlti; return i;
-                case 0x000B0000 >> 16: i.branch = 4; i.func = ee_i_tltiu; return i;
-                case 0x000C0000 >> 16: i.branch = 4; i.func = ee_i_teqi; return i;
-                case 0x000E0000 >> 16: i.branch = 4; i.func = ee_i_tnei; return i;
-                case 0x00100000 >> 16: i.branch = 1; i.func = ee_i_bltzal; return i;
-                case 0x00110000 >> 16: i.branch = 1; i.func = ee_i_bgezal; return i;
-                case 0x00120000 >> 16: i.branch = 3; i.func = ee_i_bltzall; return i;
-                case 0x00130000 >> 16: i.branch = 3; i.func = ee_i_bgezall; return i;
-                case 0x00180000 >> 16: i.func = ee_i_mtsab; return i;
-                case 0x00190000 >> 16: i.func = ee_i_mtsah; return i;
+                case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bltz; return i;
+                case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bgez; return i;
+                case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bltzl; return i;
+                case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bgezl; return i;
+                case 0x00080000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tgei; return i;
+                case 0x00090000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tgeiu; return i;
+                case 0x000A0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tlti; return i;
+                case 0x000B0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tltiu; return i;
+                case 0x000C0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_teqi; return i;
+                case 0x000E0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.func = ee_i_tnei; return i;
+                case 0x00100000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bltzal; return i;
+                case 0x00110000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bgezal; return i;
+                case 0x00120000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bltzall; return i;
+                case 0x00130000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bgezall; return i;
+                case 0x00180000 >> 16: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mtsab; return i;
+                case 0x00190000 >> 16: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_mtsah; return i;
             }
         } break;
-        case 0x08000000 >> 26: i.branch = 1; i.func = ee_i_j; return i;
-        case 0x0C000000 >> 26: i.branch = 1; i.func = ee_i_jal; return i;
-        case 0x10000000 >> 26: i.branch = 1; i.func = ee_i_beq; return i;
-        case 0x14000000 >> 26: i.branch = 1; i.func = ee_i_bne; return i;
-        case 0x18000000 >> 26: i.branch = 1; i.func = ee_i_blez; return i;
-        case 0x1C000000 >> 26: i.branch = 1; i.func = ee_i_bgtz; return i;
-        case 0x20000000 >> 26: i.branch = 4; i.func = ee_i_addi; return i;
-        case 0x24000000 >> 26: i.func = ee_i_addiu; return i;
-        case 0x28000000 >> 26: i.func = ee_i_slti; return i;
-        case 0x2C000000 >> 26: i.func = ee_i_sltiu; return i;
-        case 0x30000000 >> 26: i.func = ee_i_andi; return i;
-        case 0x34000000 >> 26: i.func = ee_i_ori; return i;
-        case 0x38000000 >> 26: i.func = ee_i_xori; return i;
-        case 0x3C000000 >> 26: i.func = ee_i_lui; return i;
+        case 0x08000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.func = ee_i_j; return i;
+        case 0x0C000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.func = ee_i_jal; return i;
+        case 0x10000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_beq; return i;
+        case 0x14000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bne; return i;
+        case 0x18000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_blez; return i;
+        case 0x1C000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bgtz; return i;
+        case 0x20000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.func = ee_i_addi; return i;
+        case 0x24000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_addiu; return i;
+        case 0x28000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_slti; return i;
+        case 0x2C000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_sltiu; return i;
+        case 0x30000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_andi; return i;
+        case 0x34000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_ori; return i;
+        case 0x38000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_xori; return i;
+        case 0x3C000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_lui; return i;
         case 0x40000000 >> 26: { // cop0
             switch ((opcode & 0x03E00000) >> 21) {
-                case 0x00000000 >> 21: i.func = ee_i_mfc0; return i;
-                case 0x00800000 >> 21: i.func = ee_i_mtc0; return i;
+                case 0x00000000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mfc0; return i;
+                case 0x00800000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mtc0; return i;
                 case 0x01000000 >> 21: {
                     switch ((opcode & 0x001F0000) >> 16) {
-                        case 0x00000000 >> 16: i.branch = 1; i.func = ee_i_bc0f; return i;
-                        case 0x00010000 >> 16: i.branch = 1; i.func = ee_i_bc0t; return i;
-                        case 0x00020000 >> 16: i.branch = 3; i.func = ee_i_bc0fl; return i;
-                        case 0x00030000 >> 16: i.branch = 3; i.func = ee_i_bc0tl; return i;
+                        case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bc0f; return i;
+                        case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bc0t; return i;
+                        case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bc0fl; return i;
+                        case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bc0tl; return i;
                     }
                 } break;
                 case 0x02000000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000001: i.func = ee_i_tlbr; return i;
-                        case 0x00000002: i.func = ee_i_tlbwi; return i;
-                        case 0x00000006: i.func = ee_i_tlbwr; return i;
-                        case 0x00000008: i.func = ee_i_tlbp; return i;
-                        case 0x00000018: i.branch = 2; i.func = ee_i_eret; return i;
-                        case 0x00000038: i.func = ee_i_ei; return i;
-                        case 0x00000039: i.func = ee_i_di; return i;
+                        case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbr; return i;
+                        case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbwi; return i;
+                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbwr; return i;
+                        case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbp; return i;
+                        case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.func = ee_i_eret; return i;
+                        case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_ei; return i;
+                        case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_di; return i;
                     }
                 } break;
             }
         } break;
         case 0x44000000 >> 26: { // cop1
             switch ((opcode & 0x03E00000) >> 21) {
-                case 0x00000000 >> 21: i.func = ee_i_mfc1; return i;
-                case 0x00400000 >> 21: i.func = ee_i_cfc1; return i;
-                case 0x00800000 >> 21: i.func = ee_i_mtc1; return i;
-                case 0x00C00000 >> 21: i.func = ee_i_ctc1; return i;
+                case 0x00000000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mfc1; return i;
+                case 0x00400000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_cfc1; return i;
+                case 0x00800000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mtc1; return i;
+                case 0x00C00000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_ctc1; return i;
                 case 0x01000000 >> 21: {
                     switch ((opcode & 0x001F0000) >> 16) {
-                        case 0x00000000 >> 16: i.branch = 1; i.func = ee_i_bc1f; return i;
-                        case 0x00010000 >> 16: i.branch = 1; i.func = ee_i_bc1t; return i;
-                        case 0x00020000 >> 16: i.branch = 3; i.func = ee_i_bc1fl; return i;
-                        case 0x00030000 >> 16: i.branch = 3; i.func = ee_i_bc1tl; return i;
+                        case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bc1f; return i;
+                        case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bc1t; return i;
+                        case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bc1fl; return i;
+                        case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bc1tl; return i;
                     }
                 } break;
                 case 0x02000000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000000: i.func = ee_i_adds; return i;
-                        case 0x00000001: i.func = ee_i_subs; return i;
-                        case 0x00000002: i.func = ee_i_muls; return i;
-                        case 0x00000003: i.func = ee_i_divs; return i;
-                        case 0x00000004: i.func = ee_i_sqrts; return i;
-                        case 0x00000005: i.func = ee_i_abss; return i;
-                        case 0x00000006: i.func = ee_i_movs; return i;
-                        case 0x00000007: i.func = ee_i_negs; return i;
-                        case 0x00000016: i.func = ee_i_rsqrts; return i;
-                        case 0x00000018: i.func = ee_i_addas; return i;
-                        case 0x00000019: i.func = ee_i_subas; return i;
-                        case 0x0000001A: i.func = ee_i_mulas; return i;
-                        case 0x0000001C: i.func = ee_i_madds; return i;
-                        case 0x0000001D: i.func = ee_i_msubs; return i;
-                        case 0x0000001E: i.func = ee_i_maddas; return i;
-                        case 0x0000001F: i.func = ee_i_msubas; return i;
-                        case 0x00000024: i.func = ee_i_cvtw; return i;
-                        case 0x00000028: i.func = ee_i_maxs; return i;
-                        case 0x00000029: i.func = ee_i_mins; return i;
-                        case 0x00000030: i.func = ee_i_cf; return i;
-                        case 0x00000032: i.func = ee_i_ceq; return i;
-                        case 0x00000034: i.func = ee_i_clt; return i;
-                        case 0x00000036: i.func = ee_i_cle; return i;
+                        case 0x00000000: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_adds; return i;
+                        case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_subs; return i;
+                        case 0x00000002: i.cycles = EE_CYC_FPU_MULT; i.func = ee_i_muls; return i;
+                        case 0x00000003: i.cycles = EE_CYC_FPU_DIV; i.func = ee_i_divs; return i;
+                        case 0x00000004: i.cycles = EE_CYC_FPU_DIV; i.func = ee_i_sqrts; return i;
+                        case 0x00000005: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_abss; return i;
+                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_movs; return i;
+                        case 0x00000007: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_negs; return i;
+                        case 0x00000016: i.cycles = EE_CYC_FPU_DIV; i.func = ee_i_rsqrts; return i;
+                        case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_addas; return i;
+                        case 0x00000019: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_subas; return i;
+                        case 0x0000001A: i.cycles = EE_CYC_FPU_MULT; i.func = ee_i_mulas; return i;
+                        case 0x0000001C: i.cycles = EE_CYC_FPU_MULT; i.func = ee_i_madds; return i;
+                        case 0x0000001D: i.cycles = EE_CYC_FPU_MULT; i.func = ee_i_msubs; return i;
+                        case 0x0000001E: i.cycles = EE_CYC_FPU_MULT; i.func = ee_i_maddas; return i;
+                        case 0x0000001F: i.cycles = EE_CYC_FPU_MULT; i.func = ee_i_msubas; return i;
+                        case 0x00000024: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_cvtw; return i;
+                        case 0x00000028: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_maxs; return i;
+                        case 0x00000029: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mins; return i;
+                        case 0x00000030: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_cf; return i;
+                        case 0x00000032: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_ceq; return i;
+                        case 0x00000034: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_clt; return i;
+                        case 0x00000036: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_cle; return i;
                     }
                 } break;
                 case 0x02800000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000020: i.func = ee_i_cvts; return i;
+                        case 0x00000020: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_cvts; return i;
                     }
                 } break;
             }
         } break;
         case 0x48000000 >> 26: { // cop2
             switch ((opcode & 0x03E00000) >> 21) {
-                case 0x00200000 >> 21: i.func = ee_i_qmfc2; return i;
-                case 0x00400000 >> 21: i.func = ee_i_cfc2; return i;
-                case 0x00A00000 >> 21: i.func = ee_i_qmtc2; return i;
-                case 0x00C00000 >> 21: i.func = ee_i_ctc2; return i;
+                case 0x00200000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_qmfc2; return i;
+                case 0x00400000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_cfc2; return i;
+                case 0x00A00000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_qmtc2; return i;
+                case 0x00C00000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_ctc2; return i;
                 case 0x01000000 >> 21: {
                     switch ((opcode & 0x001F0000) >> 16) {
-                        case 0x00000000 >> 16: i.branch = 1; i.func = ee_i_bc2f; return i;
-                        case 0x00010000 >> 16: i.branch = 1; i.func = ee_i_bc2t; return i;
-                        case 0x00020000 >> 16: i.branch = 3; i.func = ee_i_bc2fl; return i;
-                        case 0x00030000 >> 16: i.branch = 3; i.func = ee_i_bc2tl; return i;
+                        case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bc2f; return i;
+                        case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.func = ee_i_bc2t; return i;
+                        case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bc2fl; return i;
+                        case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bc2tl; return i;
                     }
                 } break;
                 case 0x02000000 >> 21:
@@ -3190,61 +3418,61 @@ ee_instruction ee_decode(uint32_t opcode) {
                 case 0x03C00000 >> 21:
                 case 0x03E00000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000000: i.func = ee_i_vaddx; return i;
-                        case 0x00000001: i.func = ee_i_vaddy; return i;
-                        case 0x00000002: i.func = ee_i_vaddz; return i;
-                        case 0x00000003: i.func = ee_i_vaddw; return i;
-                        case 0x00000004: i.func = ee_i_vsubx; return i;
-                        case 0x00000005: i.func = ee_i_vsuby; return i;
-                        case 0x00000006: i.func = ee_i_vsubz; return i;
-                        case 0x00000007: i.func = ee_i_vsubw; return i;
-                        case 0x00000008: i.func = ee_i_vmaddx; return i;
-                        case 0x00000009: i.func = ee_i_vmaddy; return i;
-                        case 0x0000000A: i.func = ee_i_vmaddz; return i;
-                        case 0x0000000B: i.func = ee_i_vmaddw; return i;
-                        case 0x0000000C: i.func = ee_i_vmsubx; return i;
-                        case 0x0000000D: i.func = ee_i_vmsuby; return i;
-                        case 0x0000000E: i.func = ee_i_vmsubz; return i;
-                        case 0x0000000F: i.func = ee_i_vmsubw; return i;
-                        case 0x00000010: i.func = ee_i_vmaxx; return i;
-                        case 0x00000011: i.func = ee_i_vmaxy; return i;
-                        case 0x00000012: i.func = ee_i_vmaxz; return i;
-                        case 0x00000013: i.func = ee_i_vmaxw; return i;
-                        case 0x00000014: i.func = ee_i_vminix; return i;
-                        case 0x00000015: i.func = ee_i_vminiy; return i;
-                        case 0x00000016: i.func = ee_i_vminiz; return i;
-                        case 0x00000017: i.func = ee_i_vminiw; return i;
-                        case 0x00000018: i.func = ee_i_vmulx; return i;
-                        case 0x00000019: i.func = ee_i_vmuly; return i;
-                        case 0x0000001A: i.func = ee_i_vmulz; return i;
-                        case 0x0000001B: i.func = ee_i_vmulw; return i;
-                        case 0x0000001C: i.func = ee_i_vmulq; return i;
-                        case 0x0000001D: i.func = ee_i_vmaxi; return i;
-                        case 0x0000001E: i.func = ee_i_vmuli; return i;
-                        case 0x0000001F: i.func = ee_i_vminii; return i;
-                        case 0x00000020: i.func = ee_i_vaddq; return i;
-                        case 0x00000021: i.func = ee_i_vmaddq; return i;
-                        case 0x00000022: i.func = ee_i_vaddi; return i;
-                        case 0x00000023: i.func = ee_i_vmaddi; return i;
-                        case 0x00000024: i.func = ee_i_vsubq; return i;
-                        case 0x00000025: i.func = ee_i_vmsubq; return i;
-                        case 0x00000026: i.func = ee_i_vsubi; return i;
-                        case 0x00000027: i.func = ee_i_vmsubi; return i;
-                        case 0x00000028: i.func = ee_i_vadd; return i;
-                        case 0x00000029: i.func = ee_i_vmadd; return i;
-                        case 0x0000002A: i.func = ee_i_vmul; return i;
-                        case 0x0000002B: i.func = ee_i_vmax; return i;
-                        case 0x0000002C: i.func = ee_i_vsub; return i;
-                        case 0x0000002D: i.func = ee_i_vmsub; return i;
-                        case 0x0000002E: i.func = ee_i_vopmsub; return i;
-                        case 0x0000002F: i.func = ee_i_vmini; return i;
-                        case 0x00000030: i.func = ee_i_viadd; return i;
-                        case 0x00000031: i.func = ee_i_visub; return i;
-                        case 0x00000032: i.func = ee_i_viaddi; return i;
-                        case 0x00000034: i.func = ee_i_viand; return i;
-                        case 0x00000035: i.func = ee_i_vior; return i;
-                        case 0x00000038: i.func = ee_i_vcallms; return i;
-                        case 0x00000039: i.func = ee_i_vcallmsr; return i;
+                        case 0x00000000: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddx; return i;
+                        case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddy; return i;
+                        case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddz; return i;
+                        case 0x00000003: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddw; return i;
+                        case 0x00000004: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubx; return i;
+                        case 0x00000005: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsuby; return i;
+                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubz; return i;
+                        case 0x00000007: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubw; return i;
+                        case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddx; return i;
+                        case 0x00000009: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddy; return i;
+                        case 0x0000000A: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddz; return i;
+                        case 0x0000000B: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddw; return i;
+                        case 0x0000000C: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubx; return i;
+                        case 0x0000000D: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsuby; return i;
+                        case 0x0000000E: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubz; return i;
+                        case 0x0000000F: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubw; return i;
+                        case 0x00000010: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaxx; return i;
+                        case 0x00000011: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaxy; return i;
+                        case 0x00000012: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaxz; return i;
+                        case 0x00000013: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaxw; return i;
+                        case 0x00000014: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vminix; return i;
+                        case 0x00000015: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vminiy; return i;
+                        case 0x00000016: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vminiz; return i;
+                        case 0x00000017: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vminiw; return i;
+                        case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulx; return i;
+                        case 0x00000019: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmuly; return i;
+                        case 0x0000001A: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulz; return i;
+                        case 0x0000001B: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulw; return i;
+                        case 0x0000001C: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulq; return i;
+                        case 0x0000001D: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaxi; return i;
+                        case 0x0000001E: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmuli; return i;
+                        case 0x0000001F: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vminii; return i;
+                        case 0x00000020: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddq; return i;
+                        case 0x00000021: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddq; return i;
+                        case 0x00000022: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddi; return i;
+                        case 0x00000023: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddi; return i;
+                        case 0x00000024: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubq; return i;
+                        case 0x00000025: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubq; return i;
+                        case 0x00000026: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubi; return i;
+                        case 0x00000027: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubi; return i;
+                        case 0x00000028: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vadd; return i;
+                        case 0x00000029: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmadd; return i;
+                        case 0x0000002A: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmul; return i;
+                        case 0x0000002B: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmax; return i;
+                        case 0x0000002C: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsub; return i;
+                        case 0x0000002D: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsub; return i;
+                        case 0x0000002E: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vopmsub; return i;
+                        case 0x0000002F: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmini; return i;
+                        case 0x00000030: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_viadd; return i;
+                        case 0x00000031: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_visub; return i;
+                        case 0x00000032: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_viaddi; return i;
+                        case 0x00000034: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_viand; return i;
+                        case 0x00000035: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vior; return i;
+                        case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vcallms; return i;
+                        case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vcallmsr; return i;
                         case 0x0000003C:
                         case 0x0000003D:
                         case 0x0000003E:
@@ -3252,237 +3480,237 @@ ee_instruction ee_decode(uint32_t opcode) {
                             uint32_t func = (opcode & 3) | ((opcode & 0x7c0) >> 4);
 
                             switch (func) {
-                                case 0x00000000: i.func = ee_i_vaddax; return i;
-                                case 0x00000001: i.func = ee_i_vadday; return i;
-                                case 0x00000002: i.func = ee_i_vaddaz; return i;
-                                case 0x00000003: i.func = ee_i_vaddaw; return i;
-                                case 0x00000004: i.func = ee_i_vsubax; return i;
-                                case 0x00000005: i.func = ee_i_vsubay; return i;
-                                case 0x00000006: i.func = ee_i_vsubaz; return i;
-                                case 0x00000007: i.func = ee_i_vsubaw; return i;
-                                case 0x00000008: i.func = ee_i_vmaddax; return i;
-                                case 0x00000009: i.func = ee_i_vmadday; return i;
-                                case 0x0000000A: i.func = ee_i_vmaddaz; return i;
-                                case 0x0000000B: i.func = ee_i_vmaddaw; return i;
-                                case 0x0000000C: i.func = ee_i_vmsubax; return i;
-                                case 0x0000000D: i.func = ee_i_vmsubay; return i;
-                                case 0x0000000E: i.func = ee_i_vmsubaz; return i;
-                                case 0x0000000F: i.func = ee_i_vmsubaw; return i;
-                                case 0x00000010: i.func = ee_i_vitof0; return i;
-                                case 0x00000011: i.func = ee_i_vitof4; return i;
-                                case 0x00000012: i.func = ee_i_vitof12; return i;
-                                case 0x00000013: i.func = ee_i_vitof15; return i;
-                                case 0x00000014: i.func = ee_i_vftoi0; return i;
-                                case 0x00000015: i.func = ee_i_vftoi4; return i;
-                                case 0x00000016: i.func = ee_i_vftoi12; return i;
-                                case 0x00000017: i.func = ee_i_vftoi15; return i;
-                                case 0x00000018: i.func = ee_i_vmulax; return i;
-                                case 0x00000019: i.func = ee_i_vmulay; return i;
-                                case 0x0000001A: i.func = ee_i_vmulaz; return i;
-                                case 0x0000001B: i.func = ee_i_vmulaw; return i;
-                                case 0x0000001C: i.func = ee_i_vmulaq; return i;
-                                case 0x0000001D: i.func = ee_i_vabs; return i;
-                                case 0x0000001E: i.func = ee_i_vmulai; return i;
-                                case 0x0000001F: i.func = ee_i_vclipw; return i;
-                                case 0x00000020: i.func = ee_i_vaddaq; return i;
-                                case 0x00000021: i.func = ee_i_vmaddaq; return i;
-                                case 0x00000022: i.func = ee_i_vaddai; return i;
-                                case 0x00000023: i.func = ee_i_vmaddai; return i;
-                                case 0x00000024: i.func = ee_i_vsubaq; return i;
-                                case 0x00000025: i.func = ee_i_vmsubaq; return i;
-                                case 0x00000026: i.func = ee_i_vsubai; return i;
-                                case 0x00000027: i.func = ee_i_vmsubai; return i;
-                                case 0x00000028: i.func = ee_i_vadda; return i;
-                                case 0x00000029: i.func = ee_i_vmadda; return i;
-                                case 0x0000002A: i.func = ee_i_vmula; return i;
-                                case 0x0000002C: i.func = ee_i_vsuba; return i;
-                                case 0x0000002D: i.func = ee_i_vmsuba; return i;
-                                case 0x0000002E: i.func = ee_i_vopmula; return i;
-                                case 0x0000002F: i.func = ee_i_vnop; return i;
-                                case 0x00000030: i.func = ee_i_vmove; return i;
-                                case 0x00000031: i.func = ee_i_vmr32; return i;
-                                case 0x00000034: i.func = ee_i_vlqi; return i;
-                                case 0x00000035: i.func = ee_i_vsqi; return i;
-                                case 0x00000036: i.func = ee_i_vlqd; return i;
-                                case 0x00000037: i.func = ee_i_vsqd; return i;
-                                case 0x00000038: i.func = ee_i_vdiv; return i;
-                                case 0x00000039: i.func = ee_i_vsqrt; return i;
-                                case 0x0000003A: i.func = ee_i_vrsqrt; return i;
-                                case 0x0000003B: i.func = ee_i_vwaitq; return i;
-                                case 0x0000003C: i.func = ee_i_vmtir; return i;
-                                case 0x0000003D: i.func = ee_i_vmfir; return i;
-                                case 0x0000003E: i.func = ee_i_vilwr; return i;
-                                case 0x0000003F: i.func = ee_i_viswr; return i;
-                                case 0x00000040: i.func = ee_i_vrnext; return i;
-                                case 0x00000041: i.func = ee_i_vrget; return i;
-                                case 0x00000042: i.func = ee_i_vrinit; return i;
-                                case 0x00000043: i.func = ee_i_vrxor; return i;
+                                case 0x00000000: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddax; return i;
+                                case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vadday; return i;
+                                case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddaz; return i;
+                                case 0x00000003: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddaw; return i;
+                                case 0x00000004: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubax; return i;
+                                case 0x00000005: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubay; return i;
+                                case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubaz; return i;
+                                case 0x00000007: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubaw; return i;
+                                case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddax; return i;
+                                case 0x00000009: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmadday; return i;
+                                case 0x0000000A: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddaz; return i;
+                                case 0x0000000B: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddaw; return i;
+                                case 0x0000000C: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubax; return i;
+                                case 0x0000000D: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubay; return i;
+                                case 0x0000000E: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubaz; return i;
+                                case 0x0000000F: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubaw; return i;
+                                case 0x00000010: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vitof0; return i;
+                                case 0x00000011: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vitof4; return i;
+                                case 0x00000012: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vitof12; return i;
+                                case 0x00000013: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vitof15; return i;
+                                case 0x00000014: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vftoi0; return i;
+                                case 0x00000015: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vftoi4; return i;
+                                case 0x00000016: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vftoi12; return i;
+                                case 0x00000017: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vftoi15; return i;
+                                case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulax; return i;
+                                case 0x00000019: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulay; return i;
+                                case 0x0000001A: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulaz; return i;
+                                case 0x0000001B: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulaw; return i;
+                                case 0x0000001C: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulaq; return i;
+                                case 0x0000001D: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vabs; return i;
+                                case 0x0000001E: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmulai; return i;
+                                case 0x0000001F: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vclipw; return i;
+                                case 0x00000020: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddaq; return i;
+                                case 0x00000021: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddaq; return i;
+                                case 0x00000022: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vaddai; return i;
+                                case 0x00000023: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmaddai; return i;
+                                case 0x00000024: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubaq; return i;
+                                case 0x00000025: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubaq; return i;
+                                case 0x00000026: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsubai; return i;
+                                case 0x00000027: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsubai; return i;
+                                case 0x00000028: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vadda; return i;
+                                case 0x00000029: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmadda; return i;
+                                case 0x0000002A: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmula; return i;
+                                case 0x0000002C: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsuba; return i;
+                                case 0x0000002D: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmsuba; return i;
+                                case 0x0000002E: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vopmula; return i;
+                                case 0x0000002F: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vnop; return i;
+                                case 0x00000030: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmove; return i;
+                                case 0x00000031: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmr32; return i;
+                                case 0x00000034: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vlqi; return i;
+                                case 0x00000035: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsqi; return i;
+                                case 0x00000036: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vlqd; return i;
+                                case 0x00000037: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsqd; return i;
+                                case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vdiv; return i;
+                                case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vsqrt; return i;
+                                case 0x0000003A: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vrsqrt; return i;
+                                case 0x0000003B: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vwaitq; return i;
+                                case 0x0000003C: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmtir; return i;
+                                case 0x0000003D: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vmfir; return i;
+                                case 0x0000003E: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vilwr; return i;
+                                case 0x0000003F: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_viswr; return i;
+                                case 0x00000040: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vrnext; return i;
+                                case 0x00000041: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vrget; return i;
+                                case 0x00000042: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vrinit; return i;
+                                case 0x00000043: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_vrxor; return i;
                             }
                         } break;
                     }
                 } break;
             }
         } break;
-        case 0x50000000 >> 26: i.branch = 3; i.func = ee_i_beql; return i;
-        case 0x54000000 >> 26: i.branch = 3; i.func = ee_i_bnel; return i;
-        case 0x58000000 >> 26: i.branch = 3; i.func = ee_i_blezl; return i;
-        case 0x5C000000 >> 26: i.branch = 3; i.func = ee_i_bgtzl; return i;
-        case 0x60000000 >> 26: i.branch = 4; i.func = ee_i_daddi; return i;
-        case 0x64000000 >> 26: i.func = ee_i_daddiu; return i;
-        case 0x68000000 >> 26: i.func = ee_i_ldl; return i;
-        case 0x6C000000 >> 26: i.func = ee_i_ldr; return i;
+        case 0x50000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_beql; return i;
+        case 0x54000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bnel; return i;
+        case 0x58000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_blezl; return i;
+        case 0x5C000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.func = ee_i_bgtzl; return i;
+        case 0x60000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.func = ee_i_daddi; return i;
+        case 0x64000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_daddiu; return i;
+        case 0x68000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_ldl; return i;
+        case 0x6C000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_ldr; return i;
         case 0x70000000 >> 26: { // mmi
             switch (opcode & 0x0000003F) {
-                case 0x00000000: i.func = ee_i_madd; return i;
-                case 0x00000001: i.func = ee_i_maddu; return i;
-                case 0x00000004: i.func = ee_i_plzcw; return i;
+                case 0x00000000: i.cycles = EE_CYC_MULT; i.func = ee_i_madd; return i;
+                case 0x00000001: i.cycles = EE_CYC_MULT; i.func = ee_i_maddu; return i;
+                case 0x00000004: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_plzcw; return i;
                 case 0x00000008: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.func = ee_i_paddw; return i;
-                        case 0x00000040 >> 6: i.func = ee_i_psubw; return i;
-                        case 0x00000080 >> 6: i.func = ee_i_pcgtw; return i;
-                        case 0x000000C0 >> 6: i.func = ee_i_pmaxw; return i;
-                        case 0x00000100 >> 6: i.func = ee_i_paddh; return i;
-                        case 0x00000140 >> 6: i.func = ee_i_psubh; return i;
-                        case 0x00000180 >> 6: i.func = ee_i_pcgth; return i;
-                        case 0x000001C0 >> 6: i.func = ee_i_pmaxh; return i;
-                        case 0x00000200 >> 6: i.func = ee_i_paddb; return i;
-                        case 0x00000240 >> 6: i.func = ee_i_psubb; return i;
-                        case 0x00000280 >> 6: i.func = ee_i_pcgtb; return i;
-                        case 0x00000400 >> 6: i.func = ee_i_paddsw; return i;
-                        case 0x00000440 >> 6: i.func = ee_i_psubsw; return i;
-                        case 0x00000480 >> 6: i.func = ee_i_pextlw; return i;
-                        case 0x000004C0 >> 6: i.func = ee_i_ppacw; return i;
-                        case 0x00000500 >> 6: i.func = ee_i_paddsh; return i;
-                        case 0x00000540 >> 6: i.func = ee_i_psubsh; return i;
-                        case 0x00000580 >> 6: i.func = ee_i_pextlh; return i;
-                        case 0x000005C0 >> 6: i.func = ee_i_ppach; return i;
-                        case 0x00000600 >> 6: i.func = ee_i_paddsb; return i;
-                        case 0x00000640 >> 6: i.func = ee_i_psubsb; return i;
-                        case 0x00000680 >> 6: i.func = ee_i_pextlb; return i;
-                        case 0x000006C0 >> 6: i.func = ee_i_ppacb; return i;
-                        case 0x00000780 >> 6: i.func = ee_i_pext5; return i;
-                        case 0x000007C0 >> 6: i.func = ee_i_ppac5; return i;
+                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_paddw; return i;
+                        case 0x00000040 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubw; return i;
+                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pcgtw; return i;
+                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmaxw; return i;
+                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_paddh; return i;
+                        case 0x00000140 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubh; return i;
+                        case 0x00000180 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pcgth; return i;
+                        case 0x000001C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmaxh; return i;
+                        case 0x00000200 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_paddb; return i;
+                        case 0x00000240 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubb; return i;
+                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pcgtb; return i;
+                        case 0x00000400 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_paddsw; return i;
+                        case 0x00000440 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubsw; return i;
+                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pextlw; return i;
+                        case 0x000004C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_ppacw; return i;
+                        case 0x00000500 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_paddsh; return i;
+                        case 0x00000540 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubsh; return i;
+                        case 0x00000580 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pextlh; return i;
+                        case 0x000005C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_ppach; return i;
+                        case 0x00000600 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_paddsb; return i;
+                        case 0x00000640 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubsb; return i;
+                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pextlb; return i;
+                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_ppacb; return i;
+                        case 0x00000780 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pext5; return i;
+                        case 0x000007C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_ppac5; return i;
                     }
                 } break;
                 case 0x00000009: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.func = ee_i_pmaddw; return i;
-                        case 0x00000080 >> 6: i.func = ee_i_psllvw; return i;
-                        case 0x000000C0 >> 6: i.func = ee_i_psrlvw; return i;
-                        case 0x00000100 >> 6: i.func = ee_i_pmsubw; return i;
-                        case 0x00000200 >> 6: i.func = ee_i_pmfhi; return i;
-                        case 0x00000240 >> 6: i.func = ee_i_pmflo; return i;
-                        case 0x00000280 >> 6: i.func = ee_i_pinth; return i;
-                        case 0x00000300 >> 6: i.func = ee_i_pmultw; return i;
-                        case 0x00000340 >> 6: i.func = ee_i_pdivw; return i;
-                        case 0x00000380 >> 6: i.func = ee_i_pcpyld; return i;
-                        case 0x00000400 >> 6: i.func = ee_i_pmaddh; return i;
-                        case 0x00000440 >> 6: i.func = ee_i_phmadh; return i;
-                        case 0x00000480 >> 6: i.func = ee_i_pand; return i;
-                        case 0x000004C0 >> 6: i.func = ee_i_pxor; return i;
-                        case 0x00000500 >> 6: i.func = ee_i_pmsubh; return i;
-                        case 0x00000540 >> 6: i.func = ee_i_phmsbh; return i;
-                        case 0x00000680 >> 6: i.func = ee_i_pexeh; return i;
-                        case 0x000006C0 >> 6: i.func = ee_i_prevh; return i;
-                        case 0x00000700 >> 6: i.func = ee_i_pmulth; return i;
-                        case 0x00000740 >> 6: i.func = ee_i_pdivbw; return i;
-                        case 0x00000780 >> 6: i.func = ee_i_pexew; return i;
-                        case 0x000007C0 >> 6: i.func = ee_i_prot3w; return i;
+                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmaddw; return i;
+                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psllvw; return i;
+                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psrlvw; return i;
+                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmsubw; return i;
+                        case 0x00000200 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmfhi; return i;
+                        case 0x00000240 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmflo; return i;
+                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pinth; return i;
+                        case 0x00000300 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmultw; return i;
+                        case 0x00000340 >> 6: i.cycles = EE_CYC_MMI_DIV; i.func = ee_i_pdivw; return i;
+                        case 0x00000380 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pcpyld; return i;
+                        case 0x00000400 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmaddh; return i;
+                        case 0x00000440 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_phmadh; return i;
+                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pand; return i;
+                        case 0x000004C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pxor; return i;
+                        case 0x00000500 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmsubh; return i;
+                        case 0x00000540 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_phmsbh; return i;
+                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pexeh; return i;
+                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_prevh; return i;
+                        case 0x00000700 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmulth; return i;
+                        case 0x00000740 >> 6: i.cycles = EE_CYC_MMI_DIV; i.func = ee_i_pdivbw; return i;
+                        case 0x00000780 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pexew; return i;
+                        case 0x000007C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_prot3w; return i;
                     }
                 } break;
-                case 0x00000010: i.func = ee_i_mfhi1; return i;
-                case 0x00000011: i.func = ee_i_mthi1; return i;
-                case 0x00000012: i.func = ee_i_mflo1; return i;
-                case 0x00000013: i.func = ee_i_mtlo1; return i;
-                case 0x00000018: i.func = ee_i_mult1; return i;
-                case 0x00000019: i.func = ee_i_multu1; return i;
-                case 0x0000001A: i.func = ee_i_div1; return i;
-                case 0x0000001B: i.func = ee_i_divu1; return i;
-                case 0x00000020: i.func = ee_i_madd1; return i;
-                case 0x00000021: i.func = ee_i_maddu1; return i;
+                case 0x00000010: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mfhi1; return i;
+                case 0x00000011: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mthi1; return i;
+                case 0x00000012: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mflo1; return i;
+                case 0x00000013: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_mtlo1; return i;
+                case 0x00000018: i.cycles = EE_CYC_MULT; i.func = ee_i_mult1; return i;
+                case 0x00000019: i.cycles = EE_CYC_MULT; i.func = ee_i_multu1; return i;
+                case 0x0000001A: i.cycles = EE_CYC_DIV; i.func = ee_i_div1; return i;
+                case 0x0000001B: i.cycles = EE_CYC_DIV; i.func = ee_i_divu1; return i;
+                case 0x00000020: i.cycles = EE_CYC_MULT; i.func = ee_i_madd1; return i;
+                case 0x00000021: i.cycles = EE_CYC_MULT; i.func = ee_i_maddu1; return i;
                 case 0x00000028: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000040 >> 6: i.func = ee_i_pabsw; return i;
-                        case 0x00000080 >> 6: i.func = ee_i_pceqw; return i;
-                        case 0x000000C0 >> 6: i.func = ee_i_pminw; return i;
-                        case 0x00000100 >> 6: i.func = ee_i_padsbh; return i;
-                        case 0x00000140 >> 6: i.func = ee_i_pabsh; return i;
-                        case 0x00000180 >> 6: i.func = ee_i_pceqh; return i;
-                        case 0x000001C0 >> 6: i.func = ee_i_pminh; return i;
-                        case 0x00000280 >> 6: i.func = ee_i_pceqb; return i;
-                        case 0x00000400 >> 6: i.func = ee_i_padduw; return i;
-                        case 0x00000440 >> 6: i.func = ee_i_psubuw; return i;
-                        case 0x00000480 >> 6: i.func = ee_i_pextuw; return i;
-                        case 0x00000500 >> 6: i.func = ee_i_padduh; return i;
-                        case 0x00000540 >> 6: i.func = ee_i_psubuh; return i;
-                        case 0x00000580 >> 6: i.func = ee_i_pextuh; return i;
-                        case 0x00000600 >> 6: i.func = ee_i_paddub; return i;
-                        case 0x00000640 >> 6: i.func = ee_i_psubub; return i;
-                        case 0x00000680 >> 6: i.func = ee_i_pextub; return i;
-                        case 0x000006C0 >> 6: i.func = ee_i_qfsrv; return i;
+                        case 0x00000040 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pabsw; return i;
+                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pceqw; return i;
+                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pminw; return i;
+                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_padsbh; return i;
+                        case 0x00000140 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pabsh; return i;
+                        case 0x00000180 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pceqh; return i;
+                        case 0x000001C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pminh; return i;
+                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pceqb; return i;
+                        case 0x00000400 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_padduw; return i;
+                        case 0x00000440 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubuw; return i;
+                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pextuw; return i;
+                        case 0x00000500 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_padduh; return i;
+                        case 0x00000540 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubuh; return i;
+                        case 0x00000580 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pextuh; return i;
+                        case 0x00000600 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_paddub; return i;
+                        case 0x00000640 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psubub; return i;
+                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pextub; return i;
+                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_qfsrv; return i;
                     }
                 } break;
                 case 0x00000029: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.func = ee_i_pmadduw; return i;
-                        case 0x000000C0 >> 6: i.func = ee_i_psravw; return i;
-                        case 0x00000200 >> 6: i.func = ee_i_pmthi; return i;
-                        case 0x00000240 >> 6: i.func = ee_i_pmtlo; return i;
-                        case 0x00000280 >> 6: i.func = ee_i_pinteh; return i;
-                        case 0x00000300 >> 6: i.func = ee_i_pmultuw; return i;
-                        case 0x00000340 >> 6: i.func = ee_i_pdivuw; return i;
-                        case 0x00000380 >> 6: i.func = ee_i_pcpyud; return i;
-                        case 0x00000480 >> 6: i.func = ee_i_por; return i;
-                        case 0x000004C0 >> 6: i.func = ee_i_pnor; return i;
-                        case 0x00000680 >> 6: i.func = ee_i_pexch; return i;
-                        case 0x000006C0 >> 6: i.func = ee_i_pcpyh; return i;
-                        case 0x00000780 >> 6: i.func = ee_i_pexcw; return i;
+                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmadduw; return i;
+                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psravw; return i;
+                        case 0x00000200 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmthi; return i;
+                        case 0x00000240 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmtlo; return i;
+                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pinteh; return i;
+                        case 0x00000300 >> 6: i.cycles = EE_CYC_MMI_MULT; i.func = ee_i_pmultuw; return i;
+                        case 0x00000340 >> 6: i.cycles = EE_CYC_MMI_DIV; i.func = ee_i_pdivuw; return i;
+                        case 0x00000380 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pcpyud; return i;
+                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_por; return i;
+                        case 0x000004C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pnor; return i;
+                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pexch; return i;
+                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pcpyh; return i;
+                        case 0x00000780 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pexcw; return i;
                     }
                 } break;
                 case 0x00000030: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.func = ee_i_pmfhllw; return i;
-                        case 0x00000040 >> 6: i.func = ee_i_pmfhluw; return i;
-                        case 0x00000080 >> 6: i.func = ee_i_pmfhlslw; return i;
-                        case 0x000000c0 >> 6: i.func = ee_i_pmfhllh; return i;
-                        case 0x00000100 >> 6: i.func = ee_i_pmfhlsh; return i;
+                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmfhllw; return i;
+                        case 0x00000040 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmfhluw; return i;
+                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmfhlslw; return i;
+                        case 0x000000c0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmfhllh; return i;
+                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmfhlsh; return i;
                     }
                 } break;
-                case 0x00000031: i.func = ee_i_pmthl; return i;
-                case 0x00000034: i.func = ee_i_psllh; return i;
-                case 0x00000036: i.func = ee_i_psrlh; return i;
-                case 0x00000037: i.func = ee_i_psrah; return i;
-                case 0x0000003C: i.func = ee_i_psllw; return i;
-                case 0x0000003E: i.func = ee_i_psrlw; return i;
-                case 0x0000003F: i.func = ee_i_psraw; return i;
+                case 0x00000031: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_pmthl; return i;
+                case 0x00000034: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psllh; return i;
+                case 0x00000036: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psrlh; return i;
+                case 0x00000037: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psrah; return i;
+                case 0x0000003C: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psllw; return i;
+                case 0x0000003E: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psrlw; return i;
+                case 0x0000003F: i.cycles = EE_CYC_MMI_DEFAULT; i.func = ee_i_psraw; return i;
             }
         } break;
-        case 0x78000000 >> 26: i.func = ee_i_lq; return i;
-        case 0x7C000000 >> 26: i.func = ee_i_sq; return i;
-        case 0x80000000 >> 26: i.func = ee_i_lb; return i;
-        case 0x84000000 >> 26: i.func = ee_i_lh; return i;
-        case 0x88000000 >> 26: i.func = ee_i_lwl; return i;
-        case 0x8C000000 >> 26: i.func = ee_i_lw; return i;
-        case 0x90000000 >> 26: i.func = ee_i_lbu; return i;
-        case 0x94000000 >> 26: i.func = ee_i_lhu; return i;
-        case 0x98000000 >> 26: i.func = ee_i_lwr; return i;
-        case 0x9C000000 >> 26: i.func = ee_i_lwu; return i;
-        case 0xA0000000 >> 26: i.func = ee_i_sb; return i;
-        case 0xA4000000 >> 26: i.func = ee_i_sh; return i;
-        case 0xA8000000 >> 26: i.func = ee_i_swl; return i;
-        case 0xAC000000 >> 26: i.func = ee_i_sw; return i;
-        case 0xB0000000 >> 26: i.func = ee_i_sdl; return i;
-        case 0xB4000000 >> 26: i.func = ee_i_sdr; return i;
-        case 0xB8000000 >> 26: i.func = ee_i_swr; return i;
-        case 0xBC000000 >> 26: i.func = ee_i_cache; return i;
-        case 0xC4000000 >> 26: i.func = ee_i_lwc1; return i;
-        case 0xCC000000 >> 26: i.func = ee_i_pref; return i;
-        case 0xD8000000 >> 26: i.func = ee_i_lqc2; return i;
-        case 0xDC000000 >> 26: i.func = ee_i_ld; return i;
-        case 0xE4000000 >> 26: i.func = ee_i_swc1; return i;
-        case 0xF8000000 >> 26: i.func = ee_i_sqc2; return i;
-        case 0xFC000000 >> 26: i.func = ee_i_sd; return i;
+        case 0x78000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lq; return i;
+        case 0x7C000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_sq; return i;
+        case 0x80000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lb; return i;
+        case 0x84000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lh; return i;
+        case 0x88000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lwl; return i;
+        case 0x8C000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lw; return i;
+        case 0x90000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lbu; return i;
+        case 0x94000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lhu; return i;
+        case 0x98000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lwr; return i;
+        case 0x9C000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lwu; return i;
+        case 0xA0000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sb; return i;
+        case 0xA4000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sh; return i;
+        case 0xA8000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_swl; return i;
+        case 0xAC000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sw; return i;
+        case 0xB0000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sdl; return i;
+        case 0xB4000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sdr; return i;
+        case 0xB8000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_swr; return i;
+        case 0xBC000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_cache; return i;
+        case 0xC4000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lwc1; return i;
+        case 0xCC000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_pref; return i;
+        case 0xD8000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lqc2; return i;
+        case 0xDC000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_ld; return i;
+        case 0xE4000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_swc1; return i;
+        case 0xF8000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sqc2; return i;
+        case 0xFC000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sd; return i;
     }
 
     i.func = ee_i_invalid;
@@ -3491,7 +3719,7 @@ ee_instruction ee_decode(uint32_t opcode) {
 }
 
 int ee_run_block(struct ee_state* ee, int max_cycles) {
-    // This is the entrypoint to the EENULL process.
+    // This is the entrypoint to the EENULL thread.
     // If we hit this address, the program is basically idling
     // so we "fast-forward" 1024 cycles
     if (ee->pc == 0x81fc0) {
@@ -3510,7 +3738,7 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
 
         int cycles = 0;
 
-        for (const auto& i : block) {
+        for (const auto& i : block.instructions) {
             ee->delay_slot = ee->branch;
             ee->branch = 0;
 
@@ -3518,17 +3746,15 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
             if (ee_check_irq(ee))
                 break;
 
-            cycles++;
-
             ee->pc = ee->next_pc;
             ee->next_pc += 4;
 
             i.func(ee, i);
 
+            ee->count++;
             ee->r[0] = { 0 };
 
-            ++ee->total_cycles;
-            ++ee->count;
+            cycles++;
 
             // An exception occurred or likely branch was taken
             // break immediately and clear the exception flag
@@ -3546,14 +3772,11 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
 
     uint32_t pc = ee->pc;
     uint32_t block_pc = ee->pc;
-
-    std::vector <ee_instruction> block;
-
-    block.reserve(max_cycles);
-
-    int prev_branch = 0;
-
     ee_instruction i;
+    ee_block block;
+
+    block.cycles = 0;
+    block.instructions.reserve(max_cycles);
 
     while (max_cycles) {
         ee->opcode = bus_read32(ee, pc);
@@ -3561,13 +3784,15 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         if (ee->opcode != 0) {
             i = ee_decode(ee->opcode);
 
-            block.push_back(i);
+            block.instructions.push_back(i);
         } else {
             i.func = ee_i_nop;
             i.branch = 0;
 
-            block.push_back(i);
+            block.instructions.push_back(i);
         }
+
+        block.cycles += i.cycles;
 
         if (i.branch == 1 || i.branch == 3) {
             max_cycles = 2;
