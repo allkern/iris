@@ -234,7 +234,7 @@ void show_main_menubar(iris::instance* iris) {
                     ImGui::EndMenu();
                 }
 
-                if (BeginMenu("Scale")) {
+                if (BeginMenu(ICON_MS_CROP " Scale")) {
                     for (int i = 2; i <= 6; i++) {
                         char buf[16]; snprintf(buf, 16, "%.1fx", (float)i * 0.5f);
 
@@ -248,7 +248,7 @@ void show_main_menubar(iris::instance* iris) {
                     ImGui::EndMenu();
                 }
 
-                if (BeginMenu("Aspect mode")) {
+                if (BeginMenu(ICON_MS_ASPECT_RATIO " Aspect mode")) {
                     for (int i = 0; i < 7; i++) {
                         if (Selectable(aspect_mode_names[i], iris->aspect_mode == i)) {
                             iris->aspect_mode = i;
@@ -260,7 +260,7 @@ void show_main_menubar(iris::instance* iris) {
                     ImGui::EndMenu();
                 }
 
-                if (BeginMenu("Scaling filter")) {
+                if (BeginMenu(ICON_MS_FILTER " Scaling filter")) {
                     if (Selectable("Nearest", !iris->bilinear)) {
                         iris->bilinear = false;
 
@@ -276,11 +276,43 @@ void show_main_menubar(iris::instance* iris) {
                     ImGui::EndMenu();
                 }
 
-                if (MenuItem("Integer scaling", nullptr, &iris->integer_scaling)) {
+                if (BeginMenu(ICON_MS_ASPECT_RATIO " Window size")) {
+                    const char* sizes[] = {
+                        "640x480",
+                        "800x600",
+                        "960x720",
+                        "1024x768",
+                        "1280x720",
+                        "1280x800"
+                    };
+
+                    int widths[] = {
+                        640, 800, 960, 1024, 1280, 1280
+                    };
+
+                    int heights[] = {
+                        480, 600, 720, 768, 720, 800
+                    };
+
+                    for (int i = 0; i < 6; i++) {
+                        bool selected = iris->window_width == widths[i] && iris->window_height == heights[i];
+
+                        if (MenuItem(sizes[i], nullptr, selected)) {
+                            iris->window_width = widths[i];
+                            iris->window_height = heights[i];
+
+                            SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height);
+                        }
+                    }
+
+                    ImGui::EndMenu();
+                }
+
+                if (MenuItem(ICON_MS_SPEED_2X " Integer scaling", nullptr, &iris->integer_scaling)) {
                     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
 
-                if (MenuItem("Fullscreen", "F11", &iris->fullscreen)) {
+                if (MenuItem(ICON_MS_FULLSCREEN " Fullscreen", "F11", &iris->fullscreen)) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
                 }
 
@@ -385,6 +417,7 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->show_memory_viewer));
             if (MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->show_vu_disassembler));
             if (MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->show_pad_debugger));
+            if (MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->show_overlay));
 
             Separator();
 
@@ -413,6 +446,7 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_symbols = false;
                 iris->show_threads = false;
                 iris->show_breakpoints = false;
+                iris->show_overlay = false;
             }
             
             ImGui::EndMenu();
