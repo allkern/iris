@@ -15,6 +15,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_sdlgpu3.h"
+#include "implot.h"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
@@ -29,6 +30,7 @@
 #include "incbin.h"
 
 INCBIN(roboto, "../res/Roboto-Regular.ttf");
+INCBIN(roboto_black, "../res/Roboto-Black.ttf");
 INCBIN(symbols, "../res/MaterialSymbolsRounded.ttf");
 INCBIN(firacode, "../res/FiraCode-Regular.ttf");
 INCBIN(ps1_memory_card_icon, "../res/ps1_mcd.png");
@@ -196,9 +198,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     /* SDL_OpenAudioDeviceStream starts the device paused. You have to tell it to start! */
     SDL_ResumeAudioStreamDevice(iris->stream);
 
-    // Setup Dear ImGui context
+    // Setup Dear ImGui/ImPlot context
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
+    ImPlot::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
 
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
@@ -231,6 +234,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     iris->font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 16.0F, &config_no_own);
     iris->font_icons      = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 20.0F, &config, g_icon_range);
     iris->font_icons_big  = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 50.0F, &config_no_own, g_icon_range);
+    iris->font_black      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_black_data, g_roboto_black_size, 30.0F, &config_no_own);
 
     IM_ASSERT(iris->font_small_code != nullptr);
     IM_ASSERT(iris->font_code != nullptr);
@@ -239,6 +243,7 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     IM_ASSERT(iris->font_body != nullptr);
     IM_ASSERT(iris->font_icons != nullptr);
     IM_ASSERT(iris->font_icons_big != nullptr);
+    IM_ASSERT(iris->font_black != nullptr);
 
     io.FontDefault = iris->font_body;
 
@@ -349,6 +354,22 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
     colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.00f, 0.00f, 0.00f, 0.35f);
 
+    ImPlotStyle& pstyle = ImPlot::GetStyle();
+
+    pstyle.MinorGridSize = ImVec2(0.0f, 0.0f);
+    pstyle.MajorGridSize = ImVec2(0.0f, 0.0f);
+    pstyle.MinorTickLen = ImVec2(0.0f, 0.0f);
+    pstyle.MajorTickLen = ImVec2(0.0f, 0.0f);
+    pstyle.PlotDefaultSize = ImVec2(250.0f, 150.0f);
+    pstyle.PlotPadding = ImVec2(0.0f, 0.0f);
+    pstyle.LegendPadding = ImVec2(0.0f, 0.0f);
+    pstyle.LegendInnerPadding = ImVec2(0.0f, 0.0f);
+    pstyle.LineWeight = 2.0f;
+
+    pstyle.Colors[ImPlotCol_Line]       = ImVec4(0.0f, 1.0f, 0.2f, 1.0f);
+    pstyle.Colors[ImPlotCol_FrameBg]    = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+    pstyle.Colors[ImPlotCol_PlotBg]     = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
+
     iris->open = true;
 
     // Initialize our emulator state
@@ -424,6 +445,8 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     // Initialize appstate
     *appstate = iris;
 
+    SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height);
+
     return SDL_APP_CONTINUE;
 }
 
@@ -481,13 +504,15 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     // Execute until VBlank
     while (!ps2_gs_is_vblank(iris->ps2->gs)) {
-        do_cycle(iris);
+        ps2_cycle(iris->ps2);
 
-        if (iris->pause) {
-            iris::update_window(iris);
+        // do_cycle(iris);
 
-            return SDL_APP_CONTINUE;
-        }
+        // if (iris->pause) {
+        //     iris::update_window(iris);
+
+        //     return SDL_APP_CONTINUE;
+        // }
     }
 
     // Draw frame
@@ -495,13 +520,15 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     
     // Execute until vblank is over
     while (ps2_gs_is_vblank(iris->ps2->gs)) {
-        do_cycle(iris);
+        ps2_cycle(iris->ps2);
 
-        if (iris->pause) {
-            iris::update_window(iris);
+        // do_cycle(iris);
 
-            return SDL_APP_CONTINUE;
-        }
+        // if (iris->pause) {
+        //     iris::update_window(iris);
+
+        //     return SDL_APP_CONTINUE;
+        // }
     }
 
     return SDL_APP_CONTINUE;
@@ -572,6 +599,7 @@ void SDL_AppQuit(void* appstate, SDL_AppResult result) {
     SDL_WaitForGPUIdle(iris->device);
     ImGui_ImplSDL3_Shutdown();
     ImGui_ImplSDLGPU3_Shutdown();
+    ImPlot::DestroyContext();
     ImGui::DestroyContext();
 
     // Release resources

@@ -11,3 +11,6 @@
 [submodule "incbin"]
 	path = incbin
 	url = https://github.com/graphitemaster/incbin
+[submodule "implot"]
+	path = implot
+	url = https://github.com/epezent/implot

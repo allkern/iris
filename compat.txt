@@ -11,10 +11,12 @@
 "Klonoa 2 - Lunatea's Veil (USA)" - Doesn't work on Release builds (!), requires 16-bit DMAC writes
 "Namco Museum 50th Anniversary (USA)" - Requires MFIFO
 "R-Type Final (Japan)" - Requires MFIFO
+"Sega Ages 2500 Series Vol. 23 - Sega Memorial Selection (Japan)" - GIF DMA read from NULL
 "Sega Genesis Collection (USA)" - Works, "forgets" to change the videomode causing wrong graphics at startup (needs 24-bit 640x448 interlaced?)
 "Simpsons, The - Hit & Run (USA)" - Needs MFIFO
 "Tekken 4 (USA)" - Needs MFIFO
 "Tekken Tag Tournament (USA) (v1.00)" - Needs MFIFO
 "Thunder Force VI (Japan)" - Crashes on an invalid GIF DMA address when starting up (compare against Dobie)
 "Virtua Fighter 4 - Evolution (USA)" - Works, uses filling mode
+"Virtua Fighter - Cyber Generation - Judgment Six no Yabou (Japan)" - PMTHL unimplemented
 "We Love Katamari (USA)" - Uses filling mode, gets stuck trying to play an FMV after the Namco logo?
