@@ -61,7 +61,7 @@ static inline void show_modules_table(iris::instance* iris) {
             // bss section
             TableSetColumnIndex(3);
             addr += mod->data_size;
-            Text("0x%08x", iop->module_list[i].text_addr);
+            Text("0x%08x", addr);
 
             PopFont();
         }
