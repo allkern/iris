@@ -86,6 +86,7 @@ struct ps2_state {
     struct sched_state* sched;
 
     int ee_cycles;
+    int timescale;
 
     // Debug
     struct ps2_elf_function* func;
@@ -102,6 +103,7 @@ void ps2_load_bios(struct ps2_state* ps2, const char* path);
 void ps2_load_rom1(struct ps2_state* ps2, const char* path);
 void ps2_load_rom2(struct ps2_state* ps2, const char* path);
 void ps2_cycle(struct ps2_state* ps2);
+void ps2_set_timescale(struct ps2_state* ps2, int timescale);
 void ps2_iop_cycle(struct ps2_state* ps2);
 void ps2_destroy(struct ps2_state* ps2);
 
