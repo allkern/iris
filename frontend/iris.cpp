@@ -247,6 +247,7 @@ void update_window(iris::instance* iris) {
     // if (iris->show_gamelist) show_gamelist(iris);
     if (iris->show_imgui_demo) ShowDemoWindow(&iris->show_imgui_demo);
     if (iris->show_bios_setting_window) show_bios_setting_window(iris);
+    if (iris->show_overlay) show_overlay(iris);
 
     // Display little pause icon in the top right corner
     if (iris->pause) {

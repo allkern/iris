@@ -65,6 +65,40 @@ struct elf_symbol {
     uint32_t size;
 };
 
+// Event -> Action
+enum {
+    INPUT_ACTION_PRESS_BUTTON,
+    INPUT_ACTION_RELEASE_BUTTON,
+    INPUT_ACTION_MOVE_AXIS
+};
+
+enum {
+    INPUT_CONTROLLER_DUALSHOCK2
+
+    // Large To-do list here, we're missing the Namco GunCon
+    // controllers, JogCon, NegCon, Buzz! Buzzer, the Train
+    // controllers, Taiko Drum Master controller, the Dance Dance
+    // Revolution mat, Guitar Hero controllers, etc.
+};
+
+// struct input_action {
+//     int action;
+
+//     union {
+//         uint32_t button;
+//         uint8_t axis;
+//     };
+// };
+
+// class input_device {
+//     int controller;
+
+// public:
+//     void set_controller(int controller);
+//     int get_controller();
+//     virtual input_action map_event(SDL_Event* event) = 0;
+// };
+
 struct instance {
     SDL_Window* window = nullptr;
     SDL_GPUDevice* device = nullptr;
@@ -101,6 +135,7 @@ struct instance {
     ImFont* font_body = nullptr;
     ImFont* font_icons = nullptr;
     ImFont* font_icons_big = nullptr;
+    ImFont* font_black = nullptr;
 
     std::string elf_path = "";
     std::string boot_path = "";
@@ -149,6 +184,7 @@ struct instance {
     bool show_memory_card_tool = false;
     bool show_imgui_demo = false;
     bool show_vu_disassembler = false;
+    bool show_overlay = false;
 
     // Special windows
     bool show_bios_setting_window = false;
@@ -191,6 +227,8 @@ struct instance {
 
     struct ds_state* ds[2] = { nullptr };
     struct mcd_state* mcd[2] = { nullptr };
+
+    // input_device* device[2];
 
     float drop_file_alpha = 0.0f;
     float drop_file_alpha_delta = 0.0f;
@@ -239,6 +277,7 @@ void show_settings(iris::instance* iris);
 void show_pad_debugger(iris::instance* iris);
 void show_symbols(iris::instance* iris);
 void show_threads(iris::instance* iris);
+void show_overlay(iris::instance* iris);
 void show_memory_card_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
 // void show_gamelist(iris::instance* iris);

@@ -84,6 +84,8 @@ int parse_toml_settings(iris::instance* iris) {
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);
     iris->renderer_backend = display["renderer"].value_or(RENDERER_SOFTWARE_THREAD);
+    iris->window_width = display["window_width"].value_or(960);
+    iris->window_height = display["window_height"].value_or(720);
 
     auto audio = tbl["audio"];
     iris->mute = audio["mute"].value_or(false);
@@ -108,6 +110,8 @@ int parse_toml_settings(iris::instance* iris) {
     iris->show_status_bar = debugger["show_status_bar"].value_or(true);
     iris->show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
     iris->show_threads = debugger["show_threads"].value_or(false);
+    iris->show_overlay = debugger["show_overlay"].value_or(false);
+
     // iris->show_symbols = debugger["show_symbols"].value_or(false);
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
@@ -282,6 +286,7 @@ void close_settings(iris::instance* iris) {
             { "show_breakpoints", iris->show_breakpoints },
             { "show_threads", iris->show_threads },
             { "show_imgui_demo", iris->show_imgui_demo },
+            { "show_overlay", iris->show_overlay },
             { "skip_fmv", iris->skip_fmv }
         } },
         { "display", toml::table {
@@ -290,7 +295,9 @@ void close_settings(iris::instance* iris) {
             { "integer_scaling", iris->integer_scaling },
             { "fullscreen", iris->fullscreen },
             { "bilinear", iris->bilinear },
-            { "renderer", iris->renderer_backend }
+            { "renderer", iris->renderer_backend },
+            { "window_width", iris->window_width },
+            { "window_height", iris->window_height }
         } },
         { "audio", toml::table {
             { "mute", iris->mute },
