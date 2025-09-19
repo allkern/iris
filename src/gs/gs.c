@@ -70,14 +70,14 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     struct sched_event vblank_out_event;
 
     vblank_out_event.callback = gs_handle_vblank_out;
-    vblank_out_event.cycles = GS_VBLANK_NTSC; 
+    vblank_out_event.cycles = GS_VBLANK_NTSC;
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
     struct sched_event field_flip_event;
 
     field_flip_event.callback = gs_flip_field;
-    field_flip_event.cycles = 30000 * 4;
+    field_flip_event.cycles = 65622;
     field_flip_event.name = "Field flip event";
     field_flip_event.udata = gs;
 
@@ -319,6 +319,8 @@ uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
     // Hack toggle between FIFO empty and FIFO "Neither Empty nor Almost Full"
     gs->csr ^= 0x4000;
 
+    addr = (addr & 0xfffff000) | (addr & 0x3ff);
+
     switch (addr) {
         case 0x12000000: return gs->csr | 0x551b0000;
         case 0x12000010: return gs->csr | 0x551b0000;
@@ -339,6 +341,8 @@ uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr) {
         case 0x12001010: return gs->csr | 0x551b0000;
         case 0x12001040: return gs->csr | 0x551b0000;
         case 0x12001080: return gs->siglblid;
+
+        case 0x12001001: return (gs->csr >> 8) & 0xff;
     }
 
     printf("gs: Unhandled read from %08x\n", addr);
@@ -376,6 +380,11 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
         case 0x120000D0: gs->extwrite = data; return;
         case 0x120000E0: gs->bgcolor = data; return;
         case 0x12001000: {
+            if (data & 8) {
+                // Game is requesting vsync
+                gs->vblank |= 1;
+            }
+
             gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
 
             if (gs->signal_pending && ((gs->csr & 1) == 0)) {

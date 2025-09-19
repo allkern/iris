@@ -118,8 +118,10 @@ extern "C" {
 // EE clock: 294.912 MHz, 294912000 clocks/s
 // 294912000/60=4915200 clocks/frame
 
-#define GS_FRAME_NTSC 4497600 // (240 * 9370)
-#define GS_VBLANK_NTSC 417600 // (22 * 9370)
+// #define GS_FRAME_NTSC (4497600) // (240 * 9370)
+// #define GS_VBLANK_NTSC (417600) // (22 * 9370)
+#define GS_FRAME_NTSC 4489019 // (240 * 9370)
+#define GS_VBLANK_NTSC 431096 // (22 * 9370)
 #define GS_FRAME_PAL (286 * 9476)
 #define GS_VBLANK_PAL (26 * 9476)
 
