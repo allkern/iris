@@ -49,10 +49,24 @@ void iop_timer_tick(struct ps2_iop_timers* timers, int i) {
                 t->internal = 0;
             }
         } else {
-            ++t->counter;
+            t->counter += 2;
         }
     } else {
-        t->counter += 9;
+        if (i == 4) {
+            switch (t->t4_prescaler) {
+                case 0: t->counter += 2; break;
+                case 1: {
+                    if (t->internal != 128) {
+                        ++t->internal;
+                    } else {
+                        t->counter += 1;
+                        t->internal = 0;
+                    }
+                } break;
+            }
+        } else {
+            t->counter += 2;
+        }
     }
 
     if (t->counter >= t->target && prev < t->target) {
