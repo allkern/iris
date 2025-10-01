@@ -116,6 +116,7 @@ int parse_toml_settings(iris::instance* iris) {
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
+    iris->timescale = debugger["timescale"].value_or(8);
 
     toml::array* recents = tbl["recents"]["array"].as_array();
 
@@ -126,6 +127,8 @@ int parse_toml_settings(iris::instance* iris) {
     renderer_set_bilinear(iris->ctx, iris->bilinear);
     renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
     renderer_set_scale(iris->ctx, iris->scale);
+
+    ps2_set_timescale(iris->ps2, iris->timescale);
 
     ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
 
@@ -287,7 +290,8 @@ void close_settings(iris::instance* iris) {
             { "show_threads", iris->show_threads },
             { "show_imgui_demo", iris->show_imgui_demo },
             { "show_overlay", iris->show_overlay },
-            { "skip_fmv", iris->skip_fmv }
+            { "skip_fmv", iris->skip_fmv },
+            { "timescale", iris->timescale }
         } },
         { "display", toml::table {
             { "scale", iris->scale },

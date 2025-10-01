@@ -421,6 +421,20 @@ void show_main_menubar(iris::instance* iris) {
 
             Separator();
 
+            if (BeginMenu(ICON_MS_MORE_TIME " Timescale")) {
+                for (int i = 0; i < 9; i++) {
+                    char buf[16]; snprintf(buf, 16, "%dx", 1 << i);
+
+                    if (Selectable(buf, iris->timescale == (1 << i))) {
+                        iris->timescale = (1 << i);
+
+                        ps2_set_timescale(iris->ps2, iris->timescale);
+                    }
+                }
+
+                ImGui::EndMenu();
+            }
+
             if (MenuItem(ICON_MS_SKIP_NEXT " Skip FMVs", NULL, &iris->skip_fmv)) {
                 printf("Skip FMVs: %d\n", iris->skip_fmv);
                 ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);

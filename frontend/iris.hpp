@@ -213,6 +213,7 @@ struct instance {
     int menubar_height = 0;
     bool mute = false;
     float volume = 1.0f;
+    int timescale = 8;
 
     bool limit_fps = true;
     float fps_cap = 60.0f;

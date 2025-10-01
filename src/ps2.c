@@ -246,11 +246,9 @@ void ps2_cycle(struct ps2_state* ps2) {
         cycles = ee_run_block(ps2->ee, 128);
     }
 
-    cycles *= ps2->timescale; 
-
     ps2->ee_cycles += cycles;
 
-    sched_tick(ps2->sched, cycles);
+    sched_tick(ps2->sched, ps2->timescale * cycles);
 
     ps2_ipu_run(ps2->ipu);
 
