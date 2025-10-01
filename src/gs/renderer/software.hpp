@@ -50,6 +50,7 @@ void software_get_display_format(void* ctx, int* fmt);
 void software_get_interlace_mode(void* ctx, int* mode);
 void software_set_window_rect(void* udata, int x, int y, int w, int h);
 void* software_get_buffer_data(void* udata, int* w, int* h, int* bpp);
+renderer_stats* software_get_debug_stats(void* ctx);
 const char* software_get_name(void* ctx);
 void software_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer);
 void software_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass);

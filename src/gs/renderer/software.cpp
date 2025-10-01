@@ -8,6 +8,8 @@
 
 #include <SDL3/SDL.h>
 
+renderer_stats dummy = {};
+
 int software_psmct32_block[] = {
     0 , 1 , 4 , 5 , 16, 17, 20, 21,
     2 , 3 , 6 , 7 , 18, 19, 22, 23,
@@ -1794,3 +1796,7 @@ extern "C" void software_transfer_read(struct ps2_gs* gs, void* udata) {
 void software_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
 void software_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass) {}
 void software_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
+
+renderer_stats* software_get_debug_stats(void* udata) {
+    return &dummy;
+}

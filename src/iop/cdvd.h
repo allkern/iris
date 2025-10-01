@@ -71,6 +71,18 @@ extern "C" {
 #define CDVD_CD_SS_2048 2048
 #define CDVD_DVD_SS 2064
 
+struct nvram_layout {
+	uint32_t bios_version;   // bios version that this eeprom layout is for
+	int32_t config0_offset;   // offset of 1st config block
+	int32_t config1_offset;   // offset of 2nd config block
+	int32_t config2_offset;   // offset of 3rd config block
+	int32_t console_id_offset; // offset of console id (?)
+	int32_t ilink_id_offset;   // offset of ilink id (ilink mac address)
+	int32_t modelnum_offset;  // offset of ps2 model number (eg "SCPH-70002")
+	int32_t regparams_offset; // offset of RegionParams for PStwo
+	int32_t mac_offset;       // offset of MAC address on PStwo
+};
+
 struct ps2_cdvd {
     uint8_t n_cmd;
     uint8_t n_stat;
@@ -118,6 +130,11 @@ struct ps2_cdvd {
     struct sched_state* sched;
     uint64_t layer2_lba;
 
+    uint32_t config_rw;
+    uint32_t config_offset;
+    uint32_t config_numblocks;
+    uint32_t config_block_index;
+
     // To-do:
     // void (*poweroff_handler)(void* udata)
     // void (*trayctrl_handler)(void* udata, uint8_t ctrl)
@@ -131,6 +148,7 @@ void ps2_cdvd_close(struct ps2_cdvd* cdvd);
 void ps2_cdvd_power_off(struct ps2_cdvd* cdvd);
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr);
 void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data);
+void ps2_cdvd_reset(struct ps2_cdvd* cdvd);
 
 #undef ALIGNED_U32
 

@@ -9,34 +9,24 @@
 
 // #define printf(fmt, ...)(0)
 
-#define VU_LD_DEST ((vu->lower >> 21) & 0xf)
-#define VU_LD_DI(i) (vu->lower & (1 << (24 - i)))
-#define VU_LD_DX ((vu->lower >> 24) & 1)
-#define VU_LD_DY ((vu->lower >> 23) & 1)
-#define VU_LD_DZ ((vu->lower >> 22) & 1)
-#define VU_LD_DW ((vu->lower >> 21) & 1)
-#define VU_LD_D ((vu->lower >> 6) & 0x1f)
-#define VU_LD_S ((vu->lower >> 11) & 0x1f)
-#define VU_LD_T ((vu->lower >> 16) & 0x1f)
-#define VU_LD_SF ((vu->lower >> 21) & 3)
-#define VU_LD_TF ((vu->lower >> 23) & 3)
-#define VU_LD_IMM5 (((int32_t)(VU_LD_D << 27)) >> 27)
-#define VU_LD_IMM11 (((int32_t)((vu->lower & 0x7ff) << 21)) >> 21)
-#define VU_LD_IMM12 ((((vu->lower >> 21) & 0x1) << 11) | (vu->lower & 0x7ff))
-#define VU_LD_IMM15 ((vu->lower & 0x7ff) | ((vu->lower & 0x1e00000) >> 10))
-#define VU_LD_IMM24 (vu->lower & 0xffffff)
+#define VU_LD_DI(i) (ins->ld_di[i])
+#define VU_LD_D (ins->ld_d)
+#define VU_LD_S (ins->ld_s)
+#define VU_LD_T (ins->ld_t)
+#define VU_LD_SF (ins->ld_sf)
+#define VU_LD_TF (ins->ld_tf)
+#define VU_LD_IMM5 (ins->ld_imm5)
+#define VU_LD_IMM11 (ins->ld_imm11)
+#define VU_LD_IMM12 (ins->ld_imm12)
+#define VU_LD_IMM15 (ins->ld_imm15)
+#define VU_LD_IMM24 (ins->ld_imm24)
 #define VU_ID vu->vi[VU_LD_D]
 #define VU_IS vu->vi[VU_LD_S]
 #define VU_IT vu->vi[VU_LD_T]
-#define VU_UD_DEST ((vu->upper >> 21) & 0xf)
-#define VU_UD_DI(i) (vu->upper & (1 << (24 - i)))
-#define VU_UD_DX ((vu->upper >> 24) & 1)
-#define VU_UD_DY ((vu->upper >> 23) & 1)
-#define VU_UD_DZ ((vu->upper >> 22) & 1)
-#define VU_UD_DW ((vu->upper >> 21) & 1)
-#define VU_UD_D ((vu->upper >> 6) & 0x1f)
-#define VU_UD_S ((vu->upper >> 11) & 0x1f)
-#define VU_UD_T ((vu->upper >> 16) & 0x1f)
+#define VU_UD_DI(i) (ins->ud_di[i])
+#define VU_UD_D (ins->ud_d)
+#define VU_UD_S (ins->ud_s)
+#define VU_UD_T (ins->ud_t)
 
 struct vu_state* vu_create(void) {
     return (struct vu_state*)malloc(sizeof(struct vu_state));
@@ -262,12 +252,14 @@ static inline void vu_mem_write(struct vu_state* vu, uint32_t addr, uint32_t dat
             } else if (addr == 0x43a) {
                 vu->vu1->tpc = data;
             } else {
-                printf("vu: oob write\n");
+                // printf("vu: oob write\n");
 
-                exit(1);
+                // exit(1);
             }
         }
     } else {
+        // if (addr == 0x0000013d) *(int*)0 = 0;
+
         vu->vu_mem[addr & 0x3ff].u32[i] = data;
     }
 }
@@ -314,7 +306,7 @@ static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
 }
 
 // Upper pipeline
-void vu_i_abs(struct vu_state* vu) {
+void vu_i_abs(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -322,7 +314,7 @@ void vu_i_abs(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, t, i, fabsf(vu_vf_i(vu, s, i)));
     }
 }
-void vu_i_add(struct vu_state* vu) {
+void vu_i_add(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     int t = VU_UD_T;
@@ -339,7 +331,7 @@ void vu_i_add(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addi(struct vu_state* vu) {
+void vu_i_addi(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
@@ -355,7 +347,7 @@ void vu_i_addi(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addq(struct vu_state* vu) {
+void vu_i_addq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
@@ -371,7 +363,7 @@ void vu_i_addq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addx(struct vu_state* vu) {
+void vu_i_addx(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -390,7 +382,7 @@ void vu_i_addx(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addy(struct vu_state* vu) {
+void vu_i_addy(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -409,7 +401,7 @@ void vu_i_addy(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addz(struct vu_state* vu) {
+void vu_i_addz(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -428,7 +420,7 @@ void vu_i_addz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addw(struct vu_state* vu) {
+void vu_i_addw(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -447,7 +439,7 @@ void vu_i_addw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_adda(struct vu_state* vu) {
+void vu_i_adda(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -463,7 +455,7 @@ void vu_i_adda(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addai(struct vu_state* vu) {
+void vu_i_addai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
     for (int i = 0; i < 4; i++) {
@@ -478,9 +470,8 @@ void vu_i_addai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addaq(struct vu_state* vu) {
+void vu_i_addaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
-    int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
@@ -494,7 +485,7 @@ void vu_i_addaq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addax(struct vu_state* vu) {
+void vu_i_addax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -512,7 +503,7 @@ void vu_i_addax(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_adday(struct vu_state* vu) {
+void vu_i_adday(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -530,7 +521,7 @@ void vu_i_adday(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addaz(struct vu_state* vu) {
+void vu_i_addaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -548,7 +539,7 @@ void vu_i_addaz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_addaw(struct vu_state* vu) {
+void vu_i_addaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -566,7 +557,7 @@ void vu_i_addaw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_sub(struct vu_state* vu) {
+void vu_i_sub(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     int t = VU_UD_T;
@@ -583,7 +574,7 @@ void vu_i_sub(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subi(struct vu_state* vu) {
+void vu_i_subi(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
@@ -599,7 +590,7 @@ void vu_i_subi(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subq(struct vu_state* vu) {
+void vu_i_subq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
@@ -615,7 +606,7 @@ void vu_i_subq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subx(struct vu_state* vu) {
+void vu_i_subx(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -634,7 +625,7 @@ void vu_i_subx(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_suby(struct vu_state* vu) {
+void vu_i_suby(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -653,7 +644,7 @@ void vu_i_suby(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subz(struct vu_state* vu) {
+void vu_i_subz(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -672,7 +663,7 @@ void vu_i_subz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subw(struct vu_state* vu) {
+void vu_i_subw(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -691,7 +682,7 @@ void vu_i_subw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_suba(struct vu_state* vu) {
+void vu_i_suba(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -707,7 +698,7 @@ void vu_i_suba(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subai(struct vu_state* vu) {
+void vu_i_subai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
     for (int i = 0; i < 4; i++) {
@@ -722,9 +713,8 @@ void vu_i_subai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subaq(struct vu_state* vu) {
+void vu_i_subaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
-    int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
@@ -738,7 +728,7 @@ void vu_i_subaq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subax(struct vu_state* vu) {
+void vu_i_subax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -756,7 +746,7 @@ void vu_i_subax(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subay(struct vu_state* vu) {
+void vu_i_subay(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -774,7 +764,7 @@ void vu_i_subay(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subaz(struct vu_state* vu) {
+void vu_i_subaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -792,7 +782,7 @@ void vu_i_subaz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_subaw(struct vu_state* vu) {
+void vu_i_subaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -810,7 +800,7 @@ void vu_i_subaw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mul(struct vu_state* vu) {
+void vu_i_mul(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     int t = VU_UD_T;
@@ -827,7 +817,7 @@ void vu_i_mul(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_muli(struct vu_state* vu) {
+void vu_i_muli(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
@@ -843,7 +833,7 @@ void vu_i_muli(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulq(struct vu_state* vu) {
+void vu_i_mulq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
@@ -859,7 +849,7 @@ void vu_i_mulq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulx(struct vu_state* vu) {
+void vu_i_mulx(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -878,7 +868,7 @@ void vu_i_mulx(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_muly(struct vu_state* vu) {
+void vu_i_muly(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -897,7 +887,7 @@ void vu_i_muly(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulz(struct vu_state* vu) {
+void vu_i_mulz(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -916,7 +906,7 @@ void vu_i_mulz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulw(struct vu_state* vu) {
+void vu_i_mulw(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -935,7 +925,7 @@ void vu_i_mulw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mula(struct vu_state* vu) {
+void vu_i_mula(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -951,7 +941,7 @@ void vu_i_mula(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulai(struct vu_state* vu) {
+void vu_i_mulai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
     for (int i = 0; i < 4; i++) {
@@ -966,9 +956,8 @@ void vu_i_mulai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulaq(struct vu_state* vu) {
+void vu_i_mulaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
-    int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
@@ -982,7 +971,7 @@ void vu_i_mulaq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulax(struct vu_state* vu) {
+void vu_i_mulax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1000,7 +989,7 @@ void vu_i_mulax(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulay(struct vu_state* vu) {
+void vu_i_mulay(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1018,7 +1007,7 @@ void vu_i_mulay(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulaz(struct vu_state* vu) {
+void vu_i_mulaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1036,7 +1025,7 @@ void vu_i_mulaz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_mulaw(struct vu_state* vu) {
+void vu_i_mulaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1054,7 +1043,7 @@ void vu_i_mulaw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_madd(struct vu_state* vu) {
+void vu_i_madd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1071,7 +1060,7 @@ void vu_i_madd(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddi(struct vu_state* vu) {
+void vu_i_maddi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
@@ -1087,7 +1076,7 @@ void vu_i_maddi(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddq(struct vu_state* vu) {
+void vu_i_maddq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
@@ -1103,7 +1092,7 @@ void vu_i_maddq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddx(struct vu_state* vu) {
+void vu_i_maddx(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1122,7 +1111,7 @@ void vu_i_maddx(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddy(struct vu_state* vu) {
+void vu_i_maddy(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1141,7 +1130,7 @@ void vu_i_maddy(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddz(struct vu_state* vu) {
+void vu_i_maddz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1160,7 +1149,7 @@ void vu_i_maddz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddw(struct vu_state* vu) {
+void vu_i_maddw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1179,7 +1168,7 @@ void vu_i_maddw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_madda(struct vu_state* vu) {
+void vu_i_madda(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1195,7 +1184,7 @@ void vu_i_madda(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddai(struct vu_state* vu) {
+void vu_i_maddai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
     for (int i = 0; i < 4; i++) {
@@ -1210,9 +1199,8 @@ void vu_i_maddai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddaq(struct vu_state* vu) {
+void vu_i_maddaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
-    int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
@@ -1226,7 +1214,7 @@ void vu_i_maddaq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddax(struct vu_state* vu) {
+void vu_i_maddax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1244,7 +1232,7 @@ void vu_i_maddax(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_madday(struct vu_state* vu) {
+void vu_i_madday(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1262,7 +1250,7 @@ void vu_i_madday(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddaz(struct vu_state* vu) {
+void vu_i_maddaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1280,7 +1268,7 @@ void vu_i_maddaz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_maddaw(struct vu_state* vu) {
+void vu_i_maddaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1298,7 +1286,7 @@ void vu_i_maddaw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msub(struct vu_state* vu) {
+void vu_i_msub(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1315,7 +1303,7 @@ void vu_i_msub(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubi(struct vu_state* vu) {
+void vu_i_msubi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
@@ -1331,7 +1319,7 @@ void vu_i_msubi(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubq(struct vu_state* vu) {
+void vu_i_msubq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
@@ -1347,7 +1335,7 @@ void vu_i_msubq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubx(struct vu_state* vu) {
+void vu_i_msubx(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1366,7 +1354,7 @@ void vu_i_msubx(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msuby(struct vu_state* vu) {
+void vu_i_msuby(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1385,7 +1373,7 @@ void vu_i_msuby(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubz(struct vu_state* vu) {
+void vu_i_msubz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1404,7 +1392,7 @@ void vu_i_msubz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubw(struct vu_state* vu) {
+void vu_i_msubw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1423,7 +1411,7 @@ void vu_i_msubw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msuba(struct vu_state* vu) {
+void vu_i_msuba(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1439,7 +1427,7 @@ void vu_i_msuba(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubai(struct vu_state* vu) {
+void vu_i_msubai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
     for (int i = 0; i < 4; i++) {
@@ -1454,9 +1442,8 @@ void vu_i_msubai(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubaq(struct vu_state* vu) {
+void vu_i_msubaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
-    int t = VU_UD_T;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
@@ -1470,7 +1457,7 @@ void vu_i_msubaq(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubax(struct vu_state* vu) {
+void vu_i_msubax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1488,7 +1475,7 @@ void vu_i_msubax(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubay(struct vu_state* vu) {
+void vu_i_msubay(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1506,7 +1493,7 @@ void vu_i_msubay(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubaz(struct vu_state* vu) {
+void vu_i_msubaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1524,7 +1511,7 @@ void vu_i_msubaz(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_msubaw(struct vu_state* vu) {
+void vu_i_msubaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1542,7 +1529,7 @@ void vu_i_msubaw(struct vu_state* vu) {
 
     vu_update_status(vu);
 }
-void vu_i_max(struct vu_state* vu) {
+void vu_i_max(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1555,7 +1542,7 @@ void vu_i_max(struct vu_state* vu) {
         }
     }
 }
-void vu_i_maxi(struct vu_state* vu) {
+void vu_i_maxi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
@@ -1567,7 +1554,7 @@ void vu_i_maxi(struct vu_state* vu) {
         }
     }
 }
-void vu_i_maxx(struct vu_state* vu) {
+void vu_i_maxx(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1584,7 +1571,7 @@ void vu_i_maxx(struct vu_state* vu) {
         }
     }
 }
-void vu_i_maxy(struct vu_state* vu) {
+void vu_i_maxy(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1601,7 +1588,7 @@ void vu_i_maxy(struct vu_state* vu) {
         }
     }
 }
-void vu_i_maxz(struct vu_state* vu) {
+void vu_i_maxz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1618,7 +1605,7 @@ void vu_i_maxz(struct vu_state* vu) {
         }
     }
 }
-void vu_i_maxw(struct vu_state* vu) {
+void vu_i_maxw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1635,7 +1622,7 @@ void vu_i_maxw(struct vu_state* vu) {
         }
     }
 }
-void vu_i_mini(struct vu_state* vu) {
+void vu_i_mini(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1648,7 +1635,7 @@ void vu_i_mini(struct vu_state* vu) {
         }
     }
 }
-void vu_i_minii(struct vu_state* vu) {
+void vu_i_minii(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
@@ -1660,7 +1647,7 @@ void vu_i_minii(struct vu_state* vu) {
         }
     }
 }
-void vu_i_minix(struct vu_state* vu) {
+void vu_i_minix(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1675,7 +1662,7 @@ void vu_i_minix(struct vu_state* vu) {
         }
     }
 }
-void vu_i_miniy(struct vu_state* vu) {
+void vu_i_miniy(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1690,7 +1677,7 @@ void vu_i_miniy(struct vu_state* vu) {
         }
     }
 }
-void vu_i_miniz(struct vu_state* vu) {
+void vu_i_miniz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1705,7 +1692,7 @@ void vu_i_miniz(struct vu_state* vu) {
         }
     }
 }
-void vu_i_miniw(struct vu_state* vu) {
+void vu_i_miniw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
@@ -1720,7 +1707,7 @@ void vu_i_miniw(struct vu_state* vu) {
         }
     }
 }
-void vu_i_opmula(struct vu_state* vu) {
+void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1756,7 +1743,7 @@ void vu_i_opmula(struct vu_state* vu) {
     vu_clear_flags(vu, 3);
     vu_update_status(vu);
 }
-void vu_i_opmsub(struct vu_state* vu) {
+void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1791,10 +1778,10 @@ void vu_i_opmsub(struct vu_state* vu) {
     vu_clear_flags(vu, 3);
     vu_update_status(vu);
 }
-void vu_i_nop(struct vu_state* vu) {
+void vu_i_nop(struct vu_state* vu, const struct vu_instruction* ins) {
     // No operation
 }
-void vu_i_ftoi0(struct vu_state* vu) {
+void vu_i_ftoi0(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1802,7 +1789,7 @@ void vu_i_ftoi0(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i)));
     }
 }
-void vu_i_ftoi4(struct vu_state* vu) {
+void vu_i_ftoi4(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1810,7 +1797,7 @@ void vu_i_ftoi4(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.0625f)));
     }
 }
-void vu_i_ftoi12(struct vu_state* vu) {
+void vu_i_ftoi12(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1818,7 +1805,7 @@ void vu_i_ftoi12(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000244140625f)));
     }
 }
-void vu_i_ftoi15(struct vu_state* vu) {
+void vu_i_ftoi15(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1826,7 +1813,7 @@ void vu_i_ftoi15(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000030517578125f)));
     }
 }
-void vu_i_itof0(struct vu_state* vu) {
+void vu_i_itof0(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1834,7 +1821,7 @@ void vu_i_itof0(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)vu->vf[s].s32[i]);
     }
 }
-void vu_i_itof4(struct vu_state* vu) {
+void vu_i_itof4(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1842,7 +1829,7 @@ void vu_i_itof4(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.0625f));
     }
 }
-void vu_i_itof12(struct vu_state* vu) {
+void vu_i_itof12(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1850,7 +1837,7 @@ void vu_i_itof12(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000244140625f));
     }
 }
-void vu_i_itof15(struct vu_state* vu) {
+void vu_i_itof15(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
@@ -1858,7 +1845,7 @@ void vu_i_itof15(struct vu_state* vu) {
         if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000030517578125f));
     }
 }
-void vu_i_clip(struct vu_state* vu) {
+void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_UD_T;
     int s = VU_UD_S;
 
@@ -1879,16 +1866,16 @@ void vu_i_clip(struct vu_state* vu) {
 }
 
 // Lower pipeline
-void vu_i_b(struct vu_state* vu) {
+void vu_i_b(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->next_tpc = vu->tpc + VU_LD_IMM11;
 }
-void vu_i_bal(struct vu_state* vu) {
+void vu_i_bal(struct vu_state* vu, const struct vu_instruction* ins) {
     // Instruction next to the delay slot
     VU_IT = vu->tpc + 1;
 
     vu->next_tpc = vu->tpc + VU_LD_IMM11;
 }
-void vu_i_div(struct vu_state* vu) {
+void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
     int s = VU_LD_S;
     int tf = VU_LD_TF;
@@ -1897,7 +1884,7 @@ void vu_i_div(struct vu_state* vu) {
     vu->q.f = vu_vf_i(vu, s, sf) / vu_vf_i(vu, t, tf);
     vu->q.f = vu_cvtf(vu->q.u32);
 }
-void vu_i_eatan(struct vu_state* vu) {
+void vu_i_eatan(struct vu_state* vu, const struct vu_instruction* ins) {
     float x = vu_vf_i(vu, VU_LD_S, VU_LD_SF);
 
     if (x == -1.0f) {
@@ -1908,7 +1895,7 @@ void vu_i_eatan(struct vu_state* vu) {
         vu->p.f = vu_atan(x);
     }
 }
-void vu_i_eatanxy(struct vu_state* vu) {
+void vu_i_eatanxy(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     float x = vu_vf_x(vu, s);
     float y = vu_vf_y(vu, s);
@@ -1921,7 +1908,7 @@ void vu_i_eatanxy(struct vu_state* vu) {
         vu->p.f = vu_atan(x);
     }
 }
-void vu_i_eatanxz(struct vu_state* vu) {
+void vu_i_eatanxz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     float x = vu_vf_x(vu, s);
     float z = vu_vf_z(vu, s);
@@ -1935,7 +1922,7 @@ void vu_i_eatanxz(struct vu_state* vu) {
         vu->p.f = vu_atan(x);
     }
 }
-void vu_i_eexp(struct vu_state* vu) {
+void vu_i_eexp(struct vu_state* vu, const struct vu_instruction* ins) {
     const static float coeffs[] = {
         0.249998688697815f, 0.031257584691048f,
         0.002591371303424f, 0.000171562001924f,
@@ -1959,7 +1946,7 @@ void vu_i_eexp(struct vu_state* vu) {
 
     vu->p.f = 1.0 / value;
 }
-void vu_i_eleng(struct vu_state* vu) {
+void vu_i_eleng(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
 
     float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
@@ -1968,10 +1955,10 @@ void vu_i_eleng(struct vu_state* vu) {
 
     vu->p.f = sqrtf(x2 + y2 + z2);
 }
-void vu_i_ercpr(struct vu_state* vu) {
+void vu_i_ercpr(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->p.f = 1.0f / vu_vf_i(vu, VU_LD_S, VU_LD_SF);
 }
-void vu_i_erleng(struct vu_state* vu) {
+void vu_i_erleng(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
 
     float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
@@ -1980,7 +1967,7 @@ void vu_i_erleng(struct vu_state* vu) {
 
     vu->p.f = 1.0f / sqrtf(x2 + y2 + z2);
 }
-void vu_i_ersadd(struct vu_state* vu) {
+void vu_i_ersadd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
 
     float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
@@ -1989,10 +1976,10 @@ void vu_i_ersadd(struct vu_state* vu) {
 
     vu->p.f = 1.0f / (x2 + y2 + z2);
 }
-void vu_i_ersqrt(struct vu_state* vu) {
+void vu_i_ersqrt(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->p.f = 1.0f / sqrtf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
 }
-void vu_i_esadd(struct vu_state* vu) {
+void vu_i_esadd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
 
     float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
@@ -2001,105 +1988,105 @@ void vu_i_esadd(struct vu_state* vu) {
 
     vu->p.f = x2 + y2 + z2;
 }
-void vu_i_esin(struct vu_state* vu) {
+void vu_i_esin(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->p.f = sinf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
 }
-void vu_i_esqrt(struct vu_state* vu) {
+void vu_i_esqrt(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->p.f = sqrtf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
 }
-void vu_i_esum(struct vu_state* vu) {
+void vu_i_esum(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
 
     vu->p.f = vu_vf_x(vu, s) + vu_vf_y(vu, s) + vu_vf_z(vu, s) + vu_vf_w(vu, s);
 }
-void vu_i_fcand(struct vu_state* vu) {
+void vu_i_fcand(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->vi[1] = ((vu->clip & 0xffffff) & VU_LD_IMM24) != 0;
 }
-void vu_i_fceq(struct vu_state* vu) {
+void vu_i_fceq(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->vi[1] = (vu->clip & 0xffffff) == VU_LD_IMM24;
 }
-void vu_i_fcget(struct vu_state* vu) {
+void vu_i_fcget(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
 
     vu->vi[VU_LD_T] = vu->clip & 0xfff;
 }
-void vu_i_fcor(struct vu_state* vu) {
+void vu_i_fcor(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->vi[1] = ((vu->clip & 0xffffff) | VU_LD_IMM24) == 0xffffff;
 }
-void vu_i_fcset(struct vu_state* vu) {
+void vu_i_fcset(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->clip = VU_LD_IMM24;
 }
-void vu_i_fmand(struct vu_state* vu) {
+void vu_i_fmand(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, vu->mac_pipeline[3] & VU_IS);
 }
-void vu_i_fmeq(struct vu_state* vu) {
+void vu_i_fmeq(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, (VU_IS & 0xffff) == (vu->mac_pipeline[3] & 0xffff));
 }
-void vu_i_fmor(struct vu_state* vu) {
+void vu_i_fmor(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, (VU_IS & 0xffff) | (vu->mac_pipeline[3] & 0xffff));
 }
-void vu_i_fsand(struct vu_state* vu) {
+void vu_i_fsand(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, vu->status & VU_LD_IMM12);
 }
-void vu_i_fseq(struct vu_state* vu) {
+void vu_i_fseq(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, (vu->status & 0xfff) == VU_LD_IMM12);
 }
-void vu_i_fsor(struct vu_state* vu) {
+void vu_i_fsor(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, (vu->status & 0xfff) | VU_LD_IMM12);
 }
-void vu_i_fsset(struct vu_state* vu) {
+void vu_i_fsset(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->status &= 0x3f;
     vu->status |= VU_LD_IMM12 & 0xfc0;
 }
-void vu_i_iadd(struct vu_state* vu) {
+void vu_i_iadd(struct vu_state* vu, const struct vu_instruction* ins) {
     // printf("iadd vi%02u, vi%02u (%04x), vi%02u (%04x)\n", VU_LD_D, VU_LD_S, VU_IS, VU_LD_T, VU_IT);
 
     vu_set_vi(vu, VU_LD_D, VU_IS + VU_IT);
 }
-void vu_i_iaddi(struct vu_state* vu) {
+void vu_i_iaddi(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, VU_IS + VU_LD_IMM5);
 }
-void vu_i_iaddiu(struct vu_state* vu) {
+void vu_i_iaddiu(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, VU_IS + VU_LD_IMM15);
 }
-void vu_i_iand(struct vu_state* vu) {
+void vu_i_iand(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_D, VU_IS & VU_IT);
 }
-void vu_i_ibeq(struct vu_state* vu) {
+void vu_i_ibeq(struct vu_state* vu, const struct vu_instruction* ins) {
     if (VU_IT == VU_IS) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
-void vu_i_ibgez(struct vu_state* vu) {
+void vu_i_ibgez(struct vu_state* vu, const struct vu_instruction* ins) {
     if ((int16_t)VU_IS >= 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
-void vu_i_ibgtz(struct vu_state* vu) {
+void vu_i_ibgtz(struct vu_state* vu, const struct vu_instruction* ins) {
     if ((int16_t)VU_IS > 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
-void vu_i_iblez(struct vu_state* vu) {
+void vu_i_iblez(struct vu_state* vu, const struct vu_instruction* ins) {
     if ((int16_t)VU_IS <= 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
-void vu_i_ibltz(struct vu_state* vu) {
+void vu_i_ibltz(struct vu_state* vu, const struct vu_instruction* ins) {
     if ((int16_t)VU_IS < 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
-void vu_i_ibne(struct vu_state* vu) {
+void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
     // printf("ibne vi%02u (%04x), vi%02u (%04x), 0x%08x\n", VU_LD_T, VU_IT, VU_LD_S, VU_IS, vu->tpc + VU_LD_IMM11);
 
     if (VU_IT != VU_IS) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
-void vu_i_ilw(struct vu_state* vu) {
+void vu_i_ilw(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
@@ -2111,7 +2098,7 @@ void vu_i_ilw(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vi[t] = data.u32[i];
     }
 }
-void vu_i_ilwr(struct vu_state* vu) {
+void vu_i_ilwr(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2124,16 +2111,16 @@ void vu_i_ilwr(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vi[t] = data.u32[i];
     }
 }
-void vu_i_ior(struct vu_state* vu) {
+void vu_i_ior(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_D, VU_IS | VU_IT);
 }
-void vu_i_isub(struct vu_state* vu) {
+void vu_i_isub(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_D, VU_IS - VU_IT);
 }
-void vu_i_isubiu(struct vu_state* vu) {
+void vu_i_isubiu(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, VU_IS - VU_LD_IMM15);
 }
-void vu_i_isw(struct vu_state* vu) {
+void vu_i_isw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2143,7 +2130,7 @@ void vu_i_isw(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vi[t], i);
     }
 }
-void vu_i_iswr(struct vu_state* vu) {
+void vu_i_iswr(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2153,17 +2140,17 @@ void vu_i_iswr(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vi[t], i);
     }
 }
-void vu_i_jalr(struct vu_state* vu) {
+void vu_i_jalr(struct vu_state* vu, const struct vu_instruction* ins) {
     uint16_t s = VU_IS;
 
     VU_IT = vu->tpc + 1;
 
     vu->next_tpc = s;
 }
-void vu_i_jr(struct vu_state* vu) {
+void vu_i_jr(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->next_tpc = VU_IS;
 }
-void vu_i_lq(struct vu_state* vu) {
+void vu_i_lq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2176,7 +2163,7 @@ void vu_i_lq(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
     }
 }
-void vu_i_lqd(struct vu_state* vu) {
+void vu_i_lqd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2191,15 +2178,17 @@ void vu_i_lqd(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
     }
 }
-void vu_i_lqi(struct vu_state* vu) {
+void vu_i_lqi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
-    uint32_t addr = vu->vi[s];
-    uint128_t data = vu_mem_read(vu, addr);
+    if (t) {
+        uint32_t addr = vu->vi[s];
+        uint128_t data = vu_mem_read(vu, addr);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) if (t) vu->vf[t].u32[i] = data.u32[i];
+        for (int i = 0; i < 4; i++) {
+            if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
+        }
     }
 
     // printf(" vf%02u, (vi%02u++) (%04x) (%f %f %f %f)\n",
@@ -2214,16 +2203,16 @@ void vu_i_lqi(struct vu_state* vu) {
 
     if (s) vu->vi[s]++;
 }
-void vu_i_mfir(struct vu_state* vu) {
+void vu_i_mfir(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
 
     for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = (int32_t)(*((int16_t*)&VU_IS));
+        if (VU_LD_DI(i)) vu->vf[t].u32[i] = (int32_t)(int16_t)VU_IS;
     }
 }
-void vu_i_mfp(struct vu_state* vu) {
+void vu_i_mfp(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
@@ -2232,7 +2221,7 @@ void vu_i_mfp(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->p.f;
     }
 }
-void vu_i_move(struct vu_state* vu) {
+void vu_i_move(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2242,7 +2231,7 @@ void vu_i_move(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->vf[s].u32[i];
     }
 }
-void vu_i_mr32(struct vu_state* vu) {
+void vu_i_mr32(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
@@ -2260,10 +2249,10 @@ void vu_i_mr32(struct vu_state* vu) {
     if (VU_LD_DI(2)) vu->vf[t].u32[2] = vu->vf[s].u32[3];
     if (VU_LD_DI(3)) vu->vf[t].u32[3] = x;
 }
-void vu_i_mtir(struct vu_state* vu) {
+void vu_i_mtir(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, vu->vf[VU_LD_S].u32[VU_LD_SF] & 0xffff);
 }
-void vu_i_rget(struct vu_state* vu) {
+void vu_i_rget(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
@@ -2272,7 +2261,7 @@ void vu_i_rget(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->r.u32;
     }
 }
-void vu_i_rinit(struct vu_state* vu) {
+void vu_i_rinit(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
 
     vu->r.u32 = 0x3f800000;
@@ -2281,7 +2270,7 @@ void vu_i_rinit(struct vu_state* vu) {
 
     vu->r.u32 |= vu->vf[s].u32[VU_LD_SF] & 0x007fffff;
 }
-void vu_i_rnext(struct vu_state* vu) {
+void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
@@ -2297,24 +2286,26 @@ void vu_i_rnext(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->r.u32;
     }
 }
-void vu_i_rsqrt(struct vu_state* vu) {
+void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->q.f = vu_vf_i(vu, VU_LD_S, VU_LD_SF) / sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
     vu->q.f = vu_cvtf(vu->q.u32);
 }
-void vu_i_rxor(struct vu_state* vu) {
+void vu_i_rxor(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[VU_LD_S].u32[VU_LD_SF]) & 0x007FFFFF);
 }
-void vu_i_sq(struct vu_state* vu) {
+void vu_i_sq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
     uint32_t addr = vu->vi[t] + VU_LD_IMM11;
 
+    // printf("vu: sq addr=%08x vf%02d=%08x %08x %08x %08x\n", addr, s, vu->vf[s].u32[3], vu->vf[s].u32[2], vu->vf[s].u32[1], vu->vf[s].u32[0]);
+
     for (int i = 0; i < 4; i++) {
         if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
     }
 }
-void vu_i_sqd(struct vu_state* vu) {
+void vu_i_sqd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2326,7 +2317,7 @@ void vu_i_sqd(struct vu_state* vu) {
         if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
     }
 }
-void vu_i_sqi(struct vu_state* vu) {
+void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
@@ -2338,19 +2329,19 @@ void vu_i_sqi(struct vu_state* vu) {
 
     vu_set_vi(vu, t, vu->vi[t] + 1);
 }
-void vu_i_sqrt(struct vu_state* vu) {
+void vu_i_sqrt(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->q.f = sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
     vu->q.f = vu_cvtf(vu->q.u32);
 }
-void vu_i_waitp(struct vu_state* vu) {
+void vu_i_waitp(struct vu_state* vu, const struct vu_instruction* ins) {
     // No operation
 }
-void vu_i_waitq(struct vu_state* vu) {
+void vu_i_waitq(struct vu_state* vu, const struct vu_instruction* ins) {
     // No operation
     vu->q_delay = 0;
 }
 
-void vu_i_xgkick(struct vu_state* vu) {
+void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
     uint16_t addr = VU_IS;
 
     int eop = 1;
@@ -2359,6 +2350,8 @@ void vu_i_xgkick(struct vu_state* vu) {
         uint128_t tag = vu_mem_read(vu, addr++);
 
         addr &= 0x7ff;
+
+        if (addr == 0) break;
 
         // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
@@ -2373,8 +2366,8 @@ void vu_i_xgkick(struct vu_state* vu) {
         if (!nloop)
             continue;
 
-        // if (!nregs)
-        //     nregs = 16;
+        if (!nregs)
+            nregs = 16;
 
         int qwc = 0;
 
@@ -2390,6 +2383,9 @@ void vu_i_xgkick(struct vu_state* vu) {
                 qwc = nloop;
             } break;
         }
+
+        if (qwc >= 0x7ff)
+            continue;
 
         // printf("vu: nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
         //     nloop,
@@ -2411,13 +2407,18 @@ void vu_i_xgkick(struct vu_state* vu) {
             ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
 
             addr &= 0x7ff;
+
+            if (addr == 0) {
+                eop = 1;
+                break;
+            }
         }
     } while (!eop);
 }
-void vu_i_xitop(struct vu_state* vu) {
+void vu_i_xitop(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, VU_LD_T, vu->vif->itop);
 }
-void vu_i_xtop(struct vu_state* vu) {
+void vu_i_xtop(struct vu_state* vu, const struct vu_instruction* ins) {
     if (vu->id == 0) {
         printf("vu: xtop used in VU0\n");
 
@@ -2538,7 +2539,224 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     }
 }
 
-static inline void vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
+#define VU_FLD_X 1
+#define VU_FLD_Y 2
+#define VU_FLD_Z 4
+#define VU_FLD_W 8
+
+#define VU_DEC_UD_S_SRC_T_BROADCAST(bc, f) \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.src[1].reg = vu->upper.ud_t; \
+    vu->upper.src[1].field = bc; \
+    vu->upper.func = f;
+
+#define VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(bc, f) \
+    vu->upper.dst.reg = vu->upper.ud_d; \
+    vu->upper.dst.field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[1].reg = vu->upper.ud_t; \
+    vu->upper.src[1].field = bc; \
+    vu->upper.func = f;
+
+#define VU_DEC_UD_D_DST_S_SRC_T_SRC(f) \
+    vu->upper.dst.reg = vu->upper.ud_d; \
+    vu->upper.dst.field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[1].reg = vu->upper.ud_t; \
+    vu->upper.src[1].field = vu->upper.dst.field; \
+    vu->upper.func = f;
+
+#define VU_DEC_UD_D_DST_S_SRC(f) \
+    vu->upper.dst.reg = vu->upper.ud_d; \
+    vu->upper.dst.field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.func = f;
+
+#define VU_DEC_UD_T_DST_S_SRC(f) \
+    vu->upper.dst.reg = vu->upper.ud_t; \
+    vu->upper.dst.field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.func = f;
+
+#define VU_DEC_UD_S_SRC_T_SRC(f) \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.src[1].reg = vu->upper.ud_t; \
+    vu->upper.src[1].field = vu->upper.src[0].field; \
+    vu->upper.func = f;
+
+#define VU_DEC_UD_S_SRC(f) \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.func = f;
+
+#define VU_DEC_OPMULA() \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = VU_FLD_X | VU_FLD_Y | VU_FLD_Z; \
+    vu->upper.src[1].reg = vu->upper.ud_t; \
+    vu->upper.src[1].field = vu->upper.src[0].field; \
+    vu->upper.func = vu_i_opmula;
+
+#define VU_DEC_OPMSUB() \
+    vu->upper.dst.reg = vu->upper.ud_d; \
+    vu->upper.dst.field = VU_FLD_X | VU_FLD_Y | VU_FLD_Z; \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[1].reg = vu->upper.ud_t; \
+    vu->upper.src[1].field = vu->upper.dst.field; \
+    vu->upper.func = vu_i_opmsub;
+
+#define VU_DEC_CLIP() \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = VU_FLD_X | VU_FLD_Y | VU_FLD_Z; \
+    vu->upper.src[1].reg = vu->upper.ud_t; \
+    vu->upper.src[1].field = VU_FLD_W; \
+    vu->upper.func = vu_i_clip;
+
+#define VU_DEC_LD_NONE(f) \
+    vu->lower.func = f;
+
+#define VU_DEC_UD_NONE(f) \
+    vu->upper.func = f;
+
+#define VU_DEC_LD_T_DST_S_VISRC(f) \
+    vu->lower.dst.reg = vu->lower.ld_t; \
+    vu->lower.dst.field = (opcode >> 21) & 0xf; \
+    vu->lower.vi_src[0] = vu->lower.ld_s; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_DST_S_VISRC_S_VIDST(f) \
+    vu->lower.dst.reg = vu->lower.ld_t; \
+    vu->lower.dst.field = (opcode >> 21) & 0xf; \
+    vu->lower.vi_dst = vu->lower.ld_s; \
+    vu->lower.vi_src[0] = vu->lower.vi_dst; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(f) \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = (opcode >> 21) & 0xf; \
+    vu->lower.vi_dst = vu->lower.ld_t; \
+    vu->lower.vi_src[0] = vu->lower.vi_dst; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_S_SF_SRC_T_TF_SRC(f) \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.src[1].reg = vu->lower.ld_t; \
+    vu->lower.src[1].field = vu->lower.ld_tf; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_VIDST_S_SF_SRC(f) \
+    vu->lower.vi_dst = vu->lower.ld_t; \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_DST_S_VISRC(f) \
+    vu->lower.dst.reg = vu->lower.ld_t; \
+    vu->lower.dst.field = (opcode >> 21) & 0xf; \
+    vu->lower.vi_src[0] = vu->lower.ld_s; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_TF_SRC(f) \
+    vu->lower.src[0].reg = vu->lower.ld_t; \
+    vu->lower.src[0].field = vu->lower.ld_tf; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_S_SRC_T_VISRC(f) \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = (opcode >> 21) & 0xf; \
+    vu->lower.vi_src[0] = vu->lower.ld_t; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_VIDST_S_VISRC(f) \
+    vu->lower.vi_dst = vu->lower.ld_t; \
+    vu->lower.vi_src[0] = vu->lower.ld_s; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_S_VISRC_T_VISRC(f) \
+    vu->lower.vi_src[0] = vu->lower.ld_s; \
+    vu->lower.vi_src[1] = vu->lower.ld_t; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_VIDST_S_VISRC(f) \
+    vu->lower.vi_dst = vu->lower.ld_t; \
+    vu->lower.vi_src[0] = vu->lower.ld_s; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_VISRC_S_VISRC(f) \
+    vu->lower.vi_src[0] = vu->lower.ld_t; \
+    vu->lower.vi_src[1] = vu->lower.ld_s; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_VIDST(v, f) \
+    vu->lower.vi_dst = v; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_VIDST(f) \
+    vu->lower.vi_dst = vu->lower.ld_t; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_S_VISRC(f) \
+    vu->lower.vi_src[0] = vu->lower.ld_s; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_S_FLD_SRC(fld, f) \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = fld; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(f) \
+    vu->lower.vi_dst = vu->lower.ld_d; \
+    vu->lower.vi_src[0] = vu->lower.ld_s; \
+    vu->lower.vi_src[1] = vu->lower.ld_t; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_DST_S_SRC(f) \
+    vu->lower.dst.reg = vu->lower.ld_t; \
+    vu->lower.dst.field = (opcode >> 21) & 0xf; \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = vu->lower.dst.field; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_T_DST(f) \
+    vu->lower.dst.reg = vu->lower.ld_t; \
+    vu->lower.dst.field = (opcode >> 21) & 0xf; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_S_SF_SRC(f) \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.func = f;
+
+#define VU_DEC_MR32() \
+    vu->lower.dst.reg = vu->lower.ld_t; \
+    vu->lower.dst.field = (opcode >> 21) & 0xf; \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = (vu->lower.dst.field >> 1) | ((vu->lower.dst.field & 1) << 3); \
+    vu->lower.func = vu_i_mr32;
+
+void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
+    vu->upper.ud_d = (opcode >> 6) & 0x1f;
+    vu->upper.ud_s = (opcode >> 11) & 0x1f;
+    vu->upper.ud_t = (opcode >> 16) & 0x1f;
+
+    for (int i = 0; i < 4; i++)
+        vu->upper.ud_di[i] = opcode & (1 << (24 - i));
+
+    vu->upper.func = NULL;
+    vu->upper.dst.reg = 0;
+    vu->upper.dst.field = 0;
+    vu->upper.src[0].reg = 0;
+    vu->upper.src[0].field = 0;
+    vu->upper.src[1].reg = 0;
+    vu->upper.src[1].field = 0;
+
     // Decode 000007FF style instruction
     if ((opcode & 0x3c) == 0x3c) {
         // 0EEEE 1111 EE
@@ -2550,186 +2768,211 @@ static inline void vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
         // bits 0-1 and bits 6-9 (6 bits) are enough to decode
         // all of the following
         switch (((opcode & 0x3c0) >> 4) | (opcode & 3)) {
-            case 0x00: vu_i_addax(vu); return;
-            case 0x01: vu_i_adday(vu); return;
-            case 0x02: vu_i_addaz(vu); return;
-            case 0x03: vu_i_addaw(vu); return;
-            case 0x04: vu_i_subax(vu); return;
-            case 0x05: vu_i_subay(vu); return;
-            case 0x06: vu_i_subaz(vu); return;
-            case 0x07: vu_i_subaw(vu); return;
-            case 0x08: vu_i_maddax(vu); return;
-            case 0x09: vu_i_madday(vu); return;
-            case 0x0A: vu_i_maddaz(vu); return;
-            case 0x0B: vu_i_maddaw(vu); return;
-            case 0x0C: vu_i_msubax(vu); return;
-            case 0x0D: vu_i_msubay(vu); return;
-            case 0x0E: vu_i_msubaz(vu); return;
-            case 0x0F: vu_i_msubaw(vu); return;
-            case 0x10: vu_i_itof0(vu); return;
-            case 0x11: vu_i_itof4(vu); return;
-            case 0x12: vu_i_itof12(vu); return;
-            case 0x13: vu_i_itof15(vu); return;
-            case 0x14: vu_i_ftoi0(vu); return;
-            case 0x15: vu_i_ftoi4(vu); return;
-            case 0x16: vu_i_ftoi12(vu); return;
-            case 0x17: vu_i_ftoi15(vu); return;
-            case 0x18: vu_i_mulax(vu); return;
-            case 0x19: vu_i_mulay(vu); return;
-            case 0x1A: vu_i_mulaz(vu); return;
-            case 0x1B: vu_i_mulaw(vu); return;
-            case 0x1C: vu_i_mulaq(vu); return;
-            case 0x1D: vu_i_abs(vu); return;
-            case 0x1E: vu_i_mulai(vu); return;
-            case 0x1F: vu_i_clip(vu); return;
-            case 0x20: vu_i_addaq(vu); return;
-            case 0x21: vu_i_maddaq(vu); return;
-            case 0x22: vu_i_addai(vu); return;
-            case 0x23: vu_i_maddai(vu); return;
-            case 0x24: vu_i_subaq(vu); return;
-            case 0x25: vu_i_msubaq(vu); return;
-            case 0x26: vu_i_subai(vu); return;
-            case 0x27: vu_i_msubai(vu); return;
-            case 0x28: vu_i_adda(vu); return;
-            case 0x29: vu_i_madda(vu); return;
-            case 0x2A: vu_i_mula(vu); return;
-            case 0x2C: vu_i_suba(vu); return;
-            case 0x2D: vu_i_msuba(vu); return;
-            case 0x2E: vu_i_opmula(vu); return;
-            case 0x2F: vu_i_nop(vu); return;
+            case 0x00: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_addax); return;
+            case 0x01: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_adday); return;
+            case 0x02: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_addaz); return;
+            case 0x03: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_addaw); return;
+            case 0x04: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_subax); return;
+            case 0x05: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_subay); return;
+            case 0x06: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_subaz); return;
+            case 0x07: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_subaw); return;
+            case 0x08: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_maddax); return;
+            case 0x09: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_madday); return;
+            case 0x0A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_maddaz); return;
+            case 0x0B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_maddaw); return;
+            case 0x0C: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_msubax); return;
+            case 0x0D: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_msubay); return;
+            case 0x0E: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_msubaz); return;
+            case 0x0F: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_msubaw); return;
+            case 0x10: VU_DEC_UD_T_DST_S_SRC(vu_i_itof0); return;
+            case 0x11: VU_DEC_UD_T_DST_S_SRC(vu_i_itof4); return;
+            case 0x12: VU_DEC_UD_T_DST_S_SRC(vu_i_itof12); return;
+            case 0x13: VU_DEC_UD_T_DST_S_SRC(vu_i_itof15); return;
+            case 0x14: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi0); return;
+            case 0x15: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi4); return;
+            case 0x16: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi12); return;
+            case 0x17: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi15); return;
+            case 0x18: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_mulax); return;
+            case 0x19: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_mulay); return;
+            case 0x1A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_mulaz); return;
+            case 0x1B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_mulaw); return;
+            case 0x1C: VU_DEC_UD_S_SRC(vu_i_mulaq); return;
+            case 0x1D: VU_DEC_UD_T_DST_S_SRC(vu_i_abs); return;
+            case 0x1E: VU_DEC_UD_S_SRC(vu_i_mulai); return;
+            case 0x1F: VU_DEC_CLIP(); return;
+            case 0x20: VU_DEC_UD_S_SRC(vu_i_addaq); return;
+            case 0x21: VU_DEC_UD_S_SRC(vu_i_maddaq); return;
+            case 0x22: VU_DEC_UD_S_SRC(vu_i_addai); return;
+            case 0x23: VU_DEC_UD_S_SRC(vu_i_maddai); return;
+            case 0x24: VU_DEC_UD_S_SRC(vu_i_subaq); return;
+            case 0x25: VU_DEC_UD_S_SRC(vu_i_msubaq); return;
+            case 0x26: VU_DEC_UD_S_SRC(vu_i_subai); return;
+            case 0x27: VU_DEC_UD_S_SRC(vu_i_msubai); return;
+            case 0x28: VU_DEC_UD_S_SRC_T_SRC(vu_i_adda); return;
+            case 0x29: VU_DEC_UD_S_SRC_T_SRC(vu_i_madda); return;
+            case 0x2A: VU_DEC_UD_S_SRC_T_SRC(vu_i_mula); return;
+            case 0x2C: VU_DEC_UD_S_SRC_T_SRC(vu_i_suba); return;
+            case 0x2D: VU_DEC_UD_S_SRC_T_SRC(vu_i_msuba); return;
+            case 0x2E: VU_DEC_OPMULA(); return;
+            case 0x2F: VU_DEC_UD_NONE(vu_i_nop); return;
         }
     } else {
         // Decode 0000003F style instruction
         switch (opcode & 0x3f) {
-            case 0x00: vu_i_addx(vu); return;
-            case 0x01: vu_i_addy(vu); return;
-            case 0x02: vu_i_addz(vu); return;
-            case 0x03: vu_i_addw(vu); return;
-            case 0x04: vu_i_subx(vu); return;
-            case 0x05: vu_i_suby(vu); return;
-            case 0x06: vu_i_subz(vu); return;
-            case 0x07: vu_i_subw(vu); return;
-            case 0x08: vu_i_maddx(vu); return;
-            case 0x09: vu_i_maddy(vu); return;
-            case 0x0A: vu_i_maddz(vu); return;
-            case 0x0B: vu_i_maddw(vu); return;
-            case 0x0C: vu_i_msubx(vu); return;
-            case 0x0D: vu_i_msuby(vu); return;
-            case 0x0E: vu_i_msubz(vu); return;
-            case 0x0F: vu_i_msubw(vu); return;
-            case 0x10: vu_i_maxx(vu); return;
-            case 0x11: vu_i_maxy(vu); return;
-            case 0x12: vu_i_maxz(vu); return;
-            case 0x13: vu_i_maxw(vu); return;
-            case 0x14: vu_i_minix(vu); return;
-            case 0x15: vu_i_miniy(vu); return;
-            case 0x16: vu_i_miniz(vu); return;
-            case 0x17: vu_i_miniw(vu); return;
-            case 0x18: vu_i_mulx(vu); return;
-            case 0x19: vu_i_muly(vu); return;
-            case 0x1A: vu_i_mulz(vu); return;
-            case 0x1B: vu_i_mulw(vu); return;
-            case 0x1C: vu_i_mulq(vu); return;
-            case 0x1D: vu_i_maxi(vu); return;
-            case 0x1E: vu_i_muli(vu); return;
-            case 0x1F: vu_i_minii(vu); return;
-            case 0x20: vu_i_addq(vu); return;
-            case 0x21: vu_i_maddq(vu); return;
-            case 0x22: vu_i_addi(vu); return;
-            case 0x23: vu_i_maddi(vu); return;
-            case 0x24: vu_i_subq(vu); return;
-            case 0x25: vu_i_msubq(vu); return;
-            case 0x26: vu_i_subi(vu); return;
-            case 0x27: vu_i_msubi(vu); return;
-            case 0x28: vu_i_add(vu); return;
-            case 0x29: vu_i_madd(vu); return;
-            case 0x2A: vu_i_mul(vu); return;
-            case 0x2B: vu_i_max(vu); return;
-            case 0x2C: vu_i_sub(vu); return;
-            case 0x2D: vu_i_msub(vu); return;
-            case 0x2E: vu_i_opmsub(vu); return;
-            case 0x2F: vu_i_mini(vu); return;
+            case 0x00: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_addx); return;
+            case 0x01: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_addy); return;
+            case 0x02: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_addz); return;
+            case 0x03: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_addw); return;
+            case 0x04: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_subx); return;
+            case 0x05: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_suby); return;
+            case 0x06: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_subz); return;
+            case 0x07: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_subw); return;
+            case 0x08: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_maddx); return;
+            case 0x09: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_maddy); return;
+            case 0x0A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_maddz); return;
+            case 0x0B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_maddw); return;
+            case 0x0C: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_msubx); return;
+            case 0x0D: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_msuby); return;
+            case 0x0E: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_msubz); return;
+            case 0x0F: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_msubw); return;
+            case 0x10: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_maxx); return;
+            case 0x11: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_maxy); return;
+            case 0x12: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_maxz); return;
+            case 0x13: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_maxw); return;
+            case 0x14: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_minix); return;
+            case 0x15: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_miniy); return;
+            case 0x16: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_miniz); return;
+            case 0x17: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_miniw); return;
+            case 0x18: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_mulx); return;
+            case 0x19: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_muly); return;
+            case 0x1A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_mulz); return;
+            case 0x1B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_mulw); return;
+            case 0x1C: VU_DEC_UD_D_DST_S_SRC(vu_i_mulq); return;
+            case 0x1D: VU_DEC_UD_D_DST_S_SRC(vu_i_maxi); return;
+            case 0x1E: VU_DEC_UD_D_DST_S_SRC(vu_i_muli); return;
+            case 0x1F: VU_DEC_UD_D_DST_S_SRC(vu_i_minii); return;
+            case 0x20: VU_DEC_UD_D_DST_S_SRC(vu_i_addq); return;
+            case 0x21: VU_DEC_UD_D_DST_S_SRC(vu_i_maddq); return;
+            case 0x22: VU_DEC_UD_D_DST_S_SRC(vu_i_addi); return;
+            case 0x23: VU_DEC_UD_D_DST_S_SRC(vu_i_maddi); return;
+            case 0x24: VU_DEC_UD_D_DST_S_SRC(vu_i_subq); return;
+            case 0x25: VU_DEC_UD_D_DST_S_SRC(vu_i_msubq); return;
+            case 0x26: VU_DEC_UD_D_DST_S_SRC(vu_i_subi); return;
+            case 0x27: VU_DEC_UD_D_DST_S_SRC(vu_i_msubi); return;
+            case 0x28: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_add); return;
+            case 0x29: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_madd); return;
+            case 0x2A: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_mul); return;
+            case 0x2B: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_max); return;
+            case 0x2C: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_sub); return;
+            case 0x2D: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_msub); return;
+            case 0x2E: VU_DEC_OPMSUB(); return;
+            case 0x2F: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_mini); return;
         }
     }
 }
 
-static inline void vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
+void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
+    vu->lower.ld_d = (opcode >> 6) & 0x1f;
+    vu->lower.ld_s = (opcode >> 11) & 0x1f;
+    vu->lower.ld_t = (opcode >> 16) & 0x1f;
+    vu->lower.ld_sf = (opcode >> 21) & 3;
+    vu->lower.ld_tf = (opcode >> 23) & 3;
+    vu->lower.ld_imm5 = ((int32_t)(((opcode >> 6) & 0x1f) << 27)) >> 27;
+    vu->lower.ld_imm11 = ((int32_t)((opcode & 0x7ff) << 21)) >> 21;
+    vu->lower.ld_imm12 = (((opcode >> 21) & 1) << 11) | (opcode & 0x7ff);
+    vu->lower.ld_imm15 = (opcode & 0x7ff) | ((opcode & 0x1e00000) >> 10);
+    vu->lower.ld_imm24 = opcode & 0xffffff;
+
+    for (int i = 0; i < 4; i++)
+        vu->lower.ld_di[i] = opcode & (1 << (24 - i));
+
+    vu->lower.func = NULL;
+    vu->lower.dst.reg = 0;
+    vu->lower.dst.field = 0;
+    vu->lower.src[0].reg = 0;
+    vu->lower.src[0].field = 0;
+    vu->lower.src[1].reg = 0;
+    vu->lower.src[1].field = 0;
+    vu->lower.vi_src[0] = 0;
+    vu->lower.vi_src[1] = 0;
+    vu->lower.vi_dst = 0;
+
     switch ((opcode & 0xFE000000) >> 25) {
-        case 0x00: vu_i_lq(vu); return;
-        case 0x01: vu_i_sq(vu); return;
-        case 0x04: vu_i_ilw(vu); return;
-        case 0x05: vu_i_isw(vu); return;
-        case 0x08: vu_i_iaddiu(vu); return;
-        case 0x09: vu_i_isubiu(vu); return;
-        case 0x10: vu_i_fceq(vu); return;
-        case 0x11: vu_i_fcset(vu); return;
-        case 0x12: vu_i_fcand(vu); return;
-        case 0x13: vu_i_fcor(vu); return;
-        case 0x14: vu_i_fseq(vu); return;
-        case 0x15: vu_i_fsset(vu); return;
-        case 0x16: vu_i_fsand(vu); return;
-        case 0x17: vu_i_fsor(vu); return;
-        case 0x18: vu_i_fmeq(vu); return;
-        case 0x1A: vu_i_fmand(vu); return;
-        case 0x1B: vu_i_fmor(vu); return;
-        case 0x1C: vu_i_fcget(vu); return;
-        case 0x20: vu_i_b(vu); return;
-        case 0x21: vu_i_bal(vu); return;
-        case 0x24: vu_i_jr(vu); return;
-        case 0x25: vu_i_jalr(vu); return;
-        case 0x28: vu_i_ibeq(vu); return;
-        case 0x29: vu_i_ibne(vu); return;
-        case 0x2C: vu_i_ibltz(vu); return;
-        case 0x2D: vu_i_ibgtz(vu); return;
-        case 0x2E: vu_i_iblez(vu); return;
-        case 0x2F: vu_i_ibgez(vu); return;
+        case 0x00: VU_DEC_LD_T_DST_S_VISRC(vu_i_lq); return;
+        case 0x01: VU_DEC_LD_S_SRC_T_VISRC(vu_i_sq); return;
+        case 0x04: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_ilw); return;
+        case 0x05: VU_DEC_LD_S_VISRC_T_VISRC(vu_i_isw); return;
+        case 0x08: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_iaddiu); return;
+        case 0x09: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_isubiu); return;
+        case 0x10: VU_DEC_LD_VIDST(1, vu_i_fceq); return;
+        case 0x11: VU_DEC_LD_NONE(vu_i_fcset); return;
+        case 0x12: VU_DEC_LD_VIDST(1, vu_i_fcand); return;
+        case 0x13: VU_DEC_LD_VIDST(1, vu_i_fcor); return;
+        case 0x14: VU_DEC_LD_T_VIDST(vu_i_fseq); return;
+        case 0x15: VU_DEC_LD_NONE(vu_i_fsset); return;
+        case 0x16: VU_DEC_LD_T_VIDST(vu_i_fsand); return;
+        case 0x17: VU_DEC_LD_T_VIDST(vu_i_fsor); return;
+        case 0x18: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmeq); return;
+        case 0x1A: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmand); return;
+        case 0x1B: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmor); return;
+        case 0x1C: VU_DEC_LD_T_VIDST(vu_i_fcget); return;
+        case 0x20: VU_DEC_LD_NONE(vu_i_b); return;
+        case 0x21: VU_DEC_LD_T_VIDST(vu_i_bal); return;
+        case 0x24: VU_DEC_LD_S_VISRC(vu_i_jr); return;
+        case 0x25: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_jalr); return;
+        case 0x28: VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibeq); return;
+        case 0x29: VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibne); return;
+        case 0x2C: VU_DEC_LD_S_VISRC(vu_i_ibltz); return;
+        case 0x2D: VU_DEC_LD_S_VISRC(vu_i_ibgtz); return;
+        case 0x2E: VU_DEC_LD_S_VISRC(vu_i_iblez); return;
+        case 0x2F: VU_DEC_LD_S_VISRC(vu_i_ibgez); return;
         case 0x40: {
             if ((opcode & 0x3C) == 0x3C) {
                 switch (((opcode & 0x7C0) >> 4) | (opcode & 3)) {
-                    case 0x30: vu_i_move(vu); return;
-                    case 0x31: vu_i_mr32(vu); return;
-                    case 0x34: vu_i_lqi(vu); return;
-                    case 0x35: vu_i_sqi(vu); return;
-                    case 0x36: vu_i_lqd(vu); return;
-                    case 0x37: vu_i_sqd(vu); return;
-                    case 0x38: vu_i_div(vu); return;
-                    case 0x39: vu_i_sqrt(vu); return;
-                    case 0x3A: vu_i_rsqrt(vu); return;
-                    case 0x3B: vu_i_waitq(vu); return;
-                    case 0x3C: vu_i_mtir(vu); return;
-                    case 0x3D: vu_i_mfir(vu); return;
-                    case 0x3E: vu_i_ilwr(vu); return;
-                    case 0x3F: vu_i_iswr(vu); return;
-                    case 0x40: vu_i_rnext(vu); return;
-                    case 0x41: vu_i_rget(vu); return;
-                    case 0x42: vu_i_rinit(vu); return;
-                    case 0x43: vu_i_rxor(vu); return;
-                    case 0x64: vu_i_mfp(vu); return;
-                    case 0x68: vu_i_xtop(vu); return;
-                    case 0x69: vu_i_xitop(vu); return;
-                    case 0x6C: vu_i_xgkick(vu); return;
-                    case 0x70: vu_i_esadd(vu); return;
-                    case 0x71: vu_i_ersadd(vu); return;
-                    case 0x72: vu_i_eleng(vu); return;
-                    case 0x73: vu_i_erleng(vu); return;
-                    case 0x74: vu_i_eatanxy(vu); return;
-                    case 0x75: vu_i_eatanxz(vu); return;
-                    case 0x76: vu_i_esum(vu); return;
-                    case 0x78: vu_i_esqrt(vu); return;
-                    case 0x79: vu_i_ersqrt(vu); return;
-                    case 0x7A: vu_i_ercpr(vu); return;
-                    case 0x7B: vu_i_waitp(vu); return;
-                    case 0x7C: vu_i_esin(vu); return;
-                    case 0x7D: vu_i_eatan(vu); return;
-                    case 0x7E: vu_i_eexp(vu); return;
+                    case 0x30: VU_DEC_LD_T_DST_S_SRC(vu_i_move); return;
+                    case 0x31: VU_DEC_MR32(); return;
+                    case 0x34: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(vu_i_lqi); return;
+                    case 0x35: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(vu_i_sqi); return;
+                    case 0x36: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(vu_i_lqd); return;
+                    case 0x37: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(vu_i_sqd); return;
+                    case 0x38: VU_DEC_LD_S_SF_SRC_T_TF_SRC(vu_i_div); return;
+                    case 0x39: VU_DEC_LD_T_TF_SRC(vu_i_sqrt); return;
+                    case 0x3A: VU_DEC_LD_S_SF_SRC_T_TF_SRC(vu_i_rsqrt); return;
+                    case 0x3B: VU_DEC_LD_NONE(vu_i_waitq); return;
+                    case 0x3C: VU_DEC_LD_T_VIDST_S_SF_SRC(vu_i_mtir); return;
+                    case 0x3D: VU_DEC_LD_T_DST_S_VISRC(vu_i_mfir); return;
+                    case 0x3E: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_ilwr); return;
+                    case 0x3F: VU_DEC_LD_T_VISRC_S_VISRC(vu_i_iswr); return;
+                    case 0x40: VU_DEC_LD_T_DST(vu_i_rnext); return;
+                    case 0x41: VU_DEC_LD_T_DST(vu_i_rget); return;
+                    case 0x42: VU_DEC_LD_S_SF_SRC(vu_i_rinit); return;
+                    case 0x43: VU_DEC_LD_S_SF_SRC(vu_i_rxor); return;
+                    case 0x64: VU_DEC_LD_T_DST(vu_i_mfp); return;
+                    case 0x68: VU_DEC_LD_T_VIDST(vu_i_xtop); return;
+                    case 0x69: VU_DEC_LD_T_VIDST(vu_i_xitop); return;
+                    case 0x6C: VU_DEC_LD_S_VISRC(vu_i_xgkick); return;
+                    case 0x70: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_esadd); return;
+                    case 0x71: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_ersadd); return;
+                    case 0x72: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_eleng); return;
+                    case 0x73: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_erleng); return;
+                    case 0x74: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y, vu_i_eatanxy); return;
+                    case 0x75: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Z, vu_i_eatanxz); return;
+                    case 0x76: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z | VU_FLD_W, vu_i_esum); return;
+                    case 0x78: VU_DEC_LD_S_SF_SRC(vu_i_esqrt); return;
+                    case 0x79: VU_DEC_LD_S_SF_SRC(vu_i_ersqrt); return;
+                    case 0x7A: VU_DEC_LD_S_SF_SRC(vu_i_ercpr); return;
+                    case 0x7B: VU_DEC_LD_NONE(vu_i_waitp); return;
+                    case 0x7C: VU_DEC_LD_S_SF_SRC(vu_i_esin); return;
+                    case 0x7D: VU_DEC_LD_S_SF_SRC(vu_i_eatan); return;
+                    case 0x7E: VU_DEC_LD_S_SF_SRC(vu_i_eexp); return;
                 }
             } else {
                 switch (opcode & 0x3F) {
-                    case 0x30: vu_i_iadd(vu); return;
-                    case 0x31: vu_i_isub(vu); return;
-                    case 0x32: vu_i_iaddi(vu); return;
-                    case 0x34: vu_i_iand(vu); return;
-                    case 0x35: vu_i_ior(vu); return;
+                    case 0x30: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_iadd); return;
+                    case 0x31: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_isub); return;
+                    case 0x32: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_iaddi); return;
+                    case 0x34: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_iand); return;
+                    case 0x35: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_ior); return;
                 }
             }
         } break;
@@ -2750,8 +2993,6 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
     vu->tpc = addr;
     vu->next_tpc = addr + 1;
 
-    vu->upper = 0;
-    vu->lower = 0;
     vu->i_bit = 0;
     vu->e_bit = 0;
     vu->m_bit = 0;
@@ -2773,36 +3014,83 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
 
         delayed_e_bit = vu->e_bit != 0;
 
-        vu->upper = liw >> 32;
-        vu->lower = liw & 0xffffffff;
-        vu->i_bit = (vu->upper & 0x80000000) != 0;
-        vu->e_bit = (vu->upper & 0x40000000) != 0;
-        vu->m_bit = (vu->upper & 0x20000000) != 0;
-        vu->d_bit = (vu->upper & 0x10000000) != 0;
-        vu->t_bit = (vu->upper & 0x08000000) != 0;
+        uint32_t upper = liw >> 32;
+        uint32_t lower = liw & 0xffffffff;
+
+        vu->i_bit = (upper & 0x80000000) != 0;
+        vu->e_bit = (upper & 0x40000000) != 0;
+        vu->m_bit = (upper & 0x20000000) != 0;
+        vu->d_bit = (upper & 0x10000000) != 0;
+        vu->t_bit = (upper & 0x08000000) != 0;
 
         vu->q_delay--;
 
         vu_update_status(vu);
-
-        // printf("%04x: %08x %08x %s", tpc, vu->upper, vu->lower, vu->e_bit ? "[e] " : " ");
-
-        // vu->status = vu->mac_pipeline[3];
-
-        vu_execute_upper(vu, vu->upper & 0x7ffffff);
         
+        vu_decode_upper(vu, upper & 0x7ffffff);
+
+        // char ubuf[512];
+        // printf("%04x: %08x %08x ", tpc, upper, lower);
+        // printf("%-40s", vu_disassemble_upper(ubuf, upper & 0x7ffffff, &ds));
+
         if (vu->i_bit) {
-            // printf("loi %08x\n", vu->lower);
+            // printf("loi 0x%08x\n", lower);
+
+            vu->upper.func(vu, &vu->upper);
 
             // LOI
-            vu->i.u32 = vu->lower;
+            vu->i.u32 = lower;
+            vu->lower.func = NULL;
+            vu->lower.dst.reg = 0;
+            vu->lower.dst.field = 0;
+            vu->lower.src[0].reg = 0;
+            vu->lower.src[0].field = 0;
+            vu->lower.src[1].reg = 0;
+            vu->lower.src[1].field = 0;
+            vu->lower.vi_src[0] = 0;
+            vu->lower.vi_src[1] = 0;
+            vu->lower.vi_dst = 0;
         } else {
-            // char ud[512], ld[512];
+            vu_decode_lower(vu, lower);
 
-            // printf("%-40s%-40s\n", vu_disassemble_upper(ud, vu->upper, &ds), vu_disassemble_lower(ld, vu->lower, &ds));
+            // char lbuf[512];
+            // printf("%-40s\n", vu_disassemble_lower(lbuf, lower & 0xffffffff, &ds));
 
-            vu_execute_lower(vu, vu->lower);
+            int hazard0 = vu->upper.dst.reg == vu->lower.src[0].reg;
+            int hazard1 = vu->upper.dst.reg == vu->lower.src[1].reg;
+            int hazard2 = vu->upper.dst.reg == vu->lower.dst.reg;
+
+            if (!vu->upper.dst.reg) {
+                vu->upper.func(vu, &vu->upper);
+                vu->lower.func(vu, &vu->lower);
+            } else if (hazard0 || hazard1) {
+                // Upper instruction writes to a register that the lower
+                // instruction reads from. In this case the lower instruction
+                // gets the previous value of the register, executing the lower
+                // instruction first does the trick.
+
+                vu->lower.func(vu, &vu->lower);
+                vu->upper.func(vu, &vu->upper);
+            } else if (hazard2) {
+                // Upper and lower instructions write to the same register.
+                // In this case the upper instruction takes priority, so we
+                // restore the value of the register after executing the lower
+                // instruction.
+
+                vu->upper.func(vu, &vu->upper);
+
+                struct vu_reg tmp = vu->vf[vu->upper.dst.reg];
+
+                vu->lower.func(vu, &vu->lower);
+
+                vu->vf[vu->upper.dst.reg] = tmp;
+            } else {
+                vu->upper.func(vu, &vu->upper);
+                vu->lower.func(vu, &vu->lower);
+            }
         }
+
+
 
         vu->mac_pipeline[3] = vu->mac_pipeline[2];
         vu->mac_pipeline[2] = vu->mac_pipeline[1];
@@ -2937,8 +3225,6 @@ void ps2_vu_reset(struct vu_state* vu) {
     vu->clip_pipeline[3] = 0;
     vu->tpc = 0;
     vu->next_tpc = 1;
-    vu->upper = 0;
-    vu->lower = 0;
     vu->i_bit = 0;
     vu->e_bit = 0;
     vu->m_bit = 0;
@@ -2946,6 +3232,14 @@ void ps2_vu_reset(struct vu_state* vu) {
     vu->t_bit = 0;
 
     vu->vf[0].w = 1.0;
+}
+
+void ps2_vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
+    vu_decode_upper(vu, opcode);
+}
+
+void ps2_vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
+    vu_decode_lower(vu, opcode);
 }
 
 // #undef printf

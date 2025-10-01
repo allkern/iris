@@ -113,6 +113,9 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uin
     timer->cmpe = (data >> 8) & 1;
     timer->ovfe = (data >> 9) & 1;
 
+    if (!timer->cue)
+        return;
+
     if (timer->gate) {
         printf("timers: Timer %d gate write %08x\n", t, data);
 

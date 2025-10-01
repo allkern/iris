@@ -176,6 +176,10 @@ struct spu2_core {
     uint32_t adma_ringbuf_write_idx;
     uint32_t adma_ringbuf_read_idx;
     int adma_ringbuf_full;
+
+    // Capture buffers
+    uint16_t cb_out1_addr;
+    uint16_t cb_out3_addr;
 };
 
 struct ps2_spu2 {

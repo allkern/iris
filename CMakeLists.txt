@@ -95,6 +95,7 @@ target_sources(iris PRIVATE
   frontend/ui/memory_card_tool.cpp
   frontend/ui/menubar.cpp
   frontend/ui/modules.cpp
+  frontend/ui/overlay.cpp
   frontend/ui/pad.cpp
   frontend/ui/settings.cpp
   frontend/ui/spu2.cpp
@@ -171,13 +172,17 @@ target_sources(iris PRIVATE
   imgui/imgui_tables.cpp
   imgui/imgui_widgets.cpp
   imgui/backends/imgui_impl_sdl3.cpp
-  imgui/backends/imgui_impl_sdlgpu3.cpp)
+  imgui/backends/imgui_impl_sdlgpu3.cpp
+  implot/implot_demo.cpp
+  implot/implot_items.cpp
+  implot/implot.cpp)
 
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
 
 target_include_directories(iris PRIVATE
     imgui
     imgui/backends
+    implot
     SDL/include
     frontend
     incbin

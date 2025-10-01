@@ -5,10 +5,6 @@
 
 #include "ps2.h"
 
-#ifndef _PS2_TIMESCALE
-#define _PS2_TIMESCALE 4
-#endif
-
 struct ps2_state* ps2_create(void) {
     return malloc(sizeof(struct ps2_state));
 }
@@ -149,6 +145,7 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_ipu_reset(ps2->ipu);
 
     ps2->ee_cycles = 7;
+    ps2->timescale = 1;
 }
 
 void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void* ee_udata, void (*iop_kputchar)(void*, char), void* iop_udata) {
@@ -210,6 +207,7 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_usb_init(ps2->usb);
     ps2_fw_init(ps2->fw, ps2->iop_intc);
     ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
+    ps2_cdvd_reset(ps2->cdvd);
 
     ps2_gs_reset(ps2->gs);
     ps2_ram_reset(ps2->ee_ram);
@@ -242,29 +240,6 @@ void ps2_reset(struct ps2_state* ps2) {
 // }
 
 void ps2_cycle(struct ps2_state* ps2) {
-    // if (ps2->ee->pc == 0xe0040)
-    //     printf("ee: Entry @ cyc=%ld\n", ps2->ee->total_cycles);
-
-    // ps2_trace(ps2);
-
-    // Waitloop detection
-    // if (ps2->ee->pc == 0x81fc0) {
-    //     while (!sched_tick(ps2->sched, 4)) {
-    //         --ps2->ee_cycles;
-
-    //         if (!ps2->ee_cycles) {
-    //             iop_cycle(ps2->iop);
-    //             ps2_iop_timers_tick(ps2->iop_timers);
-        
-    //             ps2->ee_cycles = 7;
-    //         }
-    //     }
-
-    //     ee_cycle(ps2->ee);
-
-    //     return;
-    // }
-
     int cycles = ee_run_block(ps2->ee, 128);
 
     while (!cycles) {
@@ -273,7 +248,7 @@ void ps2_cycle(struct ps2_state* ps2) {
 
     ps2->ee_cycles += cycles;
 
-    sched_tick(ps2->sched, (2 * _PS2_TIMESCALE) * cycles);
+    sched_tick(ps2->sched, ps2->timescale * cycles);
 
     ps2_ipu_run(ps2->ipu);
 
@@ -302,6 +277,10 @@ void ps2_iop_cycle(struct ps2_state* ps2) {
     // ps2_iop_timers_tick(ps2->iop_timers);
 
     // ps2->ee_cycles = 7;
+}
+
+void ps2_set_timescale(struct ps2_state* ps2, int timescale) {
+    ps2->timescale = timescale;
 }
 
 void ps2_destroy(struct ps2_state* ps2) {

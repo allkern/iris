@@ -1,3 +1,5 @@
+#include "renderer.hpp"
+
 #include "null.hpp"
 
 void null_init(void* ctx, struct ps2_gs* gs, SDL_Window* window, SDL_GPUDevice* device) {}
@@ -36,3 +38,9 @@ extern "C" void null_transfer_read(struct ps2_gs* gs, void* udata) {}
 void null_begin_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
 void null_render(void* udata, SDL_GPUCommandBuffer* command_buffer, SDL_GPURenderPass* render_pass) {}
 void null_end_render(void* udata, SDL_GPUCommandBuffer* command_buffer) {}
+
+renderer_stats* null_get_debug_stats(void* ctx) {
+    static renderer_stats stats = {};
+
+    return &stats;
+}

@@ -21,6 +21,19 @@
 #define EE_ALIGNED16
 #endif
 
+#define EE_CYC_DEFAULT 9
+#define EE_CYC_BRANCH 11
+#define EE_CYC_COP_DEFAULT 7
+#define EE_CYC_MULT 2*8
+#define EE_CYC_DIV 14*8
+#define EE_CYC_MMI_MULT 3*8
+#define EE_CYC_MMI_DIV 22*8
+#define EE_CYC_MMI_DEFAULT 14
+#define EE_CYC_FPU_MULT 4*8
+#define EE_CYC_FPU_DIV 6*8
+#define EE_CYC_STORE 14
+#define EE_CYC_LOAD 14
+
 struct ee_instruction {
     uint32_t opcode;
     int32_t rs;
@@ -37,8 +50,14 @@ struct ee_instruction {
     // 3 - likely branch
     // 4 - conditional exception
     int branch;
+    int cycles;
 
     void (*func)(struct ee_state*, const ee_instruction&); 
+};
+
+struct ee_block {
+    std::vector <ee_instruction> instructions;
+    uint32_t cycles;
 };
 
 struct ee_state {
@@ -46,7 +65,7 @@ struct ee_state {
 
     uint32_t block_pc;
 
-    std::unordered_map <uint32_t, std::vector<ee_instruction>> block_cache;
+    std::unordered_map <uint32_t, ee_block> block_cache;
 
     uint128_t r[32] EE_ALIGNED16;
     uint128_t hi EE_ALIGNED16;
@@ -119,6 +138,10 @@ struct ee_state {
     struct vu_state* vu1;
 
     struct ee_vtlb_entry vtlb[48];
+
+    int eenull_counter;
+    int csr_reads;
+    int intc_reads;
 };
 
 #define THS_RUN 0x01

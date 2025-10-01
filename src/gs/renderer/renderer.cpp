@@ -24,6 +24,7 @@ void renderer_init_null(renderer_state* renderer, struct ps2_gs* gs, SDL_Window*
     renderer->set_window_rect = null_set_window_rect;
     renderer->get_buffer_data = null_get_buffer_data;
     renderer->get_name = null_get_name;
+    renderer->get_debug_stats = null_get_debug_stats;
     renderer->begin_render = null_begin_render;
     renderer->render = null_render;
     renderer->end_render = null_end_render;
@@ -54,6 +55,7 @@ void renderer_init_software(renderer_state* renderer, struct ps2_gs* gs, SDL_Win
     renderer->set_window_rect = software_set_window_rect;
     renderer->get_buffer_data = software_get_buffer_data;
     renderer->get_name = software_get_name;
+    renderer->get_debug_stats = software_get_debug_stats;
     renderer->begin_render = software_begin_render;
     renderer->render = software_render;
     renderer->end_render = software_end_render;
@@ -83,6 +85,7 @@ void renderer_init_software_thread(renderer_state* renderer, struct ps2_gs* gs, 
     renderer->get_interlace_mode = software_thread_get_interlace_mode;
     renderer->set_window_rect = software_thread_set_window_rect;
     renderer->get_buffer_data = software_thread_get_buffer_data;
+    renderer->get_debug_stats = software_thread_get_debug_stats;
     renderer->get_name = software_thread_get_name;
     renderer->begin_render = software_thread_begin_render;
     renderer->render = software_thread_render;
@@ -157,6 +160,9 @@ void* renderer_get_buffer_data(renderer_state* renderer, int* w, int* h, int* bp
 }
 const char* renderer_get_name(renderer_state* renderer) {
     return renderer->get_name(renderer->udata);
+}
+renderer_stats* renderer_get_debug_stats(renderer_state* renderer) {
+    return renderer->get_debug_stats(renderer->udata);
 }
 
 void renderer_destroy(renderer_state* renderer) {

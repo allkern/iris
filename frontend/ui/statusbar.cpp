@@ -77,8 +77,11 @@ void show_status_bar(iris::instance* iris) {
                 vp_w, vp_h,
                 mode == 3 ? "Interlaced" : "Progressive",
                 get_format_bpp(disp_fmt),
-                iris->fps * 2.0f
+                GetIO().Framerate
             );
+
+            // iris->avg_frames++;
+            // iris->avg_fps += iris->fps;
         } else {
             Text(ICON_MS_MONITOR " %s | No image",
                 renderer_get_name(iris->ctx)
