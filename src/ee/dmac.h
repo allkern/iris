@@ -20,8 +20,7 @@ extern "C" {
 #define TAG_PCT(d) ((d.u64[0] >> 26) & 3)
 #define TAG_ID(d) ((d.u64[0] >> 28) & 7)
 #define TAG_IRQ(d) ((d.u64[0] >> 31) & 1)
-#define TAG_ADDR(d) ((d.u64[0] >> 32) & 0x7fffffff)
-#define TAG_MEM(d) ((d.u64[0] >> 63) & 1)
+#define TAG_ADDR(d) ((d.u64[0] >> 32) & 0xfffffff0)
 #define TAG_DATA(d) (d.u64[1])
 
 #define DMAC_VIF0 0
@@ -42,7 +41,6 @@ struct dmac_tag {
     uint64_t id;
     uint64_t irq;
     uint64_t addr;
-    uint64_t mem;
     uint64_t data;
     int end;
 };
