@@ -50,8 +50,6 @@ uint64_t ps2_usb_read32(struct ps2_usb* usb, uint32_t addr) {
 
     printf("usb: Unhandled read at %08x\n", addr);
 
-    exit(1);
-
     return 0;
 }
 
@@ -89,8 +87,6 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
     }
 
     printf("usb: Unhandled write at %08x (%08x)\n", addr, data);
-
-    exit(1);
 
     return;
 }

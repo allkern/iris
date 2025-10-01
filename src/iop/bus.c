@@ -123,18 +123,7 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     MAP_MEM_READ(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
-    // Namco System 246 DIP switches
-    if (addr == 0x1f803204) {
-        return 0x81;
-    }
-
-    if (addr == 0x1f803100) {
-        return 0x82;
-    }
-
-    if (addr == 0x1f803200) {
-        return 0x83;
-    }
+    if (addr == 0x1f80146e) { return 0x30; }
 
     printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
 
@@ -162,10 +151,21 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_MEM_READ(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
-    // PCMCIA (CXD9566)
+    // 0x20 - PCMCIA (CXD9566)
+    // 0x30 - Expansion bay
     if (addr == 0x1f80146e) { return 0x30; }
 
-    // printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
+    // SPEED rev3 (Capabilities)
+    // bit 0 - SMAP
+    // bit 1 - ATA
+    // bit 3 - UART
+    // bit 4 - DVR
+    // bit 5 - FLASH
+    // if (addr == 0x10000004) { return 0x03; }
+    // if (addr == 0x1000205c) { return 0xffff; }
+    // if (addr == 0x1000205e) { return 0xffff; }
+
+    printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }

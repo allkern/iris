@@ -109,7 +109,13 @@ uint64_t ps2_gif_read32(struct ps2_gif* gif, uint32_t addr) {
 
 void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x10003000: gif->ctrl = data; return;
+        case 0x10003000: {
+            if (data & 1) {
+                ps2_gif_init(gif, gif->vu1, gif->gs);
+            }
+
+            printf("gif: ctrl=%08x\n", data);
+        } return;
         case 0x10003010: gif->mode = data; return;
     }
 }
@@ -191,8 +197,8 @@ void gif_handle_tag(struct ps2_gif* gif, uint128_t data) {
         } break;
     }
 
-    // printf("giftag: nloop=%04lx eop=%d prim=%d fmt=%d nregs=%d reg=%016lx\n",
-    //     gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.fmt, gif->tag.nregs, gif->tag.reg
+    // printf("giftag: nloop=%04lx eop=%d prim=%04x (pre=%d) fmt=%d nregs=%d reg=%08x%08x\n",
+    //     gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.pre, gif->tag.fmt, gif->tag.nregs, gif->tag.reg >> 32, gif->tag.reg & 0xffffffff
     // );
 
     if (gif->tag.pre) {
@@ -213,7 +219,7 @@ void gif_handle_packed(struct ps2_gif* gif, uint128_t data) {
         case 0x01: /* printf("gif: RGBAQ <- %016lx\n", data.u64[0]); */ gif_write_rgbaq(gif, data); break;
         case 0x02: /* printf("gif: STQ <- %016lx\n", data.u64[0]); */ gif_write_stq(gif, data); break;
         case 0x03: /* printf("gif: UV <- %016lx\n", data.u64[0]); */ gif_write_uv(gif, data); break;
-        case 0x04: /* printf("gif: XYZF23 <- %016lx\n", data.u64[0]); */ gif_write_xyzf23(gif, data); break;
+        case 0x04: /* printf("gif: XYZF23 <- %08x%08x %08x%08x\n", data.u32[3], data.u32[2], data.u32[1], data.u32[0]); */ gif_write_xyzf23(gif, data); break;
         case 0x05: /* printf("gif: XYZ23 <- %016lx\n", data.u64[0]); */ gif_write_xyz23(gif, data); break;
         case 0x06: /* printf("gif: TEX0_1 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_TEX0_1, data.u64[0]); break;
         case 0x07: /* printf("gif: TEX0_2 <- %016lx\n", data.u64[0]); */ ps2_gs_write_internal(gif->gs, GS_TEX0_2, data.u64[0]); break;
@@ -273,11 +279,8 @@ void gif_handle_reglist(struct ps2_gif* gif, uint128_t data) {
         }
 
         // Note: This handles odd NREGS*NLOOP case
-        if (gif->tag.index == gif->tag.remaining) {
-            gif->state = GIF_STATE_RECV_TAG;
-
+        if (gif->tag.index == gif->tag.remaining)
             break;
-        }
     }
 
     gif->tag.qwc--;

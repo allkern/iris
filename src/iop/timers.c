@@ -192,20 +192,20 @@ void iop_timer_handle_mode_write(struct ps2_iop_timers* timers, int t, uint64_t 
         // ps2_iop_intc_irq(timers->intc, timer_get_irq_mask(t));
     }
 
-    printf("iop: Timer %d mode write %08x -> %08x gate_en=%d gate_mode=%d irq_reset=%d cmp_irq=%d ovf_irq=%d rep_irq=%d levl=%d use_ext=%d irq_en=%d t4_prescaler=%d\n",
-        t, timers->timer[t].mode,
-        data,
-        timers->timer[t].gate_en,
-        timers->timer[t].gate_mode,
-        timers->timer[t].irq_reset,
-        timers->timer[t].cmp_irq,
-        timers->timer[t].ovf_irq,
-        timers->timer[t].rep_irq,
-        timers->timer[t].levl,
-        timers->timer[t].use_ext,
-        timers->timer[t].irq_en,
-        timers->timer[t].t4_prescaler
-    );
+    // printf("iop: Timer %d mode write %08x -> %08x gate_en=%d gate_mode=%d irq_reset=%d cmp_irq=%d ovf_irq=%d rep_irq=%d levl=%d use_ext=%d irq_en=%d t4_prescaler=%d\n",
+    //     t, timers->timer[t].mode,
+    //     data,
+    //     timers->timer[t].gate_en,
+    //     timers->timer[t].gate_mode,
+    //     timers->timer[t].irq_reset,
+    //     timers->timer[t].cmp_irq,
+    //     timers->timer[t].ovf_irq,
+    //     timers->timer[t].rep_irq,
+    //     timers->timer[t].levl,
+    //     timers->timer[t].use_ext,
+    //     timers->timer[t].irq_en,
+    //     timers->timer[t].t4_prescaler
+    // );
 
     /* To-do: Schedule timer interrupts for better performance */
 }

@@ -122,14 +122,14 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uin
         // exit(1);
     }
 
-    printf("timers: Timer %d mode write %08x mode=%08x counter=%04x compare=%04x clks=%d gate=%d gats=%d gatm=%d zret=%d cue=%d cmpe=%d ovfe=%d\n",
-        t, data,
-        timer->mode,
-        timer->counter,
-        timer->compare,
-        timer->clks, timer->gate, timer->gats, timer->gatm,
-        timer->zret, timer->cue, timer->cmpe, timer->ovfe
-    );
+    // printf("timers: Timer %d mode write %08x mode=%08x counter=%04x compare=%04x clks=%d gate=%d gats=%d gatm=%d zret=%d cue=%d cmpe=%d ovfe=%d\n",
+    //     t, data,
+    //     timer->mode,
+    //     timer->counter,
+    //     timer->compare,
+    //     timer->clks, timer->gate, timer->gats, timer->gatm,
+    //     timer->zret, timer->cue, timer->cmpe, timer->ovfe
+    // );
 
     switch (timer->clks) {
         case 0: timer->delta = 1; break;
