@@ -559,7 +559,10 @@ void software_thread_set_size(void* udata, int width, int height) {
 
     uint64_t display = 0, dispfb = 0;
 
-    if (en1) {
+    if (en1 && en2) {
+        display = ctx->gs->display1 > ctx->gs->display2 ? ctx->gs->display1 : ctx->gs->display2;
+        dispfb = ctx->gs->dispfb1 > ctx->gs->dispfb2 ? ctx->gs->dispfb1 : ctx->gs->dispfb2;
+    } else if (en1) {
         display = ctx->gs->display1;
         dispfb = ctx->gs->dispfb1;
     } else if (en2) {
@@ -594,7 +597,16 @@ void software_thread_set_size(void* udata, int width, int height) {
     //     tex_h /= 2;
     // }
 
-    // printf("gsr: Setting framebuffer size to %dx%d fmt=%02x\n", tex_w, tex_h, ctx->disp_fmt);
+    // Weird dobiestation hack, should fix Silent Hill 2, Choro Q HG, etc.
+    if (tex_h >= (tex_w * 1.3))
+        tex_h = tex_h / 2;
+
+    // printf("gsr: Setting framebuffer size to %dx%d fmt=%02x magh=%d magv=%d en=(%d,%d) dwh=(%d,%d) dxy=(%d,%d)\n", tex_w, tex_h, tex_fmt, magh, magv, en1, en2,
+    //     (int)((display >> 32) & 0xfff) + 1,
+    //     (int)((display >> 44) & 0x7ff) + 1,
+    //     (int)(display & 0xfff),
+    //     (int)((display >> 12) & 0xfff)
+    // );
 
     // Do nothing if the size hasn't changed
     if (tex_w == ctx->tex_w && tex_h == ctx->tex_h && tex_fmt == ctx->disp_fmt) {
@@ -1851,6 +1863,28 @@ static inline uint32_t gs_generic_read(struct ps2_gs* gs, uint32_t bp, uint32_t 
 
             return data >> 28;
         } break;
+        case GS_PSMZ32: {
+            return gs->vram[psmz32_addr(bp, bw, u, v) & 0xfffff];
+        } break;
+        case GS_PSMZ24: {
+            return gs->vram[psmz32_addr(bp, bw, u, v) & 0xfffff] & 0xffffff;
+        } break;
+        case GS_PSMZ16: {
+            uint32_t addr = psmz16_addr(bp, bw, u, v);
+            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
+
+            int idx = (u & 15) + ((v & 1) * 16);
+
+            return vram[psmct16_shift[idx] & 0xfffff];
+        } break;
+        case GS_PSMZ16S: {
+            uint32_t addr = psmz16s_addr(bp, bw, u, v);
+            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
+
+            int idx = (u & 15) + ((v & 1) * 16);
+
+            return vram[psmct16_shift[idx] & 0xfffff];
+        } break;
         default: {
             // printf("Unsupported PSMT %02x for generic read\n", gs->ctx->tbpsm);
             // exit(1);
@@ -1863,8 +1897,11 @@ static inline void gs_generic_write(struct ps2_gs* gs, uint32_t bp, uint32_t bw,
         case GS_PSMCT32:
             gs->vram[psmct32_addr(bp, bw, u, v) & 0xfffff] = data;
         break;
-        case GS_PSMCT24:
-            gs->vram[psmct32_addr(bp, bw, u, v) & 0xfffff] = data;
+        case GS_PSMCT24: {
+            uint32_t addr = psmct32_addr(bp, bw, u, v) & 0xfffff;
+
+            gs->vram[addr] = (gs->vram[addr] & 0xff000000) | (data & 0xffffff);
+        } break;
         break;
         case GS_PSMCT16: {
             uint32_t addr = psmct16_addr(bp, bw, u, v);
@@ -1914,6 +1951,31 @@ static inline void gs_generic_write(struct ps2_gs* gs, uint32_t bp, uint32_t bw,
             uint32_t addr = psmct32_addr(bp, bw, u, v) & 0xfffff;
 
             gs->vram[addr] = (gs->vram[addr] & 0x0fffffff) | ((data & 0xf) << 28);
+        } break;
+        case GS_PSMZ32:
+            gs->vram[psmz32_addr(bp, bw, u, v) & 0xfffff] = data;
+        break;
+        case GS_PSMZ24: {
+            uint32_t addr = psmz32_addr(bp, bw, u, v) & 0xfffff;
+
+            gs->vram[addr] = (gs->vram[addr] & 0xff000000) | (data & 0xffffff);
+        } break;
+        break;
+        case GS_PSMZ16: {
+            uint32_t addr = psmz16_addr(bp, bw, u, v);
+            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
+
+            int idx = (u & 15) + ((v & 1) * 16);
+
+            vram[psmct16_shift[idx] & 0xfffff] = data;
+        } break;
+        case GS_PSMZ16S: {
+            uint32_t addr = psmz16s_addr(bp, bw, u, v);
+            uint16_t* vram = (uint16_t*)(&gs->vram[addr & 0xfffff]);
+
+            int idx = (u & 15) + ((v & 1) * 16);
+
+            vram[psmct16_shift[idx] & 0xfffff] = data;
         } break;
         default: {
             // printf("Unsupported PSMT %02x for write\n", gs->ctx->tbpsm);
@@ -2060,11 +2122,10 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
         area = EDGE(v0, v1, v2);
     }
 
-    // printf("triangle: v0=(%04x,%04x) v1=(%04x,%04x) v2=(%04x,%04x) v3=(%04x,%04x)\n",
+    // printf("triangle: v0=(%04x,%04x) v1=(%04x,%04x) v2=(%04x,%04x)\n",
     //     v0.x, v0.y,
     //     v1.x, v1.y,
-    //     v2.x, v2.y,
-    //     gs->vq[3].x, gs->vq[3].y
+    //     v2.x, v2.y
     // );
 
     v0.x -= gs->ctx->ofx;
@@ -2106,7 +2167,12 @@ void render_triangle(struct ps2_gs* gs, void* udata) {
     int w1_row = EDGE(v2, v0, p);
     int w2_row = EDGE(v0, v1, p);
 
-    // if (gs->fge)
+    // printf("triangle: v0=(%d.%d,%d.%d) v1=(%d.%d,%d.%d) v2=(%d.%d,%d.%d) v3=(%d.%d,%d.%d)\n",
+    //     v0.x >> 4, (v0.x & 0xf) * 625, v0.y >> 4, (v0.y & 0xf) * 625,
+    //     v1.x >> 4, (v1.x & 0xf) * 625, v1.y >> 4, (v1.y & 0xf) * 625,
+    //     v2.x >> 4, (v2.x & 0xf) * 625, v2.y >> 4, (v2.y & 0xf) * 625,
+    //     gs->vq[3].x >> 4, (gs->vq[3].x & 0xf) * 625, gs->vq[3].y >> 4, (gs->vq[3].y & 0xf) * 625
+    // );
 
     for (p.y = ymin; p.y < ymax; p.y += 16) {
         // Barycentric coordinates at start of row
