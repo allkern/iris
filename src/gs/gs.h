@@ -264,7 +264,11 @@ struct ps2_gs {
     uint32_t* vram;
 
     int vblank;
+
+    // SIGNAL stuff
     int signal_pending;
+    int signal_stall;
+    uint32_t stall_sigid;
 
     // 1KB CLUT cache
     uint32_t clut_cache[0x100];

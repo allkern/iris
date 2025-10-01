@@ -16,6 +16,8 @@ static inline void gs_test_gs_irq(struct ps2_gs* gs) {
     uint32_t stat = gs->csr & 0x1f;
 
     if (stat & (~mask)) {
+        // printf("gs: IRQ triggered! stat=%02x mask=%02x\n", stat, mask);
+
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 }
@@ -382,20 +384,26 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
         case 0x12001000: {
             if (data & 8) {
                 // Game is requesting vsync
-                gs->vblank |= 1;
+                // gs->vblank |= 1;
             }
 
             gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
 
-            if (gs->signal_pending && ((gs->csr & 1) == 0)) {
-                gs->csr |= 1;
+            if (data & 1) {
+                if (gs->signal_pending) {
+                    gs->siglblid &= ~0xffffffffull;
+                    gs->siglblid |= gs->stall_sigid;
+                }
             }
         } return;
         case 0x12001010: {
+            int prev_signal = (gs->imr >> 8) & 1;
+            int new_signal = (data >> 8) & 1;
+
             gs->imr = data;
 
-            if (gs->signal_pending && (((gs->imr >> 8) & 1) == 0)) {
-                gs->signal_pending = 0;
+            if (gs->signal_pending && (prev_signal && !new_signal)) {
+                gs->signal_pending--;
 
                 ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
             }
@@ -685,30 +693,35 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
         case 0x53: /* printf("gs: TRXDIR <- %016lx\n", data); */ gs->trxdir = data; gs->backend.transfer_start(gs, gs->backend.udata); return;
         case 0x54: gs->hwreg = data; gs->backend.transfer_write(gs, gs->backend.udata); return;
         case 0x60: /* printf("gs: SIGNAL <- %016lx\n", data); */ {
+            uint64_t mask = data >> 32;
+            uint64_t value = data & mask;
+
             if (gs->csr & 1) {
-                gs->signal_pending = 1;
+                gs->signal_pending++;
+
+                gs->stall_sigid = gs->siglblid & 0xffffffff;
+                gs->stall_sigid &= ~mask;
+                gs->stall_sigid |= value;
 
                 return;
             }
 
-            gs->signal_pending = 0;
+            gs->signal_pending++;
             gs->signal = data;
-
-            uint64_t mask = data >> 32;
 
             gs->csr |= 1;
             gs->siglblid &= ~mask;
-            gs->siglblid |= data & mask;
+            gs->siglblid |= value;
 
             gs_test_gs_irq(gs);
         } return;
-        case 0x61: {
+        case 0x61: /* printf("gs: FINISH <- %016lx\n", data); */ {
             // Trigger FINISH event
             gs->csr |= 2;
 
             gs_test_gs_irq(gs);
         } return;
-        case 0x62: {
+        case 0x62: /* printf("gs: LABEL <- %016lx\n", data); */ {
             gs->label = data;
 
             uint64_t mask = data >> 32;
@@ -720,8 +733,6 @@ void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data) {
             // printf("gs: Invalid privileged register %02x write %016lx\n", reg, data);
 
             return;
-
-            exit(1);
         }
     }
 }
