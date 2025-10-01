@@ -35,8 +35,8 @@
 #endif
 
 // file = fopen("vu.dump", "a"); fprintf(file, #ins "\n"); fclose(file);
-#define VU_LOWER(ins) { ee->vu0->lower = i.opcode; vu_i_ ## ins(ee->vu0); }
-#define VU_UPPER(ins) { ee->vu0->upper = i.opcode; vu_i_ ## ins(ee->vu0); }
+#define VU_LOWER(ins) { ps2_vu_decode_lower(ee->vu0, i.opcode); vu_i_ ## ins(ee->vu0, &ee->vu0->lower); }
+#define VU_UPPER(ins) { ps2_vu_decode_upper(ee->vu0, i.opcode); vu_i_ ## ins(ee->vu0, &ee->vu0->upper); }
 
 static inline int fast_abs32(int a) {
     uint32_t m = a >> 31;
@@ -357,11 +357,9 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
         if ((addr & 0xf0000000) == 0x70000000)                                  \
             return ps2_ram_read ## b(ee->scratchpad, addr & 0x3fff);            \
         uint32_t phys;                                                          \
-        if (ee_translate_virt(ee, addr, &phys)) {                               \
-            printf("ee: TLB mapping error\n");                                  \
-            exit(1);                                                            \
-            return 0;                                                           \
-        }                                                                       \
+        ee_translate_virt(ee, addr, &phys);                                     \
+        if (phys == 0x1000f000) ee->intc_reads++;                               \
+        if (phys == 0x12001000) ee->csr_reads++;                                \
         return ee->bus.read ## b(ee->bus.udata, phys);                          \
     }
 
@@ -370,11 +368,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
         if ((addr & 0xf0000000) == 0x70000000)                                              \
             { ps2_ram_write ## b(ee->scratchpad, addr & 0x3fff, data); return; }            \
         uint32_t phys;                                                                      \
-        if (ee_translate_virt(ee, addr, &phys)) {                                           \
-            printf("ee: TLB mapping error\n");                                              \
-            exit(1);                                                                        \
-            return;                                                                         \
-        }                                                                                   \
+        ee_translate_virt(ee, addr, &phys);                                                 \
         ee->bus.write ## b(ee->bus.udata, phys, data);                                      \
     }
 
@@ -543,6 +537,8 @@ static inline int ee_check_irq(struct ee_state* ee) {
         //     ee->delay_slot
         // );
 
+        ee->intc_reads = 0;
+
         ee_exception_level1(ee, CAUSE_EXC1_INT);
 
         return 1;
@@ -642,16 +638,16 @@ static inline void ee_i_bc0tl(struct ee_state* ee, const ee_instruction& i) {
     BRANCH_LIKELY(ee->cpcond0, EE_D_SI16);
 }
 static inline void ee_i_bc1f(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((ee->fcr & (1 << 23)) == 0, EE_D_SI16);
+    BRANCH((ee->fcr & FPU_FLG_C) == 0, EE_D_SI16);
 }
 static inline void ee_i_bc1fl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((ee->fcr & (1 << 23)) == 0, EE_D_SI16);
+    BRANCH_LIKELY((ee->fcr & FPU_FLG_C) == 0, EE_D_SI16);
 }
 static inline void ee_i_bc1t(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((ee->fcr & (1 << 23)) != 0, EE_D_SI16);
+    BRANCH((ee->fcr & FPU_FLG_C) != 0, EE_D_SI16);
 }
 static inline void ee_i_bc1tl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((ee->fcr & (1 << 23)) != 0, EE_D_SI16);
+    BRANCH_LIKELY((ee->fcr & FPU_FLG_C) != 0, EE_D_SI16);
 }
 static inline void ee_i_bc2f(struct ee_state* ee, const ee_instruction& i) { BRANCH(1, EE_D_SI16); }
 static inline void ee_i_bc2fl(struct ee_state* ee, const ee_instruction& i) { BRANCH_LIKELY(1, EE_D_SI16); }
@@ -721,39 +717,39 @@ static inline void ee_i_cache(struct ee_state* ee, const ee_instruction& i) {
 } 
 static inline void ee_i_ceq(struct ee_state* ee, const ee_instruction& i) {
     if (EE_FS == EE_FT) {
-        ee->fcr |= 1 << 23;    
+        ee->fcr |= FPU_FLG_C;
     } else {
-        ee->fcr &= ~(1 << 23);
+        ee->fcr &= ~FPU_FLG_C;
     }
 }
 static inline void ee_i_cf(struct ee_state* ee, const ee_instruction& i) {
-    ee->fcr &= ~(1 << 23);
+    ee->fcr &= ~FPU_FLG_C; 
 }
 static inline void ee_i_cfc1(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = (EE_D_FS >= 16) ? ee->fcr : 0x2e30;
+    EE_RT = SE6432((EE_D_FS >= 16) ? ee->fcr : 0x2e30);
 }
 static inline void ee_i_cfc2(struct ee_state* ee, const ee_instruction& i) {
     EE_RT = SE6432(ps2_vu_read_vi(ee->vu0, EE_D_RD));
 }
 static inline void ee_i_cle(struct ee_state* ee, const ee_instruction& i) {
     if (EE_FS <= EE_FT) {
-        ee->fcr |= 1 << 23;
+        ee->fcr |= FPU_FLG_C;
     } else {
-        ee->fcr &= ~(1 << 23);
+        ee->fcr &= ~FPU_FLG_C;
     }
 }
 static inline void ee_i_clt(struct ee_state* ee, const ee_instruction& i) {
     if (EE_FS < EE_FT) {
-        ee->fcr |= 1 << 23;
+        ee->fcr |= FPU_FLG_C;
     } else {
-        ee->fcr &= ~(1 << 23);
+        ee->fcr &= ~FPU_FLG_C;
     }
 }
 static inline void ee_i_ctc1(struct ee_state* ee, const ee_instruction& i) {
     if (EE_D_FS < 16)
         return;
 
-    ee->fcr = (ee->fcr & ~(0x83c078)) | (EE_RT & 0x83c078);
+    ee->fcr = EE_RT32; // (ee->fcr & ~(0x83c078)) | (EE_RT & 0x83c078);
 }
 static inline void ee_i_ctc2(struct ee_state* ee, const ee_instruction& i) {
     // To-do: Handle FBRST, VPU_STAT, CMSAR1
@@ -3189,6 +3185,8 @@ void ee_reset(struct ee_state* ee) {
     ee->prid = 0x2e20;
     ee->pc = EE_VEC_RESET;
     ee->next_pc = ee->pc + 4;
+    ee->intc_reads = 0;
+    ee->csr_reads = 0;
 
     ee->block_cache.clear();
 
@@ -3725,8 +3723,21 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     if (ee->pc == 0x81fc0) {
         ee_check_irq(ee);
 
-        ee->total_cycles += 1024;
-        ee->count += 1024;
+        ee->total_cycles += 8 * 128;
+        ee->count += 8 * 128;
+        // ee->eenull_counter += 8 * 64;
+
+        return 8 * 128;
+    }
+
+    if (ee->intc_reads >= 10000) {
+        ee_check_irq(ee);
+
+        return 1024;
+    }
+
+    if (ee->csr_reads >= 1000) {
+        ee_check_irq(ee);
 
         return 1024;
     }
@@ -3745,6 +3756,10 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
             // If we need to handle an interrupt, break out of the loop
             if (ee_check_irq(ee))
                 break;
+
+            // if (ee->pc >= 0x81fc0 && ee->pc <= 0x81fdc) {
+            //     ee->eenull_counter++;
+            // }
 
             ee->pc = ee->next_pc;
             ee->next_pc += 4;
@@ -3820,4 +3835,12 @@ struct ps2_ram* ee_get_spr(struct ee_state* ee) {
 
 void ee_set_fmv_skip(struct ee_state* ee, int v) {
     ee->fmv_skip = v;
+}
+
+void ee_reset_intc_reads(struct ee_state* ee) {
+    ee->intc_reads = 0;
+}
+
+void ee_reset_csr_reads(struct ee_state* ee) {
+    ee->csr_reads = 0;
 }

@@ -101,12 +101,33 @@ void ps2_intc_write64(struct ps2_intc* intc, uint32_t addr, uint64_t data) {
 void ps2_intc_irq(struct ps2_intc* intc, int dev) {
     intc->stat |= 1 << dev;
 
+    static const char* dev_names[] = {
+        "GS",
+        "SBUS",
+        "VBLANK_IN",
+        "VBLANK_OUT",
+        "VIF0",
+        "VIF1",
+        "VU0",
+        "VU1",
+        "IPU",
+        "TIMER0",
+        "TIMER1",
+        "TIMER2",
+        "TIMER3",
+        "SFIFO",
+        "VU0_WD"
+    };
+
     struct sched_event event;
 
     event.callback = intc_check_irq_event;
     event.cycles = 64;
     event.name = "INTC IRQ check";
     event.udata = intc;
+
+    // Notify EE that an interrupt has occurred
+    ee_reset_intc_reads(intc->ee);
 
     sched_schedule(intc->sched, event);
 }

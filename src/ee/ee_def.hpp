@@ -138,6 +138,10 @@ struct ee_state {
     struct vu_state* vu1;
 
     struct ee_vtlb_entry vtlb[48];
+
+    int eenull_counter;
+    int csr_reads;
+    int intc_reads;
 };
 
 #define THS_RUN 0x01
