@@ -6,7 +6,7 @@
 
 #include "vif.h"
 
-// #define printf(fmt, ...)(0)
+#define printf(fmt, ...)(0)
 
 struct ps2_vif* ps2_vif_create(void) {
     return malloc(sizeof(struct ps2_vif));
@@ -185,6 +185,18 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 // printf("vif%d: FLUSHE\n", vif->id);
             } break;
             case VIF_CMD_FLUSH: {
+                // Note: MASSIVE GRAN TURISMO HACK!
+                //       GT3/4 expect IBT and stall bits to be set when a
+                //       VIF IRQ occurs, CODE also needs to be set to the
+                //       last command that caused a stall.
+                //       This is admittedly a huge hack, but we can't really
+                //       emulate any of this without properly implementing
+                //       DMA timings.
+                if (data & 0x80000000) {
+                    vif->stat |= 0x00000c02;
+                    vif->stat ^= 0x0f000000;
+                    vif->code = data;
+                }
                 // printf("vif%d: FLUSH\n", vif->id);
             } break;
             case VIF_CMD_FLUSHA: {
@@ -269,7 +281,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vif->shift = 0;
             } break;
             case VIF_CMD_DIRECT: {
-                //printf("vif%d: DIRECT(%04x)\n", vif->id, data & 0xffff);
+                // fprintf(stdout, "vif%d: DIRECT(%04x)\n", vif->id, data & 0xffff);
 
                 int imm = data & 0xffff;
 
@@ -282,7 +294,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vif->shift = 0;
             } break;
             case VIF_CMD_DIRECTHL: {
-                // printf("vif%d: DIRECTHL(%04x)\n", vif->id, data & 0xffff);
+                // fprintf(stdout, "vif%d: DIRECTHL(%04x)\n", vif->id, data & 0xffff);
 
                 int imm = data & 0xffff;
 
@@ -346,7 +358,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vif->shift = 0;
                 vif->addr = addr;
 
-                // printf("vif%d: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x usn=%d wr=%d mode=%d\n", vif->id, data >> 24, vif->unpack_fmt, flg, vif->unpack_num, addr, vif->tops, vif->unpack_usn, vif->pending_words, vif->mode);
+                // fprintf(stdout, "vif%d: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x usn=%d wr=%d mode=%d\n", vif->id, data >> 24, vif->unpack_fmt, flg, vif->unpack_num, addr, vif->tops, vif->unpack_usn, vif->pending_words, vif->mode);
             } break;
             default: {
                 // printf("vif%d: Unhandled command %02x\n", vif->id, vif->cmd);
@@ -375,12 +387,13 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 }
             } break;
             case VIF_CMD_MPG: {
-                // printf("vif%d: Writing %08x to MicroMem\n", vif->id, data);
-
                 if (!vif->shift) {
                     vif->data.u32[vif->shift++] = data;
                 } else {
                     vif->data.u32[1] = data;
+
+                    // fprintf(stdout, "vif%d: Writing %08x %08x to MicroMem addr=%04x\n", vif->id, vif->data.u32[0], vif->data.u32[1], vif->addr);
+
                     vif->vu->micro_mem[(vif->addr++) & 0x7ff] = vif->data.u64[0];
                     vif->shift = 0;
                 }
@@ -393,13 +406,18 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
             case VIF_CMD_DIRECT: {
                 vif->data.u32[vif->shift++] = data;
 
+                vif->pending_words--;
+
                 if (vif->shift == 4) {
+                    // fprintf(stdout, "vif%d: Writing %08x %08x %08x %08x to GIF FIFO pending=%d\n", vif->id, vif->data.u32[3], vif->data.u32[2], vif->data.u32[1], vif->data.u32[0], vif->pending_words);
                     ee_bus_write128(vif->bus, 0x10006000, vif->data);
 
                     vif->shift = 0;
                 }
 
-                if (!(--vif->pending_words)) {
+                if (!vif->pending_words) {
+                    // fprintf(stdout, "vif%d: DIRECT complete\n", vif->id);
+
                     vif->state = VIF_IDLE;
                 }
             } break;
@@ -805,7 +823,11 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
         case 0x10003970: return vif->c[3];
 
         // VIF1 registers
-        case 0x10003c00: return vif->stat;
+        case 0x10003c00: {
+            uint32_t stat = vif->stat; vif->stat = 0;
+            
+            return stat; 
+        } break;
         case 0x10003c10: return vif->fbrst;
         case 0x10003c20: return vif->err;
         case 0x10003c30: return vif->mark;
@@ -877,15 +899,15 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
         default: {
             printf("vif%d: Unhandled 32-bit write to %08x\n", vif->id, addr);
 
-            exit(1);
+            // exit(1);
         } break;
     }
 }
 
 uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr) {
     switch (addr) {
-        case 0x10004000: // printf("vif%d: 128-bit FIFO read\n", vif->id); exit(1); break;
-        case 0x10005000: // printf("vif%d: 128-bit FIFO read\n", vif->id); exit(1); break;
+        case 0x10004000: break; // printf("vif%d: 128-bit FIFO read\n", vif->id); exit(1); break;
+        case 0x10005000: break; // printf("vif%d: 128-bit FIFO read\n", vif->id); exit(1); break;
 
         default: {
             printf("vif%d: Unhandled 128-bit read to %08x\n", vif->id, addr);
