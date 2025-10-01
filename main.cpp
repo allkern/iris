@@ -504,15 +504,13 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
 
     // Execute until VBlank
     while (!ps2_gs_is_vblank(iris->ps2->gs)) {
-        ps2_cycle(iris->ps2);
+        do_cycle(iris);
 
-        // do_cycle(iris);
+        if (iris->pause) {
+            iris::update_window(iris);
 
-        // if (iris->pause) {
-        //     iris::update_window(iris);
-
-        //     return SDL_APP_CONTINUE;
-        // }
+            return SDL_APP_CONTINUE;
+        }
     }
 
     // Draw frame
@@ -520,16 +518,22 @@ SDL_AppResult SDL_AppIterate(void* appstate) {
     
     // Execute until vblank is over
     while (ps2_gs_is_vblank(iris->ps2->gs)) {
-        ps2_cycle(iris->ps2);
+        do_cycle(iris);
 
-        // do_cycle(iris);
+        if (iris->pause) {
+            iris::update_window(iris);
 
-        // if (iris->pause) {
-        //     iris::update_window(iris);
-
-        //     return SDL_APP_CONTINUE;
-        // }
+            return SDL_APP_CONTINUE;
+        }
     }
+
+    float p = ((float)iris->ps2->ee->eenull_counter / (float)(4920115)) * 100.0f;
+
+    // printf("ee: Time spent idling: %ld cycles (%.2f%%) INTC reads: %d CSR reads: %d (%.1f fps)\n", iris->ps2->ee->eenull_counter, p, iris->ps2->ee->intc_reads, iris->ps2->ee->csr_reads, 1.0f / ImGui::GetIO().DeltaTime);
+
+    iris->ps2->ee->eenull_counter = 0;
+    iris->ps2->ee->intc_reads = 0;
+    iris->ps2->ee->csr_reads = 0;
 
     return SDL_APP_CONTINUE;
 }
