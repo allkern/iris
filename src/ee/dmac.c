@@ -348,6 +348,39 @@ void dmac_send_vif1_irq(void* udata, int overshoot) {
     dmac_set_irq(dmac, DMAC_VIF1);
 }
 
+void mfifo_handle_ref_tag(struct ps2_dmac* dmac) {
+    struct dmac_channel* c = dmac->mfifo_drain;
+
+    while (c->qwc) {
+        uint128_t q = dmac_read_qword(dmac, c->madr);
+
+        if (c == &dmac->vif1) {
+            // VIF1 FIFO
+            ee_bus_write128(dmac->bus, 0x10005000, q);
+        } else {
+            // GIF FIFO
+            ee_bus_write128(dmac->bus, 0x10006000, q);
+        }
+
+
+        c->madr += 16;
+        c->qwc--;
+    }
+
+    if (channel_is_done(c)) {
+        // fprintf(stdout, "dmac: mfifo channel done end=%d tte-irq=%d\n", c->tag.end, c->tag.irq && (c->chcr & 0x80));
+        dmac_set_irq(dmac, c == &dmac->vif1 ? DMAC_VIF1 : DMAC_GIF);
+
+        c->chcr &= ~0x100;
+
+        return;
+    }
+
+    if (c->tag.id == 1) {
+        c->tadr = dmac->rbor | (c->madr & dmac->rbsr);
+    }
+}
+
 void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
     struct dmac_channel* c = dmac->mfifo_drain;
 
@@ -365,11 +398,11 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
         c->madr += 16;
         c->qwc--;
 
-        // printf("dmac: mfifo channel qwc=%d\n", c->qwc);
+        // fprintf(stdout, "dmac: mfifo channel qwc=%d\n", c->qwc);
 
         if (c->qwc == 0) {
             if (channel_is_done(c)) {
-                printf("dmac: mfifo channel done end=%d tte-irq=%d\n", c->tag.end, c->tag.irq && (c->chcr & 0x80));
+                // fprintf(stdout, "dmac: mfifo channel done end=%d tte-irq=%d\n", c->tag.end, c->tag.irq && (c->chcr & 0x80));
                 dmac_set_irq(dmac, c == &dmac->vif1 ? DMAC_VIF1 : DMAC_GIF);
 
                 c->chcr &= ~0x100;
@@ -396,6 +429,8 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
 
     c->tadr = dmac->rbor | (c->tadr & dmac->rbsr);
 
+    // fprintf(stdout, "dmac: tadr=%08x madr=%08x qwc=%d tagid=%d end=%d\n", c->tadr, c->madr, c->qwc, c->tag.id, c->tag.end);
+
     switch (c->tag.id) {
         case 1:
         case 2:
@@ -404,13 +439,21 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
         case 7: {
             c->madr = dmac->rbor | (c->madr & dmac->rbsr);
         } break;
-    }
 
-    printf("dmac: tadr=%08x madr=%08x qwc=%d tagid=%d end=%d\n", c->tadr, c->madr, c->qwc, c->tag.id, c->tag.end);
+        default: {
+            mfifo_handle_ref_tag(dmac);
+
+            if (c->tadr == dmac->spr_from.madr) {
+                // fprintf(stdout, "dmac: MFIFO empty\n");
+
+                dmac_set_irq(dmac, DMAC_MEIS);
+            }
+        } return;
+    }
 
     if (c->qwc == 0) {
         if (channel_is_done(c)) {
-            printf("dmac: mfifo channel done end=%d tte-irq=%d\n", c->tag.end, c->tag.irq && (c->chcr & 0x80));
+            // fprintf(stdout, "dmac: mfifo channel done end=%d tte-irq=%d\n", c->tag.end, c->tag.irq && (c->chcr & 0x80));
             dmac_set_irq(dmac, c == &dmac->vif1 ? DMAC_VIF1 : DMAC_GIF);
 
             c->chcr &= ~0x100;
@@ -420,7 +463,7 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
     }
 
     if (c->tadr == dmac->spr_from.madr) {
-        fprintf(stdout, "dmac: MFIFO empty\n");
+        // fprintf(stdout, "dmac: MFIFO empty\n");
 
         dmac_set_irq(dmac, DMAC_MEIS);
     }
@@ -440,8 +483,9 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
 
     int mfifo_drain = (dmac->ctrl >> 2) & 3;
 
-    if (mfifo_drain == 2)
+    if (mfifo_drain == 2) {
         return;
+    }
 
     int tte = (dmac->vif1.chcr >> 6) & 1;
     int mode = (dmac->vif1.chcr >> 2) & 3;
@@ -454,13 +498,13 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     event.name = "VIF1 DMA IRQ";
     event.udata = dmac;
     event.callback = dmac_send_vif1_irq;
-    event.cycles = 1000;
+    event.cycles = 4000;
 
     // We don't handle VIF1 reads
     if ((dmac->vif1.chcr & 1) == 0) {
         // Gran Turismo 3 sends a VIF1 read with QWC=0, presumably to
         // wait until the GIF FIFO is actually full, so we shouldn't send
-        // and interrupt there.
+        // an interrupt there.
         if (dmac->vif1.qwc == 0)
             return;
 
@@ -1241,15 +1285,15 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
             int stall_drain = (dmac->ctrl >> 6) & 3;
 
             if (mfifo_drain || stall_ctrl || stall_drain) {
-                printf("dmac: mfifo_drain=%d stall_ctrl=%d stall_drain=%d\n",
-                    mfifo_drain, stall_ctrl, stall_drain
-                );
+                // fprintf(stdout, "dmac: 32-bit mfifo_drain=%d stall_ctrl=%d stall_drain=%d\n",
+                //     mfifo_drain, stall_ctrl, stall_drain
+                // );
 
                 switch (mfifo_drain) {
                     case 0: dmac->mfifo_drain = NULL; break;
                     case 2: dmac->mfifo_drain = &dmac->vif1; break;
                     case 3: dmac->mfifo_drain = &dmac->gif; break;
-                    default: printf("dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
+                    default: fprintf(stdout, "dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
                 }
             }
         } return;
@@ -1262,46 +1306,41 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
         case 0x1000F590: dmac->enable = data; return;
     }
 
-    if (c) {
-        switch (addr & 0xff) {
-            case 0x00: {
-                // c->chcr = data;
-
-                // if (data & 0x100) {
-                //     dmac_handle_channel_start(dmac, addr);
-                // }
-
-                // Behavior required for IPU FMVs to work
-                if ((c->chcr & 0x100) == 0) {
-                    c->chcr = data;
-
-                    if (data & 0x100) {
-                        dmac_handle_channel_start(dmac, addr);
-                    }
-                } else {
-                    // printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
-                    c->chcr &= (data & 0x100) | 0xfffffeff;
-                }
-            } return;
-            case 0x10: {
-                c->madr = data;
-
-                // Clear MADR's MSB on SPR channels
-                if (c == &dmac->spr_to || c == &dmac->spr_from) {
-                    c->madr &= 0x7fffffff;
-                }
-            } return;
-            case 0x20: c->qwc = data & 0xffff; return;
-            case 0x30: c->tadr = data; return;
-            case 0x40: c->asr0 = data; return;
-            case 0x50: c->asr1 = data; return;
-            case 0x80: c->sadr = data & 0x3ff0; return;
-        }
-
-        // printf("dmac: Unknown channel register %02x\n", addr & 0xff);
-
+    if (!c)
         return;
+
+    switch (addr & 0xff) {
+        case 0x00: {
+            // Behavior required for IPU FMVs to work
+            if ((c->chcr & 0x100) == 0) {
+                c->chcr = data;
+
+                if (data & 0x100) {
+                    dmac_handle_channel_start(dmac, addr);
+                }
+            } else {
+                // printf("dmac: channel %s value=%08x chcr=%08x\n", dmac_get_channel_name(dmac, addr), data, c->chcr);
+                c->chcr &= (data & 0x100) | 0xfffffeff;
+            }
+        } return;
+        case 0x10: {
+            c->madr = data;
+
+            // Clear MADR's MSB on SPR channels
+            if (c == &dmac->spr_to || c == &dmac->spr_from) {
+                c->madr &= 0x7fffffff;
+            }
+        } return;
+        case 0x20: c->qwc = data & 0xffff; return;
+        case 0x30: c->tadr = data; return;
+        case 0x40: c->asr0 = data; return;
+        case 0x50: c->asr1 = data; return;
+        case 0x80: c->sadr = data & 0x3ff0; return;
     }
+
+    // printf("dmac: Unknown channel register %02x\n", addr & 0xff);
+
+    return;
 }
 
 uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr) {
@@ -1388,15 +1427,15 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
             int stall_drain = (dmac->ctrl >> 6) & 3;
 
             if (mfifo_drain || stall_ctrl || stall_drain) {
-                printf("dmac: mfifo_drain=%d stall_ctrl=%d stall_drain=%d\n",
-                    mfifo_drain, stall_ctrl, stall_drain
-                );
+                // fprintf(stdout, "dmac: 8-bit mfifo_drain=%d stall_ctrl=%d stall_drain=%d\n",
+                //     mfifo_drain, stall_ctrl, stall_drain
+                // );
 
                 switch (mfifo_drain) {
                     case 0: dmac->mfifo_drain = NULL; break;
                     case 2: dmac->mfifo_drain = &dmac->vif1; break;
                     case 3: dmac->mfifo_drain = &dmac->gif; break;
-                    default: printf("dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
+                    default: fprintf(stdout, "dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
                 }
             }
         } return;
