@@ -983,13 +983,6 @@ static inline void ee_i_lb(struct ee_state* ee, const ee_instruction& i) {
     EE_RT = SE648(bus_read8(ee, EE_RS32 + SE3216(EE_D_I16)));
 }
 static inline void ee_i_lbu(struct ee_state* ee, const ee_instruction& i) {
-    if (((EE_RS32 + SE3216(EE_D_I16)) & 0x1fffffff) == 0x06776cc0) {
-        printf("ee: Debug breakpoint at %08x pc=%08x block=%08x\n", EE_RS32 + SE3216(EE_D_I16), ee->pc,
-            ee->block_pc
-        );
-        *(int*)0 = 0; // Debug breakpoint
-    }
-
     EE_RT = bus_read8(ee, EE_RS32 + SE3216(EE_D_I16));
 }
 static inline void ee_i_ld(struct ee_state* ee, const ee_instruction& i) {
@@ -3736,11 +3729,11 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         return 1024;
     }
 
-    if (ee->csr_reads >= 1000) {
-        ee_check_irq(ee);
+    // if (ee->csr_reads >= 1000) {
+    //     ee_check_irq(ee);
 
-        return 1024;
-    }
+    //     return 1024;
+    // }
 
     if (ee->block_cache.contains(ee->pc)) {
         const auto& block = ee->block_cache[ee->pc];
