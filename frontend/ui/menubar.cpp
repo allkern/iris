@@ -283,7 +283,7 @@ void show_main_menubar(iris::instance* iris) {
                         "960x720",
                         "1024x768",
                         "1280x720",
-                        "1280x800"
+                        "1280x960"
                     };
 
                     int widths[] = {
@@ -291,7 +291,7 @@ void show_main_menubar(iris::instance* iris) {
                     };
 
                     int heights[] = {
-                        480, 600, 720, 768, 720, 800
+                        480, 600, 720, 768, 720, 960
                     };
 
                     for (int i = 0; i < 6; i++) {
@@ -344,8 +344,8 @@ void show_main_menubar(iris::instance* iris) {
 
             MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar);
 
-            if (MenuItem(ICON_MS_CONTENT_COPY " Copy data path to clipboard")) {
-                SDL_SetClipboardText(iris->pref_path.c_str());
+            if (MenuItem(ICON_MS_OPEN_IN_NEW " Open data folder")) {
+                SDL_OpenURL(iris->pref_path.c_str());
             }
 
             Separator();
