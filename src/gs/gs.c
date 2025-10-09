@@ -157,6 +157,15 @@ void ps2_gs_reset(struct ps2_gs* gs) {
     gs->ctx = &gs->context[0];
     gs->csr |= 2;
 
+    // Schedule Vblank event
+    struct sched_event vblank_event;
+    vblank_event.callback = gs_handle_vblank_in;
+    vblank_event.cycles = GS_FRAME_NTSC;
+    vblank_event.name = "Vblank in event";
+    vblank_event.udata = gs;
+
+    sched_schedule(gs->sched, vblank_event);
+
     memset(gs->vram, 0, 0x400000);
 }
 
