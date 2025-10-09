@@ -24,6 +24,7 @@ struct sched_state {
 struct sched_state* sched_create(void);
 void sched_init(struct sched_state* sched);
 void sched_schedule(struct sched_state* sched, struct sched_event event);
+void sched_reset(struct sched_state* sched);
 int sched_tick(struct sched_state* sched, int cycles);
 const struct sched_event* sched_next_event(struct sched_state* sched);
 void sched_destroy(struct sched_state* sched);

@@ -113,6 +113,11 @@ const struct sched_event* sched_next_event(struct sched_state* sched) {
     return &sched->events[0];
 }
 
+void sched_reset(struct sched_state* sched) {
+    sched->nevents = 0;
+    sched->offset = 0;
+}
+
 void sched_destroy(struct sched_state* sched) {
     free(sched->events);
     free(sched);
