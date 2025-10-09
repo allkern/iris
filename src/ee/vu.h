@@ -64,6 +64,10 @@ struct vu_state {
 
     struct vu_instruction upper, lower;
 
+	int vi_backup_cycles;
+    int vi_backup_reg;
+    int vi_backup_value;
+
     uint64_t micro_mem[0x800];
     uint128_t vu_mem[0x400];
 
@@ -89,10 +93,6 @@ struct vu_state {
     } prev_q;
 
     int q_delay;
-
-    uint16_t ialu_prev_v;
-    uint16_t ialu_prev_i;
-    int ialu_delay;
 
     union {
         uint32_t u32;

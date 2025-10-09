@@ -226,7 +226,7 @@ static inline float vu_acc_i(struct vu_state* vu, int i) {
     return vu_cvtf(vu->acc.u32[i]);
 }
 
-static inline void vu_mem_write(struct vu_state* vu, uint32_t addr, uint32_t data, int i) {
+static inline void vu_mem_write(struct vu_state* vu, uint16_t addr, uint32_t data, int i) {
     if (!vu->id) {
         if (addr <= 0x3ff) {
             vu->vu_mem[addr & 0xff].u32[i] = data;
@@ -258,7 +258,7 @@ static inline void vu_mem_write(struct vu_state* vu, uint32_t addr, uint32_t dat
             }
         }
     } else {
-        // if (addr == 0x0000013d) *(int*)0 = 0;
+        // if (addr == 0x000001d3) *(int*)0 = 0;
 
         vu->vu_mem[addr & 0x3ff].u32[i] = data;
     }
@@ -303,6 +303,35 @@ static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
     }
 
     return vu->vu_mem[addr & 0x3ff];
+}
+
+static inline void vu_write_branch_pipeline(struct vu_state* vu, int dst) {
+    if (!dst)
+        return;
+
+    //On repeat writes we need to remember the value from before the chain
+	if (vu->vi_backup_cycles && dst == vu->vi_backup_reg) {
+		vu->vi_backup_cycles = 2;
+
+		return;
+	}
+
+    vu->vi_backup_cycles = 2;
+    vu->vi_backup_reg = dst;
+    vu->vi_backup_value = vu->vi[dst];
+
+    // printf("branch pipeline: dst=%d prev=%04x rw=%d\n",
+    //     vu->branch_pipeline_curr.reg, vu->branch_pipeline_curr.prev,
+    //     vu->branch_pipeline_curr.rw
+    // );
+}
+
+static inline uint16_t vu_get_branch_register(struct vu_state* vu, int reg) {
+    if (vu->vi_backup_cycles && (vu->vi_backup_reg == reg)) {
+        return vu->vi_backup_value;
+    }
+
+    return vu->vi[reg];
 }
 
 // Upper pipeline
@@ -2041,48 +2070,68 @@ void vu_i_fsset(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->status |= VU_LD_IMM12 & 0xfc0;
 }
 void vu_i_iadd(struct vu_state* vu, const struct vu_instruction* ins) {
-    // printf("iadd vi%02u, vi%02u (%04x), vi%02u (%04x)\n", VU_LD_D, VU_LD_S, VU_IS, VU_LD_T, VU_IT);
+    vu_write_branch_pipeline(vu, VU_LD_D);
 
     vu_set_vi(vu, VU_LD_D, VU_IS + VU_IT);
 }
 void vu_i_iaddi(struct vu_state* vu, const struct vu_instruction* ins) {
+    vu_write_branch_pipeline(vu, VU_LD_T);
+
     vu_set_vi(vu, VU_LD_T, VU_IS + VU_LD_IMM5);
 }
 void vu_i_iaddiu(struct vu_state* vu, const struct vu_instruction* ins) {
+    vu_write_branch_pipeline(vu, VU_LD_T);
+
     vu_set_vi(vu, VU_LD_T, VU_IS + VU_LD_IMM15);
 }
 void vu_i_iand(struct vu_state* vu, const struct vu_instruction* ins) {
+    vu_write_branch_pipeline(vu, VU_LD_T);
+
     vu_set_vi(vu, VU_LD_D, VU_IS & VU_IT);
 }
 void vu_i_ibeq(struct vu_state* vu, const struct vu_instruction* ins) {
-    if (VU_IT == VU_IS) {
+    uint16_t t = vu_get_branch_register(vu, VU_LD_T);
+    uint16_t s = vu_get_branch_register(vu, VU_LD_S);
+
+    if (t == s) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
 void vu_i_ibgez(struct vu_state* vu, const struct vu_instruction* ins) {
-    if ((int16_t)VU_IS >= 0) {
+    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+
+    if (s >= 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
 void vu_i_ibgtz(struct vu_state* vu, const struct vu_instruction* ins) {
-    if ((int16_t)VU_IS > 0) {
+    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+
+    if (s > 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
 void vu_i_iblez(struct vu_state* vu, const struct vu_instruction* ins) {
-    if ((int16_t)VU_IS <= 0) {
+    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+
+    if (s <= 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
 void vu_i_ibltz(struct vu_state* vu, const struct vu_instruction* ins) {
-    if ((int16_t)VU_IS < 0) {
+    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+
+    if (s < 0) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
 void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
-    // printf("ibne vi%02u (%04x), vi%02u (%04x), 0x%08x\n", VU_LD_T, VU_IT, VU_LD_S, VU_IS, vu->tpc + VU_LD_IMM11);
+    uint16_t t = vu_get_branch_register(vu, VU_LD_T);
+    uint16_t s = vu_get_branch_register(vu, VU_LD_S);
 
-    if (VU_IT != VU_IS) {
+    // printf("ibne vi%02u (%04x), vi%02u (%04x), 0x%08x\n", VU_LD_T, t, VU_LD_S, s, vu->tpc + VU_LD_IMM11);
+
+    if (t != s) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
@@ -2112,12 +2161,18 @@ void vu_i_ilwr(struct vu_state* vu, const struct vu_instruction* ins) {
     }
 }
 void vu_i_ior(struct vu_state* vu, const struct vu_instruction* ins) {
+    vu_write_branch_pipeline(vu, VU_LD_D);
+
     vu_set_vi(vu, VU_LD_D, VU_IS | VU_IT);
 }
 void vu_i_isub(struct vu_state* vu, const struct vu_instruction* ins) {
+    vu_write_branch_pipeline(vu, VU_LD_D);
+
     vu_set_vi(vu, VU_LD_D, VU_IS - VU_IT);
 }
 void vu_i_isubiu(struct vu_state* vu, const struct vu_instruction* ins) {
+    vu_write_branch_pipeline(vu, VU_LD_T);
+
     vu_set_vi(vu, VU_LD_T, VU_IS - VU_LD_IMM15);
 }
 void vu_i_isw(struct vu_state* vu, const struct vu_instruction* ins) {
@@ -2167,6 +2222,8 @@ void vu_i_lqd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
+    vu_write_branch_pipeline(vu, s);
+
     vu_set_vi(vu, s, vu->vi[s] - 1);
 
     uint32_t addr = vu->vi[s];
@@ -2182,6 +2239,8 @@ void vu_i_lqi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
+    vu_write_branch_pipeline(vu, s);
+
     if (t) {
         uint32_t addr = vu->vi[s];
         uint128_t data = vu_mem_read(vu, addr);
@@ -2191,17 +2250,7 @@ void vu_i_lqi(struct vu_state* vu, const struct vu_instruction* ins) {
         }
     }
 
-    // printf(" vf%02u, (vi%02u++) (%04x) (%f %f %f %f)\n",
-    //     t,
-    //     s,
-    //     VU_IS,
-    //     vu->vf[t].f[0],
-    //     vu->vf[t].f[1],
-    //     vu->vf[t].f[2],
-    //     vu->vf[t].f[3]
-    // );
-
-    if (s) vu->vi[s]++;
+    vu_set_vi(vu, s, vu->vi[s] + 1);
 }
 void vu_i_mfir(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
@@ -2250,6 +2299,8 @@ void vu_i_mr32(struct vu_state* vu, const struct vu_instruction* ins) {
     if (VU_LD_DI(3)) vu->vf[t].u32[3] = x;
 }
 void vu_i_mtir(struct vu_state* vu, const struct vu_instruction* ins) {
+    vu_write_branch_pipeline(vu, VU_LD_T);
+
     vu_set_vi(vu, VU_LD_T, vu->vf[VU_LD_S].u32[VU_LD_SF] & 0xffff);
 }
 void vu_i_rget(struct vu_state* vu, const struct vu_instruction* ins) {
@@ -2309,6 +2360,8 @@ void vu_i_sqd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
+    vu_write_branch_pipeline(vu, t);
+
     vu_set_vi(vu, t, vu->vi[t] - 1);
 
     uint32_t addr = vu->vi[t];
@@ -2320,6 +2373,8 @@ void vu_i_sqd(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
+
+    vu_write_branch_pipeline(vu, t);
 
     uint32_t addr = vu->vi[t];
 
@@ -2349,9 +2404,12 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
     do {
         uint128_t tag = vu_mem_read(vu, addr++);
 
-        addr &= 0x7ff;
+        if ((tag.u64[0] | tag.u64[1]) == 0)
+            break;
 
-        if (addr == 0) break;
+        // addr &= 0x3ff;
+
+        // if (addr == 0) break;
 
         // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
@@ -2366,8 +2424,8 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
         if (!nloop)
             continue;
 
-        if (!nregs)
-            nregs = 16;
+        // if (!nregs)
+        //     nregs = 16;
 
         int qwc = 0;
 
@@ -2384,16 +2442,17 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
             } break;
         }
 
-        if (qwc >= 0x7ff)
-            continue;
+        if (qwc >= 0x400) {
+            fprintf(stderr, "vu: Weird xgkick tag nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
+                nloop,
+                nregs,
+                eop,
+                flg,
+                qwc
+            ); 
 
-        // printf("vu: nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
-        //     nloop,
-        //     nregs,
-        //     eop,
-        //     flg,
-        //     qwc
-        // ); 
+            exit(1);
+        }
 
         for (int i = 0; i < qwc; i++) {
             // printf("vu: %08x: %08x %08x %08x %08x\n",
@@ -2406,12 +2465,12 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
 
             ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
 
-            addr &= 0x7ff;
+            addr &= 0x3ff;
 
-            if (addr == 0) {
-                eop = 1;
-                break;
-            }
+            // if (addr == 0) {
+            //     eop = 1;
+            //     break;
+            // }
         }
     } while (!eop);
 }
@@ -2904,18 +2963,22 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
         case 0x05: VU_DEC_LD_S_VISRC_T_VISRC(vu_i_isw); return;
         case 0x08: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_iaddiu); return;
         case 0x09: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_isubiu); return;
-        case 0x10: VU_DEC_LD_VIDST(1, vu_i_fceq); return;
+
+        // Note: The flag check instructions clobber the destination register
+        //       "immediately", this means we don't actually need to generate
+        //       a dependency.
+        case 0x10: VU_DEC_LD_NONE(vu_i_fceq); return; // VU_DEC_LD_VIDST(1, vu_i_fceq); return;
         case 0x11: VU_DEC_LD_NONE(vu_i_fcset); return;
-        case 0x12: VU_DEC_LD_VIDST(1, vu_i_fcand); return;
-        case 0x13: VU_DEC_LD_VIDST(1, vu_i_fcor); return;
-        case 0x14: VU_DEC_LD_T_VIDST(vu_i_fseq); return;
+        case 0x12: VU_DEC_LD_NONE(vu_i_fcand); return; // VU_DEC_LD_VIDST(1, vu_i_fcand); return;
+        case 0x13: VU_DEC_LD_NONE(vu_i_fcor); return; // VU_DEC_LD_VIDST(1, vu_i_fcor); return;
+        case 0x14: VU_DEC_LD_NONE(vu_i_fseq); return; // VU_DEC_LD_T_VIDST(vu_i_fseq); return;
         case 0x15: VU_DEC_LD_NONE(vu_i_fsset); return;
-        case 0x16: VU_DEC_LD_T_VIDST(vu_i_fsand); return;
-        case 0x17: VU_DEC_LD_T_VIDST(vu_i_fsor); return;
-        case 0x18: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmeq); return;
-        case 0x1A: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmand); return;
-        case 0x1B: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmor); return;
-        case 0x1C: VU_DEC_LD_T_VIDST(vu_i_fcget); return;
+        case 0x16: VU_DEC_LD_NONE(vu_i_fsand); return; // VU_DEC_LD_T_VIDST(vu_i_fsand); return;
+        case 0x17: VU_DEC_LD_NONE(vu_i_fsor); return; // VU_DEC_LD_T_VIDST(vu_i_fsor); return;
+        case 0x18: VU_DEC_LD_S_VISRC(vu_i_fmeq); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmeq); return;
+        case 0x1A: VU_DEC_LD_S_VISRC(vu_i_fmand); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmand); return;
+        case 0x1B: VU_DEC_LD_S_VISRC(vu_i_fmor); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmor); return;
+        case 0x1C: VU_DEC_LD_NONE(vu_i_fcget); return; // VU_DEC_LD_T_VIDST(vu_i_fcget); return;
         case 0x20: VU_DEC_LD_NONE(vu_i_b); return;
         case 0x21: VU_DEC_LD_T_VIDST(vu_i_bal); return;
         case 0x24: VU_DEC_LD_S_VISRC(vu_i_jr); return;
@@ -3034,7 +3097,7 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         // printf("%-40s", vu_disassemble_upper(ubuf, upper & 0x7ffffff, &ds));
 
         if (vu->i_bit) {
-            // printf("loi 0x%08x\n", lower);
+            // printf("%-12s0x%08x\n", "loi", lower);
 
             vu->upper.func(vu, &vu->upper);
 
@@ -3090,8 +3153,6 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
             }
         }
 
-
-
         vu->mac_pipeline[3] = vu->mac_pipeline[2];
         vu->mac_pipeline[2] = vu->mac_pipeline[1];
         vu->mac_pipeline[1] = vu->mac_pipeline[0];
@@ -3102,13 +3163,14 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         vu->clip_pipeline[1] = vu->clip_pipeline[0];
         vu->clip_pipeline[0] = vu->clip;
 
-        // printf("mac_pipeline: %08x %08x %08x %08x mac=%08x\n",
-        //     vu->mac_pipeline[0],
-        //     vu->mac_pipeline[1],
-        //     vu->mac_pipeline[2],
-        //     vu->mac_pipeline[3],
-        //     vu->mac
-        // );
+        if (vu->vi_backup_cycles) {
+            vu->vi_backup_cycles--;
+
+            if (!vu->vi_backup_cycles) {
+                vu->vi_backup_reg = 0;
+                vu->vi_backup_value = 0;
+            }
+        }
     }
 }
 
