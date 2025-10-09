@@ -702,7 +702,7 @@ void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
     // );
 
     if (mode != 0) {
-        printf("dmac: ipu_from mode %d not supported\n", mode);
+        fprintf(stderr, "dmac: ipu_from mode %d not supported\n", mode);
 
         exit(1);
 
@@ -761,7 +761,7 @@ int dmac_transfer_ipu_to_qword(struct ps2_dmac* dmac) {
 
     if (dmac->ipu_to.tag.id == 1) {
         dmac->ipu_to.tadr = dmac->ipu_to.madr;
-        printf("dmac: ipu_to tag id=1, setting tadr to %08x\n", dmac->ipu_to.tadr);
+        fprintf(stderr, "dmac: ipu_to tag id=1, setting tadr to %08x\n", dmac->ipu_to.tadr);
         exit(1);
     }
 
@@ -951,7 +951,7 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
         if (dmac->sif1.tag.id == 1) {
             dmac->sif1.tadr = dmac->sif1.madr;
 
-            printf("dmac: SIF1 tag id=1, setting TADR to MADR=%08x\n", dmac->sif1.madr);
+            fprintf(stderr, "dmac: SIF1 tag id=1, setting TADR to MADR=%08x\n", dmac->sif1.madr);
 
             exit(1);
         }
@@ -965,7 +965,7 @@ void dmac_handle_sif1_transfer(struct ps2_dmac* dmac) {
     dmac->sif1.qwc = 0;
 }
 void dmac_handle_sif2_transfer(struct ps2_dmac* dmac) {
-    printf("ee: SIF2 channel unimplemented\n"); exit(1);
+    fprintf(stderr, "ee: SIF2 channel unimplemented\n"); exit(1);
 }
 
 void dmac_spr_from_interleave(struct ps2_dmac* dmac) {
@@ -1293,7 +1293,7 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                     case 0: dmac->mfifo_drain = NULL; break;
                     case 2: dmac->mfifo_drain = &dmac->vif1; break;
                     case 3: dmac->mfifo_drain = &dmac->gif; break;
-                    default: fprintf(stdout, "dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
+                    default: fprintf(stderr, "dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
                 }
             }
         } return;
@@ -1435,7 +1435,7 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                     case 0: dmac->mfifo_drain = NULL; break;
                     case 2: dmac->mfifo_drain = &dmac->vif1; break;
                     case 3: dmac->mfifo_drain = &dmac->gif; break;
-                    default: fprintf(stdout, "dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
+                    default: fprintf(stderr, "dmac: Invalid MFIFO drain channel %d\n", mfifo_drain); exit(1);
                 }
             }
         } return;
@@ -1447,7 +1447,7 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
         } return;
     }
 
-    printf("dmac: 8-bit write to %08x (%02x)\n", addr, data);
+    fprintf(stderr, "dmac: 8-bit write to %08x (%02x)\n", addr, data);
 
     // exit(1);
 
@@ -1455,7 +1455,7 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 }
 
 uint64_t ps2_dmac_read16(struct ps2_dmac* dmac, uint32_t addr) {
-    printf("dmac: 16-bit read from %08x\n", addr);
+    fprintf(stderr, "dmac: 16-bit read from %08x\n", addr);
 
     exit(1);
 }
@@ -1480,7 +1480,7 @@ void ps2_dmac_write16(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
         } return;
     }
 
-    printf("dmac: 16-bit write to %08x (%04x)\n", addr, data & 0xffff);
+    fprintf(stderr, "dmac: 16-bit write to %08x (%04x)\n", addr, data & 0xffff);
 
     exit(1);
 }

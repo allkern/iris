@@ -91,7 +91,7 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
         // Write data until unpack_wl is reached, then skip unpack_skip
         vif->vu->vu_mem[(vif->addr++) & 0x3ff] = data;
     } else {
-        printf("vif%d: Unpack error: unpack_cl (%d) < unpack_wl (%d)\n", vif->id, vif->unpack_cl, vif->unpack_wl);
+        fprintf(stderr, "vif%d: Unpack error: unpack_cl (%d) < unpack_wl (%d)\n", vif->id, vif->unpack_cl, vif->unpack_wl);
         exit(1);
     }
 
@@ -334,7 +334,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 if (flg) addr += vif->tops;
 
                 if (filling) {
-                    printf("vif%d: Filling mode unimplemented\n", vif->id);
+                    fprintf(stderr, "vif%d: Filling mode unimplemented\n", vif->id);
 
                     return;
                     // exit(1);
@@ -361,7 +361,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 // fprintf(stdout, "vif%d: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x usn=%d wr=%d mode=%d\n", vif->id, data >> 24, vif->unpack_fmt, flg, vif->unpack_num, addr, vif->tops, vif->unpack_usn, vif->pending_words, vif->mode);
             } break;
             default: {
-                // printf("vif%d: Unhandled command %02x\n", vif->id, vif->cmd);
+                // fprintf(stderr, "vif%d: Unhandled command %02x\n", vif->id, vif->cmd);
 
                 // exit(1);
             } break;
@@ -785,7 +785,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                     } break;
 
                     default: {
-                        printf("vif%d: Unimplemented unpack format %02x\n", vif->id, vif->unpack_fmt);
+                        fprintf(stderr, "vif%d: Unimplemented unpack format %02x\n", vif->id, vif->unpack_fmt);
 
                         exit(1);
                     } break;
@@ -856,7 +856,7 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr) {
         case 0x10005000: // printf("vif%d: 32-bit FIFO read\n", vif->id); exit(1); break;
 
         default: {
-            printf("vif%d: Unhandled 32-bit read to %08x\n", vif->id, addr);
+            fprintf(stderr, "vif%d: Unhandled 32-bit read to %08x\n", vif->id, addr);
 
             exit(1);
         } break;
@@ -897,7 +897,7 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
         case 0x10005000: vif_handle_fifo_write(vif, data); break;
 
         default: {
-            printf("vif%d: Unhandled 32-bit write to %08x\n", vif->id, addr);
+            fprintf(stderr, "vif%d: Unhandled 32-bit write to %08x\n", vif->id, addr);
 
             // exit(1);
         } break;
@@ -910,7 +910,7 @@ uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr) {
         case 0x10005000: break; // printf("vif%d: 128-bit FIFO read\n", vif->id); exit(1); break;
 
         default: {
-            printf("vif%d: Unhandled 128-bit read to %08x\n", vif->id, addr);
+            fprintf(stderr, "vif%d: Unhandled 128-bit read to %08x\n", vif->id, addr);
 
             exit(1);
         } break;
@@ -936,7 +936,7 @@ void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {
         } break;
 
         default: {
-            printf("vif%d: Unhandled 128-bit write to %08x\n", vif->id, addr);
+            fprintf(stderr, "vif%d: Unhandled 128-bit write to %08x\n", vif->id, addr);
 
             exit(1);
         } break;

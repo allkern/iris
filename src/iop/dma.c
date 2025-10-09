@@ -134,13 +134,13 @@ static inline void dma_fetch_tag(struct ps2_iop_dma* dma, struct iop_dma_channel
 }
 
 void iop_dma_handle_mdec_in_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: MDEC in channel unimplemented\n"); exit(1);
+    fprintf(stderr, "iop: MDEC in channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_mdec_out_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: MDEC out channel unimplemented\n"); exit(1);
+    fprintf(stderr, "iop: MDEC out channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_sif2_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: SIF2 channel unimplemented\n"); exit(1);
+    fprintf(stderr, "iop: SIF2 channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     // No data in CDVD buffer yet
@@ -279,10 +279,10 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
     // }
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: PIO channel unimplemented\n"); exit(1);
+    fprintf(stderr, "iop: PIO channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_otc_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: OTC channel unimplemented\n"); exit(1);
+    fprintf(stderr, "iop: OTC channel unimplemented\n"); exit(1);
 }
 
 void spu2_dma_irq_event_handler(void* udata, int overshoot) {
@@ -371,7 +371,7 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
     // }
 }
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
-    printf("iop: DEV9 channel unimplemented\n"); exit(1);
+    fprintf(stderr, "iop: DEV9 channel unimplemented\n"); exit(1);
 }
 void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
     // if (!ps2_sif0_is_empty(dma->sif)) {
@@ -396,8 +396,8 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
         if (dma->sif0.extra) {
             q.u32[0] = iop_bus_read32(dma->bus, dma->sif0.tadr + 8);
             q.u32[1] = iop_bus_read32(dma->bus, dma->sif0.tadr + 12);
-            q.u32[2] = 0;
-            q.u32[3] = 0;
+            q.u32[2] = iop_bus_read32(dma->bus, dma->sif0.tadr + 0);
+            q.u32[3] = iop_bus_read32(dma->bus, dma->sif0.tadr + 4);
 
             ps2_sif0_write(dma->sif, q);
         }
@@ -527,7 +527,7 @@ void dma_handle_sio2_out_irq_event(void* udata, int overshoot) {
 }
 void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
     if ((dma->sio2_out.chcr & 0x1000000) == 0) {
-        printf("dma: SIO2_out not requested\n");
+        fprintf(stderr, "dma: SIO2_out not requested\n");
 
         exit(1);
 
@@ -540,7 +540,7 @@ void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
         return;
     }
 
-    printf("dma: WHAT? Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
+    fprintf(stderr, "dma: WHAT? Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
 
     exit(1);
 
@@ -798,14 +798,14 @@ void ps2_iop_dma_write16(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
 
         const char* name = iop_dma_get_channel_name(addr);
 
-        printf("iop_dma: Unknown 16-bit %s register write %08x %08lx\n", name, addr, data);
+        fprintf(stderr, "iop_dma: Unknown 16-bit %s register write %08x %08lx\n", name, addr, data);
 
         exit(1);
 
         return;
     }
 
-    printf("iop_dma: Unknown DMA register write %08x %08lx\n", addr, data);
+    fprintf(stderr, "iop_dma: Unknown DMA register write %08x %08lx\n", addr, data);
 
     exit(1);
 }

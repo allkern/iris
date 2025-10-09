@@ -9,6 +9,9 @@ struct ee_bus* ee_bus_create(void) {
     return malloc(sizeof(struct ee_bus));
 }
 
+#define likely(x) __builtin_expect(!!(x), 1)
+#define unlikely(x) __builtin_expect(!!(x), 0)
+
 void ee_bus_init(struct ee_bus* bus, const char* bios_path) {
     memset(bus, 0, sizeof(struct ee_bus));
 
@@ -145,7 +148,7 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
-    if (ptr) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+    if (likely(ptr)) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     // MAP_MEM_READ(8, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     // MAP_MEM_READ(8, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -173,7 +176,7 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
-    if (ptr) return *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+    if (likely(ptr)) return *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     // MAP_MEM_READ(16, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     // MAP_MEM_READ(16, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -197,7 +200,7 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
         case 0x1a000006: return 2;
     }
 
-    printf("bus: Unhandled 16-bit read from physical address 0x%08x\n", addr); // exit(1);
+    fprintf(stderr, "bus: Unhandled 16-bit read from physical address 0x%08x\n", addr); // exit(1);
 
     return 0;
 }
@@ -207,7 +210,7 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
-    if (ptr) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+    if (likely(ptr)) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     // MAP_MEM_READ(32, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     // MAP_MEM_READ(32, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -280,7 +283,7 @@ uint64_t ee_bus_read64(void* udata, uint32_t addr) {
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
-    if (ptr) return *((uint64_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+    if (likely(ptr)) return *((uint64_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     // MAP_MEM_READ(64, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     // MAP_MEM_READ(64, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -298,7 +301,7 @@ uint64_t ee_bus_read64(void* udata, uint32_t addr) {
     MAP_MEM_READ(64, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(64, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
-    printf("bus: Unhandled 64-bit read from physical address 0x%08x\n", addr); // exit(1);
+    fprintf(stderr, "bus: Unhandled 64-bit read from physical address 0x%08x\n", addr); // exit(1);
 
     return 0;
 }
@@ -308,7 +311,7 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
-    if (ptr) return *((uint128_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
+    if (likely(ptr)) return *((uint128_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
     // MAP_MEM_READ(128, 0x00000000, 0x01FFFFFF, ram, ee_ram);
     // MAP_MEM_READ(128, 0x20000000, 0x21FFFFFF, ram, ee_ram);
@@ -323,7 +326,7 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     MAP_MEM_READ(128, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(128, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
-    printf("bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); // exit(1);
+    fprintf(stderr, "bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); // exit(1);
 
     // *(int*)0 = 0;
 
@@ -335,7 +338,7 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
 
     void* ptr = bus->fastmem_w_table[addr >> 13];
 
-    if (ptr) {
+    if (likely(ptr)) {
         *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
 
         return;
@@ -363,7 +366,7 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
 
     void* ptr = bus->fastmem_w_table[addr >> 13];
 
-    if (ptr) {
+    if (likely(ptr)) {
         *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
 
         return;
@@ -395,7 +398,7 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
 
     void* ptr = bus->fastmem_w_table[addr >> 13];
 
-    if (ptr) {
+    if (likely(ptr)) {
         *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
 
         return;
@@ -452,7 +455,7 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
         case 0x1f80141c: return;
     }
 
-    printf("bus: Unhandled 32-bit write to physical address 0x%08x (0x%08lx)\n", addr, data); if ((addr & 0xff000000) == 0x02000000) exit(1);
+    fprintf(stderr, "bus: Unhandled 32-bit write to physical address 0x%08x (0x%08lx)\n", addr, data); if ((addr & 0xff000000) == 0x02000000) exit(1);
 }
 
 void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
@@ -460,7 +463,7 @@ void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
 
     void* ptr = bus->fastmem_w_table[addr >> 13];
 
-    if (ptr) {
+    if (likely(ptr)) {
         *((uint64_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
 
         return;
@@ -489,7 +492,7 @@ void ee_bus_write128(void* udata, uint32_t addr, uint128_t data) {
 
     void* ptr = bus->fastmem_w_table[addr >> 13];
 
-    if (ptr) {
+    if (likely(ptr)) {
         *((uint128_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
 
         return;

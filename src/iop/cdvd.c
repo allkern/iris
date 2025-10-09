@@ -228,7 +228,7 @@ static inline void cdvd_s_mechacon_cmd(struct ps2_cdvd* cdvd) {
         } break;
 
         default: {
-            printf("cdvd: Unknown S subcommand %02x\n", cdvd->s_params[0]);
+            fprintf(stderr, "cdvd: Unknown S subcommand %02x\n", cdvd->s_params[0]);
 
             exit(1);
         } break;
@@ -258,7 +258,7 @@ static inline void cdvd_s_read_rtc(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[7] = itob_table[tm.tm_year - 100];
 }
 static inline void cdvd_s_write_rtc(struct ps2_cdvd* cdvd) {
-    printf("cdvd: write_rtc\n");
+    fprintf(stderr, "cdvd: write_rtc\n");
 
     exit(1);
 }
@@ -271,7 +271,7 @@ static inline void cdvd_s_read_nvram(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[1] = cdvd->nvram[(addr << 1) + 1];
 }
 static inline void cdvd_s_write_nvram(struct ps2_cdvd* cdvd) {
-    printf("cdvd: write_nvram\n");
+    fprintf(stderr, "cdvd: write_nvram\n");
 
     exit(1);
 }
@@ -538,7 +538,7 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x90: printf("cdvd: mg_write_hdr_start\n"); cdvd_s_mg_write_hdr_start(cdvd); break;
 
         default: {
-            printf("cdvd: Unknown S command %02xh\n", cmd);
+            fprintf(stderr, "cdvd: Unknown S command %02xh\n", cmd);
 
             exit(1);
         } break;
@@ -754,7 +754,7 @@ static inline void cdvd_n_nop(struct ps2_cdvd* cdvd) {
     ps2_iop_intc_irq(cdvd->intc, IOP_INTC_CDVD);
 }
 static inline void cdvd_n_nop_sync(struct ps2_cdvd* cdvd) {
-    printf("cdvd: nop_sync\n"); exit(1);
+    fprintf(stderr, "cdvd: nop_sync\n"); exit(1);
 }
 static inline void cdvd_n_standby(struct ps2_cdvd* cdvd) {
     printf("cdvd: standby\n");
@@ -1070,7 +1070,7 @@ static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x09: cdvd_n_get_toc(cdvd); break;
         case 0x0c: cdvd_n_read_key(cdvd); break;
         default: {
-            printf("cdvd: Unhandled N command %02x\n", cdvd->n_cmd);
+            fprintf(stderr, "cdvd: Unhandled N command %02x\n", cdvd->n_cmd);
 
             exit(1);
         } break;
@@ -1084,7 +1084,7 @@ static inline void cdvd_handle_n_param(struct ps2_cdvd* cdvd, uint8_t param) {
     cdvd->n_params[cdvd->n_param_index++] = param;
 
     if (cdvd->n_param_index > 15) {
-        printf("cdvd: N parameter FIFO overflow\n");
+        fprintf(stderr, "cdvd: N parameter FIFO overflow\n");
 
         exit(1);
     }

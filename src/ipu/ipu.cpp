@@ -1405,7 +1405,7 @@ extern "C" void ps2_ipu_write64(struct ps2_ipu* ipu, uint32_t addr, uint64_t dat
         case 0x10002030: return; // (W) ipu->ipu->write_top(); return;
     }
 
-    printf("ipu: Unhandled IPU write address %08x\n", addr);
+    fprintf(stderr, "ipu: Unhandled IPU write address %08x\n", addr);
 
     exit(1);
 }
@@ -1416,7 +1416,7 @@ extern "C" uint128_t ps2_ipu_read128(struct ps2_ipu* ipu, uint32_t addr) {
         case 0x10007010: break; // (W) ipu->ipu->write_FIFO();
     }
 
-    printf("ipu: Unhandled IPU read address %08x\n", addr);
+    fprintf(stderr, "ipu: Unhandled IPU read address %08x\n", addr);
 
     return { 0 }; // Return a zeroed quad if the address is unhandled
 }

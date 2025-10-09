@@ -85,7 +85,7 @@ void ps2_sif0_write(struct ps2_sif* sif, uint128_t data) {
         uint128_t* ptr = realloc(sif->sif0.data, sizeof(uint128_t) * sif->sif0.capacity);
         
         if (!ptr) {
-            printf("sif: Couldn't resize SIF0 buffer\n");
+            fprintf(stderr, "sif: Couldn't resize SIF0 buffer\n");
 
             exit(1);
         }
@@ -131,7 +131,7 @@ void ps2_sif1_write(struct ps2_sif* sif, uint128_t data) {
         uint128_t* ptr = realloc(sif->sif1.data, sizeof(uint128_t) * sif->sif1.capacity);
         
         if (!ptr) {
-            printf("sif: Couldn't resize SIF1 buffer\n");
+            fprintf(stderr, "sif: Couldn't resize SIF1 buffer\n");
 
             exit(1);
         }

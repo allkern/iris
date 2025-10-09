@@ -190,7 +190,7 @@ void ps2_ee_timers_tick(struct ps2_ee_timers* timers) {
             int ovf = t->counter == 0x10000;
 
             if (!(cmp || ovf)) {
-                printf("timer %d: error counter=%04x compare=%04x cycles_until-check=%d\n", i, t->counter, t->compare, t->cycles_until_check);
+                fprintf(stderr, "timer %d: error counter=%04x compare=%04x cycles_until-check=%d\n", i, t->counter, t->compare, t->cycles_until_check);
 
                 exit(1);
             }
@@ -243,7 +243,7 @@ void ps2_ee_timers_write16(struct ps2_ee_timers* timers, uint32_t addr, uint64_t
         case 0x30: timers->timer[t].hold = data & 0xffff; return;
     }
 
-    printf("ee: timer %d write %08x to %02x\n", t, data, addr & 0xff);
+    fprintf(stderr, "ee: timer %d write %08x to %02x\n", t, data, addr & 0xff);
 
     exit(1);
 }
@@ -260,7 +260,7 @@ uint64_t ps2_ee_timers_read16(struct ps2_ee_timers* timers, uint32_t addr) {
         case 0x30: return timers->timer[t].hold & 0xffff;
     }
 
-    printf("ee: timers read16 %08x\n", addr);
+    fprintf(stderr, "ee: timers read16 %08x\n", addr);
 
     exit(1);
 

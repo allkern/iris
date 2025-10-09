@@ -412,7 +412,7 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
         case 0x12001080: gs->siglblid = data; return;
     }
 
-    printf("gs: Unhandled write to %08x with data %016lx\n", addr, data);
+    fprintf(stderr, "gs: Unhandled write to %08x with data %016lx\n", addr, data);
 
     exit(1);
 }
@@ -794,7 +794,7 @@ uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg) {
         case 0x61: return gs->finish;
         case 0x62: return gs->label;
         default: {
-            printf("gs: Invalid privileged register %02x read\n", reg);
+            fprintf(stderr, "gs: Invalid privileged register %02x read\n", reg);
 
             exit(1);
         }

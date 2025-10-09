@@ -383,13 +383,7 @@ static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
 
     uint32_t phys;
 
-    if (ee_translate_virt(ee, addr, &phys)) {
-        printf("ee: TLB mapping error\n");
-
-        exit(1);
-
-        return { 0 };
-    }
+    ee_translate_virt(ee, addr, &phys);
 
     return ee->bus.read128(ee->bus.udata, phys);
 }
@@ -408,11 +402,7 @@ static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t da
 
     uint32_t phys;
 
-    if (ee_translate_virt(ee, addr, &phys)) {
-        printf("ee: TLB mapping error\n");
-
-        exit(1);
-    }
+    ee_translate_virt(ee, addr, &phys);
 
     ee->bus.write128(ee->bus.udata, phys, data);
 }
@@ -2969,11 +2959,11 @@ static inline void ee_i_teqi(struct ee_state* ee, const ee_instruction& i) {
 static inline void ee_i_tge(struct ee_state* ee, const ee_instruction& i) {
     if (EE_RS >= EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { printf("ee: tgei unimplemented\n"); exit(1); }
-static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { printf("ee: tgeiu unimplemented\n"); exit(1); }
-static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { printf("ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) { printf("ee: tlbp unimplemented\n"); return; exit(1); }
-static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) { printf("ee: tlbr unimplemented\n"); return; exit(1); }
+static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgei unimplemented\n"); exit(1); }
+static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeiu unimplemented\n"); exit(1); }
+static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeu unimplemented\n"); exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbp unimplemented\n"); return; exit(1); }
+static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbr unimplemented\n"); return; exit(1); }
 static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     printf("ee: Index=%d EntryLo0=%08x EntryLo1=%08x EntryHi=%08x PageMask=%08x\n",
         ee->index,
@@ -2984,15 +2974,15 @@ static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     );
     /* To-do: MMU */
 }
-static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) { return; printf("ee: tlbwr unimplemented\n"); exit(1); }
-static inline void ee_i_tlt(struct ee_state* ee, const ee_instruction& i) { printf("ee: tlt unimplemented\n"); exit(1); }
-static inline void ee_i_tlti(struct ee_state* ee, const ee_instruction& i) { printf("ee: tlti unimplemented\n"); exit(1); }
-static inline void ee_i_tltiu(struct ee_state* ee, const ee_instruction& i) { printf("ee: tltiu unimplemented\n"); exit(1); }
-static inline void ee_i_tltu(struct ee_state* ee, const ee_instruction& i) { printf("ee: tltu unimplemented\n"); exit(1); }
+static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) { return; fprintf(stderr, "ee: tlbwr unimplemented\n"); exit(1); }
+static inline void ee_i_tlt(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlt unimplemented\n"); exit(1); }
+static inline void ee_i_tlti(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlti unimplemented\n"); exit(1); }
+static inline void ee_i_tltiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tltiu unimplemented\n"); exit(1); }
+static inline void ee_i_tltu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tltu unimplemented\n"); exit(1); }
 static inline void ee_i_tne(struct ee_state* ee, const ee_instruction& i) {
     if (EE_RS != EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_tnei(struct ee_state* ee, const ee_instruction& i) { printf("ee: tnei unimplemented\n"); exit(1); }
+static inline void ee_i_tnei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tnei unimplemented\n"); exit(1); }
 static inline void ee_i_vabs(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(abs) }
 static inline void ee_i_vadd(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(add) }
 static inline void ee_i_vadda(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(adda) }
@@ -3124,7 +3114,7 @@ static inline void ee_i_xori(struct ee_state* ee, const ee_instruction& i) {
     EE_RT = EE_RS ^ EE_D_I16;
 }
 static inline void ee_i_invalid(struct ee_state* ee, const ee_instruction& i) {
-    printf("ee: Invalid instruction %08x at PC=%08x\n", i.opcode, ee->pc);
+    fprintf(stderr, "ee: Invalid instruction %08x at PC=%08x\n", i.opcode, ee->pc);
 
     exit(1);
 }
@@ -3184,6 +3174,8 @@ void ee_reset(struct ee_state* ee) {
     ee->block_cache.clear();
 
     fesetround(FE_TOWARDZERO);
+
+    ps2_ram_reset(ee->scratchpad);
 
     ee->fcr = 0x01000001;
 }
