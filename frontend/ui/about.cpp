@@ -37,8 +37,8 @@ void show_about_window(iris::instance* iris) {
             Text("");
             TextWrapped(
                 "Special thanks to: The emudev Discord server, Ziemas, "
-                "ncarrillo, cakehonolulu, Layle, and the PCSX2 team "
-                "for their kind support."
+                "refraction, ncarrillo, cakehonolulu, Layle, and "
+                "the PCSX2 team for their kind support."
             );
             Text("");
             Text("Please file any issues to "); SameLine(0.0, 0.0);
