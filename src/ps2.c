@@ -189,6 +189,8 @@ void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
 }
 
 void ps2_reset(struct ps2_state* ps2) {
+    sched_reset(ps2->sched);
+
     ee_reset(ps2->ee);
     iop_reset(ps2->iop);
     vu_init(ps2->vu0, 0, ps2->gif, ps2->vif0, ps2->vu1);
@@ -212,7 +214,8 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_gs_reset(ps2->gs);
     ps2_ram_reset(ps2->ee_ram);
     ps2_ram_reset(ps2->iop_ram);
-    ps2_ram_reset(ee_get_spr(ps2->ee));
+
+    ps2_ipu_reset(ps2->ipu);
 }
 
 // To-do: This will soon be useless, need to integrate
