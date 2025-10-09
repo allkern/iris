@@ -28,36 +28,36 @@ static inline int ioman_allocate_file(FILE* file) {
     return -1;
 }
 
-static inline int ioman_get_drive(std::string path) {
+static inline int ioman_get_device(std::string path) {
     auto p = path.find_first_of(':');
 
     if (p == std::string::npos)
         return 0;
 
-    std::string drive = path.substr(0, p);
+    std::string device = path.substr(0, p);
 
-    if (drive == "rom0") {
-        return IOMAN_DRIVE_ROM0;
-    } else if (drive == "rom1") {
-        return IOMAN_DRIVE_ROM1;
-    } else if (drive == "cdrom0") {
-        return IOMAN_DRIVE_CDROM0;
-    } else if (drive == "host") {
-        return IOMAN_DRIVE_HOST;
-    } else if (drive == "host0") {
-        return IOMAN_DRIVE_HOST;        
-    } else if (drive == "mc0") {
-        return IOMAN_DRIVE_MC0;
-    } else if (drive == "mc1") {
-        return IOMAN_DRIVE_MC1;
-    } else if (drive == "mass") {
-        return IOMAN_DRIVE_MASS;
+    if (device == "rom0") {
+        return IOMAN_DEV_ROM0;
+    } else if (device == "rom1") {
+        return IOMAN_DEV_ROM1;
+    } else if (device == "cdrom0") {
+        return IOMAN_DEV_CDROM0;
+    } else if (device == "host") {
+        return IOMAN_DEV_HOST;
+    } else if (device == "host0") {
+        return IOMAN_DEV_HOST;        
+    } else if (device == "mc0") {
+        return IOMAN_DEV_MC0;
+    } else if (device == "mc1") {
+        return IOMAN_DEV_MC1;
+    } else if (device == "mass") {
+        return IOMAN_DEV_MASS;
     }
 
-    // To-do: There's probably some ATA/DEV9/HDD drive
+    // To-do: There's probably some ATA/DEV9/HDD device
     // but I have no idea how it's used
 
-    return IOMAN_DRIVE_UNKNOWN;
+    return IOMAN_DEV_UNKNOWN;
 }
 
 extern "C" int ioman_open(struct iop_state* iop) {
@@ -74,10 +74,10 @@ extern "C" int ioman_open(struct iop_state* iop) {
 
     std::string path(buf);
 
-    int drive = ioman_get_drive(path);
+    int device = ioman_get_device(path);
 
     // Only hook host files
-    if (drive != IOMAN_DRIVE_HOST && drive != IOMAN_DRIVE_MASS)
+    if (device != IOMAN_DEV_HOST && device != IOMAN_DEV_MASS)
         return 0;
 
     // printf("path=%s\n", path.c_str());

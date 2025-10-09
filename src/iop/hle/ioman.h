@@ -4,7 +4,7 @@
 #include "../iop.h"
 #include "../iop_export.h"
 
-#define IOMAN_DRIVE_UNKNOWN 0
+#define IOMAN_DEV_UNKNOWN 0
 
 // BIOS ROM
 // DVD ROM
@@ -13,13 +13,13 @@
 // Memory card slot 1
 // Memory card slot 2
 // USB drive
-#define IOMAN_DRIVE_ROM0      1
-#define IOMAN_DRIVE_ROM1      2
-#define IOMAN_DRIVE_CDROM0    3
-#define IOMAN_DRIVE_HOST      4
-#define IOMAN_DRIVE_MC0       5
-#define IOMAN_DRIVE_MC1       6
-#define IOMAN_DRIVE_MASS      7
+#define IOMAN_DEV_ROM0      1
+#define IOMAN_DEV_ROM1      2
+#define IOMAN_DEV_CDROM0    3
+#define IOMAN_DEV_HOST      4
+#define IOMAN_DEV_MC0       5
+#define IOMAN_DEV_MC1       6
+#define IOMAN_DEV_MASS      7
 
 #ifdef __cplusplus
 extern "C" {
