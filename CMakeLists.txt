@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.16...4.0)
+cmake_minimum_required(VERSION 3.1...4.0)
 
 # We need to build release always, unoptimized builds
 # won't cut it.
@@ -192,7 +192,7 @@ target_include_directories(iris PRIVATE
 
 target_link_libraries(iris PUBLIC
   tomlplusplus::tomlplusplus
-  SDL3::SDL3
+  SDL3::SDL3-static
 )
 
 set_target_properties(iris PROPERTIES 
