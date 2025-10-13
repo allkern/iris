@@ -101,6 +101,23 @@ static inline void vu_update_status(struct vu_state* vu) {
     vu->status |= (vu->status & 0x3f) << 6;
 }
 
+static inline void vu_set_q(struct vu_state* vu, float value, int delay) {
+    if (vu->q_delay == 0) {
+        vu->prev_q.f = vu->q.f;
+    }
+
+    vu->q.f = value;
+    vu->q_delay = delay;
+}
+
+static inline struct vu_reg32 vu_get_q(struct vu_state* vu) {
+    if (!vu->q_delay) {
+        return vu->q;
+    }
+
+    return vu->prev_q;
+}
+
 static inline float vu_update_flags(struct vu_state* vu, float value, int index) {
     uint32_t value_u = *(uint32_t*)&value;
 
@@ -334,6 +351,85 @@ static inline uint16_t vu_get_branch_register(struct vu_state* vu, int reg) {
     return vu->vi[reg];
 }
 
+void vu_xgkick(struct vu_state* vu) {
+    uint16_t addr = vu->xgkick_addr;
+
+    int eop = 1;
+
+    do {
+        uint128_t tag = vu_mem_read(vu, addr++);
+
+        if ((tag.u64[0] | tag.u64[1]) == 0)
+            break;
+
+        // addr &= 0x3ff;
+
+        // if (addr == 0) break;
+
+        // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
+
+        ps2_gif_write128(vu->gif, 0, tag);
+
+        eop = (tag.u64[0] & 0x8000) != 0;
+
+        int nloop = tag.u64[0] & 0x7fff;
+        int flg = (tag.u64[0] >> 58) & 3;
+        int nregs = (tag.u64[0] >> 60) & 0xf;
+
+        if (!nloop)
+            continue;
+
+        // if (!nregs)
+        //     nregs = 16;
+
+        int qwc = 0;
+
+        switch (flg) {
+            case 0: {
+                qwc = nregs * nloop;
+            } break;
+            case 1: {
+                qwc = (nregs * nloop + 1) / 2; // Round up for odd cases
+            } break;
+            case 2:
+            case 3: {
+                qwc = nloop;
+            } break;
+        }
+
+        if (qwc >= 0x400) {
+            fprintf(stderr, "vu: Weird xgkick tag nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
+                nloop,
+                nregs,
+                eop,
+                flg,
+                qwc
+            ); 
+
+            exit(1);
+        }
+
+        for (int i = 0; i < qwc; i++) {
+            // printf("vu: %08x: %08x %08x %08x %08x\n",
+            //     addr,
+            //     vu->vu_mem[addr].u32[3],
+            //     vu->vu_mem[addr].u32[2],
+            //     vu->vu_mem[addr].u32[1],
+            //     vu->vu_mem[addr].u32[0]
+            // );
+
+            ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
+
+            addr &= 0x3ff;
+
+            // if (addr == 0) {
+            //     eop = 1;
+            //     break;
+            // }
+        }
+    } while (!eop);
+}
+
 // Upper pipeline
 void vu_i_abs(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
@@ -379,10 +475,11 @@ void vu_i_addi(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_addq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_vf_i(vu, s, i) + vu->q.f;
+            float result = vu_vf_i(vu, s, i) + q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
@@ -501,10 +598,11 @@ void vu_i_addai(struct vu_state* vu, const struct vu_instruction* ins) {
 }
 void vu_i_addaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_vf_i(vu, s, i) + vu->q.f;
+            float result = vu_vf_i(vu, s, i) + q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
@@ -622,10 +720,11 @@ void vu_i_subi(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_subq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_vf_i(vu, s, i) - vu->q.f;
+            float result = vu_vf_i(vu, s, i) - q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
@@ -744,10 +843,11 @@ void vu_i_subai(struct vu_state* vu, const struct vu_instruction* ins) {
 }
 void vu_i_subaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_vf_i(vu, s, i) - vu->q.f;
+            float result = vu_vf_i(vu, s, i) - q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
@@ -865,10 +965,11 @@ void vu_i_muli(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_mulq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_vf_i(vu, s, i) * vu->q.f;
+            float result = vu_vf_i(vu, s, i) * q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
@@ -987,10 +1088,11 @@ void vu_i_mulai(struct vu_state* vu, const struct vu_instruction* ins) {
 }
 void vu_i_mulaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_vf_i(vu, s, i) * vu->q.f;
+            float result = vu_vf_i(vu, s, i) * q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
@@ -1108,10 +1210,11 @@ void vu_i_maddi(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_maddq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu->q.f;
+            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
@@ -1230,10 +1333,11 @@ void vu_i_maddai(struct vu_state* vu, const struct vu_instruction* ins) {
 }
 void vu_i_maddaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu->acc.f[i] + vu_vf_i(vu, s, i) * vu->q.f;
+            float result = vu->acc.f[i] + vu_vf_i(vu, s, i) * q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
@@ -1351,11 +1455,12 @@ void vu_i_msubi(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_msubq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu_acc_i(vu, i) - (vu_vf_i(vu, s, i) * vu->q.f);
-            
+            float result = vu_acc_i(vu, i) - (vu_vf_i(vu, s, i) * q);
+
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
@@ -1473,10 +1578,11 @@ void vu_i_msubai(struct vu_state* vu, const struct vu_instruction* ins) {
 }
 void vu_i_msubaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
+    float q = vu_get_q(vu).f;
 
     for (int i = 0; i < 4; i++) {
         if (VU_UD_DI(i)) {
-            float result = vu->acc.f[i] - vu_vf_i(vu, s, i) * vu->q.f;
+            float result = vu->acc.f[i] - vu_vf_i(vu, s, i) * q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
@@ -1777,7 +1883,7 @@ void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    struct vu_reg tmp;
+    struct vu_reg128 tmp;
 
     tmp.f[0] = vu->acc.x - vu_vf_y(vu, s) * vu_vf_z(vu, t);
     tmp.f[1] = vu->acc.y - vu_vf_z(vu, s) * vu_vf_x(vu, t);
@@ -1910,8 +2016,12 @@ void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins) {
     int tf = VU_LD_TF;
     int sf = VU_LD_SF;
 
-    vu->q.f = vu_vf_i(vu, s, sf) / vu_vf_i(vu, t, tf);
-    vu->q.f = vu_cvtf(vu->q.u32);
+    struct vu_reg32 q;
+
+    q.f = vu_vf_i(vu, s, sf) / vu_vf_i(vu, t, tf);
+    q.f = vu_cvtf(q.u32);
+
+    vu_set_q(vu, q.f, 7);
 }
 void vu_i_eatan(struct vu_state* vu, const struct vu_instruction* ins) {
     float x = vu_vf_i(vu, VU_LD_S, VU_LD_SF);
@@ -2338,8 +2448,12 @@ void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins) {
     }
 }
 void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->q.f = vu_vf_i(vu, VU_LD_S, VU_LD_SF) / sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
-    vu->q.f = vu_cvtf(vu->q.u32);
+    struct vu_reg32 q;
+
+    q.f = vu_vf_i(vu, VU_LD_S, VU_LD_SF) / sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
+    q.f = vu_cvtf(q.u32);
+
+    vu_set_q(vu, q.f, 13);
 }
 void vu_i_rxor(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[VU_LD_S].u32[VU_LD_SF]) & 0x007FFFFF);
@@ -2385,18 +2499,27 @@ void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, t, vu->vi[t] + 1);
 }
 void vu_i_sqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->q.f = sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
-    vu->q.f = vu_cvtf(vu->q.u32);
+    struct vu_reg32 q;
+
+    q.f = sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
+    q.f = vu_cvtf(q.u32);
+
+    vu_set_q(vu, q.f, 7);
 }
 void vu_i_waitp(struct vu_state* vu, const struct vu_instruction* ins) {
     // No operation
 }
 void vu_i_waitq(struct vu_state* vu, const struct vu_instruction* ins) {
-    // No operation
     vu->q_delay = 0;
 }
 
 void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
+    // vu_xgkick(vu);
+    // vu->xgkick_pending = 3;
+    // vu->xgkick_addr = VU_IS;
+
+    // return;
+
     uint16_t addr = VU_IS;
 
     int eop = 1;
@@ -2635,6 +2758,14 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     vu->upper.src[0].field = vu->upper.dst.field; \
     vu->upper.func = f;
 
+#define VU_DEC_UD_D_DST_S_SRC_Q_SRC(f) \
+    vu->upper.dst.reg = vu->upper.ud_d; \
+    vu->upper.dst.field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[1].reg = VU_REG_Q; \
+    vu->upper.func = f;
+
 #define VU_DEC_UD_T_DST_S_SRC(f) \
     vu->upper.dst.reg = vu->upper.ud_t; \
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
@@ -2652,6 +2783,12 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
 #define VU_DEC_UD_S_SRC(f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.func = f;
+
+#define VU_DEC_UD_S_SRC_Q_SRC(f) \
+    vu->upper.src[0].reg = vu->upper.ud_s; \
+    vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.src[1].reg = VU_REG_Q; \
     vu->upper.func = f;
 
 #define VU_DEC_OPMULA() \
@@ -2710,6 +2847,14 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     vu->lower.src[1].field = vu->lower.ld_tf; \
     vu->lower.func = f;
 
+#define VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(f) \
+    vu->lower.dst.reg = VU_REG_Q; \
+    vu->lower.src[0].reg = vu->lower.ld_s; \
+    vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.src[1].reg = vu->lower.ld_t; \
+    vu->lower.src[1].field = vu->lower.ld_tf; \
+    vu->lower.func = f;
+
 #define VU_DEC_LD_T_VIDST_S_SF_SRC(f) \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
@@ -2723,6 +2868,12 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     vu->lower.func = f;
 
 #define VU_DEC_LD_T_TF_SRC(f) \
+    vu->lower.src[0].reg = vu->lower.ld_t; \
+    vu->lower.src[0].field = vu->lower.ld_tf; \
+    vu->lower.func = f;
+
+#define VU_DEC_LD_Q_DST_T_TF_SRC(f) \
+    vu->lower.dst.reg = VU_REG_Q; \
     vu->lower.src[0].reg = vu->lower.ld_t; \
     vu->lower.src[0].field = vu->lower.ld_tf; \
     vu->lower.func = f;
@@ -2855,16 +3006,16 @@ void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
             case 0x19: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_mulay); return;
             case 0x1A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_mulaz); return;
             case 0x1B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_mulaw); return;
-            case 0x1C: VU_DEC_UD_S_SRC(vu_i_mulaq); return;
+            case 0x1C: VU_DEC_UD_S_SRC_Q_SRC(vu_i_mulaq); return;
             case 0x1D: VU_DEC_UD_T_DST_S_SRC(vu_i_abs); return;
             case 0x1E: VU_DEC_UD_S_SRC(vu_i_mulai); return;
             case 0x1F: VU_DEC_CLIP(); return;
-            case 0x20: VU_DEC_UD_S_SRC(vu_i_addaq); return;
-            case 0x21: VU_DEC_UD_S_SRC(vu_i_maddaq); return;
+            case 0x20: VU_DEC_UD_S_SRC_Q_SRC(vu_i_addaq); return;
+            case 0x21: VU_DEC_UD_S_SRC_Q_SRC(vu_i_maddaq); return;
             case 0x22: VU_DEC_UD_S_SRC(vu_i_addai); return;
             case 0x23: VU_DEC_UD_S_SRC(vu_i_maddai); return;
-            case 0x24: VU_DEC_UD_S_SRC(vu_i_subaq); return;
-            case 0x25: VU_DEC_UD_S_SRC(vu_i_msubaq); return;
+            case 0x24: VU_DEC_UD_S_SRC_Q_SRC(vu_i_subaq); return;
+            case 0x25: VU_DEC_UD_S_SRC_Q_SRC(vu_i_msubaq); return;
             case 0x26: VU_DEC_UD_S_SRC(vu_i_subai); return;
             case 0x27: VU_DEC_UD_S_SRC(vu_i_msubai); return;
             case 0x28: VU_DEC_UD_S_SRC_T_SRC(vu_i_adda); return;
@@ -2906,16 +3057,16 @@ void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
             case 0x19: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_muly); return;
             case 0x1A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_mulz); return;
             case 0x1B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_mulw); return;
-            case 0x1C: VU_DEC_UD_D_DST_S_SRC(vu_i_mulq); return;
+            case 0x1C: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_mulq); return;
             case 0x1D: VU_DEC_UD_D_DST_S_SRC(vu_i_maxi); return;
             case 0x1E: VU_DEC_UD_D_DST_S_SRC(vu_i_muli); return;
             case 0x1F: VU_DEC_UD_D_DST_S_SRC(vu_i_minii); return;
-            case 0x20: VU_DEC_UD_D_DST_S_SRC(vu_i_addq); return;
-            case 0x21: VU_DEC_UD_D_DST_S_SRC(vu_i_maddq); return;
+            case 0x20: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_addq); return;
+            case 0x21: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_maddq); return;
             case 0x22: VU_DEC_UD_D_DST_S_SRC(vu_i_addi); return;
             case 0x23: VU_DEC_UD_D_DST_S_SRC(vu_i_maddi); return;
-            case 0x24: VU_DEC_UD_D_DST_S_SRC(vu_i_subq); return;
-            case 0x25: VU_DEC_UD_D_DST_S_SRC(vu_i_msubq); return;
+            case 0x24: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_subq); return;
+            case 0x25: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_msubq); return;
             case 0x26: VU_DEC_UD_D_DST_S_SRC(vu_i_subi); return;
             case 0x27: VU_DEC_UD_D_DST_S_SRC(vu_i_msubi); return;
             case 0x28: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_add); return;
@@ -2998,9 +3149,9 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
                     case 0x35: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(vu_i_sqi); return;
                     case 0x36: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(vu_i_lqd); return;
                     case 0x37: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(vu_i_sqd); return;
-                    case 0x38: VU_DEC_LD_S_SF_SRC_T_TF_SRC(vu_i_div); return;
-                    case 0x39: VU_DEC_LD_T_TF_SRC(vu_i_sqrt); return;
-                    case 0x3A: VU_DEC_LD_S_SF_SRC_T_TF_SRC(vu_i_rsqrt); return;
+                    case 0x38: VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(vu_i_div); return;
+                    case 0x39: VU_DEC_LD_Q_DST_T_TF_SRC(vu_i_sqrt); return;
+                    case 0x3A: VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(vu_i_rsqrt); return;
                     case 0x3B: VU_DEC_LD_NONE(vu_i_waitq); return;
                     case 0x3C: VU_DEC_LD_T_VIDST_S_SF_SRC(vu_i_mtir); return;
                     case 0x3D: VU_DEC_LD_T_DST_S_VISRC(vu_i_mfir); return;
@@ -3040,6 +3191,43 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
             }
         } break;
     }
+}
+
+static inline void vu_advance_fmac_pipeline(struct vu_state* vu) {
+    vu->upper_pipeline[3] = vu->upper_pipeline[2];
+    vu->upper_pipeline[2] = vu->upper_pipeline[1];
+    vu->upper_pipeline[1] = vu->upper_pipeline[0];
+    vu->upper_pipeline[0].dst.reg = vu->upper.dst.reg;
+    vu->upper_pipeline[0].dst.field = vu->upper.dst.field;
+    vu->upper_pipeline[0].src[0].reg = vu->upper.src[0].reg;
+    vu->upper_pipeline[0].src[0].field = vu->upper.src[0].field;
+    vu->upper_pipeline[0].src[1].reg = vu->upper.src[1].reg;
+    vu->upper_pipeline[0].src[1].field = vu->upper.src[1].field;
+    vu->lower_pipeline[3] = vu->lower_pipeline[2];
+    vu->lower_pipeline[2] = vu->lower_pipeline[1];
+    vu->lower_pipeline[1] = vu->lower_pipeline[0];
+    vu->lower_pipeline[0].dst.reg = vu->lower.dst.reg;
+    vu->lower_pipeline[0].dst.field = vu->lower.dst.field;
+    vu->lower_pipeline[0].src[0].reg = vu->lower.src[0].reg;
+    vu->lower_pipeline[0].src[0].field = vu->lower.src[0].field;
+    vu->lower_pipeline[0].src[1].reg = vu->lower.src[1].reg;
+    vu->lower_pipeline[0].src[1].field = vu->lower.src[1].field;
+}
+
+static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
+    int stall = 0;
+
+    for (int i = 0; i < 4; i++) {
+        for (int j = 0; j < 2; j++) {
+            if (vu->upper.src[j].reg && (vu->upper.src[j].reg == vu->upper_pipeline[i].dst.reg)) {
+                if (vu->upper.src[j].field & vu->upper_pipeline[i].dst.field) {
+                    return 3 - i;
+                }
+            }
+        }
+    }
+
+    return stall;
 }
 
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
@@ -3086,7 +3274,8 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         vu->d_bit = (upper & 0x10000000) != 0;
         vu->t_bit = (upper & 0x08000000) != 0;
 
-        vu->q_delay--;
+        if (vu->q_delay)
+            vu->q_delay--;
 
         vu_update_status(vu);
         
@@ -3122,15 +3311,24 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
             int hazard0 = vu->upper.dst.reg == vu->lower.src[0].reg;
             int hazard1 = vu->upper.dst.reg == vu->lower.src[1].reg;
             int hazard2 = vu->upper.dst.reg == vu->lower.dst.reg;
+            int hazard3 = (vu->lower.dst.reg == VU_REG_Q) && vu->q_delay;
+            int waitq = vu->lower.func == vu_i_waitq;
+
+            // If the lower instruction writes to Q and Q is not ready yet,
+            // the VU stalls the pipeline until it is ready.
+            if (hazard3) vu->q_delay = 0;
 
             if (!vu->upper.dst.reg) {
                 vu->upper.func(vu, &vu->upper);
                 vu->lower.func(vu, &vu->lower);
-            } else if (hazard0 || hazard1) {
+            } else if (hazard0 || hazard1 || waitq) {
                 // Upper instruction writes to a register that the lower
                 // instruction reads from. In this case the lower instruction
                 // gets the previous value of the register, executing the lower
                 // instruction first does the trick.
+
+                // We also execute WAITQ first, since it will stall the pipeline
+                // if the upper instruction reads Q
 
                 vu->lower.func(vu, &vu->lower);
                 vu->upper.func(vu, &vu->upper);
@@ -3142,7 +3340,7 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
 
                 vu->upper.func(vu, &vu->upper);
 
-                struct vu_reg tmp = vu->vf[vu->upper.dst.reg];
+                struct vu_reg128 tmp = vu->vf[vu->upper.dst.reg];
 
                 vu->lower.func(vu, &vu->lower);
 
@@ -3152,6 +3350,14 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
                 vu->lower.func(vu, &vu->lower);
             }
         }
+
+        // if (vu_get_fmac_stall_cycles(vu)) {
+        //     printf("vu%d: FMAC hazard detected at %04x, stalling %d cycles (q_delay=%d)\n", vu->id, tpc, vu_get_fmac_stall_cycles(vu), vu->q_delay);
+
+        //     exit(1);
+        // }
+
+        // vu_advance_fmac_pipeline(vu);
 
         vu->mac_pipeline[3] = vu->mac_pipeline[2];
         vu->mac_pipeline[2] = vu->mac_pipeline[1];
@@ -3169,6 +3375,14 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
             if (!vu->vi_backup_cycles) {
                 vu->vi_backup_reg = 0;
                 vu->vi_backup_value = 0;
+            }
+        }
+
+        if (vu->xgkick_pending) {
+            vu->xgkick_pending--;
+
+            if (!vu->xgkick_pending) {
+                vu_xgkick(vu);
             }
         }
     }
@@ -3292,6 +3506,8 @@ void ps2_vu_reset(struct vu_state* vu) {
     vu->m_bit = 0;
     vu->d_bit = 0;
     vu->t_bit = 0;
+    vu->q_delay = 0;
+    vu->prev_q.u32 = 0;
 
     vu->vf[0].w = 1.0;
 }

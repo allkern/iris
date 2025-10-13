@@ -11,7 +11,7 @@ extern "C" {
 #include "vif.h"
 #include "gif.h"
 
-struct vu_reg {
+struct vu_reg128 {
     union {
         uint128_t u128;
         uint64_t u64[2];
@@ -28,6 +28,23 @@ struct vu_reg {
         };
     };
 };
+
+struct vu_reg32 {
+    union {
+        uint32_t u32;
+        int32_t s32;
+        float f;
+        uint16_t u16[2];
+        int16_t s16[2];
+        uint8_t u8[4];
+        int8_t s8[4];
+    };
+};
+
+#define VU_REG_R 32
+#define VU_REG_I 33
+#define VU_REG_Q 34
+#define VU_REG_P 35
 
 struct vu_instruction {
     uint32_t ld_di[4];
@@ -58,11 +75,18 @@ struct vu_instruction {
 };
 
 struct vu_state {
-    struct vu_reg vf[32];
+    struct vu_reg128 vf[32];
     uint16_t vi[16];
-    struct vu_reg acc;
+    struct vu_reg128 acc;
 
     struct vu_instruction upper, lower;
+
+    struct {
+        struct {
+            uint8_t reg;
+            uint8_t field;
+        } dst, src[2];
+    } upper_pipeline[4], lower_pipeline[4];
 
 	int vi_backup_cycles;
     int vi_backup_reg;
@@ -86,18 +110,12 @@ struct vu_state {
     uint32_t mac_pipeline[4];
     uint32_t clip_pipeline[4];
 
-    union {
-        uint32_t u32;
-        uint32_t s32;
-        float f;
-    } prev_q;
-
     int q_delay;
+    struct vu_reg32 prev_q;
+    struct vu_reg32 p;
 
-    union {
-        uint32_t u32;
-        float f;
-    } p;
+    int xgkick_pending;
+    int xgkick_addr;
 
     union {
         uint32_t cr[16];
@@ -107,21 +125,9 @@ struct vu_state {
             uint32_t mac;
             uint32_t clip;
             uint32_t rsv0;
-            union {
-                uint32_t u32;
-                uint32_t s32;
-                float f;
-            } r;
-            union {
-                uint32_t u32;
-                uint32_t s32;
-                float f;
-            } i;
-            union {
-                uint32_t u32;
-                uint32_t s32;
-                float f;
-            } q;
+            struct vu_reg32 r;
+            struct vu_reg32 i;
+            struct vu_reg32 q;
             uint32_t rsv1;
             uint32_t rsv2;
             uint32_t rsv3;

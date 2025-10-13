@@ -99,7 +99,7 @@ uint32_t vu0i_prev[32];
 uint32_t vu0i_frames[32];
 uint32_t ee_fpu_prev[32];
 uint32_t ee_fpu_frames[32];
-struct vu_reg vu0f_prev[32];
+struct vu_reg128 vu0f_prev[32];
 uint128_t vu0f_frames[32];
 uint32_t iop_prev[32];
 uint32_t iop_frames[32];
