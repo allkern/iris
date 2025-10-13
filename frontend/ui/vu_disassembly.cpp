@@ -317,7 +317,25 @@ void show_vu_disassembler(iris::instance* iris) {
                             pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
                         }
                     }
+                } SameLine();
+
+                BeginDisabled(!stop_at_e_bit);
+                if (Button(ICON_MS_ARROW_RIGHT_ALT " Next program")) {
+                    int prev = addr;
+
+                    addr = 0;
+
+                    for (int i = prev; i < 512; i++) {
+                        uint32_t upper = iris->ps2->vu0->micro_mem[i] >> 32;
+
+                        if (upper & 0x40000000) {
+                            addr = i + 2;
+
+                            break;
+                        }
+                    }
                 }
+                EndDisabled();
 
                 SeparatorText("Disassembly");
 
@@ -360,7 +378,25 @@ void show_vu_disassembler(iris::instance* iris) {
                             pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
                         }
                     }
+                } SameLine();
+
+                BeginDisabled(!stop_at_e_bit);
+                if (Button(ICON_MS_ARROW_RIGHT_ALT " Next program")) {
+                    int prev = addr;
+
+                    addr = 0;
+
+                    for (int i = prev; i < 2048; i++) {
+                        uint32_t upper = iris->ps2->vu1->micro_mem[i] >> 32;
+
+                        if (upper & 0x40000000) {
+                            addr = i + 2;
+
+                            break;
+                        }
+                    }
                 }
+                EndDisabled();
 
                 SeparatorText("Disassembly");
 
