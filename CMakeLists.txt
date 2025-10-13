@@ -16,10 +16,8 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
 endif()
 
 # Statically link SDL3 for Linux targets
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-    set(SDL_STATIC ON)
-    set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-endif()
+set(SDL_STATIC ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 # if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
 #     add_custom_command(
