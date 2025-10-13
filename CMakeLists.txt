@@ -16,9 +16,8 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
 endif()
 
 # Statically link SDL3 for Linux targets
-set(SDL_STATIC ON)
-
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    set(SDL_STATIC ON)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
@@ -198,10 +197,17 @@ target_include_directories(iris PRIVATE
     res
 )
 
-target_link_libraries(iris PUBLIC
-  tomlplusplus::tomlplusplus
-  SDL3::SDL3-static
-)
+if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    target_link_libraries(iris PUBLIC
+        tomlplusplus::tomlplusplus
+        SDL3::SDL3-static
+    )
+else()
+    target_link_libraries(iris PUBLIC
+        tomlplusplus::tomlplusplus
+        SDL3::SDL3
+    )
+endif()
 
 set_target_properties(iris PROPERTIES 
     # On macOS, make a proper .app bundle instead of a bare executable
