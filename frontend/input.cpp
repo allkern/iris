@@ -4,7 +4,7 @@
 #include "iris.hpp"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
-#include "stb_image_write.h"
+#include "stb/stb_image_write.h"
 
 namespace iris {
 
@@ -80,7 +80,7 @@ bool save_screenshot(iris::instance* iris, std::string path = "") {
 
     int w, h, bpp;
 
-    void* ptr = renderer_get_buffer_data(iris->ctx, &w, &h, &bpp);
+    void* ptr = nullptr; // renderer_get_buffer_data(iris->ctx, &w, &h, &bpp);
 
     if (!ptr) {
         push_info(iris, "Couldn't save screenshot");

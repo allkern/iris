@@ -120,9 +120,9 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
     spu2->c[0].endx = 0x00ffffff;
     spu2->c[1].endx = 0x00ffffff;
 
-    output = fopen("adma.wav", "wb");
+    // output = fopen("adma.wav", "wb");
 
-    fseek(output, sizeof(struct wav_hdr) + sizeof(struct wav_chunk), SEEK_SET);
+    // fseek(output, sizeof(struct wav_hdr) + sizeof(struct wav_chunk), SEEK_SET);
 }
 
 void spu2_irq(struct ps2_spu2* spu2, int c) {
@@ -667,45 +667,45 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
 }
 
 void ps2_spu2_destroy(struct ps2_spu2* spu2) {
-    uint32_t size = ftell(output) - 8;
+    // uint32_t size = ftell(output) - 8;
 
-    struct wav_hdr hdr;
+    // struct wav_hdr hdr;
 
-    hdr.riff[0] = 'R';
-    hdr.riff[1] = 'I';
-    hdr.riff[2] = 'F';
-    hdr.riff[3] = 'F';
-    hdr.size = size;
-    hdr.wave[0] = 'W';
-    hdr.wave[1] = 'A';
-    hdr.wave[2] = 'V';
-    hdr.wave[3] = 'E';
-    hdr.fmt[0] = 'f';
-    hdr.fmt[1] = 'm';
-    hdr.fmt[2] = 't';
-    hdr.fmt[3] = ' ';
-    hdr.block_size = 16;
-    hdr.audio_format = 1;
-    hdr.num_channels = 2;
-    hdr.samplerate = 48000;
-    hdr.bits_per_sample = 16;
-    hdr.bytes_per_block = 4;
-    hdr.bytes_per_sec = 48000 * 4;
+    // hdr.riff[0] = 'R';
+    // hdr.riff[1] = 'I';
+    // hdr.riff[2] = 'F';
+    // hdr.riff[3] = 'F';
+    // hdr.size = size;
+    // hdr.wave[0] = 'W';
+    // hdr.wave[1] = 'A';
+    // hdr.wave[2] = 'V';
+    // hdr.wave[3] = 'E';
+    // hdr.fmt[0] = 'f';
+    // hdr.fmt[1] = 'm';
+    // hdr.fmt[2] = 't';
+    // hdr.fmt[3] = ' ';
+    // hdr.block_size = 16;
+    // hdr.audio_format = 1;
+    // hdr.num_channels = 2;
+    // hdr.samplerate = 48000;
+    // hdr.bits_per_sample = 16;
+    // hdr.bytes_per_block = 4;
+    // hdr.bytes_per_sec = 48000 * 4;
 
-    struct wav_chunk chunk;
+    // struct wav_chunk chunk;
 
-    chunk.id[0] = 'd';
-    chunk.id[1] = 'a';
-    chunk.id[2] = 't';
-    chunk.id[3] = 'a';
-    chunk.size = chunk_size;
+    // chunk.id[0] = 'd';
+    // chunk.id[1] = 'a';
+    // chunk.id[2] = 't';
+    // chunk.id[3] = 'a';
+    // chunk.size = chunk_size;
 
-    fseek(output, 0, SEEK_SET);
-    fwrite(&hdr, sizeof(struct wav_hdr), 1, output);
-    fwrite(&chunk, sizeof(struct wav_chunk), 1, output);
+    // fseek(output, 0, SEEK_SET);
+    // fwrite(&hdr, sizeof(struct wav_hdr), 1, output);
+    // fwrite(&chunk, sizeof(struct wav_chunk), 1, output);
 
-    fflush(output);
-    fclose(output);
+    // fflush(output);
+    // fclose(output);
 
     free(spu2);
 }
@@ -1087,17 +1087,17 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
     struct spu2_sample c0_adma = spu2_get_adma_sample(spu2, 0);
     struct spu2_sample c1_adma = spu2_get_adma_sample(spu2, 1);
 
-    if (output) {
-        if (spu2->c[0].adma_playing) {
-            chunk_size += sizeof(int16_t) * 2;
-            fwrite(&c0_adma.s16, sizeof(int16_t), 2, output);
-        }
+    // if (output) {
+    //     if (spu2->c[0].adma_playing) {
+    //         chunk_size += sizeof(int16_t) * 2;
+    //         fwrite(&c0_adma.s16, sizeof(int16_t), 2, output);
+    //     }
 
-        if (spu2->c[1].adma_playing) {
-            chunk_size += sizeof(int16_t) * 2;
-            fwrite(&c1_adma.s16, sizeof(int16_t), 2, output);
-        }
-    }
+    //     if (spu2->c[1].adma_playing) {
+    //         chunk_size += sizeof(int16_t) * 2;
+    //         fwrite(&c1_adma.s16, sizeof(int16_t), 2, output);
+    //     }
+    // }
 
     // s.s16[0] += c0_adma.s16[0];
     // s.s16[1] += c0_adma.s16[1];

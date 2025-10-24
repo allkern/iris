@@ -289,14 +289,6 @@ static inline int fpu_min(int32_t a, int32_t b) {
     return (a < 0 && b < 0) ? max(a, b) : min(a, b);
 }
 
-static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t virt) {
-    struct ee_vtlb_entry* entry = NULL;
-
-    for (int i = 0; i < 48; i++) {
-        ee->vtlb[i].mask;
-    }
-}
-
 static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t* phys) {
     int seg = ee_get_segment(virt);
 
@@ -1295,11 +1287,11 @@ static inline void ee_i_pabsh(struct ee_state* ee, const ee_instruction& i) {
     }
 #else
     __m128i b = _mm_set1_epi16((unsigned short)0x8000);
-    __m128i a = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((const __m128i*)t);
     __m128i f = _mm_cmpeq_epi16(a, b);
     __m128i r = _mm_add_epi16(_mm_abs_epi16(a), f);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pabsw(struct ee_state* ee, const ee_instruction& i) {
@@ -1312,11 +1304,11 @@ static inline void ee_i_pabsw(struct ee_state* ee, const ee_instruction& i) {
     }
 #else
     __m128i b = _mm_set1_epi32(0x80000000);
-    __m128i a = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((const __m128i*)t);
     __m128i f = _mm_cmpeq_epi32(a, b);
     __m128i r = _mm_add_epi32(_mm_abs_epi32(a), f);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddb(struct ee_state* ee, const ee_instruction& i) {
@@ -1329,11 +1321,11 @@ static inline void ee_i_paddb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = s->u8[i] + t->u8[i];
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_add_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddh(struct ee_state* ee, const ee_instruction& i) {
@@ -1346,11 +1338,11 @@ static inline void ee_i_paddh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = s->u16[i] + t->u16[i];
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_add_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddsb(struct ee_state* ee, const ee_instruction& i) {
@@ -1364,11 +1356,11 @@ static inline void ee_i_paddsb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = (r > 0x7f) ? 0x7f : ((r < -128) ? 0x80 : r);
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddsh(struct ee_state* ee, const ee_instruction& i) {
@@ -1382,11 +1374,11 @@ static inline void ee_i_paddsh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = (r > 0x7fff) ? 0x7fff : ((r < -0x8000) ? 0x8000 : r);
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddsw(struct ee_state* ee, const ee_instruction& i) {
@@ -1400,11 +1392,11 @@ static inline void ee_i_paddsw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = (r >= 0x7fffffff) ? 0x7fffffff : ((r < (int32_t)0x80000000) ? 0x80000000 : r);
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddub(struct ee_state* ee, const ee_instruction& i) {
@@ -1418,11 +1410,11 @@ static inline void ee_i_paddub(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = (r > 0xff) ? 0xff : r;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epu8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_padduh(struct ee_state* ee, const ee_instruction& i) {
@@ -1436,11 +1428,11 @@ static inline void ee_i_padduh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = (r > 0xffff) ? 0xffff : r;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epu16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_padduw(struct ee_state* ee, const ee_instruction& i) {
@@ -1454,11 +1446,11 @@ static inline void ee_i_padduw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = (r > 0xffffffff) ? 0xffffffff : r;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epu32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddw(struct ee_state* ee, const ee_instruction& i) {
@@ -1471,11 +1463,11 @@ static inline void ee_i_paddw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = s->u32[i] + t->u32[i];
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_add_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_padsbh(struct ee_state* ee, const ee_instruction& i) {
@@ -1493,13 +1485,13 @@ static inline void ee_i_padsbh(struct ee_state* ee, const ee_instruction& i) {
     d->u16[6] = s->u16[6] + t->u16[6];
     d->u16[7] = s->u16[7] + t->u16[7];
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i x = _mm_sub_epi16(a, b);
     __m128i y = _mm_add_epi16(a, b);
     __m128i r = _mm_blend_epi16(x, y, 15);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pand(struct ee_state* ee, const ee_instruction& i) {
@@ -1511,11 +1503,11 @@ static inline void ee_i_pand(struct ee_state* ee, const ee_instruction& i) {
     d->u64[0] = s->u64[0] & t->u64[0];
     d->u64[1] = s->u64[1] & t->u64[1];
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_and_si128(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pceqb(struct ee_state* ee, const ee_instruction& i) {
@@ -1528,11 +1520,11 @@ static inline void ee_i_pceqb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = (s->u8[i] == t->u8[i]) ? 0xff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpeq_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pceqh(struct ee_state* ee, const ee_instruction& i) {
@@ -1545,11 +1537,11 @@ static inline void ee_i_pceqh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = (s->u16[i] == t->u16[i]) ? 0xffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpeq_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pceqw(struct ee_state* ee, const ee_instruction& i) {
@@ -1562,11 +1554,11 @@ static inline void ee_i_pceqw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = (s->u32[i] == t->u32[i]) ? 0xffffffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpeq_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcgtb(struct ee_state* ee, const ee_instruction& i) {
@@ -1579,11 +1571,11 @@ static inline void ee_i_pcgtb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = ((int8_t)s->u8[i] > (int8_t)t->u8[i]) ? 0xff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpgt_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcgth(struct ee_state* ee, const ee_instruction& i) {
@@ -1596,11 +1588,11 @@ static inline void ee_i_pcgth(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = ((int16_t)s->u16[i] > (int16_t)t->u16[i]) ? 0xffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpgt_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcgtw(struct ee_state* ee, const ee_instruction& i) {
@@ -1613,11 +1605,11 @@ static inline void ee_i_pcgtw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = ((int32_t)s->u32[i] > (int32_t)t->u32[i]) ? 0xffffffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpgt_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcpyh(struct ee_state* ee, const ee_instruction& i) {
@@ -1641,11 +1633,11 @@ static inline void ee_i_pcpyh(struct ee_state* ee, const ee_instruction& i) {
         0x0908090809080908
     };
 
-    __m128i m = _mm_load_si128((void*)mask);
-    __m128i a = _mm_load_si128((void*)t);
+    __m128i m = _mm_load_si128((__m128i*)mask);
+    __m128i a = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_shuffle_epi8(a, m);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcpyld(struct ee_state* ee, const ee_instruction& i) {
@@ -1657,11 +1649,11 @@ static inline void ee_i_pcpyld(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u64[0] = rt.u64[0];
     ee->r[d].u64[1] = rs.u64[0];
 #else
-    __m128i a = _mm_load_si128((void*)&ee->r[EE_D_RT]);
-    __m128i b = _mm_load_si128((void*)&ee->r[EE_D_RS]);
+    __m128i a = _mm_load_si128((__m128i*)&ee->r[EE_D_RT]);
+    __m128i b = _mm_load_si128((__m128i*)&ee->r[EE_D_RS]);
     __m128i r = _mm_unpacklo_epi64(a, b);
 
-    _mm_store_si128((void*)&ee->r[EE_D_RD], r);
+    _mm_store_si128((__m128i*)&ee->r[EE_D_RD], r);
 #endif
 }
 static inline void ee_i_pcpyud(struct ee_state* ee, const ee_instruction& i) {

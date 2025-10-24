@@ -14,3 +14,6 @@
 [submodule "implot"]
 	path = implot
 	url = https://github.com/epezent/implot
+[submodule "parallel-gs"]
+	path = parallel-gs
+	url = https://github.com/Arntzen-software/parallel-gs

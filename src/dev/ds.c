@@ -279,11 +279,11 @@ void ds_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
     exit(1);
 }
 
-struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
+struct ds_state* ds_attach(struct ps2_sio2* sio2, int port) {
     struct ds_state* ds = malloc(sizeof(struct ds_state));
     struct sio2_device dev;
 
-    dev.detach = ds_sio2_detach;
+    dev.detach = ds_detach;
     dev.handle_command = ds_handle_command;
     dev.udata = ds;
 
@@ -326,7 +326,7 @@ void ds_analog_change(struct ds_state* ds, int axis, uint8_t value) {
     }
 }
 
-void ds_sio2_detach(void* udata) {
+void ds_detach(void* udata) {
     struct ds_state* ds = (struct ds_state*)udata;
 
     free(ds);

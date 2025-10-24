@@ -1,8 +1,14 @@
-#include "../platform.hpp"
+#include "iris.hpp"
 
-namespace iris {
+// Note: This is a stub implementation for platforms that
+//       do not need special initialization
 
-void init_platform(iris::instance* iris) {}
-void destroy_platform(iris::instance* iris) {}
+namespace iris::platform {
+
+bool init(iris::instance* iris) {
+    return true;
+}
+
+void destroy(iris::instance* iris) {}
 
 }

@@ -7,15 +7,8 @@
 
 // Iris includes
 #include "iris.hpp"
-#include "elf.hpp"
 #include "config.hpp"
-#include "platform.hpp"
 #include "ee/ee_def.hpp"
-
-// ImGui includes
-#include "imgui.h"
-#include "imgui_impl_sdl3.h"
-#include "imgui_impl_sdlgpu3.h"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
@@ -58,39 +51,22 @@ int open_file(iris::instance* iris, std::string file) {
         if (!boot_file)
             return 2;
 
-        load_elf_symbols_from_disc(iris);
+        elf::load_symbols_from_disc(iris);
 
-        // Temporarily disable window updates
-        struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
-
-        ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
         ps2_boot_file(iris->ps2, boot_file);
-
-        // Re-enable window updates
-        ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
 
         iris->loaded = file;
 
         return 0;
     }
 
-    load_elf_symbols_from_file(iris, file);
+    elf::load_symbols_from_file(iris, file);
 
     // Note: We need the trailing whitespaces here because of IOMAN HLE
     // Load executable
     file = "host:  " + file;
 
-    // Temporarily disable window updates
-    struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
-
-    ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
-
     ps2_boot_file(iris->ps2, file.c_str());
-
-    // ps2_elf_load(iris->ps2, file);
-
-    // Re-enable window updates
-    ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
 
     iris->loaded = file;
 
@@ -139,12 +115,46 @@ void sleep_limiter(iris::instance* iris) {
     }
 }
 
+static inline void do_cycle(iris::instance* iris) {
+    ps2_cycle(iris->ps2);
+
+    if (iris->step_out) {
+        // jr $ra
+        if (iris->ps2->ee->opcode == 0x03e00008) {
+            iris->step_out = false;
+            iris->pause = true;
+
+            // Consume the delay slot
+            ps2_cycle(iris->ps2);
+        }
+    }
+
+    if (iris->step_over) {
+        if (iris->ps2->ee->pc == iris->step_over_addr) {
+            iris->step_over = false;
+            iris->pause = true;
+        }
+    }
+
+    for (const iris::breakpoint& b : iris->breakpoints) {
+        if (b.cpu == iris::BKPT_CPU_EE) {
+            if (iris->ps2->ee->pc == b.addr) {
+                iris->pause = true;
+            }
+        } else {
+            if (iris->ps2->iop->pc == b.addr) {
+                iris->pause = true;
+            }
+        }
+    }
+}
+
 void update_window(iris::instance* iris) {
     using namespace ImGui;
 
     // Limit FPS to 60 only when paused
-    if (iris->limit_fps && iris->pause)
-        sleep_limiter(iris);
+    // if (iris->limit_fps && iris->pause)
+    //     sleep_limiter(iris);
 
     update_title(iris);
     update_time(iris);
@@ -152,7 +162,38 @@ void update_window(iris::instance* iris) {
     ImGuiIO& io = ImGui::GetIO();
 
     // Start the Dear ImGui frame
-    ImGui_ImplSDLGPU3_NewFrame();
+    if (SDL_GetWindowFlags(iris->window) & SDL_WINDOW_MINIMIZED) {
+        SDL_Delay(1);
+
+        return;
+    }
+
+    // Resize swapchain?
+    int width, height;
+
+    SDL_GetWindowSize(iris->window, &width, &height);
+
+    if (width > 0 && height > 0 && (iris->swapchain_rebuild || iris->main_window_data.Width != width || iris->main_window_data.Height != height)) {
+        ImGui_ImplVulkan_SetMinImageCount(iris->min_image_count);
+    
+        ImGui_ImplVulkanH_CreateOrResizeWindow(
+            iris->instance,
+            iris->physical_device,
+            iris->device,
+            &iris->main_window_data,
+            iris->queue_family,
+            nullptr,
+            width, height,
+            iris->min_image_count,
+            0
+        );
+
+        iris->main_window_data.FrameIndex = 0;
+        iris->swapchain_rebuild = false;
+    }
+
+    // Start the Dear ImGui frame
+    ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
@@ -160,15 +201,11 @@ void update_window(iris::instance* iris) {
         show_main_menubar(iris);
     }
 
-    int w, h;
-
-    SDL_GetWindowSize(iris->window, &w, &h);
-
-    h -= iris->menubar_height;
+    height -= iris->menubar_height;
 
     // To-do: Optionally hide main menubar
     if (iris->show_status_bar)
-        h -= iris->menubar_height;
+        height -= iris->menubar_height;
 
     DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
@@ -273,71 +310,246 @@ void update_window(iris::instance* iris) {
         );
     }
 
+    if (Begin("Output")) {
+        render::render_frame(iris);
+    } End();
+
     handle_animations(iris);
 
     // Rendering
     ImGui::Render();
+
     ImDrawData* draw_data = ImGui::GetDrawData();
-    const bool is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
 
-    SDL_GPUCommandBuffer* command_buffer = SDL_AcquireGPUCommandBuffer(iris->device); // Acquire a GPU command buffer
-    SDL_GPUTexture* swapchain_texture;
+    const bool main_is_minimized = (draw_data->DisplaySize.x <= 0.0f || draw_data->DisplaySize.y <= 0.0f);
 
-    SDL_AcquireGPUSwapchainTexture(command_buffer, iris->window, &swapchain_texture, nullptr, nullptr); // Acquire a swapchain texture
+    iris->main_window_data.ClearValue.color.float32[0] = 0.0f;
+    iris->main_window_data.ClearValue.color.float32[1] = 0.0f;
+    iris->main_window_data.ClearValue.color.float32[2] = 0.0f;
+    iris->main_window_data.ClearValue.color.float32[3] = 1.0f;
 
-    if (swapchain_texture != nullptr && !is_minimized)
-    {
-        // This is mandatory: call ImGui_ImplSDLGPU3_PrepareDrawData() to upload the vertex/index buffer!
-        ImGui_ImplSDLGPU3_PrepareDrawData(draw_data, command_buffer);
-
-        // Same for our renderer
-        renderer_begin_render(iris->ctx, command_buffer);
-
-        // Setup and start a render pass
-        SDL_GPUColorTargetInfo target_info = {};
-        target_info.texture = swapchain_texture;
-        target_info.clear_color = SDL_FColor { 0.11, 0.11, 0.11, 1.0 };
-        target_info.load_op = SDL_GPU_LOADOP_CLEAR;
-        target_info.store_op = SDL_GPU_STOREOP_STORE;
-        target_info.mip_level = 0;
-        target_info.layer_or_depth_plane = 0;
-        target_info.cycle = false;
-        SDL_GPURenderPass* render_pass = SDL_BeginGPURenderPass(command_buffer, &target_info, 1, nullptr);
-
-        renderer_render(iris->ctx, command_buffer, render_pass);
-
-        // Render ImGui
-        ImGui_ImplSDLGPU3_RenderDrawData(draw_data, command_buffer, render_pass);
-
-        SDL_EndGPURenderPass(render_pass);
-
-        renderer_end_render(iris->ctx, command_buffer);
+    if (!main_is_minimized) {
+        if (!imgui::render_frame(iris, draw_data)) {
+            printf("iris: Failed to render ImGui frame\n");
+        }
     }
 
-    // Submit the command buffer
-    SDL_SubmitGPUCommandBuffer(command_buffer);
+    // Update and Render additional Platform Windows
+    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+
+    // Present Main Platform Window
+    if (!main_is_minimized) {
+        if (!imgui::present_frame(iris)) {
+            printf("iris: Failed to present frame\n");
+        }
+    }
 
     iris->frames++;
 }
 
-void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
-    iris::instance* iris = (iris::instance*)userdata;
+iris::instance* create() {
+    return new iris::instance();
+}
 
-    if (!additional_amount)
-        return;
+bool init(iris::instance* iris, int argc, const char* argv[]) {
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD)) {
+        fprintf(stderr, "iris: Failed to init SDL \'%s\'\n", SDL_GetError());
 
-    if (iris->pause)
-        return;
-
-    iris->audio_buf.resize(additional_amount);
-
-    for (int i = 0; i < additional_amount; i++) {
-        iris->audio_buf[i] = ps2_spu2_get_sample(iris->ps2->spu2);
-        iris->audio_buf[i].s16[0] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
-        iris->audio_buf[i].s16[1] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
+        return false;
     }
 
-    SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), additional_amount * sizeof(spu2_sample));
+    // Create and check window
+    iris->main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
+
+    iris->window = SDL_CreateWindow(
+        IRIS_TITLE,
+        iris->window_width, iris->window_height,
+        SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE |
+        SDL_WINDOW_HIGH_PIXEL_DENSITY | SDL_WINDOW_HIDDEN
+    );
+
+    if (!iris->window) {
+        printf("iris: Failed to create SDL window \'%s\'\n", SDL_GetError());
+
+        return false;
+    }
+
+    // Init preferences path
+    if (std::filesystem::exists("portable")) {
+        iris->pref_path = "./";
+    } else {
+        char* pref = SDL_GetPrefPath("Allkern", "Iris");
+
+        iris->pref_path = std::string(pref);
+
+        SDL_free(pref);
+    }
+
+    if (!iris::vulkan::init(iris)) {
+        fprintf(stderr, "iris: Failed to initialize Vulkan\n");
+
+        return false;
+    }
+
+    if (!iris::imgui::init(iris)) {
+        fprintf(stderr, "iris: Failed to initialize ImGui\n");
+
+        return false;
+    }
+
+    if (!iris::platform::init(iris)) {
+        fprintf(stderr, "iris: Failed to initialize platform\n");
+
+        return false;
+    }
+
+    if (!iris::audio::init(iris)) {
+        fprintf(stderr, "iris: Failed to initialize audio\n");
+
+        return false;
+    }
+
+    if (!iris::emu::init(iris)) {
+        fprintf(stderr, "iris: Failed to initialize emulator state\n");
+
+        return false;
+    }
+
+    if (!iris::settings::init(iris, argc, argv)) {
+        fprintf(stderr, "iris: Failed to initialize settings\n");
+
+        return false;
+    }
+
+    if (!iris::render::init(iris)) {
+        fprintf(stderr, "iris: Failed to initialize render state\n");
+
+        return false;
+    }
+
+    SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height);
+    SDL_ShowWindow(iris->window);
+
+    return true;
+}
+
+SDL_AppResult update(iris::instance* iris) {
+    if (iris->pause) {
+        iris->step_out = false;
+        iris->step_over = false;
+
+        if (iris->step) {
+            ps2_cycle(iris->ps2);
+
+            iris->step = false;
+        }
+
+        iris::update_window(iris);
+
+        return SDL_APP_CONTINUE;
+    }
+
+    // Execute until VBlank
+    while (!ps2_gs_is_vblank(iris->ps2->gs)) {
+        do_cycle(iris);
+
+        if (iris->pause) {
+            iris::update_window(iris);
+
+            return SDL_APP_CONTINUE;
+        }
+    }
+
+    // Draw frame
+    iris::update_window(iris);
+    
+    // Execute until vblank is over
+    while (ps2_gs_is_vblank(iris->ps2->gs)) {
+        do_cycle(iris);
+
+        if (iris->pause) {
+            iris::update_window(iris);
+
+            return SDL_APP_CONTINUE;
+        }
+    }
+
+    // float p = ((float)iris->ps2->ee->eenull_counter / (float)(4920115)) * 100.0f;
+
+    // printf("ee: Time spent idling: %ld cycles (%.2f%%) INTC reads: %d CSR reads: %d (%.1f fps)\n", iris->ps2->ee->eenull_counter, p, iris->ps2->ee->intc_reads, iris->ps2->ee->csr_reads, 1.0f / ImGui::GetIO().DeltaTime);
+
+    iris->ps2->ee->eenull_counter = 0;
+    iris->ps2->ee->intc_reads = 0;
+    iris->ps2->ee->csr_reads = 0;
+
+    return SDL_APP_CONTINUE;
+}
+
+SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
+    ImGui_ImplSDL3_ProcessEvent(event);
+
+    switch (event->type) {
+        case SDL_EVENT_QUIT: {
+            return SDL_APP_SUCCESS;
+        } break;
+
+        case SDL_EVENT_KEY_DOWN: {
+            handle_keydown_event(iris, event->key);
+        } break;
+
+        case SDL_EVENT_KEY_UP: {
+            handle_keyup_event(iris, event->key);
+        } break;
+
+        case SDL_EVENT_DROP_BEGIN: {
+            iris->drop_file_active = true;
+            iris->drop_file_alpha = 0.0f;
+            iris->drop_file_alpha_delta = 1.0f / 10.0f;
+            iris->drop_file_alpha_target = 1.0f;
+        } break;
+        
+        case SDL_EVENT_DROP_COMPLETE: {
+            iris->drop_file_active = true;
+            iris->drop_file_alpha = iris->drop_file_alpha_target;
+            iris->drop_file_alpha_delta = -(1.0f / 10.0f);
+            iris->drop_file_alpha_target = 0.0f;
+        } break;
+
+        case SDL_EVENT_DROP_FILE: {
+            if (!event->drop.data)
+                break;
+
+            std::string path(event->drop.data);
+
+            if (open_file(iris, path)) {
+                push_info(iris, "Failed to open file: " + path);
+            } else {
+                add_recent(iris, path);
+            }
+
+            // Maybe not needed anymore?
+            // SDL_free(event->drop.data);
+        } break;
+    }
+
+    return SDL_APP_CONTINUE;
+}
+
+void destroy(iris::instance* iris) {
+    iris::render::destroy(iris);
+    iris::settings::close(iris);
+    iris::imgui::cleanup(iris);
+    iris::vulkan::cleanup(iris);
+    iris::platform::destroy(iris);
+    iris::emu::destroy(iris);
+
+    SDL_DestroyWindow(iris->window);
+    SDL_Quit();
+
+    delete iris;
 }
 
 }

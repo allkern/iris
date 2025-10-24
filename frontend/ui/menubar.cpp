@@ -222,12 +222,12 @@ void show_main_menubar(iris::instance* iris) {
                         if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
                             iris->renderer_backend = i;
 
-                            renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
-                            renderer_set_scale(iris->ctx, iris->scale);
-                            renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
-                            renderer_set_bilinear(iris->ctx, iris->bilinear);
-                            renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
-                            renderer_set_size(iris->ctx, 0, 0);
+                            // renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
+                            // renderer_set_scale(iris->ctx, iris->scale);
+                            // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+                            // renderer_set_bilinear(iris->ctx, iris->bilinear);
+                            // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+                            // renderer_set_size(iris->ctx, 0, 0);
                         }
                     }
 
@@ -241,7 +241,7 @@ void show_main_menubar(iris::instance* iris) {
                         if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
                             iris->scale = (float)i * 0.5f;
 
-                            renderer_set_scale(iris->ctx, iris->scale);
+                            // renderer_set_scale(iris->ctx, iris->scale);
                         }
                     }
 
@@ -253,7 +253,7 @@ void show_main_menubar(iris::instance* iris) {
                         if (Selectable(aspect_mode_names[i], iris->aspect_mode == i)) {
                             iris->aspect_mode = i;
 
-                            renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+                            // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
                         }
                     }
 
@@ -264,13 +264,13 @@ void show_main_menubar(iris::instance* iris) {
                     if (Selectable("Nearest", !iris->bilinear)) {
                         iris->bilinear = false;
 
-                        renderer_set_bilinear(iris->ctx, false);
+                        // renderer_set_bilinear(iris->ctx, false);
                     }
 
                     if (Selectable("Bilinear", iris->bilinear)) {
                         iris->bilinear = true;
 
-                        renderer_set_bilinear(iris->ctx, true);
+                        // renderer_set_bilinear(iris->ctx, true);
                     }
 
                     ImGui::EndMenu();
@@ -309,7 +309,7 @@ void show_main_menubar(iris::instance* iris) {
                 }
 
                 if (MenuItem(ICON_MS_SPEED_2X " Integer scaling", nullptr, &iris->integer_scaling)) {
-                    renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+                    // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
 
                 if (MenuItem(ICON_MS_FULLSCREEN " Fullscreen", "F11", &iris->fullscreen)) {

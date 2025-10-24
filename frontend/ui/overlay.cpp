@@ -89,14 +89,14 @@ void show_overlay(iris::instance* iris) {
             EndPlot();
         }
 
-        renderer_stats* stats = renderer_get_debug_stats(iris->ctx);
+        renderer_stats* stats; // = renderer_get_debug_stats(iris->ctx);
 
         PushFont(iris->font_black);
         Text("%d fps", (int)std::roundf(1.0 / ImGui::GetIO().DeltaTime));
         PopFont();
-        Text("Primitives: %d", stats->primitives);
-        Text("Texture uploads: %d", stats->texture_uploads);
-        Text("Texture blits: %d", stats->texture_blits);
+        // Text("Primitives: %d", stats->primitives);
+        // Text("Texture uploads: %d", stats->texture_uploads);
+        // Text("Texture blits: %d", stats->texture_blits);
     } End();
 }
 

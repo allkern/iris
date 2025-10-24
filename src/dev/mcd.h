@@ -38,8 +38,8 @@ struct mcd_state {
     FILE* file;
 };
 
-struct mcd_state* mcd_sio2_attach(struct ps2_sio2* sio2, int port, const char* path);
-void mcd_sio2_detach(void* udata);
+struct mcd_state* mcd_attach(struct ps2_sio2* sio2, int port, const char* path);
+void mcd_detach(void* udata);
 
 #ifdef __cplusplus
 }

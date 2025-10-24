@@ -141,7 +141,7 @@ void ps1_mcd_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
     ps1_mcd_cmd_invalid(sio2, mcd);
 }
 
-struct ps1_mcd_state* ps1_mcd_sio2_attach(struct ps2_sio2* sio2, int port, const char* path) {
+struct ps1_mcd_state* ps1_mcd_attach(struct ps2_sio2* sio2, int port, const char* path) {
     FILE* file = fopen(path, "r+b");
 
     if (!file)
@@ -161,7 +161,7 @@ struct ps1_mcd_state* ps1_mcd_sio2_attach(struct ps2_sio2* sio2, int port, const
         path
     );
 
-    dev.detach = ps1_mcd_sio2_detach;
+    dev.detach = ps1_mcd_detach;
     dev.handle_command = ps1_mcd_handle_command;
     dev.udata = mcd;
 
@@ -170,7 +170,7 @@ struct ps1_mcd_state* ps1_mcd_sio2_attach(struct ps2_sio2* sio2, int port, const
     return mcd;
 }
 
-void ps1_mcd_sio2_detach(void* udata) {
+void ps1_mcd_detach(void* udata) {
     struct ps1_mcd_state* mcd = (struct ps1_mcd_state*)udata;
 
     // Flush buffer back to file

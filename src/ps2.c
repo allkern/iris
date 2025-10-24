@@ -197,7 +197,6 @@ void ps2_reset(struct ps2_state* ps2) {
     vu_init(ps2->vu1, 1, ps2->gif, ps2->vif1, ps2->vu1);
 
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->ee, ps2->sched, ps2->ee_bus);
-    ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
     ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
@@ -211,6 +210,7 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_cdvd_reset(ps2->cdvd);
 
+    ps2_gif_reset(ps2->gif);
     ps2_gs_reset(ps2->gs);
     ps2_ram_reset(ps2->ee_ram);
     ps2_ram_reset(ps2->iop_ram);

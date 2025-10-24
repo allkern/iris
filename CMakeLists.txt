@@ -1,4 +1,5 @@
-cmake_minimum_required(VERSION 3.1...4.0)
+cmake_minimum_required(VERSION 4.1)
+project(iris LANGUAGES C CXX)
 
 # We need to build release always, unoptimized builds
 # won't cut it.
@@ -11,25 +12,9 @@ set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
 
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
-    target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS)
-endif()
-
 # Statically link SDL3 for Linux targets
 set(SDL_STATIC ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
-# if (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
-#     add_custom_command(
-#         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/main_data.c"
-#         OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/software_thread_data.c"
-#         COMMAND "cl.exe ${CMAKE_CURRENT_BINARY_DIR}/incbin/incbin.c"
-#         COMMAND "./incbin.exe ${CMAKE_CURRENT_BINARY_DIR}/main.cpp -I\"res\" -o \"${CMAKE_CURRENT_BINARY_DIR}/main_data.c\""
-#         COMMAND "./incbin.exe ${CMAKE_CURRENT_BINARY_DIR}/src/gs/renderer/software_thread.cpp -I\"shaders\" -o \"${CMAKE_CURRENT_BINARY_DIR}/software_thread_data.c\""
-#     )
-# endif()
-
-project(iris LANGUAGES C CXX)
 
 find_package(Git QUIET)
 
@@ -58,13 +43,34 @@ message(STATUS "Project Version: ${GIT_VERSION_STRING}")
 #     @ONLY
 # )
 
-add_subdirectory(tomlplusplus)
-
 include(CheckIPOSupported)
 check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
 
 # And this part tells CMake where to find and install the file itself
 add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
+
+target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
+target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
+# target_compile_definitions(iris PUBLIC _DEBUG)
+
+set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
+add_subdirectory(parallel-gs EXCLUDE_FROM_ALL)
+add_subdirectory(SDL EXCLUDE_FROM_ALL)
+add_subdirectory(tomlplusplus)
+
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
+    target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS -mssse3 -msse4.1)
+endif()
+
+if (X11_API)
+	target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_XLIB_KHR)
+endif()
+if (WAYLAND_API)
+	target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
+endif()
+if (WIN32)
+	target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_WIN32_KHR)
+endif()
 
 if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
     if (LTO_SUPPORTED)
@@ -79,110 +85,113 @@ set_property(TARGET iris PROPERTY CXX_STANDARD 20)
 add_definitions("-D_IRIS_VERSION=${GIT_VERSION_STRING}")
 
 target_sources(iris PRIVATE
-  main.cpp
-  frontend/audio.cpp
-  frontend/handlers.cpp
-  frontend/input.cpp
-  frontend/iris.cpp
-  frontend/elf.cpp
-  frontend/notifications.cpp
-  frontend/settings.cpp
-  frontend/platform/stub.cpp
-  frontend/ui/about.cpp
-  frontend/ui/bios_setting.cpp
-  frontend/ui/breakpoints.cpp
-  frontend/ui/control.cpp
-  frontend/ui/dma.cpp
-  frontend/ui/gs.cpp
-  frontend/ui/intc.cpp
-  frontend/ui/logs.cpp
-  frontend/ui/memory.cpp
-  frontend/ui/memory_card_tool.cpp
-  frontend/ui/menubar.cpp
-  frontend/ui/modules.cpp
-  frontend/ui/overlay.cpp
-  frontend/ui/pad.cpp
-  frontend/ui/settings.cpp
-  frontend/ui/spu2.cpp
-  frontend/ui/state.cpp
-  frontend/ui/statusbar.cpp
-  frontend/ui/symbols.cpp
-  frontend/ui/threads.cpp
-  frontend/ui/vu_disassembly.cpp
-  src/ps2.c
-  src/ps2_elf.c
-  src/ps2_iso9660.c
-  src/queue.c
-  src/scheduler.c
-  src/dev/ds.c
-  src/dev/mcd.c
-  src/dev/mtap.c
-  src/dev/ps1_mcd.c
-  src/dev/ps1_mcd.c
-  src/ee/ee_cached.cpp
-  src/ee/bus.c
-  src/ee/dmac.c
-  src/ee/ee_dis.c
-  src/ee/gif.c
-  src/ee/intc.c
-  src/ee/timers.c
-  src/ee/vif.c
-  src/ee/vu.c
-  src/ee/vu_dis.c
-  src/gs/gs.c
-  src/gs/renderer/null.cpp
-  src/gs/renderer/renderer.cpp
-  src/gs/renderer/software.cpp
-  src/gs/renderer/software_thread.cpp
-  src/iop/bus.c
-  src/iop/cdvd.c
-  src/iop/disc.c
-  src/iop/dma.c
-  src/iop/fw.c
-  src/iop/intc.c
-  src/iop/iop.c
-  src/iop/iop_dis.c
-  src/iop/iop_export.c
-  src/iop/rpc.c
-  src/iop/sio2.c
-  src/iop/spu2.c
-  src/iop/timers.c
-  src/iop/usb.c
-  src/iop/disc/bin.c
-  src/iop/disc/cue.c
-  src/iop/disc/iso.c
-  src/iop/hle/ioman.cpp
-  src/iop/hle/loadcore.c
-  src/ipu/chromtable.cpp
-  src/ipu/codedblockpattern.cpp
-  src/ipu/dct_coeff.cpp
-  src/ipu/dct_coeff_table0.cpp
-  src/ipu/dct_coeff_table1.cpp
-  src/ipu/ipu.cpp
-  src/ipu/ipu_fifo.cpp
-  src/ipu/lumtable.cpp
-  src/ipu/mac_addr_inc.cpp
-  src/ipu/mac_b_pic.cpp
-  src/ipu/mac_i_pic.cpp
-  src/ipu/mac_p_pic.cpp
-  src/ipu/motioncode.cpp
-  src/ipu/vlc_table.cpp
-  src/shared/bios.c
-  src/shared/ram.c
-  src/shared/sbus.c
-  src/shared/sif.c
-  imgui/imgui.cpp
-  imgui/imgui_demo.cpp
-  imgui/imgui_draw.cpp
-  imgui/imgui_tables.cpp
-  imgui/imgui_widgets.cpp
-  imgui/backends/imgui_impl_sdl3.cpp
-  imgui/backends/imgui_impl_sdlgpu3.cpp
-  implot/implot_demo.cpp
-  implot/implot_items.cpp
-  implot/implot.cpp)
-
-add_subdirectory(SDL EXCLUDE_FROM_ALL)
+    main.cpp
+    frontend/audio.cpp
+    frontend/handlers.cpp
+    frontend/vulkan.cpp
+    frontend/imgui.cpp
+    frontend/emu.cpp
+    frontend/render.cpp
+    frontend/input.cpp
+    frontend/iris.cpp
+    frontend/elf.cpp
+    frontend/notifications.cpp
+    frontend/settings.cpp
+    frontend/platform/stub.cpp
+    frontend/ui/about.cpp
+    frontend/ui/bios_setting.cpp
+    frontend/ui/breakpoints.cpp
+    frontend/ui/control.cpp
+    frontend/ui/dma.cpp
+    frontend/ui/gs.cpp
+    frontend/ui/intc.cpp
+    frontend/ui/logs.cpp
+    frontend/ui/memory.cpp
+    frontend/ui/memory_card_tool.cpp
+    frontend/ui/menubar.cpp
+    frontend/ui/modules.cpp
+    frontend/ui/overlay.cpp
+    frontend/ui/pad.cpp
+    frontend/ui/settings.cpp
+    frontend/ui/spu2.cpp
+    frontend/ui/state.cpp
+    frontend/ui/statusbar.cpp
+    frontend/ui/symbols.cpp
+    frontend/ui/threads.cpp
+    frontend/ui/vu_disassembly.cpp
+    src/ps2.c
+    src/ps2_elf.c
+    src/ps2_iso9660.c
+    src/queue.c
+    src/scheduler.c
+    src/dev/ds.c
+    src/dev/mcd.c
+    src/dev/mtap.c
+    src/dev/ps1_mcd.c
+    src/dev/ps1_mcd.c
+    src/ee/ee_cached.cpp
+    src/ee/bus.c
+    src/ee/dmac.c
+    src/ee/ee_dis.c
+    src/ee/gif.c
+    src/ee/intc.c
+    src/ee/timers.c
+    src/ee/vif.c
+    src/ee/vu.c
+    src/ee/vu_dis.c
+    src/gs/gs.c
+    src/gs/renderer/null.cpp
+    src/gs/renderer/renderer.cpp
+    src/gs/renderer/hardware.cpp
+#   src/gs/renderer/software.cpp
+#   src/gs/renderer/software_thread.cpp
+    src/iop/bus.c
+    src/iop/cdvd.c
+    src/iop/disc.c
+    src/iop/dma.c
+    src/iop/fw.c
+    src/iop/intc.c
+    src/iop/iop.c
+    src/iop/iop_dis.c
+    src/iop/iop_export.c
+    src/iop/rpc.c
+    src/iop/sio2.c
+    src/iop/spu2.c
+    src/iop/timers.c
+    src/iop/usb.c
+    src/iop/disc/bin.c
+    src/iop/disc/cue.c
+    src/iop/disc/iso.c
+    src/iop/hle/ioman.cpp
+    src/iop/hle/loadcore.c
+    src/ipu/chromtable.cpp
+    src/ipu/codedblockpattern.cpp
+    src/ipu/dct_coeff.cpp
+    src/ipu/dct_coeff_table0.cpp
+    src/ipu/dct_coeff_table1.cpp
+    src/ipu/ipu.cpp
+    src/ipu/ipu_fifo.cpp
+    src/ipu/lumtable.cpp
+    src/ipu/mac_addr_inc.cpp
+    src/ipu/mac_b_pic.cpp
+    src/ipu/mac_i_pic.cpp
+    src/ipu/mac_p_pic.cpp
+    src/ipu/motioncode.cpp
+    src/ipu/vlc_table.cpp
+    src/shared/bios.c
+    src/shared/ram.c
+    src/shared/sbus.c
+    src/shared/sif.c
+    imgui/imgui.cpp
+    imgui/imgui_demo.cpp
+    imgui/imgui_draw.cpp
+    imgui/imgui_tables.cpp
+    imgui/imgui_widgets.cpp
+    imgui/backends/imgui_impl_sdl3.cpp
+    imgui/backends/imgui_impl_vulkan.cpp
+    implot/implot_demo.cpp
+    implot/implot_items.cpp
+    implot/implot.cpp)
 
 target_include_directories(iris PRIVATE
     imgui
@@ -191,6 +200,7 @@ target_include_directories(iris PRIVATE
     SDL/include
     frontend
     incbin
+    parallel-gs
     src
     res
 )
@@ -199,11 +209,13 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     target_link_libraries(iris PUBLIC
         tomlplusplus::tomlplusplus
         SDL3::SDL3-static
+        parallel-gs
     )
 else()
     target_link_libraries(iris PUBLIC
         tomlplusplus::tomlplusplus
         SDL3::SDL3
+        parallel-gs
     )
 endif()
 

@@ -6,14 +6,17 @@
 #include <chrono>
 #include <deque>
 
-#include "imgui.h"
-#include "imgui_impl_sdl2.h"
-#include "imgui_impl_sdlrenderer2.h"
+#include "gs/renderer/renderer.hpp"
 
 #include <SDL3/SDL.h>
+#include <volk.h>
+
+#include "imgui.h"
+#include "imgui_impl_sdl3.h"
+#include "imgui_impl_vulkan.h"
 
 #include "ps2.h"
-#include "gs/renderer/renderer.hpp"
+#include "config.hpp"
 
 namespace iris {
 
@@ -101,19 +104,46 @@ enum {
 
 struct instance {
     SDL_Window* window = nullptr;
-    SDL_GPUDevice* device = nullptr;
     SDL_AudioStream* stream = nullptr;
+
+    // Vulkan state
+    std::vector <VkExtensionProperties> instance_extensions;
+    std::vector <VkLayerProperties> instance_layers;
+    std::vector <VkExtensionProperties> device_extensions;
+    std::vector <VkLayerProperties> device_layers;
+    std::vector <const char*> enabled_instance_extensions;
+    std::vector <const char*> enabled_instance_layers;
+    std::vector <const char*> enabled_device_extensions;
+    std::vector <const char*> enabled_device_layers;
+    VkApplicationInfo app_info = {};
+    VkInstanceCreateInfo instance_create_info = {};
+    VkDeviceCreateInfo device_create_info = {};
+    VkInstance instance = VK_NULL_HANDLE;
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    VkPhysicalDeviceFeatures2 device_features = {};
+    VkDeviceQueueCreateInfo queue_create_info = {};
+    uint32_t queue_family = (uint32_t)-1;
+    VkQueue queue = VK_NULL_HANDLE;
+    VkDevice device = VK_NULL_HANDLE;
+    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+    ImGui_ImplVulkanH_Window main_window_data = {};
+    uint32_t min_image_count = 2;
+    bool swapchain_rebuild = false;
+    VkSurfaceKHR surface = VK_NULL_HANDLE;
+    float main_scale = 1;
+    VkPhysicalDeviceVulkan11Features vulkan_11_features = {};
+    VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
+    VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
+    VkSampler sampler = VK_NULL_HANDLE;
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
 
     struct ps2_state* ps2 = nullptr;
 
     unsigned int window_width = 960;
     unsigned int window_height = 720;
-    unsigned int texture_width;
-    unsigned int texture_height;
-    uint32_t* texture_buf = nullptr;
 
-    unsigned int renderer_backend = RENDERER_SOFTWARE_THREAD;
-    renderer_state* ctx = nullptr;
+    unsigned int renderer_backend = RENDERER_BACKEND_NULL;
+    renderer_state* renderer = nullptr;
 
     uint32_t ps2_memory_card_icon_width = 0;
     uint32_t ps1_memory_card_icon_width = 0;
@@ -123,10 +153,6 @@ struct instance {
     uint32_t ps1_memory_card_icon_height = 0;
     uint32_t pocketstation_icon_height = 0;
     uint32_t iris_icon_height = 0;
-    SDL_GPUTexture* ps2_memory_card_icon_tex = nullptr;
-    SDL_GPUTexture* ps1_memory_card_icon_tex = nullptr;
-    SDL_GPUTexture* pocketstation_icon_tex = nullptr;
-    SDL_GPUTexture* iris_icon_tex = nullptr;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
@@ -191,7 +217,7 @@ struct instance {
     bool show_about_window = false;
 
     bool fullscreen = 0;
-    int aspect_mode = RENDERER_ASPECT_AUTO;
+    int aspect_mode = 0; // RENDERER_ASPECT_AUTO;
     bool bilinear = true;
     bool integer_scaling = false;
     float scale = 1.5f;
@@ -247,12 +273,56 @@ struct instance {
     int screenshot_counter = 0;
 };
 
-int init_audio(iris::instance* iris);
-int init_settings(iris::instance* iris, int argc, const char* argv[]);
-void cli_check_for_help_version(iris::instance* iris, int argc, const char* argv[]);
-void close_settings(iris::instance* iris);
+namespace audio {
+    bool init(iris::instance* iris);
+    void update(void* udata, SDL_AudioStream* stream, int additional_amount, int total_amount);
+}
 
-void update(iris::instance* iris);
+namespace settings {
+    bool init(iris::instance* iris, int argc, const char* argv[]);
+    bool check_for_quick_exit(int argc, const char* argv[]);
+    void close(iris::instance* iris);
+}
+
+namespace imgui {
+    bool init(iris::instance* iris);
+    void set_theme(iris::instance* iris, int theme);
+    bool render_frame(iris::instance* iris, ImDrawData* draw_data);
+    bool present_frame(iris::instance* iris);
+    void cleanup(iris::instance* iris);
+}
+
+namespace vulkan {
+    bool init(iris::instance* iris, bool enable_validation = false);
+    void cleanup(iris::instance* iris);
+}
+
+namespace platform {
+    bool init(iris::instance* iris);
+    void destroy(iris::instance* iris);
+}
+
+namespace elf {
+    bool load_symbols_from_disc(iris::instance* iris);
+    bool load_symbols_from_file(iris::instance* iris, std::string path);
+}
+
+namespace emu {
+    bool init(iris::instance* iris);
+    void destroy(iris::instance* iris);
+}
+
+namespace render {
+    bool init(iris::instance* iris);
+    void destroy(iris::instance* iris);
+    bool render_frame(iris::instance* iris);
+}
+
+iris::instance* create();
+bool init(iris::instance* iris, int argc, const char* argv[]);
+void destroy(iris::instance* iris);
+SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event);
+SDL_AppResult update(iris::instance* iris);
 void update_window(iris::instance* iris);
 
 void show_main_menubar(iris::instance* iris);
@@ -299,7 +369,5 @@ int open_file(iris::instance* iris, std::string file);
 
 bool save_screenshot(iris::instance* iris, std::string path);
 std::string get_default_screenshot_filename(iris::instance* iris);
-
-void audio_update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount);
 
 }

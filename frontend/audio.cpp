@@ -1,91 +1,43 @@
 #include "iris.hpp"
 
-namespace iris {
+namespace iris::audio {
 
-void audio_update(void* ud, uint8_t* buf, int size) {
-    iris::instance* iris = (iris::instance*)ud;
+void update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
+    iris::instance* iris = (iris::instance*)userdata;
 
-    memset(buf, 0, size);
-
-    if (iris->mute || iris->pause)
+    if (iris->pause || iris->mute || !additional_amount)
         return;
 
-    for (int i = 0; i < (size >> 2); i++) {
-        struct spu2_sample s;
+    iris->audio_buf.resize(additional_amount);
 
-        struct spu2_sample c0_adma = ps2_spu2_get_adma_sample(iris->ps2->spu2, 0);
-        struct spu2_sample c1_adma = ps2_spu2_get_adma_sample(iris->ps2->spu2, 1);
-    
-        s.s16[0] = c0_adma.s16[0];
-        s.s16[1] = c0_adma.s16[1];
-        s.s16[0] += c1_adma.s16[0];
-        s.s16[1] += c1_adma.s16[1];
-
-        if (iris->core0_solo >= 0) {
-            for (int i = 0; i < 24; i++) {
-                struct spu2_sample c0 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 0, i);
-
-                bool mute = iris->core0_mute[i] || i != iris->core0_solo;
-
-                s.s16[0] += mute ? 0 : c0.s16[0];
-                s.s16[1] += mute ? 0 : c0.s16[1];
-            }
-        } else {
-            for (int i = 0; i < 24; i++) {
-                struct spu2_sample c0 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 0, i);
-
-                bool mute = iris->core0_mute[i];
-
-                s.s16[0] += mute ? 0 : c0.s16[0];
-                s.s16[1] += mute ? 0 : c0.s16[1];
-            }
-        }
-
-        if (iris->core1_solo >= 0) {
-            for (int i = 0; i < 24; i++) {
-                struct spu2_sample c1 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 1, i);
-
-                bool mute = iris->core1_mute[i] || i != iris->core1_solo;
-
-                s.s16[0] += mute ? 0 : c1.s16[0];
-                s.s16[1] += mute ? 0 : c1.s16[1];
-            }
-        } else {
-            for (int i = 0; i < 24; i++) {
-                struct spu2_sample c1 = ps2_spu2_get_voice_sample(iris->ps2->spu2, 1, i);
-
-                bool mute = iris->core1_mute[i];
-
-                s.s16[0] += mute ? 0 : c1.s16[0];
-                s.s16[1] += mute ? 0 : c1.s16[1];
-            }
-        }
-
-        *(int16_t*)(&buf[(i << 2) + 0]) = s.u16[0];
-        *(int16_t*)(&buf[(i << 2) + 2]) = s.u16[1];
+    for (int i = 0; i < additional_amount; i++) {
+        iris->audio_buf[i] = ps2_spu2_get_sample(iris->ps2->spu2);
+        iris->audio_buf[i].s16[0] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
+        iris->audio_buf[i].s16[1] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
     }
+
+    SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), additional_amount * sizeof(spu2_sample));
 }
 
-int init_audio(iris::instance* iris) {
-    // SDL_AudioDeviceID dev;
-    // SDL_AudioSpec obtained, desired;
+bool init(iris::instance* iris) {
+    SDL_AudioSpec spec;
 
-    // desired.freq     = 48000;
-    // desired.format   = AUDIO_S16SYS;
-    // desired.channels = 2;
-    // desired.samples  = 512;
-    // desired.callback = &audio_update;
-    // desired.userdata = iris;
+    spec.channels = 2;
+    spec.format = SDL_AUDIO_S16;
+    spec.freq = 48000;
 
-    // dev = SDL_OpenAudioDevice(NULL, 0, &desired, &obtained, 0);
+    iris->stream = SDL_OpenAudioDeviceStream(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec, iris::audio::update, iris);
 
-    // if (dev) {
-    //     SDL_PauseAudioDevice(dev, 0);
+    if (!iris->stream) {
+        fprintf(stderr, "audio: Failed to open audio device\n");
 
-    //     return 0;
-    // }
+        return false;
+    }
 
-    return 1;
+    /* SDL_OpenAudioDeviceStream starts the device paused. You have to tell it to start! */
+    SDL_ResumeAudioStreamDevice(iris->stream);
+
+    return true;
 }
 
 }

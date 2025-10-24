@@ -58,17 +58,17 @@ void show_graphics_settings(iris::instance* iris) {
 
     Text("Renderer");
 
-    if (BeginCombo("##renderer", renderer_get_name(iris->ctx), ImGuiComboFlags_HeightSmall)) {
+    if (BeginCombo("##renderer", "Renderer" /* renderer_get_name(iris->ctx) */, ImGuiComboFlags_HeightSmall)) {
         for (int i = 0; i < 3; i++) {
             if (Selectable(settings_renderer_names[i], i == iris->renderer_backend)) {
                 iris->renderer_backend = i;
 
-                renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
-                renderer_set_scale(iris->ctx, iris->scale);
-                renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
-                renderer_set_bilinear(iris->ctx, iris->bilinear);
-                renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
-                renderer_set_size(iris->ctx, 0, 0);
+                // renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
+                // renderer_set_scale(iris->ctx, iris->scale);
+                // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+                // renderer_set_bilinear(iris->ctx, iris->bilinear);
+                // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+                // renderer_set_size(iris->ctx, 0, 0);
             }
         }
 
@@ -82,18 +82,18 @@ void show_graphics_settings(iris::instance* iris) {
             if (Selectable(settings_aspect_mode_names[i], iris->aspect_mode == i)) {
                 iris->aspect_mode = i;
 
-                renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+                // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
             }
         }
 
         EndCombo();
     }
 
-    BeginDisabled(
-        iris->aspect_mode == RENDERER_ASPECT_AUTO ||
-        iris->aspect_mode == RENDERER_ASPECT_STRETCH ||
-        iris->aspect_mode == RENDERER_ASPECT_STRETCH_KEEP
-    );
+    // BeginDisabled(
+    //     iris->aspect_mode == RENDERER_ASPECT_AUTO ||
+    //     iris->aspect_mode == RENDERER_ASPECT_STRETCH ||
+    //     iris->aspect_mode == RENDERER_ASPECT_STRETCH_KEEP
+    // );
 
     Text("Scale");
 
@@ -106,7 +106,7 @@ void show_graphics_settings(iris::instance* iris) {
             if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
                 iris->scale = (float)i * 0.5f;
 
-                renderer_set_scale(iris->ctx, iris->scale);
+                // renderer_set_scale(iris->ctx, iris->scale);
             }
         }
 
@@ -121,13 +121,13 @@ void show_graphics_settings(iris::instance* iris) {
         if (Selectable("Nearest", !iris->bilinear)) {
             iris->bilinear = false;
 
-            renderer_set_bilinear(iris->ctx, false);
+            // renderer_set_bilinear(iris->ctx, false);
         }
 
         if (Selectable("Bilinear", iris->bilinear)) {
             iris->bilinear = true;
 
-            renderer_set_bilinear(iris->ctx, true);
+            // renderer_set_bilinear(iris->ctx, true);
         }
 
         EndCombo();
@@ -283,17 +283,17 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         int icon_width = iris->ps2_memory_card_icon_width;
         int icon_height = iris->ps2_memory_card_icon_height;
-        SDL_GPUTexture* icon_tex = iris->ps2_memory_card_icon_tex;
+        // SDL_GPUTexture* icon_tex = iris->ps2_memory_card_icon_tex;
 
         SetCursorPosX((GetContentRegionAvail().x / 2.0) - (icon_width / 2.0));
 
-        Image(
-            (ImTextureID)(intptr_t)icon_tex,
-            ImVec2(icon_width, icon_height),
-            ImVec2(0, 0), ImVec2(1, 1),
-            col,
-            ImVec4(0.0, 0.0, 0.0, 0.0)
-        );
+        // Image(
+        //     (ImTextureID)(intptr_t)icon_tex,
+        //     ImVec2(icon_width, icon_height),
+        //     ImVec2(0, 0), ImVec2(1, 1),
+        //     col,
+        //     ImVec4(0.0, 0.0, 0.0, 0.0)
+        // );
 
         InvisibleButton("##pad", ImVec2(10, 10));
 

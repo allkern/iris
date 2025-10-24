@@ -16,3 +16,4 @@
 #define STR(m) STR1(m)
 
 #define IRIS_TITLE "Iris (" STR(_IRIS_VERSION) ")"
+#define IRIS_VULKAN_API_VERSION VK_API_VERSION_1_2

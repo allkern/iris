@@ -123,7 +123,7 @@ static inline int disc_fetch_system_cnf(struct disc_state* disc) {
     return 1;
 }
 
-int disc_get_extension(char* path) {
+int disc_get_extension(const char* path) {
     if (!path)
         return DISC_EXT_UNSUPPORTED;
 

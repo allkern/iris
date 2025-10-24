@@ -48,11 +48,11 @@ struct ds_state {
     int lock;
 };
 
-struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port);
+struct ds_state* ds_attach(struct ps2_sio2* sio2, int port);
 void ds_button_press(struct ds_state* ds, uint16_t mask);
 void ds_button_release(struct ds_state* ds, uint16_t mask);
 void ds_analog_change(struct ds_state* ds, int axis, uint8_t value);
-void ds_sio2_detach(void* udata);
+void ds_detach(void* udata);
 
 #ifdef __cplusplus
 }

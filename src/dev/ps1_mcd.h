@@ -22,8 +22,8 @@ struct ps1_mcd_state {
     FILE* file;
 };
 
-struct ps1_mcd_state* ps1_mcd_sio2_attach(struct ps2_sio2* sio2, int port, const char* path);
-void ps1_mcd_sio2_detach(void* udata);
+struct ps1_mcd_state* ps1_mcd_attach(struct ps2_sio2* sio2, int port, const char* path);
+void ps1_mcd_detach(void* udata);
 
 #ifdef __cplusplus
 }

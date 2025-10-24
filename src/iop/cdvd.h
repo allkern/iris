@@ -20,12 +20,17 @@ extern "C" {
     5     Error (1=error occurred)
     6-7   Unknown
 */
-#define CDVD_STATUS_TRAY_OPEN 1
-#define CDVD_STATUS_SPINNING  2
-#define CDVD_STATUS_READING   4
-#define CDVD_STATUS_PAUSED    8
-#define CDVD_STATUS_SEEKING   16
-#define CDVD_STATUS_ERROR     32
+#define CDVD_STATUS_TRAY_OPEN_BIT 1
+#define CDVD_STATUS_SPINNING_BIT  2
+#define CDVD_STATUS_READING_BIT   4
+#define CDVD_STATUS_PAUSED_BIT    8
+#define CDVD_STATUS_SEEKING_BIT   16
+#define CDVD_STATUS_ERROR_BIT     32
+#define CDVD_STATUS_STOPPED       0x00
+#define CDVD_STATUS_SPINNING      0x02
+#define CDVD_STATUS_READING       0x06
+#define CDVD_STATUS_PAUSED        0x0A
+#define CDVD_STATUS_SEEKING       0x12
 
 /*
     0     Error (1=error occurred)
