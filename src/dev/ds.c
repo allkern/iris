@@ -56,14 +56,14 @@ static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) 
     queue_push(sio2->out, ds->buttons >> 8);
 
     if (ds->mode) {
-        queue_push(sio2->out, ds->ax_right_y);
         queue_push(sio2->out, ds->ax_right_x);
-        queue_push(sio2->out, ds->ax_left_y);
+        queue_push(sio2->out, ds->ax_right_y);
         queue_push(sio2->out, ds->ax_left_x);
+        queue_push(sio2->out, ds->ax_left_y);
 
         // Push pressure bytes (only in DualShock 2 mode)
         // Note: Some games (e.g. OutRun 2 SP/2006) won't register inputs
-        //       if the pressure  values are 0, so we push the max value
+        //       if the pressure values are 0, so we push the max value
         //       instead
         if (ds->mode == 2) {
             queue_push(sio2->out, 0xff);
@@ -97,10 +97,10 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
         queue_push(sio2->out, ds->buttons >> 8);
 
         if (ds->mode) {
-            queue_push(sio2->out, ds->ax_right_y);
             queue_push(sio2->out, ds->ax_right_x);
-            queue_push(sio2->out, ds->ax_left_y);
+            queue_push(sio2->out, ds->ax_right_y);
             queue_push(sio2->out, ds->ax_left_x);
+            queue_push(sio2->out, ds->ax_left_y);
         }
     } else {
         queue_push(sio2->out, 0xff);

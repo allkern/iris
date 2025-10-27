@@ -151,10 +151,10 @@ void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key) {
         case SDLK_0: {
             ps2_iop_intc_irq(iris->ps2->iop_intc, IOP_INTC_USB);
         } break;
-        case SDLK_I: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 0xff); break;
+        case SDLK_I: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 0); break;
         case SDLK_J: ds_analog_change(iris->ds[0], DS_AX_LEFT_H, 0); break;
-        case SDLK_K: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 0); break;
-        case SDLK_L: ds_analog_change(iris->ds[0], DS_AX_LEFT_H, 0xff); break;
+        case SDLK_K: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 255); break;
+        case SDLK_L: ds_analog_change(iris->ds[0], DS_AX_LEFT_H, 255); break;
     }
 
     uint16_t mask = map_button(key.key);
@@ -164,10 +164,10 @@ void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key) {
 
 void handle_keyup_event(iris::instance* iris, SDL_KeyboardEvent& key) {
     switch (key.key) {
-        case SDLK_I: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 0x80); break;
-        case SDLK_J: ds_analog_change(iris->ds[0], DS_AX_LEFT_H, 0x80); break;
-        case SDLK_K: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 0x80); break;
-        case SDLK_L: ds_analog_change(iris->ds[0], DS_AX_LEFT_H, 0x80); break;
+        case SDLK_I: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 0x7f); break;
+        case SDLK_J: ds_analog_change(iris->ds[0], DS_AX_LEFT_H, 0x7f); break;
+        case SDLK_K: ds_analog_change(iris->ds[0], DS_AX_LEFT_V, 0x7f); break;
+        case SDLK_L: ds_analog_change(iris->ds[0], DS_AX_LEFT_H, 0x7f); break;
     }
 
     uint16_t mask = map_button(key.key);
