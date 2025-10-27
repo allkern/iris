@@ -40,4 +40,15 @@ bool init(iris::instance* iris) {
     return true;
 }
 
+void close(iris::instance* iris) {
+    if (!iris->stream) {
+        return;
+    }
+
+    SDL_PauseAudioStreamDevice(iris->stream);
+    SDL_DestroyAudioStream(iris->stream);
+
+    iris->stream = nullptr;
+}
+
 }
