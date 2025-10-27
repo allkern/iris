@@ -391,6 +391,10 @@ struct gs_privileged_state {
 
 void gs_get_privileged_state(struct ps2_gs* gs, struct gs_privileged_state* state);
 
+int ps2_gs_write_signal(struct ps2_gs* gs, uint64_t data);
+int ps2_gs_write_finish(struct ps2_gs* gs, uint64_t data);
+int ps2_gs_write_label(struct ps2_gs* gs, uint64_t data);
+
 #ifdef __cplusplus
 }
 #endif

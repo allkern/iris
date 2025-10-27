@@ -832,3 +832,49 @@ void gs_get_privileged_state(struct ps2_gs* gs, struct gs_privileged_state* stat
 int ps2_gs_is_vblank(struct ps2_gs* gs) {
     return gs->vblank;
 }
+
+int ps2_gs_write_signal(struct ps2_gs* gs, uint64_t data) {
+    uint64_t mask = data >> 32;
+    uint64_t value = data & mask;
+
+    if (gs->csr & 1) {
+        gs->signal_pending++;
+
+        gs->stall_sigid = gs->siglblid & 0xffffffff;
+        gs->stall_sigid &= ~mask;
+        gs->stall_sigid |= value;
+
+        return 1;
+    }
+
+    gs->signal_pending++;
+    gs->signal = data;
+
+    gs->csr |= 1;
+    gs->siglblid &= ~mask;
+    gs->siglblid |= value;
+
+    gs_test_gs_irq(gs);
+
+    return 0;
+}
+
+int ps2_gs_write_finish(struct ps2_gs* gs, uint64_t data) {
+    // Trigger FINISH event
+    gs->csr |= 2;
+
+    gs_test_gs_irq(gs);
+
+    return 1;
+}
+
+int ps2_gs_write_label(struct ps2_gs* gs, uint64_t data) {
+    gs->label = data;
+
+    uint64_t mask = data >> 32;
+
+    gs->siglblid &= (~mask) << 32;
+    gs->siglblid |= (data & mask) << 32;
+
+    return 0;
+}
