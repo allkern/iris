@@ -15,6 +15,7 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
 
 	ctx->instance = new ExternallyManagedInstance(info.instance, info.instance_create_info);
 	ctx->device = new ExternallyManagedDevice(info.device, info.device_create_info);
+	ctx->signal_handler = new RendererSignalHandler(ctx->gs);
 
 	ctx->granite_ctx.set_instance_factory(ctx->instance);
 	ctx->granite_ctx.set_device_factory(ctx->device);
@@ -38,14 +39,32 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
 	ctx->granite_device.init_frame_contexts(4);
 
 	GSOptions opts = {};
+	// opts.super_sampling = SuperSampling::X4;
+	// opts.ordered_super_sampling = true;
+	// opts.super_sampled_textures = true;
 
 	if (!ctx->interface.init(&ctx->granite_device, opts)) {
 		return false;
     }
 
 	ctx->interface.reset_context_state();
+	ctx->interface.set_signal_interface(ctx->signal_handler);
 
     return true;
+}
+
+void hardware_reset(void* udata) {
+	hardware_state* ctx = static_cast<hardware_state*>(udata);
+
+	ctx->interface.flush();
+	ctx->interface.reset_context_state();
+
+	// Clear VRAM
+	void* ptr = ctx->interface.map_vram_write(0, 0x400000);
+
+	memset(ptr, 0, 0x400000);
+
+	ctx->interface.end_vram_write(0, 0x400000);
 }
 
 void hardware_destroy(void* udata) {
@@ -53,8 +72,14 @@ void hardware_destroy(void* udata) {
 
     ctx->granite_device.wait_idle();
 
+	delete ctx->instance;
+	delete ctx->device;
+	delete ctx->signal_handler;
+
     delete ctx;
 }
+
+static int phase = 0;
 
 renderer_image hardware_get_frame(void* udata) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
@@ -97,10 +122,10 @@ renderer_image hardware_get_frame(void* udata) {
 
 	VSyncInfo info = {};
 
-	info.phase = 0;
+	info.phase = phase;
 	info.anti_blur = true;
-	info.force_progressive = true;
-	info.overscan = true;
+	info.force_progressive = false;
+	info.overscan = false;
 	info.crtc_offsets = false;
 	info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -121,6 +146,8 @@ renderer_image hardware_get_frame(void* udata) {
 	image.format = granite_image->get_format();
 	image.view = granite_image->get_view().get_view().view;
 
+	phase ^= 1;
+
 	return image;
 }
 
@@ -128,7 +155,4 @@ extern "C" void hardware_transfer(void* udata, int path, const void* data, size_
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
 	ctx->interface.gif_transfer(path, data, size);
-	// ctx->interface.flush();
-
-	// printf("hardware_transfer: path=%d size=%zu\n", path, size);
 }

@@ -74,12 +74,33 @@ public:
 	}
 };
 
+class RendererSignalHandler : public SignalInterface {
+	struct ps2_gs* m_gs;
+
+public:
+	virtual ~RendererSignalHandler() override = default;
+	RendererSignalHandler(struct ps2_gs* gs) : m_gs(gs) {}
+
+	virtual bool on_signal(uint64_t payload) override {
+		return ps2_gs_write_signal(m_gs, payload);
+	}
+
+	virtual bool on_finish(uint64_t payload) override {
+		return ps2_gs_write_finish(m_gs, payload);
+	}
+
+	virtual bool on_label(uint64_t payload) override {
+		return ps2_gs_write_label(m_gs, payload);;
+	}
+};
+
 struct hardware_state {
     Vulkan::Context granite_ctx;
     Vulkan::Device granite_device;
     GSInterface interface;
 	ExternallyManagedDevice* device;
 	ExternallyManagedInstance* instance;
+	RendererSignalHandler* signal_handler;
 
     struct ps2_gs* gs;
     struct ps2_gif* gif;
@@ -87,6 +108,7 @@ struct hardware_state {
 
 void* hardware_create();
 bool hardware_init(void* udata, const renderer_create_info& info);
+void hardware_reset(void* udata);
 void hardware_destroy(void* udata);
 renderer_image hardware_get_frame(void* udata);
 
