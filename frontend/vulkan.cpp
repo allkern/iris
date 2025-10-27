@@ -350,6 +350,109 @@ int find_graphics_queue_family_index(iris::instance* iris) {
     return -1;
 }
 
+VkBuffer create_buffer(iris::instance* iris, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory& buffer_memory) {
+    VkBuffer buffer = VK_NULL_HANDLE;
+
+    VkBufferCreateInfo buffer_info = {};
+    buffer_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    buffer_info.size = size;
+    buffer_info.usage = usage;
+    buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    if (vkCreateBuffer(iris->device, &buffer_info, nullptr, &buffer) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to create buffer\n");
+
+        return VK_NULL_HANDLE;
+    }
+
+    VkMemoryRequirements memory_requirements;
+    vkGetBufferMemoryRequirements(iris->device, buffer, &memory_requirements);
+
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = memory_requirements.size;
+
+    VkPhysicalDeviceMemoryProperties memory_properties;
+    vkGetPhysicalDeviceMemoryProperties(iris->physical_device, &memory_properties);
+
+    for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
+        if ((memory_requirements.memoryTypeBits & (1 << i)) &&
+            (memory_properties.memoryTypes[i].propertyFlags & properties) == properties) {
+            alloc_info.memoryTypeIndex = i;
+            break;
+        }
+    }
+
+    if (vkAllocateMemory(iris->device, &alloc_info, nullptr, &buffer_memory) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to allocate buffer memory\n");
+
+        vkDestroyBuffer(iris->device, buffer, nullptr);
+
+        return VK_NULL_HANDLE;
+    }
+
+    vkBindBufferMemory(iris->device, buffer, buffer_memory, 0);
+
+    return buffer;
+}
+
+void load_buffer(iris::instance* iris, VkDeviceMemory buffer_memory, void* data, VkDeviceSize size) {
+    void* ptr;
+
+    vkMapMemory(iris->device, buffer_memory, 0, size, 0, &ptr);
+    memcpy(ptr, data, (size_t)size);
+    vkUnmapMemory(iris->device, buffer_memory);
+}
+
+bool copy_buffer(iris::instance* iris, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
+    VkCommandPool command_pool = VK_NULL_HANDLE;
+
+    VkCommandPoolCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    info.queueFamilyIndex = iris->queue_family;
+
+    if (vkCreateCommandPool(iris->device, &info, VK_NULL_HANDLE, &command_pool) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to create command pool\n");
+    
+        return false;
+    }
+
+    VkCommandBufferAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    alloc_info.commandPool = command_pool;
+    alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer;
+    vkAllocateCommandBuffers(iris->device, &alloc_info, &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    vkBeginCommandBuffer(command_buffer, &begin_info);
+
+    VkBufferCopy copy_region{};
+    copy_region.size = size;
+    vkCmdCopyBuffer(command_buffer, src, dst, 1, &copy_region);
+
+    vkEndCommandBuffer(command_buffer);
+
+    VkSubmitInfo submit_info{};
+    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.commandBufferCount = 1;
+    submit_info.pCommandBuffers = &command_buffer;
+
+    vkQueueSubmit(iris->queue, 1, &submit_info, VK_NULL_HANDLE);
+    vkQueueWaitIdle(iris->queue);
+
+    vkFreeCommandBuffers(iris->device, command_pool, 1, &command_buffer);
+    vkDestroyCommandPool(iris->device, command_pool, VK_NULL_HANDLE);
+
+    return true;
+}
+
 bool init(iris::instance* iris, bool enable_validation) {
     if (volkInitialize() != VK_SUCCESS) {
         fprintf(stderr, "vulkan: Failed to initialize volk loader\n");
@@ -505,16 +608,78 @@ bool init(iris::instance* iris, bool enable_validation) {
 
     vkGetDeviceQueue(iris->device, iris->queue_family, 0, &iris->queue);
 
+    iris->indices = { 0, 1, 2, 2, 3, 0 };
+
+    iris->vertex_buffer_size = sizeof(vertex) * iris->vertices.size();
+
+    // Create vertex and index buffers
+    // Create and populate index buffer immediately by creating
+    // a staging buffer, filling it, and then copying it over to
+    // the device local index buffer.
+    // The vertex buffer will be updated dynamically each frame.
+    VkDeviceMemory index_staging_buffer_memory;
+    VkDeviceSize index_buffer_size = sizeof(uint16_t) * iris->indices.size();
+
+    iris->index_buffer = create_buffer(
+        iris,
+        sizeof(uint16_t) * iris->indices.size(),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        iris->index_buffer_memory
+    );
+
+    VkBuffer index_staging_buffer = create_buffer(
+        iris,
+        index_buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, 
+        index_staging_buffer_memory
+    );
+
+    load_buffer(iris, index_staging_buffer_memory, iris->indices.data(), index_buffer_size);
+    copy_buffer(iris, index_staging_buffer, iris->index_buffer, index_buffer_size);
+
+    iris->vertex_buffer = create_buffer(
+        iris,
+        iris->vertex_buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+        iris->vertex_buffer_memory
+    );
+
+    iris->vertex_staging_buffer = create_buffer(
+        iris,
+        iris->vertex_buffer_size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        iris->vertex_staging_buffer_memory
+    );
+
+    // We don't need the staging buffer anymore
+    vkFreeMemory(iris->device, index_staging_buffer_memory, nullptr);
+    vkDestroyBuffer(iris->device, index_staging_buffer, nullptr);
+
     return true;
 }
 
 void cleanup(iris::instance* iris) {
+    vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
+    vkDestroySampler(iris->device, iris->sampler, nullptr);
+    vkDestroyBuffer(iris->device, iris->vertex_buffer, nullptr);
+    vkDestroyBuffer(iris->device, iris->vertex_staging_buffer, nullptr);
+    vkDestroyBuffer(iris->device, iris->index_buffer, nullptr);
+    vkFreeMemory(iris->device, iris->vertex_staging_buffer_memory, nullptr);
+    vkFreeMemory(iris->device, iris->vertex_buffer_memory, nullptr);
+    vkFreeMemory(iris->device, iris->index_buffer_memory, nullptr);
+    vkDestroyPipeline(iris->device, iris->pipeline, nullptr);
+    vkDestroyRenderPass(iris->device, iris->render_pass, nullptr);
+    vkDestroyPipelineLayout(iris->device, iris->pipeline_layout, nullptr);
     vkDestroyDevice(iris->device, nullptr);
     vkDestroyInstance(iris->instance, nullptr);
-
-    iris->queue = VK_NULL_HANDLE;
-    iris->device = VK_NULL_HANDLE;
-    iris->instance = VK_NULL_HANDLE;
 }
 
 }

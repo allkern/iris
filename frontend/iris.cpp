@@ -53,6 +53,8 @@ int open_file(iris::instance* iris, std::string file) {
 
         elf::load_symbols_from_disc(iris);
 
+        renderer_reset(iris->renderer);
+
         ps2_boot_file(iris->ps2, boot_file);
 
         iris->loaded = file;
@@ -65,6 +67,8 @@ int open_file(iris::instance* iris, std::string file) {
     // Note: We need the trailing whitespaces here because of IOMAN HLE
     // Load executable
     file = "host:  " + file;
+
+    renderer_reset(iris->renderer);
 
     ps2_boot_file(iris->ps2, file.c_str());
 
@@ -310,10 +314,6 @@ void update_window(iris::instance* iris) {
         );
     }
 
-    if (Begin("Output")) {
-        render::render_frame(iris);
-    } End();
-
     handle_animations(iris);
 
     // Rendering
@@ -539,6 +539,7 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
 }
 
 void destroy(iris::instance* iris) {
+    iris::audio::close(iris);
     iris::render::destroy(iris);
     iris::settings::close(iris);
     iris::imgui::cleanup(iris);

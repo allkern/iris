@@ -8,6 +8,8 @@
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
 
+#include <array>
+
 // External includes
 #include "res/IconsMaterialSymbols.h"
 
@@ -25,6 +27,8 @@ INCBIN(ps1_memory_card_icon, "../res/ps1_mcd.png");
 INCBIN(ps2_memory_card_icon, "../res/ps2_mcd.png");
 INCBIN(pocketstation_icon, "../res/pocketstation.png");
 INCBIN(iris_icon, "../res/iris.png");
+INCBIN(vertex_shader, "../shaders/vertex.spv");
+INCBIN(fragment_shader, "../shaders/fragment.spv");
 
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
@@ -42,6 +46,7 @@ static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
 static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
     wd->Surface = iris->surface;
+    wd->ClearEnable = false;
 
     // Check for WSI support
     VkBool32 res;
@@ -267,6 +272,195 @@ void set_theme(iris::instance* iris, int theme) {
     pstyle.Colors[ImPlotCol_PlotBg]     = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+VkShaderModule create_shader(iris::instance* iris, uint32_t* code, size_t size) {
+    VkShaderModuleCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    info.pCode = code;
+    info.codeSize = size;
+
+    VkShaderModule shader;
+
+    if (vkCreateShaderModule(iris->device, &info, nullptr, &shader) != VK_SUCCESS) {
+        return VK_NULL_HANDLE;
+    }
+
+    return shader;
+}
+
+VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkShaderModule frag_shader) {
+    // Create pipeline layout
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+
+    VkPipelineLayoutCreateInfo pipeline_layout_info = {};
+    pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    pipeline_layout_info.setLayoutCount = 1; // Optional
+    pipeline_layout_info.pSetLayouts = &iris->descriptor_set_layout; // Optional
+    pipeline_layout_info.pushConstantRangeCount = 0; // Optional
+    pipeline_layout_info.pPushConstantRanges = VK_NULL_HANDLE; // Optional
+
+    if (vkCreatePipelineLayout(iris->device, &pipeline_layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to create pipeline layout\n");
+
+        return VK_NULL_HANDLE;
+    }
+
+    iris->pipeline_layout = pipeline_layout;
+
+    // Create render pass
+    VkAttachmentDescription color_attachment = {};
+    color_attachment.format = iris->main_window_data.SurfaceFormat.format;
+    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    VkAttachmentReference color_attachment_ref = {};
+    color_attachment_ref.attachment = 0;
+    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+    VkSubpassDescription subpass = {};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_attachment_ref;
+
+    VkRenderPass render_pass = VK_NULL_HANDLE;
+
+    VkRenderPassCreateInfo render_pass_info = {};
+    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    render_pass_info.attachmentCount = 1;
+    render_pass_info.pAttachments = &color_attachment;
+    render_pass_info.subpassCount = 1;
+    render_pass_info.pSubpasses = &subpass;
+
+    if (vkCreateRenderPass(iris->device, &render_pass_info, nullptr, &render_pass) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to create render pass\n");
+
+        return VK_NULL_HANDLE;
+    }
+
+    iris->render_pass = render_pass;
+
+    // Create graphics pipeline
+    VkPipelineShaderStageCreateInfo shader_stages[2] = {};
+    shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
+    shader_stages[0].module = vert_shader;
+    shader_stages[0].pName = "main";
+    shader_stages[0].pNext = VK_NULL_HANDLE;
+    shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    shader_stages[1].module = frag_shader;
+    shader_stages[1].pName = "main";
+    shader_stages[1].pNext = VK_NULL_HANDLE;
+
+    static const VkDynamicState dynamic_states[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamic_state_info = {};
+    dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state_info.dynamicStateCount = 2;
+    dynamic_state_info.pDynamicStates = dynamic_states;
+
+    const auto binding_description = vertex::get_binding_description();
+    const auto attribute_descriptions = vertex::get_attribute_descriptions();
+
+    VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
+    vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertex_input_info.vertexBindingDescriptionCount = 1;
+    vertex_input_info.pVertexBindingDescriptions = &binding_description;
+    vertex_input_info.vertexAttributeDescriptionCount = 2;
+    vertex_input_info.pVertexAttributeDescriptions = attribute_descriptions.data();
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_info = {};
+    input_assembly_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    input_assembly_info.primitiveRestartEnable = VK_FALSE;
+
+    VkViewport viewport = {};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = (float)iris->main_window_data.Width;
+    viewport.height = (float)iris->main_window_data.Height;
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkExtent2D extent = {};
+    extent.width = iris->main_window_data.Width;
+    extent.height = iris->main_window_data.Height;
+
+    VkRect2D scissor = {};
+    scissor.offset = {0, 0};
+    scissor.extent = extent;
+
+    VkPipelineViewportStateCreateInfo viewport_state_info = {};
+    viewport_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_state_info.viewportCount = 1;
+    viewport_state_info.pViewports = &viewport;
+    viewport_state_info.scissorCount = 1;
+    viewport_state_info.pScissors = &scissor;
+
+    VkPipelineRasterizationStateCreateInfo rasterizer_info = {};
+    rasterizer_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    rasterizer_info.depthClampEnable = VK_FALSE;
+    rasterizer_info.rasterizerDiscardEnable = VK_FALSE;
+    rasterizer_info.polygonMode = VK_POLYGON_MODE_FILL;
+    rasterizer_info.lineWidth = 1.0f;
+    rasterizer_info.cullMode = VK_CULL_MODE_NONE;
+    rasterizer_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+    rasterizer_info.depthBiasEnable = VK_FALSE;
+
+    VkPipelineColorBlendAttachmentState blend_attachment_state = {};
+    blend_attachment_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    blend_attachment_state.blendEnable = VK_FALSE;
+
+    VkPipelineColorBlendStateCreateInfo blend_state_info{};
+    blend_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    blend_state_info.logicOpEnable = VK_FALSE;
+    blend_state_info.attachmentCount = 1;
+    blend_state_info.pAttachments = &blend_attachment_state;
+
+    VkPipelineMultisampleStateCreateInfo multisampling_state_info = {};
+    multisampling_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisampling_state_info.sampleShadingEnable = VK_FALSE;
+    multisampling_state_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+    VkGraphicsPipelineCreateInfo pipeline_info = {};
+    pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipeline_info.stageCount = 2;
+    pipeline_info.pStages = shader_stages;
+    pipeline_info.pVertexInputState = &vertex_input_info;
+    pipeline_info.pInputAssemblyState = &input_assembly_info;
+    pipeline_info.pViewportState = &viewport_state_info;
+    pipeline_info.pRasterizationState = &rasterizer_info;
+    pipeline_info.pMultisampleState = &multisampling_state_info;
+    pipeline_info.pDepthStencilState = nullptr; // Optional
+    pipeline_info.pColorBlendState = &blend_state_info;
+    pipeline_info.pDynamicState = &dynamic_state_info;
+    pipeline_info.layout = pipeline_layout;
+    pipeline_info.renderPass = render_pass;
+    pipeline_info.subpass = 0;
+    pipeline_info.pTessellationState = VK_NULL_HANDLE;
+    pipeline_info.basePipelineHandle = VK_NULL_HANDLE; // Optional
+    pipeline_info.basePipelineIndex = -1; // Optional
+
+    VkPipeline pipeline = VK_NULL_HANDLE;
+
+    if (vkCreateGraphicsPipelines(iris->device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline) != VK_SUCCESS) {
+        return VK_NULL_HANDLE;
+    }
+
+    vkDestroyShaderModule(iris->device, frag_shader, nullptr);
+    vkDestroyShaderModule(iris->device, vert_shader, nullptr);
+
+    return pipeline;
+}
+
+
 bool init(iris::instance* iris) {
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE },
@@ -285,6 +479,36 @@ bool init(iris::instance* iris) {
 
     if (vkCreateDescriptorPool(iris->device, &pool_info, VK_NULL_HANDLE, &iris->descriptor_pool) != VK_SUCCESS) {
         fprintf(stderr, "imgui: Failed to create descriptor pool\n");
+
+        return false;
+    }
+
+    VkDescriptorSetLayoutBinding sampler_layout_binding = {};
+    sampler_layout_binding.binding = 0;
+    sampler_layout_binding.descriptorCount = 1;
+    sampler_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    sampler_layout_binding.pImmutableSamplers = nullptr;
+    sampler_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    VkDescriptorSetLayoutCreateInfo layout_info = {};
+    layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+    layout_info.bindingCount = 1;
+    layout_info.pBindings = &sampler_layout_binding;
+
+    if (vkCreateDescriptorSetLayout(iris->device, &layout_info, nullptr, &iris->descriptor_set_layout) != VK_SUCCESS) {
+        fprintf(stderr, "imgui: Failed to create descriptor set layout\n");
+
+        return false;
+    }
+
+    VkDescriptorSetAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+    alloc_info.descriptorPool = iris->descriptor_pool;
+    alloc_info.descriptorSetCount = 1;
+    alloc_info.pSetLayouts = &iris->descriptor_set_layout;
+
+    if (vkAllocateDescriptorSets(iris->device, &alloc_info, &iris->descriptor_set) != VK_SUCCESS) {
+        fprintf(stderr, "imgui: Failed to allocate descriptor sets\n");
 
         return false;
     }
@@ -363,6 +587,29 @@ bool init(iris::instance* iris) {
     // To-do: Make theme selectable, for now just use granite
     set_theme(iris, IRIS_THEME_GRANITE);
 
+    iris->clear_value.color.float32[0] = 0.11f;
+    iris->clear_value.color.float32[1] = 0.11f;
+    iris->clear_value.color.float32[2] = 0.11f;
+    iris->clear_value.color.float32[3] = 1.0f;
+
+    // Initialize our pipeline
+    VkShaderModule vert_shader = create_shader(iris, (uint32_t*)g_vertex_shader_data, g_vertex_shader_size);
+    VkShaderModule frag_shader = create_shader(iris, (uint32_t*)g_fragment_shader_data, g_fragment_shader_size);
+
+    if (!vert_shader || !frag_shader) {
+        fprintf(stderr, "vulkan: Failed to create shader modules\n");
+
+        return false;
+    }
+
+    iris->pipeline = create_pipeline(iris, vert_shader, frag_shader);
+
+    if (!iris->pipeline) {
+        fprintf(stderr, "imgui: Failed to create graphics pipeline\n");
+
+        return false;
+    }
+
     return true;
 }
 
@@ -440,6 +687,8 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
         return false;
     }
 
+    render::render_frame(iris, fd->CommandBuffer, fd->Framebuffer);
+
     {
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -448,7 +697,7 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
         info.renderArea.extent.width = wd->Width;
         info.renderArea.extent.height = wd->Height;
         info.clearValueCount = 1;
-        info.pClearValues = &wd->ClearValue;
+        info.pClearValues = &iris->clear_value;
 
         vkCmdBeginRenderPass(fd->CommandBuffer, &info, VK_SUBPASS_CONTENTS_INLINE);
     }
