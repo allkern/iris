@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <chrono>
+#include <array>
 #include <deque>
 
 #include "gs/renderer/renderer.hpp"
@@ -19,6 +20,14 @@
 #include "config.hpp"
 
 namespace iris {
+
+#define RENDER_ASPECT_NATIVE 0
+#define RENDER_ASPECT_STRETCH 1
+#define RENDER_ASPECT_STRETCH_KEEP 2
+#define RENDER_ASPECT_4_3 3
+#define RENDER_ASPECT_16_9 4
+#define RENDER_ASPECT_5_4 5
+#define RENDER_ASPECT_AUTO 6
 
 enum : int {
     BKPT_CPU_EE,
@@ -102,6 +111,38 @@ enum {
 //     virtual input_action map_event(SDL_Event* event) = 0;
 // };
 
+struct vertex {
+    struct {
+        float x, y;
+    } pos, uv;
+
+    static constexpr const VkVertexInputBindingDescription get_binding_description() {
+        VkVertexInputBindingDescription binding_description = {};
+
+        binding_description.binding = 0;
+        binding_description.stride = sizeof(vertex);
+        binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        return binding_description;
+    }
+
+    static constexpr const std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions() {
+        std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {};
+
+        attribute_descriptions[0].binding = 0;
+        attribute_descriptions[0].location = 0;
+        attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
+        attribute_descriptions[0].offset = offsetof(vertex, pos);
+
+        attribute_descriptions[1].binding = 0;
+        attribute_descriptions[1].location = 1;
+        attribute_descriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
+        attribute_descriptions[1].offset = offsetof(vertex, uv);
+
+        return attribute_descriptions;
+    }
+};
+
 struct instance {
     SDL_Window* window = nullptr;
     SDL_AudioStream* stream = nullptr;
@@ -135,7 +176,22 @@ struct instance {
     VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
     VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
     VkSampler sampler = VK_NULL_HANDLE;
+    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    VkRenderPass render_pass = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkClearValue clear_value = {};
+    VkBuffer vertex_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory vertex_buffer_memory = VK_NULL_HANDLE;
+    VkBuffer vertex_staging_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory vertex_staging_buffer_memory = VK_NULL_HANDLE;
+    VkDeviceSize vertex_buffer_size = 0;
+    VkBuffer index_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory index_buffer_memory = VK_NULL_HANDLE;
+    std::array <vertex, 4> vertices = {};
+    std::array <uint16_t, 6> indices = {};
+    renderer_image image = {};
 
     struct ps2_state* ps2 = nullptr;
 
@@ -275,6 +331,7 @@ struct instance {
 
 namespace audio {
     bool init(iris::instance* iris);
+    void close(iris::instance* iris);
     void update(void* udata, SDL_AudioStream* stream, int additional_amount, int total_amount);
 }
 
@@ -315,7 +372,8 @@ namespace emu {
 namespace render {
     bool init(iris::instance* iris);
     void destroy(iris::instance* iris);
-    bool render_frame(iris::instance* iris);
+    bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer);
+    bool save_screenshot(iris::instance* iris, std::string path);
 }
 
 iris::instance* create();
