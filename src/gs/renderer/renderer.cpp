@@ -12,6 +12,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
         case RENDERER_BACKEND_NULL: {
             renderer->create = null_create;
             renderer->init = null_init;
+            renderer->reset = null_reset;
             renderer->destroy = null_destroy;
             renderer->get_frame = null_get_frame;
             renderer->transfer = null_transfer;
@@ -24,6 +25,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
         case RENDERER_BACKEND_HARDWARE: {
             renderer->create = hardware_create;
             renderer->init = hardware_init;
+            renderer->reset = hardware_reset;
             renderer->destroy = hardware_destroy;
             renderer->get_frame = hardware_get_frame;
             renderer->transfer = hardware_transfer;
@@ -41,6 +43,10 @@ void renderer_destroy(renderer_state* renderer) {
     renderer->destroy(renderer->udata);
 
     delete renderer;
+}
+
+void renderer_reset(renderer_state* renderer) {
+    renderer->reset(renderer->udata);
 }
 
 renderer_image renderer_get_frame(renderer_state* renderer) {

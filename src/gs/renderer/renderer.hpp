@@ -79,6 +79,7 @@ struct renderer_state {
 
     void* (*create)();
     bool (*init)(void* udata, const renderer_create_info& info);
+    void (*reset)(void* udata);
     void (*destroy)(void* udata);
     renderer_image (*get_frame)(void* udata);
     void (*transfer)(void* udata, int path, const void* data, size_t size);
@@ -86,6 +87,7 @@ struct renderer_state {
 
 renderer_state* renderer_create(void);
 bool renderer_init(renderer_state* renderer, const renderer_create_info& info);
+void renderer_reset(renderer_state* renderer);
 void renderer_destroy(renderer_state* renderer);
 
 renderer_image renderer_get_frame(renderer_state* renderer);
