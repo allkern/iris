@@ -9,6 +9,7 @@
 
 void* null_create();
 bool null_init(void* udata, const renderer_create_info& info);
+void null_reset(void* udata);
 void null_destroy(void* udata);
 renderer_image null_get_frame(void* udata);
 

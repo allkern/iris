@@ -10,6 +10,10 @@ bool null_init(void* udata, const renderer_create_info& info) {
     return true;
 }
 
+void null_reset(void* udata) {
+    // Nothing
+}
+
 void null_destroy(void* udata) {
     // Nothing
 }
