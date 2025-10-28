@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define printf(fmt, ...)(0)
+
 static inline uint8_t ds_get_model_byte(struct ds_state* ds) {
     switch (ds->mode) {
         case 0: return 0x41;

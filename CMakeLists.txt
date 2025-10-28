@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.11)
+cmake_minimum_required(VERSION 3.21)
 project(iris LANGUAGES C CXX)
 
 # We need to build release always, unoptimized builds
@@ -45,6 +45,9 @@ message(STATUS "Project Version: ${GIT_VERSION_STRING}")
 
 include(CheckIPOSupported)
 check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
+
+set(BUILD_SHARED_LIBS OFF)
+set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 # And this part tells CMake where to find and install the file itself
 add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
@@ -205,19 +208,11 @@ target_include_directories(iris PRIVATE
     res
 )
 
-if (CMAKE_SYSTEM_NAME MATCHES "Linux")
-    target_link_libraries(iris PUBLIC
-        tomlplusplus::tomlplusplus
-        SDL3::SDL3-static
-        parallel-gs
-    )
-else()
-    target_link_libraries(iris PUBLIC
-        tomlplusplus::tomlplusplus
-        SDL3::SDL3
-        parallel-gs
-    )
-endif()
+target_link_libraries(iris PUBLIC
+    tomlplusplus::tomlplusplus
+    SDL3::SDL3-static
+    parallel-gs
+)
 
 set_target_properties(iris PROPERTIES 
     # On macOS, make a proper .app bundle instead of a bare executable
@@ -273,14 +268,5 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
         )
         "
         COMPONENT Runtime
-    )
-endif()
-
-# Copy the runtime DLLs to the output directory on Windows
-if (CMAKE_SYSTEM_NAME MATCHES "Windows")
-    add_custom_command(TARGET iris POST_BUILD
-        COMMAND "${CMAKE_COMMAND}" -E copy
-        "$<TARGET_RUNTIME_DLLS:iris>" "$<TARGET_FILE_DIR:iris>"
-        COMMAND_EXPAND_LISTS
     )
 endif()
