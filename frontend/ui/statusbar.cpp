@@ -70,23 +70,27 @@ void show_status_bar(iris::instance* iris) {
         // renderer_get_display_format(iris->ctx, &disp_fmt);
         // renderer_get_interlace_mode(iris->ctx, &mode);
 
-        if (vp_w) {
-            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
-                "None", // renderer_get_name(iris->ctx),
-                disp_w, disp_h,
-                vp_w, vp_h,
-                mode == 3 ? "Interlaced" : "Progressive",
-                get_format_bpp(disp_fmt),
-                GetIO().Framerate
-            );
+        Text(ICON_MS_MONITOR " %s | No image",
+            "None" // renderer_get_name(iris->ctx)
+        );
 
-            // iris->avg_frames++;
-            // iris->avg_fps += iris->fps;
-        } else {
-            Text(ICON_MS_MONITOR " %s | No image",
-                "None" // renderer_get_name(iris->ctx)
-            );
-        }
+        // if (vp_w) {
+        //     Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
+        //         "None", // renderer_get_name(iris->ctx),
+        //         disp_w, disp_h,
+        //         vp_w, vp_h,
+        //         mode == 3 ? "Interlaced" : "Progressive",
+        //         get_format_bpp(disp_fmt),
+        //         GetIO().Framerate
+        //     );
+
+        //     // iris->avg_frames++;
+        //     // iris->avg_fps += iris->fps;
+        // } else {
+        //     Text(ICON_MS_MONITOR " %s | No image",
+        //         "None" // renderer_get_name(iris->ctx)
+        //     );
+        // }
 
         EndMainStatusBar();
     }

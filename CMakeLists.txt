@@ -1,9 +1,9 @@
-cmake_minimum_required(VERSION 4.1)
+cmake_minimum_required(VERSION 3.11)
 project(iris LANGUAGES C CXX)
 
 # We need to build release always, unoptimized builds
 # won't cut it.
-set(CMAKE_BUILD_TYPE "RelWithDebInfo")
+set(CMAKE_BUILD_TYPE "Release")
 
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")

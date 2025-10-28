@@ -591,7 +591,6 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
     struct sched_event event;
 
     assert(((dmac->gif.chcr >> 6) & 1) == 0);
-    assert(dmac->gif.qwc == 0);
 
     int mode = (dmac->gif.chcr >> 2) & 3;
 

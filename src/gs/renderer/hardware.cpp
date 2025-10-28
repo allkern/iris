@@ -84,12 +84,20 @@ static int phase = 0;
 renderer_image hardware_get_frame(void* udata) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
-	ctx->interface.flush();
+    struct gs_privileged_state state;
+
+    gs_get_privileged_state(ctx->gs, &state);
+
+	if (!state.pmode) {
+		// No display enabled.
+		renderer_image image = {};
+		image.image = VK_NULL_HANDLE;
+		image.view = VK_NULL_HANDLE;
+
+		return image;
+	}
 
 	auto& priv = ctx->interface.get_priv_register_state();
-
-    struct gs_privileged_state state;
-    gs_get_privileged_state(ctx->gs, &state);
 
     *((uint64_t*)&priv.pmode) = state.pmode;
     *((uint64_t*)&priv.smode1) = state.smode1;
@@ -111,14 +119,7 @@ renderer_image hardware_get_frame(void* udata) {
     *((uint64_t*)&priv.busdir) = state.busdir;
     *((uint64_t*)&priv.siglblid) = state.siglblid;
 
-	if (!state.pmode) {
-		// No display enabled.
-		renderer_image image = {};
-		image.image = VK_NULL_HANDLE;
-		image.view = VK_NULL_HANDLE;
-
-		return image;
-	}
+	ctx->interface.flush();
 
 	VSyncInfo info = {};
 
