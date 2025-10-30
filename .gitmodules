@@ -1,13 +1,14 @@
 [submodule "imgui"]
 	path = imgui
 	url = https://github.com/ocornut/imgui
-	branch = docking
+	branch = v1.92.4-docking
 [submodule "tomlplusplus"]
 	path = tomlplusplus
 	url = https://github.com/marzer/tomlplusplus
 [submodule "SDL"]
 	path = SDL
 	url = https://github.com/libsdl-org/SDL
+	branch = release-3.2.24
 [submodule "incbin"]
 	path = incbin
 	url = https://github.com/graphitemaster/incbin
