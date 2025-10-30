@@ -2,7 +2,7 @@ name: Ubuntu CI
 
 on:
   push:
-    branches: [ "master" ]
+    branches: [ "vulkan" ]
 
 jobs:
   build:
@@ -40,3 +40,4 @@ jobs:
       with:
         name: iris-latest-ubuntu-appimage
         path: ./appimage
+
