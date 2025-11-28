@@ -145,7 +145,7 @@ bool setup_fonts(iris::instance* iris, ImGuiIO& io) {
         return false;
     }
 
-    io.FontDefault = iris->font_body;
+    io.FontDefault = iris->font_icons;
 
     return true;
 }
@@ -293,10 +293,10 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipeline_layout_info.setLayoutCount = 1; // Optional
-    pipeline_layout_info.pSetLayouts = &iris->descriptor_set_layout; // Optional
-    pipeline_layout_info.pushConstantRangeCount = 0; // Optional
-    pipeline_layout_info.pPushConstantRanges = VK_NULL_HANDLE; // Optional
+    pipeline_layout_info.setLayoutCount = 1;
+    pipeline_layout_info.pSetLayouts = &iris->descriptor_set_layout;
+    pipeline_layout_info.pushConstantRangeCount = 0;
+    pipeline_layout_info.pPushConstantRanges = VK_NULL_HANDLE;
 
     if (vkCreatePipelineLayout(iris->device, &pipeline_layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
         fprintf(stderr, "vulkan: Failed to create pipeline layout\n");
@@ -326,6 +326,14 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attachment_ref;
 
+    VkSubpassDependency dependency = {};
+    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.dstSubpass = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
     VkRenderPass render_pass = VK_NULL_HANDLE;
 
     VkRenderPassCreateInfo render_pass_info = {};
@@ -334,6 +342,8 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     render_pass_info.pAttachments = &color_attachment;
     render_pass_info.subpassCount = 1;
     render_pass_info.pSubpasses = &subpass;
+    render_pass_info.dependencyCount = 1;
+    render_pass_info.pDependencies = &dependency;
 
     if (vkCreateRenderPass(iris->device, &render_pass_info, nullptr, &render_pass) != VK_SUCCESS) {
         fprintf(stderr, "vulkan: Failed to create render pass\n");
@@ -460,29 +470,7 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     return pipeline;
 }
 
-
 bool init(iris::instance* iris) {
-    VkDescriptorPoolSize pool_sizes[] = {
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE },
-    };
-
-    VkDescriptorPoolCreateInfo pool_info = {};
-    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-    pool_info.maxSets = 0;
-
-    for (VkDescriptorPoolSize& pool_size : pool_sizes)
-        pool_info.maxSets += pool_size.descriptorCount;
-
-    pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
-    pool_info.pPoolSizes = pool_sizes;
-
-    if (vkCreateDescriptorPool(iris->device, &pool_info, VK_NULL_HANDLE, &iris->descriptor_pool) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to create descriptor pool\n");
-
-        return false;
-    }
-
     VkDescriptorSetLayoutBinding sampler_layout_binding = {};
     sampler_layout_binding.binding = 0;
     sampler_layout_binding.descriptorCount = 1;
@@ -490,10 +478,21 @@ bool init(iris::instance* iris) {
     sampler_layout_binding.pImmutableSamplers = nullptr;
     sampler_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
+    VkDescriptorBindingFlags flags = {};
+    flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+
+    VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags = {};
+    binding_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    binding_flags.pNext = nullptr;
+    binding_flags.pBindingFlags = &flags;
+    binding_flags.bindingCount = 1;
+
     VkDescriptorSetLayoutCreateInfo layout_info = {};
     layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layout_info.bindingCount = 1;
     layout_info.pBindings = &sampler_layout_binding;
+    layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    layout_info.pNext = &binding_flags;
 
     if (vkCreateDescriptorSetLayout(iris->device, &layout_info, nullptr, &iris->descriptor_set_layout) != VK_SUCCESS) {
         fprintf(stderr, "imgui: Failed to create descriptor set layout\n");
@@ -620,8 +619,6 @@ void cleanup(iris::instance* iris) {
     ImGui::DestroyContext();
 
     ImGui_ImplVulkanH_DestroyWindow(iris->instance, iris->device, &iris->main_window_data, VK_NULL_HANDLE);
-
-    vkDestroyDescriptorPool(iris->device, iris->descriptor_pool, nullptr);
 }
 
 bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
@@ -674,8 +671,6 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
 
         return false;
     }
-
-    // To-do: Render backend image here!!!
 
     VkCommandBufferBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
