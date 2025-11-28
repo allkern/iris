@@ -16,7 +16,7 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build
+        cmake -S . -B build -G "Unix Makefiles"
         cmake --build build -j8
         sudo cmake --install build
         mkdir -p ./build/dist
@@ -25,5 +25,6 @@ jobs:
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
 
 
