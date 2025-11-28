@@ -1454,9 +1454,10 @@ void ps2_dmac_write8(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 }
 
 uint64_t ps2_dmac_read16(struct ps2_dmac* dmac, uint32_t addr) {
-    fprintf(stderr, "dmac: 16-bit read from %08x\n", addr);
+    int shift = (addr & 2) * 16;
+    addr = addr & ~3;
 
-    exit(1);
+    return (ps2_dmac_read32(dmac, addr) >> shift) & 0xffff;
 }
 
 void ps2_dmac_write16(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
