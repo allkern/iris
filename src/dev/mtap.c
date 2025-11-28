@@ -3,6 +3,8 @@
 
 #include "mtap.h"
 
+#define printf(fmt,...)(0)
+
 void mtap_cmd_probe(struct ps2_sio2* sio2, struct mtap_state* mtap) {
     printf("mtap: mtap_cmd_probe\n");
 

@@ -4,6 +4,8 @@
 #include <string.h>
 #include <assert.h>
 
+#define printf(fmt,...)(0)
+
 void ps1_mcd_flush_block(struct ps1_mcd_state* mcd, int addr) {
     fseek(mcd->file, addr, SEEK_SET);
     fwrite(&mcd->buf[addr], 1, 128, mcd->file);
