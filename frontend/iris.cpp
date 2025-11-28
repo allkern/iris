@@ -205,12 +205,6 @@ void update_window(iris::instance* iris) {
         show_main_menubar(iris);
     }
 
-    height -= iris->menubar_height;
-
-    // To-do: Optionally hide main menubar
-    if (iris->show_status_bar)
-        height -= iris->menubar_height;
-
     DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
     // Drop file fade animation
@@ -232,7 +226,7 @@ void update_window(iris::instance* iris) {
 
         GetForegroundDrawList()->AddRectFilled(
             ImVec2(0, 0),
-            ImVec2(iris->window_width, iris->window_height),
+            ImVec2(width, height),
             ImColor(0.0f, 0.0f, 0.0f, iris->drop_file_alpha * 0.35f)
         );
 
@@ -248,7 +242,7 @@ void update_window(iris::instance* iris) {
         );
 
         GetForegroundDrawList()->AddText(
-            ImVec2(iris->window_width / 2 - icon_size.x / 2, iris->window_height / 2 - icon_size.y),
+            ImVec2(width / 2 - icon_size.x / 2, height / 2 - icon_size.y),
             ImColor(1.0f, 1.0f, 1.0f, iris->drop_file_alpha),
             ICON_MS_DOWNLOAD
         );
@@ -256,7 +250,7 @@ void update_window(iris::instance* iris) {
         PopFont();
 
         GetForegroundDrawList()->AddText(
-            ImVec2(iris->window_width / 2 - text_size.x / 2, iris->window_height / 2),
+            ImVec2(width / 2 - text_size.x / 2, height / 2),
             ImColor(1.0f, 1.0f, 1.0f, iris->drop_file_alpha),
             "Drop file here to launch"
         );
@@ -292,10 +286,6 @@ void update_window(iris::instance* iris) {
 
     // Display little pause icon in the top right corner
     if (iris->pause) {
-        int width, height;
-
-        SDL_GetWindowSize(iris->window, &width, &height);
-
         auto ts = CalcTextSize(ICON_MS_PAUSE);
 
         int offset = 0;
@@ -364,6 +354,29 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     // Create and check window
     iris->main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
 
+    // Init preferences path
+    if (std::filesystem::exists("portable")) {
+        iris->pref_path = "./";
+    } else {
+        char* pref = SDL_GetPrefPath("Allkern", "Iris");
+
+        iris->pref_path = std::string(pref);
+
+        SDL_free(pref);
+    }
+
+    if (!iris::emu::init(iris)) {
+        fprintf(stderr, "iris: Failed to initialize emulator state\n");
+
+        return false;
+    }
+
+    if (!iris::settings::init(iris, argc, argv)) {
+        fprintf(stderr, "iris: Failed to initialize settings\n");
+
+        return false;
+    }
+
     iris->window = SDL_CreateWindow(
         IRIS_TITLE,
         iris->window_width, iris->window_height,
@@ -375,17 +388,6 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         printf("iris: Failed to create SDL window \'%s\'\n", SDL_GetError());
 
         return false;
-    }
-
-    // Init preferences path
-    if (std::filesystem::exists("portable")) {
-        iris->pref_path = "./";
-    } else {
-        char* pref = SDL_GetPrefPath("Allkern", "Iris");
-
-        iris->pref_path = std::string(pref);
-
-        SDL_free(pref);
     }
 
     if (!iris::vulkan::init(iris)) {
@@ -412,25 +414,22 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         return false;
     }
 
-    if (!iris::emu::init(iris)) {
-        fprintf(stderr, "iris: Failed to initialize emulator state\n");
-
-        return false;
-    }
-
-    if (!iris::settings::init(iris, argc, argv)) {
-        fprintf(stderr, "iris: Failed to initialize settings\n");
-
-        return false;
-    }
-
     if (!iris::render::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize render state\n");
 
         return false;
     }
 
-    SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height);
+    // Sadly we need to start a frame here to measure menubar height
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    iris->menubar_height = ImGui::GetFrameHeight();
+
+    ImGui::EndFrame();
+
+    SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
     SDL_ShowWindow(iris->window);
 
     return true;
@@ -538,7 +537,17 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
+int get_menubar_height(iris::instance* iris) {
+    if (iris->show_status_bar) {
+        return iris->menubar_height * 2;
+    }
+
+    return iris->menubar_height;
+}
+
 void destroy(iris::instance* iris) {
+    SDL_HideWindow(iris->window);
+
     iris::audio::close(iris);
     iris::render::destroy(iris);
     iris::settings::close(iris);

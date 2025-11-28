@@ -77,6 +77,8 @@ struct renderer_state {
     struct ps2_gif* gif = nullptr;
     void* udata = nullptr;
 
+    renderer_create_info info = {};
+
     void* (*create)();
     bool (*init)(void* udata, const renderer_create_info& info);
     void (*reset)(void* udata);
@@ -87,6 +89,7 @@ struct renderer_state {
 
 renderer_state* renderer_create(void);
 bool renderer_init(renderer_state* renderer, const renderer_create_info& info);
+bool renderer_switch(renderer_state* renderer, int backend);
 void renderer_reset(renderer_state* renderer);
 void renderer_destroy(renderer_state* renderer);
 

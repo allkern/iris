@@ -453,6 +453,31 @@ bool copy_buffer(iris::instance* iris, VkBuffer src, VkBuffer dst, VkDeviceSize 
     return true;
 }
 
+bool create_descriptor_pool(iris::instance* iris) {
+    VkDescriptorPoolSize pool_sizes[] = {
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64 }
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    pool_info.maxSets = 0;
+
+    for (VkDescriptorPoolSize& pool_size : pool_sizes)
+        pool_info.maxSets += pool_size.descriptorCount;
+
+    pool_info.poolSizeCount = (uint32_t)IM_ARRAYSIZE(pool_sizes);
+    pool_info.pPoolSizes = pool_sizes;
+
+    if (vkCreateDescriptorPool(iris->device, &pool_info, VK_NULL_HANDLE, &iris->descriptor_pool) != VK_SUCCESS) {
+        fprintf(stderr, "imgui: Failed to create descriptor pool\n");
+
+        return false;
+    }
+
+    return true;
+}
+
 bool init(iris::instance* iris, bool enable_validation) {
     if (volkInitialize() != VK_SUCCESS) {
         fprintf(stderr, "vulkan: Failed to initialize volk loader\n");
@@ -585,6 +610,7 @@ bool init(iris::instance* iris, bool enable_validation) {
     iris->vulkan_12_features.descriptorIndexing = VK_TRUE;
     iris->vulkan_12_features.descriptorBindingPartiallyBound = VK_TRUE;
     iris->vulkan_12_features.descriptorBindingVariableDescriptorCount = VK_TRUE;
+    iris->vulkan_12_features.descriptorBindingSampledImageUpdateAfterBind = VK_TRUE;
     iris->vulkan_12_features.runtimeDescriptorArray = VK_TRUE;
     iris->vulkan_12_features.timelineSemaphore = VK_TRUE;
     iris->vulkan_12_features.bufferDeviceAddress = VK_TRUE;
@@ -663,11 +689,14 @@ bool init(iris::instance* iris, bool enable_validation) {
     vkFreeMemory(iris->device, index_staging_buffer_memory, nullptr);
     vkDestroyBuffer(iris->device, index_staging_buffer, nullptr);
 
+    create_descriptor_pool(iris);
+
     return true;
 }
 
 void cleanup(iris::instance* iris) {
     vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
+    vkDestroyDescriptorPool(iris->device, iris->descriptor_pool, nullptr);
     vkDestroySampler(iris->device, iris->sampler, nullptr);
     vkDestroyBuffer(iris->device, iris->vertex_buffer, nullptr);
     vkDestroyBuffer(iris->device, iris->vertex_staging_buffer, nullptr);

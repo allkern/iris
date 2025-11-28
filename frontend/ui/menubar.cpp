@@ -23,7 +23,7 @@ const char* aspect_mode_names[] = {
 const char* renderer_names[] = {
     "Null",
     "Software",
-    "Software (Threaded)"
+    "Hardware (Vulkan)"
 };
 
 const char* fullscreen_names[] = {
@@ -44,8 +44,6 @@ void show_main_menubar(iris::instance* iris) {
 
     if (BeginMainMenuBar()) {
         ImVec2 size = GetWindowSize();
-
-        iris->menubar_height = size.y;
 
         if (BeginMenu("Iris")) {
             if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Open...")) {
@@ -219,16 +217,15 @@ void show_main_menubar(iris::instance* iris) {
             if (BeginMenu(ICON_MS_MONITOR " Display")) {
                 if (BeginMenu(ICON_MS_BRUSH " Renderer")) {
                     for (int i = 0; i < 3; i++) {
+                        BeginDisabled(i == RENDERER_BACKEND_SOFTWARE);
+
                         if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
                             iris->renderer_backend = i;
 
-                            // renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
-                            // renderer_set_scale(iris->ctx, iris->scale);
-                            // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
-                            // renderer_set_bilinear(iris->ctx, iris->bilinear);
-                            // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
-                            // renderer_set_size(iris->ctx, 0, 0);
+                            renderer_switch(iris->renderer, i);
                         }
+
+                        EndDisabled();
                     }
 
                     ImGui::EndMenu();
@@ -301,7 +298,7 @@ void show_main_menubar(iris::instance* iris) {
                             iris->window_width = widths[i];
                             iris->window_height = heights[i];
 
-                            SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height);
+                            SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
                         }
                     }
 
@@ -338,11 +335,14 @@ void show_main_menubar(iris::instance* iris) {
                 PopStyleVar();
  
                 MenuItem(ICON_MS_VOLUME_OFF " Mute", nullptr, &iris->mute);
+                MenuItem(ICON_MS_MUSIC_OFF " Mute ADMA", nullptr, &iris->mute_adma);
 
                 ImGui::EndMenu();
             }
 
-            MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar);
+            if (MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar)) {
+                SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
+            }
 
             if (MenuItem(ICON_MS_OPEN_IN_NEW " Open data folder")) {
                 SDL_OpenURL(iris->pref_path.c_str());

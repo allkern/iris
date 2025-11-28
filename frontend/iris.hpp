@@ -143,6 +143,15 @@ struct vertex {
     }
 };
 
+struct shader_pass {
+    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+    VkPipeline pipeline = VK_NULL_HANDLE;
+    VkRenderPass render_pass = VK_NULL_HANDLE;
+    VkImageView input = VK_NULL_HANDLE;
+    VkShaderModule vert_shader = VK_NULL_HANDLE;
+    VkShaderModule frag_shader = VK_NULL_HANDLE;
+};
+
 struct instance {
     SDL_Window* window = nullptr;
     SDL_AudioStream* stream = nullptr;
@@ -193,10 +202,25 @@ struct instance {
     std::array <uint16_t, 6> indices = {};
     renderer_image image = {};
 
+    // Multipass shader stuff
+    std::vector <shader_pass> shader_passes = {};
+    VkDescriptorSetLayout shader_descriptor_set_layout = VK_NULL_HANDLE;
+    VkDescriptorSet shader_descriptor_set = VK_NULL_HANDLE;
+    VkShaderModule default_vert_shader = VK_NULL_HANDLE;
+
+    struct {
+        VkImage image = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        VkImageView view = VK_NULL_HANDLE;
+        VkFramebuffer framebuffer = VK_NULL_HANDLE;
+    } shader_framebuffers[2];
+
     struct ps2_state* ps2 = nullptr;
 
     unsigned int window_width = 960;
     unsigned int window_height = 720;
+    unsigned int render_width = 640;
+    unsigned int render_height = 480;
 
     unsigned int renderer_backend = RENDERER_BACKEND_NULL;
     renderer_state* renderer = nullptr;
@@ -209,6 +233,10 @@ struct instance {
     uint32_t ps1_memory_card_icon_height = 0;
     uint32_t pocketstation_icon_height = 0;
     uint32_t iris_icon_height = 0;
+    VkDescriptorSet ps2_memory_card_icon_ds = VK_NULL_HANDLE;
+    VkDescriptorSet ps1_memory_card_icon_ds = VK_NULL_HANDLE;
+    VkDescriptorSet pocketstation_icon_ds = VK_NULL_HANDLE;
+    VkDescriptorSet iris_icon_ds = VK_NULL_HANDLE;
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
@@ -296,6 +324,7 @@ struct instance {
     bool mute = false;
     float volume = 1.0f;
     int timescale = 8;
+    bool mute_adma = true;
 
     bool limit_fps = true;
     float fps_cap = 60.0f;
@@ -382,6 +411,7 @@ void destroy(iris::instance* iris);
 SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event);
 SDL_AppResult update(iris::instance* iris);
 void update_window(iris::instance* iris);
+int get_menubar_height(iris::instance* iris);
 
 void show_main_menubar(iris::instance* iris);
 void show_ee_control(iris::instance* iris);

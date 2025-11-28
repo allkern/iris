@@ -63,16 +63,30 @@ void show_status_bar(iris::instance* iris) {
     using namespace ImGui;
 
     if (BeginMainStatusBar()) {
-        int vp_w, vp_h, disp_w, disp_h, disp_fmt, mode;
+        static const char* const modes[] = {
+            "Progressive",
+            "Interlaced (Field)",
+            "Progressive",
+            "Interlaced (Frame)"
+        };
 
-        // renderer_get_viewport_size(iris->ctx, &vp_w, &vp_h);
-        // renderer_get_display_size(iris->ctx, &disp_w, &disp_h);
-        // renderer_get_display_format(iris->ctx, &disp_fmt);
-        // renderer_get_interlace_mode(iris->ctx, &mode);
+        int dispfb = 0;
 
-        Text(ICON_MS_MONITOR " %s | No image",
-            "None" // renderer_get_name(iris->ctx)
-        );
+        if (!iris->image.image) {
+            Text(ICON_MS_MONITOR " %s | No image | %1.f fps",
+                "None",
+                GetIO().Framerate
+            );
+        } else {
+            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
+                "None",
+                iris->render_width, iris->render_height,
+                iris->image.width, iris->image.height,
+                modes[iris->ps2->gs->smode2 & 3],
+                32,
+                GetIO().Framerate
+            );
+        }
 
         // if (vp_w) {
         //     Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",

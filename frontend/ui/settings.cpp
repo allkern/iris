@@ -56,20 +56,25 @@ void show_graphics_settings(iris::instance* iris) {
 
     // Separator();
 
+    static const char* settings_renderer_names[] = {
+        "Null",
+        "Software",
+        "Hardware"
+    };
+
     Text("Renderer");
 
-    if (BeginCombo("##renderer", "Renderer" /* renderer_get_name(iris->ctx) */, ImGuiComboFlags_HeightSmall)) {
+    if (BeginCombo("##renderer", settings_renderer_names[iris->renderer_backend], ImGuiComboFlags_HeightSmall)) {
         for (int i = 0; i < 3; i++) {
+            BeginDisabled(i == RENDERER_BACKEND_SOFTWARE);
+
             if (Selectable(settings_renderer_names[i], i == iris->renderer_backend)) {
                 iris->renderer_backend = i;
 
-                // renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
-                // renderer_set_scale(iris->ctx, iris->scale);
-                // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
-                // renderer_set_bilinear(iris->ctx, iris->bilinear);
-                // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
-                // renderer_set_size(iris->ctx, 0, 0);
+                renderer_switch(iris->renderer, i);
             }
+
+            EndDisabled();
         }
 
         EndCombo();
@@ -81,19 +86,17 @@ void show_graphics_settings(iris::instance* iris) {
         for (int i = 0; i < 7; i++) {
             if (Selectable(settings_aspect_mode_names[i], iris->aspect_mode == i)) {
                 iris->aspect_mode = i;
-
-                // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
             }
         }
 
         EndCombo();
     }
 
-    // BeginDisabled(
-    //     iris->aspect_mode == RENDERER_ASPECT_AUTO ||
-    //     iris->aspect_mode == RENDERER_ASPECT_STRETCH ||
-    //     iris->aspect_mode == RENDERER_ASPECT_STRETCH_KEEP
-    // );
+    BeginDisabled(
+        iris->aspect_mode == RENDER_ASPECT_AUTO ||
+        iris->aspect_mode == RENDER_ASPECT_STRETCH ||
+        iris->aspect_mode == RENDER_ASPECT_STRETCH_KEEP
+    );
 
     Text("Scale");
 
@@ -105,8 +108,6 @@ void show_graphics_settings(iris::instance* iris) {
 
             if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
                 iris->scale = (float)i * 0.5f;
-
-                // renderer_set_scale(iris->ctx, iris->scale);
             }
         }
 

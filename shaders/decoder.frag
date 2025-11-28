@@ -1,3 +1,14 @@
+#version 460
+
+layout (location = 0) in vec2 TexCoord;
+layout (location = 0) out vec4 FragColor;
+layout (binding = 0) uniform sampler2D input_tex;
+
+layout(push_constant) uniform constants {
+    vec2 resolution;
+    int frame;
+} PushConstants;
+
 // Decoder or Demodulator
 // This pass takes the Composite signal generated on Buffer B
 // and decodes it
@@ -5,16 +16,16 @@
 #define PI   3.14159265358979323846
 #define TAU  6.28318530717958647693
 
-#define BRIGHTNESS_FACTOR        40.0
+#define BRIGHTNESS_FACTOR        2.0
 
 // The decoded IQ signals get multiplied by this
 // factor. Bigger values yield more color saturation
-#define CHROMA_SATURATION_FACTOR 4.0
+#define CHROMA_SATURATION_FACTOR 3.0
 
 // Size of the decoding FIR filter. bigger values
 // yield more smuggly video and are more expensive
-#define CHROMA_DECODER_FIR_SIZE  16
-#define LUMA_DECODER_FIR_SIZE  16
+#define CHROMA_DECODER_FIR_SIZE  8
+#define LUMA_DECODER_FIR_SIZE  4
 
 float sinc(float x) {
     x *= PI;
@@ -30,9 +41,9 @@ float sincf(float cutoff, float n) {
 
 // YIQ to RGB matrix
 const mat3 yiq_to_rgb = mat3(
-    1.000, 1.000, 1.000,
-    0.956,-0.272,-1.106,
-    0.621,-0.647, 1.703
+    1.000,  1.000,  1.000,
+    0.956, -0.272, -1.106,
+    0.621, -0.647,  1.703
 );
 
 float blackman(float n, float N) {
@@ -44,7 +55,7 @@ float blackman(float n, float N) {
 }
 
 void main() {
-    vec2 uv = FragTexCoord * screen_size;
+    vec2 uv = TexCoord * PushConstants.resolution;
 
     // Chroma decoder oscillator frequency 
     float fc = 16.0;
@@ -58,13 +69,13 @@ void main() {
     vec3 yiq = vec3(0.0);
     
     // Decode Luma first
-    for (int d = -LUMA_DECODER_FIR_SIZE; d < 0; d++) {
+    for (int d = -LUMA_DECODER_FIR_SIZE; d < LUMA_DECODER_FIR_SIZE; d++) {
         vec2 p = vec2(uv.x + float(d), uv.y);
-        vec3 s = texture(input_texture, p / screen_size).rgb;
+        vec3 s = texture(input_tex, p / PushConstants.resolution).rgb;
         float t = fc * (uv.x + float(d));
 
         float window = blackman(float(d + LUMA_DECODER_FIR_SIZE), float(LUMA_DECODER_FIR_SIZE)); 
-        float filt = sincf(0.25, float(d));
+        float filt = sincf(0.25, float(d)) * 2.75;
 
         yiq.x += s.x * filt;
     }
@@ -75,9 +86,9 @@ void main() {
     // Then decode chroma
     for (int d = -CHROMA_DECODER_FIR_SIZE; d < 0; d++) {
         vec2 p = vec2(uv.x + float(d), uv.y);
-        vec3 s = texture(input_texture, p / screen_size).rgb;
-        float t = fc * (uv.x + float(d)) + ((PI / 2.0) * uv.y) + ((PI) * float(frame & 1));
-        
+        vec3 s = texture(input_tex, p / PushConstants.resolution).rgb;
+        float t = fc * (uv.x + float(d)) + ((PI / 2.0) * uv.y) + (PI * float((PushConstants.frame >> 1) & 1));
+
         // Apply Blackman window for smoother colors
         float window = blackman(float(d + CHROMA_DECODER_FIR_SIZE), float(CHROMA_DECODER_FIR_SIZE)); 
         float filt = sincf(0.25, float(d));

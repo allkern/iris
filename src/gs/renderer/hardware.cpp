@@ -39,7 +39,7 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
 	ctx->granite_device.init_frame_contexts(4);
 
 	GSOptions opts = {};
-	// opts.super_sampling = SuperSampling::X4;
+	// opts.super_sampling = SuperSampling::X8;
 	// opts.ordered_super_sampling = true;
 	// opts.super_sampled_textures = true;
 
@@ -70,16 +70,12 @@ void hardware_reset(void* udata) {
 void hardware_destroy(void* udata) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
-    ctx->granite_device.wait_idle();
-
 	delete ctx->instance;
 	delete ctx->device;
 	delete ctx->signal_handler;
 
     delete ctx;
 }
-
-static int phase = 0;
 
 renderer_image hardware_get_frame(void* udata) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
@@ -123,10 +119,10 @@ renderer_image hardware_get_frame(void* udata) {
 
 	VSyncInfo info = {};
 
-	info.phase = phase;
+	info.phase = 0;
 	info.anti_blur = true;
-	info.force_progressive = false;
-	info.overscan = false;
+	info.force_progressive = true;
+	info.overscan = true;
 	info.crtc_offsets = false;
 	info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -146,8 +142,6 @@ renderer_image hardware_get_frame(void* udata) {
 	image.height = granite_image->get_height();
 	image.format = granite_image->get_format();
 	image.view = granite_image->get_view().get_view().view;
-
-	phase ^= 1;
 
 	return image;
 }

@@ -72,20 +72,21 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->window_width = window["window_width"].value_or(960);
     iris->window_height = window["window_height"].value_or(720);
     iris->fullscreen = window["fullscreen"].value_or(0);
-    // iris->fullscreen_mode = tbl["fullscreen_mode"].value_or(0);
 
     auto display = tbl["display"];
-    iris->aspect_mode = display["aspect_mode"].value_or(0); // display["aspect_mode"].value_or(RENDERER_ASPECT_AUTO);
+    iris->aspect_mode = display["aspect_mode"].value_or(RENDER_ASPECT_AUTO);
     iris->bilinear = display["bilinear"].value_or(true);
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);
-    iris->renderer_backend = display["renderer"].value_or(0); // display["renderer"].value_or(RENDERER_SOFTWARE_THREAD);
+    iris->renderer_backend = display["renderer"].value_or(RENDERER_BACKEND_HARDWARE);
     iris->window_width = display["window_width"].value_or(960);
     iris->window_height = display["window_height"].value_or(720);
+    iris->menubar_height = display["menubar_height"].value_or(0);
 
     auto audio = tbl["audio"];
     iris->mute = audio["mute"].value_or(false);
     iris->volume = audio["volume"].value_or(1.0);
+    iris->mute_adma = audio["mute_adma"].value_or(true);
 
     auto debugger = tbl["debugger"];
     iris->show_ee_control = debugger["show_ee_control"].value_or(false);
@@ -299,11 +300,13 @@ void close(iris::instance* iris) {
             { "bilinear", iris->bilinear },
             { "renderer", iris->renderer_backend },
             { "window_width", iris->window_width },
-            { "window_height", iris->window_height }
+            { "window_height", iris->window_height },
+            { "menubar_height", iris->menubar_height }
         } },
         { "audio", toml::table {
             { "mute", iris->mute },
-            { "volume", iris->volume },
+            { "mute_adma", iris->mute_adma },
+            { "volume", iris->volume }
         } },
         { "paths", toml::table {
             { "bios_path", iris->bios_path },
