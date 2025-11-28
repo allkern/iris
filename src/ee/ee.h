@@ -145,6 +145,7 @@ int ee_run_block(struct ee_state* ee, int cycles);
 void ee_set_fmv_skip(struct ee_state* ee, int v);
 void ee_reset_intc_reads(struct ee_state* ee);
 void ee_reset_csr_reads(struct ee_state* ee);
+void ee_flush_cache(struct ee_state* ee);
 
 #undef EE_ALIGNED16
 

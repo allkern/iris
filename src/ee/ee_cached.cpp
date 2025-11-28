@@ -3693,79 +3693,14 @@ ee_instruction ee_decode(uint32_t opcode) {
     return i;
 }
 
-int ee_run_block(struct ee_state* ee, int max_cycles) {
-    // This is the entrypoint to the EENULL thread.
-    // If we hit this address, the program is basically idling
-    // so we "fast-forward" 1024 cycles
-    if (ee->pc == 0x81fc0) {
-        ee_check_irq(ee);
+static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycles) {
+    ee->block_cache[ee->pc] = {};
 
-        ee->total_cycles += 8 * 128;
-        ee->count += 8 * 128;
-        // ee->eenull_counter += 8 * 64;
-
-        return 8 * 128;
-    }
-
-    if (ee->intc_reads >= 10000) {
-        ee_check_irq(ee);
-
-        return 1024;
-    }
-
-    // if (ee->csr_reads >= 1000) {
-    //     ee_check_irq(ee);
-
-    //     return 1024;
-    // }
-
-    if (ee->block_cache.contains(ee->pc)) {
-        const auto& block = ee->block_cache[ee->pc];
-
-        ee->block_pc = ee->pc;
-
-        int cycles = 0;
-
-        for (const auto& i : block.instructions) {
-            ee->delay_slot = ee->branch;
-            ee->branch = 0;
-
-            // If we need to handle an interrupt, break out of the loop
-            if (ee_check_irq(ee))
-                break;
-
-            // if (ee->pc >= 0x81fc0 && ee->pc <= 0x81fdc) {
-            //     ee->eenull_counter++;
-            // }
-
-            ee->pc = ee->next_pc;
-            ee->next_pc += 4;
-
-            i.func(ee, i);
-
-            ee->count++;
-            ee->r[0] = { 0 };
-
-            cycles++;
-
-            // An exception occurred or likely branch was taken
-            // break immediately and clear the exception flag
-            if (ee->exception) {
-                ee->exception = 0;
-
-                break;
-            }
-        }
-
-        // printf("ee: Block executed with %d cycles pc=%08x\n", cycles, ee->pc);
-
-        return cycles;
-    }
+    struct ee_block& block = ee->block_cache.at(ee->pc);
 
     uint32_t pc = ee->pc;
     uint32_t block_pc = ee->pc;
     ee_instruction i;
-    ee_block block;
 
     block.cycles = 0;
     block.instructions.reserve(max_cycles);
@@ -3797,9 +3732,89 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         pc += 4;
     }
 
-    ee->block_cache[block_pc] = block;
+    return &block;
+}
 
-    return 0;
+static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
+    const auto& block_it = ee->block_cache.find(pc);
+
+    if (block_it != ee->block_cache.end()) {
+        return &block_it->second;
+    }
+
+    return nullptr;
+}
+
+int ee_run_block(struct ee_state* ee, int max_cycles) {
+    // This is the entrypoint to the EENULL thread.
+    // If we hit this address, the program is basically idling
+    // so we "fast-forward" 1024 cycles
+    if (ee->pc == 0x81fc0) {
+        ee_check_irq(ee);
+
+        ee->total_cycles += 2048;
+        ee->count += 2048;
+        // ee->eenull_counter += 8 * 64;
+
+        return 2048;
+    }
+
+    if (ee->intc_reads >= 10000) {
+        ee_check_irq(ee);
+
+        return 2048;
+    }
+
+    // if (ee->csr_reads >= 1000) {
+    //     ee_check_irq(ee);
+
+    //     return 1024;
+    // }
+
+    struct ee_block* block = ee_find_block(ee, ee->pc);
+
+    if (!block) {
+        block = ee_cache_block(ee, max_cycles);
+    }
+
+    ee->block_pc = ee->pc;
+
+    int cycles = 0;
+
+    for (const auto& i : block->instructions) {
+        ee->delay_slot = ee->branch;
+        ee->branch = 0;
+
+        // If we need to handle an interrupt, break out of the loop
+        if (ee_check_irq(ee))
+            break;
+
+        ee->pc = ee->next_pc;
+        ee->next_pc += 4;
+
+        i.func(ee, i);
+
+        ee->count++;
+        ee->r[0] = { 0 };
+
+        cycles++;
+
+        // An exception occurred or likely branch was taken
+        // break immediately and clear the exception flag
+        if (ee->exception) {
+            ee->exception = 0;
+
+            break;
+        }
+    }
+
+    // printf("ee: Block executed with %d cycles pc=%08x\n", cycles, ee->pc);
+
+    return cycles;
+}
+
+void ee_flush_cache(struct ee_state* ee) {
+    ee->block_cache.clear();
 }
 
 uint32_t ee_get_pc(struct ee_state* ee) {
