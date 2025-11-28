@@ -948,43 +948,28 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         v->counter &= 0xfff;
         v->counter |= sample_index << 12;
 
-        // if (v->loop_end) {
-        //     c->endx |= 1 << vc;
-
-        //     if (!v->loop) {
-        //         adsr_load_release(spu2, c, v, vc);
-        //     }
-        // } else if (v->loop_start) {
-        //     v->lsax = v->nax;
-        // } else {
-        //     v->nax += 8;
-        // }
-
         if (v->loop_start) {
             spu2_check_irq(spu2, v->nax);
 
             v->lsax = v->nax;
+            v->loop_addr_specified = 1;
+        }
 
-            v->nax += 8;
-            v->nax &= 0xfffff;
-        } else if (v->loop_end) {
-            // if (vc == 18 && cr == 1)
-            //     printf("spu2: Voice %d loop end at 0x%08x (lsax=%08x ssa=%08x) loop=%d end=%d start=%d\n", vc, v->nax, v->lsax, v->ssa, v->loop, v->loop_end, v->loop_start);
+        v->nax += 8;
+        v->nax &= 0xfffff;
 
+        spu2_check_irq(spu2, v->nax);
+        
+        if (v->loop_end) {
             if (!v->loop) {
-                adsr_load_release(spu2, c, v, vc);
-
                 v->envx = 0;
+
+                adsr_load_release(spu2, c, v, vc);
             } else {
                 v->nax = v->lsax;
+
+                spu2_check_irq(spu2, v->nax);
             }
-
-            spu2_check_irq(spu2, v->nax);
-        } else {
-            spu2_check_irq(spu2, v->nax);
-
-            v->nax += 8;
-            v->nax &= 0xfffff;
         }
 
         spu2_decode_adpcm_block(spu2, v);
@@ -1052,10 +1037,22 @@ static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int
 
     struct spu2_sample s = silence;
 
-    s.s16[0] = spu2->ram[(c ? 0x2400 : 0x2000) + spu2->c[c].memin_read_addr];
-    s.s16[1] = spu2->ram[(c ? 0x2600 : 0x2200) + spu2->c[c].memin_read_addr];
+    // 32-bit HIFI PCM mode
+    if (spu2->spdif_out & 4) {
+        int32_t left = *(int32_t*)(&spu2->ram[0x2400 + spu2->c[c].memin_read_addr]);
+        int32_t right = *(int32_t*)(&spu2->ram[0x2600 + spu2->c[c].memin_read_addr]);
 
-    spu2->c[c].memin_read_addr++;
+        s.s16[0] = (int16_t)((left >> 16) & 0xffff);
+        s.s16[1] = (int16_t)((right >> 16) & 0xffff);
+
+        spu2->c[c].memin_read_addr++;
+        spu2->c[c].memin_read_addr++;
+    } else {
+        s.s16[0] = spu2->ram[(c ? 0x2400 : 0x2000) + spu2->c[c].memin_read_addr];
+        s.s16[1] = spu2->ram[(c ? 0x2600 : 0x2200) + spu2->c[c].memin_read_addr];
+
+        spu2->c[c].memin_read_addr++;
+    }
 
     if (spu2->c[c].memin_read_addr == 0x100) {
         spu2->c[c].memin_read_addr = 0;
@@ -1077,7 +1074,7 @@ struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
     return spu2_get_adma_sample(spu2, c);
 }
 
-struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
+struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
     struct spu2_sample s = silence;
 
     s.u16[0] = 0;
@@ -1099,10 +1096,12 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2) {
     //     }
     // }
 
-    // s.s16[0] += c0_adma.s16[0];
-    // s.s16[1] += c0_adma.s16[1];
-    // s.s16[0] += c1_adma.s16[0];
-    // s.s16[1] += c1_adma.s16[1];
+    if (adma_enable) {
+        s.s16[0] += c0_adma.s16[0];
+        s.s16[1] += c0_adma.s16[1];
+        s.s16[0] += c1_adma.s16[0];
+        s.s16[1] += c1_adma.s16[1];
+    }
 
     for (int i = 0; i < 24; i++) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);

@@ -85,6 +85,7 @@ struct spu2_voice {
     int loop;
     int loop_end;
     int prev_sample_index;
+    int loop_addr_specified;
     int16_t s[4];
 
     // Envelope
@@ -213,7 +214,7 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr);
 void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data);
 void ps2_spu2_destroy(struct ps2_spu2* spu2);
-struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu);
+struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu, int adma_enable);
 struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v);
 struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c);
 void spu2_start_adma(struct ps2_spu2* spu2, int c);
