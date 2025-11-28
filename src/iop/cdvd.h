@@ -74,6 +74,7 @@ extern "C" {
 #define CDVD_CD_SS_2328 2328
 #define CDVD_CD_SS_2340 2340
 #define CDVD_CD_SS_2048 2048
+#define CDVD_CD_SS_2352 2352
 #define CDVD_DVD_SS 2064
 
 struct nvram_layout {
@@ -119,7 +120,7 @@ struct ps2_cdvd {
     uint8_t cdkey[16];
 
     struct disc_state* disc;
-    uint8_t buf[2340];
+    uint8_t buf[2352];
     int buf_size;
 
     // Pending read

@@ -158,6 +158,24 @@ static const uint8_t itob_table[] = {
     0x88, 0x89, 0x90, 0x91, 0x92, 0x93, 0x94, 0x95,
 };
 
+static inline const char* cdvd_get_n_command_name(uint8_t cmd) {
+    switch (cmd) {
+        case 0x00: return "nop";
+        case 0x01: return "nop_sync";
+        case 0x02: return "standby";
+        case 0x03: return "stop";
+        case 0x04: return "pause";
+        case 0x05: return "seek";
+        case 0x06: return "read_cd";
+        case 0x07: return "read_cdda";
+        case 0x08: return "read_dvd";
+        case 0x09: return "get_toc";
+        case 0x0c: return "read_key";
+    }
+
+    return "<unknown>";
+}
+
 static inline const char* cdvd_get_type_name(int type) {
     switch (type) {
         case CDVD_DISC_NO_DISC: return "No disc";
@@ -202,6 +220,49 @@ static inline void cdvd_init_s_fifo(struct ps2_cdvd* cdvd, int size) {
     cdvd->s_stat &= ~0x40;
 }
 
+static inline void cdvd_s_read_subq(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 11);
+
+    int track = disc_get_track_number(cdvd->disc, cdvd->read_lba);
+
+    struct track_info info;
+    disc_get_track_info(cdvd->disc, track, &info);
+
+    int track_lba = (cdvd->read_lba + 150) - info.lba;
+
+    int track_mm = track_lba / (60 * 75);
+    int track_ss = (track_lba % (60 * 75)) / 75;
+    int track_ff = (track_lba % (60 * 75)) % 75;
+    int abs_mm = (cdvd->read_lba + 150) / (60 * 75);
+    int abs_ss = ((cdvd->read_lba + 150) % (60 * 75)) / 75;
+    int abs_ff = ((cdvd->read_lba + 150) % (60 * 75)) % 75;
+
+    fprintf(stdout, "cdvd: S subq read: track=%02d trk %02d:%02d:%02d abs %02d:%02d:%02d\n",
+        track,
+        track_mm, track_ss, track_ff,
+        abs_mm, abs_ss, abs_ff
+    );
+
+    // Note: From PCSX2
+    //       the formatted subq command returns: 
+    //       control/adr, track, index, trk min, trk sec, trk frm, 0x00, abs min, abs sec, abs frm
+    memset(&cdvd->s_fifo[0], 0, 11);
+
+    cdvd->s_fifo[0] = 0x41; // control/adr
+    cdvd->s_fifo[1] = track; // track
+    cdvd->s_fifo[2] = 0x01; // index
+    cdvd->s_fifo[3] = itob_table[track_mm]; // trk min
+    cdvd->s_fifo[4] = itob_table[track_ss]; // trk sec
+    cdvd->s_fifo[5] = itob_table[track_ff]; // trk frm
+    cdvd->s_fifo[6] = 0x00;
+    cdvd->s_fifo[7] = itob_table[abs_mm]; // abs min
+    cdvd->s_fifo[8] = itob_table[abs_ss]; // abs sec
+    cdvd->s_fifo[9] = itob_table[abs_ff]; // abs frm
+
+    // To-do: This doesn't work for whatever reason, even though
+    //        we're returning correct data, the CD player just
+    //        won't actually display the current time.
+}
 static inline void cdvd_s_mechacon_cmd(struct ps2_cdvd* cdvd) {
     switch (cdvd->s_params[0]) {
         case 0x00: {
@@ -291,6 +352,11 @@ static inline void cdvd_s_read_ilink_id(struct ps2_cdvd* cdvd) {
     int offset = g_dragon_layout.ilink_id_offset;
 
     memcpy(&cdvd->s_fifo[1], &cdvd->nvram[offset], 8);
+}
+static inline void cdvd_s_ctrl_audio_digital_out(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
 }
 static inline void cdvd_s_forbid_dvd(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
@@ -473,11 +539,18 @@ static inline void cdvd_s_get_region_params(struct ps2_cdvd* cdvd) {
 
     int offset = g_dragon_layout.regparams_offset;
 
-    cdvd->s_fifo[0] = 0;
-    cdvd->s_fifo[1] = 1 << 3; // MechaCon encryption zone
+    cdvd->s_fifo[1] = 1 << 0; // MechaCon encryption zone
     cdvd->s_fifo[2] = 0;
 
     memcpy(&cdvd->s_fifo[3], &cdvd->nvram[offset], 8);
+
+    fprintf(stdout, "cdvd: Region: \'%c\' Language set: %c%c%c%c\n",
+        cdvd->s_fifo[3],
+        cdvd->s_fifo[4],
+        cdvd->s_fifo[5],
+        cdvd->s_fifo[6],
+        cdvd->s_fifo[7]
+    );
 
     //This is basically what PCSX2 returns on a blank NVM/MEC file
     // cdvd->s_fifo[0] = 0;
@@ -500,6 +573,8 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->s_cmd = cmd;
 
     switch (cmd) {
+        // Note: Used by CD player to get current playing position
+        case 0x02: printf("cdvd: read_subq\n"); cdvd_s_read_subq(cdvd); break;
         case 0x03: printf("cdvd: mechacon_cmd(%02x)\n", cdvd->s_params[0]); cdvd_s_mechacon_cmd(cdvd); break;
         case 0x05: printf("cdvd: update_sticky_flags\n"); cdvd_s_update_sticky_flags(cdvd); break;
         // case 0x06: printf("cdvd: tray_ctrl\n"); cdvd_s_tray_ctrl(cdvd); break;
@@ -509,6 +584,9 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x0b: printf("cdvd: write_nvram\n"); cdvd_s_write_nvram(cdvd); break;
         // case 0x0f: printf("cdvd: power_off\n"); cdvd_s_power_off(cdvd); break;
         case 0x12: printf("cdvd: read_ilink_id\n"); cdvd_s_read_ilink_id(cdvd); break;
+
+        // Note: Used by CD player
+        case 0x14: printf("cdvd: ctrl_audio_digital_out\n"); cdvd_s_ctrl_audio_digital_out(cdvd); break;
         case 0x15: printf("cdvd: forbid_dvd\n"); cdvd_s_forbid_dvd(cdvd); break;
         case 0x17: printf("cdvd: read_model\n"); cdvd_s_read_model(cdvd); break;
         case 0x1a: printf("cdvd: certify_boot\n"); cdvd_s_certify_boot(cdvd); break;
@@ -604,12 +682,15 @@ static inline void cdvd_send_irq(struct ps2_cdvd* cdvd) {
 }
 
 void cdvd_fetch_sector(struct ps2_cdvd* cdvd) {
-    memset(cdvd->buf, 0, 2340);
+    memset(cdvd->buf, 0, 2352);
 
     switch (cdvd->read_size) {
         case CDVD_CD_SS_2048:
         case CDVD_CD_SS_2328: {
             disc_read_sector(cdvd->disc, cdvd->buf, cdvd->read_lba++, DISC_SS_DATA);
+        } break;
+        case CDVD_CD_SS_2352: {
+            disc_read_sector(cdvd->disc, cdvd->buf, cdvd->read_lba++, DISC_SS_RAW);
         } break;
         case CDVD_CD_SS_2340: {
             // LBA -> MSF
@@ -828,33 +909,21 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
     // );
 }
 static inline void cdvd_n_read_cdda(struct ps2_cdvd* cdvd) {
-    /*  Params:
-        0-3   Sector position
-        4-7   Sectors to read
-
-        Performs a DVD-style read, with a block size of 2064 bytes. The format of the data is as follows:
-        0    1    Volume number + 0x20
-        1    3    Sector number - volume start + 0x30000, in big-endian.
-        4    8    ? (all zeroes)
-        12   2048 Raw sector data
-        2060 4    ? (all zeroes)
-    */
-
     int prev_lba = cdvd->read_lba;
 
     cdvd->read_lba = *(uint32_t*)(cdvd->n_params);
     cdvd->read_count = *(uint32_t*)(cdvd->n_params + 4);
     cdvd->read_speed = cdvd->n_params[9];
-    cdvd->read_size = CDVD_CD_SS_2340;
+    cdvd->read_size = CDVD_CD_SS_2352;
 
-    // printf("cdvd: ReadCdda lba=%08x count=%08x\n", cdvd->read_lba, cdvd->read_count);
+    // fprintf(stderr, "cdvd: ReadCdda lba=%d count=%d decode=%d\n", cdvd->read_lba, cdvd->read_count, cdvd->mecha_decode);
 
     struct sched_event event;
 
     event.name = "CDVD ReadCdda";
     event.udata = cdvd;
     event.callback = cdvd_do_read;
-    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
+    event.cycles = ((2352.f / 2.f) / 44100.f) * (36864000.f * 8);
 
     cdvd_set_status(cdvd, CDVD_STATUS_READING);
 
@@ -892,11 +961,55 @@ static inline void cdvd_n_read_dvd(struct ps2_cdvd* cdvd) {
     cdvd_set_status(cdvd, CDVD_STATUS_READING);
 }
 static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {
-    printf("cdvd: get_toc\n");
+    fprintf(stderr, "cdvd: get_toc\n");
 
     memset(cdvd->buf, 0, 2064);
 
-    if (!cdvd_is_dual_layer(cdvd)) {
+    if (cdvd->disc_type == CDVD_DISC_CDDA) {
+        int track_count = disc_get_track_count(cdvd->disc);
+        int disc_size = disc_get_size(cdvd->disc) / 2352;
+
+        int size_mm = disc_size / (60 * 75);
+        int size_ss = (disc_size % (60 * 75)) / 75;
+        int size_ff = (disc_size % (60 * 75)) % 75;
+
+        cdvd->buf[0] = 0x41;
+		cdvd->buf[1] = 0x00;
+
+		//Number of FirstTrack
+		cdvd->buf[2] = 0xa0;
+		cdvd->buf[7] = 0x01;
+
+		//Number of LastTrack
+		cdvd->buf[12] = 0xa1;
+		cdvd->buf[17] = itob_table[track_count];
+
+		//DiskLength
+		cdvd->buf[22] = 0xa2;
+		cdvd->buf[27] = itob_table[size_mm]; // mm
+		cdvd->buf[28] = itob_table[size_ss]; // ss
+		cdvd->buf[29] = itob_table[size_ff]; // ff
+
+        for (int i = 0; i < track_count; i++) {
+            int num = i + 1;
+
+            struct track_info info;
+
+            disc_get_track_info(cdvd->disc, num, &info);
+
+            int track_mm = info.lba / (60 * 75);
+            int track_ss = (info.lba % (60 * 75)) / 75;
+            int track_ff = (info.lba % (60 * 75)) % 75;
+
+            // fprintf(stderr, "cdvd: track %d %02d:%02d:%02d\n", i + 1, track_mm, track_ss, track_ff);
+
+            cdvd->buf[30 + (i * 10)] = info.type;
+            cdvd->buf[32 + (i * 10)] = itob_table[num]; // Track number
+            cdvd->buf[37 + (i * 10)] = itob_table[track_mm]; // mm
+            cdvd->buf[38 + (i * 10)] = itob_table[track_ss]; // ss
+            cdvd->buf[39 + (i * 10)] = itob_table[track_ff]; // ff
+        }
+    } else if (!cdvd_is_dual_layer(cdvd)) {
         cdvd->buf[0] = 0x04;
         cdvd->buf[1] = 0x02;
         cdvd->buf[2] = 0xF2;
@@ -1010,7 +1123,7 @@ static inline void cdvd_n_read_key(struct ps2_cdvd* cdvd) {
 static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->n_cmd = cmd;
 
-    // printf("cdvd: N command %02x\n", cmd);
+    // fprintf(stdout, "cdvd: N command %s (%02x)\n", cdvd_get_n_command_name(cmd), cmd);
 
     cdvd_set_busy(cdvd);
 
@@ -1106,11 +1219,7 @@ int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay) {
     cdvd->detected_disc_type = disc_get_type(cdvd->disc);
     cdvd->layer2_lba = disc_get_volume_lba(cdvd->disc, 1);
 
-    if (cdvd->detected_disc_type == CDVD_DISC_CDDA) {
-        cdvd->detected_disc_type = CDVD_DISC_PS2_CD;
-    }
-
-    printf("cdvd: Opened \'%s\' (%s)\n", path, cdvd_get_type_name(cdvd->detected_disc_type));
+    fprintf(stdout, "cdvd: Opened \'%s\' (%s)\n", path, cdvd_get_type_name(cdvd->detected_disc_type));
 
     if (!delay) {
         cdvd_set_status(cdvd, CDVD_STATUS_SPINNING);
