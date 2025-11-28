@@ -636,10 +636,6 @@ uint64_t cue_get_size(void* udata) {
     return size;
 }
 
-uint64_t cue_get_volume_lba(void* udata) {
-    return 0;
-}
-
 int cue_get_sector_size(void* udata) {
     return 2352;
 }
@@ -651,16 +647,16 @@ int cue_init(struct disc_cue* cue, const char* path) {
     if (cue_parse(cue, path) != CUE_OK) {
         printf("cue: Failed to parse CUE file '%s'\n", path);
 
-        return 1;
+        return 0;
     }
 
     if (cue_load(cue, LD_FILE) != CUE_OK) {
         printf("cue: Failed to load CUE file '%s'\n", path);
 
-        return 1;
+        return 0;
     }
 
-    return 0;
+    return 1;
 }
 
 int cue_get_track_count(void* udata) {

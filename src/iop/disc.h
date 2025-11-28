@@ -25,8 +25,9 @@ extern "C" {
 #define DISC_EXT_ISO 0
 #define DISC_EXT_BIN 1
 #define DISC_EXT_CUE 2
-#define DISC_EXT_NONE 3
-#define DISC_EXT_UNSUPPORTED 4
+#define DISC_EXT_CHD 3
+#define DISC_EXT_NONE 4
+#define DISC_EXT_UNSUPPORTED 5
 
 #define DISC_MEDIA_CD 0
 #define DISC_MEDIA_DVD 1
@@ -82,7 +83,6 @@ struct track_info {
 struct disc_state {
     int (*read_sector)(void* udata, unsigned char* buf, uint64_t lba, int size);
     uint64_t (*get_size)(void* udata);
-    uint64_t (*get_volume_lba)(void* udata);
     int (*get_sector_size)(void* udata);
     int (*get_track_count)(void* udata);
     int (*get_track_info)(void* udata, int track, struct track_info* info);

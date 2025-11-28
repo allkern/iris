@@ -13,10 +13,10 @@ int bin_init(struct disc_bin* bin, const char* path) {
     if (!bin->file) {
         free(bin);
 
-        return 1;
+        return 0;
     }
 
-    return 0;
+    return 1;
 }
 
 void bin_destroy(struct disc_bin* bin) {
@@ -47,10 +47,6 @@ uint64_t bin_get_size(void* udata) {
     fseek64(bin->file, 0, SEEK_END);
 
     return ftell64(bin->file);
-}
-
-uint64_t bin_get_volume_lba(void* udata) {
-    return 0;
 }
 
 int bin_get_sector_size(void* udata) {

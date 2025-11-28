@@ -12,10 +12,10 @@ int iso_init(struct disc_iso* iso, const char* path) {
     if (!iso->file) {
         free(iso);
 
-        return 1;
+        return 0;
     }
 
-    return 0;
+    return 1;
 }
 
 void iso_destroy(struct disc_iso* iso) {
@@ -41,10 +41,6 @@ uint64_t iso_get_size(void* udata) {
     fseek64(iso->file, 0, SEEK_END);
 
     return ftell64(iso->file);
-}
-
-uint64_t iso_get_volume_lba(void* udata) {
-    return 0;
 }
 
 int iso_get_sector_size(void* udata) {

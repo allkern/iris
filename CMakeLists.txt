@@ -59,7 +59,8 @@ target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
 add_subdirectory(parallel-gs EXCLUDE_FROM_ALL)
 add_subdirectory(SDL EXCLUDE_FROM_ALL)
-add_subdirectory(tomlplusplus)
+add_subdirectory(tomlplusplus EXCLUDE_FROM_ALL)
+add_subdirectory(libchdr EXCLUDE_FROM_ALL)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS -mssse3 -msse4.1)
@@ -126,6 +127,7 @@ target_sources(iris PRIVATE
     src/ps2_elf.c
     src/ps2_iso9660.c
     src/queue.c
+    src/list.c
     src/scheduler.c
     src/dev/ds.c
     src/dev/mcd.c
@@ -164,6 +166,7 @@ target_sources(iris PRIVATE
     src/iop/usb.c
     src/iop/disc/bin.c
     src/iop/disc/cue.c
+    src/iop/disc/chd.c
     src/iop/disc/iso.c
     src/iop/hle/ioman.cpp
     src/iop/hle/loadcore.c
@@ -204,6 +207,7 @@ target_include_directories(iris PRIVATE
     frontend
     incbin
     parallel-gs
+    libchdr/include
     src
     res
 )
@@ -212,6 +216,7 @@ target_link_libraries(iris PUBLIC
     tomlplusplus::tomlplusplus
     SDL3::SDL3-static
     parallel-gs
+    chdr-static
 )
 
 set_target_properties(iris PROPERTIES 

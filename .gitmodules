@@ -18,3 +18,6 @@
 [submodule "parallel-gs"]
 	path = parallel-gs
 	url = https://github.com/Arntzen-software/parallel-gs
+[submodule "libchdr"]
+	path = libchdr
+	url = https://github.com/rtissera/libchdr

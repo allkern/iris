@@ -6,6 +6,7 @@
 #include "disc.h"
 #include "disc/iso.h"
 #include "disc/cue.h"
+#include "disc/chd.h"
 #include "disc/bin.h"
 
 #ifdef _MSC_VER
@@ -56,6 +57,7 @@ static const char* disc_extensions[] = {
     "iso",
     "bin",
     "cue",
+    "chd",
     NULL
 };
 
@@ -191,7 +193,6 @@ struct disc_state* disc_open(const char* path) {
             s->udata = iso;
             s->read_sector = iso_read_sector;
             s->get_size = iso_get_size;
-            s->get_volume_lba = iso_get_volume_lba;
             s->get_sector_size = iso_get_sector_size;
             s->get_track_count = iso_get_track_count;
             s->get_track_info = iso_get_track_info;
@@ -202,19 +203,18 @@ struct disc_state* disc_open(const char* path) {
         } break;
 
         // Raw 2352-byte sector disc image (CD)
+        case DISC_EXT_NONE:
         case DISC_EXT_BIN: {
             struct disc_bin* bin = bin_create();
 
             s->udata = bin;
             s->read_sector = bin_read_sector;
             s->get_size = bin_get_size;
-            s->get_volume_lba = bin_get_volume_lba;
             s->get_sector_size = bin_get_sector_size;
             s->get_track_count = bin_get_track_count;
             s->get_track_info = bin_get_track_info;
             s->get_track_number = bin_get_track_number;
 
-            // To-do: Check if path exists
             r = bin_init(bin, path);
         } break;
 
@@ -225,14 +225,27 @@ struct disc_state* disc_open(const char* path) {
             s->udata = cue;
             s->read_sector = cue_read_sector;
             s->get_size = cue_get_size;
-            s->get_volume_lba = cue_get_volume_lba;
             s->get_sector_size = cue_get_sector_size;
             s->get_track_count = cue_get_track_count;
             s->get_track_info = cue_get_track_info;
             s->get_track_number = cue_get_track_number;
 
-            // To-do: Check if path exists
             r = cue_init(cue, path);
+        } break;
+
+        // MAME CHD disc image (Compressed Hunks of Data)
+        case DISC_EXT_CHD: {
+            struct disc_chd* chd = chd_create();
+
+            s->udata = chd;
+            s->read_sector = chd_read_sector;
+            s->get_size = chd_get_size;
+            s->get_sector_size = chd_get_sector_size;
+            s->get_track_count = chd_get_track_count;
+            s->get_track_info = chd_get_track_info;
+            s->get_track_number = chd_get_track_number;
+
+            r = chd_init(chd, path);
         } break;
 
         default: {
@@ -242,12 +255,13 @@ struct disc_state* disc_open(const char* path) {
         } break;
     }
 
-    if (!r)
-        return s;
+    if (!r) {
+        free(s);
 
-    free(s);
+        return NULL;
+    }
 
-    return NULL;
+    return s;
 }
 
 #define CD_EXTRA_SIZE 800000000

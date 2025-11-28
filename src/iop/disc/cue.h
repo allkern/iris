@@ -103,7 +103,6 @@ int cue_get_track_lba(struct disc_cue* cue, int track);
 
 int cue_read_sector(void* udata, unsigned char* buf, uint64_t lba, int size);
 uint64_t cue_get_size(void* udata);
-uint64_t cue_get_volume_lba(void* udata);
 int cue_get_sector_size(void* udata);
 int cue_get_track_count(void* udata);
 int cue_get_track_info(void* udata, int track, struct track_info* info);

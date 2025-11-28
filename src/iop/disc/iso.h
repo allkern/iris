@@ -21,7 +21,6 @@ void iso_destroy(struct disc_iso* iso);
 // Disc IF
 int iso_read_sector(void* udata, unsigned char* buf, uint64_t lba, int size);
 uint64_t iso_get_size(void* udata);
-uint64_t iso_get_volume_lba(void* udata);
 int iso_get_sector_size(void* udata);
 int iso_get_track_count(void* udata);
 int iso_get_track_info(void* udata, int track, struct track_info* info);

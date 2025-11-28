@@ -42,7 +42,7 @@ int open_file(iris::instance* iris, std::string file) {
         c = tolower(c);
 
     // Load disc image
-    if (ext == ".iso" || ext == ".bin" || ext == ".cue") {
+    if (ext == ".iso" || ext == ".bin" || ext == ".cue" || ext == ".chd") {
         if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str(), 0))
             return 1;
 

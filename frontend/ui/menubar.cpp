@@ -52,8 +52,14 @@ void show_main_menubar(iris::instance* iris) {
                 iris->mute = true;
 
                 auto f = pfd::open_file("Select a file to load", "", {
-                    "All File Types (*.iso; *.bin; *.cue; *.elf)", "*.iso *.bin *.cue *.elf",
-                    "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
+                    "All File Types (*.iso; *.bin; *.cue; *.chd; *.elf)", "*.iso *.bin *.cue *.chd *.elf",
+                    "Disc Images (*.iso; *.bin; *.cue; *.chd)", "*.iso *.bin *.cue *.chd",
+                    "CD images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
+                    "DVD images (*.iso; *.chd)", "*.iso *.chd",
+                    "ISO Files (*.iso)", "*.iso",
+                    "CUE Files (*.cue)", "*.cue",
+                    "BIN Files (*.bin)", "*.bin",
+                    "CHD Files (*.chd)", "*.chd",
                     "ELF Executables (*.elf)", "*.elf",
                     "All Files (*.*)", "*"
                 });
@@ -62,17 +68,25 @@ void show_main_menubar(iris::instance* iris) {
 
                 iris->mute = prev_mute;
 
-                if (f.result().size()) {
-                    open_file(iris, f.result().at(0));
-                    add_recent(iris, f.result().at(0));
+                std::string path = f.result().at(0);
+
+                if (path.size()) {
+                    if (open_file(iris, path)) {
+                        push_info(iris, "Failed to open file: " + path);
+                    } else {
+                        add_recent(iris, path);
+                    }
                 }
             }
 
             if (BeginMenu(ICON_MS_HISTORY " Open Recent", iris->recents.size())) {
                 for (const std::string& s : iris->recents) {
                     if (MenuItem(s.c_str())) {
-                        open_file(iris, s);
-                        add_recent(iris, s);
+                        if (open_file(iris, s)) {
+                            push_info(iris, "Failed to open file: " + s);
+                        } else {
+                            add_recent(iris, s);
+                        }
                     }
                 }
 
@@ -189,7 +203,13 @@ void show_main_menubar(iris::instance* iris) {
                 iris->mute = true;
 
                 auto f = pfd::open_file("Select CD/DVD image", "", {
-                    "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
+                    "Disc Images (*.iso; *.bin; *.cue; *.chd)", "*.iso *.bin *.cue *.chd",
+                    "CD images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
+                    "DVD images (*.iso; *.chd)", "*.iso *.chd",
+                    "ISO Files (*.iso)", "*.iso",
+                    "CUE Files (*.cue)", "*.cue",
+                    "BIN Files (*.bin)", "*.bin",
+                    "CHD Files (*.chd)", "*.chd",
                     "All Files (*.*)", "*"
                 });
 

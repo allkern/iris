@@ -21,7 +21,6 @@ void bin_destroy(struct disc_bin* bin);
 // Disc IF
 int bin_read_sector(void* udata, unsigned char* buf, uint64_t lba, int size);
 uint64_t bin_get_size(void* udata);
-uint64_t bin_get_volume_lba(void* udata);
 int bin_get_sector_size(void* udata);
 int bin_get_track_count(void* udata);
 int bin_get_track_info(void* udata, int track, struct track_info* info);
