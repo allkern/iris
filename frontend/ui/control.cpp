@@ -421,6 +421,10 @@ void show_ee_control(iris::instance* iris) {
 
         if (Button(ICON_MS_MOVE_DOWN)) {
             iris->ee_control_follow_pc = true;
+        } SameLine();
+
+        if (Button(ICON_MS_AUTORENEW)) {
+            ee_flush_cache(iris->ps2->ee);
         }
 
         if (iris->symbols.size()) {
