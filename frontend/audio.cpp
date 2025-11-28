@@ -5,15 +5,15 @@ namespace iris::audio {
 void update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
     iris::instance* iris = (iris::instance*)userdata;
 
-    if (iris->pause || iris->mute || !additional_amount)
+    if (iris->pause || !additional_amount)
         return;
 
     iris->audio_buf.resize(additional_amount);
 
     for (int i = 0; i < additional_amount; i++) {
-        iris->audio_buf[i] = ps2_spu2_get_sample(iris->ps2->spu2);
-        iris->audio_buf[i].s16[0] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
-        iris->audio_buf[i].s16[1] *= iris->volume * (iris->mute ? 0.0f : 1.0f);
+        iris->audio_buf[i] = ps2_spu2_get_sample(iris->ps2->spu2, !iris->mute_adma);
+        iris->audio_buf[i].s16[0] *= iris->mute ? 0.0f : iris->volume;
+        iris->audio_buf[i].s16[1] *= iris->mute ? 0.0f : iris->volume;
     }
 
     SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), additional_amount * sizeof(spu2_sample));
