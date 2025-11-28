@@ -429,6 +429,8 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
 #include "rpc.h"
 
 void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
+    int madr_increment = ((dma->sif1.chcr >> 1) & 1) ? -4 : 4;
+
     // No data in the SIF FIFO yet
     if (ps2_sif1_is_empty(dma->sif))
         return;
@@ -465,7 +467,7 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
             for (int i = 0; i < 4; i++) {
                 iop_bus_write32(dma->bus, addr, q.u32[i]);
 
-                addr += 4;
+                addr += madr_increment;
                 --size;
             }
         }
@@ -707,13 +709,25 @@ void ps2_iop_dma_write32(struct ps2_iop_dma* dma, uint32_t addr, uint64_t data) 
                 // printf("iop: Starting %s channel with chcr=%08x madr=%08x bcr=%08x tadr=%08x\n", iop_dma_get_channel_name(addr), data, c->madr, c->bcr, c->tadr);
 
                 // Check negative MADR increments
-                assert((c->chcr & 2) == 0);
+                // if ((c->chcr & 2) == 0) {
+                //     fprintf(stderr, "iop: Negative MADR increments not supported on IOP DMA channels\n");
 
-                // Check for burst transfers
-                assert(((c->chcr >> 9) & 3) != 0);
+                //     // exit(1);
+                // }
 
-                // Check for 0-sized blocks
-                assert((c->bcr & 0xffff) != 0);
+                // // Check for burst transfers
+                // if (((c->chcr >> 9) & 3) != 0) {
+                //     fprintf(stderr, "iop: Burst transfers not supported on IOP DMA channels\n");
+
+                //     // exit(1);
+                // }
+
+                // // Check for 0-sized blocks
+                // if ((c->bcr & 0xffff) == 0) {
+                //     fprintf(stderr, "iop: 0-sized blocks not supported on IOP DMA channels\n");
+
+                //     exit(1);
+                // }
 
                 switch (addr & 0xff0) {
                     case 0x080: iop_dma_handle_mdec_in_transfer(dma); break;
