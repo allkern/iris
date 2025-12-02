@@ -58,7 +58,7 @@ void gs_flip_field(void* udata, int overshoot) {
     struct ps2_gs* gs = (struct ps2_gs*)udata;
 
     // Toggle field
-    gs->csr ^= 1 << 13;
+    gs->csr ^= (1 << 13) | (1 << 14);
 }
 
 void gs_handle_vblank_in(void* udata, int overshoot) {

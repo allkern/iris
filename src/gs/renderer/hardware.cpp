@@ -119,16 +119,16 @@ renderer_image hardware_get_frame(void* udata) {
 
 	VSyncInfo info = {};
 
-	info.phase = 0;
+	info.phase = ctx->gs->csr & (1 << 13) ? 0 : 1;
 	info.anti_blur = true;
-	info.force_progressive = true;
+	info.force_progressive = false;
 	info.overscan = true;
 	info.crtc_offsets = false;
 	info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	info.dst_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	info.adapt_to_internal_horizontal_resolution = false;
-	info.raw_circuit_scanout = true;
+	info.raw_circuit_scanout = false;
 	info.high_resolution_scanout = false;
 
 	ScanoutResult scanout = ctx->interface.vsync(info);
