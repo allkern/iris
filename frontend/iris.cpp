@@ -78,7 +78,7 @@ int open_file(iris::instance* iris, std::string file) {
 }
 
 void update_title(iris::instance* iris) {
-    char buf[128];
+    char buf[512];
 
     std::string base = "";
 
