@@ -478,21 +478,21 @@ bool init(iris::instance* iris) {
     sampler_layout_binding.pImmutableSamplers = nullptr;
     sampler_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-    VkDescriptorBindingFlags flags = {};
-    flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
+    // VkDescriptorBindingFlags flags = {};
+    // flags = VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT;
 
-    VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags = {};
-    binding_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
-    binding_flags.pNext = nullptr;
-    binding_flags.pBindingFlags = &flags;
-    binding_flags.bindingCount = 1;
+    // VkDescriptorSetLayoutBindingFlagsCreateInfo binding_flags = {};
+    // binding_flags.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO;
+    // binding_flags.pNext = nullptr;
+    // binding_flags.pBindingFlags = &flags;
+    // binding_flags.bindingCount = 1;
 
     VkDescriptorSetLayoutCreateInfo layout_info = {};
     layout_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     layout_info.bindingCount = 1;
     layout_info.pBindings = &sampler_layout_binding;
-    layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
-    layout_info.pNext = &binding_flags;
+    // layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
+    // layout_info.pNext = &binding_flags;
 
     if (vkCreateDescriptorSetLayout(iris->device, &layout_info, nullptr, &iris->descriptor_set_layout) != VK_SUCCESS) {
         fprintf(stderr, "imgui: Failed to create descriptor set layout\n");

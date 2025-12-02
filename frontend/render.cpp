@@ -617,27 +617,27 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer) {
     renderer_image image = renderer_get_frame(iris->renderer);
 
-    bool need_rebuild = image.width != iris->image.width ||
-                        image.height != iris->image.height ||
-                        image.format != iris->image.format;
+    // bool need_rebuild = image.width != iris->image.width ||
+    //                     image.height != iris->image.height ||
+    //                     image.format != iris->image.format;
 
     iris->image = image;
 
-    if (need_rebuild && image.view != VK_NULL_HANDLE) {
-        if (!rebuild_shaders(iris)) {
-            fprintf(stderr, "render: Failed to build shaders\n");
+    // if (need_rebuild && image.view != VK_NULL_HANDLE) {
+    //     if (!rebuild_shaders(iris)) {
+    //         fprintf(stderr, "render: Failed to build shaders\n");
 
-            return false;
-        }
-    }
+    //         return false;
+    //     }
+    // }
 
     // Process shader passes here
     VkImageView output_view = iris->image.view;
     VkImage output_image = iris->image.image;
 
-    if (output_view != VK_NULL_HANDLE) {
-        render_shader_passes(iris, command_buffer, output_view, output_image);
-    }
+    // if (output_view != VK_NULL_HANDLE) {
+    //     render_shader_passes(iris, command_buffer, output_view, output_image);
+    // }
 
     VkRenderPassBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
