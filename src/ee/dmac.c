@@ -1465,6 +1465,10 @@ void ps2_dmac_write16(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
 
     switch (addr) {
         case 0x10008000:
+        case 0x1000a000:
+        case 0x1000d000:
+        case 0x1000d400:
+        case 0x1000d800:
         case 0x10009000: {
             if ((c->chcr & 0x100) == 0) {
                 c->chcr &= 0xffff0000;
