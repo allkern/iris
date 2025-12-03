@@ -546,12 +546,12 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         int voice = addr / 12;
 
         switch (addr % 12) {
-            case 0x0: SPU2_WRITEH_V(core, voice, ssa); return;
-            case 0x2: SPU2_WRITEL_V(core, voice, ssa); return;
-            case 0x4: SPU2_WRITEH_V(core, voice, lsax); return;
-            case 0x6: SPU2_WRITEL_V(core, voice, lsax); return;
-            case 0x8: SPU2_WRITEH_V(core, voice, nax); return;
-            case 0xA: SPU2_WRITEL_V(core, voice, nax); return;
+            case 0x0: SPU2_WRITEH_V(core, voice, ssa); spu2->c[core].v[voice].ssa &= 0xfffff; return;
+            case 0x2: SPU2_WRITEL_V(core, voice, ssa); spu2->c[core].v[voice].ssa &= 0xfffff; return;
+            case 0x4: SPU2_WRITEH_V(core, voice, lsax); spu2->c[core].v[voice].lsax &= 0xfffff; return;
+            case 0x6: SPU2_WRITEL_V(core, voice, lsax); spu2->c[core].v[voice].lsax &= 0xfffff; return;
+            case 0x8: SPU2_WRITEH_V(core, voice, nax); spu2->c[core].v[voice].nax &= 0xfffff; return;
+            case 0xA: SPU2_WRITEL_V(core, voice, nax); spu2->c[core].v[voice].nax &= 0xfffff; return;
         }
     }
 
@@ -948,18 +948,14 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         v->counter &= 0xfff;
         v->counter |= sample_index << 12;
 
-        if (v->loop_start) {
-            spu2_check_irq(spu2, v->nax);
-
+        if (v->loop_start)
             v->lsax = v->nax;
-            v->loop_addr_specified = 1;
-        }
 
         v->nax += 8;
         v->nax &= 0xfffff;
 
         spu2_check_irq(spu2, v->nax);
-        
+
         if (v->loop_end) {
             if (!v->loop) {
                 v->envx = 0;
