@@ -54,8 +54,8 @@ void show_main_menubar(iris::instance* iris) {
                 auto f = pfd::open_file("Select a file to load", "", {
                     "All File Types (*.iso; *.bin; *.cue; *.chd; *.elf)", "*.iso *.bin *.cue *.chd *.elf",
                     "Disc Images (*.iso; *.bin; *.cue; *.chd)", "*.iso *.bin *.cue *.chd",
-                    "CD images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
-                    "DVD images (*.iso; *.chd)", "*.iso *.chd",
+                    "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
+                    "DVD Images (*.iso; *.chd)", "*.iso *.chd",
                     "ISO Files (*.iso)", "*.iso",
                     "CUE Files (*.cue)", "*.cue",
                     "BIN Files (*.bin)", "*.bin",
@@ -68,13 +68,15 @@ void show_main_menubar(iris::instance* iris) {
 
                 iris->mute = prev_mute;
 
-                std::string path = f.result().at(0);
+                if (f.result().size()) {
+                    std::string path = f.result().at(0);
 
-                if (path.size()) {
-                    if (open_file(iris, path)) {
-                        push_info(iris, "Failed to open file: " + path);
-                    } else {
-                        add_recent(iris, path);
+                    if (path.size()) {
+                        if (open_file(iris, path)) {
+                            push_info(iris, "Failed to open file: " + path);
+                        } else {
+                            add_recent(iris, path);
+                        }
                     }
                 }
             }
@@ -204,8 +206,8 @@ void show_main_menubar(iris::instance* iris) {
 
                 auto f = pfd::open_file("Select CD/DVD image", "", {
                     "Disc Images (*.iso; *.bin; *.cue; *.chd)", "*.iso *.bin *.cue *.chd",
-                    "CD images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
-                    "DVD images (*.iso; *.chd)", "*.iso *.chd",
+                    "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
+                    "DVD Images (*.iso; *.chd)", "*.iso *.chd",
                     "ISO Files (*.iso)", "*.iso",
                     "CUE Files (*.cue)", "*.cue",
                     "BIN Files (*.bin)", "*.bin",
