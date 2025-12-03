@@ -122,7 +122,7 @@ renderer_image hardware_get_frame(void* udata) {
 	info.phase = ctx->gs->csr & (1 << 13) ? 0 : 1;
 	info.anti_blur = true;
 	info.force_progressive = false;
-	info.overscan = true;
+	info.overscan = false;
 	info.crtc_offsets = false;
 	info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;

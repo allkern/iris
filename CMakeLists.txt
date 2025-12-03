@@ -3,7 +3,7 @@ project(iris LANGUAGES C CXX)
 
 # We need to build release always, unoptimized builds
 # won't cut it.
-set(CMAKE_BUILD_TYPE "Release")
+set(CMAKE_BUILD_TYPE "RelWithDebInfo")
 
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
@@ -47,7 +47,6 @@ include(CheckIPOSupported)
 check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
 
 set(BUILD_SHARED_LIBS OFF)
-set(CMAKE_EXE_LINKER_FLAGS "-static")
 
 # And this part tells CMake where to find and install the file itself
 add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
