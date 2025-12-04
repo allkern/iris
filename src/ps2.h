@@ -39,6 +39,21 @@ extern "C" {
 
 #include "scheduler.h"
 
+enum {
+    PS2_SYSTEM_AUTO = 0,
+    PS2_SYSTEM_RETAIL,
+    PS2_SYSTEM_RETAIL_DECKARD,
+    PS2_SYSTEM_DESR,
+    PS2_SYSTEM_TEST,
+    PS2_SYSTEM_TOOL,
+    PS2_SYSTEM_KONAMI_PYTHON,
+    PS2_SYSTEM_KONAMI_PYTHON2,
+    PS2_SYSTEM_NAMCO_S147,
+    PS2_SYSTEM_NAMCO_S148,
+    PS2_SYSTEM_NAMCO_S246,
+    PS2_SYSTEM_NAMCO_S256
+};
+
 struct ps2_elf_function {
     char* name;
     uint32_t addr;
@@ -106,6 +121,7 @@ void ps2_cycle(struct ps2_state* ps2);
 void ps2_set_timescale(struct ps2_state* ps2, int timescale);
 void ps2_iop_cycle(struct ps2_state* ps2);
 void ps2_destroy(struct ps2_state* ps2);
+void ps2_set_system(struct ps2_state* ps2, int system);
 
 #ifdef __cplusplus
 }
