@@ -142,6 +142,7 @@ struct ee_state {
     int eenull_counter;
     int csr_reads;
     int intc_reads;
+    int ram_size;
 };
 
 #define THS_RUN 0x01

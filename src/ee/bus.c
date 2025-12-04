@@ -21,20 +21,23 @@ void ee_bus_init(struct ee_bus* bus, const char* bios_path) {
     }
 }
 
-void ee_bus_init_fastmem(struct ee_bus* bus) {
+void ee_bus_init_fastmem(struct ee_bus* bus, int ee_ram_size, int iop_ram_size) {
+    memset(bus->fastmem_r_table, 0, sizeof(bus->fastmem_r_table));
+    memset(bus->fastmem_w_table, 0, sizeof(bus->fastmem_w_table));
+
     // BIOS
     for (int i = 0; i < 0x200; i++) {
         bus->fastmem_r_table[i+0xfe00] = bus->bios->buf + (i * 0x2000);
     }
 
     // Main RAM
-    for (int i = 0; i < 0x1000; i++) {
+    for (int i = 0; i < (ee_ram_size / 0x2000); i++) {
         bus->fastmem_r_table[i+0x0000] = bus->ee_ram->buf + (i * 0x2000);
         bus->fastmem_w_table[i+0x0000] = bus->ee_ram->buf + (i * 0x2000);
     }
 
     // IOP RAM
-    for (int i = 0; i < 0x100; i++) {
+    for (int i = 0; i < (iop_ram_size / 0x2000); i++) {
         bus->fastmem_r_table[i+0xe000] = bus->iop_ram->buf + (i * 0x2000);
         bus->fastmem_w_table[i+0xe000] = bus->iop_ram->buf + (i * 0x2000);
     }
@@ -390,7 +393,7 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
         case 0x1f801472: return;
     }
 
-    // printf("bus: Unhandled 16-bit write to physical address 0x%08x (0x%04lx)\n", addr, data);
+    printf("bus: Unhandled 16-bit write to physical address 0x%08x (0x%04lx)\n", addr, data);
 }
 
 void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {

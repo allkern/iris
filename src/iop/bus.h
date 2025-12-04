@@ -61,7 +61,7 @@ void iop_bus_init_usb(struct iop_bus* bus, struct ps2_usb* usb);
 void iop_bus_init_fw(struct iop_bus* bus, struct ps2_fw* fw);
 void iop_bus_init_sbus(struct iop_bus* bus, struct ps2_sbus* sbus);
 
-void iop_bus_init_fastmem(struct iop_bus* bus);
+void iop_bus_init_fastmem(struct iop_bus* bus, int ram_size);
 
 #ifdef __cplusplus
 }

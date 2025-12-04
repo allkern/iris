@@ -18,14 +18,17 @@ void iop_bus_init(struct iop_bus* bus, const char* bios_path) {
     }
 }
 
-void iop_bus_init_fastmem(struct iop_bus* bus) {
+void iop_bus_init_fastmem(struct iop_bus* bus, int ram_size) {
+    memset(bus->fastmem_r_table, 0, sizeof(bus->fastmem_r_table));
+    memset(bus->fastmem_w_table, 0, sizeof(bus->fastmem_w_table));
+
     // BIOS
     for (int i = 0; i < 0x200; i++) {
         bus->fastmem_r_table[i+0xfe00] = bus->bios->buf + (i * 0x2000);
     }
 
     // IOP RAM
-    for (int i = 0; i < 0x100; i++) {
+    for (int i = 0; i < (ram_size / 0x2000); i++) {
         bus->fastmem_r_table[i+0x0000] = bus->iop_ram->buf + (i * 0x2000);
         bus->fastmem_w_table[i+0x0000] = bus->iop_ram->buf + (i * 0x2000);
     }
@@ -150,6 +153,9 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_REG_READ(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
     MAP_MEM_READ(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
+
+    // PSX DESR
+    if (addr == 0x1000480c) return 0xffff;
 
     // 0x20 - PCMCIA (CXD9566)
     // 0x30 - Expansion bay

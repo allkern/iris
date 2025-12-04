@@ -133,7 +133,7 @@ union ee_fpu_reg {
 struct ee_state;
 
 struct ee_state* ee_create(void);
-void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, struct ee_bus_s bus);
+void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, int ram_size, struct ee_bus_s bus);
 void ee_reset(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
 void ee_set_int0(struct ee_state* ee, int v);
@@ -146,6 +146,7 @@ void ee_set_fmv_skip(struct ee_state* ee, int v);
 void ee_reset_intc_reads(struct ee_state* ee);
 void ee_reset_csr_reads(struct ee_state* ee);
 void ee_flush_cache(struct ee_state* ee);
+void ee_set_ram_size(struct ee_state* ee, int ram_size);
 
 #undef EE_ALIGNED16
 

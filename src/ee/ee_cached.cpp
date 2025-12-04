@@ -299,8 +299,8 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
         return 0;
     }
 
-    if (virt >= 0x00000000 && virt <= 0x01FFFFFF) {
-        *phys = virt & 0x1FFFFFF;
+    if (virt >= 0x00000000 && virt <= ee->ram_size) {
+        *phys = virt & ee->ram_size;
 
         return 0;
     }
@@ -311,14 +311,14 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
         return 0;
     }
 
-    if (virt >= 0x20000000 && virt <= 0x21FFFFFF) {
-        *phys = virt & 0x1FFFFFF;
+    if (virt >= 0x20000000 && virt <= (0x20000000 | ee->ram_size)) {
+        *phys = virt & ee->ram_size;
 
         return 0;
     }
 
-    if (virt >= 0x30000000 && virt <= 0x31FFFFFF) {
-        *phys = virt & 0x1FFFFFF;
+    if (virt >= 0x30000000 && virt <= (0x30000000 | ee->ram_size)) {
+        *phys = virt & ee->ram_size;
 
         return 0;
     }
@@ -3117,7 +3117,7 @@ struct ee_state* ee_create(void) {
     return new ee_state();
 }
 
-void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, struct ee_bus_s bus) {
+void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, int ram_size, struct ee_bus_s bus) {
     ee->prid = 0x2e20;
     ee->pc = EE_VEC_RESET;
     ee->next_pc = ee->pc + 4;
@@ -3134,6 +3134,7 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, st
     fesetround(FE_TOWARDZERO);
 
     ee->fcr = 0x01000001;
+    ee->ram_size = ram_size - 1;
 }
 
 void ee_reset(struct ee_state* ee) {
@@ -3835,4 +3836,8 @@ void ee_reset_intc_reads(struct ee_state* ee) {
 
 void ee_reset_csr_reads(struct ee_state* ee) {
     ee->csr_reads = 0;
+}
+
+void ee_set_ram_size(struct ee_state* ee, int ram_size) {
+    ee->ram_size = ram_size - 1;
 }
