@@ -301,7 +301,7 @@ struct instance {
     bool show_about_window = false;
 
     bool fullscreen = 0;
-    int aspect_mode = 0; // RENDERER_ASPECT_AUTO;
+    int aspect_mode = RENDER_ASPECT_AUTO;
     bool bilinear = true;
     bool integer_scaling = false;
     float scale = 1.5f;
@@ -311,6 +311,7 @@ struct instance {
     uint32_t ee_control_address = 0;
     uint32_t iop_control_address = 0;
     bool skip_fmv = false;
+    int system = PS2_SYSTEM_RETAIL_DECKARD;
 
     std::deque <std::string> recents;
 

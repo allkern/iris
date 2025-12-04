@@ -40,12 +40,67 @@ int settings_fullscreen_flags[] = {
 };
 
 const char* settings_buttons[] = {
+    " " ICON_MS_DEPLOYED_CODE "  System",
     " " ICON_MS_MONITOR "  Graphics",
     " " ICON_MS_FOLDER "  Paths",
     " " ICON_MS_SIM_CARD_DOWNLOAD "  Memory cards",
     " " ICON_MS_MORE_HORIZ "  Misc.",
     nullptr
 };
+
+const char* system_names[] = {
+    "Auto",
+    "Retail (Fat)",
+    "Retail (Slim)",
+    "PSX DESR",
+    "TEST unit (DTL-H)",
+    "TOOL unit (DTL-T)"
+};
+
+const char* mechacon_model_names[] = {
+    "SPC970",
+    "Dragon"
+};
+
+void show_system_settings(iris::instance* iris) {
+    using namespace ImGui;
+
+    Text("Model");
+
+    if (BeginCombo("##combo", system_names[iris->system])) {
+        for (int i = 0; i < 6; i++) {
+            if (Selectable(system_names[i], i == iris->system)) {
+                iris->system = i;
+
+                ps2_set_system(iris->ps2, i);
+            }
+        }
+
+        EndCombo();
+    }
+
+    if (BeginTable("##specs-table", 2, ImGuiTableFlags_SizingFixedSame)) {
+        TableNextRow();
+        TableSetColumnIndex(0);
+        TextDisabled("Main RAM");
+        TableSetColumnIndex(1);
+        Text("%d MB", iris->ps2->ee_ram->size / (1024 * 1024));
+
+        TableNextRow();
+        TableSetColumnIndex(0);
+        TextDisabled("IOP RAM");
+        TableSetColumnIndex(1);
+        Text("%d MB", iris->ps2->iop_ram->size / (1024 * 1024));
+
+        TableNextRow();
+        TableSetColumnIndex(0);
+        TextDisabled("MechaCon Model");
+        TableSetColumnIndex(1);
+        Text("%s", mechacon_model_names[iris->ps2->cdvd->mechacon_model]);
+
+        EndTable();
+    }
+}
 
 void show_graphics_settings(iris::instance* iris) {
     using namespace ImGui;
@@ -402,9 +457,10 @@ void show_settings(iris::instance* iris) {
 
         if (BeginChild("##content", ImVec2(0, GetContentRegionAvail().y - 100.0), ImGuiChildFlags_AutoResizeY)) {
             switch (selected_settings) {
-                case 0: show_graphics_settings(iris); break;
-                case 1: show_paths_settings(iris); break;
-                case 2: show_memory_card_settings(iris); break;
+                case 0: show_system_settings(iris); break;
+                case 1: show_graphics_settings(iris); break;
+                case 2: show_paths_settings(iris); break;
+                case 3: show_memory_card_settings(iris); break;
             }
         } EndChild();
 
