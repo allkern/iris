@@ -89,6 +89,11 @@ struct nvram_layout {
 	int32_t mac_offset;       // offset of MAC address on PStwo
 };
 
+enum {
+    CDVD_MECHACON_SPC970,
+    CDVD_MECHACON_DRAGON
+};
+
 struct ps2_cdvd {
     uint8_t n_cmd;
     uint8_t n_stat;
@@ -141,6 +146,9 @@ struct ps2_cdvd {
     uint32_t config_numblocks;
     uint32_t config_block_index;
 
+    int mechacon_model;
+    struct nvram_layout layout;
+
     // To-do:
     // void (*poweroff_handler)(void* udata)
     // void (*trayctrl_handler)(void* udata, uint8_t ctrl)
@@ -152,6 +160,7 @@ void ps2_cdvd_destroy(struct ps2_cdvd* cdvd);
 int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay);
 void ps2_cdvd_close(struct ps2_cdvd* cdvd);
 void ps2_cdvd_power_off(struct ps2_cdvd* cdvd);
+void ps2_cdvd_set_mechacon_model(struct ps2_cdvd* cdvd, int model);
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr);
 void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data);
 void ps2_cdvd_reset(struct ps2_cdvd* cdvd);

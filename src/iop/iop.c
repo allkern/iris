@@ -790,7 +790,7 @@ static inline void iop_i_syscall(struct iop_state* iop) {
 static inline void iop_i_break(struct iop_state* iop) {
     DO_PENDING_LOAD;
 
-    iop_exception(iop, CAUSE_BP);
+    // iop_exception(iop, CAUSE_BP);
 }
 
 static inline void iop_i_mfhi(struct iop_state* iop) {
