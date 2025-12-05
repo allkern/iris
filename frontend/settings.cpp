@@ -196,28 +196,44 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     }
 
     if (bios_path.size()) {
-        ps2_load_bios(iris->ps2, bios_path.c_str());
+        if (!ps2_load_bios(iris->ps2, bios_path.c_str())) {
+            // push_info(iris, "Couldn't load BIOS");
+
+            iris->show_bios_setting_window = true;
+        }
     } else {
         if (iris->bios_path.size()) {
-            ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+            if (!ps2_load_bios(iris->ps2, iris->bios_path.c_str())) {
+                // push_info(iris, "Couldn't load BIOS");
+
+                iris->show_bios_setting_window = true;
+            }
         } else {
             iris->show_bios_setting_window = true;
         }
     }
 
     if (rom1_path.size()) {
-        ps2_load_rom1(iris->ps2, rom1_path.c_str());
+        if (!ps2_load_rom1(iris->ps2, rom1_path.c_str())) {
+            // push_info(iris, "Couldn't load ROM1");
+        }
     } else {
         if (iris->rom1_path.size()) {
-            ps2_load_rom1(iris->ps2, iris->rom1_path.c_str());
+            if (!ps2_load_rom1(iris->ps2, iris->rom1_path.c_str())) {
+                // push_info(iris, "Couldn't load ROM1");
+            }
         }
     }
 
     if (rom2_path.size()) {
-        ps2_load_rom2(iris->ps2, rom2_path.c_str());
+        if (!ps2_load_rom2(iris->ps2, rom2_path.c_str())) {
+            // push_info(iris, "Couldn't load ROM2");
+        }
     } else {
         if (iris->rom2_path.size()) {
-            ps2_load_rom2(iris->ps2, iris->rom2_path.c_str());
+            if (!ps2_load_rom2(iris->ps2, iris->rom2_path.c_str())) {
+                // push_info(iris, "Couldn't load ROM2");
+            }
         }
     }
 
@@ -261,7 +277,7 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 
     parse_cli_settings(iris, argc, argv);
 
-    return r;
+    return true;
 }
 
 void close(iris::instance* iris) {
