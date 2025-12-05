@@ -70,16 +70,22 @@ void show_status_bar(iris::instance* iris) {
             "Interlaced (Frame)"
         };
 
+        static const char* const renderers[] = {
+            "Null",
+            "Software",
+            "Hardware (Vulkan)"
+        };
+
         int dispfb = 0;
 
         if (!iris->image.image) {
             Text(ICON_MS_MONITOR " %s | No image | %1.f fps",
-                "None",
+                renderers[iris->renderer_backend],
                 GetIO().Framerate
             );
         } else {
             Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
-                "None",
+                renderers[iris->renderer_backend],
                 iris->render_width, iris->render_height,
                 iris->image.width, iris->image.height,
                 modes[iris->ps2->gs->smode2 & 3],
