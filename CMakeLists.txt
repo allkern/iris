@@ -56,10 +56,10 @@ target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
 # target_compile_definitions(iris PUBLIC _DEBUG)
 
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
-add_subdirectory(parallel-gs EXCLUDE_FROM_ALL)
-add_subdirectory(SDL EXCLUDE_FROM_ALL)
-add_subdirectory(tomlplusplus EXCLUDE_FROM_ALL)
-add_subdirectory(libchdr EXCLUDE_FROM_ALL)
+add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
+add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
+add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
+add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS -mssse3 -msse4.1)
@@ -147,8 +147,6 @@ target_sources(iris PRIVATE
     src/gs/renderer/null.cpp
     src/gs/renderer/renderer.cpp
     src/gs/renderer/hardware.cpp
-#   src/gs/renderer/software.cpp
-#   src/gs/renderer/software_thread.cpp
     src/iop/bus.c
     src/iop/cdvd.c
     src/iop/disc.c
@@ -187,26 +185,29 @@ target_sources(iris PRIVATE
     src/shared/ram.c
     src/shared/sbus.c
     src/shared/sif.c
-    imgui/imgui.cpp
-    imgui/imgui_demo.cpp
-    imgui/imgui_draw.cpp
-    imgui/imgui_tables.cpp
-    imgui/imgui_widgets.cpp
-    imgui/backends/imgui_impl_sdl3.cpp
-    imgui/backends/imgui_impl_vulkan.cpp
-    implot/implot_demo.cpp
-    implot/implot_items.cpp
-    implot/implot.cpp)
+    deps/imgui/imgui.cpp
+    deps/imgui/imgui_demo.cpp
+    deps/imgui/imgui_draw.cpp
+    deps/imgui/imgui_tables.cpp
+    deps/imgui/imgui_widgets.cpp
+    deps/imgui/backends/imgui_impl_sdl3.cpp
+    deps/imgui/backends/imgui_impl_vulkan.cpp
+    deps/implot/implot_demo.cpp
+    deps/implot/implot_items.cpp
+    deps/implot/implot.cpp
+)
 
 target_include_directories(iris PRIVATE
-    imgui
-    imgui/backends
-    implot
-    SDL/include
+    deps/imgui
+    deps/imgui/backends
+    deps/implot
+    deps/SDL/include
+    deps/incbin
+    deps/parallel-gs
+    deps/libchdr/include
+    deps/stb
+    deps/portable-file-dialogs
     frontend
-    incbin
-    parallel-gs
-    libchdr/include
     src
     res
 )
@@ -247,11 +248,11 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     # tell Install about the target, otherwise fixup won't know about the transitive dependencies
     install(TARGETS iris
     	BUNDLE DESTINATION ./install COMPONENT Runtime
-   	  RUNTIME DESTINATION ./install/bin COMPONENT Runtime
+   	    RUNTIME DESTINATION ./install/bin COMPONENT Runtime
     )
 	
     set(DEP_DIR "${CMAKE_BINARY_DIR}")  # where to look for dependencies when fixing up
-    INSTALL(CODE 
+    install(CODE 
         "include(BundleUtilities)
         fixup_bundle(\"$<TARGET_BUNDLE_DIR:iris>\" \"\" \"${DEP_DIR}\")
         " 
