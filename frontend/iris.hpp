@@ -222,7 +222,7 @@ struct instance {
     unsigned int render_width = 640;
     unsigned int render_height = 480;
 
-    unsigned int renderer_backend = RENDERER_BACKEND_NULL;
+    unsigned int renderer_backend = RENDERER_BACKEND_HARDWARE;
     renderer_state* renderer = nullptr;
 
     uint32_t ps2_memory_card_icon_width = 0;
