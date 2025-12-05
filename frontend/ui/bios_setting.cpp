@@ -68,9 +68,13 @@ void show_bios_stage(iris::instance* iris) {
         iris->bios_path = buf;
         iris->dump_to_file = true;
 
-        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+        if (!ps2_load_bios(iris->ps2, iris->bios_path.c_str())) {
+            push_info(iris, "Couldn't load BIOS");
 
-        stage = 1;
+            stage = 0;
+        } else {
+            stage = 1;
+        }
     }
 
     EndDisabled();
