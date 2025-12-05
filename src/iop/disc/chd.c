@@ -75,6 +75,12 @@ int chd_init(struct disc_chd* chd, const char* path) {
 
     chd->sector_size = get_sector_type_size(type);
 
+    if (!chd->sector_size) {
+        printf("chd: Unsupported sector type \'%s\'\n", type);
+
+        return 0;
+    }
+
     return 1;
 }
 
@@ -124,7 +130,9 @@ int chd_read_sector(void* udata, unsigned char* buf, uint64_t lba, int size) {
 }
 
 uint64_t chd_get_size(void* udata) {
-    return 0;
+    struct disc_chd* chd = (struct disc_chd*)udata;
+
+    return chd->header->logicalbytes;
 }
 
 int chd_get_sector_size(void* udata) {
