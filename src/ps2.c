@@ -173,19 +173,31 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
     }
 }
 
-void ps2_load_bios(struct ps2_state* ps2, const char* path) {
-    ps2_bios_load(ps2->bios, path);
+int ps2_load_bios(struct ps2_state* ps2, const char* path) {
+    if (ps2_bios_load(ps2->bios, path)) {
+        return 0;
+    }
 
     ee_bus_init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
     iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
+
+    return 1;
 }
 
-void ps2_load_rom1(struct ps2_state* ps2, const char* path) {
-    ps2_bios_load(ps2->rom1, path);
+int ps2_load_rom1(struct ps2_state* ps2, const char* path) {
+    if (ps2_bios_load(ps2->rom1, path)) {
+        return 0;
+    }
+
+    return 1;
 }
 
-void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
-    ps2_bios_load(ps2->rom2, path);
+int ps2_load_rom2(struct ps2_state* ps2, const char* path) {
+    if (!ps2_bios_load(ps2->rom2, path)) {
+        return 0;
+    }
+
+    return 1;
 }
 
 void ps2_reset(struct ps2_state* ps2) {
