@@ -182,9 +182,13 @@ target_sources(iris PRIVATE
     src/ipu/motioncode.cpp
     src/ipu/vlc_table.cpp
     src/shared/bios.c
+    src/shared/dev9.c
     src/shared/ram.c
     src/shared/sbus.c
     src/shared/sif.c
+    src/shared/speed.c
+    src/shared/speed/ata.c
+    src/shared/speed/flash.c
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp
