@@ -28,6 +28,8 @@ extern "C" {
 #include "shared/ram.h"
 #include "shared/sif.h"
 #include "shared/sbus.h"
+#include "shared/dev9.h"
+#include "shared/speed.h"
 #include "gs/gs.h"
 #include "ipu/ipu.h"
 
@@ -97,6 +99,8 @@ struct ps2_state {
     struct ps2_sif* sif;
     struct ps2_usb* usb;
     struct ps2_sbus* sbus;
+    struct ps2_dev9* dev9;
+    struct ps2_speed* speed;
 
     struct sched_state* sched;
 

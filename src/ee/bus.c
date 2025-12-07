@@ -111,6 +111,14 @@ void ee_bus_init_sbus(struct ee_bus* bus, struct ps2_sbus* sbus) {
     bus->sbus = sbus;
 }
 
+void ee_bus_init_dev9(struct ee_bus* bus, struct ps2_dev9* dev9) {
+    bus->dev9 = dev9;
+}
+
+void ee_bus_init_speed(struct ee_bus* bus, struct ps2_speed* speed) {
+    bus->speed = speed;
+}
+
 void ee_bus_init_vu0(struct ee_bus* bus, struct vu_state* vu) {
     bus->vu0 = vu;
 }
@@ -166,6 +174,8 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
     MAP_MEM_READ(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
     MAP_REG_READ(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
+    MAP_REG_READ(8, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ(8, 0x14000000, 0x1400FFFF, speed, speed);
 
     if ((addr >> 16) == 0x1f80) return 0;
 
@@ -193,6 +203,8 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
     MAP_MEM_READ(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
     MAP_REG_READ(16, 0x10000000, 0x10001FFF, ee_timers, timers);
+    MAP_REG_READ(16, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ(16, 0x14000000, 0x1400FFFF, speed, speed);
 
     if (addr == 0x1a000010) return 0xffff;
 
@@ -238,6 +250,8 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     MAP_MEM_READ(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
     MAP_REG_READ(32, 0x1F801600, 0x1F8016FF, usb, usb);
+    MAP_REG_READ(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ(32, 0x14000000, 0x1400FFFF, speed, speed);
 
     switch (addr) {
         case 0x1000F440: {
@@ -358,6 +372,8 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(8, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(8, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_WRITE(8, 0x1000F000, 0x1000F01F, intc, intc);
+    MAP_REG_WRITE(8, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE(8, 0x14000000, 0x1400FFFF, speed, speed);
 
     if (addr == 0x1000f180) { bus->kputchar(bus->kputchar_udata, data & 0xff); return; }
 
@@ -386,6 +402,8 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(16, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_WRITE(16, 0x1000F000, 0x1000F01F, intc, intc);
     MAP_REG_WRITE(16, 0x10000000, 0x10001FFF, ee_timers, timers);
+    MAP_REG_WRITE(16, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE(16, 0x14000000, 0x1400FFFF, speed, speed);
 
     switch (addr) {
         case 0x1a000008:
@@ -428,6 +446,8 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(32, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(32, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_WRITE(32, 0x1F801600, 0x1F8016FF, usb, usb);
+    MAP_REG_WRITE(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE(32, 0x14000000, 0x1400FFFF, speed, speed);
 
     switch (addr) {
         case 0x1000f430: {

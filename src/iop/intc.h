@@ -23,7 +23,7 @@ extern "C" {
   10    IRQ10  PIO
   11    IRQ11  VBLANK end
   12    IRQ12  DVD? (unknown purpose)
-  13    IRQ13  PCMCIA (related to DEV9 expansion slot)
+  13    IRQ13  DEV9
   14    IRQ14  Timer 3
   15    IRQ15  Timer 4
   16    IRQ16  Timer 5
@@ -55,7 +55,7 @@ extern "C" {
 #define IOP_INTC_PIO        0x00000400
 #define IOP_INTC_VBLANK_OUT 0x00000800
 #define IOP_INTC_DVD        0x00001000
-#define IOP_INTC_PCMCIA     0x00002000
+#define IOP_INTC_DEV9       0x00002000
 #define IOP_INTC_TIMER3     0x00004000
 #define IOP_INTC_TIMER4     0x00008000
 #define IOP_INTC_TIMER5     0x00010000
