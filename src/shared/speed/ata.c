@@ -7,12 +7,16 @@ struct ps2_ata* ps2_ata_create(void) {
     return malloc(sizeof(struct ps2_ata));
 }
 
-int ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed, const char* path) {
+void ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed) {
     memset(ata, 0, sizeof(struct ps2_ata));
 
     ata->speed = speed;
     ata->nsector = 1;
     ata->sector = 1;
+}
+
+int ps2_ata_load(struct ps2_ata* ata, const char* path) {
+    // To-do: Load HDD image
 
     return 1;
 }
@@ -32,7 +36,7 @@ uint64_t ps2_ata_read16(struct ps2_ata* ata, uint32_t addr) {
         case 0x0048: return ata->lcyl;
         case 0x004a: return ata->hcyl;
         case 0x004c: return ata->select;
-        case 0x004e: return 0x48;
+        case 0x004e: return 0x48; // RDY | DRQ
         case 0x005c: return 0x40;
     }
 }
@@ -54,7 +58,7 @@ void ps2_ata_write16(struct ps2_ata* ata, uint32_t addr, uint64_t data) {
         case 0x004c: ata->select = data; return;
         case 0x004e: {
             // COMMAND
-            ps2_speed_send_irq(ata->speed, 0x0001);
+            ps2_speed_send_irq(ata->speed, SPD_INTR_ATA0);
 
             return;
         } break;

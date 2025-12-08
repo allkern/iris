@@ -50,7 +50,8 @@ struct ps2_ata {
 };
 
 struct ps2_ata* ps2_ata_create(void);
-int ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed, const char* path);
+void ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed);
+int ps2_ata_load(struct ps2_ata* ata, const char* path);
 void ps2_ata_destroy(struct ps2_ata* ata);
 uint64_t ps2_ata_read16(struct ps2_ata* ata, uint32_t addr);
 uint64_t ps2_ata_read32(struct ps2_ata* ata, uint32_t addr);

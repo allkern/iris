@@ -15,14 +15,17 @@ void ps2_speed_init(struct ps2_speed* speed, struct ps2_iop_intc* iop_intc) {
     speed->flash = ps2_flash_create();
     speed->ata = ps2_ata_create();
 
-    ps2_flash_init(speed->flash, "flash.bin");
-    ps2_ata_init(speed->ata, speed, "hdd.img");
+    ps2_flash_init(speed->flash);
+    ps2_ata_init(speed->ata, speed);
 
-    speed->rev3 |= SPD_CAPS_FLASH | SPD_CAPS_ATA;
+    speed->rev3 |= SPD_CAPS_ATA | SPD_CAPS_DVR;
     speed->rev8 |= 2;
 }
 
 void ps2_speed_destroy(struct ps2_speed* speed) {
+    ps2_flash_destroy(speed->flash);
+    ps2_ata_destroy(speed->ata);
+
     free(speed);
 }
 
@@ -132,4 +135,14 @@ void ps2_speed_send_irq(struct ps2_speed* speed, uint16_t irq) {
     if (speed->intr_stat & speed->intr_mask) {
         ps2_iop_intc_irq(speed->iop_intc, IOP_INTC_DEV9);
     }
+}
+
+int ps2_speed_load_flash(struct ps2_speed* speed, const char* path) {
+    int ret = ps2_flash_load(speed->flash, path);
+
+    if (ret) {
+        speed->rev3 |= SPD_CAPS_FLASH;
+    }
+
+    return ret;
 }

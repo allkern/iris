@@ -77,6 +77,7 @@ void ps2_speed_write8(struct ps2_speed* speed, uint32_t addr, uint64_t data);
 void ps2_speed_write16(struct ps2_speed* speed, uint32_t addr, uint64_t data);
 void ps2_speed_write32(struct ps2_speed* speed, uint32_t addr, uint64_t data);
 void ps2_speed_send_irq(struct ps2_speed* speed, uint16_t irq);
+int ps2_speed_load_flash(struct ps2_speed* speed, const char* path);
 
 #ifdef __cplusplus
 }

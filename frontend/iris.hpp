@@ -257,6 +257,7 @@ struct instance {
     std::string mcd0_path = "";
     std::string mcd1_path = "";
     std::string snap_path = "";
+    std::string flash_path = "";
     std::string ini_path = "";
 
     bool core0_mute[24] = { false };
@@ -300,7 +301,7 @@ struct instance {
     bool show_bios_setting_window = false;
     bool show_about_window = false;
 
-    bool fullscreen = 0;
+    bool fullscreen = false;
     int aspect_mode = RENDER_ASPECT_AUTO;
     bool bilinear = true;
     bool integer_scaling = false;

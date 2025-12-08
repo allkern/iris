@@ -85,20 +85,22 @@ struct ps2_flash* ps2_flash_create(void) {
     return malloc(sizeof(struct ps2_flash));
 }
 
-int ps2_flash_init(struct ps2_flash* flash, const char* path) {
+void ps2_flash_init(struct ps2_flash* flash) {
     memset(flash, 0, sizeof(struct ps2_flash));
 
-	flash->id = FLASH_ID_64MBIT;
 	flash->counter = 0;
 	flash->addrbyte = 0;
 	flash->address = 0;
     flash->ctrl = FLASH_CTRL_READY;
 
 	memset(flash->data, 0xff, FLASH_PAGE_SIZE);
+    memset(flash->file, 0xff, FLASH_CARD_SIZE_ECC);
 
 	flash_calculate_ecc(flash->data);
-    
-	FILE* fd = fopen(path, "rb");
+}
+
+int ps2_flash_load(struct ps2_flash* flash, const char* path) {
+    FILE* fd = fopen(path, "rb");
 
     if (!fd) {
         memset(flash->file, 0xff, FLASH_CARD_SIZE_ECC);
@@ -115,6 +117,10 @@ int ps2_flash_init(struct ps2_flash* flash, const char* path) {
     }
 
     fclose(fd);
+
+    flash->id = FLASH_ID_64MBIT;
+
+    printf("flash: Dump \'%s\' loaded (%zu bytes)\n", path, size);
 
     return 1;
 }
@@ -138,7 +144,7 @@ void ps2_flash_reset(struct ps2_flash* flash) {
 }
 
 uint32_t flash_read_data(struct ps2_flash* flash, int size) {
-    uint32_t value, refill;
+    uint32_t value, refill = 0;
 
     memcpy(&value, &flash->data[flash->counter], size);
 
@@ -198,11 +204,15 @@ void flash_write_data(struct ps2_flash* flash, int size, uint32_t data) {
 }
 
 void flash_write_cmd(struct ps2_flash* flash, uint16_t value) {
+    // printf("flash: Command %02x (%s)\n", value, flash_get_cmd_name(value));
+
     if (!(flash->ctrl & FLASH_CTRL_READY)) {
         if ((value != SM_CMD_GETSTATUS) && (value != SM_CMD_RESET)) {
             return;
         }
-    } if (flash->cmd == SM_CMD_WRITEDATA) {
+    }
+
+    if (flash->cmd == SM_CMD_WRITEDATA) {
         if ((value != SM_CMD_PROGRAMPAGE) && (value != SM_CMD_RESET)) {
             flash->ctrl &= ~FLASH_CTRL_READY; //go busy, reset is needed
         }
@@ -257,8 +267,6 @@ void flash_write_cmd(struct ps2_flash* flash, uint16_t value) {
             
         case SM_CMD_PROGRAMPAGE: //fall
         case SM_CMD_ERASECONFIRM: {
-            flash->ctrl &= ~FLASH_CTRL_READY;
-
             flash_calculate_ecc(flash->data);
 
             memcpy(flash->file + (flash->address / FLASH_PAGE_SIZE) * FLASH_PAGE_SIZE_ECC, flash->data, FLASH_PAGE_SIZE_ECC);
@@ -324,7 +332,7 @@ uint64_t ps2_flash_read32(struct ps2_flash* flash, uint32_t addr) {
         case 0x4814: return flash_read_id(flash);
     }
 
-    printf("flash: Unknown 16-bit read at address %08x\n", addr);
+    printf("flash: Unknown 32-bit read at address %08x\n", addr);
 
     return 0;
 }

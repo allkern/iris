@@ -67,6 +67,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->mcd0_path = paths["mcd0_path"].value_or("");
     iris->mcd1_path = paths["mcd1_path"].value_or("");
     iris->snap_path = paths["snap_path"].value_or("snap");
+    iris->flash_path = paths["flash_path"].value_or("");
 
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
@@ -128,6 +129,7 @@ bool parse_toml_settings(iris::instance* iris) {
     ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
 
     ps2_set_system(iris->ps2, iris->system);
+    ps2_speed_load_flash(iris->ps2->speed, iris->flash_path.c_str());
 
     return true;
 }
@@ -338,7 +340,8 @@ void close(iris::instance* iris) {
             { "rom2_path", iris->rom2_path },
             { "mcd0_path", iris->mcd0_path },
             { "mcd1_path", iris->mcd1_path },
-            { "snap_path", iris->snap_path }
+            { "snap_path", iris->snap_path },
+            { "flash_path", iris->flash_path }
         } },
         { "recents", toml::table {
             { "array", toml::array() }

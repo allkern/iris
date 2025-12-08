@@ -93,7 +93,8 @@ struct ps2_flash {
 };
 
 struct ps2_flash* ps2_flash_create(void);
-int ps2_flash_init(struct ps2_flash* flash, const char* path);
+void ps2_flash_init(struct ps2_flash* flash);
+int ps2_flash_load(struct ps2_flash* flash, const char* path);
 void ps2_flash_destroy(struct ps2_flash* flash);
 uint64_t ps2_flash_read16(struct ps2_flash* flash, uint32_t addr);
 uint64_t ps2_flash_read32(struct ps2_flash* flash, uint32_t addr);

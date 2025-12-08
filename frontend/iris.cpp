@@ -286,20 +286,27 @@ void update_window(iris::instance* iris) {
 
     // Display little pause icon in the top right corner
     if (iris->pause) {
-        auto ts = CalcTextSize(ICON_MS_PAUSE);
+        ImVec2 ts = CalcTextSize(ICON_MS_PAUSE);
+        ImVec2 offset = ImVec2(10.0f, 10.0f);
+        ImVec2 padding = ImVec2(0.0f, 0.0f);
 
-        int offset = 0;
+        ts.x -= 1.0f;
+
+        int menubar_offset = 0;
 
         if (!iris->fullscreen) {
-            offset += iris->menubar_height;
+            menubar_offset += iris->menubar_height;
         }
 
+        // GetBackgroundDrawList()->AddRectFilled(
+        //     ImVec2(width - ts.x - offset.x - padding.x, menubar_offset + offset.y - padding.y),
+        //     ImVec2(width - offset.x + padding.x, menubar_offset + ts.y + offset.y + padding.y),
+        //     GetColorU32(GetStyleColorVec4(ImGuiCol_WindowBg)), 8.0f
+        // );
+
         GetBackgroundDrawList()->AddText(
-            ImVec2(
-                width - ts.x * 1.5f,
-                offset + ts.x * 0.5f
-            ),
-            0xffffffff,
+            ImVec2(width - ts.x - offset.x, menubar_offset + offset.y),
+            GetColorU32(GetStyleColorVec4(ImGuiCol_Text)),
             ICON_MS_PAUSE
         );
     }

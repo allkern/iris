@@ -212,6 +212,7 @@ void show_paths_settings(iris::instance* iris) {
     static char buf[512];
     static char dvd_buf[512];
     static char rom2_buf[512];
+    static char flash_buf[512];
 
     Text("BIOS (rom0)");
 
@@ -224,6 +225,7 @@ void show_paths_settings(iris::instance* iris) {
     const char* bios_hint = iris->bios_path.size() ? iris->bios_path.c_str() : "e.g. scph10000.bin";
     const char* rom1_hint = iris->rom1_path.size() ? iris->rom1_path.c_str() : "Not configured";
     const char* rom2_hint = iris->rom2_path.size() ? iris->rom2_path.c_str() : "Not configured";
+    const char* flash_hint = iris->flash_path.size() ? iris->flash_path.c_str() : "Not configured";
 
     SetNextItemWidth(300);
 
@@ -276,6 +278,8 @@ void show_paths_settings(iris::instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##rom1")) {
+        iris->rom1_path = "";
+
         memset(dvd_buf, 0, 512);
     }
 
@@ -306,16 +310,53 @@ void show_paths_settings(iris::instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##rom2")) {
+        iris->rom2_path = "";
+
         memset(rom2_buf, 0, 512);
-    }
+    } 
+
+    Text("Flash memory (xfrom)");
+
+    SetNextItemWidth(300);
+
+    InputTextWithHint("##flash", flash_hint, flash_buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    SameLine();
+
+    if (Button(ICON_MS_FOLDER "##flash")) {
+        bool mute = iris->mute;
+
+        iris->mute = true;
+
+        auto f = pfd::open_file("Select Flash/XFROM dump file", "", {
+            "XFROM dumps (*.bin)", "*.bin",
+            "All Files (*.*)", "*"
+        });
+
+        while (!f.ready());
+
+        iris->mute = mute;
+
+        if (f.result().size()) {
+            strncpy(flash_buf, f.result().at(0).c_str(), 512);
+        }
+    } SameLine();
+
+    if (Button(ICON_MS_CLEAR "##xfrom")) {
+        iris->flash_path = "";
+
+        memset(flash_buf, 0, 512);
+    } 
 
     if (Button(ICON_MS_SAVE " Save")) {
         std::string bios_path = buf;
+        std::string rom1_path = dvd_buf;
+        std::string rom2_path = rom2_buf;
+        std::string flash_path = flash_buf;
 
         if (bios_path.size()) iris->bios_path = bios_path;
-
-        iris->rom1_path = dvd_buf;
-        iris->rom2_path = rom2_buf;
+        if (rom1_path.size()) iris->rom1_path = rom1_path;
+        if (rom2_path.size()) iris->rom2_path = rom2_path;
+        if (flash_path.size()) iris->flash_path = flash_path;
     } SameLine();
 
     TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Restart the emulator to apply these changes");
