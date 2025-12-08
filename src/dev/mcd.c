@@ -264,6 +264,24 @@ void mcd_cmd_auth_f0(struct ps2_sio2* sio2, struct mcd_state* mcd) {
         } break;
     }
 }
+void mcd_cmd_auth_f1(struct ps2_sio2* sio2, struct mcd_state* mcd) {
+    fprintf(stderr, "mcd: mcd_cmd_auth_f1\n");
+    fprintf(stderr, "mcd: params=");
+
+    for (int i = 0; i < 16; i++) {
+        fprintf(stderr, "%02x ", sio2->in->buf[2 + i]);
+    }
+
+    fprintf(stderr, "\n");
+
+    exit(1);
+
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x00);
+    queue_push(sio2->out, 0x2b);
+    queue_push(sio2->out, mcd->term);
+}
 void mcd_cmd_auth_f3(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     printf("mcd: mcd_cmd_auth_f3\n");
 
@@ -310,6 +328,7 @@ void mcd_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
         case 0x81: mcd_cmd_rw_end(sio2, mcd); return;
         case 0x82: mcd_cmd_erase_block(sio2, mcd); return;
         case 0xf0: mcd_cmd_auth_f0(sio2, mcd); return;
+        case 0xf1: mcd_cmd_auth_f1(sio2, mcd); return;
         case 0xf3: mcd_cmd_auth_f3(sio2, mcd); return;
         case 0xf7: mcd_cmd_auth_f7(sio2, mcd); return;
         case 0xbf: mcd_cmd_unk_bf(sio2, mcd); return;
