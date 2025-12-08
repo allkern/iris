@@ -12,8 +12,8 @@ extern "C" {
 #include <stdint.h>
 
 struct disc_chd {
+    const chd_header* header;
     chd_file* file;
-    chd_header* header;
     uint8_t* buffer;
     size_t cached_hunknum;
     int sector_size;

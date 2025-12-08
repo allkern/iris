@@ -132,7 +132,7 @@ int chd_read_sector(void* udata, unsigned char* buf, uint64_t lba, int size) {
 uint64_t chd_get_size(void* udata) {
     struct disc_chd* chd = (struct disc_chd*)udata;
 
-    return chd->header->logicalbytes;
+    return chd->sector_size * chd->header->hunkcount;
 }
 
 int chd_get_sector_size(void* udata) {
