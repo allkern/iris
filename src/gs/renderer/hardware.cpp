@@ -56,7 +56,7 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
 void hardware_reset(void* udata) {
 	hardware_state* ctx = static_cast<hardware_state*>(udata);
 
-	ctx->interface.flush();
+	// ctx->interface.flush();
 	ctx->interface.reset_context_state();
 
 	// Clear VRAM

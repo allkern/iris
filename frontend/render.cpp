@@ -615,7 +615,13 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 }
 
 bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer) {
-    renderer_image image = renderer_get_frame(iris->renderer);
+    renderer_image image;
+
+    if (iris->pause) {
+        image = iris->image;
+    } else {
+        image = renderer_get_frame(iris->renderer);
+    }
 
     // bool need_rebuild = image.width != iris->image.width ||
     //                     image.height != iris->image.height ||
