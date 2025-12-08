@@ -371,7 +371,12 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
     // }
 }
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
-    fprintf(stderr, "iop: DEV9 channel unimplemented\n"); exit(1);
+    printf("dev9: DMA transfer started\n");
+
+    iop_dma_set_dicr_flag(dma, IOP_DMA_DEV9);
+    iop_dma_check_irq(dma);
+
+    dma->dev9.chcr &= ~0x1000000;
 }
 void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
     // if (!ps2_sif0_is_empty(dma->sif)) {
