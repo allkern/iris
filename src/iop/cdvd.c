@@ -543,6 +543,12 @@ static inline void cdvd_s_mg_write_hdr_start(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_mg_read_bit_length(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 3);
+
+    for (int i = 0; i < 3; i++)
+        cdvd->s_fifo[i] = 0;
+}
 static inline void cdvd_s_get_region_params(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 15);
 
@@ -644,6 +650,7 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x8d: printf("cdvd: mg_write_data\n"); cdvd_s_mg_write_data(cdvd); break;
         case 0x8f: printf("cdvd: mechacon_auth_8f\n"); cdvd_s_mechacon_auth_8f(cdvd); break;
         case 0x90: printf("cdvd: mg_write_hdr_start\n"); cdvd_s_mg_write_hdr_start(cdvd); break;
+        case 0x91: printf("cdvd: mg_read_bit_length\n"); cdvd_s_mg_read_bit_length(cdvd); break;
 
         default: {
             fprintf(stderr, "cdvd: Unknown S command %02xh\n", cmd);
