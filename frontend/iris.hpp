@@ -29,6 +29,11 @@ namespace iris {
 #define RENDER_ASPECT_5_4 5
 #define RENDER_ASPECT_AUTO 6
 
+#define IRIS_THEME_GRANITE 0
+#define IRIS_THEME_IMGUI_DARK 1
+#define IRIS_THEME_IMGUI_LIGHT 2
+#define IRIS_THEME_IMGUI_CLASSIC 3
+
 enum : int {
     BKPT_CPU_EE,
     BKPT_CPU_IOP
@@ -313,6 +318,7 @@ struct instance {
     uint32_t iop_control_address = 0;
     bool skip_fmv = false;
     int system = PS2_SYSTEM_RETAIL_DECKARD;
+    int theme = IRIS_THEME_GRANITE;
 
     std::deque <std::string> recents;
 
@@ -374,7 +380,7 @@ namespace settings {
 
 namespace imgui {
     bool init(iris::instance* iris);
-    void set_theme(iris::instance* iris, int theme);
+    void set_theme(iris::instance* iris, int theme, bool set_bg_color = true);
     bool render_frame(iris::instance* iris, ImDrawData* draw_data);
     bool present_frame(iris::instance* iris);
     void cleanup(iris::instance* iris);

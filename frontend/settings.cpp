@@ -119,6 +119,21 @@ bool parse_toml_settings(iris::instance* iris) {
     auto system = tbl["system"];
     iris->system = system["model"].value_or(PS2_SYSTEM_RETAIL_DECKARD);
 
+    auto ui = tbl["ui"];
+    iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
+
+    toml::array* bgcolor = tbl["ui"]["bgcolor"].as_array();
+
+    if (bgcolor && bgcolor->size() == 3) {
+        iris->clear_value.color.float32[0] = (float)bgcolor->at(0).as_floating_point()->get();
+        iris->clear_value.color.float32[1] = (float)bgcolor->at(1).as_floating_point()->get();
+        iris->clear_value.color.float32[2] = (float)bgcolor->at(2).as_floating_point()->get();
+    } else {
+        iris->clear_value.color.float32[0] = 0.11f;
+        iris->clear_value.color.float32[1] = 0.11f;
+        iris->clear_value.color.float32[2] = 0.11f;
+    }
+
     toml::array* recents = tbl["recents"]["array"].as_array();
 
     for (int i = 0; i < recents->size(); i++)
@@ -328,6 +343,14 @@ void close(iris::instance* iris) {
             { "window_width", iris->window_width },
             { "window_height", iris->window_height },
             { "menubar_height", iris->menubar_height }
+        } },
+        { "ui", toml::table {
+            { "theme", iris->theme },
+            { "bgcolor", toml::array {
+                iris->clear_value.color.float32[0],
+                iris->clear_value.color.float32[1],
+                iris->clear_value.color.float32[2]
+            } }
         } },
         { "audio", toml::table {
             { "mute", iris->mute },

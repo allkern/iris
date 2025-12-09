@@ -35,13 +35,6 @@ INCBIN(fragment_shader, "../shaders/fragment.spv");
 
 namespace iris::imgui {
 
-enum : int {
-    IRIS_THEME_GRANITE,
-    IRIS_THEME_IMGUI_DARK,
-    IRIS_THEME_IMGUI_LIGHT,
-    IRIS_THEME_IMGUI_CLASSIC
-};
-
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
 static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
@@ -150,7 +143,7 @@ bool setup_fonts(iris::instance* iris, ImGuiIO& io) {
     return true;
 }
 
-void set_theme(iris::instance* iris, int theme) {
+void set_theme(iris::instance* iris, int theme, bool set_bg_color) {
     // Init 'Granite' theme
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowPadding           = ImVec2(8.0, 8.0);
@@ -240,18 +233,46 @@ void set_theme(iris::instance* iris, int theme) {
             colors[ImGuiCol_NavWindowingHighlight]  = ImVec4(1.00f, 1.00f, 1.00f, 0.70f);
             colors[ImGuiCol_NavWindowingDimBg]      = ImVec4(0.80f, 0.80f, 0.80f, 0.20f);
             colors[ImGuiCol_ModalWindowDimBg]       = ImVec4(0.00f, 0.00f, 0.00f, 0.35f);
+
+            if (!set_bg_color) break;
+
+            iris->clear_value.color.float32[0] = 0.11f;
+            iris->clear_value.color.float32[1] = 0.11f;
+            iris->clear_value.color.float32[2] = 0.11f;
+            iris->clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_IMGUI_DARK: {
             ImGui::StyleColorsDark();
+
+            if (!set_bg_color) break;
+
+            iris->clear_value.color.float32[0] = 0.11f;
+            iris->clear_value.color.float32[1] = 0.11f;
+            iris->clear_value.color.float32[2] = 0.11f;
+            iris->clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_IMGUI_LIGHT: {
             ImGui::StyleColorsLight();
+
+            if (!set_bg_color) break;
+
+            iris->clear_value.color.float32[0] = 0.89f;
+            iris->clear_value.color.float32[1] = 0.89f;
+            iris->clear_value.color.float32[2] = 0.89f;
+            iris->clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_IMGUI_CLASSIC: {
             ImGui::StyleColorsClassic();
+
+            if (!set_bg_color) break;
+
+            iris->clear_value.color.float32[0] = 0.11f;
+            iris->clear_value.color.float32[1] = 0.11f;
+            iris->clear_value.color.float32[2] = 0.11f;
+            iris->clear_value.color.float32[3] = 1.00f;
         } break;
     }
 
@@ -583,13 +604,7 @@ bool init(iris::instance* iris) {
         return false;
     }
 
-    // To-do: Make theme selectable, for now just use granite
-    set_theme(iris, IRIS_THEME_GRANITE);
-
-    iris->clear_value.color.float32[0] = 0.11f;
-    iris->clear_value.color.float32[1] = 0.11f;
-    iris->clear_value.color.float32[2] = 0.11f;
-    iris->clear_value.color.float32[3] = 1.0f;
+    set_theme(iris, iris->theme, false);
 
     // Initialize our pipeline
     VkShaderModule vert_shader = create_shader(iris, (uint32_t*)g_vertex_shader_data, g_vertex_shader_size);

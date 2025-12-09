@@ -467,6 +467,36 @@ void show_memory_card_settings(iris::instance* iris) {
     show_memory_card(iris, 1);
 }
 
+static const char* const theme_names[] = {
+    "Granite",
+    "ImGui Dark",
+    "ImGui Light",
+    "ImGui Classic",
+    0
+};
+
+void show_misc_settings(iris::instance* iris) {
+    using namespace ImGui;
+
+    Text("Theme");
+
+    if (BeginCombo("##theme", theme_names[iris->theme])) {
+        for (int i = 0; theme_names[i]; i++) {
+            if (Selectable(theme_names[i], iris->theme == i)) {
+                iris->theme = i;
+
+                imgui::set_theme(iris, i);
+            }
+        }
+
+        EndCombo();
+    }
+
+    Text("Background color");
+
+    ColorEdit3("##bgcolor", (float*)&iris->clear_value.color);
+}
+
 void show_settings(iris::instance* iris) {
     using namespace ImGui;
 
@@ -502,6 +532,7 @@ void show_settings(iris::instance* iris) {
                 case 1: show_graphics_settings(iris); break;
                 case 2: show_paths_settings(iris); break;
                 case 3: show_memory_card_settings(iris); break;
+                case 4: show_misc_settings(iris); break;
             }
         } EndChild();
 
