@@ -51,4 +51,16 @@ void close(iris::instance* iris) {
     iris->stream = nullptr;
 }
 
+bool mute(iris::instance* iris) {
+    iris->prev_mute = iris->mute;
+
+    iris->mute = true;
+
+    return iris->prev_mute;
+}
+
+void unmute(iris::instance* iris) {
+    iris->mute = iris->prev_mute;
+}
+
 }

@@ -47,9 +47,7 @@ void show_main_menubar(iris::instance* iris) {
 
         if (BeginMenu("Iris")) {
             if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Open...")) {
-                int prev_mute = iris->mute;
-
-                iris->mute = true;
+                audio::mute(iris);
 
                 auto f = pfd::open_file("Select a file to load", "", {
                     "All File Types (*.iso; *.bin; *.cue; *.chd; *.elf)", "*.iso *.bin *.cue *.chd *.elf",
@@ -66,7 +64,7 @@ void show_main_menubar(iris::instance* iris) {
 
                 while (!f.ready());
 
-                iris->mute = prev_mute;
+                audio::unmute(iris);
 
                 if (f.result().size()) {
                     std::string path = f.result().at(0);
@@ -200,9 +198,7 @@ void show_main_menubar(iris::instance* iris) {
             }
 
             if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
-                bool mute = iris->mute;
-
-                iris->mute = true;
+                audio::mute(iris);
 
                 auto f = pfd::open_file("Select CD/DVD image", "", {
                     "Disc Images (*.iso; *.bin; *.cue; *.chd)", "*.iso *.bin *.cue *.chd",
@@ -217,7 +213,7 @@ void show_main_menubar(iris::instance* iris) {
 
                 while (!f.ready());
 
-                iris->mute = mute;
+                audio::unmute(iris);
 
                 if (f.result().size()) {
                     // 2-second delay to allow the disc to spin up
@@ -381,9 +377,7 @@ void show_main_menubar(iris::instance* iris) {
         if (BeginMenu("Tools")) {
             if (MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->show_imgui_demo));
             if (MenuItem(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
-                bool mute = iris->mute;
-
-                iris->mute = true;
+                audio::mute(iris);
 
                 std::string filename = get_default_screenshot_filename(iris);
 
@@ -394,7 +388,7 @@ void show_main_menubar(iris::instance* iris) {
 
                 while (!f.ready());
 
-                iris->mute = mute;
+                audio::unmute(iris);
 
                 if (f.result().size()) {
                     save_screenshot(iris, f.result());

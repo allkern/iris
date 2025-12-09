@@ -330,6 +330,7 @@ struct instance {
     unsigned int ticks = 0;
     int menubar_height = 0;
     bool mute = false;
+    bool prev_mute = false;
     float volume = 1.0f;
     int timescale = 8;
     bool mute_adma = true;
@@ -370,6 +371,8 @@ namespace audio {
     bool init(iris::instance* iris);
     void close(iris::instance* iris);
     void update(void* udata, SDL_AudioStream* stream, int additional_amount, int total_amount);
+    bool mute(iris::instance* iris);
+    void unmute(iris::instance* iris);
 }
 
 namespace settings {

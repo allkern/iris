@@ -139,13 +139,6 @@ bool parse_toml_settings(iris::instance* iris) {
     for (int i = 0; i < recents->size(); i++)
         iris->recents.push_back(recents->at(i).as_string()->get());
 
-    ps2_set_timescale(iris->ps2, iris->timescale);
-
-    ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
-
-    ps2_set_system(iris->ps2, iris->system);
-    ps2_speed_load_flash(iris->ps2->speed, iris->flash_path.c_str());
-
     return true;
 }
 
@@ -293,6 +286,20 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     int r = parse_toml_settings(iris);
 
     parse_cli_settings(iris, argc, argv);
+
+    if (iris->mcd0_path.size())
+        iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2, iris->mcd0_path.c_str());
+
+    if (iris->mcd1_path.size())
+        iris->mcd[1] = mcd_attach(iris->ps2->sio2, 3, iris->mcd1_path.c_str());
+
+    // Apply settings loaded from file/CLI
+    ps2_set_timescale(iris->ps2, iris->timescale);
+
+    ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
+
+    ps2_set_system(iris->ps2, iris->system);
+    ps2_speed_load_flash(iris->ps2->speed, iris->flash_path.c_str());
 
     return true;
 }

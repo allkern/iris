@@ -1,10 +1,12 @@
 #include <vector>
 #include <string>
 #include <cctype>
+#include <cstdlib>
 
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "portable-file-dialogs.h"
 
 namespace iris {
 
@@ -66,16 +68,36 @@ void show_memory_card_tool(iris::instance* iris) {
             int size_in_bytes;
 
             if (type == MEMCARD_TYPE_PS2) {
-                int sectors = 0x4000 << size;
-
-                // Calculate data + ECC area
-                size_in_bytes = (sectors * 512) + (sectors * 16);
-
-                printf("size_in_bytes=%d (%x)\n", size_in_bytes, size_in_bytes);
+                // Calculate data + ECC area (nsects*512 + nsects*16)
+                size_in_bytes = 0x840000 << size;
             } else {
                 size_in_bytes = 128 * 1024;
+            }
 
-                printf("size_in_bytes=%d (%x)\n", size_in_bytes, size_in_bytes);
+            audio::mute(iris);
+
+            auto f = pfd::save_file("Save Memory Card image", iris->pref_path + "image.mcd", {
+                "Iris Memory Card Image (*.mcd)", "*.mcd",
+                "PCSX2 Memory Card Image (*.ps2)", "*.ps2",
+                "All Files (*.*)", "*"
+            });
+
+            while (!f.ready());
+
+            audio::unmute(iris);
+
+            if (f.result().size()) {
+                FILE* file = fopen(f.result().c_str(), "wb");
+
+                void* buf = malloc(size_in_bytes);
+
+                memset(buf, 0, size_in_bytes);
+
+                fseek(file, 0, SEEK_SET);
+                fwrite(buf, size_in_bytes, 1, file);
+                fclose(file);
+
+                free(buf);
             }
         }
     } End();

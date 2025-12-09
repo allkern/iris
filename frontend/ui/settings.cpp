@@ -233,9 +233,7 @@ void show_paths_settings(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom0")) {
-        bool mute = iris->mute;
-
-        iris->mute = true;
+        audio::mute(iris);
 
         auto f = pfd::open_file("Select BIOS file", "", {
             "BIOS dumps (*.bin; *.rom0)", "*.bin *.rom0",
@@ -244,7 +242,7 @@ void show_paths_settings(iris::instance* iris) {
 
         while (!f.ready());
 
-        iris->mute = mute;
+        audio::unmute(iris);
 
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 512);
@@ -259,9 +257,7 @@ void show_paths_settings(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom1")) {
-        bool mute = iris->mute;
-
-        iris->mute = true;
+        audio::mute(iris);
 
         auto f = pfd::open_file("Select DVD BIOS file", "", {
             "DVD BIOS dumps (*.bin; *.rom1)", "*.bin *.rom1",
@@ -270,7 +266,7 @@ void show_paths_settings(iris::instance* iris) {
 
         while (!f.ready());
 
-        iris->mute = mute;
+        audio::unmute(iris);
 
         if (f.result().size()) {
             strncpy(dvd_buf, f.result().at(0).c_str(), 512);
@@ -291,9 +287,7 @@ void show_paths_settings(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom2")) {
-        bool mute = iris->mute;
-
-        iris->mute = true;
+        audio::mute(iris);
 
         auto f = pfd::open_file("Select ROM2 file", "", {
             "ROM2 dumps (*.bin; *.rom2)", "*.bin *.rom2",
@@ -302,7 +296,7 @@ void show_paths_settings(iris::instance* iris) {
 
         while (!f.ready());
 
-        iris->mute = mute;
+        audio::unmute(iris);
 
         if (f.result().size()) {
             strncpy(rom2_buf, f.result().at(0).c_str(), 512);
@@ -323,9 +317,7 @@ void show_paths_settings(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##flash")) {
-        bool mute = iris->mute;
-
-        iris->mute = true;
+        audio::mute(iris);
 
         auto f = pfd::open_file("Select Flash/XFROM dump file", "", {
             "XFROM dumps (*.bin)", "*.bin",
@@ -334,7 +326,7 @@ void show_paths_settings(iris::instance* iris) {
 
         while (!f.ready());
 
-        iris->mute = mute;
+        audio::unmute(iris);
 
         if (f.result().size()) {
             strncpy(flash_buf, f.result().at(0).c_str(), 512);
@@ -415,7 +407,9 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         char it_label[7] = "##mcd0";
         char bt_label[10] = ICON_MS_FOLDER "##mcd0";
-        char ed_label[10] = ICON_MS_EDIT "##mcd0";
+        char ed_label[10];
+
+        snprintf(ed_label, 10, "%s##mcd0", iris->mcd[slot] ? ICON_MS_ARROW_DOWNWARD : ICON_MS_ARROW_UPWARD);
 
         it_label[5] = '0' + slot;
         bt_label[8] = '0' + slot;
@@ -425,9 +419,7 @@ void show_memory_card(iris::instance* iris, int slot) {
         SameLine();
 
         if (Button(bt_label)) {
-            bool mute = iris->mute;
-
-            iris->mute = true;
+            audio::mute(iris);
 
             auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->pref_path, {
                 "Memory Card files (*.ps2; *.mcd; *.bin)", "*.ps2 *.mcd *.bin",
@@ -436,7 +428,7 @@ void show_memory_card(iris::instance* iris, int slot) {
 
             while (!f.ready());
 
-            iris->mute = mute;
+            audio::unmute(iris);
 
             if (f.result().size()) {
                 strncpy(buf, f.result().at(0).c_str(), 512);
@@ -447,9 +439,33 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         SameLine();
 
-        if (Button(ed_label)) {
+        BeginDisabled((!iris->mcd[slot]) && (!path.size()));
 
+        if (Button(ed_label)) {
+            if (iris->mcd[slot]) {
+                if (slot == 0) {
+                    iris->mcd0_path = "";
+                } else {
+                    iris->mcd1_path = "";
+                }
+
+                ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
+
+                iris->mcd[slot] = nullptr;
+            } else {
+                if (slot == 0) {
+                    iris->mcd0_path = path;
+                } else {
+                    iris->mcd1_path = path;
+                }
+
+                ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
+
+                iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2 + slot, path.c_str());
+            }
         }
+
+        EndDisabled();
     } EndChild();
 }
 

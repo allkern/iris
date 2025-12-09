@@ -42,9 +42,7 @@ void show_bios_stage(iris::instance* iris) {
     SameLine();
 
     if (Button(ICON_MS_FOLDER)) {
-        bool mute = iris->mute;
-
-        iris->mute = true;
+        audio::mute(iris);
 
         auto f = pfd::open_file("Select BIOS file", "", {
             "All File Types (*.bin; *.rom0)", "*.bin *.rom0",
@@ -53,7 +51,7 @@ void show_bios_stage(iris::instance* iris) {
 
         while (!f.ready());
 
-        iris->mute = mute;
+        audio::unmute(iris);
 
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 512);
