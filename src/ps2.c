@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "ps2.h"
+#include "rom.h"
 
 struct ps2_state* ps2_create(void) {
     return malloc(sizeof(struct ps2_state));
@@ -189,6 +190,14 @@ int ps2_load_bios(struct ps2_state* ps2, const char* path) {
     ee_bus_init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
     iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
 
+    if (ps2->system == PS2_SYSTEM_AUTO) {
+        struct ps2_rom_info info = ps2_rom_search(ps2->bios->buf, ps2->bios->size + 1);
+
+        ps2_set_system(ps2, info.system);
+
+        ps2->detected_system = info.system;
+    }
+
     return 1;
 }
 
@@ -348,10 +357,6 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
     int ee_ram_size, iop_ram_size, mechacon_model;
 
     switch (system) {
-        // case PS2_SYSTEM_AUTO: {
-            /* To-do: Check loaded BIOS */
-        // } break;
-
         case PS2_SYSTEM_RETAIL: {
             ee_ram_size = RAM_SIZE_32MB;
             iop_ram_size = RAM_SIZE_2MB;
@@ -370,11 +375,52 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             mechacon_model = CDVD_MECHACON_DRAGON;
         } break;
 
-        // To-do: Fact check
         case PS2_SYSTEM_TEST:
         case PS2_SYSTEM_TOOL: {
             ee_ram_size = RAM_SIZE_128MB;
-            iop_ram_size = RAM_SIZE_8MB;
+            iop_ram_size = RAM_SIZE_16MB;
+
+            // To-do: Separate mechacon model for TOOL/TEST
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_KONAMI_PYTHON: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_SPC970;
+        } break;
+
+        case PS2_SYSTEM_KONAMI_PYTHON2: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S147: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+
+            // This board actually has no MechaCon
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S148: {
+            ee_ram_size = RAM_SIZE_64MB;
+            iop_ram_size = RAM_SIZE_2MB;
+
+            // This board actually has no MechaCon
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S246: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S256: {
+            ee_ram_size = RAM_SIZE_64MB;
+            iop_ram_size = RAM_SIZE_4MB;
             mechacon_model = CDVD_MECHACON_DRAGON;
         } break;
 
@@ -382,8 +428,10 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             ee_ram_size = RAM_SIZE_32MB;
             iop_ram_size = RAM_SIZE_2MB;
             mechacon_model = CDVD_MECHACON_DRAGON;
-        }
+        } break;
     }
+
+    ps2->detected_system = system;
 
     ps2_ram_destroy(ps2->ee_ram);
     ps2_ram_destroy(ps2->iop_ram);

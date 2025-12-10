@@ -106,6 +106,7 @@ struct ps2_state {
 
     int ee_cycles;
     int timescale;
+    int system, detected_system;
 
     // Debug
     struct ps2_elf_function* func;
