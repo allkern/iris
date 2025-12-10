@@ -565,6 +565,7 @@ bool init(iris::instance* iris) {
     ImGuiStyle& style = ImGui::GetStyle();
     style.ScaleAllSizes(iris->main_scale);
     style.FontScaleDpi = iris->main_scale;
+    style.WindowMinSize = ImVec2(600, 500);
     io.ConfigDpiScaleFonts = true;
     io.ConfigDpiScaleViewports = true;
 
