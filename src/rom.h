@@ -1,11 +1,12 @@
-#ifndef BIOS_HASH_H
-#define BIOS_HASH_H
+#ifndef ROM_H
+#define ROM_H
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #include <stdint.h>
+#include <stddef.h>
 
 struct ps2_rom_info {
     const char* md5hash;

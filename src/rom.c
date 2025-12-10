@@ -80,13 +80,13 @@ static const struct ps2_rom_info rom_info_table[] = {
     { "30d56e79d89fbddf10938fa67fe3f34e", "5.0 02/20/08 J", "NTSC-J", "SCPH-90005/SCPH-90006/SCPH-90007", 2 },
     { "93ea3bcee4252627919175ff1b16a1d9", "5.0 04/15/10 E", "PAL-E", "KDL-22PX300 (Sony Bravia TV) (Europe)", 2 },
     { "d3e81e95db25f5a86a7b7474550a2155", "5.0 04/15/10 J", "NTSC-J", "KDL-22PX300 (Sony Bravia TV)", 2 },
-    { "cc4b9cea0fdb3d2506173668a2a88305", "?.? ??/??/?? ?", "N/A", "Namco System 147", 8 },
-    { "860c13259a548c7ff07b67157928b076", "?.? ??/??/?? ?", "N/A", "Namco System 148", 9 }
+    { "cc4b9cea0fdb3d2506173668a2a88305", "?.? \?\?/\?\?/?? ?", "N/A", "Namco System 147", 8 },
+    { "860c13259a548c7ff07b67157928b076", "?.? \?\?/\?\?/?? ?", "N/A", "Namco System 148", 9 }
 };
 
 static const struct ps2_rom_info unknown = {
     "00000000000000000000000000000000",
-    "?.? ??/??/?? ?",
+    "?.? \?\?/\?\?/?? ?",
     "N/A",
     "Unknown",
     2
