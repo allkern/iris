@@ -54,7 +54,13 @@ const char* system_names[] = {
     "Retail (Slim)",
     "PSX DESR",
     "TEST unit (DTL-H)",
-    "TOOL unit (DTL-T)"
+    "TOOL unit (DTL-T)",
+    "Konami Python",
+    "Konami Python 2",
+    "Namco System 147",
+    "Namco System 148",
+    "Namco System 246",
+    "Namco System 256"
 };
 
 const char* mechacon_model_names[] = {
@@ -81,6 +87,15 @@ void show_system_settings(iris::instance* iris) {
 
     if (BeginTable("##specs-table", 2, ImGuiTableFlags_SizingFixedSame)) {
         TableNextRow();
+
+        if (iris->system == 0) {
+            TableSetColumnIndex(0);
+            TextDisabled("Detected system");
+            TableSetColumnIndex(1);
+            Text("%s", system_names[iris->ps2->detected_system]);
+            TableNextRow();
+        }
+
         TableSetColumnIndex(0);
         TextDisabled("Main RAM");
         TableSetColumnIndex(1);
@@ -212,6 +227,7 @@ void show_paths_settings(iris::instance* iris) {
     static char buf[512];
     static char dvd_buf[512];
     static char rom2_buf[512];
+    static char nvram_buf[512];
     static char flash_buf[512];
 
     Text("BIOS (rom0)");
@@ -225,6 +241,7 @@ void show_paths_settings(iris::instance* iris) {
     const char* bios_hint = iris->bios_path.size() ? iris->bios_path.c_str() : "e.g. scph10000.bin";
     const char* rom1_hint = iris->rom1_path.size() ? iris->rom1_path.c_str() : "Not configured";
     const char* rom2_hint = iris->rom2_path.size() ? iris->rom2_path.c_str() : "Not configured";
+    const char* nvram_hint = iris->nvram_path.size() ? iris->nvram_path.c_str() : "Not configured";
     const char* flash_hint = iris->flash_path.size() ? iris->flash_path.c_str() : "Not configured";
 
     SetNextItemWidth(300);
@@ -309,6 +326,36 @@ void show_paths_settings(iris::instance* iris) {
         memset(rom2_buf, 0, 512);
     } 
 
+    Text("EEPROM memory (nvram)");
+
+    SetNextItemWidth(300);
+
+    InputTextWithHint("##nvram", nvram_hint, nvram_buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    SameLine();
+
+    if (Button(ICON_MS_FOLDER "##nvram")) {
+        audio::mute(iris);
+
+        auto f = pfd::open_file("Select NVRAM file", "", {
+            "NVRAM dumps (*.nvm; *.bin)", "*.nvm *.bin",
+            "All Files (*.*)", "*"
+        });
+
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        if (f.result().size()) {
+            strncpy(nvram_buf, f.result().at(0).c_str(), 512);
+        }
+    } SameLine();
+
+    if (Button(ICON_MS_CLEAR "##nvram")) {
+        iris->nvram_path = "";
+
+        memset(nvram_buf, 0, 512);
+    } 
+
     Text("Flash memory (xfrom)");
 
     SetNextItemWidth(300);
@@ -344,15 +391,20 @@ void show_paths_settings(iris::instance* iris) {
         std::string rom1_path = dvd_buf;
         std::string rom2_path = rom2_buf;
         std::string flash_path = flash_buf;
+        std::string nvram_path = nvram_buf;
 
         if (bios_path.size()) iris->bios_path = bios_path;
         if (rom1_path.size()) iris->rom1_path = rom1_path;
         if (rom2_path.size()) iris->rom2_path = rom2_path;
         if (flash_path.size()) iris->flash_path = flash_path;
+        if (nvram_path.size()) iris->nvram_path = nvram_path;
     } SameLine();
 
     TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Restart the emulator to apply these changes");
 }
+
+static char slot0_buf[1024];
+static char slot1_buf[1024];
 
 void show_memory_card(iris::instance* iris, int slot) {
     using namespace ImGui;
@@ -402,7 +454,7 @@ void show_memory_card(iris::instance* iris, int slot) {
         Text("Slot %d", slot+1);
         PopFont();
 
-        static char buf[512];
+        char* buf = slot ? slot1_buf : slot0_buf;
         const char* hint = path.size() ? path.c_str() : "Not configured";
 
         char it_label[7] = "##mcd0";
@@ -434,6 +486,10 @@ void show_memory_card(iris::instance* iris, int slot) {
                 strncpy(buf, f.result().at(0).c_str(), 512);
 
                 path = f.result().at(0);
+
+                ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
+
+                iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2 + slot, path.c_str());
             }
         }
 
@@ -443,22 +499,10 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         if (Button(ed_label)) {
             if (iris->mcd[slot]) {
-                if (slot == 0) {
-                    iris->mcd0_path = "";
-                } else {
-                    iris->mcd1_path = "";
-                }
-
                 ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
 
                 iris->mcd[slot] = nullptr;
             } else {
-                if (slot == 0) {
-                    iris->mcd0_path = path;
-                } else {
-                    iris->mcd1_path = path;
-                }
-
                 ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
 
                 iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2 + slot, path.c_str());

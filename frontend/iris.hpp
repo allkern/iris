@@ -257,6 +257,7 @@ struct instance {
     std::string bios_path = "";
     std::string rom1_path = "";
     std::string rom2_path = "";
+    std::string nvram_path = "";
     std::string disc_path = "";
     std::string pref_path = "";
     std::string mcd0_path = "";
@@ -317,7 +318,7 @@ struct instance {
     uint32_t ee_control_address = 0;
     uint32_t iop_control_address = 0;
     bool skip_fmv = false;
-    int system = PS2_SYSTEM_RETAIL_DECKARD;
+    int system = PS2_SYSTEM_AUTO;
     int theme = IRIS_THEME_GRANITE;
 
     std::deque <std::string> recents;

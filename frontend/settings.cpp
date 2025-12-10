@@ -64,6 +64,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->bios_path = paths["bios_path"].value_or("");
     iris->rom1_path = paths["rom1_path"].value_or("");
     iris->rom2_path = paths["rom2_path"].value_or("");
+    iris->nvram_path = paths["nvram_path"].value_or("");
     iris->mcd0_path = paths["mcd0_path"].value_or("");
     iris->mcd1_path = paths["mcd1_path"].value_or("");
     iris->snap_path = paths["snap_path"].value_or("snap");
@@ -117,7 +118,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->timescale = debugger["timescale"].value_or(8);
 
     auto system = tbl["system"];
-    iris->system = system["model"].value_or(PS2_SYSTEM_RETAIL_DECKARD);
+    iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
 
     auto ui = tbl["ui"];
     iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
@@ -272,20 +273,15 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
 
         iris->loaded = iris->disc_path;
     }
-
-    // if (iris->mcd0_path.size()) {
-    //     mcd_sio2_attach(iris->ps2->sio2, 2, iris->mcd0_path.c_str());
-    // }
-
-    // if (iris->mcd1_path.size()) {
-    //     mcd_sio2_attach(iris->ps2->sio2, 3, iris->mcd1_path.c_str());
-    // }
 }
 
 bool init(iris::instance* iris, int argc, const char* argv[]) {
     int r = parse_toml_settings(iris);
 
     parse_cli_settings(iris, argc, argv);
+
+    if (iris->nvram_path.size())
+        ps2_cdvd_load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
 
     if (iris->mcd0_path.size())
         iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2, iris->mcd0_path.c_str());
@@ -368,6 +364,7 @@ void close(iris::instance* iris) {
             { "bios_path", iris->bios_path },
             { "rom1_path", iris->rom1_path },
             { "rom2_path", iris->rom2_path },
+            { "nvram_path", iris->nvram_path },
             { "mcd0_path", iris->mcd0_path },
             { "mcd1_path", iris->mcd1_path },
             { "snap_path", iris->snap_path },
