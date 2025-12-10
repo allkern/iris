@@ -12,6 +12,7 @@ namespace iris {
 bool hovered = false;
 std::string tooltip = "";
 int selected_settings = 0;
+int saved = 0;
 
 const char* settings_renderer_names[] = {
     "Null",
@@ -266,6 +267,36 @@ void show_paths_settings(iris::instance* iris) {
         }
     }
 
+    if (BeginTable("##rom-info", 2, ImGuiTableFlags_SizingFixedFit)) {
+        TableNextRow();
+        TableSetColumnIndex(0);
+        TextDisabled("Model" " ");
+        TableSetColumnIndex(1);
+        Text("%s", iris->ps2->rom_info.model);
+
+        TableNextRow();
+        TableSetColumnIndex(0);
+        TextDisabled("Version" " ");
+        TableSetColumnIndex(1);
+        Text("%s", iris->ps2->rom_info.version);
+
+        TableNextRow();
+        TableSetColumnIndex(0);
+        TextDisabled("Region" " ");
+        TableSetColumnIndex(1);
+        Text("%s", iris->ps2->rom_info.region);
+
+        TableNextRow();
+        TableSetColumnIndex(0);
+        TextDisabled("MD5 hash" " ");
+        TableSetColumnIndex(1);
+        Text("%s", iris->ps2->rom_info.md5hash);
+
+        EndTable();
+    }
+
+    Separator();
+
     Text("DVD Player (rom1)");
 
     SetNextItemWidth(300);
@@ -398,9 +429,13 @@ void show_paths_settings(iris::instance* iris) {
         if (rom2_path.size()) iris->rom2_path = rom2_path;
         if (flash_path.size()) iris->flash_path = flash_path;
         if (nvram_path.size()) iris->nvram_path = nvram_path;
+
+        saved = 1;
     } SameLine();
 
-    TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Restart the emulator to apply these changes");
+    if (saved) {
+        TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Restart the emulator to apply these changes");
+    }
 }
 
 static char slot0_buf[1024];

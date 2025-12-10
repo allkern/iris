@@ -40,6 +40,7 @@ extern "C" {
 #include "dev/mtap.h"
 
 #include "scheduler.h"
+#include "rom.h"
 
 enum {
     PS2_SYSTEM_AUTO = 0,
@@ -107,6 +108,8 @@ struct ps2_state {
     int ee_cycles;
     int timescale;
     int system, detected_system;
+
+    struct ps2_rom_info rom_info;
 
     // Debug
     struct ps2_elf_function* func;

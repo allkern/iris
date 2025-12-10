@@ -110,5 +110,10 @@ struct ps2_rom_info ps2_rom_search(uint8_t* rom, size_t size) {
         }
     }
 
-    return unknown;
+    struct ps2_rom_info info;
+    
+    info = unknown;
+    info.md5hash = buf;
+
+    return info;
 }
