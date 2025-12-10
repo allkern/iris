@@ -1334,8 +1334,6 @@ void ps2_cdvd_set_mechacon_model(struct ps2_cdvd* cdvd, int model) {
             cdvd->layout = g_dragon_layout;
         } break;
     }
-
-    fprintf(stderr, "cdvd: Set Mechacon model to %d\n", model);
 }
 
 int ps2_cdvd_load_nvram(struct ps2_cdvd* cdvd, const char* path) {
