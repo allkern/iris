@@ -47,7 +47,7 @@ int ps2_bios_load(struct ps2_bios* bios, const char* path) {
     bios->size = get_file_size(file) - 1;
     bios->buf = malloc(bios->size + 1);
 
-    if (!fread(bios->buf, 1, bios->size, file)) {
+    if (!fread(bios->buf, 1, bios->size + 1, file)) {
         printf("bios: Couldn't read binary from \'%s\'\n", path);
 
         return 1;
