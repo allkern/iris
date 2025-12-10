@@ -160,6 +160,7 @@ void ps2_cdvd_destroy(struct ps2_cdvd* cdvd);
 int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay);
 void ps2_cdvd_close(struct ps2_cdvd* cdvd);
 void ps2_cdvd_power_off(struct ps2_cdvd* cdvd);
+int ps2_cdvd_load_nvram(struct ps2_cdvd* cdvd, const char* path);
 void ps2_cdvd_set_mechacon_model(struct ps2_cdvd* cdvd, int model);
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr);
 void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data);
