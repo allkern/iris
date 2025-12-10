@@ -22,7 +22,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("EE")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->ee_ram->buf, RAM_SIZE_32MB, 0);
+                editor.DrawContents(ps2->ee_ram->buf, ps2->ee_ram->size, 0);
 
                 PopFont();
 
@@ -42,7 +42,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("IOP")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->iop_ram->buf, RAM_SIZE_2MB, 0);
+                editor.DrawContents(ps2->iop_ram->buf, ps2->iop_ram->size, 0);
 
                 PopFont();
 
