@@ -191,11 +191,11 @@ int ps2_load_bios(struct ps2_state* ps2, const char* path) {
     iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
 
     if (ps2->system == PS2_SYSTEM_AUTO) {
-        ps2->rom_info = ps2_rom_search(ps2->bios->buf, ps2->bios->size + 1);
+        ps2->rom0_info = ps2_rom0_search(ps2->bios->buf, ps2->bios->size + 1);
 
-        ps2_set_system(ps2, ps2->rom_info.system);
+        ps2_set_system(ps2, ps2->rom0_info.system);
 
-        ps2->detected_system = ps2->rom_info.system;
+        ps2->detected_system = ps2->rom0_info.system;
     }
 
     return 1;
@@ -205,6 +205,8 @@ int ps2_load_rom1(struct ps2_state* ps2, const char* path) {
     if (ps2_bios_load(ps2->rom1, path)) {
         return 0;
     }
+
+    ps2->rom1_info = ps2_rom1_search(ps2->rom1->buf, ps2->rom1->size + 1);
 
     return 1;
 }
@@ -358,11 +360,11 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
 
     switch (system) {
         case PS2_SYSTEM_AUTO: {
-            ps2->rom_info = ps2_rom_search(ps2->bios->buf, ps2->bios->size + 1);
+            ps2->rom0_info = ps2_rom0_search(ps2->bios->buf, ps2->bios->size + 1);
 
-            ps2_set_system(ps2, ps2->rom_info.system);
+            ps2_set_system(ps2, ps2->rom0_info.system);
 
-            ps2->detected_system = ps2->rom_info.system;
+            ps2->detected_system = ps2->rom0_info.system;
 
             return;
         } break;

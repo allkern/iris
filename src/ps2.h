@@ -109,7 +109,8 @@ struct ps2_state {
     int timescale;
     int system, detected_system;
 
-    struct ps2_rom_info rom_info;
+    struct ps2_rom_info rom0_info;
+    struct ps2_rom_info rom1_info;
 
     // Debug
     struct ps2_elf_function* func;

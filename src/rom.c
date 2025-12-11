@@ -1,7 +1,7 @@
 #include "rom.h"
 #include "md5.h"
 
-static const struct ps2_rom_info rom_info_table[] = {
+static const struct ps2_rom_info rom0_info_table[] = {
     { "32f2e4d5ff5ee11072a6bc45530f5765", "5.0 01/17/00 T", "N/A", "DTL-H10000", 4 },
     { "acf4730ceb38ac9d8c7d8e21f2614600", "5.0 01/17/00 T", "NTSC-J", "SCPH-10000", 1 },
     { "acf9968c8f596d2b15f42272082513d1", "5.0 02/17/00 T", "N/A", "DTL-H10000", 4 },
@@ -84,6 +84,29 @@ static const struct ps2_rom_info rom_info_table[] = {
     { "860c13259a548c7ff07b67157928b076", "?.? \?\?/\?\?/?? ?", "N/A", "Namco System 148", 9 }
 };
 
+static const struct ps2_rom_info rom1_info_table[] = {
+    { "31a671627b9bf2d88f5e3f6680941fa6", "1.10U" },
+    { "22080eed26576f4e2282c905dc6e0a4b", "1.20E" },
+    { "20a4e401b9e7885e25f1c31f6bfcbe0c", "1.20U" },
+    { "a1a15b62cef142575faaea17fb23dbd1", "1.30E" },
+    { "567fe068711a9e5914e836cb650600af", "1.30U" },
+    { "8afc4544e572842a6bb301ad92dc0c02", "2.00J" },
+    { "d5118e3979eb2a3814ebbfa32825e7b0", "2.10E" },
+    { "f0b2e6b7f6d06561e230a5b85e5d1bf9", "2.10J" },
+    { "d0f79251699fdeff073a7c2365d0c526", "2.10U" },
+    { "32abbe7ab7c1b72d5ffc24d4963bd6c6", "2.12G" },
+    { "4499f6303d05d4caeb289c2344ea3469", "2.12U" },
+    { "6bdb45a952f697f367cd1646cdf09235", "2.13E" },
+    { "d609f69d9e3ef236f6e2bf0a80762b6f", "2.15G" },
+    { "f40466438d83a02c1eecba3efff20b6a", "3.00E" },
+    { "e414c981647883e33f17642da827a739", "3.00U" },
+    { "6bbd2f348c585fdd645900f6ec75f2c7", "3.02C" },
+    { "503115717429b64e19fa6103e3fa5a35", "3.02E" },
+    { "2ac40eec790adecf4bc5ee1090a27676", "3.02U" },
+    { "a2b55c44a3c3eec0abe5647cfb6a6493", "3.10" },
+    { "79b4880006769a1af9b0a6c7302cc18d", "3.11" }
+};
+
 static const struct ps2_rom_info unknown = {
     "00000000000000000000000000000000",
     "Unknown",
@@ -92,7 +115,7 @@ static const struct ps2_rom_info unknown = {
     2
 };
 
-struct ps2_rom_info ps2_rom_search(uint8_t* rom, size_t size) {
+struct ps2_rom_info ps2_rom0_search(uint8_t* rom, size_t size) {
     struct md5_context ctx;
     char buf[33];
 
@@ -104,9 +127,36 @@ struct ps2_rom_info ps2_rom_search(uint8_t* rom, size_t size) {
         sprintf(&buf[i * 2], "%02x", ctx.digest[i]);
     }
 
-    for (size_t i = 0; i < sizeof(rom_info_table) / sizeof(rom_info_table[0]); i++) {
-        if (strncmp(buf, rom_info_table[i].md5hash, 32) == 0) {
-            return rom_info_table[i];
+    for (size_t i = 0; i < sizeof(rom0_info_table) / sizeof(rom0_info_table[0]); i++) {
+        if (strncmp(buf, rom0_info_table[i].md5hash, 32) == 0) {
+            return rom0_info_table[i];
+        }
+    }
+
+    struct ps2_rom_info info;
+    
+    info = unknown;
+
+    memcpy(info.md5hash, buf, 33);
+
+    return info;
+}
+
+struct ps2_rom_info ps2_rom1_search(uint8_t* rom, size_t size) {
+    struct md5_context ctx;
+    char buf[33];
+
+    md5_init(&ctx);
+    md5_update(&ctx, rom, size);
+    md5_finalize(&ctx);
+
+    for (int i = 0; i < 16; i++) {
+        sprintf(&buf[i * 2], "%02x", ctx.digest[i]);
+    }
+
+    for (size_t i = 0; i < sizeof(rom1_info_table) / sizeof(rom1_info_table[0]); i++) {
+        if (strncmp(buf, rom1_info_table[i].md5hash, 32) == 0) {
+            return rom1_info_table[i];
         }
     }
 

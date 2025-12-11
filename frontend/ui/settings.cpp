@@ -274,27 +274,27 @@ void show_paths_settings(iris::instance* iris) {
         TableSetColumnIndex(0);
         TextDisabled("Model" " ");
         TableSetColumnIndex(1);
-        Text("%s", iris->ps2->rom_info.model);
+        Text("%s", iris->ps2->rom0_info.model);
 
         TableNextRow();
         TableSetColumnIndex(0);
         TextDisabled("Version" " ");
         TableSetColumnIndex(1);
-        Text("%s", iris->ps2->rom_info.version);
+        Text("%s", iris->ps2->rom0_info.version);
 
         TableNextRow();
         TableSetColumnIndex(0);
         TextDisabled("Region" " ");
         TableSetColumnIndex(1);
-        Text("%s", iris->ps2->rom_info.region);
+        Text("%s", iris->ps2->rom0_info.region);
 
         TableNextRow();
         TableSetColumnIndex(0);
         TextDisabled("MD5 hash" " ");
         TableSetColumnIndex(1);
-        Text("%s", iris->ps2->rom_info.md5hash); SameLine();
+        Text("%s", iris->ps2->rom0_info.md5hash); SameLine();
         if (SmallButton(ICON_MS_CONTENT_COPY)) {
-            SDL_SetClipboardText(iris->ps2->rom_info.md5hash);
+            SDL_SetClipboardText(iris->ps2->rom0_info.md5hash);
         }
 
         EndTable();
@@ -323,6 +323,8 @@ void show_paths_settings(iris::instance* iris) {
 
         if (f.result().size()) {
             strncpy(dvd_buf, f.result().at(0).c_str(), 512);
+
+            ps2_load_rom1(iris->ps2, dvd_buf);
         }
     } SameLine();
 
@@ -330,6 +332,29 @@ void show_paths_settings(iris::instance* iris) {
         iris->rom1_path = "";
 
         memset(dvd_buf, 0, 512);
+    }
+
+    if (iris->rom1_path.size()) {
+        if (BeginTable("##rom1-info", 2, ImGuiTableFlags_SizingFixedFit)) {
+            TableNextRow();
+            TableSetColumnIndex(0);
+            TextDisabled("Version" " ");
+            TableSetColumnIndex(1);
+            Text("%s", iris->ps2->rom1_info.version);
+
+            TableNextRow();
+            TableSetColumnIndex(0);
+            TextDisabled("MD5 hash" " ");
+            TableSetColumnIndex(1);
+            Text("%s", iris->ps2->rom1_info.md5hash); SameLine();
+            if (SmallButton(ICON_MS_CONTENT_COPY)) {
+                SDL_SetClipboardText(iris->ps2->rom1_info.md5hash);
+            }
+
+            EndTable();
+        }
+
+        Separator();
     }
 
     Text("Chinese extensions (rom2)");
