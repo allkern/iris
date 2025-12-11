@@ -480,9 +480,12 @@ bool create_descriptor_pool(iris::instance* iris) {
 
 bool upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride) {
     VkDeviceSize image_size = width * height * stride;
-
     VkBuffer staging_buffer = VK_NULL_HANDLE;
     VkDeviceMemory staging_buffer_memory = VK_NULL_HANDLE;
+    VkImage image = VK_NULL_HANDLE;
+    VkImageView image_view = VK_NULL_HANDLE;
+    VkSampler sampler = VK_NULL_HANDLE;
+    VkDeviceMemory image_memory = VK_NULL_HANDLE;
 
     staging_buffer = create_buffer(
         iris,
@@ -492,13 +495,133 @@ bool upload_texture(iris::instance* iris, void* pixels, int width, int height, i
         staging_buffer_memory
     );
 
-    if (staging_buffer == VK_NULL_HANDLE) {
+    if (staging_buffer == VK_NULL_HANDLE)
         return false;
-    }
 
     load_buffer(iris, staging_buffer_memory, pixels, image_size);
 
     // To-do: Transition image layout and copy buffer to image
+    // Create the Vulkan image.
+    {
+        VkImageCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        info.imageType = VK_IMAGE_TYPE_2D;
+        info.format = VK_FORMAT_R8G8B8A8_UNORM;
+        info.extent.width = width;
+        info.extent.height = height;
+        info.extent.depth = 1;
+        info.mipLevels = 1;
+        info.arrayLayers = 1;
+        info.samples = VK_SAMPLE_COUNT_1_BIT;
+        info.tiling = VK_IMAGE_TILING_OPTIMAL;
+        info.usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+        info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+        info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        
+        if (vkCreateImage(iris->device, &info, VK_NULL_HANDLE, &image) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to create image\n");
+
+            return false;
+        }
+
+        VkMemoryRequirements req;
+        vkGetImageMemoryRequirements(iris->device, image, &req);
+        VkMemoryAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        alloc_info.allocationSize = req.size;
+        VkPhysicalDeviceMemoryProperties memory_properties;
+        vkGetPhysicalDeviceMemoryProperties(iris->physical_device, &memory_properties);
+
+        for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
+            if ((req.memoryTypeBits & (1 << i)) &&
+                (memory_properties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) == VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                alloc_info.memoryTypeIndex = i;
+                break;
+            }
+        }
+        if (vkAllocateMemory(iris->device, &alloc_info, VK_NULL_HANDLE, &image_memory) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to allocate image memory\n");
+
+            return false;
+        }
+
+        if (vkBindImageMemory(iris->device, image, image_memory, 0) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to bind image memory\n");
+
+            return false;
+        }
+    }
+
+    // Create the Image View
+    {
+        VkImageViewCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        info.image = image;
+        info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        info.format = VK_FORMAT_R8G8B8A8_UNORM;
+        info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        info.subresourceRange.levelCount = 1;
+        info.subresourceRange.layerCount = 1;
+        if (vkCreateImageView(iris->device, &info, VK_NULL_HANDLE, &image_view) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to create image view\n");
+
+            return false;
+        }
+    }
+
+    // Create Sampler
+    {
+        VkSamplerCreateInfo sampler_info{};
+        sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        sampler_info.magFilter = VK_FILTER_LINEAR;
+        sampler_info.minFilter = VK_FILTER_LINEAR;
+        sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT; // outside image bounds just use border color
+        sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+        sampler_info.minLod = -1000;
+        sampler_info.maxLod = 1000;
+        sampler_info.maxAnisotropy = 1.0f;
+        if (vkCreateSampler(iris->device, &sampler_info, VK_NULL_HANDLE, &sampler) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to create sampler\n");
+
+            return false;
+        }
+    }
+
+    // Create Descriptor Set:
+    VkDescriptorSet descriptor_set;
+
+    {
+        VkDescriptorSetAllocateInfo alloc_info = {};
+        alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        alloc_info.descriptorPool = iris->descriptor_pool;
+        alloc_info.descriptorSetCount = 1;
+        alloc_info.pSetLayouts = &iris->descriptor_set_layout;
+        if (vkAllocateDescriptorSets(iris->device, &alloc_info, &descriptor_set) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to allocate descriptor sets\n");
+
+            return false;
+        }
+    }
+
+    // Update the Descriptor Set:
+    {
+        VkDescriptorImageInfo desc_image[1] = {};
+        desc_image[0].sampler = sampler;
+        desc_image[0].imageView = image_view;
+        desc_image[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        VkWriteDescriptorSet write_desc[1] = {};
+        write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_desc[0].dstSet = descriptor_set;
+        write_desc[0].descriptorCount = 1;
+        write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write_desc[0].pImageInfo = desc_image;
+        vkUpdateDescriptorSets(iris->device, 1, write_desc, 0, nullptr);
+    }
+
+    // To-do: Upload staging buffer data here
+    // ref: https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples#example-for-vulkan-users
 
     vkDestroyBuffer(iris->device, staging_buffer, nullptr);
     vkFreeMemory(iris->device, staging_buffer_memory, nullptr);
