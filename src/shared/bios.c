@@ -29,6 +29,10 @@ void ps2_bios_init(struct ps2_bios* bios) {
     bios->size = 0x3fffff;
 
     memset(bios->buf, 0, 0x400000);
+
+    uint32_t* ptr = (uint32_t*)bios->buf;
+
+    ptr[0] = 0x1000fffe; // b 0x00000000
 }
 
 int ps2_bios_load(struct ps2_bios* bios, const char* path) {
