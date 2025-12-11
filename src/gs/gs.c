@@ -32,6 +32,20 @@ static inline int gs_assert_vblank(struct ps2_gs* gs) {
     return 0;
 }
 
+
+static inline int gs_assert_hblank(struct ps2_gs* gs) {
+    if ((gs->csr & 4) == 0) {
+        if (gs->csr_enable & 4)
+            gs->csr |= 4;
+
+        // printf("gs: Asserting Hblank imr.hsync=%d\n", (gs->imr >> 8) & 4);
+
+        return ((gs->imr >> 8) & 4) == 0;
+    }
+
+    return 0;
+}
+
 void gs_handle_vblank_in(void* udata, int overshoot);
 void gs_handle_hblank(void* udata, int overshoot);
 
@@ -83,8 +97,6 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 
-    gs->csr |= 6;
-
     // Send Vblank IRQ through INTC
     ps2_intc_irq(gs->ee_intc, EE_INTC_VBLANK_IN);
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_IN);
@@ -111,6 +123,12 @@ void gs_handle_hblank(void* udata, int overshoot) {
     hblank_event.cycles = GS_SCANLINE_NTSC;
     hblank_event.name = "Hblank event";
     hblank_event.udata = gs;
+
+    if (gs_assert_hblank(gs)) {
+        ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
+    }
+
+    gs->csr ^= 1 << 13 | 1 << 14;
 
     sched_schedule(gs->sched, hblank_event);
 }
@@ -143,11 +161,13 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
     // sched_schedule(gs->sched, hblank_event);
 
     gs->ctx = &gs->context[0];
+    gs->imr = 0x00007f00;
 }
 
 void ps2_gs_reset(struct ps2_gs* gs) {
     gs->ctx = &gs->context[0];
     gs->csr |= 2;
+    gs->imr = 0x00007f00;
 
     // Schedule Vblank event
     struct sched_event vblank_event;
@@ -157,6 +177,14 @@ void ps2_gs_reset(struct ps2_gs* gs) {
     vblank_event.udata = gs;
 
     sched_schedule(gs->sched, vblank_event);
+
+    // struct sched_event hblank_event;
+    // hblank_event.callback = gs_handle_hblank;
+    // hblank_event.cycles = GS_SCANLINE_NTSC;
+    // hblank_event.name = "Hblank event";
+    // hblank_event.udata = gs;
+
+    // sched_schedule(gs->sched, hblank_event);
 
     memset(gs->vram, 0, 0x400000);
 }
@@ -392,6 +420,7 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
             }
 
             gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
+            gs->csr_enable = data;
 
             if (data & 1) {
                 if (gs->signal_pending) {

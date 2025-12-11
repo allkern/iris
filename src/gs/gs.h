@@ -286,6 +286,7 @@ struct ps2_gs {
     uint64_t imr;
     uint64_t busdir;
     uint64_t siglblid;
+    uint64_t csr_enable;
 
     // Internal registers
     uint64_t prim;
