@@ -451,29 +451,35 @@ void show_memory_card(iris::instance* iris, int slot) {
     if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0), 0))) {
         std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
 
-        ImVec4 col = GetStyleColorVec4(iris->mcd[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+        ImVec4 col = GetStyleColorVec4(iris->mcd_slot_type[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
         col.w = 1.0;
 
-        InvisibleButton("##pad", ImVec2(10, 10));
+        InvisibleButton("##pad0", ImVec2(10, 10));
 
         int icon_width = iris->ps2_memory_card_icon_width;
         int icon_height = iris->ps2_memory_card_icon_height;
-        // SDL_GPUTexture* icon_tex = iris->ps2_memory_card_icon_tex;
+        VkDescriptorSet icon_ds = iris->ps2_memory_card_icon_ds;
+
+        if (iris->mcd_slot_type[slot] == 2) {
+            icon_width = iris->ps1_memory_card_icon_width;
+            icon_height = iris->ps1_memory_card_icon_height;
+            icon_ds = iris->ps1_memory_card_icon_ds;
+        }
 
         SetCursorPosX((GetContentRegionAvail().x / 2.0) - (icon_width / 2.0));
 
-        // Image(
-        //     (ImTextureID)(intptr_t)icon_tex,
-        //     ImVec2(icon_width, icon_height),
-        //     ImVec2(0, 0), ImVec2(1, 1),
-        //     col,
-        //     ImVec4(0.0, 0.0, 0.0, 0.0)
-        // );
+        Image(
+            (ImTextureID)(intptr_t)icon_ds,
+            ImVec2(icon_width, icon_height),
+            ImVec2(0, 0), ImVec2(1, 1),
+            col,
+            ImVec4(0.0, 0.0, 0.0, 0.0)
+        );
 
-        InvisibleButton("##pad", ImVec2(10, 10));
+        InvisibleButton("##pad1", ImVec2(10, 10));
 
-        if (path.size() && !iris->mcd[slot]) {
+        if (path.size() && !iris->mcd_slot_type[slot]) {
             TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Check file");
 
             if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
@@ -496,7 +502,7 @@ void show_memory_card(iris::instance* iris, int slot) {
         char bt_label[10] = ICON_MS_FOLDER "##mcd0";
         char ed_label[10];
 
-        snprintf(ed_label, 10, "%s##mcd0", iris->mcd[slot] ? ICON_MS_ARROW_DOWNWARD : ICON_MS_ARROW_UPWARD);
+        snprintf(ed_label, 10, "%s##mcd0", iris->mcd_slot_type[slot] ? ICON_MS_ARROW_DOWNWARD : ICON_MS_ARROW_UPWARD);
 
         it_label[5] = '0' + slot;
         bt_label[8] = '0' + slot;
@@ -522,25 +528,19 @@ void show_memory_card(iris::instance* iris, int slot) {
 
                 path = f.result().at(0);
 
-                ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
-
-                iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2 + slot, path.c_str());
+                emu::attach_memory_card(iris, slot, path.c_str());
             }
         }
 
         SameLine();
 
-        BeginDisabled((!iris->mcd[slot]) && (!path.size()));
+        BeginDisabled((!iris->mcd_slot_type[slot]) && (!path.size()));
 
         if (Button(ed_label)) {
-            if (iris->mcd[slot]) {
-                ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
-
-                iris->mcd[slot] = nullptr;
+            if (iris->mcd_slot_type[slot]) {
+                emu::detach_memory_card(iris, slot);
             } else {
-                ps2_sio2_detach_device(iris->ps2->sio2, 2 + slot);
-
-                iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2 + slot, path.c_str());
+                emu::attach_memory_card(iris, slot, path.c_str());
             }
         }
 

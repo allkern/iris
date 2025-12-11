@@ -349,6 +349,7 @@ struct instance {
 
     struct ds_state* ds[2] = { nullptr };
     struct mcd_state* mcd[2] = { nullptr };
+    int mcd_slot_type[2] = { 0 };
 
     // input_device* device[2];
 
@@ -396,6 +397,7 @@ namespace imgui {
 namespace vulkan {
     bool init(iris::instance* iris, bool enable_validation = false);
     void cleanup(iris::instance* iris);
+    VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride);
 }
 
 namespace platform {
@@ -411,6 +413,8 @@ namespace elf {
 namespace emu {
     bool init(iris::instance* iris);
     void destroy(iris::instance* iris);
+    int attach_memory_card(iris::instance* iris, int slot, const char* path);
+    void detach_memory_card(iris::instance* iris, int slot);
 }
 
 namespace render {

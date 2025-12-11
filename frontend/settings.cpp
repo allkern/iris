@@ -284,10 +284,10 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         ps2_cdvd_load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
 
     if (iris->mcd0_path.size())
-        iris->mcd[0] = mcd_attach(iris->ps2->sio2, 2, iris->mcd0_path.c_str());
+        emu::attach_memory_card(iris, 0, iris->mcd0_path.c_str());
 
     if (iris->mcd1_path.size())
-        iris->mcd[1] = mcd_attach(iris->ps2->sio2, 3, iris->mcd1_path.c_str());
+        emu::attach_memory_card(iris, 1, iris->mcd1_path.c_str());
 
     // Apply settings loaded from file/CLI
     ps2_set_timescale(iris->ps2, iris->timescale);

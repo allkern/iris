@@ -30,6 +30,8 @@ INCBIN(iris_icon, "../res/iris.png");
 INCBIN(vertex_shader, "../shaders/vertex.spv");
 INCBIN(fragment_shader, "../shaders/fragment.spv");
 
+#include "stb_image.h"
+
 #define VOLK_IMPLEMENTATION
 #include <volk.h>
 
@@ -623,6 +625,46 @@ bool init(iris::instance* iris) {
 
         return false;
     }
+
+    auto load_texture = [iris](const stbi_uc* data, size_t size, uint32_t* x, uint32_t* y) -> VkDescriptorSet {
+        int c;
+
+        stbi_uc* buf = stbi_load_from_memory(data, size, (int*)x, (int*)y, &c, 4);
+
+        auto ds = vulkan::upload_texture(iris, buf, *x, *y, c);
+
+        stbi_image_free(buf);
+
+        return ds;
+    };
+
+    iris->ps1_memory_card_icon_ds = load_texture(
+        g_ps1_memory_card_icon_data,
+        g_ps1_memory_card_icon_size,
+        &iris->ps1_memory_card_icon_width,
+        &iris->ps1_memory_card_icon_height
+    );
+
+    iris->ps2_memory_card_icon_ds = load_texture(
+        g_ps2_memory_card_icon_data,
+        g_ps2_memory_card_icon_size,
+        &iris->ps2_memory_card_icon_width,
+        &iris->ps2_memory_card_icon_height
+    );
+
+    iris->pocketstation_icon_ds = load_texture(
+        g_pocketstation_icon_data,
+        g_pocketstation_icon_size,
+        &iris->pocketstation_icon_width,
+        &iris->pocketstation_icon_height
+    );
+
+    iris->iris_icon_ds = load_texture(
+        g_iris_icon_data,
+        g_iris_icon_size,
+        &iris->iris_icon_width,
+        &iris->iris_icon_height
+    );
 
     return true;
 }
