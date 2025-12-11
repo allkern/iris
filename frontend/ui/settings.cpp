@@ -264,6 +264,8 @@ void show_paths_settings(iris::instance* iris) {
 
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 512);
+
+            ps2_load_bios(iris->ps2, buf);
         }
     }
 
@@ -290,7 +292,10 @@ void show_paths_settings(iris::instance* iris) {
         TableSetColumnIndex(0);
         TextDisabled("MD5 hash" " ");
         TableSetColumnIndex(1);
-        Text("%s", iris->ps2->rom_info.md5hash);
+        Text("%s", iris->ps2->rom_info.md5hash); SameLine();
+        if (SmallButton(ICON_MS_CONTENT_COPY)) {
+            SDL_SetClipboardText(iris->ps2->rom_info.md5hash);
+        }
 
         EndTable();
     }
@@ -484,7 +489,7 @@ void show_memory_card(iris::instance* iris, int slot) {
 
             if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
                 if (BeginTooltip()) {
-                    Text("please check files ");
+                    Text("Please check files ");
     
                     EndTooltip();
                 }
@@ -601,7 +606,10 @@ void show_settings(iris::instance* iris) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking;
 
-    if (imgui::BeginEx("Settings", &iris->show_settings, flags)) {
+    SetNextWindowSize(ImVec2(650, 510), ImGuiCond_FirstUseEver);
+    PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(650, 510));
+
+    if (Begin("Settings", &iris->show_settings, flags)) {
         PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
         PushStyleVarY(ImGuiStyleVar_ItemSpacing, 6.0);
 
@@ -639,6 +647,8 @@ void show_settings(iris::instance* iris) {
             Text("Hover over an item to get more information");
         }
     } End();
+
+    PopStyleVar();
 }
 
 }
