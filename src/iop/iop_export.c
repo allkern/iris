@@ -21,6 +21,7 @@ static inline int iop_get_module(struct iop_state* iop, int itable) {
 
     if (!strncmp(buf, "ioman", 8)) return MODULE_IOMAN;
     if (!strncmp(buf, "loadcore", 8)) return MODULE_LOADCORE;
+    if (!strncmp(buf, "sysmem", 8)) return MODULE_SYSMEM;
 
     return MODULE_UNKNOWN;
 }
@@ -68,6 +69,23 @@ static inline int iop_delegate_loadcore(struct iop_state* iop, int slot) {
     return 0;
 }
 
+static inline int iop_delegate_sysmem(struct iop_state* iop, int slot) {
+    switch (slot & 0xffff) {
+        // SYSMEM kprintf
+        case 14: {
+            int a0 = iop->r[4];
+            int a1 = iop->r[5];
+            int a2 = iop->r[6];
+
+            while (iop_read8(iop, a0) != 0) {
+                putchar(iop_read8(iop, a0++));
+            }
+        } break;
+    }
+
+    return 0;
+}
+
 int iop_test_module_hooks(struct iop_state* iop) {
     uint32_t slot = iop_read32(iop, iop->pc);
 
@@ -87,6 +105,7 @@ int iop_test_module_hooks(struct iop_state* iop) {
     switch (module) {
         case MODULE_IOMAN: return iop_delegate_ioman(iop, slot);
         case MODULE_LOADCORE: return iop_delegate_loadcore(iop, slot);
+        case MODULE_SYSMEM: return iop_delegate_sysmem(iop, slot);
     }
 
     return 0;
