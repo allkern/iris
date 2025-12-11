@@ -140,6 +140,14 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     MAP_REG_READ(8, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_READ(8, 0x10000000, 0x1000FFFF, speed, speed);
 
+    switch (addr) {
+        // Required for T10000 TOOL BIOS
+        // Otherwise the IOP hangs during initialization if the RAM size
+        // is 8 MB or hangs with a stack overflow after init if the RAM 
+        // size is 16 MB
+        case 0x1f803204: return 0x7c;
+    }
+
     printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
 
     return 0;
@@ -193,11 +201,6 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
 uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    // IOP BIU config
-    if (addr == 0xfffe0130) {
-        return 0;
-    }
-
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
 
     if (ptr) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
@@ -226,6 +229,8 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     if (addr == 0x1f801560) return 0;
 
     if ((addr & 0xff000000) == 0x1e000000) return 0;
+    if (addr == 0xfffe0130) return 0xffffffff;
+
     // Bloody Roar 4 Wrong IOP CDVD DMA
     // if ((addr & 0xff000000) == 0x0c000000) { *(uint8_t*)0 = 0; }
 
@@ -299,6 +304,9 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
 
         return;
     }
+
+    // BIU config
+    if (addr == 0xfffe0130) return;
 
     // MAP_MEM_WRITE(32, 0x00000000, 0x001FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
