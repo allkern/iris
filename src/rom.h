@@ -9,7 +9,7 @@ extern "C" {
 #include <stddef.h>
 
 struct ps2_rom_info {
-    const char* md5hash;
+    char md5hash[33];
     const char* version;
     const char* region;
     const char* model;

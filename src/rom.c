@@ -86,8 +86,8 @@ static const struct ps2_rom_info rom_info_table[] = {
 
 static const struct ps2_rom_info unknown = {
     "00000000000000000000000000000000",
-    "?.? \?\?/\?\?/?? ?",
-    "N/A",
+    "Unknown",
+    "Unknown",
     "Unknown",
     2
 };
@@ -113,7 +113,8 @@ struct ps2_rom_info ps2_rom_search(uint8_t* rom, size_t size) {
     struct ps2_rom_info info;
     
     info = unknown;
-    info.md5hash = buf;
+
+    memcpy(info.md5hash, buf, 33);
 
     return info;
 }
