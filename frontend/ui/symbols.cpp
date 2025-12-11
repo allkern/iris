@@ -79,7 +79,7 @@ int edit_callback(ImGuiInputTextCallbackData* data) {
 void show_symbols(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("Symbols", &iris->show_symbols, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("Symbols", &iris->show_symbols, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {

@@ -96,7 +96,7 @@ void show_thread_list(iris::instance* iris) {
 void show_threads(iris::instance* iris) {
     using namespace ImGui;
     
-    if (Begin("Threads", &iris->show_threads)) {
+    if (imgui::BeginEx("Threads", &iris->show_threads)) {
         if (!iris->ps2->ee->thread_list_base) {
             ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
             ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);

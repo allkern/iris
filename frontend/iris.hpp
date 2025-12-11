@@ -388,6 +388,9 @@ namespace imgui {
     bool render_frame(iris::instance* iris, ImDrawData* draw_data);
     bool present_frame(iris::instance* iris);
     void cleanup(iris::instance* iris);
+
+    // Wrapper for ImGui::Begin that sets a default size
+    bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);
 }
 
 namespace vulkan {

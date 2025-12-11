@@ -17,7 +17,7 @@ void show_memory_viewer(iris::instance* iris) {
 
     struct ps2_state* ps2 = iris->ps2;
 
-    if (Begin("Memory", &iris->show_memory_viewer)) {
+    if (imgui::BeginEx("Memory", &iris->show_memory_viewer)) {
         if (BeginTabBar("##tabbar")) {
             if (BeginTabItem("EE")) {
                 PushFont(iris->font_code);

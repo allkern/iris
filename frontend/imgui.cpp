@@ -565,7 +565,6 @@ bool init(iris::instance* iris) {
     ImGuiStyle& style = ImGui::GetStyle();
     style.ScaleAllSizes(iris->main_scale);
     style.FontScaleDpi = iris->main_scale;
-    style.WindowMinSize = ImVec2(600, 500);
     io.ConfigDpiScaleFonts = true;
     io.ConfigDpiScaleViewports = true;
 
@@ -784,6 +783,13 @@ bool present_frame(iris::instance* iris) {
     wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
 
     return true;
+}
+
+bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags) {
+    ImGui::SetNextWindowSize(ImVec2(600.0, 600.0), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowPos(ImVec2(50.0, 50.0), ImGuiCond_FirstUseEver);
+
+    return ImGui::Begin(name, p_open, flags);
 }
 
 }

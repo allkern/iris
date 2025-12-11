@@ -398,7 +398,7 @@ void show_ee_control(iris::instance* iris) {
 
     PushFont(iris->font_icons);
 
-    if (Begin("EE (R5900)", &iris->show_ee_control)) {
+    if (imgui::BeginEx("EE (R5900)", &iris->show_ee_control)) {
         if (Button(iris->pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE, ImVec2(50, 0))) {
             iris->pause = !iris->pause;
         } SameLine();
@@ -458,7 +458,7 @@ void show_iop_control(iris::instance* iris) {
 
     PushFont(iris->font_icons);
 
-    if (Begin("IOP (R3000)", &iris->show_iop_control)) {
+    if (imgui::BeginEx("IOP (R3000)", &iris->show_iop_control)) {
         if (Button(iris->pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE, ImVec2(50, 0))) {
             iris->pause = !iris->pause;
         } SameLine();

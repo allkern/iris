@@ -264,7 +264,7 @@ void show_vu_disassembler(iris::instance* iris) {
 
     PushFont(iris->font_icons);
 
-    if (Begin("VU disassembler", &iris->show_vu_disassembler, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("VU disassembler", &iris->show_vu_disassembler, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("File")) {
                 if (MenuItem(ICON_MS_FILE_SAVE " Save disassembly as...", NULL)) {

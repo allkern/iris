@@ -805,7 +805,7 @@ static int ee_reg_group = 0;
 void show_ee_state(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("EE state", &iris->show_ee_state, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("EE state", &iris->show_ee_state, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {
@@ -891,7 +891,7 @@ void show_ee_state(iris::instance* iris) {
 void show_iop_state(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("IOP state", &iris->show_iop_state, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("IOP state", &iris->show_iop_state, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {

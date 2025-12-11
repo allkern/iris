@@ -170,7 +170,7 @@ void show_breakpoint_editor(iris::instance* iris) {
 void show_breakpoints(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("Breakpoints", &iris->show_breakpoints, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("Breakpoints", &iris->show_breakpoints, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             MenuItem("Settings");
 

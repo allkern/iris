@@ -48,7 +48,7 @@ void show_logs(iris::instance* iris, const std::vector <std::string>& logs) {
 void show_ee_logs(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("EE logs", &iris->show_ee_logs)) {
+    if (imgui::BeginEx("EE logs", &iris->show_ee_logs)) {
         if (Button(ICON_MS_DELETE)) {
             iris->ee_log.clear();
         } SameLine();
@@ -73,7 +73,7 @@ void show_ee_logs(iris::instance* iris) {
 void show_iop_logs(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("IOP logs", &iris->show_iop_logs, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("IOP logs", &iris->show_iop_logs, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (MenuItem(iop_follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {

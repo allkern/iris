@@ -357,6 +357,15 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
     int ee_ram_size, iop_ram_size, mechacon_model;
 
     switch (system) {
+        case PS2_SYSTEM_AUTO: {
+            ps2->rom_info = ps2_rom_search(ps2->bios->buf, ps2->bios->size + 1);
+
+            ps2_set_system(ps2, ps2->rom_info.system);
+
+            ps2->detected_system = ps2->rom_info.system;
+
+            return;
+        } break;
         case PS2_SYSTEM_RETAIL: {
             ee_ram_size = RAM_SIZE_32MB;
             iop_ram_size = RAM_SIZE_2MB;
@@ -378,7 +387,7 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
         case PS2_SYSTEM_TEST:
         case PS2_SYSTEM_TOOL: {
             ee_ram_size = RAM_SIZE_128MB;
-            iop_ram_size = RAM_SIZE_16MB;
+            iop_ram_size = RAM_SIZE_8MB;
 
             // To-do: Separate mechacon model for TOOL/TEST
             mechacon_model = CDVD_MECHACON_DRAGON;

@@ -131,7 +131,7 @@ void show_spu2_debugger(iris::instance* iris) {
 
     const struct ps2_spu2* spu2 = iris->ps2->spu2;
 
-    if (Begin("SPU2", &iris->show_spu2_debugger)) {
+    if (imgui::BeginEx("SPU2", &iris->show_spu2_debugger)) {
         if (BeginTabBar("##spu2tabbar")) {
             if (BeginTabItem("CORE0")) {
                 show_spu2_tab(iris, 0);

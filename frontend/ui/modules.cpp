@@ -88,7 +88,7 @@ void show_iop_modules(iris::instance* iris) {
 
     struct iop_state* iop = iris->ps2->iop;
 
-    if (Begin("IOP Modules", &iris->show_iop_modules, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("IOP Modules", &iris->show_iop_modules, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {

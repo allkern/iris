@@ -11,7 +11,7 @@ namespace iris {
 void show_pad_debugger(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("DualShock 2", &iris->show_pad_debugger)) {
+    if (imgui::BeginEx("DualShock 2", &iris->show_pad_debugger)) {
         if (BeginTabBar("##padtabbar")) {
             if (BeginTabItem("Slot 1")) {
                 struct ds_state* ds = (struct ds_state*)iris->ps2->sio2->port[0].udata;

@@ -478,6 +478,34 @@ bool create_descriptor_pool(iris::instance* iris) {
     return true;
 }
 
+bool upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride) {
+    VkDeviceSize image_size = width * height * stride;
+
+    VkBuffer staging_buffer = VK_NULL_HANDLE;
+    VkDeviceMemory staging_buffer_memory = VK_NULL_HANDLE;
+
+    staging_buffer = create_buffer(
+        iris,
+        image_size,
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+        staging_buffer_memory
+    );
+
+    if (staging_buffer == VK_NULL_HANDLE) {
+        return false;
+    }
+
+    load_buffer(iris, staging_buffer_memory, pixels, image_size);
+
+    // To-do: Transition image layout and copy buffer to image
+
+    vkDestroyBuffer(iris->device, staging_buffer, nullptr);
+    vkFreeMemory(iris->device, staging_buffer_memory, nullptr);
+
+    return true;
+}
+
 bool init(iris::instance* iris, bool enable_validation) {
     if (volkInitialize() != VK_SUCCESS) {
         fprintf(stderr, "vulkan: Failed to initialize volk loader\n");

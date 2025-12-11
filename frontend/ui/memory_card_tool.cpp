@@ -28,7 +28,7 @@ int type = MEMCARD_TYPE_PS2;
 void show_memory_card_tool(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("Create memory card", &iris->show_memory_card_tool, ImGuiWindowFlags_NoCollapse)) {
+    if (imgui::BeginEx("Create memory card", &iris->show_memory_card_tool, ImGuiWindowFlags_NoCollapse)) {
         Text("Type");
 
         if (BeginCombo("##type", type_names[type])) {

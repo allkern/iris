@@ -621,7 +621,7 @@ void show_gs_memory(iris::instance* iris) {
 void show_gs_debugger(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("GS", &iris->show_gs_debugger, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("GS", &iris->show_gs_debugger, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {

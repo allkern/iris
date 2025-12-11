@@ -601,7 +601,7 @@ void show_settings(iris::instance* iris) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking;
 
-    if (Begin("Settings", &iris->show_settings, flags)) {
+    if (imgui::BeginEx("Settings", &iris->show_settings, flags)) {
         PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
         PushStyleVarY(ImGuiStyleVar_ItemSpacing, 6.0);
 
