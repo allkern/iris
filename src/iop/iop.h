@@ -63,6 +63,8 @@ struct iop_state {
 
     void (*kputchar)(void*, char);
     void* kputchar_udata;
+    void (*sm_putchar)(void*, char);
+    void* sm_putchar_udata;
 
     uint32_t cop0_r[16];
 
@@ -146,6 +148,7 @@ struct iop_state {
 struct iop_state* iop_create(void);
 void iop_init(struct iop_state* iop, struct iop_bus_s bus);
 void iop_init_kputchar(struct iop_state* iop, void (*kputchar)(void*, char), void* udata);
+void iop_init_sm_putchar(struct iop_state* iop, void (*sm_putchar)(void*, char), void* udata);
 void iop_destroy(struct iop_state* iop);
 void iop_cycle(struct iop_state* iop);
 void iop_reset(struct iop_state* iop);

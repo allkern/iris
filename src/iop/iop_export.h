@@ -11,6 +11,7 @@ extern "C" {
 
 #include "hle/ioman.h"
 #include "hle/loadcore.h"
+#include "hle/sysmem.h"
 
 #define MODULE_UNKNOWN  0
 #define MODULE_IOMAN    1

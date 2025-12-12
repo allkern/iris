@@ -289,6 +289,7 @@ struct instance {
     bool show_iop_interrupts = false;
     bool show_iop_modules = false;
     bool show_iop_dma = false;
+    bool show_sysmem_logs = false;
     bool show_gs_debugger = false;
     bool show_spu2_debugger = false;
     bool show_memory_viewer = false;
@@ -343,6 +344,7 @@ struct instance {
 
     std::vector <std::string> ee_log = { "" };
     std::vector <std::string> iop_log = { "" };
+    std::vector <std::string> sysmem_log = { "" };
 
     std::vector <iris::breakpoint> breakpoints = {};
     std::deque <iris::notification> notifications = {};
@@ -444,6 +446,7 @@ void show_iop_logs(iris::instance* iris);
 void show_iop_interrupts(iris::instance* iris);
 void show_iop_modules(iris::instance* iris);
 void show_iop_dma(iris::instance* iris);
+void show_sysmem_logs(iris::instance* iris);
 void show_gs_debugger(iris::instance* iris);
 void show_spu2_debugger(iris::instance* iris);
 void show_memory_viewer(iris::instance* iris);
@@ -466,6 +469,7 @@ void handle_scissor_event(void* udata);
 void handle_drag_and_drop_event(void* udata, const char* path);
 void handle_ee_tty_event(void* udata, char c);
 void handle_iop_tty_event(void* udata, char c);
+void handle_sysmem_tty_event(void* udata, char c);
 
 void handle_animations(iris::instance* iris);
 

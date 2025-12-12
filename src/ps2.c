@@ -157,9 +157,18 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->timescale = 1;
 }
 
-void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void* ee_udata, void (*iop_kputchar)(void*, char), void* iop_udata) {
-    ee_bus_init_kputchar(ps2->ee_bus, ee_kputchar, ee_udata);
-    iop_init_kputchar(ps2->iop, iop_kputchar, iop_udata);
+void ps2_init_tty_handler(struct ps2_state* ps2, int tty, void (*handler)(void*, char), void* udata) {
+    switch (tty) {
+        case PS2_TTY_EE:  
+            ee_bus_init_kputchar(ps2->ee_bus, handler, udata);
+            break;
+        case PS2_TTY_IOP:
+            iop_init_kputchar(ps2->iop, handler, udata);
+            break;
+        case PS2_TTY_SYSMEM:
+            iop_init_sm_putchar(ps2->iop, handler, udata);
+            break;
+    }
 }
 
 void ps2_boot_file(struct ps2_state* ps2, const char* path) {

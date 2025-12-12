@@ -169,6 +169,7 @@ target_sources(iris PRIVATE
     src/iop/disc/iso.c
     src/iop/hle/ioman.cpp
     src/iop/hle/loadcore.c
+    src/iop/hle/sysmem.c
     src/ipu/chromtable.cpp
     src/ipu/codedblockpattern.cpp
     src/ipu/dct_coeff.cpp

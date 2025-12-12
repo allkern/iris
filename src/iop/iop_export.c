@@ -72,15 +72,7 @@ static inline int iop_delegate_loadcore(struct iop_state* iop, int slot) {
 static inline int iop_delegate_sysmem(struct iop_state* iop, int slot) {
     switch (slot & 0xffff) {
         // SYSMEM kprintf
-        case 14: {
-            int a0 = iop->r[4];
-            int a1 = iop->r[5];
-            int a2 = iop->r[6];
-
-            while (iop_read8(iop, a0) != 0) {
-                putchar(iop_read8(iop, a0++));
-            }
-        } break;
+        case 14: return sysmem_kprintf(iop);
     }
 
     return 0;

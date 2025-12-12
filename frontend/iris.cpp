@@ -278,6 +278,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_pad_debugger) show_pad_debugger(iris);
     if (iris->show_symbols) show_symbols(iris);
     if (iris->show_threads) show_threads(iris);
+    if (iris->show_sysmem_logs) show_sysmem_logs(iris);
     if (iris->show_memory_card_tool) show_memory_card_tool(iris);
     // if (iris->show_gamelist) show_gamelist(iris);
     if (iris->show_imgui_demo) ShowDemoWindow(&iris->show_imgui_demo);
