@@ -631,8 +631,8 @@ void show_settings(iris::instance* iris) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking;
 
-    SetNextWindowSize(ImVec2(650, 510), ImGuiCond_FirstUseEver);
-    PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(650, 510));
+    SetNextWindowSize(ImVec2(650, 560), ImGuiCond_FirstUseEver);
+    PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(650, 560));
 
     if (Begin("Settings", &iris->show_settings, flags)) {
         PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
