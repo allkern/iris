@@ -204,6 +204,8 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 
         adsr_load_attack(spu2, cr, v);
         spu2_decode_adpcm_block(spu2, v);
+
+        v->envx = 0x7fff;
     }
 }
 
@@ -221,7 +223,7 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 
         // spu2->c[c].v[i+h*16].playing = 0;
 
-        // printf("spu2: voice %d koff\n", v);
+        // printf("spu2: core %d voice %d koff\n", c, v);
         if (!spu2->c[c].v[v].playing)
             continue;
 
