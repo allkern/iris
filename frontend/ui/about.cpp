@@ -20,7 +20,7 @@ void show_about_window(iris::instance* iris) {
 
     if (Begin("About", &iris->show_about_window, flags)) {
         if (BeginChild("##iconchild", ImVec2(100.0, 210.0), ImGuiChildFlags_AutoResizeY)) {
-            Image((ImTextureID)(intptr_t)iris->iris_icon_ds, ImVec2(100.0, 100.0));
+            Image((ImTextureID)(intptr_t)iris->iris_icon.descriptor_set, ImVec2(100.0, 100.0));
         } EndChild(); SameLine(0.0, 10.0);
 
         if (BeginChild("##textchild", ImVec2(350.0, 0.0))) {

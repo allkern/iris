@@ -157,6 +157,16 @@ struct shader_pass {
     VkShaderModule frag_shader = VK_NULL_HANDLE;
 };
 
+struct texture {
+    int width = 0, height = 0, stride = 0;
+    VkDeviceSize image_size = 0;
+    VkImage image = VK_NULL_HANDLE;
+    VkImageView image_view = VK_NULL_HANDLE;
+    VkSampler sampler = VK_NULL_HANDLE;
+    VkDeviceMemory image_memory = VK_NULL_HANDLE;
+    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+};
+
 struct instance {
     SDL_Window* window = nullptr;
     SDL_AudioStream* stream = nullptr;
@@ -189,6 +199,7 @@ struct instance {
     VkPhysicalDeviceVulkan11Features vulkan_11_features = {};
     VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
     VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchain_maintenance_1_features = {};
     VkSampler sampler = VK_NULL_HANDLE;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
@@ -230,18 +241,10 @@ struct instance {
     unsigned int renderer_backend = RENDERER_BACKEND_HARDWARE;
     renderer_state* renderer = nullptr;
 
-    uint32_t ps2_memory_card_icon_width = 0;
-    uint32_t ps1_memory_card_icon_width = 0;
-    uint32_t pocketstation_icon_width = 0;
-    uint32_t iris_icon_width = 0;
-    uint32_t ps2_memory_card_icon_height = 0;
-    uint32_t ps1_memory_card_icon_height = 0;
-    uint32_t pocketstation_icon_height = 0;
-    uint32_t iris_icon_height = 0;
-    VkDescriptorSet ps2_memory_card_icon_ds = VK_NULL_HANDLE;
-    VkDescriptorSet ps1_memory_card_icon_ds = VK_NULL_HANDLE;
-    VkDescriptorSet pocketstation_icon_ds = VK_NULL_HANDLE;
-    VkDescriptorSet iris_icon_ds = VK_NULL_HANDLE;
+    texture ps2_memory_card_icon = {};
+    texture ps1_memory_card_icon = {};
+    texture pocketstation_icon = {};
+    texture iris_icon = {};
 
     ImFont* font_small_code = nullptr;
     ImFont* font_code = nullptr;
@@ -399,7 +402,8 @@ namespace imgui {
 namespace vulkan {
     bool init(iris::instance* iris, bool enable_validation = false);
     void cleanup(iris::instance* iris);
-    VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride);
+    texture upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride);
+    void free_texture(iris::instance* iris, texture& tex);
 }
 
 namespace platform {

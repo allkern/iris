@@ -487,21 +487,17 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         InvisibleButton("##pad0", ImVec2(10, 10));
 
-        int icon_width = iris->ps2_memory_card_icon_width;
-        int icon_height = iris->ps2_memory_card_icon_height;
-        VkDescriptorSet icon_ds = iris->ps2_memory_card_icon_ds;
+        texture* tex = &iris->ps2_memory_card_icon;
 
         if (iris->mcd_slot_type[slot] == 2) {
-            icon_width = iris->ps1_memory_card_icon_width;
-            icon_height = iris->ps1_memory_card_icon_height;
-            icon_ds = iris->ps1_memory_card_icon_ds;
+            tex = &iris->ps1_memory_card_icon;
         }
 
-        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (icon_width / 2.0));
+        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (tex->width / 2.0));
 
         Image(
-            (ImTextureID)(intptr_t)icon_ds,
-            ImVec2(icon_width, icon_height),
+            (ImTextureID)(intptr_t)tex->descriptor_set,
+            ImVec2(tex->width, tex->height),
             ImVec2(0, 0), ImVec2(1, 1),
             col,
             ImVec4(0.0, 0.0, 0.0, 0.0)

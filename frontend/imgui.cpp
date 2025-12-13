@@ -626,50 +626,32 @@ bool init(iris::instance* iris) {
         return false;
     }
 
-    auto load_texture = [iris](const stbi_uc* data, size_t size, uint32_t* x, uint32_t* y) -> VkDescriptorSet {
-        int c;
+    auto load_texture = [iris](const stbi_uc* data, size_t size) -> texture {
+        int x, y, c;
 
-        stbi_uc* buf = stbi_load_from_memory(data, size, (int*)x, (int*)y, &c, 4);
+        stbi_uc* buf = stbi_load_from_memory(data, size, &x, &y, &c, 4);
 
-        auto ds = vulkan::upload_texture(iris, buf, *x, *y, c);
+        auto tex = vulkan::upload_texture(iris, buf, x, y, c);
 
         stbi_image_free(buf);
 
-        return ds;
+        return tex;
     };
 
-    iris->ps1_memory_card_icon_ds = load_texture(
-        g_ps1_memory_card_icon_data,
-        g_ps1_memory_card_icon_size,
-        &iris->ps1_memory_card_icon_width,
-        &iris->ps1_memory_card_icon_height
-    );
-
-    iris->ps2_memory_card_icon_ds = load_texture(
-        g_ps2_memory_card_icon_data,
-        g_ps2_memory_card_icon_size,
-        &iris->ps2_memory_card_icon_width,
-        &iris->ps2_memory_card_icon_height
-    );
-
-    iris->pocketstation_icon_ds = load_texture(
-        g_pocketstation_icon_data,
-        g_pocketstation_icon_size,
-        &iris->pocketstation_icon_width,
-        &iris->pocketstation_icon_height
-    );
-
-    iris->iris_icon_ds = load_texture(
-        g_iris_icon_data,
-        g_iris_icon_size,
-        &iris->iris_icon_width,
-        &iris->iris_icon_height
-    );
+    iris->ps1_memory_card_icon = load_texture(g_ps1_memory_card_icon_data, g_ps1_memory_card_icon_size);
+    iris->ps2_memory_card_icon = load_texture(g_ps2_memory_card_icon_data, g_ps2_memory_card_icon_size);
+    iris->pocketstation_icon = load_texture(g_pocketstation_icon_data, g_pocketstation_icon_size);
+    iris->iris_icon = load_texture(g_iris_icon_data, g_iris_icon_size);
 
     return true;
 }
 
 void cleanup(iris::instance* iris) {
+    vulkan::free_texture(iris, iris->ps1_memory_card_icon);
+    vulkan::free_texture(iris, iris->ps2_memory_card_icon);
+    vulkan::free_texture(iris, iris->pocketstation_icon);
+    vulkan::free_texture(iris, iris->iris_icon);
+
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImPlot::DestroyContext();

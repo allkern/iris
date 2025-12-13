@@ -18,7 +18,6 @@ void ps2_speed_init(struct ps2_speed* speed, struct ps2_iop_intc* iop_intc) {
     ps2_flash_init(speed->flash);
     ps2_ata_init(speed->ata, speed);
 
-    speed->rev3 |= SPD_CAPS_ATA | SPD_CAPS_DVR;
     speed->rev8 |= 2;
 }
 
@@ -38,7 +37,7 @@ uint64_t ps2_speed_read8(struct ps2_speed* speed, uint32_t addr) {
         case 0x002e: return 0;
     }
 
-    exit(1);
+    // exit(1);
 }
 uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
     addr &= 0xffff;
@@ -64,7 +63,7 @@ uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
         case 0x0064: return speed->if_ctrl;
     }
 
-    printf("speed: read16 %08x\n", addr); exit(1);
+    printf("speed: read16 %08x\n", addr); // exit(1);
 }
 uint64_t ps2_speed_read32(struct ps2_speed* speed, uint32_t addr) {
     addr &= 0xffff;
@@ -73,7 +72,7 @@ uint64_t ps2_speed_read32(struct ps2_speed* speed, uint32_t addr) {
         return ps2_flash_read32(speed->flash, addr);
     }
 
-    printf("speed: read32 %08x\n", addr); exit(1);
+    printf("speed: read32 %08x\n", addr); // exit(1);
 
     return 0;
 }
@@ -87,7 +86,7 @@ void ps2_speed_write8(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
         case 0x002e: speed->pio_data = data; return;
     }
 
-    exit(1);
+    // exit(1);
 }
 void ps2_speed_write16(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
     addr &= 0xffff;
@@ -115,7 +114,7 @@ void ps2_speed_write16(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
         case 0x002a: speed->intr_mask = data; return;
     }
 
-    printf("speed: write16 %08x %08x\n", addr, data); exit(1);
+    printf("speed: write16 %08x %08x\n", addr, data); // exit(1);
 }
 void ps2_speed_write32(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
     addr &= 0xffff;
@@ -126,7 +125,7 @@ void ps2_speed_write32(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
         return;
     }
 
-    printf("speed: write32 %08x %08x\n", addr, data); exit(1);
+    printf("speed: write32 %08x %08x\n", addr, data); // exit(1);
 }
 
 void ps2_speed_send_irq(struct ps2_speed* speed, uint16_t irq) {

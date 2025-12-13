@@ -111,7 +111,7 @@ void show_iop_logs(iris::instance* iris) {
 void show_sysmem_logs(iris::instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("SYSMEM logs", &iris->show_iop_logs, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("SYSMEM logs", &iris->show_sysmem_logs, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (MenuItem(sysmem_follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {

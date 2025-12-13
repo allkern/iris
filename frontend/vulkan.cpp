@@ -478,27 +478,27 @@ bool create_descriptor_pool(iris::instance* iris) {
     return true;
 }
 
-VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride) {
-    VkDeviceSize image_size = width * height * stride;
-    VkBuffer staging_buffer = VK_NULL_HANDLE;
-    VkDeviceMemory staging_buffer_memory = VK_NULL_HANDLE;
-    VkImage image = VK_NULL_HANDLE;
-    VkImageView image_view = VK_NULL_HANDLE;
-    VkSampler sampler = VK_NULL_HANDLE;
-    VkDeviceMemory image_memory = VK_NULL_HANDLE;
+texture upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride) {
+    texture tex = {};
 
-    staging_buffer = create_buffer(
+    tex.width = width;
+    tex.height = height;
+    tex.stride = stride;
+    tex.image_size = width * height * 4;
+
+    VkDeviceMemory staging_buffer_memory = VK_NULL_HANDLE;
+    VkBuffer staging_buffer = create_buffer(
         iris,
-        image_size,
+        tex.image_size,
         VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
         staging_buffer_memory
     );
 
     if (staging_buffer == VK_NULL_HANDLE)
-        return VK_NULL_HANDLE;
+        return {};
 
-    load_buffer(iris, staging_buffer_memory, pixels, image_size);
+    load_buffer(iris, staging_buffer_memory, pixels, tex.image_size);
 
     // To-do: Transition image layout and copy buffer to image
     // Create the Vulkan image.
@@ -518,14 +518,14 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
         info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
         
-        if (vkCreateImage(iris->device, &info, VK_NULL_HANDLE, &image) != VK_SUCCESS) {
+        if (vkCreateImage(iris->device, &info, VK_NULL_HANDLE, &tex.image) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to create image\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
 
         VkMemoryRequirements req;
-        vkGetImageMemoryRequirements(iris->device, image, &req);
+        vkGetImageMemoryRequirements(iris->device, tex.image, &req);
         VkMemoryAllocateInfo alloc_info = {};
         alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         alloc_info.allocationSize = req.size;
@@ -539,16 +539,16 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
                 break;
             }
         }
-        if (vkAllocateMemory(iris->device, &alloc_info, VK_NULL_HANDLE, &image_memory) != VK_SUCCESS) {
+        if (vkAllocateMemory(iris->device, &alloc_info, VK_NULL_HANDLE, &tex.image_memory) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to allocate image memory\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
 
-        if (vkBindImageMemory(iris->device, image, image_memory, 0) != VK_SUCCESS) {
+        if (vkBindImageMemory(iris->device, tex.image, tex.image_memory, 0) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to bind image memory\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
     }
 
@@ -556,16 +556,16 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
     {
         VkImageViewCreateInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        info.image = image;
+        info.image = tex.image;
         info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         info.format = VK_FORMAT_R8G8B8A8_UNORM;
         info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         info.subresourceRange.levelCount = 1;
         info.subresourceRange.layerCount = 1;
-        if (vkCreateImageView(iris->device, &info, VK_NULL_HANDLE, &image_view) != VK_SUCCESS) {
+        if (vkCreateImageView(iris->device, &info, VK_NULL_HANDLE, &tex.image_view) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to create image view\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
     }
 
@@ -582,15 +582,12 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         sampler_info.minLod = -1000;
         sampler_info.maxLod = 1000;
         sampler_info.maxAnisotropy = 1.0f;
-        if (vkCreateSampler(iris->device, &sampler_info, VK_NULL_HANDLE, &sampler) != VK_SUCCESS) {
+        if (vkCreateSampler(iris->device, &sampler_info, VK_NULL_HANDLE, &tex.sampler) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to create sampler\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
     }
-
-    // Create Descriptor Set:
-    VkDescriptorSet descriptor_set;
 
     {
         VkDescriptorSetAllocateInfo alloc_info = {};
@@ -598,33 +595,28 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         alloc_info.descriptorPool = iris->descriptor_pool;
         alloc_info.descriptorSetCount = 1;
         alloc_info.pSetLayouts = &iris->descriptor_set_layout;
-        if (vkAllocateDescriptorSets(iris->device, &alloc_info, &descriptor_set) != VK_SUCCESS) {
+        if (vkAllocateDescriptorSets(iris->device, &alloc_info, &tex.descriptor_set) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to allocate descriptor sets\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
     }
 
     // Update the Descriptor Set:
     {
         VkDescriptorImageInfo desc_image[1] = {};
-        desc_image[0].sampler = sampler;
-        desc_image[0].imageView = image_view;
+        desc_image[0].sampler = tex.sampler;
+        desc_image[0].imageView = tex.image_view;
         desc_image[0].imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         VkWriteDescriptorSet write_desc[1] = {};
         write_desc[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        write_desc[0].dstSet = descriptor_set;
+        write_desc[0].dstSet = tex.descriptor_set;
         write_desc[0].descriptorCount = 1;
         write_desc[0].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
         write_desc[0].pImageInfo = desc_image;
         vkUpdateDescriptorSets(iris->device, 1, write_desc, 0, nullptr);
     }
 
-    // To-do: Upload staging buffer data here
-    // ref: https://github.com/ocornut/imgui/wiki/Image-Loading-and-Displaying-Examples#example-for-vulkan-users
-
-    // Create a command buffer that will perform following steps when hit in the command queue.
-    // TODO: this works in the example, but may need input if this is an acceptable way to access the pool/create the command buffer.
     VkCommandPool command_pool = VK_NULL_HANDLE;
 
     VkCommandPoolCreateInfo info = {};
@@ -635,7 +627,7 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
     if (vkCreateCommandPool(iris->device, &info, VK_NULL_HANDLE, &command_pool) != VK_SUCCESS) {
         fprintf(stderr, "vulkan: Failed to create command pool\n");
     
-        return VK_NULL_HANDLE;
+        return {};
     }
 
     VkCommandBuffer command_buffer;
@@ -650,7 +642,7 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         if (vkAllocateCommandBuffers(iris->device, &alloc_info, &command_buffer) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to allocate command buffers\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
 
         VkCommandBufferBeginInfo begin_info = {};
@@ -660,7 +652,7 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
             printf("vulkan: Failed to begin command buffer\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         }
     }
 
@@ -673,7 +665,7 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         copy_barrier[0].newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
         copy_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         copy_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        copy_barrier[0].image = image;
+        copy_barrier[0].image = tex.image;
         copy_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         copy_barrier[0].subresourceRange.levelCount = 1;
         copy_barrier[0].subresourceRange.layerCount = 1;
@@ -685,7 +677,7 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         region.imageExtent.width = width;
         region.imageExtent.height = height;
         region.imageExtent.depth = 1;
-        vkCmdCopyBufferToImage(command_buffer, staging_buffer, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
+        vkCmdCopyBufferToImage(command_buffer, staging_buffer, tex.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 
         VkImageMemoryBarrier use_barrier[1] = {};
         use_barrier[0].sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -695,7 +687,7 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         use_barrier[0].newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         use_barrier[0].srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
         use_barrier[0].dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        use_barrier[0].image = image;
+        use_barrier[0].image = tex.image;
         use_barrier[0].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         use_barrier[0].subresourceRange.levelCount = 1;
         use_barrier[0].subresourceRange.layerCount = 1;
@@ -712,28 +704,36 @@ VkDescriptorSet upload_texture(iris::instance* iris, void* pixels, int width, in
         if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to end command buffer\n");
 
-            return VK_NULL_HANDLE;
-        } 
+            return {};
+        }
 
 
         if (vkQueueSubmit(iris->queue, 1, &end_info, VK_NULL_HANDLE) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to submit queue\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         } 
 
         
         if (vkDeviceWaitIdle(iris->device) != VK_SUCCESS) {
             fprintf(stderr, "vulkan: Failed to wait device idle\n");
 
-            return VK_NULL_HANDLE;
+            return {};
         } 
     }
 
+    vkDestroyCommandPool(iris->device, command_pool, nullptr);
     vkDestroyBuffer(iris->device, staging_buffer, nullptr);
     vkFreeMemory(iris->device, staging_buffer_memory, nullptr);
 
-    return descriptor_set;
+    return tex;
+}
+
+void free_texture(iris::instance* iris, texture& tex) {
+    vkDestroySampler(iris->device, tex.sampler, nullptr);
+    vkDestroyImageView(iris->device, tex.image_view, nullptr);
+    vkDestroyImage(iris->device, tex.image, nullptr);
+    vkFreeMemory(iris->device, tex.image_memory, nullptr);
 }
 
 bool init(iris::instance* iris, bool enable_validation) {
@@ -844,8 +844,10 @@ bool init(iris::instance* iris, bool enable_validation) {
         // VK_EXT_MESH_SHADER_EXTENSION_NAME,
         VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME,
         VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,
-        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME
+        VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
+        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
     };
+
     device_info.enabled_layers = {};
 
 #ifdef VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME
@@ -857,11 +859,13 @@ bool init(iris::instance* iris, bool enable_validation) {
 
     iris->vulkan_11_features.pNext = &iris->vulkan_12_features;
     iris->vulkan_12_features.pNext = &iris->subgroup_size_control_features;
-    iris->subgroup_size_control_features.pNext = VK_NULL_HANDLE;
+    iris->subgroup_size_control_features.pNext = &iris->swapchain_maintenance_1_features;
+    iris->swapchain_maintenance_1_features.pNext = VK_NULL_HANDLE;
 
     iris->vulkan_11_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
     iris->vulkan_12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     iris->subgroup_size_control_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
+    iris->swapchain_maintenance_1_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
 
     iris->vulkan_11_features.storageBuffer16BitAccess = VK_TRUE;
     iris->vulkan_11_features.uniformAndStorageBuffer16BitAccess = VK_TRUE;
@@ -878,6 +882,8 @@ bool init(iris::instance* iris, bool enable_validation) {
     
     iris->subgroup_size_control_features.subgroupSizeControl = VK_TRUE;
     iris->subgroup_size_control_features.computeFullSubgroups = VK_TRUE;
+
+    iris->swapchain_maintenance_1_features.swapchainMaintenance1 = VK_TRUE;
 
     // Chain in all feature structs
     device_info.data = &iris->vulkan_11_features;
