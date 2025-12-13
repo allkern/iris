@@ -10,17 +10,49 @@ int stage = 0;
 void show_memory_card_stage(iris::instance* iris) {
     using namespace ImGui;
 
-    PushFont(iris->font_heading);
-    Text("Set up memory cards");
-    PopFont();
+    if (BeginChild("##iconchild", ImVec2(100.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
+        Image((ImTextureID)(intptr_t)iris->iris_icon.descriptor_set, ImVec2(100.0, 100.0));
+    } EndChild(); SameLine(0.0, 10.0);
 
-    Separator();
+    if (BeginChild("##textchild", ImVec2(360.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
+        PushFont(iris->font_heading);
+        Text("Done!");
+        PopFont();
 
-    if (Button("Done")) {
-        CloseCurrentPopup();
+        Separator();
 
-        iris->show_bios_setting_window = false;
-    }
+        Text("You may now close this window and start using Iris.\n\n"
+            "Additionally you might want to check out the settings\n"
+            "menu to configure memory cards, display, audio, and\n"
+            "input options.\n\n"
+        );
+
+        Text(ICON_MS_WARNING " Please note that Iris is a work-in-progress emulator.\n"
+            "You might encounter bugs or experience poor performance\n"
+            "in general. We will appreciate any feedback or bug reports\n"
+            "you may provide.\n\n"
+        );
+
+        Text("You can report issues or provide feedback at:");
+
+        TextLinkOpenURL("https://github.com/allkern/iris/issues");
+
+        Separator();
+
+        static bool open_settings = true;
+
+        if (Button("Done")) {
+            CloseCurrentPopup();
+
+            iris->show_bios_setting_window = false;
+
+            if (open_settings) {
+                iris->show_settings = true;
+            }
+        } SameLine();
+
+        Checkbox("Open settings menu", &open_settings);
+    } EndChild();
 }
 
 void show_bios_stage(iris::instance* iris) {
@@ -58,11 +90,13 @@ void show_bios_stage(iris::instance* iris) {
         }
     }
 
+    // To-do: Add file validation
+
     Separator();
 
     BeginDisabled(!buf[0]);
 
-    if (Button("Done")) {
+    if (Button("Next")) {
         iris->bios_path = buf;
         iris->dump_to_file = true;
 

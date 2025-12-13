@@ -206,7 +206,7 @@ struct instance {
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VkRenderPass render_pass = VK_NULL_HANDLE;
     VkPipeline pipeline = VK_NULL_HANDLE;
-    VkClearValue clear_value = {};
+    VkClearValue clear_value = { 0.11, 0.11, 0.11, 1.0 };
     VkBuffer vertex_buffer = VK_NULL_HANDLE;
     VkDeviceMemory vertex_buffer_memory = VK_NULL_HANDLE;
     VkBuffer vertex_staging_buffer = VK_NULL_HANDLE;
