@@ -90,6 +90,9 @@ bool create_image(iris::instance* iris, uint32_t width, uint32_t height, VkForma
 }
 
 bool rebuild_framebuffers(iris::instance* iris) {
+    if (!iris->shader_passes.size())
+        return true;
+
     for (auto& fb : iris->shader_framebuffers) {
         bool res = create_image(iris,
             iris->image.width,
