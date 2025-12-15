@@ -118,14 +118,81 @@ void show_system_settings(iris::instance* iris) {
     }
 }
 
-void show_graphics_settings(iris::instance* iris) {
+const char* ssaa_names[] = {
+    "Disabled",
+    "2x",
+    "4x",
+    "8x",
+    "16x"
+};
+
+void show_hardware_renderer_settings(iris::instance* iris) {
     using namespace ImGui;
 
-    // PushFont(iris->font_heading);
-    // Text("Graphics");
-    // PopFont();
+    Text("SSAA");
 
-    // Separator();
+    if (BeginCombo("##ssaa", ssaa_names[iris->hardware_config.super_sampling])) {
+        for (int i = 0; i < 5; i++) {
+            if (Selectable(ssaa_names[i], iris->hardware_config.super_sampling == i)) {
+                iris->hardware_config.super_sampling = i;
+
+                if (i != 0) {
+                    iris->hardware_config.force_progressive = true;
+                }
+
+                render::refresh(iris);
+            }
+        }
+
+        EndCombo();
+    }
+
+	int super_sampling;
+	bool force_progressive;
+	bool overscan;
+	bool crtc_offsets;
+    bool disable_mipmaps;
+	bool unsynced_readbacks;
+	bool backbuffer_promotion;
+	bool allow_blend_demote;
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    BeginDisabled(iris->hardware_config.super_sampling != 0);
+    if (Checkbox(" Force progressive scan", &iris->hardware_config.force_progressive)) {
+        render::refresh(iris);
+    }
+    EndDisabled();
+
+    if (Checkbox(" Overscan", &iris->hardware_config.overscan)) {
+        render::refresh(iris);
+    }
+    
+    SeparatorText("Advanced");
+
+    if (Checkbox(" CRTC Offsets", &iris->hardware_config.crtc_offsets)) {
+        render::refresh(iris);
+    }
+
+    if (Checkbox(" Disable Mipmaps", &iris->hardware_config.disable_mipmaps)) {
+        render::refresh(iris);
+    }
+
+    if (Checkbox(" Unsynced Readbacks", &iris->hardware_config.unsynced_readbacks)) {
+        render::refresh(iris);
+    }
+
+    if (Checkbox(" Backbuffer Promotion", &iris->hardware_config.backbuffer_promotion)) {
+        render::refresh(iris);
+    }
+
+    if (Checkbox(" Allow Blend Demote", &iris->hardware_config.allow_blend_demote)) {
+        render::refresh(iris);
+    }
+    PopStyleVar();
+}
+
+void show_graphics_settings(iris::instance* iris) {
+    using namespace ImGui;
 
     static const char* settings_renderer_names[] = {
         "Null",
@@ -140,9 +207,7 @@ void show_graphics_settings(iris::instance* iris) {
             BeginDisabled(i == RENDERER_BACKEND_SOFTWARE);
 
             if (Selectable(settings_renderer_names[i], i == iris->renderer_backend)) {
-                iris->renderer_backend = i;
-
-                renderer_switch(iris->renderer, i);
+                render::switch_backend(iris, i);
             }
 
             EndDisabled();
@@ -203,9 +268,11 @@ void show_graphics_settings(iris::instance* iris) {
         }
 
         EndCombo();
-    } SameLine();
+    }
 
-    Checkbox("Integer scaling", &iris->integer_scaling);
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox(" Integer scaling", &iris->integer_scaling);
+    PopStyleVar();
 
     Text("Window mode");
 
@@ -219,6 +286,12 @@ void show_graphics_settings(iris::instance* iris) {
         }
 
         EndCombo();
+    }
+
+    if (iris->renderer_backend == RENDERER_BACKEND_HARDWARE) {
+        SeparatorText("Renderer settings");
+
+        show_hardware_renderer_settings(iris);
     }
 }
 
@@ -599,6 +672,8 @@ static const char* const theme_names[] = {
 void show_misc_settings(iris::instance* iris) {
     using namespace ImGui;
 
+    SeparatorText("Style");
+
     Text("Theme");
 
     if (BeginCombo("##theme", theme_names[iris->theme])) {
@@ -616,6 +691,79 @@ void show_misc_settings(iris::instance* iris) {
     Text("Background color");
 
     ColorEdit3("##bgcolor", (float*)&iris->clear_value.color);
+
+    Text("UI scale");
+
+    DragFloat("##uiscale", &iris->ui_scale, 0.05f, 0.5f, 1.5f, "%.1f");
+
+    // SliderFloat("##uiscale", &iris->ui_scale, 0.5f, 2.0f, "%.3f");
+
+    GetStyle().FontScaleMain = iris->ui_scale;
+
+    SeparatorText("Screenshots");
+
+    const char* format_names[] = {
+        "PNG",
+        "BMP",
+        "JPG",
+        "TGA"
+    };
+
+    const char* jpg_quality_names[] = {
+        "Minimum", // 1
+        "Low", // 25
+        "Medium", // 50
+        "High", // 90
+        "Maximum", // 100
+        "Custom..."
+    };
+
+    const char* mode_names[] = {
+        "Internal",
+        "Display"
+    };
+
+    Text("Format");
+
+    if (BeginCombo("##screenshotformat", format_names[iris->screenshot_format])) {
+        for (int i = 0; i < 4; i++) {
+            if (Selectable(format_names[i], iris->screenshot_format == i)) {
+                iris->screenshot_format = i;
+            }
+        }
+
+        EndCombo();
+    }
+
+    Text("Resolution mode");
+
+    if (BeginCombo("##screenshotmode", mode_names[iris->screenshot_mode])) {
+        for (int i = 0; i < 2; i++) {
+            if (Selectable(mode_names[i], iris->screenshot_mode == i)) {
+                iris->screenshot_mode = i;
+            }
+        }
+
+        EndCombo();
+    }
+
+    if (iris->screenshot_format == IRIS_SCREENSHOT_FORMAT_JPG) {
+        Text("JPG Quality");
+
+        if (BeginCombo("##jpgquality", jpg_quality_names[iris->screenshot_jpg_quality_mode])) {
+            for (int i = 0; i < 6; i++) {
+                if (Selectable(jpg_quality_names[i], iris->screenshot_jpg_quality_mode == i)) {
+                    iris->screenshot_jpg_quality_mode = i;
+                }
+            }
+
+            EndCombo();
+        }
+
+        if (iris->screenshot_jpg_quality_mode == IRIS_SCREENSHOT_JPG_QUALITY_CUSTOM) {
+            SliderInt("Quality##jpgqualitycustom", &iris->screenshot_jpg_quality, 1, 100, "%d", ImGuiSliderFlags_AlwaysClamp);
+        }
+    }
 }
 
 void show_settings(iris::instance* iris) {
@@ -657,6 +805,7 @@ void show_settings(iris::instance* iris) {
                 case 2: show_paths_settings(iris); break;
                 case 3: show_memory_card_settings(iris); break;
                 case 4: show_misc_settings(iris); break;
+                // case 5: show_shader_settings(iris); break;
             }
         } EndChild();
 
