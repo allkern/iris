@@ -238,9 +238,7 @@ void show_main_menubar(iris::instance* iris) {
                         BeginDisabled(i == RENDERER_BACKEND_SOFTWARE);
 
                         if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
-                            iris->renderer_backend = i;
-
-                            renderer_switch(iris->renderer, i);
+                            render::switch_backend(iris, i);
                         }
 
                         EndDisabled();
@@ -383,6 +381,9 @@ void show_main_menubar(iris::instance* iris) {
 
                 auto f = pfd::save_file("Save screenshot", filename, {
                     "PNG (*.png)", "*.png",
+                    "JPG (*.jpg)", "*.jpg",
+                    "BMP (*.bmp)", "*.bmp",
+                    "TGA (*.tga)", "*.tga",
                     "All Files (*.*)", "*"
                 });
 
@@ -393,6 +394,10 @@ void show_main_menubar(iris::instance* iris) {
                 if (f.result().size()) {
                     save_screenshot(iris, f.result());
                 }
+            }
+
+            if (MenuItem(ICON_MS_SD_CARD " Memory Card tool")) {
+                iris->show_memory_card_tool = true;
             }
 
             ImGui::EndMenu();

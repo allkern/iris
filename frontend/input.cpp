@@ -38,13 +38,35 @@ std::string get_default_screenshot_filename(iris::instance* iris) {
 
     char buf[512];
 
-    sprintf(buf, "Screenshot-%04d-%02d-%02d_%02d-%02d-%02d-%d.png",
+    sprintf(buf, "Screenshot-%04d-%02d-%02d_%02d-%02d-%02d-%d",
             dt.year, dt.month, dt.day,
             dt.hour, dt.minute, dt.second,
             iris->screenshot_counter + 1
     );
 
-    return buf;
+    std::string str(buf);
+
+    switch (iris->screenshot_format) {
+        case IRIS_SCREENSHOT_FORMAT_PNG: str += ".png"; break;
+        case IRIS_SCREENSHOT_FORMAT_BMP: str += ".bmp"; break;
+        case IRIS_SCREENSHOT_FORMAT_JPG: str += ".jpg"; break;
+        case IRIS_SCREENSHOT_FORMAT_TGA: str += ".tga"; break;
+    }
+
+    return str;
+}
+
+int get_screenshot_jpg_quality(iris::instance* iris) {
+    switch (iris->screenshot_jpg_quality_mode) {
+        case IRIS_SCREENSHOT_JPG_QUALITY_MINIMUM: return 1;
+        case IRIS_SCREENSHOT_JPG_QUALITY_LOW:     return 25;
+        case IRIS_SCREENSHOT_JPG_QUALITY_MEDIUM:  return 50;
+        case IRIS_SCREENSHOT_JPG_QUALITY_HIGH:    return 90;
+        case IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM: return 100;
+        case IRIS_SCREENSHOT_JPG_QUALITY_CUSTOM: return iris->screenshot_jpg_quality;
+    }
+
+    return 90;
 }
 
 bool save_screenshot(iris::instance* iris, std::string path = "") {
@@ -78,9 +100,35 @@ bool save_screenshot(iris::instance* iris, std::string path = "") {
         absolute_path = fn.string();
     }
 
-    int w, h, bpp;
+    void* ptr = nullptr;
+    int width = 0, height = 0, offset = 0;
 
-    void* ptr = nullptr; // renderer_get_buffer_data(iris->ctx, &w, &h, &bpp);
+    if (iris->screenshot_mode == IRIS_SCREENSHOT_MODE_INTERNAL) {
+        ptr = vulkan::read_image(iris,
+            iris->image.image,
+            iris->image.format,
+            iris->image.width,
+            iris->image.height
+        );
+
+        width = iris->image.width;
+        height = iris->image.height;
+    } else {
+        ptr = vulkan::read_image(iris,
+            iris->main_window_data.Frames[0].Backbuffer,
+            iris->main_window_data.SurfaceFormat.format,
+            iris->main_window_data.Width,
+            iris->main_window_data.Height
+        );
+
+        width = iris->main_window_data.Width;
+        height = iris->main_window_data.Height;
+        
+        if (!iris->fullscreen) {
+            offset = iris->menubar_height;
+            height -= iris->menubar_height;
+        }
+    }
 
     if (!ptr) {
         push_info(iris, "Couldn't save screenshot");
@@ -88,37 +136,39 @@ bool save_screenshot(iris::instance* iris, std::string path = "") {
         return false;
     }
 
-    uint32_t* buf = (uint32_t*)malloc((w * 4) * h);
+    uint32_t* buf = (uint32_t*)malloc((width * 4) * height);
 
-    memcpy(buf, ptr, (w * 4) * h);
+    memcpy(buf, ((uint32_t*)ptr) + offset * width, (width * 4) * height);
 
-    if (bpp == 4) {
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                buf[x + (y * w)] |= 0xff000000;
-            }
-        }
-    } else {
-        uint16_t* ptr16 = (uint16_t*)ptr;
-
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                uint32_t c = ptr16[x + (y * w)];
-
-                buf[x + (y * w)] =
-                    ((c & 0x001f) << 3) |
-                    ((c & 0x03e0) << 6) |
-                    ((c & 0x7c00) << 9) |
-                    0xff000000;
-            }
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
+            buf[x + (y * width)] |= 0xff000000;
         }
     }
 
-    int r = stbi_write_png(absolute_path.c_str(), w, h, 4, buf, w * 4);
+    int r = 0;
 
-    // printf("Saving screenshot to '%s' (%dx%d, %d bpp): %s\n",
-    //        absolute_path.c_str(), w, h, bpp, r ? "Success" : "Failure"
-    // );
+    switch (iris->screenshot_format) {
+        case IRIS_SCREENSHOT_FORMAT_PNG:
+            r = stbi_write_png(absolute_path.c_str(), width, height, 4, buf, width * 4);
+            break;
+        case IRIS_SCREENSHOT_FORMAT_BMP:
+            r = stbi_write_bmp(absolute_path.c_str(), width, height, 4, buf);
+            break;
+        case IRIS_SCREENSHOT_FORMAT_JPG:
+            r = stbi_write_jpg(absolute_path.c_str(), width, height, 4, buf, get_screenshot_jpg_quality(iris));
+            break;
+        case IRIS_SCREENSHOT_FORMAT_TGA:
+            r = stbi_write_tga(absolute_path.c_str(), width, height, 4, buf);
+            break;
+    }
+
+    printf("Saving screenshot to '%s' (%dx%d, %d bpp): %s\n",
+           absolute_path.c_str(), width, height, 32, r ? "Success" : "Failure"
+    );
+
+    free(ptr);
+    free(buf);
 
     if (!r) {
         push_info(iris, "Couldn't save screenshot");

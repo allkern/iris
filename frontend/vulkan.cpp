@@ -174,6 +174,19 @@ VkInstance create_instance(iris::instance* iris, const instance_create_info& inf
     return instance;
 }
 
+static inline uint32_t find_memory_type(iris::instance* iris, uint32_t filter, VkMemoryPropertyFlags properties) {
+    VkPhysicalDeviceMemoryProperties mp;
+    vkGetPhysicalDeviceMemoryProperties(iris->physical_device, &mp);
+
+    for (uint32_t i = 0; i < mp.memoryTypeCount; i++) {
+        if ((filter & (1 << i)) && (mp.memoryTypes[i].propertyFlags & properties) == properties) {
+            return i;
+        }
+    }
+
+    return 0;
+}
+
 struct device_create_info {
     std::vector <const char*> enabled_extensions;
     std::vector <const char*> enabled_layers;
@@ -973,6 +986,298 @@ void cleanup(iris::instance* iris) {
     vkDestroyPipelineLayout(iris->device, iris->pipeline_layout, nullptr);
     vkDestroyDevice(iris->device, nullptr);
     vkDestroyInstance(iris->instance, nullptr);
+}
+
+void insert_image_memory_barrier(
+    VkCommandBuffer buffer,
+    VkImage image,
+    VkAccessFlags src_access_mask,
+    VkAccessFlags dst_access_mask,
+    VkImageLayout old_image_layout,
+    VkImageLayout new_image_layout,
+    VkPipelineStageFlags src_stage_mask,
+    VkPipelineStageFlags dst_stage_mask,
+    VkImageSubresourceRange subresource_range)
+{
+    VkImageMemoryBarrier image_memory_barrier = {};
+    image_memory_barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    image_memory_barrier.srcAccessMask = src_access_mask;
+    image_memory_barrier.dstAccessMask = dst_access_mask;
+    image_memory_barrier.oldLayout = old_image_layout;
+    image_memory_barrier.newLayout = new_image_layout;
+    image_memory_barrier.image = image;
+    image_memory_barrier.subresourceRange = subresource_range;
+
+    vkCmdPipelineBarrier(
+        buffer,
+        src_stage_mask,
+        dst_stage_mask,
+        0,
+        0, nullptr,
+        0, nullptr,
+        1, &image_memory_barrier
+    );
+}
+
+void* read_image(iris::instance* iris, VkImage src_image, VkFormat format, int width, int height) {
+    if (src_image == VK_NULL_HANDLE) {
+        printf("vulkan: Source image is null\n");
+
+        return nullptr;
+    }
+
+    if (!width || !height) {
+        printf("vulkan: Invalid image dimensions for readback (%dx%d)\n", width, height);
+
+        return nullptr;
+    }
+
+    bool supports_blit = true;
+
+    // Check blit support for source and destination
+    VkFormatProperties format_props;
+
+    // Check if the device supports blitting from optimal images (the swapchain images are in optimal format)
+    vkGetPhysicalDeviceFormatProperties(iris->physical_device, format, &format_props);
+
+    if (!(format_props.optimalTilingFeatures & VK_FORMAT_FEATURE_BLIT_SRC_BIT)) {
+        printf("Device does not support blitting from optimal tiled images, using copy instead of blit!\n");
+
+        supports_blit = false;
+    }
+
+    // Check if the device supports blitting to linear images
+    vkGetPhysicalDeviceFormatProperties(iris->physical_device, VK_FORMAT_R8G8B8A8_UNORM, &format_props);
+
+    if (!(format_props.linearTilingFeatures & VK_FORMAT_FEATURE_BLIT_DST_BIT)) {
+        printf("Device does not support blitting to linear tiled images, using copy instead of blit!\n");
+
+        supports_blit = false;
+    }
+
+    // Create the linear tiled destination image to copy to and to read the memory from
+    VkImageCreateInfo image_create_info = {};
+    image_create_info.imageType = VK_IMAGE_TYPE_2D;
+    image_create_info.format = VK_FORMAT_R8G8B8A8_UNORM;
+    image_create_info.extent.width = width;
+    image_create_info.extent.height = height;
+    image_create_info.extent.depth = 1;
+    image_create_info.arrayLayers = 1;
+    image_create_info.mipLevels = 1;
+    image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
+    image_create_info.tiling = VK_IMAGE_TILING_LINEAR;
+    image_create_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+
+    // Create the image
+    VkImage dst_image;
+
+    if (vkCreateImage(iris->device, &image_create_info, nullptr, &dst_image) != VK_SUCCESS) {
+        printf("Failed to create image for readback\n");
+
+        return nullptr;
+    }
+
+    VkDeviceMemory dst_image_memory;
+    VkMemoryRequirements req;
+    vkGetImageMemoryRequirements(iris->device, dst_image, &req);
+    VkMemoryAllocateInfo alloc_info = {};
+    alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc_info.allocationSize = req.size;
+    alloc_info.memoryTypeIndex = find_memory_type(iris, req.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+
+    if (vkAllocateMemory(iris->device, &alloc_info, VK_NULL_HANDLE, &dst_image_memory) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to allocate image memory for readback\n");
+
+        return {};
+    }
+
+    if (vkBindImageMemory(iris->device, dst_image, dst_image_memory, 0) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to bind image memory for readback\n");
+
+        return {};
+    }
+
+    // Do the actual blit from the swapchain image to our host visible destination image
+    VkCommandPool command_pool = VK_NULL_HANDLE;
+
+    VkCommandPoolCreateInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    info.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+    info.queueFamilyIndex = iris->queue_family;
+
+    if (vkCreateCommandPool(iris->device, &info, VK_NULL_HANDLE, &command_pool) != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: Failed to create command pool for readback\n");
+    
+        return {};
+    }
+
+    VkCommandBufferAllocateInfo cmd_buffer_alloc_info = {};
+    cmd_buffer_alloc_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    cmd_buffer_alloc_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    cmd_buffer_alloc_info.commandPool = command_pool;
+    cmd_buffer_alloc_info.commandBufferCount = 1;
+
+    VkCommandBuffer command_buffer;
+    vkAllocateCommandBuffers(iris->device, &cmd_buffer_alloc_info, &command_buffer);
+
+    VkCommandBufferBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    if (vkBeginCommandBuffer(command_buffer, &begin_info) != VK_SUCCESS) {
+        printf("vulkan: Failed to begin command buffer for readback\n");
+
+        return {};
+    }
+
+    // Transition destination image to transfer destination layout
+    insert_image_memory_barrier(
+        command_buffer,
+        dst_image,
+        0,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_IMAGE_LAYOUT_UNDEFINED,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+    );
+
+    // Transition swapchain image from present to transfer source layout
+    insert_image_memory_barrier(
+        command_buffer,
+        src_image,
+        VK_ACCESS_MEMORY_READ_BIT,
+        VK_ACCESS_TRANSFER_READ_BIT,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+    );
+
+    // If source and destination support blit we'll blit as this also does automatic format conversion (e.g. from BGR to RGB)
+    if (supports_blit) {
+        // Define the region to blit (we will blit the whole swapchain image)
+        VkOffset3D blitSize;
+        blitSize.x = width;
+        blitSize.y = height;
+        blitSize.z = 1;
+        VkImageBlit imageBlitRegion{};
+        imageBlitRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageBlitRegion.srcSubresource.layerCount = 1;
+        imageBlitRegion.srcOffsets[1] = blitSize;
+        imageBlitRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageBlitRegion.dstSubresource.layerCount = 1;
+        imageBlitRegion.dstOffsets[1] = blitSize;
+
+        // Issue the blit command
+        vkCmdBlitImage(
+            command_buffer,
+            src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &imageBlitRegion,
+            VK_FILTER_NEAREST
+        );
+    } else {
+        // Otherwise use image copy (requires us to manually flip components)
+        VkImageCopy imageCopyRegion = {};
+        imageCopyRegion.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageCopyRegion.srcSubresource.layerCount = 1;
+        imageCopyRegion.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        imageCopyRegion.dstSubresource.layerCount = 1;
+        imageCopyRegion.extent.width = width;
+        imageCopyRegion.extent.height = height;
+        imageCopyRegion.extent.depth = 1;
+
+        // Issue the copy command
+        vkCmdCopyImage(
+            command_buffer,
+            src_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            dst_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1,
+            &imageCopyRegion
+        );
+    }
+
+    // Transition destination image to general layout, which is the required layout for mapping the image memory later on
+    insert_image_memory_barrier(
+        command_buffer,
+        dst_image,
+        VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_MEMORY_READ_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_GENERAL,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+    );
+
+    // Transition back the swap chain image after the blit is done
+    insert_image_memory_barrier(
+        command_buffer,
+        src_image,
+        VK_ACCESS_TRANSFER_READ_BIT,
+        VK_ACCESS_MEMORY_READ_BIT,
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VkImageSubresourceRange{ VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1 }
+    );
+
+    // End command buffer
+    {
+        VkSubmitInfo end_info = {};
+        end_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        end_info.commandBufferCount = 1;
+        end_info.pCommandBuffers = &command_buffer;
+
+        if (vkEndCommandBuffer(command_buffer) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to end command buffer\n");
+
+            return {};
+        }
+
+
+        if (vkQueueSubmit(iris->queue, 1, &end_info, VK_NULL_HANDLE) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to submit queue\n");
+
+            return {};
+        } 
+
+        
+        if (vkDeviceWaitIdle(iris->device) != VK_SUCCESS) {
+            fprintf(stderr, "vulkan: Failed to wait device idle\n");
+
+            return {};
+        } 
+    }
+
+    vkDestroyCommandPool(iris->device, command_pool, nullptr);
+
+    // Get layout of the image (including row pitch)
+    VkImageSubresource subresource { VK_IMAGE_ASPECT_COLOR_BIT, 0, 0 };
+    VkSubresourceLayout subresource_layout;
+    vkGetImageSubresourceLayout(iris->device, dst_image, &subresource, &subresource_layout);
+
+    // Map image memory so we can start copying from it
+    const char* data;
+    vkMapMemory(iris->device, dst_image_memory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
+    data += subresource_layout.offset;
+
+    void* buf = malloc(width * height * 4);
+
+    memcpy(buf, data, width * height * 4);
+
+    // Clean up resources
+    vkUnmapMemory(iris->device, dst_image_memory);
+    vkFreeMemory(iris->device, dst_image_memory, nullptr);
+    vkDestroyImage(iris->device, dst_image, nullptr);
+
+    return buf;
 }
 
 }
