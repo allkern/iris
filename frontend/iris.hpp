@@ -395,7 +395,7 @@ struct instance {
     int screenshot_counter = 0;
 
     // Renderer configs
-    hardware_config hardware_config;
+    hardware_config hardware_backend_config;
 };
 
 namespace audio {

@@ -131,13 +131,13 @@ void show_hardware_renderer_settings(iris::instance* iris) {
 
     Text("SSAA");
 
-    if (BeginCombo("##ssaa", ssaa_names[iris->hardware_config.super_sampling])) {
+    if (BeginCombo("##ssaa", ssaa_names[iris->hardware_backend_config.super_sampling])) {
         for (int i = 0; i < 5; i++) {
-            if (Selectable(ssaa_names[i], iris->hardware_config.super_sampling == i)) {
-                iris->hardware_config.super_sampling = i;
+            if (Selectable(ssaa_names[i], iris->hardware_backend_config.super_sampling == i)) {
+                iris->hardware_backend_config.super_sampling = i;
 
                 if (i != 0) {
-                    iris->hardware_config.force_progressive = true;
+                    iris->hardware_backend_config.force_progressive = true;
                 }
 
                 render::refresh(iris);
@@ -157,35 +157,35 @@ void show_hardware_renderer_settings(iris::instance* iris) {
 	bool allow_blend_demote;
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    BeginDisabled(iris->hardware_config.super_sampling != 0);
-    if (Checkbox(" Force progressive scan", &iris->hardware_config.force_progressive)) {
+    BeginDisabled(iris->hardware_backend_config.super_sampling != 0);
+    if (Checkbox(" Force progressive scan", &iris->hardware_backend_config.force_progressive)) {
         render::refresh(iris);
     }
     EndDisabled();
 
-    if (Checkbox(" Overscan", &iris->hardware_config.overscan)) {
+    if (Checkbox(" Overscan", &iris->hardware_backend_config.overscan)) {
         render::refresh(iris);
     }
     
     SeparatorText("Advanced");
 
-    if (Checkbox(" CRTC Offsets", &iris->hardware_config.crtc_offsets)) {
+    if (Checkbox(" CRTC Offsets", &iris->hardware_backend_config.crtc_offsets)) {
         render::refresh(iris);
     }
 
-    if (Checkbox(" Disable Mipmaps", &iris->hardware_config.disable_mipmaps)) {
+    if (Checkbox(" Disable Mipmaps", &iris->hardware_backend_config.disable_mipmaps)) {
         render::refresh(iris);
     }
 
-    if (Checkbox(" Unsynced Readbacks", &iris->hardware_config.unsynced_readbacks)) {
+    if (Checkbox(" Unsynced Readbacks", &iris->hardware_backend_config.unsynced_readbacks)) {
         render::refresh(iris);
     }
 
-    if (Checkbox(" Backbuffer Promotion", &iris->hardware_config.backbuffer_promotion)) {
+    if (Checkbox(" Backbuffer Promotion", &iris->hardware_backend_config.backbuffer_promotion)) {
         render::refresh(iris);
     }
 
-    if (Checkbox(" Allow Blend Demote", &iris->hardware_config.allow_blend_demote)) {
+    if (Checkbox(" Allow Blend Demote", &iris->hardware_backend_config.allow_blend_demote)) {
         render::refresh(iris);
     }
     PopStyleVar();

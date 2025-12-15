@@ -128,14 +128,14 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->screenshot_mode = screenshots["mode"].value_or(IRIS_SCREENSHOT_MODE_INTERNAL);
 
     auto hardware = tbl["hardware"];
-    iris->hardware_config.super_sampling = hardware["super_sampling"].value_or(0);
-    iris->hardware_config.force_progressive = hardware["force_progressive"].value_or(false);
-    iris->hardware_config.overscan = hardware["overscan"].value_or(false);
-    iris->hardware_config.crtc_offsets = hardware["crtc_offsets"].value_or(false);
-    iris->hardware_config.disable_mipmaps = hardware["disable_mipmaps"].value_or(false);
-    iris->hardware_config.unsynced_readbacks = hardware["unsynced_readbacks"].value_or(false);
-    iris->hardware_config.backbuffer_promotion = hardware["backbuffer_promotion"].value_or(false);
-    iris->hardware_config.allow_blend_demote = hardware["allow_blend_demote"].value_or(false);
+    iris->hardware_backend_config.super_sampling = hardware["super_sampling"].value_or(0);
+    iris->hardware_backend_config.force_progressive = hardware["force_progressive"].value_or(false);
+    iris->hardware_backend_config.overscan = hardware["overscan"].value_or(false);
+    iris->hardware_backend_config.crtc_offsets = hardware["crtc_offsets"].value_or(false);
+    iris->hardware_backend_config.disable_mipmaps = hardware["disable_mipmaps"].value_or(false);
+    iris->hardware_backend_config.unsynced_readbacks = hardware["unsynced_readbacks"].value_or(false);
+    iris->hardware_backend_config.backbuffer_promotion = hardware["backbuffer_promotion"].value_or(false);
+    iris->hardware_backend_config.allow_blend_demote = hardware["allow_blend_demote"].value_or(false);
 
     auto ui = tbl["ui"];
     iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
@@ -343,14 +343,14 @@ void close(iris::instance* iris) {
         // hardware.super_sampling = 2
         // etc.
         { "hardware", toml::table {
-            { "super_sampling", iris->hardware_config.super_sampling },
-            { "force_progressive", iris->hardware_config.force_progressive },
-            { "overscan", iris->hardware_config.overscan },
-            { "crtc_offsets", iris->hardware_config.crtc_offsets },
-            { "disable_mipmaps", iris->hardware_config.disable_mipmaps },
-            { "unsynced_readbacks", iris->hardware_config.unsynced_readbacks },
-            { "backbuffer_promotion", iris->hardware_config.backbuffer_promotion },
-            { "allow_blend_demote", iris->hardware_config.allow_blend_demote }
+            { "super_sampling", iris->hardware_backend_config.super_sampling },
+            { "force_progressive", iris->hardware_backend_config.force_progressive },
+            { "overscan", iris->hardware_backend_config.overscan },
+            { "crtc_offsets", iris->hardware_backend_config.crtc_offsets },
+            { "disable_mipmaps", iris->hardware_backend_config.disable_mipmaps },
+            { "unsynced_readbacks", iris->hardware_backend_config.unsynced_readbacks },
+            { "backbuffer_promotion", iris->hardware_backend_config.backbuffer_promotion },
+            { "allow_blend_demote", iris->hardware_backend_config.allow_blend_demote }
         } },
         { "debugger", toml::table {
             { "show_ee_control", iris->show_ee_control },

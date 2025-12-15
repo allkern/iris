@@ -349,7 +349,7 @@ bool init(iris::instance* iris) {
 
     switch (info.backend) {
         case RENDERER_BACKEND_HARDWARE: {
-            info.config = &iris->hardware_config;
+            info.config = &iris->hardware_backend_config;
         } break;
     }
 
@@ -723,7 +723,7 @@ void switch_backend(iris::instance* iris, int backend) {
 
     switch (info.backend) {
         case RENDERER_BACKEND_HARDWARE: {
-            info.config = &iris->hardware_config;
+            info.config = &iris->hardware_backend_config;
         } break;
     }
 
@@ -737,7 +737,7 @@ void switch_backend(iris::instance* iris, int backend) {
 void refresh(iris::instance* iris) {
     switch (iris->renderer_backend) {
         case RENDERER_BACKEND_HARDWARE: {
-            renderer_set_config(iris->renderer, &iris->hardware_config);
+            renderer_set_config(iris->renderer, &iris->hardware_backend_config);
         } break;
     }
 
