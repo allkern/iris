@@ -11,6 +11,7 @@ void* null_create();
 bool null_init(void* udata, const renderer_create_info& info);
 void null_reset(void* udata);
 void null_destroy(void* udata);
+void null_set_config(void* udata, void* config);
 renderer_image null_get_frame(void* udata);
 
 extern "C" {

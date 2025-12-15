@@ -39,9 +39,10 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
 	ctx->granite_device.init_frame_contexts(4);
 
 	GSOptions opts = {};
-	// opts.super_sampling = SuperSampling::X8;
-	// opts.ordered_super_sampling = true;
-	// opts.super_sampled_textures = true;
+	opts.super_sampling = (SuperSampling)ctx->config.super_sampling;
+	opts.ordered_super_sampling = true;
+	opts.super_sampled_textures = true;
+	opts.dynamic_super_sampling = true;
 
 	if (!ctx->interface.init(&ctx->granite_device, opts)) {
 		return false;
@@ -49,6 +50,32 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
 
 	ctx->interface.reset_context_state();
 	ctx->interface.set_signal_interface(ctx->signal_handler);
+
+	ctx->config = *(hardware_config*)info.config;
+
+	Hacks hacks = {};
+	hacks.allow_blend_demote = ctx->config.allow_blend_demote;
+	hacks.backbuffer_promotion = ctx->config.backbuffer_promotion;
+	hacks.disable_mipmaps = ctx->config.disable_mipmaps;
+	hacks.unsynced_readbacks = ctx->config.unsynced_readbacks;
+
+	ctx->interface.set_hacks(hacks);
+
+	if (ctx->config.super_sampling == 0) {
+		ctx->interface.set_super_sampling_rate((SuperSampling)0, false, false);
+	} else {
+		SuperSampling super_sampling;
+
+		switch (ctx->config.super_sampling) {
+			case 1: super_sampling = SuperSampling::X2; break;
+			case 2: super_sampling = SuperSampling::X4; break;
+			case 3: super_sampling = SuperSampling::X8; break;
+			case 4: super_sampling = SuperSampling::X16; break;
+			default: super_sampling = (SuperSampling)0; break;
+		}
+
+		ctx->interface.set_super_sampling_rate(super_sampling, true, true);
+	}
 
     return true;
 }
@@ -119,17 +146,26 @@ renderer_image hardware_get_frame(void* udata) {
 
 	VSyncInfo info = {};
 
-	info.phase = ctx->gs->csr & (1 << 13) ? 0 : 1;
-	info.anti_blur = true;
-	info.force_progressive = false;
-	info.overscan = false;
-	info.crtc_offsets = false;
+	if (ctx->config.super_sampling) {
+		info.phase = 0;
+		info.force_progressive = true;
+		info.raw_circuit_scanout = true;
+		info.high_resolution_scanout = true;
+		info.anti_blur = true;
+	} else {
+		info.phase = ctx->config.force_progressive ? 0 : (ctx->gs->csr & (1 << 13) ? 0 : 1);
+		info.force_progressive = ctx->config.force_progressive;
+		info.raw_circuit_scanout = false;
+		info.high_resolution_scanout = false;
+		info.anti_blur = false;
+	}
+
+	info.overscan = ctx->config.overscan;
+	info.crtc_offsets = ctx->config.crtc_offsets;
 	info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
 	info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
 	info.dst_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 	info.adapt_to_internal_horizontal_resolution = false;
-	info.raw_circuit_scanout = false;
-	info.high_resolution_scanout = false;
 
 	ScanoutResult scanout = ctx->interface.vsync(info);
 
@@ -150,4 +186,34 @@ extern "C" void hardware_transfer(void* udata, int path, const void* data, size_
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
 	ctx->interface.gif_transfer(path, data, size);
+}
+
+void hardware_set_config(void* udata, void* config) {
+	hardware_state* ctx = (hardware_state*)udata;
+
+	ctx->config = *(hardware_config*)config;
+
+	Hacks hacks = {};
+	hacks.allow_blend_demote = ctx->config.allow_blend_demote;
+	hacks.backbuffer_promotion = ctx->config.backbuffer_promotion;
+	hacks.disable_mipmaps = ctx->config.disable_mipmaps;
+	hacks.unsynced_readbacks = ctx->config.unsynced_readbacks;
+
+	ctx->interface.set_hacks(hacks);
+
+	if (ctx->config.super_sampling == 0) {
+		ctx->interface.set_super_sampling_rate((SuperSampling)0, false, false);
+	} else {
+		SuperSampling super_sampling;
+
+		switch (ctx->config.super_sampling) {
+			case 1: super_sampling = SuperSampling::X2; break;
+			case 2: super_sampling = SuperSampling::X4; break;
+			case 3: super_sampling = SuperSampling::X8; break;
+			case 4: super_sampling = SuperSampling::X16; break;
+			default: super_sampling = (SuperSampling)0; break;
+		}
+
+		ctx->interface.set_super_sampling_rate(super_sampling, true, true);
+	}
 }

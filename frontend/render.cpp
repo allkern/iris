@@ -347,6 +347,12 @@ bool init(iris::instance* iris) {
     info.instance_create_info = iris->instance_create_info;
     info.device_create_info = iris->device_create_info;
 
+    switch (info.backend) {
+        case RENDERER_BACKEND_HARDWARE: {
+            info.config = &iris->hardware_config;
+        } break;
+    }
+
     if (!renderer_init(iris->renderer, info)) {
         fprintf(stderr, "render: Failed to initialize renderer backend\n");
 
@@ -694,6 +700,48 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     frame++;
 
     return true;
+}
+
+void switch_backend(iris::instance* iris, int backend) {
+    if (iris->renderer_backend == backend)
+        return;
+
+    renderer_destroy(iris->renderer);
+
+    iris->renderer = renderer_create();
+
+    renderer_create_info info = {};
+
+    info.backend = backend;
+    info.gif = iris->ps2->gif;
+    info.gs = iris->ps2->gs;
+    info.instance = iris->instance;
+    info.device = iris->device;
+    info.physical_device = iris->physical_device;
+    info.instance_create_info = iris->instance_create_info;
+    info.device_create_info = iris->device_create_info;
+
+    switch (info.backend) {
+        case RENDERER_BACKEND_HARDWARE: {
+            info.config = &iris->hardware_config;
+        } break;
+    }
+
+    if (!renderer_init(iris->renderer, info)) {
+        fprintf(stderr, "render: Failed to initialize renderer backend\n");
+    } else {
+        iris->renderer_backend = backend;
+    }
+}
+
+void refresh(iris::instance* iris) {
+    switch (iris->renderer_backend) {
+        case RENDERER_BACKEND_HARDWARE: {
+            renderer_set_config(iris->renderer, &iris->hardware_config);
+        } break;
+    }
+
+    iris->image = renderer_get_frame(iris->renderer);
 }
 
 void destroy(iris::instance* iris) {

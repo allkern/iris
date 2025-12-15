@@ -121,8 +121,25 @@ bool parse_toml_settings(iris::instance* iris) {
     auto system = tbl["system"];
     iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
 
+    auto screenshots = tbl["screenshots"];
+    iris->screenshot_format = screenshots["format"].value_or(IRIS_SCREENSHOT_FORMAT_PNG);
+    iris->screenshot_jpg_quality_mode = screenshots["jpg_quality_mode"].value_or(IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM);
+    iris->screenshot_jpg_quality = screenshots["jpg_quality"].value_or(50);
+    iris->screenshot_mode = screenshots["mode"].value_or(IRIS_SCREENSHOT_MODE_INTERNAL);
+
+    auto hardware = tbl["hardware"];
+    iris->hardware_config.super_sampling = hardware["super_sampling"].value_or(0);
+    iris->hardware_config.force_progressive = hardware["force_progressive"].value_or(false);
+    iris->hardware_config.overscan = hardware["overscan"].value_or(false);
+    iris->hardware_config.crtc_offsets = hardware["crtc_offsets"].value_or(false);
+    iris->hardware_config.disable_mipmaps = hardware["disable_mipmaps"].value_or(false);
+    iris->hardware_config.unsynced_readbacks = hardware["unsynced_readbacks"].value_or(false);
+    iris->hardware_config.backbuffer_promotion = hardware["backbuffer_promotion"].value_or(false);
+    iris->hardware_config.allow_blend_demote = hardware["allow_blend_demote"].value_or(false);
+
     auto ui = tbl["ui"];
     iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
+    iris->ui_scale = ui["scale"].value_or(1.0f);
 
     toml::array* bgcolor = tbl["ui"]["bgcolor"].as_array();
 
@@ -313,6 +330,28 @@ void close(iris::instance* iris) {
         { "system", toml::table {
             { "model", iris->system }
         } },
+        { "screenshots", toml::table {
+            { "format", iris->screenshot_format },
+            { "mode", iris->screenshot_mode },
+            { "jpg_quality_mode", iris->screenshot_jpg_quality_mode },
+            { "jpg_quality", iris->screenshot_jpg_quality }
+        } },
+
+        // To-do: Change this to "backends" and use dotted entries
+        // e.g.
+        // [backend_settings]
+        // hardware.super_sampling = 2
+        // etc.
+        { "hardware", toml::table {
+            { "super_sampling", iris->hardware_config.super_sampling },
+            { "force_progressive", iris->hardware_config.force_progressive },
+            { "overscan", iris->hardware_config.overscan },
+            { "crtc_offsets", iris->hardware_config.crtc_offsets },
+            { "disable_mipmaps", iris->hardware_config.disable_mipmaps },
+            { "unsynced_readbacks", iris->hardware_config.unsynced_readbacks },
+            { "backbuffer_promotion", iris->hardware_config.backbuffer_promotion },
+            { "allow_blend_demote", iris->hardware_config.allow_blend_demote }
+        } },
         { "debugger", toml::table {
             { "show_ee_control", iris->show_ee_control },
             { "show_ee_state", iris->show_ee_state },
@@ -351,6 +390,7 @@ void close(iris::instance* iris) {
         } },
         { "ui", toml::table {
             { "theme", iris->theme },
+            { "scale", iris->ui_scale },
             { "bgcolor", toml::array {
                 iris->clear_value.color.float32[0],
                 iris->clear_value.color.float32[1],

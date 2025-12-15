@@ -101,6 +101,7 @@ struct hardware_state {
 	ExternallyManagedDevice* device;
 	ExternallyManagedInstance* instance;
 	RendererSignalHandler* signal_handler;
+	hardware_config config;
 
     struct ps2_gs* gs;
     struct ps2_gif* gif;
@@ -110,6 +111,7 @@ void* hardware_create();
 bool hardware_init(void* udata, const renderer_create_info& info);
 void hardware_reset(void* udata);
 void hardware_destroy(void* udata);
+void hardware_set_config(void* udata, void* config);
 renderer_image hardware_get_frame(void* udata);
 
 extern "C" {

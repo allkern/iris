@@ -17,6 +17,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
             renderer->reset = null_reset;
             renderer->destroy = null_destroy;
             renderer->get_frame = null_get_frame;
+            renderer->set_config = null_set_config;
             renderer->transfer = null_transfer;
         } break;
 
@@ -27,6 +28,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
             renderer->reset = null_reset;
             renderer->destroy = null_destroy;
             renderer->get_frame = null_get_frame;
+            renderer->set_config = null_set_config;
             renderer->transfer = null_transfer;
         } break;
 
@@ -36,6 +38,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
             renderer->reset = hardware_reset;
             renderer->destroy = hardware_destroy;
             renderer->get_frame = hardware_get_frame;
+            renderer->set_config = hardware_set_config;
             renderer->transfer = hardware_transfer;
         } break;
     }
@@ -47,7 +50,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
     return renderer->init(renderer->udata, info);
 }
 
-bool renderer_switch(renderer_state* renderer, int backend) {
+bool renderer_switch(renderer_state* renderer, int backend, void* config) {
     if (backend == renderer->info.backend)
         return true;
 
@@ -55,6 +58,7 @@ bool renderer_switch(renderer_state* renderer, int backend) {
 
     renderer_create_info info = renderer->info;
     info.backend = backend;
+    info.config = config;
 
     return renderer_init(renderer, info);
 }
@@ -71,4 +75,8 @@ void renderer_reset(renderer_state* renderer) {
 
 renderer_image renderer_get_frame(renderer_state* renderer) {
     return renderer->get_frame(renderer->udata);
+}
+
+void renderer_set_config(renderer_state* renderer, void* config) {
+    renderer->set_config(renderer->udata, config);
 }

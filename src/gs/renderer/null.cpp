@@ -27,6 +27,10 @@ renderer_image null_get_frame(void* udata) {
     return image;
 }
 
+void null_set_config(void* udata, void* config) {
+    // Nothing
+}
+
 extern "C" {
 
 void null_transfer(void* udata, int path, const void* data, size_t size) {

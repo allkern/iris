@@ -8,6 +8,7 @@
 #include <deque>
 
 #include "gs/renderer/renderer.hpp"
+#include "gs/renderer/config.hpp"
 
 #include <SDL3/SDL.h>
 #include <volk.h>
@@ -33,6 +34,21 @@ namespace iris {
 #define IRIS_THEME_IMGUI_DARK 1
 #define IRIS_THEME_IMGUI_LIGHT 2
 #define IRIS_THEME_IMGUI_CLASSIC 3
+
+#define IRIS_SCREENSHOT_FORMAT_PNG 0
+#define IRIS_SCREENSHOT_FORMAT_BMP 1
+#define IRIS_SCREENSHOT_FORMAT_JPG 2
+#define IRIS_SCREENSHOT_FORMAT_TGA 3
+
+#define IRIS_SCREENSHOT_MODE_INTERNAL 0
+#define IRIS_SCREENSHOT_MODE_DISPLAY 1
+
+#define IRIS_SCREENSHOT_JPG_QUALITY_MINIMUM 0
+#define IRIS_SCREENSHOT_JPG_QUALITY_LOW 1
+#define IRIS_SCREENSHOT_JPG_QUALITY_MEDIUM 2
+#define IRIS_SCREENSHOT_JPG_QUALITY_HIGH 3
+#define IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM 4
+#define IRIS_SCREENSHOT_JPG_QUALITY_CUSTOM 5 
 
 enum : int {
     BKPT_CPU_EE,
@@ -339,6 +355,11 @@ struct instance {
     float volume = 1.0f;
     int timescale = 8;
     bool mute_adma = true;
+    float ui_scale = 1.0f;
+    int screenshot_format = IRIS_SCREENSHOT_FORMAT_PNG;
+    int screenshot_jpg_quality_mode = IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM;
+    int screenshot_jpg_quality = 50;
+    int screenshot_mode = IRIS_SCREENSHOT_MODE_INTERNAL;
 
     bool limit_fps = true;
     float fps_cap = 60.0f;
@@ -372,6 +393,9 @@ struct instance {
     float avg_fps;
     float avg_frames;
     int screenshot_counter = 0;
+
+    // Renderer configs
+    hardware_config hardware_config;
 };
 
 namespace audio {
@@ -404,6 +428,7 @@ namespace vulkan {
     void cleanup(iris::instance* iris);
     texture upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride);
     void free_texture(iris::instance* iris, texture& tex);
+    void* read_image(iris::instance* iris, VkImage image, VkFormat format, int width, int height);
 }
 
 namespace platform {
@@ -428,6 +453,8 @@ namespace render {
     void destroy(iris::instance* iris);
     bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer);
     bool save_screenshot(iris::instance* iris, std::string path);
+    void switch_backend(iris::instance* iris, int backend);
+    void refresh(iris::instance* iris);
 }
 
 iris::instance* create();

@@ -6,6 +6,8 @@
 
 #include "gs/gs.h"
 
+#include "config.hpp"
+
 // enum : int {
 //     // Keeps aspect ratio by native resolution
 //     RENDERER_ASPECT_NATIVE,
@@ -60,6 +62,7 @@ struct renderer_create_info {
     VkDevice device;
     VkDeviceCreateInfo device_create_info;
     VkPhysicalDevice physical_device;
+    void* config;
 
     int backend;
 };
@@ -85,12 +88,14 @@ struct renderer_state {
     void (*destroy)(void* udata);
     renderer_image (*get_frame)(void* udata);
     void (*transfer)(void* udata, int path, const void* data, size_t size);
+    void (*set_config)(void* udata, void* config);
 };
 
 renderer_state* renderer_create(void);
 bool renderer_init(renderer_state* renderer, const renderer_create_info& info);
-bool renderer_switch(renderer_state* renderer, int backend);
+bool renderer_switch(renderer_state* renderer, int backend, void* config);
 void renderer_reset(renderer_state* renderer);
 void renderer_destroy(renderer_state* renderer);
+void renderer_set_config(renderer_state* renderer, void* config);
 
 renderer_image renderer_get_frame(renderer_state* renderer);
