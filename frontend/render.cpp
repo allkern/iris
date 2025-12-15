@@ -2,6 +2,8 @@
 
 #include "iris.hpp"
 
+#define RENDER_MAX_SHADER_PASSES 16
+
 // INCBIN stuff
 #define INCBIN_PREFIX g_
 #define INCBIN_STYLE INCBIN_STYLE_SNAKE
@@ -13,16 +15,9 @@ INCBIN(encoder_frag_shader, "../shaders/encoder.spv");
 INCBIN(decoder_frag_shader, "../shaders/decoder.spv");
 INCBIN(sharpen_frag_shader, "../shaders/sharpen.spv");
 
-#define RENDER_MAX_SHADER_PASSES 16
-
 namespace iris::render {
 
 static int frame = 0;
-
-struct push_constants {
-    float resolution[2];
-    int frame;
-};
 
 bool create_image(iris::instance* iris, uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkImage& image, VkImageView& view, VkDeviceMemory& memory) {
     VkImageCreateInfo image_info = {};
@@ -94,183 +89,7 @@ bool create_image(iris::instance* iris, uint32_t width, uint32_t height, VkForma
     return true;
 }
 
-bool rebuild_shaders(iris::instance* iris) {
-    // To-do: Destroy old resources
-
-    for (auto& pass : iris->shader_passes) {
-        // Create pipeline layout
-        VkPushConstantRange push_constant_range = {};
-        push_constant_range.offset = 0;
-        push_constant_range.size = sizeof(push_constants);
-        push_constant_range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-        VkPipelineLayoutCreateInfo pipeline_layout_info = {};
-        pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        pipeline_layout_info.setLayoutCount = 1;
-        pipeline_layout_info.pSetLayouts = &iris->shader_descriptor_set_layout;
-        pipeline_layout_info.pushConstantRangeCount = 1;
-        pipeline_layout_info.pPushConstantRanges = &push_constant_range;
-
-        if (vkCreatePipelineLayout(iris->device, &pipeline_layout_info, nullptr, &pass.pipeline_layout) != VK_SUCCESS) {
-            fprintf(stderr, "render: Failed to create shader pipeline layout\n");
-
-            return false;
-        }
-
-        // Create render pass
-        VkAttachmentDescription color_attachment = {};
-        color_attachment.format = iris->image.format;
-        color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-        color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-        color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-        color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-        color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        color_attachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
-        VkAttachmentReference color_attachment_ref = {};
-        color_attachment_ref.attachment = 0;
-        color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-        VkSubpassDescription subpass = {};
-        subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments = &color_attachment_ref;
-
-        VkSubpassDependency dependency = {};
-        dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-        dependency.dstSubpass = 0;
-        dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.srcAccessMask = 0;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-
-        VkRenderPass render_pass = VK_NULL_HANDLE;
-
-        VkRenderPassCreateInfo render_pass_info = {};
-        render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        render_pass_info.attachmentCount = 1;
-        render_pass_info.pAttachments = &color_attachment;
-        render_pass_info.subpassCount = 1;
-        render_pass_info.pSubpasses = &subpass;
-        render_pass_info.dependencyCount = 1;
-        render_pass_info.pDependencies = &dependency;
-
-        if (vkCreateRenderPass(iris->device, &render_pass_info, nullptr, &pass.render_pass) != VK_SUCCESS) {
-            fprintf(stderr, "render: Failed to create shader render pass\n");
-
-            return false;
-        }
-
-        // Create graphics pipeline
-        VkPipelineShaderStageCreateInfo shader_stages[2] = {};
-        shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        shader_stages[0].module = iris->default_vert_shader;
-        shader_stages[0].pName = "main";
-        shader_stages[0].pNext = VK_NULL_HANDLE;
-        shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shader_stages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shader_stages[1].module = pass.frag_shader;
-        shader_stages[1].pName = "main";
-        shader_stages[1].pNext = VK_NULL_HANDLE;
-
-        static const VkDynamicState dynamic_states[] = {
-            VK_DYNAMIC_STATE_VIEWPORT,
-            VK_DYNAMIC_STATE_SCISSOR
-        };
-
-        VkPipelineDynamicStateCreateInfo dynamic_state_info = {};
-        dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamic_state_info.dynamicStateCount = 2;
-        dynamic_state_info.pDynamicStates = dynamic_states;
-
-        VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
-        vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-        vertex_input_info.vertexBindingDescriptionCount = 0;
-        vertex_input_info.pVertexBindingDescriptions = VK_NULL_HANDLE;
-        vertex_input_info.vertexAttributeDescriptionCount = 0;
-        vertex_input_info.pVertexAttributeDescriptions = VK_NULL_HANDLE;
-
-        VkPipelineInputAssemblyStateCreateInfo input_assembly_info = {};
-        input_assembly_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-        input_assembly_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-        input_assembly_info.primitiveRestartEnable = VK_FALSE;
-
-        VkViewport viewport = {};
-        viewport.x = 0.0f;
-        viewport.y = 0.0f;
-        viewport.width = (float)iris->image.width;
-        viewport.height = (float)iris->image.height;
-        viewport.minDepth = 0.0f;
-        viewport.maxDepth = 1.0f;
-
-        VkExtent2D extent = {};
-        extent.width = iris->image.width;
-        extent.height = iris->image.height;
-
-        VkRect2D scissor = {};
-        scissor.offset = {0, 0};
-        scissor.extent = extent;
-
-        VkPipelineViewportStateCreateInfo viewport_state_info = {};
-        viewport_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-        viewport_state_info.viewportCount = 1;
-        viewport_state_info.pViewports = &viewport;
-        viewport_state_info.scissorCount = 1;
-        viewport_state_info.pScissors = &scissor;
-
-        VkPipelineRasterizationStateCreateInfo rasterizer_info = {};
-        rasterizer_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-        rasterizer_info.depthClampEnable = VK_FALSE;
-        rasterizer_info.rasterizerDiscardEnable = VK_FALSE;
-        rasterizer_info.polygonMode = VK_POLYGON_MODE_FILL;
-        rasterizer_info.lineWidth = 1.0f;
-        rasterizer_info.cullMode = VK_CULL_MODE_NONE;
-        rasterizer_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
-        rasterizer_info.depthBiasEnable = VK_FALSE;
-
-        VkPipelineColorBlendAttachmentState blend_attachment_state = {};
-        blend_attachment_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
-        blend_attachment_state.blendEnable = VK_FALSE;
-
-        VkPipelineColorBlendStateCreateInfo blend_state_info{};
-        blend_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-        blend_state_info.logicOpEnable = VK_FALSE;
-        blend_state_info.attachmentCount = 1;
-        blend_state_info.pAttachments = &blend_attachment_state;
-
-        VkPipelineMultisampleStateCreateInfo multisampling_state_info = {};
-        multisampling_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-        multisampling_state_info.sampleShadingEnable = VK_FALSE;
-        multisampling_state_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-        VkGraphicsPipelineCreateInfo pipeline_info = {};
-        pipeline_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipeline_info.stageCount = 2;
-        pipeline_info.pStages = shader_stages;
-        pipeline_info.pVertexInputState = &vertex_input_info;
-        pipeline_info.pInputAssemblyState = &input_assembly_info;
-        pipeline_info.pViewportState = &viewport_state_info;
-        pipeline_info.pRasterizationState = &rasterizer_info;
-        pipeline_info.pMultisampleState = &multisampling_state_info;
-        pipeline_info.pDepthStencilState = nullptr; // Optional
-        pipeline_info.pColorBlendState = &blend_state_info;
-        pipeline_info.pDynamicState = &dynamic_state_info;
-        pipeline_info.layout = pass.pipeline_layout;
-        pipeline_info.renderPass = pass.render_pass;
-        pipeline_info.subpass = 0;
-        pipeline_info.pTessellationState = VK_NULL_HANDLE;
-        pipeline_info.basePipelineHandle = VK_NULL_HANDLE; // Optional
-        pipeline_info.basePipelineIndex = -1; // Optional
-
-        if (vkCreateGraphicsPipelines(iris->device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pass.pipeline) != VK_SUCCESS) {
-            fprintf(stderr, "render: Failed to create shader pipeline\n");
-
-            return false;
-        }
-    }
-
+bool rebuild_framebuffers(iris::instance* iris) {
     for (auto& fb : iris->shader_framebuffers) {
         bool res = create_image(iris,
             iris->image.width,
@@ -295,8 +114,8 @@ bool rebuild_shaders(iris::instance* iris) {
         // to use this framebuffer in the specified renderpass, but in reality we can
         // use this framebuffer in any renderpass that's **compatible** with the one
         // we're specifying here. "compatible" as defined here:
-        // https://docs.vulkan.org/spec/latest/chapters/renderpass.html#renderpass-compatibility
-        framebuffer_info.renderPass = iris->shader_passes[0].render_pass;
+        // https://docs.vulkan.org/spec/latest/chapters/renderpass.get_html()#renderpass-compatibility
+        framebuffer_info.renderPass = iris->shader_passes[0].get_render_pass();
         framebuffer_info.attachmentCount = 1;
         framebuffer_info.pAttachments = &fb.view;
         framebuffer_info.width = iris->image.width;
@@ -309,25 +128,6 @@ bool rebuild_shaders(iris::instance* iris) {
             return false;
         }
     }
-
-    return true;
-}
-
-bool push_shader(iris::instance* iris, const void* data, size_t size) {
-    shader_pass pass = {};
-
-    VkShaderModuleCreateInfo create_info = {};
-    create_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    create_info.pCode = (const uint32_t*)data;
-    create_info.codeSize = size;
-
-    if (vkCreateShaderModule(iris->device, &create_info, nullptr, &pass.frag_shader) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create encoder fragment shader module\n");
-
-        return false;
-    }
-
-    iris->shader_passes.push_back(pass);
 
     return true;
 }
@@ -415,14 +215,6 @@ bool init(iris::instance* iris) {
 
     if (vkAllocateDescriptorSets(iris->device, &alloc_info, &iris->shader_descriptor_set) != VK_SUCCESS) {
         fprintf(stderr, "render: Failed to allocate descriptor sets\n");
-
-        return false;
-    }
-
-    if (push_shader(iris, g_encoder_frag_shader_data, g_encoder_frag_shader_size) == false ||
-        push_shader(iris, g_decoder_frag_shader_data, g_decoder_frag_shader_size) == false ||
-        push_shader(iris, g_sharpen_frag_shader_data, g_sharpen_frag_shader_size) == false) {
-        fprintf(stderr, "render: Failed to create default shaders\n");
 
         return false;
     }
@@ -549,9 +341,15 @@ static inline void update_descriptor_set(iris::instance* iris, VkImageView view,
 }
 
 void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, VkImageView& output_view, VkImage& output_image) {
+    if (!iris->shader_passes.size())
+        return;
+
     int i = 0;
 
-    for (const auto& pass : iris->shader_passes) {
+    for (auto& pass : iris->shader_passes) {
+        if (pass.bypass || !pass.ready())
+            continue;
+
         const int fb = i & 1;
         const VkImageView input_view = i == 0 ? iris->image.view : iris->shader_framebuffers[fb ^ 1].view;
 
@@ -560,7 +358,7 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        info.renderPass = pass.render_pass;
+        info.renderPass = pass.get_render_pass();
         info.framebuffer = iris->shader_framebuffers[fb].framebuffer;
         info.renderArea.extent.width = iris->image.width;
         info.renderArea.extent.height = iris->image.height;
@@ -585,11 +383,11 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 
         vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.pipeline);
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.get_pipeline());
 
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindIndexBuffer(command_buffer, iris->index_buffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.pipeline_layout, 0, 1, &iris->shader_descriptor_set, 0, nullptr);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.get_pipeline_layout(), 0, 1, &iris->shader_descriptor_set, 0, nullptr);
 
         VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -610,7 +408,7 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
             .frame = frame
         };
 
-        vkCmdPushConstants(command_buffer, pass.pipeline_layout, VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &constants);
+        vkCmdPushConstants(command_buffer, pass.get_pipeline_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &constants);
 
         vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 
@@ -629,27 +427,27 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
         image = renderer_get_frame(iris->renderer);
     }
 
-    // bool need_rebuild = image.width != iris->image.width ||
-    //                     image.height != iris->image.height ||
-    //                     image.format != iris->image.format;
+    bool need_rebuild = image.width != iris->image.width ||
+                        image.height != iris->image.height ||
+                        image.format != iris->image.format;
 
     iris->image = image;
 
-    // if (need_rebuild && image.view != VK_NULL_HANDLE) {
-    //     if (!rebuild_shaders(iris)) {
-    //         fprintf(stderr, "render: Failed to build shaders\n");
+    if (need_rebuild && image.view != VK_NULL_HANDLE) {
+        for (auto& pass : iris->shader_passes) {
+            pass.rebuild();
+        }
 
-    //         return false;
-    //     }
-    // }
+        rebuild_framebuffers(iris);
+    }
 
     // Process shader passes here
     VkImageView output_view = iris->image.view;
     VkImage output_image = iris->image.image;
 
-    // if (output_view != VK_NULL_HANDLE) {
-    //     render_shader_passes(iris, command_buffer, output_view, output_image);
-    // }
+    if (output_view != VK_NULL_HANDLE) {
+        render_shader_passes(iris, command_buffer, output_view, output_image);
+    }
 
     VkRenderPassBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;

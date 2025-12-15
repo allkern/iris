@@ -164,15 +164,6 @@ struct vertex {
     }
 };
 
-struct shader_pass {
-    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkRenderPass render_pass = VK_NULL_HANDLE;
-    VkImageView input = VK_NULL_HANDLE;
-    VkShaderModule vert_shader = VK_NULL_HANDLE;
-    VkShaderModule frag_shader = VK_NULL_HANDLE;
-};
-
 struct texture {
     int width = 0, height = 0, stride = 0;
     VkDeviceSize image_size = 0;
@@ -182,6 +173,10 @@ struct texture {
     VkDeviceMemory image_memory = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
 };
+
+namespace shaders {
+    class pass;
+}
 
 struct instance {
     SDL_Window* window = nullptr;
@@ -235,7 +230,7 @@ struct instance {
     renderer_image image = {};
 
     // Multipass shader stuff
-    std::vector <shader_pass> shader_passes = {};
+    std::vector <shaders::pass> shader_passes = {};
     VkDescriptorSetLayout shader_descriptor_set_layout = VK_NULL_HANDLE;
     VkDescriptorSet shader_descriptor_set = VK_NULL_HANDLE;
     VkShaderModule default_vert_shader = VK_NULL_HANDLE;
@@ -340,6 +335,7 @@ struct instance {
     bool skip_fmv = false;
     int system = PS2_SYSTEM_AUTO;
     int theme = IRIS_THEME_GRANITE;
+    bool enable_shaders = false;
 
     std::deque <std::string> recents;
 
@@ -398,6 +394,11 @@ struct instance {
     hardware_config hardware_backend_config;
 };
 
+struct push_constants {
+    float resolution[2];
+    int frame;
+};
+
 namespace audio {
     bool init(iris::instance* iris);
     void close(iris::instance* iris);
@@ -410,6 +411,37 @@ namespace settings {
     bool init(iris::instance* iris, int argc, const char* argv[]);
     bool check_for_quick_exit(int argc, const char* argv[]);
     void close(iris::instance* iris);
+}
+
+namespace shaders {
+    class pass {
+        VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
+        VkPipeline m_pipeline = VK_NULL_HANDLE;
+        VkRenderPass m_render_pass = VK_NULL_HANDLE;
+        VkImageView m_input = VK_NULL_HANDLE;
+        VkShaderModule m_vert_shader = VK_NULL_HANDLE;
+        VkShaderModule m_frag_shader = VK_NULL_HANDLE;
+        iris::instance* m_iris = nullptr;
+        std::string m_id = "";
+
+        void destroy();
+
+    public:
+        pass(iris::instance* iris, const void* data, size_t size, std::string id);
+        ~pass();
+
+        VkPipelineLayout& get_pipeline_layout();
+        VkPipeline& get_pipeline();
+        VkRenderPass& get_render_pass();
+        VkImageView& get_input();
+        VkShaderModule& get_vert_shader();
+        VkShaderModule& get_frag_shader();
+        std::string get_id() const;
+
+        bool bypass = false;
+        bool ready();
+        bool rebuild();
+    };
 }
 
 namespace imgui {

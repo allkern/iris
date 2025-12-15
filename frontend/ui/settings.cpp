@@ -43,8 +43,9 @@ int settings_fullscreen_flags[] = {
 const char* settings_buttons[] = {
     " " ICON_MS_DEPLOYED_CODE "  System",
     " " ICON_MS_MONITOR "  Graphics",
+    " " ICON_MS_BRUSH "  Shaders",
     " " ICON_MS_FOLDER "  Paths",
-    " " ICON_MS_SIM_CARD_DOWNLOAD "  Memory cards",
+    " " ICON_MS_SIM_CARD "  Memory cards",
     " " ICON_MS_MORE_HORIZ "  Misc.",
     nullptr
 };
@@ -766,6 +767,40 @@ void show_misc_settings(iris::instance* iris) {
     }
 }
 
+const char* builtin_shader_names[] = {
+    "Encoder",
+    "Decoder",
+    "Sharpen"
+};
+
+void show_shader_settings(iris::instance* iris) {
+    using namespace ImGui;
+
+    static const char* selected_shader = "";
+
+    for (auto& pass : iris->shader_passes) {
+        Text("id=%s\n", pass.get_id().c_str());
+    }
+
+    if (BeginCombo("##combo", selected_shader)) {
+        for (int i = 0; i < 6; i++) {
+            if (Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
+                selected_shader = builtin_shader_names[i];
+            }
+        }
+
+        EndCombo();
+    } SameLine();
+
+    if (Button(ICON_MS_ADD)) {
+        std::string shader(selected_shader);
+
+        if (shader == "Encoder") {
+            // shaders::pass pass(iris, )
+        }
+    }
+}
+
 void show_settings(iris::instance* iris) {
     using namespace ImGui;
 
@@ -802,10 +837,10 @@ void show_settings(iris::instance* iris) {
             switch (selected_settings) {
                 case 0: show_system_settings(iris); break;
                 case 1: show_graphics_settings(iris); break;
-                case 2: show_paths_settings(iris); break;
-                case 3: show_memory_card_settings(iris); break;
-                case 4: show_misc_settings(iris); break;
-                // case 5: show_shader_settings(iris); break;
+                case 2: show_shader_settings(iris); break;
+                case 3: show_paths_settings(iris); break;
+                case 4: show_memory_card_settings(iris); break;
+                case 5: show_misc_settings(iris); break;
             }
         } EndChild();
 

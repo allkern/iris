@@ -95,6 +95,7 @@ target_sources(iris PRIVATE
     frontend/imgui.cpp
     frontend/emu.cpp
     frontend/render.cpp
+    frontend/shaders.cpp
     frontend/input.cpp
     frontend/iris.cpp
     frontend/elf.cpp
