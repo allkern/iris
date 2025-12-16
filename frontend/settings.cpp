@@ -126,6 +126,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->screenshot_jpg_quality_mode = screenshots["jpg_quality_mode"].value_or(IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM);
     iris->screenshot_jpg_quality = screenshots["jpg_quality"].value_or(50);
     iris->screenshot_mode = screenshots["mode"].value_or(IRIS_SCREENSHOT_MODE_INTERNAL);
+    iris->screenshot_shader_processing = screenshots["shader_processing"].value_or(false);
 
     auto hardware = tbl["hardware"];
     iris->hardware_backend_config.super_sampling = hardware["super_sampling"].value_or(0);
@@ -334,7 +335,8 @@ void close(iris::instance* iris) {
             { "format", iris->screenshot_format },
             { "mode", iris->screenshot_mode },
             { "jpg_quality_mode", iris->screenshot_jpg_quality_mode },
-            { "jpg_quality", iris->screenshot_jpg_quality }
+            { "jpg_quality", iris->screenshot_jpg_quality },
+            { "shader_processing", iris->screenshot_shader_processing }
         } },
 
         // To-do: Change this to "backends" and use dotted entries

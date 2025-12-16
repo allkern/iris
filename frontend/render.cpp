@@ -11,9 +11,6 @@
 #include "incbin.h"
 
 INCBIN(default_vertex_shader, "../shaders/shader.spv");
-INCBIN(encoder_frag_shader, "../shaders/encoder.spv");
-INCBIN(decoder_frag_shader, "../shaders/decoder.spv");
-INCBIN(sharpen_frag_shader, "../shaders/sharpen.spv");
 
 namespace iris::render {
 
@@ -94,6 +91,11 @@ bool rebuild_framebuffers(iris::instance* iris) {
         return true;
 
     for (auto& fb : iris->shader_framebuffers) {
+        if (fb.framebuffer) vkDestroyFramebuffer(iris->device, fb.framebuffer, nullptr);
+        if (fb.view) vkDestroyImageView(iris->device, fb.view, nullptr);
+        if (fb.image) vkDestroyImage(iris->device, fb.image, nullptr);
+        if (fb.memory) vkFreeMemory(iris->device, fb.memory, nullptr);
+
         bool res = create_image(iris,
             iris->image.width,
             iris->image.height,
@@ -136,6 +138,8 @@ bool rebuild_framebuffers(iris::instance* iris) {
 }
 
 bool init(iris::instance* iris) {
+    iris->shader_passes.reserve(RENDER_MAX_SHADER_PASSES);
+
     // Initialize our renderer
     iris->renderer = renderer_create();
 
@@ -347,6 +351,11 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
     if (!iris->shader_passes.size())
         return;
 
+    if (iris->shader_framebuffers[0].framebuffer == VK_NULL_HANDLE ||
+        iris->shader_framebuffers[1].framebuffer == VK_NULL_HANDLE) {
+        rebuild_framebuffers(iris);
+    }
+
     int i = 0;
 
     for (auto& pass : iris->shader_passes) {
@@ -437,19 +446,19 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     iris->image = image;
 
     if (need_rebuild && image.view != VK_NULL_HANDLE) {
+        vkDeviceWaitIdle(iris->device);
+        vkQueueWaitIdle(iris->queue);
+
         for (auto& pass : iris->shader_passes) {
             pass.rebuild();
         }
-
-        rebuild_framebuffers(iris);
     }
 
     // Process shader passes here
-    VkImageView output_view = iris->image.view;
-    VkImage output_image = iris->image.image;
+    iris->output_image = iris->image;
 
-    if (output_view != VK_NULL_HANDLE) {
-        render_shader_passes(iris, command_buffer, output_view, output_image);
+    if (iris->output_image.view != VK_NULL_HANDLE) {
+        render_shader_passes(iris, command_buffer, iris->output_image.view, iris->output_image.image);
     }
 
     VkRenderPassBeginInfo info = {};
@@ -461,16 +470,16 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     info.clearValueCount = 1;
     info.pClearValues = &iris->clear_value;
 
-    if (output_view != VK_NULL_HANDLE) {
+    if (iris->output_image.view != VK_NULL_HANDLE) {
         update_vertex_buffer(iris, command_buffer);
-        update_descriptor_set(iris, output_view, iris->sampler);
+        update_descriptor_set(iris, iris->output_image.view, iris->sampler);
     }
 
     vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->pipeline);
 
-    if (output_view != VK_NULL_HANDLE) {
+    if (iris->output_image.view != VK_NULL_HANDLE) {
         VkDeviceSize offsets[] = { 0 };
 
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &iris->vertex_buffer, offsets);
@@ -492,7 +501,7 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     scissor.extent = { (uint32_t)iris->main_window_data.Width, (uint32_t)iris->main_window_data.Height };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    if (output_view != VK_NULL_HANDLE) {
+    if (iris->output_image.view != VK_NULL_HANDLE) {
         vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
     }
 
@@ -543,9 +552,44 @@ void refresh(iris::instance* iris) {
     }
 
     iris->image = renderer_get_frame(iris->renderer);
+
+    if (iris->image.view == VK_NULL_HANDLE)
+        return;
+
+    if (iris->shader_passes.size() == 0)
+        return;
+
+    vkDeviceWaitIdle(iris->device);
+    vkQueueWaitIdle(iris->queue);
+
+    for (auto& pass : iris->shader_passes) {
+        pass.rebuild();
+    }
+
+    rebuild_framebuffers(iris);
 }
 
 void destroy(iris::instance* iris) {
+    vkDeviceWaitIdle(iris->device);
+    vkQueueWaitIdle(iris->queue);
+
+    for (auto& fb : iris->shader_framebuffers) {
+        if (fb.framebuffer) vkDestroyFramebuffer(iris->device, fb.framebuffer, nullptr);
+        if (fb.view) vkDestroyImageView(iris->device, fb.view, nullptr);
+        if (fb.image) vkDestroyImage(iris->device, fb.image, nullptr);
+        if (fb.memory) vkFreeMemory(iris->device, fb.memory, nullptr);
+    }
+
+    if (iris->shader_descriptor_set_layout) {
+        vkDestroyDescriptorSetLayout(iris->device, iris->shader_descriptor_set_layout, nullptr);
+    }
+
+    if (iris->default_vert_shader) {
+        vkDestroyShaderModule(iris->device, iris->default_vert_shader, nullptr);
+    }
+
+    iris->shader_passes.clear();
+
     renderer_destroy(iris->renderer);
 }
 

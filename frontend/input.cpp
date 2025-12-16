@@ -104,15 +104,17 @@ bool save_screenshot(iris::instance* iris, std::string path = "") {
     int width = 0, height = 0, offset = 0;
 
     if (iris->screenshot_mode == IRIS_SCREENSHOT_MODE_INTERNAL) {
+        renderer_image* image = iris->screenshot_shader_processing ? &iris->output_image : &iris->image;
+
         ptr = vulkan::read_image(iris,
-            iris->image.image,
-            iris->image.format,
-            iris->image.width,
-            iris->image.height
+            image->image,
+            image->format,
+            image->width,
+            image->height
         );
 
-        width = iris->image.width;
-        height = iris->image.height;
+        width = image->width;
+        height = image->height;
     } else {
         ptr = vulkan::read_image(iris,
             iris->main_window_data.Frames[0].Backbuffer,

@@ -228,6 +228,7 @@ struct instance {
     std::array <vertex, 4> vertices = {};
     std::array <uint16_t, 6> indices = {};
     renderer_image image = {};
+    renderer_image output_image = {};
 
     // Multipass shader stuff
     std::vector <shaders::pass> shader_passes = {};
@@ -356,6 +357,7 @@ struct instance {
     int screenshot_jpg_quality_mode = IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM;
     int screenshot_jpg_quality = 50;
     int screenshot_mode = IRIS_SCREENSHOT_MODE_INTERNAL;
+    bool screenshot_shader_processing = false;
 
     bool limit_fps = true;
     float fps_cap = 60.0f;
@@ -424,10 +426,12 @@ namespace shaders {
         iris::instance* m_iris = nullptr;
         std::string m_id = "";
 
-        void destroy();
-
     public:
+        void destroy();
+        bool init(iris::instance* iris, const void* data, size_t size, std::string id);
+
         pass(iris::instance* iris, const void* data, size_t size, std::string id);
+        pass() = default;
         ~pass();
 
         VkPipelineLayout& get_pipeline_layout();

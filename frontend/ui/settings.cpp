@@ -7,6 +7,16 @@
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 
+// INCBIN stuff
+#define INCBIN_PREFIX g_
+#define INCBIN_STYLE INCBIN_STYLE_SNAKE
+
+#include "incbin.h"
+
+INCBIN(encoder_frag_shader, "../shaders/encoder.spv");
+INCBIN(decoder_frag_shader, "../shaders/decoder.spv");
+INCBIN(sharpen_frag_shader, "../shaders/sharpen.spv");
+
 namespace iris {
 
 bool hovered = false;
@@ -45,7 +55,7 @@ const char* settings_buttons[] = {
     " " ICON_MS_MONITOR "  Graphics",
     " " ICON_MS_BRUSH "  Shaders",
     " " ICON_MS_FOLDER "  Paths",
-    " " ICON_MS_SIM_CARD "  Memory cards",
+    " " ICON_MS_SD_CARD "  Memory cards",
     " " ICON_MS_MORE_HORIZ "  Misc.",
     nullptr
 };
@@ -147,15 +157,6 @@ void show_hardware_renderer_settings(iris::instance* iris) {
 
         EndCombo();
     }
-
-	int super_sampling;
-	bool force_progressive;
-	bool overscan;
-	bool crtc_offsets;
-    bool disable_mipmaps;
-	bool unsynced_readbacks;
-	bool backbuffer_promotion;
-	bool allow_blend_demote;
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     BeginDisabled(iris->hardware_backend_config.super_sampling != 0);
@@ -765,6 +766,10 @@ void show_misc_settings(iris::instance* iris) {
             SliderInt("Quality##jpgqualitycustom", &iris->screenshot_jpg_quality, 1, 100, "%d", ImGuiSliderFlags_AlwaysClamp);
         }
     }
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox(" Include shader processing", &iris->screenshot_shader_processing);
+    PopStyleVar();
 }
 
 const char* builtin_shader_names[] = {
@@ -778,12 +783,27 @@ void show_shader_settings(iris::instance* iris) {
 
     static const char* selected_shader = "";
 
+    int i = 0;
+
     for (auto& pass : iris->shader_passes) {
-        Text("id=%s\n", pass.get_id().c_str());
+        Text("%s\n", pass.get_id().c_str());
+        SameLine();
+
+        char id[16];
+
+        sprintf(id, ICON_MS_DELETE "##%d", i);
+
+        if (SmallButton(id)) {
+            iris->shader_passes.erase(iris->shader_passes.begin() + i);
+
+            break;
+        }
+
+        i++;
     }
 
     if (BeginCombo("##combo", selected_shader)) {
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < 3; i++) {
             if (Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
                 selected_shader = builtin_shader_names[i];
             }
@@ -795,8 +815,16 @@ void show_shader_settings(iris::instance* iris) {
     if (Button(ICON_MS_ADD)) {
         std::string shader(selected_shader);
 
+        iris->shader_passes.emplace_back();
+
+        auto& pass = iris->shader_passes.back();
+
         if (shader == "Encoder") {
-            // shaders::pass pass(iris, )
+            pass.init(iris, g_encoder_frag_shader_data, g_encoder_frag_shader_size, "Encoder");
+        } else if (shader == "Decoder") {
+            pass.init(iris, g_decoder_frag_shader_data, g_decoder_frag_shader_size, "Decoder");
+        } else if (shader == "Sharpen") {
+            pass.init(iris, g_sharpen_frag_shader_data, g_sharpen_frag_shader_size, "Sharpen");
         }
     }
 }

@@ -9,7 +9,8 @@
 
 namespace iris::shaders {
 
-pass::pass(iris::instance* iris, const void* data, size_t size, std::string id) {
+bool pass::init(iris::instance* iris, const void* data, size_t size, std::string id) {
+    m_vert_shader = iris->default_vert_shader;
     m_iris = iris;
     m_id = id;
 
@@ -20,7 +21,15 @@ pass::pass(iris::instance* iris, const void* data, size_t size, std::string id) 
 
     if (vkCreateShaderModule(m_iris->device, &create_info, nullptr, &m_frag_shader) != VK_SUCCESS) {
         fprintf(stderr, "render: Failed to create fragment shader module\n");
+
+        return false;
     }
+
+    return rebuild();
+}
+
+pass::pass(iris::instance* iris, const void* data, size_t size, std::string id) {
+    init(iris, data, size, id);
 }
 
 void pass::destroy() {
@@ -38,7 +47,9 @@ pass::~pass() {
 }
 
 bool pass::rebuild() {
-    destroy();
+    if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->device, m_pipeline_layout, nullptr);
+    if (m_pipeline) vkDestroyPipeline(m_iris->device, m_pipeline, nullptr);
+    if (m_render_pass) vkDestroyRenderPass(m_iris->device, m_render_pass, nullptr);
 
     VkPushConstantRange push_constant_range = {};
     push_constant_range.offset = 0;
@@ -224,7 +235,6 @@ bool pass::ready() {
     return m_pipeline_layout &&
            m_pipeline &&
            m_render_pass &&
-           m_input &&
            m_vert_shader &&
            m_frag_shader &&
            m_iris;

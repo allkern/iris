@@ -148,18 +148,17 @@ renderer_image hardware_get_frame(void* udata) {
 
 	if (ctx->config.super_sampling) {
 		info.phase = 0;
-		info.force_progressive = true;
 		info.raw_circuit_scanout = true;
 		info.high_resolution_scanout = true;
 		info.anti_blur = true;
 	} else {
 		info.phase = ctx->config.force_progressive ? 0 : (ctx->gs->csr & (1 << 13) ? 0 : 1);
-		info.force_progressive = ctx->config.force_progressive;
 		info.raw_circuit_scanout = false;
 		info.high_resolution_scanout = false;
 		info.anti_blur = false;
 	}
 
+	info.force_progressive = ctx->config.force_progressive;
 	info.overscan = ctx->config.overscan;
 	info.crtc_offsets = ctx->config.crtc_offsets;
 	info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
