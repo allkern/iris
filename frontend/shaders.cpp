@@ -32,7 +32,61 @@ pass::pass(iris::instance* iris, const void* data, size_t size, std::string id) 
     init(iris, data, size, id);
 }
 
+pass::pass(pass&& other) {
+    m_pipeline_layout = other.m_pipeline_layout;
+    m_pipeline = other.m_pipeline;
+    m_render_pass = other.m_render_pass;
+    m_input = other.m_input;
+    m_vert_shader = other.m_vert_shader;
+    m_frag_shader = other.m_frag_shader;
+    m_iris = other.m_iris;
+    m_id = other.m_id;
+    bypass = other.bypass;
+
+    other.m_pipeline_layout = VK_NULL_HANDLE;
+    other.m_pipeline = VK_NULL_HANDLE;
+    other.m_render_pass = VK_NULL_HANDLE;
+    other.m_input = VK_NULL_HANDLE;
+    other.m_vert_shader = VK_NULL_HANDLE;
+    other.m_frag_shader = VK_NULL_HANDLE;
+    other.m_iris = nullptr;
+    other.m_id = "";
+    other.bypass = false;
+}
+
+pass& pass::operator=(pass&& other) {
+    if (this != &other) {
+        m_pipeline_layout = other.m_pipeline_layout;
+        m_pipeline = other.m_pipeline;
+        m_render_pass = other.m_render_pass;
+        m_input = other.m_input;
+        m_vert_shader = other.m_vert_shader;
+        m_frag_shader = other.m_frag_shader;
+        m_iris = other.m_iris;
+        m_id = other.m_id;
+        bypass = other.bypass;
+    }
+
+    other.m_pipeline_layout = VK_NULL_HANDLE;
+    other.m_pipeline = VK_NULL_HANDLE;
+    other.m_render_pass = VK_NULL_HANDLE;
+    other.m_input = VK_NULL_HANDLE;
+    other.m_vert_shader = VK_NULL_HANDLE;
+    other.m_frag_shader = VK_NULL_HANDLE;
+    other.m_iris = nullptr;
+    other.m_id = "";
+    other.bypass = false;
+
+    return *this;
+}
+
 void pass::destroy() {
+    if (!m_iris)
+        return;
+
+    vkQueueWaitIdle(m_iris->queue);
+    vkDeviceWaitIdle(m_iris->device);
+
     if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->device, m_pipeline_layout, nullptr);
     if (m_pipeline) vkDestroyPipeline(m_iris->device, m_pipeline, nullptr);
     if (m_render_pass) vkDestroyRenderPass(m_iris->device, m_render_pass, nullptr);
@@ -47,6 +101,9 @@ pass::~pass() {
 }
 
 bool pass::rebuild() {
+    vkQueueWaitIdle(m_iris->queue);
+    vkDeviceWaitIdle(m_iris->device);
+
     if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->device, m_pipeline_layout, nullptr);
     if (m_pipeline) vkDestroyPipeline(m_iris->device, m_pipeline, nullptr);
     if (m_render_pass) vkDestroyRenderPass(m_iris->device, m_render_pass, nullptr);

@@ -90,6 +90,9 @@ bool rebuild_framebuffers(iris::instance* iris) {
     if (!iris->shader_passes.size())
         return true;
 
+    vkDeviceWaitIdle(iris->device);
+    vkQueueWaitIdle(iris->queue);
+
     for (auto& fb : iris->shader_framebuffers) {
         if (fb.framebuffer) vkDestroyFramebuffer(iris->device, fb.framebuffer, nullptr);
         if (fb.view) vkDestroyImageView(iris->device, fb.view, nullptr);
@@ -457,7 +460,7 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     // Process shader passes here
     iris->output_image = iris->image;
 
-    if (iris->output_image.view != VK_NULL_HANDLE) {
+    if (iris->output_image.view != VK_NULL_HANDLE && !iris->pause) {
         render_shader_passes(iris, command_buffer, iris->output_image.view, iris->output_image.image);
     }
 

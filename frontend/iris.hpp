@@ -431,8 +431,11 @@ namespace shaders {
         bool init(iris::instance* iris, const void* data, size_t size, std::string id);
 
         pass(iris::instance* iris, const void* data, size_t size, std::string id);
+        pass(pass&& other);
         pass() = default;
         ~pass();
+
+        pass& operator=(pass&& other);
 
         VkPipelineLayout& get_pipeline_layout();
         VkPipeline& get_pipeline();
