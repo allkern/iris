@@ -492,6 +492,10 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_about_window = true;
             }
 
+            if (MenuItem(ICON_MS_EXCLAMATION " Report an issue")) {
+                SDL_OpenURL("https://github.com/allkern/iris/issues/new");
+            }
+
             ImGui::EndMenu();
         }
 
