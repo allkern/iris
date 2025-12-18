@@ -7,6 +7,7 @@
 #include "disc/iso.h"
 #include "disc/cue.h"
 #include "disc/chd.h"
+#include "disc/ciso.h"
 #include "disc/bin.h"
 
 #ifdef _MSC_VER
@@ -58,6 +59,8 @@ static const char* disc_extensions[] = {
     "bin",
     "cue",
     "chd",
+    "cso",
+    "zso",
     NULL
 };
 
@@ -246,6 +249,21 @@ struct disc_state* disc_open(const char* path) {
             s->get_track_number = chd_get_track_number;
 
             r = chd_init(chd, path);
+        } break;
+
+        case DISC_EXT_CSO:
+        case DISC_EXT_ZSO: {
+            struct disc_ciso* ciso = ciso_create();
+
+            s->udata = ciso;
+            s->read_sector = ciso_read_sector;
+            s->get_size = ciso_get_size;
+            s->get_sector_size = ciso_get_sector_size;
+            s->get_track_count = ciso_get_track_count;
+            s->get_track_info = ciso_get_track_info;
+            s->get_track_number = ciso_get_track_number;
+
+            r = ciso_init(ciso, path);
         } break;
 
         default: {

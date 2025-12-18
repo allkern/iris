@@ -27,3 +27,9 @@
 [submodule "portable-file-dialogs"]
 	path = deps/portable-file-dialogs
 	url = https://github.com/samhocevar/portable-file-dialogs
+[submodule "deps/libdeflate"]
+	path = deps/libdeflate
+	url = https://github.com/ebiggers/libdeflate
+[submodule "deps/lz4"]
+	path = deps/lz4
+	url = https://github.com/lz4/lz4

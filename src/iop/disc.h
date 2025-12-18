@@ -26,8 +26,10 @@ extern "C" {
 #define DISC_EXT_BIN 1
 #define DISC_EXT_CUE 2
 #define DISC_EXT_CHD 3
-#define DISC_EXT_NONE 4
-#define DISC_EXT_UNSUPPORTED 5
+#define DISC_EXT_CSO 4
+#define DISC_EXT_ZSO 5
+#define DISC_EXT_NONE 6
+#define DISC_EXT_UNSUPPORTED 7
 
 #define DISC_MEDIA_CD 0
 #define DISC_MEDIA_DVD 1

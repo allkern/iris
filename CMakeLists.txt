@@ -57,6 +57,7 @@ target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
 
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
+add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
 add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
@@ -167,6 +168,7 @@ target_sources(iris PRIVATE
     src/iop/disc/bin.c
     src/iop/disc/cue.c
     src/iop/disc/chd.c
+    src/iop/disc/ciso.c
     src/iop/disc/iso.c
     src/iop/hle/ioman.cpp
     src/iop/hle/loadcore.c
@@ -203,6 +205,7 @@ target_sources(iris PRIVATE
     deps/implot/implot_demo.cpp
     deps/implot/implot_items.cpp
     deps/implot/implot.cpp
+    deps/lz4/lib/lz4.c
 )
 
 target_include_directories(iris PRIVATE
@@ -213,6 +216,7 @@ target_include_directories(iris PRIVATE
     deps/incbin
     deps/parallel-gs
     deps/libchdr/include
+    deps/lz4/lib
     deps/stb
     deps/portable-file-dialogs
     frontend
@@ -221,6 +225,7 @@ target_include_directories(iris PRIVATE
 )
 
 target_link_libraries(iris PUBLIC
+    libdeflate::libdeflate_static
     tomlplusplus::tomlplusplus
     SDL3::SDL3-static
     parallel-gs

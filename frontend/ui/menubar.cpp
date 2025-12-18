@@ -50,14 +50,15 @@ void show_main_menubar(iris::instance* iris) {
                 audio::mute(iris);
 
                 auto f = pfd::open_file("Select a file to load", "", {
-                    "All File Types (*.iso; *.bin; *.cue; *.chd; *.elf)", "*.iso *.bin *.cue *.chd *.elf",
-                    "Disc Images (*.iso; *.bin; *.cue; *.chd)", "*.iso *.bin *.cue *.chd",
+                    "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.elf)", "*.iso *.bin *.cue *.chd *.cso *.zso *.elf",
+                    "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
                     "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
-                    "DVD Images (*.iso; *.chd)", "*.iso *.chd",
+                    "DVD Images (*.iso; *.chd; *.cso; *.zso)", "*.iso *.chd *.cso *.zso",
                     "ISO Files (*.iso)", "*.iso",
                     "CUE Files (*.cue)", "*.cue",
                     "BIN Files (*.bin)", "*.bin",
                     "CHD Files (*.chd)", "*.chd",
+                    "CSO/ZSO Files (*.cso; *.zso)", "*.cso *.zso",
                     "ELF Executables (*.elf)", "*.elf",
                     "All Files (*.*)", "*"
                 });
@@ -201,13 +202,14 @@ void show_main_menubar(iris::instance* iris) {
                 audio::mute(iris);
 
                 auto f = pfd::open_file("Select CD/DVD image", "", {
-                    "Disc Images (*.iso; *.bin; *.cue; *.chd)", "*.iso *.bin *.cue *.chd",
+                    "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
                     "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
-                    "DVD Images (*.iso; *.chd)", "*.iso *.chd",
+                    "DVD Images (*.iso; *.chd; *.cso; *.zso)", "*.iso *.chd *.cso *.zso",
                     "ISO Files (*.iso)", "*.iso",
                     "CUE Files (*.cue)", "*.cue",
                     "BIN Files (*.bin)", "*.bin",
                     "CHD Files (*.chd)", "*.chd",
+                    "CSO/ZSO Files (*.cso; *.zso)", "*.cso *.zso",
                     "All Files (*.*)", "*"
                 });
 
