@@ -127,6 +127,37 @@ void show_system_settings(iris::instance* iris) {
 
         EndTable();
     }
+
+    Text("\nTimescale");
+
+    char buf[16];
+
+    sprintf(buf, "%dx", iris->timescale);
+
+    if (BeginCombo("##timescale", buf)) {
+        for (int i = 0; i < 9; i++) {
+            char buf[16]; snprintf(buf, 16, "%dx", 1 << i);
+
+            if (Selectable(buf, iris->timescale == (1 << i))) {
+                iris->timescale = (1 << i);
+
+                ps2_set_timescale(iris->ps2, iris->timescale);
+            }
+        }
+
+        EndCombo();
+    }
+
+    if (BeginTable("##effective-clock", 2, ImGuiTableFlags_SizingFixedSame)) {
+        TableNextRow();
+
+        TableSetColumnIndex(0);
+        TextDisabled("Effective frequency");
+        TableSetColumnIndex(1);
+        Text("%.3f MHz", 294.912f / iris->timescale);
+
+        EndTable();
+    }
 }
 
 const char* ssaa_names[] = {
@@ -566,6 +597,8 @@ void show_memory_card(iris::instance* iris, int slot) {
 
         if (iris->mcd_slot_type[slot] == 2) {
             tex = &iris->ps1_memory_card_icon;
+        } else if (iris->mcd_slot_type[slot] == 3) {
+            tex = &iris->pocketstation_icon;
         }
 
         SetCursorPosX((GetContentRegionAvail().x / 2.0) - (tex->width / 2.0));
@@ -616,7 +649,7 @@ void show_memory_card(iris::instance* iris, int slot) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->pref_path, {
-                "Memory Card files (*.ps2; *.mcd; *.bin)", "*.ps2 *.mcd *.bin",
+                "Memory Card files (*.ps2; *.mcd; *.bin; *.psm; *.pocket)", "*.ps2 *.mcd *.bin *.psm *.pocket",
                 "All Files (*.*)", "*"
             });
 

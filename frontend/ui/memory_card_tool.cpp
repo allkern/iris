@@ -76,9 +76,16 @@ void show_memory_card_tool(iris::instance* iris) {
 
             audio::mute(iris);
 
-            auto f = pfd::save_file("Save Memory Card image", iris->pref_path + "image.mcd", {
+            std::string default_path = iris->pref_path + "image.mcd";
+
+            if (type == MEMCARD_TYPE_POCKETSTATION) {
+                default_path = iris->pref_path + "image.psm";
+            }
+
+            auto f = pfd::save_file("Save Memory Card image", default_path, {
                 "Iris Memory Card Image (*.mcd)", "*.mcd",
                 "PCSX2 Memory Card Image (*.ps2)", "*.ps2",
+                "PocketStation Image (*.psm; *.pocket)", "*.psm *.pocket",
                 "All Files (*.*)", "*"
             });
 
@@ -96,6 +103,12 @@ void show_memory_card_tool(iris::instance* iris) {
                 fseek(file, 0, SEEK_SET);
                 fwrite(buf, size_in_bytes, 1, file);
                 fclose(file);
+
+                char msg[1024];
+
+                sprintf(msg, "Created memory card image: \"%s\"", f.result().c_str());
+
+                push_info(iris, std::string(msg));
 
                 free(buf);
             }

@@ -135,12 +135,21 @@ void ps1_mcd_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
         case 0x52: ps1_mcd_cmd_read(sio2, mcd); return;
         case 0x53: ps1_mcd_cmd_get_id(sio2, mcd); return;
         case 0x57: ps1_mcd_cmd_write(sio2, mcd); return;
-        // case 0x58: ps1_mcd_cmd_detect_pocketstation(sio2, mcd); return;
+        case 0x58: {
+            if (mcd->type == 0)
+                break;
+
+            ps1_mcd_cmd_detect_pocketstation(sio2, mcd); return;
+        }
     }
 
     sio2->recv1 |= 0x2000;
 
     ps1_mcd_cmd_invalid(sio2, mcd);
+}
+
+void ps1_mcd_set_type(struct ps1_mcd_state* mcd, int type) {
+    mcd->type = type;
 }
 
 struct ps1_mcd_state* ps1_mcd_attach(struct ps2_sio2* sio2, int port, const char* path) {

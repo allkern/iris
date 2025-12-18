@@ -20,6 +20,15 @@ void destroy(iris::instance* iris) {
     ps2_destroy(iris->ps2);
 }
 
+const char* get_extension(const char* path) {
+    const char* dot = strrchr(path, '.');
+
+    if (!dot || dot == path)
+        return nullptr;
+
+    return dot + 1;
+}
+
 int attach_memory_card(iris::instance* iris, int slot, const char* path) {
     detach_memory_card(iris, slot);
 
@@ -34,9 +43,19 @@ int attach_memory_card(iris::instance* iris, int slot, const char* path) {
     fclose(file);
 
     if (size < 0x800000) {
-        ps1_mcd_attach(iris->ps2->sio2, slot+2, path);
+        struct ps1_mcd_state* mcd = ps1_mcd_attach(iris->ps2->sio2, slot+2, path);
 
-        iris->mcd_slot_type[slot] = 2;
+        std::string ext = get_extension(path);
+
+        if (ext == "psm" || ext == "pocket") {
+            ps1_mcd_set_type(mcd, 1);
+
+            iris->mcd_slot_type[slot] = 3;
+        } else {
+            ps1_mcd_set_type(mcd, 0);
+
+            iris->mcd_slot_type[slot] = 2;
+        }
 
         return 1;
     }
