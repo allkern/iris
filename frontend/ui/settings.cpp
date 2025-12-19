@@ -818,23 +818,57 @@ void show_shader_settings(iris::instance* iris) {
 
     int i = 0;
 
-    for (auto& pass : iris->shader_passes) {
-        Text("%s\n", pass.get_id().c_str());
-        SameLine();
+    if (BeginTable("##shaders", 1, ImGuiTableFlags_SizingFixedSame | ImGuiTableFlags_RowBg)) {
+        for (int i = 0; i < iris->shader_passes.size(); i++) {
+            TableNextRow();
 
-        char id[16];
+            char up[16];
+            char down[16];
+            char del[16];
 
-        sprintf(id, ICON_MS_DELETE "##%d", i);
+            sprintf(up, ICON_MS_ARROW_UPWARD "##%d", i);
+            sprintf(down, ICON_MS_ARROW_DOWNWARD "##%d", i);
+            sprintf(del, ICON_MS_DELETE "##%d", i);
 
-        if (SmallButton(id)) {
-            iris->shader_passes.erase(iris->shader_passes.begin() + i);
+            TableSetColumnIndex(0);
+            // BeginDisabled(i == 0);
+            // if (SmallButton(up)) {
+            //     iris->shader_passes[i].swap(iris->shader_passes.at(i-1));
+            // } SameLine();
+            // EndDisabled();
+            // BeginDisabled(i == (iris->shader_passes.size() - 1));
+            // if (SmallButton(down)) {
+            //     iris->shader_passes[i].swap(iris->shader_passes.at(i+1));
+            // } SameLine();
+            // EndDisabled();
+            if (SmallButton(del)) {
+                iris->shader_passes.erase(iris->shader_passes.begin() + i);
 
-            break;
+                break;
+            } SameLine();
+            Selectable(iris->shader_passes[i].get_id().c_str());
+
+            if (BeginDragDropSource()) {
+                SetDragDropPayload("SHADER_DND_PAYLOAD", &iris->shader_passes[i], sizeof(shaders::pass));
+
+                EndDragDropSource();
+            }
+
+            if (BeginDragDropTarget()) {
+                if (const ImGuiPayload* payload = AcceptDragDropPayload("SHADER_DND_PAYLOAD")) {
+                    shaders::pass* pass = (shaders::pass*)payload->Data;
+
+                    pass->swap(iris->shader_passes.at(i));
+                }
+
+                EndDragDropTarget();
+            }
         }
 
-        i++;
+        EndTable();
     }
 
+    Text("Add shader");
     if (BeginCombo("##combo", selected_shader)) {
         for (int i = 0; i < 3; i++) {
             if (Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
@@ -858,6 +892,8 @@ void show_shader_settings(iris::instance* iris) {
             pass.init(iris, g_decoder_frag_shader_data, g_decoder_frag_shader_size, "Decoder");
         } else if (shader == "Sharpen") {
             pass.init(iris, g_sharpen_frag_shader_data, g_sharpen_frag_shader_size, "Sharpen");
+        } else if (shader == "Custom") {
+            // Open file dialog
         }
     }
 }
