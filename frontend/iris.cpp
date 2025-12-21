@@ -429,6 +429,11 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         return false;
     }
 
+    for (const std::string& s : iris->shader_passes_pending)
+        shaders::push(iris, s);
+
+    iris->shader_passes_pending.clear();
+
     // Sadly we need to start a frame here to measure menubar height
     ImGui_ImplVulkan_NewFrame();
     ImGui_ImplSDL3_NewFrame();
@@ -558,8 +563,8 @@ void destroy(iris::instance* iris) {
     SDL_HideWindow(iris->window);
 
     iris::audio::close(iris);
-    iris::render::destroy(iris);
     iris::settings::close(iris);
+    iris::render::destroy(iris);
     iris::imgui::cleanup(iris);
     iris::vulkan::cleanup(iris);
     iris::platform::destroy(iris);

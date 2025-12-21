@@ -87,7 +87,7 @@ bool create_image(iris::instance* iris, uint32_t width, uint32_t height, VkForma
 }
 
 bool rebuild_framebuffers(iris::instance* iris) {
-    if (!iris->shader_passes.size())
+    if (!shaders::count(iris))
         return true;
 
     vkDeviceWaitIdle(iris->device);
@@ -122,8 +122,8 @@ bool rebuild_framebuffers(iris::instance* iris) {
         // to use this framebuffer in the specified renderpass, but in reality we can
         // use this framebuffer in any renderpass that's **compatible** with the one
         // we're specifying here. "compatible" as defined here:
-        // https://docs.vulkan.org/spec/latest/chapters/renderpass.get_html()#renderpass-compatibility
-        framebuffer_info.renderPass = iris->shader_passes[0].get_render_pass();
+        // https://docs.vulkan.org/spec/latest/chapters/renderpass.html#renderpass-compatibility
+        framebuffer_info.renderPass = shaders::front(iris)->get_render_pass();
         framebuffer_info.attachmentCount = 1;
         framebuffer_info.pAttachments = &fb.view;
         framebuffer_info.width = iris->image.width;
@@ -141,8 +141,6 @@ bool rebuild_framebuffers(iris::instance* iris) {
 }
 
 bool init(iris::instance* iris) {
-    iris->shader_passes.reserve(RENDER_MAX_SHADER_PASSES);
-
     // Initialize our renderer
     iris->renderer = renderer_create();
 
@@ -169,22 +167,60 @@ bool init(iris::instance* iris) {
         return false;
     }
 
-    VkSamplerCreateInfo sampler_info = {};
-    sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-    sampler_info.magFilter = VK_FILTER_LINEAR;
-    sampler_info.minFilter = VK_FILTER_LINEAR;
-    sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-    sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-    sampler_info.minLod = -1000;
-    sampler_info.maxLod = 1000;
-    sampler_info.maxAnisotropy = 1.0f;
+    VkSamplerCreateInfo nearest_sampler_info = {};
+    nearest_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    nearest_sampler_info.magFilter = VK_FILTER_NEAREST;
+    nearest_sampler_info.minFilter = VK_FILTER_NEAREST;
+    nearest_sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    nearest_sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    nearest_sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    nearest_sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    nearest_sampler_info.minLod = -1000;
+    nearest_sampler_info.maxLod = 1000;
+    nearest_sampler_info.maxAnisotropy = 1.0f;
 
-    if (vkCreateSampler(iris->device, &sampler_info, VK_NULL_HANDLE, &iris->sampler) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create texture sampler\n");
+    if (vkCreateSampler(iris->device, &nearest_sampler_info, VK_NULL_HANDLE, &iris->sampler[0]) != VK_SUCCESS) {
+        fprintf(stderr, "render: Failed to create nearest texture sampler\n");
 
         return false;
+    }
+
+    VkSamplerCreateInfo bilinear_sampler_info = {};
+    bilinear_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    bilinear_sampler_info.magFilter = VK_FILTER_LINEAR;
+    bilinear_sampler_info.minFilter = VK_FILTER_LINEAR;
+    bilinear_sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+    bilinear_sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    bilinear_sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    bilinear_sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    bilinear_sampler_info.minLod = -1000;
+    bilinear_sampler_info.maxLod = 1000;
+    bilinear_sampler_info.maxAnisotropy = 1.0f;
+
+    if (vkCreateSampler(iris->device, &bilinear_sampler_info, VK_NULL_HANDLE, &iris->sampler[1]) != VK_SUCCESS) {
+        fprintf(stderr, "render: Failed to create bilinear texture sampler\n");
+
+        return false;
+    }
+
+    if (iris->cubic_supported) {
+        VkSamplerCreateInfo cubic_sampler_info = {};
+        cubic_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+        cubic_sampler_info.magFilter = VK_FILTER_LINEAR;
+        cubic_sampler_info.minFilter = VK_FILTER_LINEAR;
+        cubic_sampler_info.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+        cubic_sampler_info.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        cubic_sampler_info.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        cubic_sampler_info.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+        cubic_sampler_info.minLod = -1000;
+        cubic_sampler_info.maxLod = 1000;
+        cubic_sampler_info.maxAnisotropy = 1.0f;
+
+        if (vkCreateSampler(iris->device, &cubic_sampler_info, VK_NULL_HANDLE, &iris->sampler[2]) != VK_SUCCESS) {
+            fprintf(stderr, "render: Failed to create cubic texture sampler\n");
+
+            return false;
+        }
     }
 
     VkShaderModuleCreateInfo vert_shader_create_info = {};
@@ -351,7 +387,7 @@ static inline void update_descriptor_set(iris::instance* iris, VkImageView view,
 }
 
 void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, VkImageView& output_view, VkImage& output_image) {
-    if (!iris->shader_passes.size())
+    if (!shaders::count(iris))
         return;
 
     if (iris->shader_framebuffers[0].framebuffer == VK_NULL_HANDLE ||
@@ -361,8 +397,8 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 
     int i = 0;
 
-    for (auto& pass : iris->shader_passes) {
-        if (pass.bypass || !pass.ready())
+    for (auto& pass : shaders::vector(iris)) {
+        if (pass->bypass || !pass->ready())
             continue;
 
         const int fb = i & 1;
@@ -373,7 +409,7 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        info.renderPass = pass.get_render_pass();
+        info.renderPass = pass->get_render_pass();
         info.framebuffer = iris->shader_framebuffers[fb].framebuffer;
         info.renderArea.extent.width = iris->image.width;
         info.renderArea.extent.height = iris->image.height;
@@ -383,7 +419,7 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
         VkDescriptorImageInfo image_info = {};
         image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
         image_info.imageView = input_view;
-        image_info.sampler = iris->sampler;
+        image_info.sampler = iris->sampler[iris->filter];
 
         VkWriteDescriptorSet descriptor_write = {};
         descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -398,11 +434,11 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 
         vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.get_pipeline());
+        vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->get_pipeline());
 
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindIndexBuffer(command_buffer, iris->index_buffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass.get_pipeline_layout(), 0, 1, &iris->shader_descriptor_set, 0, nullptr);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->get_pipeline_layout(), 0, 1, &iris->shader_descriptor_set, 0, nullptr);
 
         VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -423,7 +459,7 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
             .frame = frame
         };
 
-        vkCmdPushConstants(command_buffer, pass.get_pipeline_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &constants);
+        vkCmdPushConstants(command_buffer, pass->get_pipeline_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &constants);
 
         vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 
@@ -452,8 +488,8 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
         vkDeviceWaitIdle(iris->device);
         vkQueueWaitIdle(iris->queue);
 
-        for (auto& pass : iris->shader_passes) {
-            pass.rebuild();
+        for (auto& pass : shaders::vector(iris)) {
+            pass->rebuild();
         }
     }
 
@@ -475,7 +511,7 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
 
     if (iris->output_image.view != VK_NULL_HANDLE) {
         update_vertex_buffer(iris, command_buffer);
-        update_descriptor_set(iris, iris->output_image.view, iris->sampler);
+        update_descriptor_set(iris, iris->output_image.view, iris->sampler[iris->filter]);
     }
 
     vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
@@ -560,14 +596,14 @@ void refresh(iris::instance* iris) {
     if (iris->image.view == VK_NULL_HANDLE)
         return;
 
-    if (iris->shader_passes.size() == 0)
+    if (shaders::count(iris) == 0)
         return;
 
     vkDeviceWaitIdle(iris->device);
     vkQueueWaitIdle(iris->queue);
 
-    for (auto& pass : iris->shader_passes) {
-        pass.rebuild();
+    for (auto& pass : shaders::vector(iris)) {
+        pass->rebuild();
     }
 
     rebuild_framebuffers(iris);
@@ -592,7 +628,7 @@ void destroy(iris::instance* iris) {
         vkDestroyShaderModule(iris->device, iris->default_vert_shader, nullptr);
     }
 
-    iris->shader_passes.clear();
+    shaders::clear(iris);
 
     renderer_destroy(iris->renderer);
 }

@@ -7,16 +7,6 @@
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 
-// INCBIN stuff
-#define INCBIN_PREFIX g_
-#define INCBIN_STYLE INCBIN_STYLE_SNAKE
-
-#include "incbin.h"
-
-INCBIN(encoder_frag_shader, "../shaders/encoder.spv");
-INCBIN(decoder_frag_shader, "../shaders/decoder.spv");
-INCBIN(sharpen_frag_shader, "../shaders/sharpen.spv");
-
 namespace iris {
 
 bool hovered = false;
@@ -287,17 +277,19 @@ void show_graphics_settings(iris::instance* iris) {
 
     Text("Scaling");
 
-    if (BeginCombo("##scalingfilter", iris->bilinear ? "Bilinear" : "Nearest")) {
-        if (Selectable("Nearest", !iris->bilinear)) {
-            iris->bilinear = false;
+    const char* filter_names[] = {
+        "Nearest",
+        "Bilinear",
+        "Cubic"
+    };
 
-            // renderer_set_bilinear(iris->ctx, false);
-        }
-
-        if (Selectable("Bilinear", iris->bilinear)) {
-            iris->bilinear = true;
-
-            // renderer_set_bilinear(iris->ctx, true);
+    if (BeginCombo("##scalingfilter", filter_names[iris->filter])) {
+        for (int i = 0; i < 3; i++) {
+            BeginDisabled(i == 2 && !iris->cubic_supported);
+            if (Selectable(filter_names[i], iris->filter == i)) {
+                iris->filter = i;
+            }
+            EndDisabled();
         }
 
         EndCombo();
@@ -806,9 +798,14 @@ void show_misc_settings(iris::instance* iris) {
 }
 
 const char* builtin_shader_names[] = {
-    "Encoder",
-    "Decoder",
-    "Sharpen"
+    "iris-ntsc-encoder",
+    "iris-ntsc-decoder",
+    "iris-ntsc-sharpen"
+};
+
+const char* presets[] = {
+    "NTSC codec",
+    0
 };
 
 void show_shader_settings(iris::instance* iris) {
@@ -816,7 +813,34 @@ void show_shader_settings(iris::instance* iris) {
 
     static const char* selected_shader = "";
 
-    int i = 0;
+    Text("Add shader");
+    if (BeginCombo("##combo", selected_shader)) {
+        for (int i = 0; i < 3; i++) {
+            if (Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
+                selected_shader = builtin_shader_names[i];
+            }
+        }
+
+        EndCombo();
+    } SameLine();
+
+    if (Button(ICON_MS_ADD)) {
+        std::string shader(selected_shader);
+
+        shaders::push(iris, selected_shader);
+    }
+
+    // Text("Preset");
+
+    // if (BeginCombo("##presets", selected_shader)) {
+    //     for (int i = 0; i < 3; i++) {
+    //         if (Selectable(presets[i], selected_shader == builtin_shader_names[i])) {
+    //             selected_shader = builtin_shader_names[i];
+    //         }
+    //     }
+
+    //     EndCombo();
+    // }
 
     if (BeginTable("##shaders", 1, ImGuiTableFlags_SizingFixedSame | ImGuiTableFlags_RowBg)) {
         for (int i = 0; i < iris->shader_passes.size(); i++) {
@@ -825,10 +849,12 @@ void show_shader_settings(iris::instance* iris) {
             char up[16];
             char down[16];
             char del[16];
+            char id[1024];
 
             sprintf(up, ICON_MS_ARROW_UPWARD "##%d", i);
             sprintf(down, ICON_MS_ARROW_DOWNWARD "##%d", i);
             sprintf(del, ICON_MS_DELETE "##%d", i);
+            sprintf(id, "%s##%d", shaders::at(iris, i)->get_id().c_str(), i);
 
             TableSetColumnIndex(0);
             // BeginDisabled(i == 0);
@@ -846,19 +872,20 @@ void show_shader_settings(iris::instance* iris) {
 
                 break;
             } SameLine();
-            Selectable(iris->shader_passes[i].get_id().c_str());
+
+            Selectable(id, false, ImGuiSelectableFlags_SpanAllColumns);
 
             if (BeginDragDropSource()) {
-                SetDragDropPayload("SHADER_DND_PAYLOAD", &iris->shader_passes[i], sizeof(shaders::pass));
+                SetDragDropPayload("SHADER_DND_PAYLOAD", &i, sizeof(int));
 
                 EndDragDropSource();
             }
 
             if (BeginDragDropTarget()) {
                 if (const ImGuiPayload* payload = AcceptDragDropPayload("SHADER_DND_PAYLOAD")) {
-                    shaders::pass* pass = (shaders::pass*)payload->Data;
+                    int src = *(int*)payload->Data;
 
-                    pass->swap(iris->shader_passes.at(i));
+                    shaders::swap(iris, src, i);
                 }
 
                 EndDragDropTarget();
@@ -866,35 +893,6 @@ void show_shader_settings(iris::instance* iris) {
         }
 
         EndTable();
-    }
-
-    Text("Add shader");
-    if (BeginCombo("##combo", selected_shader)) {
-        for (int i = 0; i < 3; i++) {
-            if (Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
-                selected_shader = builtin_shader_names[i];
-            }
-        }
-
-        EndCombo();
-    } SameLine();
-
-    if (Button(ICON_MS_ADD)) {
-        std::string shader(selected_shader);
-
-        iris->shader_passes.emplace_back();
-
-        auto& pass = iris->shader_passes.back();
-
-        if (shader == "Encoder") {
-            pass.init(iris, g_encoder_frag_shader_data, g_encoder_frag_shader_size, "Encoder");
-        } else if (shader == "Decoder") {
-            pass.init(iris, g_decoder_frag_shader_data, g_decoder_frag_shader_size, "Decoder");
-        } else if (shader == "Sharpen") {
-            pass.init(iris, g_sharpen_frag_shader_data, g_sharpen_frag_shader_size, "Sharpen");
-        } else if (shader == "Custom") {
-            // Open file dialog
-        }
     }
 }
 

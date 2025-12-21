@@ -77,7 +77,7 @@ bool parse_toml_settings(iris::instance* iris) {
 
     auto display = tbl["display"];
     iris->aspect_mode = display["aspect_mode"].value_or(RENDER_ASPECT_AUTO);
-    iris->bilinear = display["bilinear"].value_or(true);
+    iris->filter = display["filter"].value_or(true);
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);
     iris->renderer_backend = display["renderer"].value_or(RENDERER_BACKEND_HARDWARE);
@@ -158,6 +158,12 @@ bool parse_toml_settings(iris::instance* iris) {
 
     for (int i = 0; i < recents->size(); i++)
         iris->recents.push_back(recents->at(i).as_string()->get());
+
+    toml::array* shaders = tbl["shaders"]["array"].as_array();
+    iris->enable_shaders = tbl["shaders"]["enable"].value_or(false);
+
+    for (int i = 0; i < shaders->size(); i++)
+        iris->shader_passes_pending.push_back(shaders->at(i).as_string()->get());
 
     return true;
 }
@@ -384,7 +390,7 @@ void close(iris::instance* iris) {
             { "aspect_mode", iris->aspect_mode },
             { "integer_scaling", iris->integer_scaling },
             { "fullscreen", iris->fullscreen },
-            { "bilinear", iris->bilinear },
+            { "filter", iris->filter },
             { "renderer", iris->renderer_backend },
             { "window_width", iris->window_width },
             { "window_height", iris->window_height },
@@ -416,13 +422,22 @@ void close(iris::instance* iris) {
         } },
         { "recents", toml::table {
             { "array", toml::array() }
-        } }
+        } },
+        { "shaders", toml::table {
+            { "enable", iris->enable_shaders },
+            { "array", toml::array() }
+        } },
     };
 
     toml::array* recents = tbl["recents"]["array"].as_array();
 
     for (const std::string& s : iris->recents)
         recents->push_back(s);
+
+    toml::array* shaders = tbl["shaders"]["array"].as_array();
+
+    for (auto& s : shaders::vector(iris))
+        shaders->push_back(s->get_id());
 
     file << tbl;
 }

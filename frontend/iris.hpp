@@ -211,7 +211,8 @@ struct instance {
     VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
     VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
     VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchain_maintenance_1_features = {};
-    VkSampler sampler = VK_NULL_HANDLE;
+    VkSampler sampler[3] = { VK_NULL_HANDLE };
+    bool cubic_supported = false;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
@@ -231,7 +232,8 @@ struct instance {
     renderer_image output_image = {};
 
     // Multipass shader stuff
-    std::vector <shaders::pass> shader_passes = {};
+    std::vector <std::string> shader_passes_pending;
+    std::vector <shaders::pass*> shader_passes = {};
     VkDescriptorSetLayout shader_descriptor_set_layout = VK_NULL_HANDLE;
     VkDescriptorSet shader_descriptor_set = VK_NULL_HANDLE;
     VkShaderModule default_vert_shader = VK_NULL_HANDLE;
@@ -325,7 +327,7 @@ struct instance {
 
     bool fullscreen = false;
     int aspect_mode = RENDER_ASPECT_AUTO;
-    bool bilinear = true;
+    int filter = 1;
     bool integer_scaling = false;
     float scale = 1.5f;
     int window_mode = 0;
@@ -478,6 +480,20 @@ namespace shaders {
         bool ready();
         bool rebuild();
     };
+
+    void push(iris::instance* iris, void* data, size_t size, std::string id);
+    void push(iris::instance* iris, std::string id);
+    void pop(iris::instance* iris);
+    void insert(iris::instance* iris, int i, void* data, size_t size, std::string id);
+    void insert(iris::instance* iris, std::string id);
+    void erase(iris::instance* iris, int i);
+    pass* at(iris::instance* iris, int i);
+    void swap(iris::instance* iris, int i1, int i2);
+    pass* front(iris::instance* iris);
+    pass* back(iris::instance* iris);
+    size_t count(iris::instance* iris);
+    void clear(iris::instance* iris);
+    std::vector <shaders::pass*>& vector(iris::instance* iris);
 }
 
 namespace imgui {

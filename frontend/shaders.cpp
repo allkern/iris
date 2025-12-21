@@ -1,11 +1,18 @@
+#include <unordered_map>
 #include <algorithm>
 
 #include "config.hpp"
 #include "iris.hpp"
 
-#include <SDL3/SDL_vulkan.h>
+// INCBIN stuff
+#define INCBIN_PREFIX g_
+#define INCBIN_STYLE INCBIN_STYLE_SNAKE
 
-#include <volk.h>
+#include "incbin.h"
+
+INCBIN(encoder_frag_shader, "../shaders/encoder.spv");
+INCBIN(decoder_frag_shader, "../shaders/decoder.spv");
+INCBIN(sharpen_frag_shader, "../shaders/sharpen.spv");
 
 namespace iris::shaders {
 
@@ -323,6 +330,78 @@ VkShaderModule& pass::get_frag_shader() {
 
 std::string pass::get_id() const {
     return m_id;
+}
+
+std::unordered_map <std::string, std::pair <void*, size_t>> g_builtin_shaders = {
+    { "iris-ntsc-encoder", { (void*)g_encoder_frag_shader_data, (size_t)g_encoder_frag_shader_size } },
+    { "iris-ntsc-decoder", { (void*)g_decoder_frag_shader_data, (size_t)g_decoder_frag_shader_size } },
+    { "iris-ntsc-sharpen", { (void*)g_sharpen_frag_shader_data, (size_t)g_sharpen_frag_shader_size } },
+};
+
+void push(iris::instance* iris, void* data, size_t size, std::string id) {
+    iris->shader_passes.push_back(new pass(iris, data, size, id));
+}
+
+void push(iris::instance* iris, std::string id) {
+    auto s = g_builtin_shaders.find(id);
+
+    if (s != g_builtin_shaders.end()) {
+        push(iris, s->second.first, s->second.second, id);
+    }
+}
+
+void pop(iris::instance* iris) {
+    delete iris->shader_passes.back();
+
+    iris->shader_passes.pop_back();
+}
+
+void insert(iris::instance* iris, int i, void* data, size_t size, std::string id) {
+    iris->shader_passes.insert(
+        iris->shader_passes.begin() + i,
+        new pass(iris, data, size, id)
+    );
+}
+
+void erase(iris::instance* iris, int i) {
+    delete iris->shader_passes.at(i);
+
+    iris->shader_passes.erase(iris->shader_passes.begin() + i);
+}
+
+pass* at(iris::instance* iris, int i) {
+    return iris->shader_passes.at(i);
+}
+
+void swap(iris::instance* iris, int a, int b) {
+    pass* t = iris->shader_passes.at(a);
+
+    iris->shader_passes[a] = iris->shader_passes[b];
+    iris->shader_passes[b] = t;
+}
+
+pass* front(iris::instance* iris) {
+    return iris->shader_passes.front();
+}
+
+pass* back(iris::instance* iris) {
+    return iris->shader_passes.back();
+}
+
+size_t count(iris::instance* iris) {
+    return iris->shader_passes.size();
+}
+
+void clear(iris::instance* iris) {
+    for (auto& pass : iris->shader_passes) {
+        delete pass;
+    }
+
+    iris->shader_passes.clear();
+}
+
+std::vector <shaders::pass*>& vector(iris::instance* iris) {
+    return iris->shader_passes;
 }
 
 }

@@ -276,16 +276,18 @@ void show_main_menubar(iris::instance* iris) {
                 }
 
                 if (BeginMenu(ICON_MS_FILTER " Scaling filter")) {
-                    if (Selectable("Nearest", !iris->bilinear)) {
-                        iris->bilinear = false;
+                    const char* filter_names[] = {
+                        "Nearest",
+                        "Bilinear",
+                        "Cubic"
+                    };
 
-                        // renderer_set_bilinear(iris->ctx, false);
-                    }
-
-                    if (Selectable("Bilinear", iris->bilinear)) {
-                        iris->bilinear = true;
-
-                        // renderer_set_bilinear(iris->ctx, true);
+                    for (int i = 0; i < 3; i++) {
+                        BeginDisabled(i == 2 && !iris->cubic_supported);
+                        if (Selectable(filter_names[i], iris->filter == i)) {
+                            iris->filter = i;
+                        }
+                        EndDisabled();
                     }
 
                     ImGui::EndMenu();

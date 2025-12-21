@@ -207,6 +207,8 @@ VkDevice create_device(iris::instance* iris, const device_create_info& info) {
         iris->enabled_device_extensions.push_back(ext);
     }
 
+    iris->cubic_supported = is_device_extension_supported(iris, VK_EXT_FILTER_CUBIC_EXTENSION_NAME);
+
     for (const char* layer : info.enabled_layers) {
         if (!is_device_layer_supported(iris, layer)) {
             fprintf(stderr, "vulkan: Requested device layer not supported: %s\n", layer);
@@ -858,7 +860,8 @@ bool init(iris::instance* iris, bool enable_validation) {
         VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME,
         VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
+        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+        VK_EXT_FILTER_CUBIC_EXTENSION_NAME
     };
 
     device_info.enabled_layers = {};
@@ -974,7 +977,10 @@ bool init(iris::instance* iris, bool enable_validation) {
 void cleanup(iris::instance* iris) {
     vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
     vkDestroyDescriptorPool(iris->device, iris->descriptor_pool, nullptr);
-    vkDestroySampler(iris->device, iris->sampler, nullptr);
+
+    for (int i = 0; i < 3; i++)
+        if (iris->sampler[i]) vkDestroySampler(iris->device, iris->sampler[i], nullptr);
+
     vkDestroyBuffer(iris->device, iris->vertex_buffer, nullptr);
     vkDestroyBuffer(iris->device, iris->vertex_staging_buffer, nullptr);
     vkDestroyBuffer(iris->device, iris->index_buffer, nullptr);
