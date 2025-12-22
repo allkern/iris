@@ -156,14 +156,18 @@ bool parse_toml_settings(iris::instance* iris) {
 
     toml::array* recents = tbl["recents"]["array"].as_array();
 
-    for (int i = 0; i < recents->size(); i++)
-        iris->recents.push_back(recents->at(i).as_string()->get());
+    if (recents) {
+        for (int i = 0; i < recents->size(); i++)
+            iris->recents.push_back(recents->at(i).as_string()->get());
+    }
 
     toml::array* shaders = tbl["shaders"]["array"].as_array();
     iris->enable_shaders = tbl["shaders"]["enable"].value_or(false);
 
-    for (int i = 0; i < shaders->size(); i++)
-        iris->shader_passes_pending.push_back(shaders->at(i).as_string()->get());
+    if (shaders) {
+        for (int i = 0; i < shaders->size(); i++)
+            iris->shader_passes_pending.push_back(shaders->at(i).as_string()->get());
+    }
 
     return true;
 }
