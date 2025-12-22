@@ -3,9 +3,39 @@
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 
+#include "rom.h"
+
 namespace iris {
 
 int stage = 0;
+
+bool bios_checked = false;
+int bios_valid = false;
+
+int is_valid(const char* path) {
+    FILE* f = fopen(path, "rb");
+
+    if (!f)
+        return 0;
+
+    fseek(f, 0, SEEK_END);
+
+    size_t size = ftell(f);
+
+    fseek(f, 0, SEEK_SET);
+
+    uint8_t* buf = new uint8_t[size];
+
+    fread(buf, 1, size, f);
+
+    int valid = ps2_rom0_is_valid(buf, size);
+
+    fclose(f);
+
+    delete[] buf;
+
+    return valid ? 2 : 1;
+}
 
 void show_memory_card_stage(iris::instance* iris) {
     using namespace ImGui;
@@ -70,7 +100,11 @@ void show_bios_stage(iris::instance* iris) {
         "command line arguments."
     );
 
-    InputTextWithHint("##BIOS", "e.g. scph10000.bin", buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    if (InputTextWithHint("##BIOS", "e.g. scph10000.bin", buf, 512, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        bios_checked = true;
+        bios_valid = is_valid(buf);
+    }
+
     SameLine();
 
     if (Button(ICON_MS_FOLDER)) {
@@ -87,14 +121,41 @@ void show_bios_stage(iris::instance* iris) {
 
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 512);
+
+            bios_checked = true;
+            bios_valid = is_valid(buf);
         }
+    }
+
+    if (bios_checked) {
+        ImVec4 col = bios_valid ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+        const char* text = nullptr;
+
+        switch (bios_valid) {
+            case 0: {
+                col = ImVec4(0.86f, 0.19f, 0.18f, 1.0f);
+                text = ICON_MS_CLOSE " Couldn't open the specified file.";
+            } break;
+
+            case 1: {
+                col = ImVec4(0.90f, 0.73f, 0.2f, 1.0f);
+                text = ICON_MS_WARNING " BIOS is unknown, it might not work as expected.";
+            } break;
+
+            case 2: {
+                col = ImVec4(0.42f, 0.85f, 0.1f, 1.0f);
+                text = ICON_MS_CHECK " BIOS is known!";
+            } break;
+        }
+
+        TextColored(col, text);
     }
 
     // To-do: Add file validation
 
     Separator();
 
-    BeginDisabled(!buf[0]);
+    BeginDisabled(!bios_valid || !buf[0]);
 
     if (Button("Next")) {
         iris->bios_path = buf;
