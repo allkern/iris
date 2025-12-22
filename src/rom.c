@@ -168,3 +168,15 @@ struct ps2_rom_info ps2_rom1_search(uint8_t* rom, size_t size) {
 
     return info;
 }
+
+int ps2_rom0_is_valid(uint8_t* rom, size_t size) {
+    struct ps2_rom_info info = ps2_rom0_search(rom, size);
+
+    return strcmp(info.version, "Unknown") != 0;
+}
+
+int ps2_rom1_is_valid(uint8_t* rom, size_t size) {
+    struct ps2_rom_info info = ps2_rom1_search(rom, size);
+
+    return strcmp(info.version, "Unknown") != 0;
+}

@@ -18,6 +18,8 @@ struct ps2_rom_info {
 
 struct ps2_rom_info ps2_rom0_search(uint8_t* rom, size_t size);
 struct ps2_rom_info ps2_rom1_search(uint8_t* rom, size_t size);
+int ps2_rom0_is_valid(uint8_t* rom, size_t size);
+int ps2_rom1_is_valid(uint8_t* rom, size_t size);
 
 #ifdef __cplusplus
 }
