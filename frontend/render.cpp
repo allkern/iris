@@ -496,7 +496,7 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     // Process shader passes here
     iris->output_image = iris->image;
 
-    if (iris->output_image.view != VK_NULL_HANDLE) {
+    if (iris->enable_shaders && iris->output_image.view != VK_NULL_HANDLE) {
         render_shader_passes(iris, command_buffer, iris->output_image.view, iris->output_image.image);
     }
 

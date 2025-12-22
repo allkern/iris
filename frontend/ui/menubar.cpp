@@ -239,7 +239,7 @@ void show_main_menubar(iris::instance* iris) {
                     for (int i = 0; i < 3; i++) {
                         BeginDisabled(i == RENDERER_BACKEND_SOFTWARE);
 
-                        if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
+                        if (MenuItem(renderer_names[i], nullptr, i == iris->renderer_backend)) {
                             render::switch_backend(iris, i);
                         }
 
@@ -253,7 +253,7 @@ void show_main_menubar(iris::instance* iris) {
                     for (int i = 2; i <= 6; i++) {
                         char buf[16]; snprintf(buf, 16, "%.1fx", (float)i * 0.5f);
 
-                        if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
+                        if (MenuItem(buf, nullptr, ((float)i * 0.5f) == iris->scale)) {
                             iris->scale = (float)i * 0.5f;
 
                             // renderer_set_scale(iris->ctx, iris->scale);
@@ -265,7 +265,7 @@ void show_main_menubar(iris::instance* iris) {
 
                 if (BeginMenu(ICON_MS_ASPECT_RATIO " Aspect mode")) {
                     for (int i = 0; i < 7; i++) {
-                        if (Selectable(aspect_mode_names[i], iris->aspect_mode == i)) {
+                        if (MenuItem(aspect_mode_names[i], nullptr, iris->aspect_mode == i)) {
                             iris->aspect_mode = i;
 
                             // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
@@ -284,7 +284,7 @@ void show_main_menubar(iris::instance* iris) {
 
                     for (int i = 0; i < 3; i++) {
                         BeginDisabled(i == 2 && !iris->cubic_supported);
-                        if (Selectable(filter_names[i], iris->filter == i)) {
+                        if (MenuItem(filter_names[i], nullptr, iris->filter == i)) {
                             iris->filter = i;
                         }
                         EndDisabled();
@@ -331,6 +331,10 @@ void show_main_menubar(iris::instance* iris) {
 
                 if (MenuItem(ICON_MS_FULLSCREEN " Fullscreen", "F11", &iris->fullscreen)) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
+                }
+
+                if (MenuItem(ICON_MS_IMAGE " Enable shaders", nullptr, &iris->enable_shaders)) {
+                    // renderer_set_shaders_enabled(iris->ctx, iris->enable_shaders);
                 }
 
                 ImGui::EndMenu();
@@ -451,7 +455,7 @@ void show_main_menubar(iris::instance* iris) {
                 for (int i = 0; i < 9; i++) {
                     char buf[16]; snprintf(buf, 16, "%dx", 1 << i);
 
-                    if (Selectable(buf, iris->timescale == (1 << i))) {
+                    if (MenuItem(buf, nullptr, iris->timescale == (1 << i))) {
                         iris->timescale = (1 << i);
 
                         ps2_set_timescale(iris->ps2, iris->timescale);

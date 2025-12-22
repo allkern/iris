@@ -800,7 +800,7 @@ void show_misc_settings(iris::instance* iris) {
 const char* builtin_shader_names[] = {
     "iris-ntsc-encoder",
     "iris-ntsc-decoder",
-    "iris-ntsc-sharpen"
+    "iris-ntsc-curvature"
 };
 
 const char* presets[] = {
@@ -812,6 +812,12 @@ void show_shader_settings(iris::instance* iris) {
     using namespace ImGui;
 
     static const char* selected_shader = "";
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0f);
+    Checkbox(" Enable shaders", &iris->enable_shaders);
+    PopStyleVar();
+
+    Separator();
 
     Text("Add shader");
     if (BeginCombo("##combo", selected_shader)) {
@@ -825,9 +831,15 @@ void show_shader_settings(iris::instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_ADD)) {
-        std::string shader(selected_shader);
+        if (selected_shader && selected_shader[0]) {
+            std::string shader(selected_shader);
 
-        shaders::push(iris, selected_shader);
+            shaders::push(iris, selected_shader);
+        }
+    } SameLine();
+
+    if (Button(ICON_MS_REMOVE_SELECTION)) {
+        shaders::clear(iris);
     }
 
     // Text("Preset");
@@ -843,34 +855,26 @@ void show_shader_settings(iris::instance* iris) {
     // }
 
     if (BeginTable("##shaders", 1, ImGuiTableFlags_SizingFixedSame | ImGuiTableFlags_RowBg)) {
-        for (int i = 0; i < iris->shader_passes.size(); i++) {
+        for (int i = 0; i < shaders::count(iris); i++) {
             TableNextRow();
 
-            char up[16];
-            char down[16];
+            char bypass[16];
             char del[16];
             char id[1024];
 
-            sprintf(up, ICON_MS_ARROW_UPWARD "##%d", i);
-            sprintf(down, ICON_MS_ARROW_DOWNWARD "##%d", i);
+            sprintf(bypass, "%s##%d", shaders::at(iris, i)->bypass ? ICON_MS_CHECK_BOX_OUTLINE_BLANK : ICON_MS_CHECK_BOX, i);
             sprintf(del, ICON_MS_DELETE "##%d", i);
             sprintf(id, "%s##%d", shaders::at(iris, i)->get_id().c_str(), i);
 
             TableSetColumnIndex(0);
-            // BeginDisabled(i == 0);
-            // if (SmallButton(up)) {
-            //     iris->shader_passes[i].swap(iris->shader_passes.at(i-1));
-            // } SameLine();
-            // EndDisabled();
-            // BeginDisabled(i == (iris->shader_passes.size() - 1));
-            // if (SmallButton(down)) {
-            //     iris->shader_passes[i].swap(iris->shader_passes.at(i+1));
-            // } SameLine();
-            // EndDisabled();
             if (SmallButton(del)) {
                 iris->shader_passes.erase(iris->shader_passes.begin() + i);
 
                 break;
+            } SameLine();
+
+            if (SmallButton(bypass)) {
+                shaders::at(iris, i)->bypass = !shaders::at(iris, i)->bypass;
             } SameLine();
 
             Selectable(id, false, ImGuiSelectableFlags_SpanAllColumns);
