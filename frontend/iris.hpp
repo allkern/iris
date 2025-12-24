@@ -178,7 +178,7 @@ namespace shaders {
     class pass;
 }
 
-struct vulkan_physical_device {
+struct vulkan_gpu {
     VkPhysicalDeviceType type = VK_PHYSICAL_DEVICE_TYPE_OTHER;
     VkPhysicalDevice device = VK_NULL_HANDLE;
     std::string name = "";
@@ -198,7 +198,7 @@ struct instance {
     std::vector <const char*> enabled_instance_layers;
     std::vector <const char*> enabled_device_extensions;
     std::vector <const char*> enabled_device_layers;
-    std::vector <vulkan_physical_device> vulkan_physical_devices;
+    std::vector <vulkan_gpu> vulkan_gpus;
     VkApplicationInfo app_info = {};
     VkInstanceCreateInfo instance_create_info = {};
     VkDeviceCreateInfo device_create_info = {};

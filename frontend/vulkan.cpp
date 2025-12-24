@@ -327,30 +327,30 @@ void enumerate_physical_devices(iris::instance* iris) {
 
     vkEnumeratePhysicalDevices(iris->instance, &count, devices.data());
 
-    iris->vulkan_physical_devices.clear();
+    iris->vulkan_gpus.clear();
 
     for (const VkPhysicalDevice& device : devices) {
         VkPhysicalDeviceProperties properties;
 
         vkGetPhysicalDeviceProperties(device, &properties);
 
-        iris::vulkan_physical_device dev;
+        iris::vulkan_gpu gpu;
 
-        dev.device = device;
-        dev.type = properties.deviceType;
-        dev.name = properties.deviceName;
-        dev.api_version = properties.apiVersion;
+        gpu.device = device;
+        gpu.type = properties.deviceType;
+        gpu.name = properties.deviceName;
+        gpu.api_version = properties.apiVersion;
 
-        iris->vulkan_physical_devices.push_back(dev);
+        iris->vulkan_gpus.push_back(gpu);
     }
 }
 
 VkPhysicalDevice find_suitable_physical_device(iris::instance* iris) {
-    if (!iris->vulkan_physical_devices.size())
+    if (!iris->vulkan_gpus.size())
         return VK_NULL_HANDLE;
 
-    for (int i = 0; i < iris->vulkan_physical_devices.size(); i++) {
-        auto& dev = iris->vulkan_physical_devices[i];
+    for (int i = 0; i < iris->vulkan_gpus.size(); i++) {
+        auto& dev = iris->vulkan_gpus[i];
 
         if (dev.type == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
             iris->vulkan_selected_device_index = i;
@@ -362,7 +362,7 @@ VkPhysicalDevice find_suitable_physical_device(iris::instance* iris) {
     iris->vulkan_selected_device_index = 0;
 
     // Just pick the first device for now
-    return iris->vulkan_physical_devices[0].device;
+    return iris->vulkan_gpus[0].device;
 }
 
 int find_graphics_queue_family_index(iris::instance* iris) {
@@ -835,10 +835,10 @@ bool init(iris::instance* iris, bool enable_validation) {
     if (iris->vulkan_physical_device < 0) {
         iris->physical_device = find_suitable_physical_device(iris);
     } else {
-        if (iris->vulkan_physical_device > iris->vulkan_physical_devices.size()) {
+        if (iris->vulkan_physical_device > iris->vulkan_gpus.size()) {
             iris->physical_device = VK_NULL_HANDLE;
         } else {
-            iris->physical_device = iris->vulkan_physical_devices[iris->vulkan_physical_device].device;
+            iris->physical_device = iris->vulkan_gpus[iris->vulkan_physical_device].device;
             iris->vulkan_selected_device_index = iris->vulkan_physical_device;
         }
     }

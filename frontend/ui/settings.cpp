@@ -220,12 +220,12 @@ void show_hardware_renderer_settings(iris::instance* iris) {
     Text("GPU");
 
     const char* hint;
-    const auto& selected_device = iris->vulkan_physical_devices[iris->vulkan_selected_device_index];
+    const auto& selected_device = iris->vulkan_gpus[iris->vulkan_selected_device_index];
 
     if (iris->vulkan_physical_device < 0) {
         hint = "Auto";
     } else {
-        hint = iris->vulkan_physical_devices[iris->vulkan_physical_device].name.c_str();
+        hint = iris->vulkan_gpus[iris->vulkan_physical_device].name.c_str();
     }
 
     PushStyleVarY(ImGuiStyleVar_ItemSpacing, 5.0F);
@@ -235,8 +235,8 @@ void show_hardware_renderer_settings(iris::instance* iris) {
             iris->vulkan_physical_device = -1;
         }
 
-        for (int i = 0; i < iris->vulkan_physical_devices.size(); i++) {
-            const auto& device = iris->vulkan_physical_devices[i];
+        for (int i = 0; i < iris->vulkan_gpus.size(); i++) {
+            const auto& device = iris->vulkan_gpus[i];
 
             std::string name = device.name;
 
