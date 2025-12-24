@@ -138,6 +138,10 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->hardware_backend_config.backbuffer_promotion = hardware["backbuffer_promotion"].value_or(false);
     iris->hardware_backend_config.allow_blend_demote = hardware["allow_blend_demote"].value_or(false);
 
+    auto vulkan = tbl["vulkan"];
+    iris->vulkan_physical_device = vulkan["physical_device"].value_or(-1);
+    iris->vulkan_enable_validation_layers = vulkan["enable_validation_layers"].value_or(false);
+
     auto ui = tbl["ui"];
     iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
     iris->ui_scale = ui["scale"].value_or(1.0f);
@@ -363,6 +367,10 @@ void close(iris::instance* iris) {
             { "unsynced_readbacks", iris->hardware_backend_config.unsynced_readbacks },
             { "backbuffer_promotion", iris->hardware_backend_config.backbuffer_promotion },
             { "allow_blend_demote", iris->hardware_backend_config.allow_blend_demote }
+        } },
+        { "vulkan", toml::table {
+            { "physical_device", iris->vulkan_physical_device },
+            { "enable_validation_layers", iris->vulkan_enable_validation_layers }
         } },
         { "debugger", toml::table {
             { "show_ee_control", iris->show_ee_control },

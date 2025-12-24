@@ -331,20 +331,17 @@ void update_window(iris::instance* iris) {
         if (!imgui::render_frame(iris, draw_data)) {
             printf("iris: Failed to render ImGui frame\n");
         }
+
+        // if (!imgui::present_frame(iris)) {
+        //     printf("iris: Failed to present frame\n");
+        // }
     }
 
     // Update and Render additional Platform Windows
-    if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
-        ImGui::UpdatePlatformWindows();
-        ImGui::RenderPlatformWindowsDefault();
-    }
-
-    // Present Main Platform Window
-    if (!main_is_minimized) {
-        if (!imgui::present_frame(iris)) {
-            printf("iris: Failed to present frame\n");
-        }
-    }
+    // if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+    //     ImGui::UpdatePlatformWindows();
+    //     ImGui::RenderPlatformWindowsDefault();
+    // }
 
     iris->frames++;
 }
@@ -399,7 +396,7 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         return false;
     }
 
-    if (!iris::vulkan::init(iris)) {
+    if (!iris::vulkan::init(iris, iris->vulkan_enable_validation_layers)) {
         fprintf(stderr, "iris: Failed to initialize Vulkan\n");
 
         return false;

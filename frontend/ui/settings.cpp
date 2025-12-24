@@ -189,9 +189,11 @@ void show_hardware_renderer_settings(iris::instance* iris) {
     if (Checkbox(" Overscan", &iris->hardware_backend_config.overscan)) {
         render::refresh(iris);
     }
-    
+    PopStyleVar();
+
     SeparatorText("Advanced");
 
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     if (Checkbox(" CRTC Offsets", &iris->hardware_backend_config.crtc_offsets)) {
         render::refresh(iris);
     }
@@ -212,6 +214,47 @@ void show_hardware_renderer_settings(iris::instance* iris) {
         render::refresh(iris);
     }
     PopStyleVar();
+
+    SeparatorText("Vulkan settings");
+
+    Text("GPU");
+
+    const char* hint;
+    const auto& selected_device = iris->vulkan_physical_devices[iris->vulkan_selected_device_index];
+
+    if (iris->vulkan_physical_device < 0) {
+        hint = "Auto";
+    } else {
+        hint = iris->vulkan_physical_devices[iris->vulkan_physical_device].name.c_str();
+    }
+
+    PushStyleVarY(ImGuiStyleVar_ItemSpacing, 5.0F);
+
+    if (BeginCombo("##gpu", hint)) {
+        if (Selectable("Auto", iris->vulkan_physical_device < 0)) {
+            iris->vulkan_physical_device = -1;
+        }
+
+        for (int i = 0; i < iris->vulkan_physical_devices.size(); i++) {
+            const auto& device = iris->vulkan_physical_devices[i];
+
+            std::string name = device.name;
+
+            if (device.device == selected_device.device) {
+                name += " (Current)";
+            }
+
+            if (Selectable(name.c_str(), device.device == selected_device.device)) {
+                iris->vulkan_physical_device = i;
+            }
+        }
+
+        EndCombo();
+    }
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox(" Enable validation layers", &iris->vulkan_enable_validation_layers);
+    PopStyleVar(2);
 }
 
 void show_graphics_settings(iris::instance* iris) {

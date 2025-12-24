@@ -314,31 +314,55 @@ VkDevice create_device(iris::instance* iris, const device_create_info& info) {
     return device;
 }
 
-VkPhysicalDevice find_suitable_physical_device(iris::instance* iris) {
+void enumerate_physical_devices(iris::instance* iris) {
     uint32_t count = 0;
 
     vkEnumeratePhysicalDevices(iris->instance, &count, nullptr);
 
     if (!count) {
-        return VK_NULL_HANDLE;
+        return;
     }
 
     std::vector <VkPhysicalDevice> devices(count);
 
     vkEnumeratePhysicalDevices(iris->instance, &count, devices.data());
 
+    iris->vulkan_physical_devices.clear();
+
     for (const VkPhysicalDevice& device : devices) {
         VkPhysicalDeviceProperties properties;
 
         vkGetPhysicalDeviceProperties(device, &properties);
 
-        if (properties.deviceType == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
-            return device;
+        iris::vulkan_physical_device dev;
+
+        dev.device = device;
+        dev.type = properties.deviceType;
+        dev.name = properties.deviceName;
+        dev.api_version = properties.apiVersion;
+
+        iris->vulkan_physical_devices.push_back(dev);
+    }
+}
+
+VkPhysicalDevice find_suitable_physical_device(iris::instance* iris) {
+    if (!iris->vulkan_physical_devices.size())
+        return VK_NULL_HANDLE;
+
+    for (int i = 0; i < iris->vulkan_physical_devices.size(); i++) {
+        auto& dev = iris->vulkan_physical_devices[i];
+
+        if (dev.type == VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) {
+            iris->vulkan_selected_device_index = i;
+
+            return dev.device;
         }
     }
 
+    iris->vulkan_selected_device_index = 0;
+
     // Just pick the first device for now
-    return devices[0];
+    return iris->vulkan_physical_devices[0].device;
 }
 
 int find_graphics_queue_family_index(iris::instance* iris) {
@@ -804,7 +828,20 @@ bool init(iris::instance* iris, bool enable_validation) {
     volkLoadInstance(iris->instance);
 
     // Find a suitable Vulkan physical device (GPU)
-    iris->physical_device = find_suitable_physical_device(iris);
+    enumerate_physical_devices(iris);
+
+    iris->vulkan_selected_device_index = 0;
+
+    if (iris->vulkan_physical_device < 0) {
+        iris->physical_device = find_suitable_physical_device(iris);
+    } else {
+        if (iris->vulkan_physical_device > iris->vulkan_physical_devices.size()) {
+            iris->physical_device = VK_NULL_HANDLE;
+        } else {
+            iris->physical_device = iris->vulkan_physical_devices[iris->vulkan_physical_device].device;
+            iris->vulkan_selected_device_index = iris->vulkan_physical_device;
+        }
+    }
 
     if (!iris->physical_device) {
         fprintf(stderr, "vulkan: Failed to find a suitable Vulkan device\n");
@@ -815,7 +852,14 @@ bool init(iris::instance* iris, bool enable_validation) {
     VkPhysicalDeviceProperties properties;
     vkGetPhysicalDeviceProperties(iris->physical_device, &properties);
 
-    printf("vulkan: Using Vulkan device \"%s\"\n", properties.deviceName);
+    printf("vulkan: Using Vulkan device \"%s\". API version %d.%d.%d.%d Driver version %x\n",
+        properties.deviceName,
+        VK_API_VERSION_MAJOR(properties.apiVersion),
+        VK_API_VERSION_MINOR(properties.apiVersion),
+        VK_API_VERSION_PATCH(properties.apiVersion),
+        VK_API_VERSION_VARIANT(properties.apiVersion),
+        properties.driverVersion
+    );
 
     iris->device_extensions = get_device_extensions(iris);
     iris->device_layers = get_device_layers(iris);

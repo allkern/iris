@@ -178,6 +178,13 @@ namespace shaders {
     class pass;
 }
 
+struct vulkan_physical_device {
+    VkPhysicalDeviceType type = VK_PHYSICAL_DEVICE_TYPE_OTHER;
+    VkPhysicalDevice device = VK_NULL_HANDLE;
+    std::string name = "";
+    uint32_t api_version = 0;
+};
+
 struct instance {
     SDL_Window* window = nullptr;
     SDL_AudioStream* stream = nullptr;
@@ -191,6 +198,7 @@ struct instance {
     std::vector <const char*> enabled_instance_layers;
     std::vector <const char*> enabled_device_extensions;
     std::vector <const char*> enabled_device_layers;
+    std::vector <vulkan_physical_device> vulkan_physical_devices;
     VkApplicationInfo app_info = {};
     VkInstanceCreateInfo instance_create_info = {};
     VkDeviceCreateInfo device_create_info = {};
@@ -339,6 +347,9 @@ struct instance {
     int system = PS2_SYSTEM_AUTO;
     int theme = IRIS_THEME_GRANITE;
     bool enable_shaders = false;
+    int vulkan_physical_device = -1;
+    int vulkan_selected_device_index = 0;
+    bool vulkan_enable_validation_layers = false;
 
     std::deque <std::string> recents;
 
@@ -500,7 +511,6 @@ namespace imgui {
     bool init(iris::instance* iris);
     void set_theme(iris::instance* iris, int theme, bool set_bg_color = true);
     bool render_frame(iris::instance* iris, ImDrawData* draw_data);
-    bool present_frame(iris::instance* iris);
     void cleanup(iris::instance* iris);
 
     // Wrapper for ImGui::Begin that sets a default size
