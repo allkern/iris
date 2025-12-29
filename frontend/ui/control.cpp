@@ -466,7 +466,7 @@ void show_iop_control(iris::instance* iris) {
         if (Button(ICON_MS_STEP)) {
             iris->pause = true;
 
-            ps2_iop_cycle(iris->ps2);
+            ps2_step_iop(iris->ps2);
         }
 
         SeparatorText("Disassembly");

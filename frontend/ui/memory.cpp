@@ -32,7 +32,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("EE SPR")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->ee->scratchpad->buf, 0x4000, 0);
+                editor.DrawContents(ps2->ee->spr->buf, 0x4000, 0);
 
                 PopFont();
 
