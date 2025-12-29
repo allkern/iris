@@ -223,8 +223,6 @@ target_include_directories(iris PRIVATE
     res
 )
 
-find_library(Vulkan COMPONENTS MoltenVK)
-
 target_link_libraries(iris PUBLIC
     libdeflate::libdeflate_static
     tomlplusplus::tomlplusplus
@@ -234,6 +232,8 @@ target_link_libraries(iris PUBLIC
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
+    find_package(Vulkan COMPONENTS MoltenVK)
+
     target_link_libraries(iris PUBLIC
         Vulkan::Vulkan
         Vulkan::MoltenVK
