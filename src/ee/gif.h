@@ -15,6 +15,10 @@ extern "C" {
 #define GIF_STATE_RECV_TAG 0
 #define GIF_STATE_PROCESSING 1
 
+#define GIF_PATH1 0
+#define GIF_PATH2 1
+#define GIF_PATH3 2
+
 struct gif_tag {
     uint64_t nloop;
     uint32_t prim;
@@ -44,7 +48,7 @@ struct ps2_gif {
     // Renderer state
     void* udata;
     void (*transfer)(void*, int, const void*, size_t);
-    struct queue_state* queue;
+    struct queue_state* queue[3];
 
     struct ps2_gs* gs;
     struct vu_state* vu1;
@@ -63,6 +67,7 @@ void ps2_gif_destroy(struct ps2_gif* gif);
 uint64_t ps2_gif_read32(struct ps2_gif* gif, uint32_t addr);
 void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data);
 void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data);
+void ps2_gif_fifo_write(struct ps2_gif* gif, uint128_t data, int path);
 void ps2_gif_set_backend(struct ps2_gif* gif, void* udata, void (*func)(void*, int, const void*, size_t));
 
 #ifdef __cplusplus

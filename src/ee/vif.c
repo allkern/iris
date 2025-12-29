@@ -168,7 +168,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vif->mode = data & 3;
             } break;
             case VIF_CMD_MSKPATH3: {
-                // printf("vif%d: MSKPATH3(%04x)\n", vif->id, data & 0xffff);
+                // fprintf(stdout, "vif%d: MSKPATH3(%04x)\n", vif->id, data & 0xffff);
 
                 if (data & 0x8000) {
                     vif->gif->stat |= 2;
@@ -410,7 +410,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
                 if (vif->shift == 4) {
                     // fprintf(stdout, "vif%d: Writing %08x %08x %08x %08x to GIF FIFO pending=%d\n", vif->id, vif->data.u32[3], vif->data.u32[2], vif->data.u32[1], vif->data.u32[0], vif->pending_words);
-                    ee_bus_write128(vif->bus, 0x10006000, vif->data);
+                    ps2_gif_fifo_write(vif->gif, vif->data, GIF_PATH2);
 
                     vif->shift = 0;
                 }

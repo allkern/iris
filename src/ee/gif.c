@@ -70,6 +70,7 @@ static inline const char* gif_get_reg_name(uint8_t r) {
 
     return "<unknown>";
 }
+
 struct ps2_gif* ps2_gif_create(void) {
     return malloc(sizeof(struct ps2_gif));
 }
@@ -80,9 +81,12 @@ void ps2_gif_init(struct ps2_gif* gif, struct vu_state* vu1, struct ps2_gs* gs) 
     gif->gs = gs;
     gif->vu1 = vu1;
 
-    gif->queue = queue_create();
+    // A queue for each PATH
+    for (int i = 0; i < 3; i++) {
+        gif->queue[i] = queue_create();
 
-    queue_init(gif->queue);
+        queue_init(gif->queue[i]);
+    }
 }
 
 void ps2_gif_reset(struct ps2_gif* gif) {
@@ -101,11 +105,13 @@ void ps2_gif_reset(struct ps2_gif* gif) {
 
     memset(&gif->tag, 0, sizeof(struct gif_tag));
 
-    queue_clear(gif->queue);
+    for (int i = 0; i < 3; i++)
+        queue_clear(gif->queue[i]);
 }
 
 void ps2_gif_destroy(struct ps2_gif* gif) {
-    queue_destroy(gif->queue);
+    for (int i = 0; i < 3; i++)
+        queue_destroy(gif->queue[i]);
 
     free(gif);
 }
@@ -139,7 +145,9 @@ void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data) {
                 ps2_gif_reset(gif);
             }
         } return;
-        case 0x10003010: gif->mode = data; return;
+        case 0x10003010: {
+            gif->mode = data;
+        } return;
     }
 }
 
@@ -220,7 +228,7 @@ void gif_handle_tag(struct ps2_gif* gif, uint128_t data) {
         } break;
     }
 
-    // printf("giftag: nloop=%04lx eop=%d prim=%04x (pre=%d) fmt=%d nregs=%d reg=%08x%08x size=%d\n",
+    // fprintf(stdout, "giftag: nloop=%04lx eop=%d prim=%04x (pre=%d) fmt=%d nregs=%d reg=%08x%08x size=%d\n",
     //     gif->tag.nloop, gif->tag.eop, gif->tag.prim, gif->tag.pre, gif->tag.fmt, gif->tag.nregs, gif->tag.reg >> 32, gif->tag.reg & 0xffffffff, gif->tag.qwc
     // );
 
@@ -327,12 +335,16 @@ void gif_handle_tag(struct ps2_gif* gif, uint128_t data) {
 // }
 
 void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
+    ps2_gif_fifo_write(gif, data, GIF_PATH3);
+}
+
+void ps2_gif_fifo_write(struct ps2_gif* gif, uint128_t data, int path) {
     // Set FQC when getting GIF FIFO writes
     gif->stat |= 0x1f000000;
 
     if (gif->state == GIF_STATE_RECV_TAG) {
         for (int i = 0; i < 4; i++)
-            queue_push(gif->queue, data.u32[i]);
+            queue_push(gif->queue[path], data.u32[i]);
 
         gif_handle_tag(gif, data);
 
@@ -340,8 +352,10 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
     }
 
     if (gif->tag.qwc) {
+        struct queue_state* queue = gif->queue[path];
+
         for (int i = 0; i < 4; i++)
-            queue_push(gif->queue, data.u32[i]);
+            queue_push(queue, data.u32[i]);
 
         gif->tag.qwc--;
 
@@ -349,9 +363,9 @@ void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data) {
             gif->state = GIF_STATE_RECV_TAG;
 
             if (gif->transfer)
-                gif->transfer(gif->udata, 2, gif->queue->buf, gif->queue->size * sizeof(uint32_t));
+                gif->transfer(gif->udata, path, queue->buf, queue->size * sizeof(uint32_t));
 
-            queue_clear(gif->queue);
+            queue_clear(queue);
         }
     }
 }

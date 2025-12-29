@@ -359,9 +359,8 @@ void mfifo_handle_ref_tag(struct ps2_dmac* dmac) {
             ee_bus_write128(dmac->bus, 0x10005000, q);
         } else {
             // GIF FIFO
-            ee_bus_write128(dmac->bus, 0x10006000, q);
+            ps2_gif_fifo_write(dmac->bus->gif, q, GIF_PATH3);
         }
-
 
         c->madr += 16;
         c->qwc--;
@@ -392,7 +391,7 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
             ee_bus_write128(dmac->bus, 0x10005000, q);
         } else {
             // GIF FIFO
-            ee_bus_write128(dmac->bus, 0x10006000, q);
+            ps2_gif_fifo_write(dmac->bus->gif, q, GIF_PATH3);
         }
 
         c->madr += 16;
@@ -601,7 +600,7 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
 
     sched_schedule(dmac->sched, event);
 
-    // printf("dmac: GIF DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x rbor=%08x rbsr=%08x sprfrom.madr=%08x\n",
+    // fprintf(stderr, "dmac: GIF DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
     //     dmac->gif.chcr & 1,
     //     (dmac->gif.chcr >> 2) & 3,
     //     (dmac->gif.chcr >> 6) & 1,
@@ -638,7 +637,7 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
         // );
 
         // GIF FIFO address
-        ee_bus_write128(dmac->bus, 0x10006000, q);
+        ps2_gif_fifo_write(dmac->bus->gif, q, GIF_PATH3);
 
         dmac->gif.madr += 16;
     }
@@ -669,7 +668,7 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
             //     dmac->gif.madr
             // );
 
-            ee_bus_write128(dmac->bus, 0x10006000, q);
+            ps2_gif_fifo_write(dmac->bus->gif, q, GIF_PATH3);
 
             dmac->gif.madr += 16;
         }

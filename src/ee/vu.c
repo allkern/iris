@@ -368,7 +368,7 @@ void vu_xgkick(struct vu_state* vu) {
 
         // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
-        ps2_gif_write128(vu->gif, 0, tag);
+        ps2_gif_fifo_write(vu->gif, tag, GIF_PATH1);
 
         eop = (tag.u64[0] & 0x8000) != 0;
 
@@ -418,7 +418,7 @@ void vu_xgkick(struct vu_state* vu) {
             //     vu->vu_mem[addr].u32[0]
             // );
 
-            ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
+            ps2_gif_fifo_write(vu->gif, vu_mem_read(vu, addr++), GIF_PATH1);
 
             addr &= 0x3ff;
 
@@ -2536,7 +2536,7 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
 
         // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
-        ps2_gif_write128(vu->gif, 0, tag);
+        ps2_gif_fifo_write(vu->gif, tag, GIF_PATH1);
 
         eop = (tag.u64[0] & 0x8000) != 0;
 
@@ -2586,7 +2586,7 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
             //     vu->vu_mem[addr].u32[0]
             // );
 
-            ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
+            ps2_gif_fifo_write(vu->gif, vu_mem_read(vu, addr++), GIF_PATH1);
 
             addr &= 0x3ff;
 
