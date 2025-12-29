@@ -315,10 +315,17 @@ void show_graphics_settings(iris::instance* iris) {
         EndCombo();
     }
 
+    if (iris->renderer_backend == RENDERER_BACKEND_HARDWARE) {
+        SeparatorText("Renderer settings");
+
+        show_hardware_renderer_settings(iris);
+    }
+
     SeparatorText("Vulkan settings");
 
     Text("GPU");
 
+    static bool changed = false;
     const char* hint;
     const auto& selected_device = iris->vulkan_gpus[iris->vulkan_selected_device_index];
 
@@ -326,6 +333,11 @@ void show_graphics_settings(iris::instance* iris) {
         hint = "Auto";
     } else {
         hint = iris->vulkan_gpus[iris->vulkan_physical_device].name.c_str();
+    }
+
+    if (changed) {
+        SameLine();
+        TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Restart the emulator to apply these changes");
     }
 
     PushStyleVarY(ImGuiStyleVar_ItemSpacing, 5.0F);
@@ -345,6 +357,8 @@ void show_graphics_settings(iris::instance* iris) {
             }
 
             if (Selectable(name.c_str(), device.device == selected_device.device)) {
+                changed = iris->vulkan_physical_device != i;
+
                 iris->vulkan_physical_device = i;
             }
         }
@@ -353,14 +367,10 @@ void show_graphics_settings(iris::instance* iris) {
     }
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    Checkbox(" Enable validation layers", &iris->vulkan_enable_validation_layers);
-    PopStyleVar(2);
-
-    if (iris->renderer_backend == RENDERER_BACKEND_HARDWARE) {
-        SeparatorText("Renderer settings");
-
-        show_hardware_renderer_settings(iris);
+    if (Checkbox(" Enable validation layers", &iris->vulkan_enable_validation_layers)) {
+        changed = true;
     }
+    PopStyleVar(2);
 }
 
 void show_paths_settings(iris::instance* iris) {
