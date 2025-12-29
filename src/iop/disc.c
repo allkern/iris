@@ -133,34 +133,20 @@ int disc_get_extension(const char* path) {
     if (!path)
         return DISC_EXT_UNSUPPORTED;
 
-    if (!(*path))
-        return DISC_EXT_UNSUPPORTED;
+    const char* ptr = strrchr(path, '.');
 
-    int len = strlen(path);
+    if (!ptr) {
+        return DISC_EXT_NONE;
+    }
 
-    char* lc = malloc(len + 1);
+    char* lc = strdup(ptr + 1);
 
-    strcpy(lc, path);
-
-    for (int i = 0; i < len; i++)
-        lc[i] = tolower(lc[i]);
-
-    path = lc;
-
-    const char* ptr = path + (len - 1);
-
-    while (*ptr != '.') {
-        if (ptr == path) {
-            free(lc);
-
-            return DISC_EXT_NONE;
-        }
-
-        --ptr;
+    for (char* p = lc; *p; p++) {
+        *p = tolower(*p);
     }
 
     for (int i = 0; disc_extensions[i]; i++) {
-        if (!strcmp(ptr + 1, disc_extensions[i])) {
+        if (!strcmp(lc, disc_extensions[i])) {
             free(lc);
 
             return i;
@@ -418,9 +404,19 @@ int disc_get_type(struct disc_state* disc) {
         }
 
         // SYSTEM.CNF not found and VIDEO_TS not found
-        // This is probably something else entirely (like an Xbox disc)
-        // The PS2 wouldn't handle it anyways
-        return CDVD_DISC_INVALID;
+        // If the PLAYSTATION string is in the PVD, then this might actually
+        // be part of a multi-disc set, return as a PlayStation disc
+        // Otherwise it's probably something else entirely (like an Xbox disc)
+        // The PS2 wouldn't handle it anyways, return as invalid.
+
+        // The Linux for PlayStation 2 install disc is an example of this.
+        // Disc 2 contains a valid ISO filesystem and the PLAYSTATION string,
+        // but no SYSTEM.CNF file.
+        if (media == DISC_MEDIA_DVD) {
+            return type == DISC_TYPE_GAME ? CDVD_DISC_PS2_DVD : CDVD_DISC_INVALID;
+        }
+
+        return type == DISC_TYPE_GAME ? CDVD_DISC_PS2_CD : CDVD_DISC_INVALID;
     }
 
     // SYSTEM.CNF points to unreadable sector, invalid
