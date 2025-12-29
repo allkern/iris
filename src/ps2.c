@@ -153,7 +153,7 @@ void ps2_init(struct ps2_state* ps2) {
 
     ps2_ipu_reset(ps2->ipu);
 
-    ps2->ee_cycles = 7;
+    ps2->ee_cycles = 0;
     ps2->timescale = 1;
 }
 
@@ -256,6 +256,8 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_ram_reset(ps2->iop_ram);
 
     ps2_ipu_reset(ps2->ipu);
+
+    ps2->ee_cycles = 0;
 }
 
 // To-do: This will soon be useless, need to integrate
@@ -301,6 +303,36 @@ void ps2_cycle(struct ps2_state* ps2) {
 
         ps2->ee_cycles -= 8;
     }
+}
+
+void ps2_step_ee(struct ps2_state* ps2) {
+    ee_step(ps2->ee);
+    sched_tick(ps2->sched, 1);
+    ps2_ee_timers_tick(ps2->ee_timers);
+
+    ps2_ipu_run(ps2->ipu);
+
+    ps2->ee_cycles++; 
+
+    if (ps2->ee_cycles == 8) {
+        iop_cycle(ps2->iop);
+        ps2_iop_timers_tick(ps2->iop_timers);
+
+        ps2->ee_cycles = 0;
+    }
+}
+
+void ps2_step_iop(struct ps2_state* ps2) {
+    for (int i = 0; i < 8; i++) {
+        ps2_ee_timers_tick(ps2->ee_timers);
+        ee_step(ps2->ee);
+    }
+
+    sched_tick(ps2->sched, 8);
+    iop_cycle(ps2->iop);
+    ps2_iop_timers_tick(ps2->iop_timers);
+
+    ps2_ipu_run(ps2->ipu);
 }
 
 void ps2_iop_cycle(struct ps2_state* ps2) {

@@ -83,7 +83,7 @@ struct ee_state {
     uint64_t sa;
     int branch, branch_taken, delay_slot;
 
-    struct ps2_ram* scratchpad;
+    struct ps2_ram* spr;
 
     int cpcond0;
 
@@ -138,6 +138,7 @@ struct ee_state {
     struct vu_state* vu1;
 
     struct ee_vtlb_entry vtlb[48];
+    struct ee_osd_config osd_config;
 
     int eenull_counter;
     int csr_reads;
@@ -149,7 +150,7 @@ struct ee_state {
 #define THS_READY 0x02
 #define THS_WAIT 0x04
 #define THS_SUSPEND 0x08
-#define THS_WAITSUSPEND 0x0C //THS_WAIT | THS_SUSPEND
+#define THS_WAITSUSPEND 0x0C // THS_WAIT | THS_SUSPEND
 #define THS_DORMANT 0x10
 
 struct ee_thread {

@@ -452,7 +452,7 @@ SDL_AppResult update(iris::instance* iris) {
         iris->step_over = false;
 
         if (iris->step) {
-            ps2_cycle(iris->ps2);
+            ps2_step_ee(iris->ps2);
 
             iris->step = false;
         }
