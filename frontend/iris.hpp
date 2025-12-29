@@ -34,6 +34,8 @@ namespace iris {
 #define IRIS_THEME_IMGUI_DARK 1
 #define IRIS_THEME_IMGUI_LIGHT 2
 #define IRIS_THEME_IMGUI_CLASSIC 3
+#define IRIS_THEME_CHERRY 4
+#define IRIS_THEME_SOURCE 5
 
 #define IRIS_SCREENSHOT_FORMAT_PNG 0
 #define IRIS_SCREENSHOT_FORMAT_BMP 1
@@ -49,6 +51,9 @@ namespace iris {
 #define IRIS_SCREENSHOT_JPG_QUALITY_HIGH 3
 #define IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM 4
 #define IRIS_SCREENSHOT_JPG_QUALITY_CUSTOM 5 
+
+#define IRIS_TITLEBAR_DEFAULT 0
+#define IRIS_TITLEBAR_SEAMLESS 1
 
 enum : int {
     BKPT_CPU_EE,
@@ -407,6 +412,13 @@ struct instance {
 
     // Renderer configs
     hardware_config hardware_backend_config;
+
+    // Windows-specific settings
+#ifdef _WIN32
+    int windows_titlebar_style = IRIS_TITLEBAR_DEFAULT;
+    bool windows_enable_borders = true;
+    bool windows_dark_mode = true;
+#endif
 };
 
 struct push_constants {
@@ -527,6 +539,7 @@ namespace vulkan {
 
 namespace platform {
     bool init(iris::instance* iris);
+    bool apply_settings(iris::instance* iris);
     void destroy(iris::instance* iris);
 }
 
