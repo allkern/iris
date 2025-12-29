@@ -37,6 +37,8 @@ uint64_t ps2_speed_read8(struct ps2_speed* speed, uint32_t addr) {
         case 0x002e: return 0;
     }
 
+    return 0;
+
     // exit(1);
 }
 uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
@@ -64,6 +66,8 @@ uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
     }
 
     printf("speed: read16 %08x\n", addr); // exit(1);
+
+    return 0;
 }
 uint64_t ps2_speed_read32(struct ps2_speed* speed, uint32_t addr) {
     addr &= 0xffff;
