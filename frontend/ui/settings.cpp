@@ -736,8 +736,17 @@ static const char* const theme_names[] = {
     "ImGui Dark",
     "ImGui Light",
     "ImGui Classic",
+    "Cherry",
+    "Source",
     0
 };
+
+#ifdef _WIN32
+static const char* titlebar_style_names[] = {
+    "Default",
+    "Seamless"
+};
+#endif
 
 void show_misc_settings(iris::instance* iris) {
     using namespace ImGui;
@@ -752,6 +761,7 @@ void show_misc_settings(iris::instance* iris) {
                 iris->theme = i;
 
                 imgui::set_theme(iris, i);
+                platform::apply_settings(iris);
             }
         }
 
@@ -766,9 +776,37 @@ void show_misc_settings(iris::instance* iris) {
 
     DragFloat("##uiscale", &iris->ui_scale, 0.05f, 0.5f, 1.5f, "%.1f");
 
-    // SliderFloat("##uiscale", &iris->ui_scale, 0.5f, 2.0f, "%.3f");
-
     GetStyle().FontScaleMain = iris->ui_scale;
+
+#ifdef _WIN32
+    Text("Titlebar style (Windows only)");
+
+    if (BeginCombo("##titlebar_style", titlebar_style_names[iris->windows_titlebar_style])) {
+        for (int i = 0; i < 2; i++) {
+            if (Selectable(titlebar_style_names[i], iris->windows_titlebar_style == i)) {
+                iris->windows_titlebar_style = i;
+
+                platform::apply_settings(iris);
+            }
+        }
+
+        EndCombo();
+    }
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+
+    BeginDisabled(iris->windows_titlebar_style != IRIS_TITLEBAR_DEFAULT);
+    if (Checkbox(" Immersive dark mode", &iris->windows_dark_mode)) {
+        platform::apply_settings(iris);
+    }
+    EndDisabled();
+
+    if (Checkbox(" Show window borders", &iris->windows_enable_borders)) {
+        platform::apply_settings(iris);
+    }
+
+    PopStyleVar();
+#endif
 
     SeparatorText("Screenshots");
 

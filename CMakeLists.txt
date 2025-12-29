@@ -102,7 +102,6 @@ target_sources(iris PRIVATE
     frontend/elf.cpp
     frontend/notifications.cpp
     frontend/settings.cpp
-    frontend/platform/stub.cpp
     frontend/ui/about.cpp
     frontend/ui/bios_setting.cpp
     frontend/ui/breakpoints.cpp
@@ -231,6 +230,13 @@ target_link_libraries(iris PUBLIC
     parallel-gs
     chdr-static
 )
+
+if (WIN32)
+    target_link_libraries(iris PRIVATE dwmapi)
+    target_sources(iris PRIVATE frontend/platform/windows.cpp)
+else()
+    target_sources(iris PRIVATE frontend/platform/stub.cpp)
+endif()
 
 set_target_properties(iris PROPERTIES 
     # On macOS, make a proper .app bundle instead of a bare executable

@@ -158,6 +158,12 @@ bool parse_toml_settings(iris::instance* iris) {
         iris->clear_value.color.float32[2] = 0.11f;
     }
 
+#ifdef _WIN32
+    iris->windows_titlebar_style = tbl["ui"]["windows_titlebar_style"].value_or(IRIS_TITLEBAR_DEFAULT);
+    iris->windows_enable_borders = tbl["ui"]["windows_enable_borders"].value_or(true);
+    iris->windows_dark_mode = tbl["ui"]["windows_dark_mode"].value_or(true);
+#endif
+
     toml::array* recents = tbl["recents"]["array"].as_array();
 
     if (recents) {
@@ -415,7 +421,12 @@ void close(iris::instance* iris) {
                 iris->clear_value.color.float32[0],
                 iris->clear_value.color.float32[1],
                 iris->clear_value.color.float32[2]
-            } }
+            } },
+#ifdef _WIN32
+            { "windows_titlebar_style", iris->windows_titlebar_style },
+            { "windows_enable_borders", iris->windows_enable_borders },
+            { "windows_dark_mode", iris->windows_dark_mode },
+#endif
         } },
         { "audio", toml::table {
             { "mute", iris->mute },

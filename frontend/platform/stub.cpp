@@ -9,6 +9,10 @@ bool init(iris::instance* iris) {
     return true;
 }
 
+bool apply_settings(iris::instance* iris) {
+    return true;
+}
+
 void destroy(iris::instance* iris) {}
 
 }
