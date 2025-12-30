@@ -16,6 +16,7 @@ jobs:
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1
       with:
+        vulkan_version: 1.4.313.0
         optional_components: com.lunarg.vulkan.volk
         install_runtime: true
         cache: true
@@ -35,6 +36,7 @@ jobs:
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
 
 
 
