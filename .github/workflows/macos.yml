@@ -26,13 +26,16 @@ jobs:
         cmake -S . -B build -G "Unix Makefiles"
         cmake --build build -j8
         sudo cmake --install build
+        codesign --remove-signature ./build/iris.app
         codesign --force --deep -s - ./build/iris.app
+        codesign -vvvv ./build/iris.app
         mkdir -p ./build/dist
         cp -R ./build/iris.app ./build/dist
     - uses: actions/upload-artifact@v4
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
 
 
 
