@@ -16,7 +16,6 @@ jobs:
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1
       with:
-        vulkan_version: 1.4.313.0
         optional_components: com.lunarg.vulkan.volk
         install_runtime: true
         cache: true
@@ -27,9 +26,6 @@ jobs:
         cmake -S . -B build -G "Unix Makefiles"
         cmake --build build -j8
         sudo cmake --install build
-        codesign --remove-signature ./build/iris.app
-        codesign --force --deep -s - ./build/iris.app
-        codesign -vvvv ./build/iris.app
         mkdir -p ./build/dist
         cp -R ./build/iris.app ./build/dist
     - uses: actions/upload-artifact@v4
