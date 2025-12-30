@@ -13,12 +13,13 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
-    - name: Prepare Vulkan SDK
-      uses: humbletim/setup-vulkan-sdk@v1.2.1
+    - name: Install Vulkan SDK
+      uses: jakoch/install-vulkan-sdk-action@v1
       with:
-        vulkan-query-version: 1.4.304.1
-        vulkan-components: Vulkan-Headers, Vulkan-Loader
-        vulkan-use-cache: true
+        optional_components: com.lunarg.vulkan.usr, com.lunarg.vulkan.volk
+        install_runtime: true
+        cache: true
+        stripdown: true
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
@@ -31,6 +32,7 @@ jobs:
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
 
 
 
