@@ -16,7 +16,7 @@ jobs:
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1
       with:
-        optional_components: com.lunarg.vulkan.usr, com.lunarg.vulkan.volk
+        optional_components: com.lunarg.vulkan.volk
         install_runtime: true
         cache: true
         stripdown: true
@@ -26,12 +26,14 @@ jobs:
         cmake -S . -B build -G "Unix Makefiles"
         cmake --build build -j8
         sudo cmake --install build
+        codesign --force --deep -s - ./build/iris.app
         mkdir -p ./build/dist
         cp -R ./build/iris.app ./build/dist
     - uses: actions/upload-artifact@v4
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
 
 
 
