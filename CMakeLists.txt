@@ -233,7 +233,7 @@ target_link_libraries(iris PUBLIC
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     find_package(Vulkan COMPONENTS MoltenVK)
-    find_library(MOLTENVK_LIBRARY NAMES libMoltenVK.dylib)
+    find_library(MOLTENVK_LIBRARY NAMES libMoltenVK.dylib PATHS ENV VULKAN_SDK)
 
     target_link_libraries(iris PUBLIC
         Vulkan::Vulkan
