@@ -234,9 +234,11 @@ target_link_libraries(iris PUBLIC
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     find_package(Vulkan COMPONENTS MoltenVK)
 
+    message(STATUS "MoltenVK path: ${Vulkan_MoltenVK_LIBRARY}")
+
     target_link_libraries(iris PUBLIC
         Vulkan::Vulkan
-        Vulkan::MoltenVK
+        ${Vulkan_MoltenVK_LIBRARY}/macos-arm64_x86_64/libMoltenVK.a
     )
 endif()
 
