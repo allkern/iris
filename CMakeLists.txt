@@ -280,11 +280,19 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     )
 	
     set(DEP_DIR "${CMAKE_BINARY_DIR}")  # where to look for dependencies when fixing up
-    install(CODE 
+    install(CODE
         "include(BundleUtilities)
         fixup_bundle(\"$<TARGET_BUNDLE_DIR:iris>\" \"\" \"${DEP_DIR}\")
-        " 
-    )
+        execute_process(
+            COMMAND echo ${CMAKE_CURRENT_SOURCE_DIR}
+            COMMAND codesign --force --deep --sign - ${CMAKE_CURRENT_SOURCE_DIR}/build/iris.app
+            RESULT_VARIABLE codesign_result
+            OUTPUT_VARIABLE codesing_output
+        )
+        if (codesign_result)
+            execute_process(COMMAND echo \"${codesign_output}\")
+        endif()
+    ")
     set(CPACK_GENERATOR "DragNDrop")
     include(CPack)
 endif()
