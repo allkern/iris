@@ -287,15 +287,27 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
    	    RUNTIME DESTINATION ./install/bin COMPONENT Runtime
     )
 	
-    set(DEP_DIR "${CMAKE_BINARY_DIR}")  # where to look for dependencies when fixing up
-    install(CODE
-        "include(BundleUtilities)
-        fixup_bundle(\"$<TARGET_BUNDLE_DIR:iris>\" \"\" \"${DEP_DIR}\")
-        execute_process(
-            COMMAND echo ${CMAKE_CURRENT_SOURCE_DIR}
-            COMMAND codesign --force --deep --sign - ${CMAKE_CURRENT_SOURCE_DIR}/build/iris.app
+    set(DEP_DIR "${CMAKE_BINARY_DIR}") # where to look for dependencies when fixing up
+    file(GLOB VULKAN_DYLIBS $ENV{VULKAN_SDK}/lib/libvulkan.*.dylib)
+    set(VULKAN_DYLIBS ${VULKAN_DYLIBS} $ENV{VULKAN_SDK}/lib/libMoltenVK.dylib)
+    install(CODE "
+        execute_process(COMMAND echo \"Fixing up bundle dependencies...\")
+        execute_process(COMMAND echo \"Dependency dir: ${DEP_DIR}\")
+        execute_process(COMMAND echo \"Vulkan dylibs: ${VULKAN_DYLIBS}\")
+        make_directory(${DEP_DIR}/iris.app/Contents/Resources/vulkan/icd.d)
+        make_directory(${DEP_DIR}/iris.app/Contents/Frameworks)
+        file(COPY
+            ${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK_icd.json
+            DESTINATION ${DEP_DIR}/iris.app/Contents/Resources/vulkan/icd.d/
+        )
+        file(COPY
+            ${VULKAN_DYLIBS}
+            DESTINATION ${DEP_DIR}/iris.app/Contents/Frameworks/
+        )
+        execute_process(COMMAND
+            codesign --force --deep --sign - ${DEP_DIR}/iris.app
             RESULT_VARIABLE codesign_result
-            OUTPUT_VARIABLE codesing_output
+            OUTPUT_VARIABLE codesign_output
         )
         if (codesign_result)
             execute_process(COMMAND echo \"${codesign_output}\")
@@ -309,11 +321,11 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     install(CODE
         "include(${CMAKE_CURRENT_SOURCE_DIR}/AppImage.cmake)
         make_appimage(
-            EXE \"${CMAKE_CURRENT_SOURCE_DIR}/build/iris\"
+            EXE \"${DEP_DIR}/iris\"
             NAME \"Iris\"
             ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
             DIR_ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
-            OUTPUT_NAME \"${CMAKE_CURRENT_SOURCE_DIR}/build/Iris-${GIT_VERSION_STRING}.AppImage\"
+            OUTPUT_NAME \"${DEP_DIR}/Iris-${GIT_VERSION_STRING}.AppImage\"
         )
         "
         COMPONENT Runtime
