@@ -287,25 +287,35 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
    	    RUNTIME DESTINATION ./install/bin COMPONENT Runtime
     )
 	
-    set(DEP_DIR "${CMAKE_BINARY_DIR}") # where to look for dependencies when fixing up
+    set(BUNDLE_PATH "${CMAKE_BINARY_DIR}/iris.app") # where to look for dependencies when fixing up
     file(GLOB VULKAN_DYLIBS $ENV{VULKAN_SDK}/lib/libvulkan.*.dylib)
     set(VULKAN_DYLIBS ${VULKAN_DYLIBS} $ENV{VULKAN_SDK}/lib/libMoltenVK.dylib)
     install(CODE "
-        execute_process(COMMAND echo \"Fixing up bundle dependencies...\")
-        execute_process(COMMAND echo \"Dependency dir: ${DEP_DIR}\")
+        execute_process(COMMAND echo \"Preparing to bundle iris...\")
+        execute_process(COMMAND echo \"Bundle path: ${BUNDLE_PATH}\")
         execute_process(COMMAND echo \"Vulkan dylibs: ${VULKAN_DYLIBS}\")
-        make_directory(${DEP_DIR}/iris.app/Contents/Resources/vulkan/icd.d)
-        make_directory(${DEP_DIR}/iris.app/Contents/Frameworks)
+        execute_process(COMMAND echo \"Adding local RPATH...\")
+        execute_process(
+            COMMAND install_name_tool -add_rpath
+            \"@executable_path/../Frameworks\"
+            \"${BUNDLE_PATH}/Contents/MacOS/iris\"
+        )
+        execute_process(COMMAND echo \"Creating ICD JSON directory...\")
+        make_directory(${BUNDLE_PATH}/Contents/Resources/vulkan/icd.d)
+        execute_process(COMMAND echo \"Creating Frameworks directory...\")
+        make_directory(${BUNDLE_PATH}/Contents/Frameworks)
+        execute_process(COMMAND echo \"Copying files...\")
         file(COPY
             ${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK_icd.json
-            DESTINATION ${DEP_DIR}/iris.app/Contents/Resources/vulkan/icd.d/
+            DESTINATION ${BUNDLE_PATH}/Contents/Resources/vulkan/icd.d/
         )
         file(COPY
             ${VULKAN_DYLIBS}
-            DESTINATION ${DEP_DIR}/iris.app/Contents/Frameworks/
+            DESTINATION ${BUNDLE_PATH}/Contents/Frameworks/
         )
+        execute_process(COMMAND echo \"Signing app bundle...\")
         execute_process(COMMAND
-            codesign --force --deep --sign - ${DEP_DIR}/iris.app
+            codesign --force --deep --sign - ${BUNDLE_PATH}
             RESULT_VARIABLE codesign_result
             OUTPUT_VARIABLE codesign_output
         )
@@ -321,11 +331,11 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     install(CODE
         "include(${CMAKE_CURRENT_SOURCE_DIR}/AppImage.cmake)
         make_appimage(
-            EXE \"${DEP_DIR}/iris\"
+            EXE \"${CMAKE_CURRENT_SOURCE_DIR}/build/iris\"
             NAME \"Iris\"
             ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
             DIR_ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
-            OUTPUT_NAME \"${DEP_DIR}/Iris-${GIT_VERSION_STRING}.AppImage\"
+            OUTPUT_NAME \"${CMAKE_CURRENT_SOURCE_DIR}/build/Iris-${GIT_VERSION_STRING}.AppImage\"
         )
         "
         COMPONENT Runtime
