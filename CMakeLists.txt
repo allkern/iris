@@ -112,6 +112,7 @@ target_sources(iris PRIVATE
     frontend/ui/logs.cpp
     frontend/ui/memory.cpp
     frontend/ui/memory_card_tool.cpp
+    frontend/ui/memory_search.cpp
     frontend/ui/menubar.cpp
     frontend/ui/modules.cpp
     frontend/ui/overlay.cpp

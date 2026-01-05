@@ -281,6 +281,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_threads) show_threads(iris);
     if (iris->show_sysmem_logs) show_sysmem_logs(iris);
     if (iris->show_memory_card_tool) show_memory_card_tool(iris);
+    if (iris->show_memory_search) show_memory_search(iris);
     // if (iris->show_gamelist) show_gamelist(iris);
     if (iris->show_imgui_demo) ShowDemoWindow(&iris->show_imgui_demo);
     if (iris->show_bios_setting_window) show_bios_setting_window(iris);
@@ -557,7 +558,7 @@ int get_menubar_height(iris::instance* iris) {
 }
 
 void destroy(iris::instance* iris) {
-    SDL_HideWindow(iris->window);
+    if (iris->window) SDL_HideWindow(iris->window);
 
     iris::audio::close(iris);
     iris::settings::close(iris);
@@ -567,7 +568,8 @@ void destroy(iris::instance* iris) {
     iris::platform::destroy(iris);
     iris::emu::destroy(iris);
 
-    SDL_DestroyWindow(iris->window);
+    if (iris->window) SDL_DestroyWindow(iris->window);
+
     SDL_Quit();
 
     delete iris;

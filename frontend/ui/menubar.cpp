@@ -382,6 +382,7 @@ void show_main_menubar(iris::instance* iris) {
         }
         if (BeginMenu("Tools")) {
             if (MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->show_imgui_demo));
+            if (MenuItem(ICON_MS_SEARCH " Memory search", NULL, &iris->show_memory_search));
             if (MenuItem(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
                 audio::mute(iris);
 
