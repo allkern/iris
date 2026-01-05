@@ -462,7 +462,7 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
 
     VkAttachmentReference color_attachment_ref = {};
     color_attachment_ref.attachment = 0;
@@ -474,12 +474,12 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     subpass.pColorAttachments = &color_attachment_ref;
 
     VkSubpassDependency dependency = {};
-    dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.dstSubpass = 0;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcSubpass = 0;
+    dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
+    dependency.srcStageMask = 0;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.srcAccessMask = 0;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
 
     VkRenderPass render_pass = VK_NULL_HANDLE;
 
@@ -682,9 +682,13 @@ bool init(iris::instance* iris) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
-    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;       // Enable Multi-Viewport / Platform Windows
-    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoTaskBarIcons;
-    // io.ConfigFlags |= ImGuiConfigFlags_ViewportsNoMerge;
+
+    if (iris->imgui_enable_viewports) {
+        io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+        io.ConfigViewportsNoDecoration = false;
+        io.ConfigViewportsNoAutoMerge = true;
+    }
+
     io.IniFilename = iris->ini_path.c_str();
 
     // Setup scaling
@@ -894,6 +898,11 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
         }
     }
 
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+
     VkPresentInfoKHR present_info = {};
     present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
@@ -923,6 +932,10 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
 bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags) {
     ImGui::SetNextWindowSize(ImVec2(600.0, 600.0), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowPos(ImVec2(50.0, 50.0), ImGuiCond_FirstUseEver);
+
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        flags |= ImGuiWindowFlags_NoTitleBar;
+    }
 
     return ImGui::Begin(name, p_open, flags);
 }

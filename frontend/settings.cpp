@@ -145,6 +145,7 @@ bool parse_toml_settings(iris::instance* iris) {
     auto ui = tbl["ui"];
     iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
     iris->ui_scale = ui["scale"].value_or(1.0f);
+    iris->imgui_enable_viewports = ui["enable_viewports"].value_or(false);
 
     toml::array* bgcolor = tbl["ui"]["bgcolor"].as_array();
 
@@ -422,6 +423,7 @@ void close(iris::instance* iris) {
                 iris->clear_value.color.float32[1],
                 iris->clear_value.color.float32[2]
             } },
+            { "enable_viewports", iris->imgui_enable_viewports },
 #ifdef _WIN32
             { "windows_titlebar_style", iris->windows_titlebar_style },
             { "windows_enable_borders", iris->windows_enable_borders },

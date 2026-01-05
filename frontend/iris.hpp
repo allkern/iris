@@ -223,7 +223,6 @@ struct instance {
     VkPhysicalDeviceVulkan11Features vulkan_11_features = {};
     VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
     VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
-    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR swapchain_maintenance_1_features = {};
     VkSampler sampler[3] = { VK_NULL_HANDLE };
     bool cubic_supported = false;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
@@ -333,6 +332,7 @@ struct instance {
     bool show_imgui_demo = false;
     bool show_vu_disassembler = false;
     bool show_overlay = false;
+    bool show_memory_search = false;
 
     // Special windows
     bool show_bios_setting_window = false;
@@ -355,6 +355,7 @@ struct instance {
     int vulkan_physical_device = -1;
     int vulkan_selected_device_index = 0;
     bool vulkan_enable_validation_layers = false;
+    bool imgui_enable_viewports = false;
 
     std::deque <std::string> recents;
 
@@ -375,6 +376,7 @@ struct instance {
     int screenshot_jpg_quality_mode = IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM;
     int screenshot_jpg_quality = 50;
     int screenshot_mode = IRIS_SCREENSHOT_MODE_INTERNAL;
+    int docking_mode = 0;
     bool screenshot_shader_processing = false;
 
     bool limit_fps = true;
@@ -599,6 +601,7 @@ void show_threads(iris::instance* iris);
 void show_overlay(iris::instance* iris);
 void show_memory_card_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
+void show_memory_search(iris::instance* iris);
 // void show_gamelist(iris::instance* iris);
 
 void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key);

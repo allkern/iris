@@ -788,6 +788,12 @@ void show_misc_settings(iris::instance* iris) {
 
     GetStyle().FontScaleMain = iris->ui_scale;
 
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox("Enable viewports", &iris->imgui_enable_viewports); SameLine();
+    PopStyleVar();
+
+    TextDisabled(ICON_MS_WARNING " Experimental feature, requires restart");
+
 #ifdef _WIN32
     Text("Titlebar style (Windows only)");
 
