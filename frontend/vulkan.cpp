@@ -769,10 +769,13 @@ texture upload_texture(iris::instance* iris, void* pixels, int width, int height
 }
 
 void free_texture(iris::instance* iris, texture& tex) {
-    vkDestroySampler(iris->device, tex.sampler, nullptr);
-    vkDestroyImageView(iris->device, tex.image_view, nullptr);
-    vkDestroyImage(iris->device, tex.image, nullptr);
-    vkFreeMemory(iris->device, tex.image_memory, nullptr);
+    if (!iris->device)
+        return;
+
+    if (tex.sampler) vkDestroySampler(iris->device, tex.sampler, nullptr);
+    if (tex.image_view) vkDestroyImageView(iris->device, tex.image_view, nullptr);
+    if (tex.image) vkDestroyImage(iris->device, tex.image, nullptr);
+    if (tex.image_memory) vkFreeMemory(iris->device, tex.image_memory, nullptr);
 }
 
 bool init(iris::instance* iris, bool enable_validation) {
@@ -904,7 +907,6 @@ bool init(iris::instance* iris, bool enable_validation) {
         VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME,
         VK_KHR_LOAD_STORE_OP_NONE_EXTENSION_NAME,
         VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
-        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
         VK_EXT_FILTER_CUBIC_EXTENSION_NAME
     };
 
@@ -919,13 +921,11 @@ bool init(iris::instance* iris, bool enable_validation) {
 
     iris->vulkan_11_features.pNext = &iris->vulkan_12_features;
     iris->vulkan_12_features.pNext = &iris->subgroup_size_control_features;
-    iris->subgroup_size_control_features.pNext = &iris->swapchain_maintenance_1_features;
-    iris->swapchain_maintenance_1_features.pNext = VK_NULL_HANDLE;
+    iris->subgroup_size_control_features.pNext = VK_NULL_HANDLE;
 
     iris->vulkan_11_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
     iris->vulkan_12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     iris->subgroup_size_control_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
-    iris->swapchain_maintenance_1_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR;
 
     iris->vulkan_11_features.storageBuffer16BitAccess = VK_TRUE;
     iris->vulkan_11_features.uniformAndStorageBuffer16BitAccess = VK_TRUE;
@@ -942,8 +942,6 @@ bool init(iris::instance* iris, bool enable_validation) {
     
     iris->subgroup_size_control_features.subgroupSizeControl = VK_TRUE;
     iris->subgroup_size_control_features.computeFullSubgroups = VK_TRUE;
-
-    iris->swapchain_maintenance_1_features.swapchainMaintenance1 = VK_TRUE;
 
     // Chain in all feature structs
     device_info.data = &iris->vulkan_11_features;
@@ -1019,23 +1017,23 @@ bool init(iris::instance* iris, bool enable_validation) {
 }
 
 void cleanup(iris::instance* iris) {
-    vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
-    vkDestroyDescriptorPool(iris->device, iris->descriptor_pool, nullptr);
+    if (iris->descriptor_set_layout) vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
+    if (iris->descriptor_pool) vkDestroyDescriptorPool(iris->device, iris->descriptor_pool, nullptr);
 
     for (int i = 0; i < 3; i++)
         if (iris->sampler[i]) vkDestroySampler(iris->device, iris->sampler[i], nullptr);
 
-    vkDestroyBuffer(iris->device, iris->vertex_buffer, nullptr);
-    vkDestroyBuffer(iris->device, iris->vertex_staging_buffer, nullptr);
-    vkDestroyBuffer(iris->device, iris->index_buffer, nullptr);
-    vkFreeMemory(iris->device, iris->vertex_staging_buffer_memory, nullptr);
-    vkFreeMemory(iris->device, iris->vertex_buffer_memory, nullptr);
-    vkFreeMemory(iris->device, iris->index_buffer_memory, nullptr);
-    vkDestroyPipeline(iris->device, iris->pipeline, nullptr);
-    vkDestroyRenderPass(iris->device, iris->render_pass, nullptr);
-    vkDestroyPipelineLayout(iris->device, iris->pipeline_layout, nullptr);
-    vkDestroyDevice(iris->device, nullptr);
-    vkDestroyInstance(iris->instance, nullptr);
+    if (iris->vertex_buffer) vkDestroyBuffer(iris->device, iris->vertex_buffer, nullptr);
+    if (iris->vertex_staging_buffer) vkDestroyBuffer(iris->device, iris->vertex_staging_buffer, nullptr);
+    if (iris->index_buffer) vkDestroyBuffer(iris->device, iris->index_buffer, nullptr);
+    if (iris->vertex_staging_buffer_memory) vkFreeMemory(iris->device, iris->vertex_staging_buffer_memory, nullptr);
+    if (iris->vertex_buffer_memory) vkFreeMemory(iris->device, iris->vertex_buffer_memory, nullptr);
+    if (iris->index_buffer_memory) vkFreeMemory(iris->device, iris->index_buffer_memory, nullptr);
+    if (iris->pipeline) vkDestroyPipeline(iris->device, iris->pipeline, nullptr);
+    if (iris->render_pass) vkDestroyRenderPass(iris->device, iris->render_pass, nullptr);
+    if (iris->pipeline_layout) vkDestroyPipelineLayout(iris->device, iris->pipeline_layout, nullptr);
+    if (iris->device) vkDestroyDevice(iris->device, nullptr);
+    if (iris->instance) vkDestroyInstance(iris->instance, nullptr);
 }
 
 void insert_image_memory_barrier(

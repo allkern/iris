@@ -610,8 +610,11 @@ void refresh(iris::instance* iris) {
 }
 
 void destroy(iris::instance* iris) {
-    vkDeviceWaitIdle(iris->device);
-    vkQueueWaitIdle(iris->queue);
+    if (!iris->window)
+        return;
+
+    if (iris->device) vkDeviceWaitIdle(iris->device);
+    if (iris->queue) vkQueueWaitIdle(iris->queue);
 
     for (auto& fb : iris->shader_framebuffers) {
         if (fb.framebuffer) vkDestroyFramebuffer(iris->device, fb.framebuffer, nullptr);
@@ -630,7 +633,7 @@ void destroy(iris::instance* iris) {
 
     shaders::clear(iris);
 
-    renderer_destroy(iris->renderer);
+    if (iris->renderer) renderer_destroy(iris->renderer);
 }
 
 }

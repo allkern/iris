@@ -17,7 +17,7 @@ bool init(iris::instance* iris) {
 }
 
 void destroy(iris::instance* iris) {
-    ps2_destroy(iris->ps2);
+    if (iris->ps2) ps2_destroy(iris->ps2);
 }
 
 const char* get_extension(const char* path) {
