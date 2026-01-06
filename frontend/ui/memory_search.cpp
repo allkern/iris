@@ -1,3 +1,5 @@
+#include <sstream>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <cctype>
@@ -6,6 +8,7 @@
 #include "ee/ee_def.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "portable-file-dialogs.h"
 
 namespace iris {
 
@@ -78,11 +81,24 @@ union value {
 
 struct match {
     uint32_t address;
-
     value prev_value, curr_value;
+    std::string description;
 };
 
-std::vector <match> search_matches;
+std::vector <match> search_matches = {
+    { 0, 0, 0 },
+    { 0x10, 0, 0 }
+};
+
+std::vector <match> address_list = {
+    { 0, 0, 0 },
+    { 0x10, 0, 0 }
+};
+
+int search_type = SEARCH_TYPE_U32;
+int search_cmp = SEARCH_CMP_EQUAL;
+int search_cpu = SEARCH_CPU_EE;
+bool search_aligned = true;
 
 template <typename T> bool compare_values(int cmp, T a, T b) {
     switch (cmp) {
@@ -349,212 +365,539 @@ void sprintf_match(const value& v, char* buf, size_t size, int type, int hex) {
 }
 
 
-
 int frame = 0;
+
+void show_search_table(iris::instance* iris, struct ps2_state* ps2, int type, int cpu) {
+    using namespace ImGui;
+
+    static uint32_t selected_address = 0;
+
+    if (search_matches.empty()) {
+        SeparatorText("Search results");
+    } else {
+        char buf[256];
+
+        if (search_matches.size() > 9999) {
+            snprintf(buf, sizeof(buf), "Search results (9999+ matches)");
+        } else {
+            snprintf(buf, sizeof(buf), "Search results (%zu matches)", search_matches.size());
+        }
+
+        SeparatorText(buf);
+    }
+
+    if (BeginTable("Matches", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp)) {
+        TableSetupColumn("Address");
+        TableSetupColumn("Previous Value");
+        TableSetupColumn("Current Value");
+        TableHeadersRow();
+
+        for (match& m : search_matches) {
+            TableNextRow();
+
+            TableSetColumnIndex(0);
+
+            char addr_label[16];
+            char prev_value_label[64];
+            char curr_value_label[64];
+
+            sprintf(addr_label, "0x%08x", m.address);
+            sprintf_match(m.prev_value, prev_value_label, sizeof(prev_value_label), type, false);
+            sprintf_match(m.curr_value, curr_value_label, sizeof(curr_value_label), type, false);
+
+            PushFont(iris->font_code);
+
+            Selectable(addr_label, false, ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_SpanAllColumns);
+
+            if (IsItemClicked(ImGuiMouseButton_Right)) {
+                OpenPopup("context_menu");
+
+                selected_address = m.address;
+            }
+
+            if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                OpenPopup("edit_value_popup");
+
+                selected_address = m.address;
+            }
+
+            if (selected_address == m.address) if (BeginPopup("context_menu")) {
+                PushFont(iris->font_small_code);
+                TextDisabled("0x%08x", m.address);
+                PopFont();
+
+                PushFont(iris->font_body);
+                if (BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
+                    if (Selectable("Address")) {
+                        ImGui::SetClipboardText(addr_label);
+                    }
+
+                    if (Selectable("Previous Value")) {
+                        ImGui::SetClipboardText(prev_value_label);
+                    }
+
+                    if (Selectable("Current Value")) {
+                        ImGui::SetClipboardText(curr_value_label);
+                    }
+
+                    ImGui::EndMenu();
+                }
+
+                bool in_address_list = false;
+
+                for (const match& am : address_list) {
+                    if (am.address == m.address) {
+                        in_address_list = true;
+                        break;
+                    }
+                }
+
+                if (Selectable(in_address_list ? ICON_MS_REMOVE " Remove from address list" : ICON_MS_ADD " Add to address list")) {
+                    if (in_address_list) {
+                        std::erase_if(address_list, [m](const match& am) {
+                            return am.address == m.address;
+                        });
+                    } else {
+                        m.description = "No description";
+
+                        address_list.push_back(m);
+                    }
+                }
+
+                PopFont();
+
+                EndPopup();
+            }
+
+            if (selected_address == m.address) if (BeginPopup("edit_value_popup")) {
+                static char new_value[9];
+
+                PushFont(iris->font_small_code);
+                TextDisabled("Edit "); SameLine(0.0, 0.0);
+                Text("%s", addr_label);
+                PopFont();
+
+                PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
+                PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
+
+                PushFont(iris->font_body);
+                PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
+
+                AlignTextToFramePadding();
+                Text(ICON_MS_EDIT); SameLine();
+
+                SetNextItemWidth(100);
+                PushFont(iris->font_code);
+
+                if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    if (new_value[0]) {
+                        m.curr_value.u64 = std::strtoull(new_value, nullptr, 16);
+
+                        write_match_value(ps2, cpu, const_cast<match&>(m), type);
+                    }
+
+                    CloseCurrentPopup();
+                }
+
+                PopFont();
+
+                if (Button("Change")) {
+                    if (new_value[0]) {
+                        m.curr_value.u64 = std::strtoull(new_value, nullptr, 16);
+
+                        write_match_value(ps2, cpu, const_cast<match&>(m), type);
+                    }
+
+                    CloseCurrentPopup();
+                } SameLine();
+
+                if (Button("Cancel"))
+                    CloseCurrentPopup();
+
+                PopStyleColor();
+                PopStyleVar(2);
+
+                PopFont();
+                EndPopup();
+            }
+
+            TableSetColumnIndex(1);
+
+            Text("%s", prev_value_label);
+
+            TableSetColumnIndex(2);
+
+            Text("%s", curr_value_label);
+
+            PopFont();
+        }
+
+        EndTable();
+    }
+}
+
+void show_address_list(iris::instance* iris) {
+    using namespace ImGui;
+
+    struct ps2_state* ps2 = iris->ps2;
+    static uint32_t selected_address = 0;
+
+    if (BeginTable("Addresses", 4, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Resizable)) {
+        TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed, 100.0f);
+        TableSetupColumn("Description");
+        TableSetupColumn("Previous Value", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        TableSetupColumn("Current Value", ImGuiTableColumnFlags_WidthFixed, 150.0f);
+        TableHeadersRow();
+
+        for (match& m : address_list) {
+            TableNextRow();
+
+            TableSetColumnIndex(0);
+
+            char addr_label[16];
+            char prev_value_label[64];
+            char curr_value_label[64];
+
+            sprintf(addr_label, "0x%08x", m.address);
+            sprintf_match(m.prev_value, prev_value_label, sizeof(prev_value_label), search_type, false);
+            sprintf_match(m.curr_value, curr_value_label, sizeof(curr_value_label), search_type, false);
+
+            PushFont(iris->font_code);
+
+            Selectable(addr_label, false, ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_SpanAllColumns);
+
+            if (IsItemClicked(ImGuiMouseButton_Right)) {
+                OpenPopup("context_menu_al");
+
+                selected_address = m.address;
+            }
+
+            if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+                OpenPopup("edit_value_popup_al");
+
+                selected_address = m.address;
+            }
+
+            if (selected_address == m.address) if (BeginPopup("context_menu_al")) {
+                PushFont(iris->font_small_code);
+                TextDisabled("0x%08x", m.address);
+                PopFont();
+
+                PushFont(iris->font_body);
+                if (BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
+                    if (Selectable("Address")) {
+                        ImGui::SetClipboardText(addr_label);
+                    }
+
+                    if (Selectable("Previous Value")) {
+                        ImGui::SetClipboardText(prev_value_label);
+                    }
+
+                    if (Selectable("Current Value")) {
+                        ImGui::SetClipboardText(curr_value_label);
+                    }
+
+                    ImGui::EndMenu();
+                }
+
+                if (Selectable(ICON_MS_REMOVE " Remove from address list")) {
+                    std::erase_if(address_list, [m](const match& am) {
+                        return am.address == m.address;
+                    });
+                }
+
+                PopFont();
+
+                EndPopup();
+            }
+
+            if (selected_address == m.address) if (BeginPopup("edit_value_popup_al")) {
+                static char new_value[9];
+
+                PushFont(iris->font_small_code);
+                TextDisabled("Edit "); SameLine(0.0, 0.0);
+                Text("%s", addr_label);
+                PopFont();
+
+                PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
+                PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
+
+                PushFont(iris->font_body);
+                PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
+
+                AlignTextToFramePadding();
+                Text(ICON_MS_EDIT); SameLine();
+
+                SetNextItemWidth(100);
+                PushFont(iris->font_code);
+
+                if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+                    if (new_value[0]) {
+                        m.curr_value.u64 = std::strtoull(new_value, nullptr, 16);
+
+                        write_match_value(ps2, search_cpu, const_cast<match&>(m), search_type);
+                    }
+
+                    CloseCurrentPopup();
+                }
+
+                PopFont();
+
+                if (Button("Change")) {
+                    if (new_value[0]) {
+                        m.curr_value.u64 = std::strtoull(new_value, nullptr, 16);
+
+                        write_match_value(ps2, search_cpu, const_cast<match&>(m), search_type);
+                    }
+
+                    CloseCurrentPopup();
+                } SameLine();
+
+                if (Button("Cancel"))
+                    CloseCurrentPopup();
+
+                PopStyleColor();
+                PopStyleVar(2);
+
+                PopFont();
+                EndPopup();
+            }
+
+            TableSetColumnIndex(1);
+
+            PushFont(iris->font_body);
+            Text("%s", m.description.c_str());
+            PopFont();
+
+            TableSetColumnIndex(2);
+
+            Text("%s", prev_value_label);
+
+            TableSetColumnIndex(3);
+
+            Text("%s", curr_value_label);
+
+            PopFont();
+        }
+    }
+
+    EndTable();
+}
+
+void show_search_options(iris::instance* iris) {
+    using namespace ImGui;
+
+    struct ps2_state* ps2 = iris->ps2;
+
+    SeparatorText("Search options");
+
+    PushItemWidth(-FLT_MIN);
+
+    Text("Type");
+    if (BeginCombo("##type", search_type_names[search_type])) {
+        for (int i = 0; i < IM_ARRAYSIZE(search_type_names); i++) {
+            if (Selectable(search_type_names[i], search_type == i)) {
+                search_type = i;
+            }
+        }
+
+        EndCombo();
+    }
+
+    Text("Comparison");
+    if (BeginCombo("##comparison", search_cmp_names[search_cmp])) {
+        for (int i = 0; i < IM_ARRAYSIZE(search_cmp_names); i++) {
+            if (Selectable(search_cmp_names[i], search_cmp == i)) {
+                search_cmp = i;
+            }
+        }
+
+        EndCombo();
+    }
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0f);
+    Checkbox("Aligned", &search_aligned);
+    PopStyleVar();
+
+    Text("Memory");
+    if (BeginCombo("##memory", search_cpu_names[search_cpu])) {
+        for (int i = 0; i < IM_ARRAYSIZE(search_cpu_names); i++) {
+            if (Selectable(search_cpu_names[i], search_cpu == i)) {
+                search_cpu = i;
+            }
+        }
+
+        EndCombo();
+    }
+
+    static char buf[64];
+
+    Text("Value");
+    if (InputText("##value", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
+        search_memory(ps2, search_cpu, search_type, search_cmp, buf, search_aligned);
+    }
+
+    PopItemWidth();
+
+    BeginDisabled(buf[0] == '\0');
+    if (Button("Search")) {
+        search_memory(ps2, search_cpu, search_type, search_cmp, buf, search_aligned);
+    } SameLine();
+    EndDisabled();
+
+    BeginDisabled(buf[0] == '\0' || search_matches.empty());
+    if (Button("Filter")) {
+        filter_results(search_type, search_cmp, buf);
+    }
+    EndDisabled();
+}
+
+void update_search_matches(struct ps2_state* ps2, int cpu) {
+    if (frame != 4) {
+        frame++;
+
+        return;
+    }
+
+    for (match& m : search_matches) {
+        struct ps2_ram* mem = cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
+
+        m.curr_value.u64 = *(uint64_t*)&mem->buf[m.address];
+    }
+
+    for (match& m : address_list) {
+        struct ps2_ram* mem = cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
+
+        m.curr_value.u64 = *(uint64_t*)&mem->buf[m.address];
+    }
+
+
+    frame = 0;
+}
+
+std::string serialize_address_list() {
+    std::stringstream ss;
+
+    for (const match& m : address_list) {
+        ss << "0x" << std::hex << m.address << "," << m.description << "\n";
+    }
+
+    return ss.str();
+}
+
+void import_address_list_from_stream(std::istream& stream) {
+    address_list.clear();
+
+    std::string line;
+
+    while (std::getline(stream, line)) {
+        std::stringstream linestream(line);
+        std::string address_str;
+        std::string description;
+
+        if (std::getline(linestream, address_str, ',') && std::getline(linestream, description)) {
+            match m;
+
+            m.address = (uint32_t)std::strtoul(address_str.c_str(), nullptr, 0);
+            m.description = description;
+            m.prev_value.u64 = 0;
+            m.curr_value.u64 = 0;
+
+            // To-do: Remove double quotes from description if present
+
+            address_list.push_back(m);
+        }
+    }
+}
 
 void show_memory_search(iris::instance* iris) {
     using namespace ImGui;
 
     struct ps2_state* ps2 = iris->ps2;
 
-    static int search_type = SEARCH_TYPE_U32;
-    static int search_cmp = SEARCH_CMP_EQUAL;
-    static int search_cpu = SEARCH_CPU_EE;
-    static bool search_aligned = true;
+    update_search_matches(ps2, search_cpu);
 
-    if (frame == 4) {
-        for (match& m : search_matches) {
-            struct ps2_ram* mem = search_cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
-            m.curr_value.u64 = *(uint64_t*)&mem->buf[m.address];
-        }
+    SetNextWindowSizeConstraints(ImVec2(600, 550), ImVec2(FLT_MAX, FLT_MAX));
 
-        frame = 0;
-    } else {
-        frame++;
-    }
+    int top_shelf_height = GetContentRegionAvail().y - 220;
 
-    if (imgui::BeginEx("Memory Search", &iris->show_memory_search)) {
-        Text("Type");
-        if (BeginCombo("##type", search_type_names[search_type])) {
-            for (int i = 0; i < IM_ARRAYSIZE(search_type_names); i++) {
-                if (Selectable(search_type_names[i], search_type == i)) {
-                    search_type = i;
-                }
-            }
+    if (imgui::BeginEx("Memory search", &iris->show_memory_search, ImGuiWindowFlags_MenuBar)) {
+        if (BeginMenuBar()) {
+            if (BeginMenu("File")) {
+                if (BeginMenu("Address list")) {
+                    if (MenuItem("Export to file...")) {
+                        std::string str = serialize_address_list();
 
-            EndCombo();
-        }
+                        pfd::save_file file("Export Address List", "address_list.csv", { "CSV Files (*.csv)", "*.csv", "All files (*.*)", "" });
 
-        Text("Comparison");
-        if (BeginCombo("##comparison", search_cmp_names[search_cmp])) {
-            for (int i = 0; i < IM_ARRAYSIZE(search_cmp_names); i++) {
-                if (Selectable(search_cmp_names[i], search_cmp == i)) {
-                    search_cmp = i;
-                }
-            }
+                        if (!file.result().empty()) {
+                            FILE* f = fopen(file.result().c_str(), "w");
 
-            EndCombo();
-        }
-        PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0f);
-        Checkbox("Aligned", &search_aligned);
-        PopStyleVar();
+                            if (f) {
+                                fwrite(str.c_str(), 1, str.size(), f);
 
-        Text("Memory");
-        if (BeginCombo("##memory", search_cpu_names[search_cpu])) {
-            for (int i = 0; i < IM_ARRAYSIZE(search_cpu_names); i++) {
-                if (Selectable(search_cpu_names[i], search_cpu == i)) {
-                    search_cpu = i;
-                }
-            }
-
-            EndCombo();
-        }
-
-        static char buf[64];
-
-        Text("Value");
-        if (InputText("##value", buf, sizeof(buf), ImGuiInputTextFlags_EnterReturnsTrue)) {
-            search_memory(ps2, search_cpu, search_type, search_cmp, buf, search_aligned);
-        }
-
-        BeginDisabled(buf[0] == '\0');
-        if (Button("Search")) {
-            search_memory(ps2, search_cpu, search_type, search_cmp, buf, search_aligned);
-        } SameLine();
-        EndDisabled();
-
-        BeginDisabled(buf[0] == '\0' || search_matches.empty());
-        if (Button("Filter")) {
-            filter_results(search_type, search_cmp, buf);
-        }
-        EndDisabled();
-
-        if (BeginTable("Matches", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY)) {
-            TableSetupColumn("Address", ImGuiTableColumnFlags_WidthFixed, 100.0f);
-            TableSetupColumn("Previous Value", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-            TableSetupColumn("Current Value", ImGuiTableColumnFlags_WidthFixed, 150.0f);
-            TableHeadersRow();
-
-            for (match& m : search_matches) {
-                TableNextRow();
-
-                TableSetColumnIndex(0);
-
-                char addr_label[16];
-                char prev_value_label[64];
-                char curr_value_label[64];
-
-                sprintf(addr_label, "0x%08x", m.address);
-                sprintf_match(m.prev_value, prev_value_label, sizeof(prev_value_label), search_type, false);
-                sprintf_match(m.curr_value, curr_value_label, sizeof(curr_value_label), search_type, false);
-
-                PushFont(iris->font_code);
-
-                Selectable(addr_label, false, ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_SpanAllColumns);
-
-                if (IsItemClicked(ImGuiMouseButton_Right)) {
-                    OpenPopup("context_menu");
-                }
-
-                if (IsItemHovered() && IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                    OpenPopup("edit_value_popup");
-                }
-
-                if (BeginPopup("context_menu")) {
-                    PushFont(iris->font_small_code);
-                    TextDisabled("0x%08x", m.address);
-                    PopFont();
-
-                    PushFont(iris->font_body);
-                    if (BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
-                        if (Selectable("Address")) {
-                            ImGui::SetClipboardText(addr_label);
+                                fclose(f);
+                            } else {
+                                push_info(iris, "Failed to open file for writing address list");
+                            }
                         }
-
-                        if (Selectable("Previous Value")) {
-                            ImGui::SetClipboardText(prev_value_label);
-                        }
-
-                        if (Selectable("Current Value")) {
-                            ImGui::SetClipboardText(curr_value_label);
-                        }
-
-                        ImGui::EndMenu();
                     }
 
-                    if (Selectable(ICON_MS_EDIT " Edit value")) {
-                        OpenPopup("edit_value_popup");
+                    if (MenuItem("Import from file...")) {
+                        pfd::open_file file("Import Address List", "", { "CSV Files (*.csv)", "*.csv", "All Files (*.*)", "*" });
+
+                        if (!file.result().empty()) {
+                            std::ifstream f(file.result().at(0));
+
+                            if (f.is_open()) {
+                                import_address_list_from_stream(f);
+                            } else {
+                                push_info(iris, "Failed to open file for reading address list");
+                            }
+                        }
                     }
 
-                    PopFont();
+                    if (MenuItem("Export to clipboard")) {
+                        std::string str = serialize_address_list();
 
-                    EndPopup();
-                }
-
-                if (BeginPopup("edit_value_popup")) {
-                    static char new_value[9];
-
-                    PushFont(iris->font_small_code);
-                    TextDisabled("Edit "); SameLine(0.0, 0.0);
-                    Text("%s", addr_label);
-                    PopFont();
-
-                    PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
-                    PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
-
-                    PushFont(iris->font_body);
-                    PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
-
-                    AlignTextToFramePadding();
-                    Text(ICON_MS_EDIT); SameLine();
-
-                    SetNextItemWidth(100);
-                    PushFont(iris->font_code);
-
-                    if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
-                        if (new_value[0]) {
-                            m.curr_value.u64 = std::strtoull(new_value, nullptr, 16);
-
-                            write_match_value(ps2, search_cpu, const_cast<match&>(m), search_type);
-                        }
-
-                        CloseCurrentPopup();
+                        SDL_SetClipboardText(str.c_str());
                     }
 
-                    PopFont();
+                    if (MenuItem("Import from clipboard")) {
+                        if (SDL_HasClipboardText()) {
+                            std::string clip_text = SDL_GetClipboardText();
 
-                    if (Button("Change")) {
-                        if (new_value[0]) {
-                            m.curr_value.u64 = std::strtoull(new_value, nullptr, 16);
+                            std::istringstream iss(clip_text);
 
-                            write_match_value(ps2, search_cpu, const_cast<match&>(m), search_type);
+                            import_address_list_from_stream(iss);
                         }
+                    }
 
-                        CloseCurrentPopup();
-                    } SameLine();
+                    if (MenuItem("Clear")) {
+                        address_list.clear();
+                    }
 
-                    if (Button("Cancel"))
-                        CloseCurrentPopup();
-
-                    PopStyleColor();
-                    PopStyleVar(2);
-
-                    PopFont();
-                    EndPopup();
+                    ImGui::EndMenu();
                 }
 
-                TableSetColumnIndex(1);
-
-                Text("%s", prev_value_label);
-
-                TableSetColumnIndex(2);
-
-                Text("%s", curr_value_label);
-
-                PopFont();
+                ImGui::EndMenu();
             }
-            EndTable();
+
+            EndMenuBar();
         }
+
+        if (BeginChild("##search_table", ImVec2(GetContentRegionAvail().x - 225, GetContentRegionAvail().y - 220))) {
+            show_search_table(iris, ps2, search_type, search_cpu);
+        } EndChild(); SameLine();
+
+        if (BeginChild("##search_options", ImVec2(0, GetContentRegionAvail().y - 220))) {
+            show_search_options(iris);
+        } EndChild();
+
+        SeparatorText("Address list");
+
+        if (BeginChild("##address_list")) {
+            show_address_list(iris);
+        } EndChild();
     } End();
 }
 

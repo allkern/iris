@@ -105,6 +105,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
     iris->show_spu2_debugger = debugger["show_spu2_debugger"].value_or(false);
     iris->show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
+    iris->show_memory_search = debugger["show_memory_search"].value_or(false);
     iris->show_vu_disassembler = debugger["show_vu_disassembler"].value_or(false);
     iris->show_status_bar = debugger["show_status_bar"].value_or(true);
     iris->show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
@@ -394,6 +395,7 @@ void close(iris::instance* iris) {
             { "show_gs_debugger", iris->show_gs_debugger },
             { "show_spu2_debugger", iris->show_spu2_debugger },
             { "show_memory_viewer", iris->show_memory_viewer },
+            { "show_memory_search", iris->show_memory_search },
             { "show_vu_disassembler", iris->show_vu_disassembler },
             { "show_status_bar", iris->show_status_bar },
             { "show_breakpoints", iris->show_breakpoints },
