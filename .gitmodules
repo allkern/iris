@@ -1,7 +1,7 @@
 [submodule "imgui"]
 	path = deps/imgui
 	url = https://github.com/ocornut/imgui
-	branch = v1.92.4-docking
+	branch = docking
 [submodule "tomlplusplus"]
 	path = deps/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus
