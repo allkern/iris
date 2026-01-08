@@ -13,6 +13,7 @@
 INCBIN(encoder_frag_shader, "../shaders/encoder.spv");
 INCBIN(decoder_frag_shader, "../shaders/decoder.spv");
 INCBIN(sharpen_frag_shader, "../shaders/sharpen.spv");
+INCBIN(ntsc_frag_shader, "../shaders/ntsc.spv");
 
 namespace iris::shaders {
 
@@ -336,6 +337,7 @@ std::unordered_map <std::string, std::pair <void*, size_t>> g_builtin_shaders = 
     { "iris-ntsc-encoder", { (void*)g_encoder_frag_shader_data, (size_t)g_encoder_frag_shader_size } },
     { "iris-ntsc-decoder", { (void*)g_decoder_frag_shader_data, (size_t)g_decoder_frag_shader_size } },
     { "iris-ntsc-curvature", { (void*)g_sharpen_frag_shader_data, (size_t)g_sharpen_frag_shader_size } },
+    { "iris-ntsc-mini", { (void*)g_ntsc_frag_shader_data, (size_t)g_ntsc_frag_shader_size } }
 };
 
 void push(iris::instance* iris, void* data, size_t size, std::string id) {

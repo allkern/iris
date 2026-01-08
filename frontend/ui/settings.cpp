@@ -897,7 +897,8 @@ void show_misc_settings(iris::instance* iris) {
 const char* builtin_shader_names[] = {
     "iris-ntsc-encoder",
     "iris-ntsc-decoder",
-    "iris-ntsc-curvature"
+    "iris-ntsc-curvature",
+    "iris-ntsc-mini"
 };
 
 const char* presets[] = {
@@ -918,7 +919,7 @@ void show_shader_settings(iris::instance* iris) {
 
     Text("Add shader");
     if (BeginCombo("##combo", selected_shader)) {
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < IM_ARRAYSIZE(builtin_shader_names); i++) {
             if (Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
                 selected_shader = builtin_shader_names[i];
             }

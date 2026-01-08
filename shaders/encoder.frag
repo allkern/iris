@@ -52,7 +52,7 @@ void main() {
     // float noise = noise_x + noise_y;
 
     // Chroma encoder oscillator frequency 
-    float fc = 16.0;
+    float fc = 128.0;
 
     // Base oscillator angle for this dot
     float t = uv.x;
