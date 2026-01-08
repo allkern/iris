@@ -41,7 +41,18 @@ static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
 static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
     wd->Surface = iris->surface;
-    wd->ClearEnable = false;
+
+    VkAttachmentDescription attachment = {};
+    attachment.format = wd->SurfaceFormat.format;
+    attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+    attachment.loadOp = VK_ATTACHMENT_LOAD_OP_LOAD;
+    attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+    attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+    attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+    wd->AttachmentDesc = attachment;
 
     // Check for WSI support
     VkBool32 res;

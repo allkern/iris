@@ -1013,7 +1013,7 @@ void show_settings(iris::instance* iris) {
         PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
         PushStyleVarY(ImGuiStyleVar_ItemSpacing, 6.0);
 
-        if (BeginChild("##sidebar", ImVec2(175, GetContentRegionAvail().y - 100.0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Border)) {
+        if (BeginChild("##sidebar", ImVec2(175, GetContentRegionAvail().y - 100.0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
             for (int i = 0; settings_buttons[i]; i++) {
                 if (selected_settings == i) PushStyleColor(ImGuiCol_Button, GetStyle().Colors[ImGuiCol_ButtonHovered]);
 
