@@ -26,7 +26,7 @@ jobs:
     - name: Generate artifact name
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-win"
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}-windows"
     - name: Zip artifact
       run: |
         $artifactName = "${{ steps.generate-name.outputs.artifact }}"
