@@ -80,7 +80,7 @@ void main() {
         vec2 p = vec2(uv.x + float(d) - 26.0, uv.y);
         vec3 s = texture(input_tex, p / PushConstants.resolution).rgb;
 
-        float filt = lowpass(1.0/4.0, float(d), 51.0);
+        float filt = lowpass(1.0/6.0, float(d), 51.0);
 
         yiq.x += s.x * filt;
     }
