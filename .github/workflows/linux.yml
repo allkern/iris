@@ -34,10 +34,11 @@ jobs:
         mv ./build/*.AppImage ./appimage
     - uses: actions/upload-artifact@v4
       with:
-        name: iris-latest-ubuntu
+        name: iris-latest-linux
         path: ./dist
     - uses: actions/upload-artifact@v4
       with:
-        name: iris-latest-ubuntu-appimage
+        name: iris-latest-linux-appimage
         path: ./appimage
+
 
