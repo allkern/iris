@@ -52,6 +52,14 @@ namespace iris {
 #define IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM 4
 #define IRIS_SCREENSHOT_JPG_QUALITY_CUSTOM 5 
 
+#define IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK 0
+#define IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT 1
+#define IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO 2
+#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE 3
+#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE 4
+#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO 5
+#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA 6
+
 #define IRIS_TITLEBAR_DEFAULT 0
 #define IRIS_TITLEBAR_SEAMLESS 1
 
@@ -356,6 +364,17 @@ struct instance {
     int vulkan_selected_device_index = 0;
     bool vulkan_enable_validation_layers = false;
     bool imgui_enable_viewports = false;
+    int codeview_color_scheme = 0;
+    ImColor codeview_color_text = IM_COL32(131, 148, 150, 255);
+    ImColor codeview_color_comment = IM_COL32(88, 110, 117, 255);
+    ImColor codeview_color_mnemonic = IM_COL32(211, 167, 30, 255);
+    ImColor codeview_color_number = IM_COL32(138, 143, 226, 255);
+    ImColor codeview_color_register = IM_COL32(68, 169, 240, 255);
+    ImColor codeview_color_other = IM_COL32(89, 89, 89, 255);
+    ImColor codeview_color_background = IM_COL32(30, 30, 30, 255);
+    ImColor codeview_color_highlight = IM_COL32(75, 75, 75, 255);
+    float codeview_font_scale = 1.0f;
+    bool codeview_use_theme_background = true;
 
     std::deque <std::string> recents;
 
@@ -524,6 +543,7 @@ namespace shaders {
 namespace imgui {
     bool init(iris::instance* iris);
     void set_theme(iris::instance* iris, int theme, bool set_bg_color = true);
+    void set_codeview_scheme(iris::instance* iris, int scheme);
     bool render_frame(iris::instance* iris, ImDrawData* draw_data);
     void cleanup(iris::instance* iris);
 

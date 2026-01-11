@@ -747,8 +747,17 @@ static const char* const theme_names[] = {
     "ImGui Light",
     "ImGui Classic",
     "Cherry",
-    "Source",
-    0
+    "Source"
+};
+
+static const char* const codeview_color_scheme_names[] = {
+    "Solarized Dark",
+    "Solarized Light",
+    "One Dark Pro",
+    "Catppuccin Latte",
+    "Catppuccin Frappé",
+    "Catppuccin Macchiato",
+    "Catppuccin Mocha"
 };
 
 #ifdef _WIN32
@@ -766,7 +775,7 @@ void show_misc_settings(iris::instance* iris) {
     Text("Theme");
 
     if (BeginCombo("##theme", theme_names[iris->theme])) {
-        for (int i = 0; theme_names[i]; i++) {
+        for (int i = 0; i < IM_ARRAYSIZE(theme_names); i++) {
             if (Selectable(theme_names[i], iris->theme == i)) {
                 iris->theme = i;
 
@@ -823,6 +832,53 @@ void show_misc_settings(iris::instance* iris) {
 
     PopStyleVar();
 #endif
+
+    SeparatorText("Codeview");
+
+#define SCHEME(str, id) \
+    if (Selectable(str, iris->codeview_color_scheme == id)) { \
+        iris->codeview_color_scheme = id; \
+        imgui::set_codeview_scheme(iris, id); \
+    }
+
+    Text("Color scheme");
+
+    if (BeginCombo("##codeview_color_scheme", codeview_color_scheme_names[iris->codeview_color_scheme])) {
+        PushFont(iris->font_small);
+        TextDisabled("Dark");
+        PopFont();
+
+        SCHEME("Solarized Dark", IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK);
+        SCHEME("One Dark Pro", IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO);
+        SCHEME("Catppuccin Mocha", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA);
+        SCHEME("Catppuccin Macchiato", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO);
+        SCHEME("Catppuccin Frappé", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE);
+
+        PushFont(iris->font_small);
+        TextDisabled("Light");
+        PopFont();
+
+        SCHEME("Solarized Light", IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT);
+        SCHEME("Catppuccin Latte", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE);
+
+        EndCombo();
+    }
+
+#undef SCHEME
+
+    static bool use_theme_background = !iris->codeview_use_theme_background;
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+
+    if (Checkbox("Use scheme background", &use_theme_background))  {
+        iris->codeview_use_theme_background = !use_theme_background;
+    }
+
+    PopStyleVar();
+
+    Text("Font scale");
+
+    DragFloat("##codeview_font_scale", &iris->codeview_font_scale, 0.05f, 0.75f, 1.5f, "%.1f");
 
     SeparatorText("Screenshots");
 
@@ -898,7 +954,8 @@ const char* builtin_shader_names[] = {
     "iris-ntsc-encoder",
     "iris-ntsc-decoder",
     "iris-ntsc-curvature",
-    "iris-ntsc-mini"
+    "iris-ntsc-scanlines",
+    "iris-ntsc-noise",
 };
 
 const char* presets[] = {

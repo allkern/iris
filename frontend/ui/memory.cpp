@@ -15,6 +15,8 @@ static MemoryEditor editor;
 void show_memory_viewer(iris::instance* iris) {
     using namespace ImGui;
 
+    editor.FontOptions = iris->font_body;
+
     struct ps2_state* ps2 = iris->ps2;
 
     if (imgui::BeginEx("Memory", &iris->show_memory_viewer)) {

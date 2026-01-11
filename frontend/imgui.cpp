@@ -430,6 +430,87 @@ void set_theme(iris::instance* iris, int theme, bool set_bg_color) {
     pstyle.Colors[ImPlotCol_PlotBg]     = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
+void set_codeview_scheme(iris::instance* iris, int scheme) {
+    switch (scheme) {
+        default: case IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK: {
+            iris->codeview_color_text = IM_COL32(131, 148, 150, 255);
+            iris->codeview_color_comment = IM_COL32(88, 110, 117, 255);
+            iris->codeview_color_mnemonic = IM_COL32(211, 167, 30, 255);
+            iris->codeview_color_number = IM_COL32(138, 143, 226, 255);
+            iris->codeview_color_register = IM_COL32(68, 169, 240, 255);
+            iris->codeview_color_other = IM_COL32(89, 89, 89, 255);
+            iris->codeview_color_background = IM_COL32(0, 43, 54, 255);
+            iris->codeview_color_highlight = IM_COL32(7, 54, 66, 255);
+        } break;
+
+        case IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT: {
+            iris->codeview_color_text = IM_COL32(101, 123, 131, 255);
+            iris->codeview_color_comment = IM_COL32(147, 161, 161, 255);
+            iris->codeview_color_mnemonic = IM_COL32(147, 101, 21, 255);
+            iris->codeview_color_number = IM_COL32(101, 123, 179, 255);
+            iris->codeview_color_register = IM_COL32(38, 139, 210, 255);
+            iris->codeview_color_other = IM_COL32(88, 110, 117, 255);
+            iris->codeview_color_background = IM_COL32(253, 246, 227, 255);
+            iris->codeview_color_highlight = IM_COL32(238, 232, 213, 255);
+        } break;
+
+        case IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO: {
+            iris->codeview_color_text = IM_COL32(171, 178, 191, 255);
+            iris->codeview_color_comment = IM_COL32(92, 99, 112, 255);
+            iris->codeview_color_mnemonic = IM_COL32(198, 120, 221, 255);
+            iris->codeview_color_number = IM_COL32(209, 154, 102, 255);
+            iris->codeview_color_register = IM_COL32(97, 175, 239, 255);
+            iris->codeview_color_other = IM_COL32(171, 178, 191, 255);
+            iris->codeview_color_background = IM_COL32(40, 44, 52, 255);
+            iris->codeview_color_highlight = IM_COL32(60, 64, 72, 255);
+        } break;
+
+        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE: {
+            iris->codeview_color_text = IM_COL32(76, 79, 105, 255);
+            iris->codeview_color_comment = IM_COL32(124, 127, 147, 255);
+            iris->codeview_color_mnemonic = IM_COL32(136, 57, 239, 255);
+            iris->codeview_color_number = IM_COL32(254, 100, 11, 255);
+            iris->codeview_color_register = IM_COL32(4, 165, 229, 255);
+            iris->codeview_color_other = IM_COL32(114, 135, 253, 255);
+            iris->codeview_color_background = IM_COL32(239, 241, 245, 255);
+            iris->codeview_color_highlight = IM_COL32(204, 208, 218, 255);
+        } break;
+
+        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE: {
+            iris->codeview_color_text = IM_COL32(198, 208, 245, 255);
+            iris->codeview_color_comment = IM_COL32(148, 156, 187, 255);
+            iris->codeview_color_mnemonic = IM_COL32(202, 158, 230, 255);
+            iris->codeview_color_number = IM_COL32(239, 159, 118, 255);
+            iris->codeview_color_register = IM_COL32(153, 209, 219, 255);
+            iris->codeview_color_other = IM_COL32(186, 187, 241, 255);
+            iris->codeview_color_background = IM_COL32(48, 52, 70, 255);
+            iris->codeview_color_highlight = IM_COL32(81, 87, 109, 255);
+        } break;
+
+        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO: {
+            iris->codeview_color_text = IM_COL32(174, 178, 208, 255);
+            iris->codeview_color_comment = IM_COL32(134, 138, 162, 255);
+            iris->codeview_color_mnemonic = IM_COL32(190, 132, 255, 255);
+            iris->codeview_color_number = IM_COL32(245, 142, 110, 255);
+            iris->codeview_color_register = IM_COL32(125, 182, 191, 255);
+            iris->codeview_color_other = IM_COL32(166, 167, 222, 255);
+            iris->codeview_color_background = IM_COL32(58, 60, 79, 255);
+            iris->codeview_color_highlight = IM_COL32(97, 100, 120, 255);
+        } break;
+
+        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA: {
+            iris->codeview_color_text = IM_COL32(205, 214, 244, 255);
+            iris->codeview_color_comment = IM_COL32(145, 151, 181, 255);
+            iris->codeview_color_mnemonic = IM_COL32(220, 162, 255, 255);
+            iris->codeview_color_number = IM_COL32(248, 159, 128, 255);
+            iris->codeview_color_register = IM_COL32(159, 226, 235, 255);
+            iris->codeview_color_other = IM_COL32(189, 191, 248, 255);
+            iris->codeview_color_background = IM_COL32(46, 49, 64, 255);
+            iris->codeview_color_highlight = IM_COL32(76, 80, 100, 255);
+        } break;
+    }
+}
+
 VkShaderModule create_shader(iris::instance* iris, uint32_t* code, size_t size) {
     VkShaderModuleCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -748,6 +829,7 @@ bool init(iris::instance* iris) {
     }
 
     set_theme(iris, iris->theme, false);
+    set_codeview_scheme(iris, iris->codeview_color_scheme);
 
     // Initialize our pipeline
     VkShaderModule vert_shader = create_shader(iris, (uint32_t*)g_vertex_shader_data, g_vertex_shader_size);

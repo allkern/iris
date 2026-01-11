@@ -486,11 +486,13 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_gs_debugger = false;
                 iris->show_spu2_debugger = false;
                 iris->show_memory_viewer = false;
+                iris->show_memory_search = false;
                 iris->show_vu_disassembler = false;
-                iris->show_pad_debugger = false;
-                iris->show_symbols = false;
-                iris->show_threads = false;
+                iris->show_status_bar = false;
                 iris->show_breakpoints = false;
+                iris->show_threads = false;
+                iris->show_sysmem_logs = false;
+                iris->show_imgui_demo = false;
                 iris->show_overlay = false;
             }
             

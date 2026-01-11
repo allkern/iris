@@ -301,13 +301,13 @@ void update_window(iris::instance* iris) {
             menubar_offset += iris->menubar_height;
         }
 
-        // GetBackgroundDrawList()->AddRectFilled(
-        //     ImVec2(width - ts.x - offset.x - padding.x, menubar_offset + offset.y - padding.y),
-        //     ImVec2(width - offset.x + padding.x, menubar_offset + ts.y + offset.y + padding.y),
-        //     GetColorU32(GetStyleColorVec4(ImGuiCol_WindowBg)), 8.0f
-        // );
+        GetBackgroundDrawList()->AddRectFilled(
+            ImVec2(width - ts.x - offset.x - padding.x, menubar_offset + offset.y - padding.y),
+            ImVec2(width - offset.x + padding.x, menubar_offset + ts.y + offset.y + padding.y),
+            GetColorU32(GetStyleColorVec4(ImGuiCol_WindowBg)), 8.0f
+        );
 
-        GetBackgroundDrawList()->AddText(
+        GetBackgroundDrawList(GetMainViewport())->AddText(
             ImVec2(width - ts.x - offset.x, menubar_offset + offset.y),
             GetColorU32(GetStyleColorVec4(ImGuiCol_Text)),
             ICON_MS_PAUSE
@@ -507,6 +507,12 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
             return SDL_APP_SUCCESS;
         } break;
 
+        case SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
+            if (event->window.windowID == SDL_GetWindowID(iris->window)) {
+                return SDL_APP_SUCCESS;
+            }
+        } break;
+
         case SDL_EVENT_KEY_DOWN: {
             handle_keydown_event(iris, event->key);
         } break;
@@ -558,12 +564,37 @@ int get_menubar_height(iris::instance* iris) {
 }
 
 void destroy(iris::instance* iris) {
+    if (iris->imgui_enable_viewports) {
+        iris->show_ee_control = false;
+        iris->show_ee_state = false;
+        iris->show_ee_logs = false;
+        iris->show_ee_interrupts = false;
+        iris->show_ee_dmac = false;
+        iris->show_iop_control = false;
+        iris->show_iop_state = false;
+        iris->show_iop_logs = false;
+        iris->show_iop_interrupts = false;
+        iris->show_iop_modules = false;
+        iris->show_iop_dma = false;
+        iris->show_gs_debugger = false;
+        iris->show_spu2_debugger = false;
+        iris->show_memory_viewer = false;
+        iris->show_memory_search = false;
+        iris->show_vu_disassembler = false;
+        iris->show_status_bar = false;
+        iris->show_breakpoints = false;
+        iris->show_threads = false;
+        iris->show_sysmem_logs = false;
+        iris->show_imgui_demo = false;
+        iris->show_overlay = false;
+    }
+
     if (iris->window) SDL_HideWindow(iris->window);
 
+    iris::imgui::cleanup(iris);
     iris::audio::close(iris);
     iris::settings::close(iris);
     iris::render::destroy(iris);
-    iris::imgui::cleanup(iris);
     iris::vulkan::cleanup(iris);
     iris::platform::destroy(iris);
     iris::emu::destroy(iris);

@@ -18,7 +18,7 @@ namespace iris {
 struct ee_dis_state g_ee_dis_state;
 struct iop_dis_state g_iop_dis_state;
 
-void print_highlighted(const char* buf) {
+void print_highlighted(iris::instance* iris, const char* buf) {
     using namespace ImGui;
 
     std::vector <std::string> tokens;
@@ -69,13 +69,41 @@ void print_highlighted(const char* buf) {
 
     for (const std::string& t : tokens) {
         if (isalpha(t[0])) {
-            TextColored(IM_RGB(211, 167, 30), "%s", t.c_str());
+            ImVec4 col = ImVec4(
+                iris->codeview_color_mnemonic.Value.x,
+                iris->codeview_color_mnemonic.Value.y,
+                iris->codeview_color_mnemonic.Value.z,
+                iris->codeview_color_mnemonic.Value.w
+            );
+
+            TextColored(col, "%s", t.c_str());
         } else if (isdigit(t[0]) || t[0] == '-') {
-            TextColored(IM_RGB(138, 143, 226), "%s", t.c_str());
+            ImVec4 col = ImVec4(
+                iris->codeview_color_number.Value.x,
+                iris->codeview_color_number.Value.y,
+                iris->codeview_color_number.Value.z,
+                iris->codeview_color_number.Value.w
+            );
+
+            TextColored(col, "%s", t.c_str());
         } else if (t[0] == '$') {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+            ImVec4 col = ImVec4(
+                iris->codeview_color_register.Value.x,
+                iris->codeview_color_register.Value.y,
+                iris->codeview_color_register.Value.z,
+                iris->codeview_color_register.Value.w
+            );
+
+            TextColored(col, "%s", t.c_str());
         } else if (t[0] == '<') {
-            TextColored(IM_RGB(89, 89, 89), "%s", t.c_str());
+            ImVec4 col = ImVec4(
+                iris->codeview_color_other.Value.x,
+                iris->codeview_color_other.Value.y,
+                iris->codeview_color_other.Value.z,
+                iris->codeview_color_other.Value.w
+            );
+
+            TextColored(col, "%s", t.c_str());
         } else {
             Text("%s", t.c_str());
         }
@@ -89,7 +117,38 @@ void print_highlighted(const char* buf) {
 static void show_ee_disassembly_view(iris::instance* iris) {
     using namespace ImGui;
 
+    float font_scale = GetStyle().FontScaleMain;
+
+    GetStyle().FontScaleMain = iris->codeview_font_scale;
+
     PushFont(iris->font_code);
+
+    if (!iris->codeview_use_theme_background) {
+        PushStyleColor(ImGuiCol_TableRowBg, ImVec4(
+            iris->codeview_color_background.Value.x,
+            iris->codeview_color_background.Value.y,
+            iris->codeview_color_background.Value.z,
+            iris->codeview_color_background.Value.w
+        ));
+        PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(
+            iris->codeview_color_background.Value.x,
+            iris->codeview_color_background.Value.y,
+            iris->codeview_color_background.Value.z,
+            iris->codeview_color_background.Value.w
+        ));
+        PushStyleColor(ImGuiCol_Text, ImVec4(
+            iris->codeview_color_text.Value.x,
+            iris->codeview_color_text.Value.y,
+            iris->codeview_color_text.Value.z,
+            iris->codeview_color_text.Value.w
+        ));
+        PushStyleColor(ImGuiCol_TextDisabled, ImVec4(
+            iris->codeview_color_comment.Value.x,
+            iris->codeview_color_comment.Value.y,
+            iris->codeview_color_comment.Value.z,
+            iris->codeview_color_comment.Value.w
+        ));
+    }
 
     if (BeginTable("table1", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
         TableSetupColumn("a", ImGuiTableColumnFlags_NoResize, 15.0f);
@@ -127,10 +186,17 @@ static void show_ee_disassembly_view(iris::instance* iris) {
 
             for (elf_symbol& sym : iris->symbols) {
                 if (sym.addr == g_ee_dis_state.pc) {
+                    ImVec4 col = ImVec4(
+                        iris->codeview_color_mnemonic.Value.x,
+                        iris->codeview_color_mnemonic.Value.y,
+                        iris->codeview_color_mnemonic.Value.z,
+                        iris->codeview_color_mnemonic.Value.w
+                    );
+
                     PushFont(iris->font_icons);
-                    TextColored(IM_RGB(211, 167, 30), ICON_MS_STAT_0); SameLine();
+                    TextColored(col, ICON_MS_STAT_0); SameLine();
                     PopFont();
-                    TextColored(IM_RGB(211, 167, 30), "%s", sym.name);
+                    TextColored(col, "%s", sym.name);
 
                     break;
                 }
@@ -225,7 +291,7 @@ static void show_ee_disassembly_view(iris::instance* iris) {
             TextDisabled("%s ", opcode_str); SameLine();
 
             if (true) {
-                print_highlighted(disassembly);
+                print_highlighted(iris, disassembly);
             } else {
                 Text("%s", disassembly);
             }
@@ -242,13 +308,50 @@ static void show_ee_disassembly_view(iris::instance* iris) {
         EndTable();
     }
 
+    if (!iris->codeview_use_theme_background) {
+        PopStyleColor(4);
+    }
+
     PopFont();
+
+    GetStyle().FontScaleMain = font_scale;
 }
 
 static void show_iop_disassembly_view(iris::instance* iris) {
     using namespace ImGui;
 
+    float font_scale = GetStyle().FontScaleMain;
+
+    GetStyle().FontScaleMain = iris->codeview_font_scale;
+
     PushFont(iris->font_code);
+
+    if (!iris->codeview_use_theme_background) {
+        PushStyleColor(ImGuiCol_TableRowBg, ImVec4(
+            iris->codeview_color_background.Value.x,
+            iris->codeview_color_background.Value.y,
+            iris->codeview_color_background.Value.z,
+            iris->codeview_color_background.Value.w
+        ));
+        PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(
+            iris->codeview_color_background.Value.x,
+            iris->codeview_color_background.Value.y,
+            iris->codeview_color_background.Value.z,
+            iris->codeview_color_background.Value.w
+        ));
+        PushStyleColor(ImGuiCol_Text, ImVec4(
+            iris->codeview_color_text.Value.x,
+            iris->codeview_color_text.Value.y,
+            iris->codeview_color_text.Value.z,
+            iris->codeview_color_text.Value.w
+        ));
+        PushStyleColor(ImGuiCol_TextDisabled, ImVec4(
+            iris->codeview_color_comment.Value.x,
+            iris->codeview_color_comment.Value.y,
+            iris->codeview_color_comment.Value.z,
+            iris->codeview_color_comment.Value.w
+        ));
+    }
 
     if (BeginTable("table2", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
         TableSetupColumn("a", ImGuiTableColumnFlags_NoResize, 15.0f);
@@ -375,7 +478,7 @@ static void show_iop_disassembly_view(iris::instance* iris) {
             }
 
             if (true) {
-                print_highlighted(disassembly);
+                print_highlighted(iris, disassembly);
             } else {
                 Text("%s", disassembly);
             }
@@ -391,6 +494,12 @@ static void show_iop_disassembly_view(iris::instance* iris) {
     }
 
     PopFont();
+
+    if (!iris->codeview_use_theme_background) {
+        PopStyleColor(4);
+    }
+
+    GetStyle().FontScaleMain = font_scale;
 }
 
 void show_ee_control(iris::instance* iris) {

@@ -145,6 +145,9 @@ bool parse_toml_settings(iris::instance* iris) {
 
     auto ui = tbl["ui"];
     iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
+    iris->codeview_font_scale = ui["codeview_font_scale"].value_or(0.0f);
+    iris->codeview_color_scheme = ui["codeview_color_scheme"].value_or(IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK);
+    iris->codeview_use_theme_background = ui["codeview_use_theme_background"].value_or(true);
     iris->ui_scale = ui["scale"].value_or(1.0f);
     iris->imgui_enable_viewports = ui["enable_viewports"].value_or(false);
 
@@ -398,6 +401,7 @@ void close(iris::instance* iris) {
             { "show_memory_search", iris->show_memory_search },
             { "show_vu_disassembler", iris->show_vu_disassembler },
             { "show_status_bar", iris->show_status_bar },
+            { "show_pad_debugger", iris->show_pad_debugger },
             { "show_breakpoints", iris->show_breakpoints },
             { "show_threads", iris->show_threads },
             { "show_sysmem_logs", iris->show_sysmem_logs },
@@ -419,6 +423,9 @@ void close(iris::instance* iris) {
         } },
         { "ui", toml::table {
             { "theme", iris->theme },
+            { "codeview_color_scheme", iris->codeview_color_scheme },
+            { "codeview_font_scale", iris->codeview_font_scale },
+            { "codeview_use_theme_background", iris->codeview_use_theme_background },
             { "scale", iris->ui_scale },
             { "bgcolor", toml::array {
                 iris->clear_value.color.float32[0],
