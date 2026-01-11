@@ -25,6 +25,7 @@ jobs:
     - name: Upload artifact
       uses: actions/upload-artifact@v4
       with:
-        name: iris-latest-win
+        name: iris-latest-windows
         path: dist/
+
 
