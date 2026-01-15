@@ -161,7 +161,7 @@ void set_theme(iris::instance* iris, int theme, bool set_bg_color) {
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowPadding           = ImVec2(8.0, 8.0);
     style.FramePadding            = ImVec2(5.0, 5.0);
-    style.ItemSpacing             = ImVec2(8.0, 4.0);
+    style.ItemSpacing             = ImVec2(8.0, 6.0);
     style.WindowBorderSize        = 0;
     style.ChildBorderSize         = 0;
     style.FrameBorderSize         = 1;

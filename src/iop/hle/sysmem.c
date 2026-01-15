@@ -61,7 +61,7 @@ int sysmem_kprintf(struct iop_state* iop) {
                         goto parse;
                     } break;
 
-                    case 'd': case 'u': case 'i': case 'x': {
+                    case 'd': case 'u': case 'i': case 'x': case 'X':{
                         uint32_t val = fetch_next_param(iop);
 
                         char fmt_buf[8];
