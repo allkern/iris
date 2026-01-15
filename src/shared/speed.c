@@ -14,9 +14,11 @@ void ps2_speed_init(struct ps2_speed* speed, struct ps2_iop_intc* iop_intc) {
     speed->iop_intc = iop_intc;
     speed->flash = ps2_flash_create();
     speed->ata = ps2_ata_create();
+    speed->eeprom = ps2_eeprom_create();
 
     ps2_flash_init(speed->flash);
     ps2_ata_init(speed->ata, speed);
+    ps2_eeprom_init(speed->eeprom);
 
     speed->rev8 |= 2;
 }
@@ -24,6 +26,7 @@ void ps2_speed_init(struct ps2_speed* speed, struct ps2_iop_intc* iop_intc) {
 void ps2_speed_destroy(struct ps2_speed* speed) {
     ps2_flash_destroy(speed->flash);
     ps2_ata_destroy(speed->ata);
+    ps2_eeprom_destroy(speed->eeprom);
 
     free(speed);
 }
@@ -34,7 +37,7 @@ uint64_t ps2_speed_read8(struct ps2_speed* speed, uint32_t addr) {
     printf("speed: read8 %08x %08x\n", addr);
 
     switch (addr) {
-        case 0x002e: return 0;
+        case 0x002e: return ps2_eeprom_read(speed->eeprom);
     }
 
     return 0;
@@ -87,7 +90,7 @@ void ps2_speed_write8(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
 
     switch (addr) {
         case 0x002c: speed->pio_dir = data; return;
-        case 0x002e: speed->pio_data = data; return;
+        case 0x002e: ps2_eeprom_write(speed->eeprom, data); return;
     }
 
     // exit(1);
@@ -148,4 +151,24 @@ int ps2_speed_load_flash(struct ps2_speed* speed, const char* path) {
     }
 
     return ret;
+}
+
+void ps2_speed_set_mac_address(struct ps2_speed* speed, const uint8_t* mac) {
+    uint16_t data[32] = {
+        0x0000, 0x0000, 0x0000, 0x0000,
+        0x0000, 0x0000, 0x0000, 0x0000,
+        0x0000, 0x1000, 0x0000, 0x0000,
+        0x0000, 0x0000, 0x0000, 0x0000,
+        0x0010, 0x0000, 0x0000, 0x0000,
+        0x0000, 0x0000, 0x0000, 0x0000,
+        0x1000, 0x0000, 0x0000, 0x0000,
+        0x0000, 0x0000, 0x0000, 0x0000
+    };
+
+    data[0] = (mac[1] << 8) | mac[0];
+    data[1] = (mac[3] << 8) | mac[2];
+    data[2] = (mac[5] << 8) | mac[4];
+    data[3] = data[0] + data[1] + data[2];
+
+    ps2_eeprom_load(speed->eeprom, data);
 }

@@ -137,6 +137,7 @@ void ps2_set_timescale(struct ps2_state* ps2, int timescale);
 void ps2_iop_cycle(struct ps2_state* ps2);
 void ps2_destroy(struct ps2_state* ps2);
 void ps2_set_system(struct ps2_state* ps2, int system);
+void ps2_set_mac_address(struct ps2_state* ps2, const uint8_t* mac);
 
 #ifdef __cplusplus
 }

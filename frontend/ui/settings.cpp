@@ -148,6 +148,29 @@ void show_system_settings(iris::instance* iris) {
 
         EndTable();
     }
+
+    SeparatorText("Network");
+
+    // To-do: Improve MAC address input by using a single text input
+    //        that fills in the colons automatically
+
+    Text("MAC Address");
+
+    PushFont(iris->font_code);
+
+    float w = CalcTextSize("FFFFFFFFFFFF").x;
+
+    SetNextItemWidth(w * 2.0);
+
+    if (InputScalarN("##macaddress", ImGuiDataType_U8, iris->mac_address, 6, nullptr, nullptr, "%02X", ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        ps2_set_mac_address(iris->ps2, iris->mac_address);
+    } SameLine();
+
+    PopFont();
+
+    if (Button(ICON_MS_REFRESH "##macaddress")) {
+        ps2_set_mac_address(iris->ps2, iris->mac_address);
+    }
 }
 
 const char* ssaa_names[] = {

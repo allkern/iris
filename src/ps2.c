@@ -518,3 +518,7 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
     ee_bus_init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
     iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
 }
+
+void ps2_set_mac_address(struct ps2_state* ps2, const uint8_t* mac) {
+    ps2_speed_set_mac_address(ps2->speed, mac);
+}

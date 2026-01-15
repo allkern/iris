@@ -303,6 +303,8 @@ struct instance {
     std::string flash_path = "";
     std::string ini_path = "";
 
+    uint8_t mac_address[6] = { 0 };
+
     bool core0_mute[24] = { false };
     bool core1_mute[24] = { false };
     int core0_solo = -1;

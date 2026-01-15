@@ -122,6 +122,22 @@ bool parse_toml_settings(iris::instance* iris) {
     auto system = tbl["system"];
     iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
 
+    toml::array* mac_array = system["mac_address"].as_array();
+
+    if (mac_array && mac_array->size() == 6) {
+        for (int i = 0; i < 6; i++) {
+            iris->mac_address[i] = static_cast<uint8_t>(mac_array->at(i).as_integer()->get());
+        }
+    } else {
+        // Default MAC address
+        iris->mac_address[0] = 0x00;
+        iris->mac_address[1] = 0x1A;
+        iris->mac_address[2] = 0x2B;
+        iris->mac_address[3] = 0x3C;
+        iris->mac_address[4] = 0x4D;
+        iris->mac_address[5] = 0x5E;
+    }
+
     auto screenshots = tbl["screenshots"];
     iris->screenshot_format = screenshots["format"].value_or(IRIS_SCREENSHOT_FORMAT_PNG);
     iris->screenshot_jpg_quality_mode = screenshots["jpg_quality_mode"].value_or(IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM);
@@ -145,7 +161,7 @@ bool parse_toml_settings(iris::instance* iris) {
 
     auto ui = tbl["ui"];
     iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
-    iris->codeview_font_scale = ui["codeview_font_scale"].value_or(0.0f);
+    iris->codeview_font_scale = ui["codeview_font_scale"].value_or(1.0f);
     iris->codeview_color_scheme = ui["codeview_color_scheme"].value_or(IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK);
     iris->codeview_use_theme_background = ui["codeview_use_theme_background"].value_or(true);
     iris->ui_scale = ui["scale"].value_or(1.0f);
@@ -340,6 +356,7 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 
     ps2_set_system(iris->ps2, iris->system);
     ps2_speed_load_flash(iris->ps2->speed, iris->flash_path.c_str());
+    ps2_speed_set_mac_address(iris->ps2->speed, iris->mac_address);
 
     return true;
 }
@@ -354,7 +371,15 @@ void close(iris::instance* iris) {
 
     auto tbl = toml::table {
         { "system", toml::table {
-            { "model", iris->system }
+            { "model", iris->system },
+            { "mac_address", toml::array {
+                iris->mac_address[0],
+                iris->mac_address[1],
+                iris->mac_address[2],
+                iris->mac_address[3],
+                iris->mac_address[4],
+                iris->mac_address[5]
+            } }
         } },
         { "screenshots", toml::table {
             { "format", iris->screenshot_format },

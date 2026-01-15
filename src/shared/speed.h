@@ -10,6 +10,7 @@ extern "C" {
 #include "iop/intc.h"
 #include "speed/ata.h"
 #include "speed/flash.h"
+#include "speed/eeprom.h"
 
 // SPEED is a chip presented as a register interface to speed devices.
 // This includes:
@@ -60,9 +61,9 @@ struct ps2_speed {
     uint32_t mwdma_mode; // 10000072
     uint32_t udma_mode; // 10000074
 
-    // FLASH (XFROM) registers
     struct ps2_ata* ata;
     struct ps2_flash* flash;
+    struct ps2_eeprom* eeprom;
 
     struct ps2_iop_intc* iop_intc;
 };
@@ -78,6 +79,7 @@ void ps2_speed_write16(struct ps2_speed* speed, uint32_t addr, uint64_t data);
 void ps2_speed_write32(struct ps2_speed* speed, uint32_t addr, uint64_t data);
 void ps2_speed_send_irq(struct ps2_speed* speed, uint16_t irq);
 int ps2_speed_load_flash(struct ps2_speed* speed, const char* path);
+void ps2_speed_set_mac_address(struct ps2_speed* speed, const uint8_t* mac);
 
 #ifdef __cplusplus
 }
