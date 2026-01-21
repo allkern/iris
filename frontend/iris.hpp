@@ -63,6 +63,13 @@ namespace iris {
 #define IRIS_TITLEBAR_DEFAULT 0
 #define IRIS_TITLEBAR_SEAMLESS 1
 
+// class widget {
+// public:
+//     virtual bool init(iris::instance* iris) = 0;
+//     virtual void render(iris::instance* iris) = 0;
+//     virtual ~widget() = default;
+// };
+
 enum : int {
     BKPT_CPU_EE,
     BKPT_CPU_IOP

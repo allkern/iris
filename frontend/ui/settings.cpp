@@ -76,7 +76,7 @@ void show_system_settings(iris::instance* iris) {
     Text("Model");
 
     if (BeginCombo("##combo", system_names[iris->system])) {
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < IM_ARRAYSIZE(system_names); i++) {
             if (Selectable(system_names[i], i == iris->system)) {
                 iris->system = i;
 
@@ -1083,12 +1083,15 @@ void show_settings(iris::instance* iris) {
 
     hovered = false;
 
-    static const ImGuiWindowFlags flags =
+    static ImGuiWindowFlags flags =
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking;
 
     SetNextWindowSize(ImVec2(650, 560), ImGuiCond_FirstUseEver);
     PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(650, 560));
+
+    if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
+        flags |= ImGuiWindowFlags_NoTitleBar;
 
     if (Begin("Settings", &iris->show_settings, flags)) {
         PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);

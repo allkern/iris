@@ -56,7 +56,16 @@ void show_overlay(iris::instance* iris) {
     using namespace ImPlot;
 
     SetNextWindowBgAlpha(0.5f);
-    SetNextWindowPos(ImVec2(10.0, 10.0 + iris->menubar_height), ImGuiCond_Always);
+
+    ImVec2 pos = ImVec2(10.0f, 10.0f + iris->menubar_height);
+
+    if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        pos.x = GetMainViewport()->Pos.x + GetMainViewport()->Size.x + 10.0f;
+        pos.y = GetMainViewport()->Pos.y;
+    }
+
+    SetNextWindowPos(pos, ImGuiCond_Always);
+    SetNextWindowViewport(0);
 
     if (Begin("Overlay", nullptr,
         ImGuiWindowFlags_NoDecoration |

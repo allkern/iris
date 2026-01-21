@@ -897,7 +897,7 @@ void show_memory_search(iris::instance* iris) {
 
     update_search_matches(ps2, search_cpu);
 
-    SetNextWindowSizeConstraints(ImVec2(600, 550), ImVec2(FLT_MAX, FLT_MAX));
+    SetNextWindowSizeConstraints(ImVec2(600, 560), ImVec2(FLT_MAX, FLT_MAX));
 
     int top_shelf_height = GetContentRegionAvail().y - 220;
 
