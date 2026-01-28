@@ -1,9 +1,15 @@
+#include <chrono>
+#include <thread>
+
 #include "iris.hpp"
 
 namespace iris::audio {
 
 void update(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
     iris::instance* iris = (iris::instance*)userdata;
+
+    if (iris->pause)
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
 
     if (iris->pause || !additional_amount)
         return;

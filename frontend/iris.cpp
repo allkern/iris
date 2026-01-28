@@ -113,11 +113,14 @@ void update_time(iris::instance* iris) {
 
 void sleep_limiter(iris::instance* iris) {
     uint32_t ticks = (1.0f / iris->fps_cap) * 1000.0f;
-    uint32_t now = SDL_GetTicks();
 
-    while ((SDL_GetTicks() - now) < ticks) {
-        std::this_thread::yield();
-    }
+    std::this_thread::sleep_for(std::chrono::milliseconds(ticks / 2));
+
+    // uint32_t now = SDL_GetTicks();
+
+    // while ((SDL_GetTicks() - now) < ticks) {
+    //     std::this_thread::sleep_for(std::chrono::milliseconds(ticks / 4));
+    // }
 }
 
 static inline void do_cycle(iris::instance* iris) {
@@ -158,8 +161,8 @@ void update_window(iris::instance* iris) {
     using namespace ImGui;
 
     // Limit FPS to 60 only when paused
-    // if (iris->limit_fps && iris->pause)
-    //     sleep_limiter(iris);
+    if (iris->limit_fps && iris->pause)
+        sleep_limiter(iris);
 
     update_title(iris);
     update_time(iris);
