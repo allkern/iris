@@ -45,7 +45,6 @@ float sinc(float x) {
 
 void main() {
     vec2 uv = curvature(TexCoord, 5.5);
-    vec3 rgb = texture(input_tex, uv).xyz;
 
 	if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) {
         FragColor = vec4(0.0);
@@ -53,18 +52,5 @@ void main() {
         return;
     }
 
-    // uv *= PushConstants.resolution;
-
-    // for (int y = -FIR_WIDTH; y < FIR_WIDTH; y++) {
-    //     for (int x = -FIR_WIDTH; x < FIR_WIDTH; x++) {
-    //         vec2 p = vec2(uv.x + float(x), uv.y + float(y));
-    //         vec3 c = texture(input_tex, p / PushConstants.resolution).xyz;
-
-    //         rgb += c;
-    //     }
-    // }
-
-    // rgb /= 4.0;
-
-    FragColor = vec4(rgb, 1.0);
+    FragColor = texture(input_tex, uv).xyzw;
 }

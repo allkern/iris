@@ -241,54 +241,54 @@ struct vulkan_gpu {
     uint32_t api_version = 0;
 };
 
-template <typename Key, typename Value> class bidirectional_map {
-    std::unordered_map<Key, Value> m_forward_map;
-    std::unordered_map<Value, Key> m_reverse_map;
+// template <typename Key, typename Value> class bidirectional_map {
+//     std::unordered_map<Key, Value> m_forward_map;
+//     std::unordered_map<Value, Key> m_reverse_map;
 
-public:
-    void insert(const Key& key, const Value& value) {
-        m_forward_map[key] = value;
-        m_reverse_map[value] = key;
-    }
+// public:
+//     void insert(const Key& key, const Value& value) {
+//         m_forward_map[key] = value;
+//         m_reverse_map[value] = key;
+//     }
 
-    bool erase_by_key(const Key& key) {
-        auto it = m_forward_map.find(key);
-        if (it != m_forward_map.end()) {
-            Value value = it->second;
-            m_forward_map.erase(it);
-            m_reverse_map.erase(value);
-            return true;
-        }
-        return false;
-    }
+//     bool erase_by_key(const Key& key) {
+//         auto it = m_forward_map.find(key);
+//         if (it != m_forward_map.end()) {
+//             Value value = it->second;
+//             m_forward_map.erase(it);
+//             m_reverse_map.erase(value);
+//             return true;
+//         }
+//         return false;
+//     }
 
-    bool erase_by_value(const Value& value) {
-        auto it = m_reverse_map.find(value);
-        if (it != m_reverse_map.end()) {
-            Key key = it->second;
-            m_reverse_map.erase(it);
-            m_forward_map.erase(key);
-            return true;
-        }
-        return false;
-    }
+//     bool erase_by_value(const Value& value) {
+//         auto it = m_reverse_map.find(value);
+//         if (it != m_reverse_map.end()) {
+//             Key key = it->second;
+//             m_reverse_map.erase(it);
+//             m_forward_map.erase(key);
+//             return true;
+//         }
+//         return false;
+//     }
 
-    Value* get_value(const Key& key) {
-        auto it = m_forward_map.find(key);
-        if (it != m_forward_map.end()) {
-            return &it->second;
-        }
-        return nullptr;
-    }
+//     Value* get_value(const Key& key) {
+//         auto it = m_forward_map.find(key);
+//         if (it != m_forward_map.end()) {
+//             return &it->second;
+//         }
+//         return nullptr;
+//     }
 
-    Key* get_key(const Value& value) {
-        auto it = m_reverse_map.find(value);
-        if (it != m_reverse_map.end()) {
-            return &it->second;
-        }
-        return nullptr;
-    }
-};
+//     Key* get_key(const Value& value) {
+//         auto it = m_reverse_map.find(value);
+//         if (it != m_reverse_map.end()) {
+//             return &it->second;
+//         }
+//         return nullptr;
+//     }
+// };
 
 struct instance {
     SDL_Window* window = nullptr;
@@ -493,7 +493,7 @@ struct instance {
     bool screenshot_shader_processing = false;
     input_device* input_devices[2] = { nullptr };
     std::unordered_map <SDL_JoystickID, SDL_Gamepad*> gamepads;
-    bidirectional_map <input_event, input_action> input_map;
+    // bidirectional_map <input_event, input_action> input_map;
     bool limit_fps = true;
     float fps_cap = 60.0f;
 
