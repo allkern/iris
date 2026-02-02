@@ -26,6 +26,7 @@ extern "C" {
 #define DS_BT_CIRCLE   0x2000
 #define DS_BT_CROSS    0x4000
 #define DS_BT_SQUARE   0x8000
+#define DS_BT_ANALOG   0x10000
 
 #define DS_AX_RIGHT_V 0
 #define DS_AX_RIGHT_H 1
@@ -49,8 +50,8 @@ struct ds_state {
 };
 
 struct ds_state* ds_attach(struct ps2_sio2* sio2, int port);
-void ds_button_press(struct ds_state* ds, uint16_t mask);
-void ds_button_release(struct ds_state* ds, uint16_t mask);
+void ds_button_press(struct ds_state* ds, uint32_t mask);
+void ds_button_release(struct ds_state* ds, uint32_t mask);
 void ds_analog_change(struct ds_state* ds, int axis, uint8_t value);
 void ds_detach(void* udata);
 

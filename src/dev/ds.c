@@ -311,11 +311,18 @@ struct ds_state* ds_attach(struct ps2_sio2* sio2, int port) {
     return ds;
 }
 
-void ds_button_press(struct ds_state* ds, uint16_t mask) {
+void ds_button_press(struct ds_state* ds, uint32_t mask) {
+    if (mask == DS_BT_ANALOG) {
+        if (!ds->lock)
+            ds->mode = ds->mode ? 0 : 1;
+
+        return;
+    }
+
     ds->buttons &= ~mask;
 }
 
-void ds_button_release(struct ds_state* ds, uint16_t mask) {
+void ds_button_release(struct ds_state* ds, uint32_t mask) {
     ds->buttons |= mask;
 }
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <unordered_map>
 #include <cstdint>
 #include <string>
 #include <vector>
@@ -62,6 +63,8 @@ namespace iris {
 
 #define IRIS_TITLEBAR_DEFAULT 0
 #define IRIS_TITLEBAR_SEAMLESS 1
+
+class instance;
 
 // class widget {
 // public:
@@ -134,23 +137,56 @@ enum {
     // Revolution mat, Guitar Hero controllers, etc.
 };
 
-// struct input_action {
-//     int action;
+struct input_device {
+    int m_slot;
 
-//     union {
-//         uint32_t button;
-//         uint8_t axis;
-//     };
-// };
+    void set_slot(int slot) {
+        this->m_slot = slot;
+    }
 
-// class input_device {
-//     int controller;
+    int get_slot() {
+        return this->m_slot;
+    }
 
-// public:
-//     void set_controller(int controller);
-//     int get_controller();
-//     virtual input_action map_event(SDL_Event* event) = 0;
-// };
+    virtual int get_type() = 0;
+    virtual void handle_event(iris::instance* iris, SDL_Event* event) = 0;
+};
+
+class keyboard_device : public input_device {
+public:
+    int get_type() override {
+        return 0;
+    }
+
+    void handle_event(iris::instance* iris, SDL_Event* event) override;
+};
+
+class gamepad_device : public input_device {
+    SDL_JoystickID id;
+
+public:
+    gamepad_device(SDL_JoystickID id) : id(id) {}
+
+    int get_type() override {
+        return 1;
+    }
+
+    SDL_JoystickID get_id() {
+        return id;
+    }
+
+    void handle_event(iris::instance* iris, SDL_Event* event) override;
+};
+
+struct input_action {
+    int action;
+    int destination;
+};
+
+struct input_event {
+    int type;
+    uint32_t id;
+};
 
 struct vertex {
     struct {
@@ -203,6 +239,55 @@ struct vulkan_gpu {
     VkPhysicalDevice device = VK_NULL_HANDLE;
     std::string name = "";
     uint32_t api_version = 0;
+};
+
+template <typename Key, typename Value> class bidirectional_map {
+    std::unordered_map<Key, Value> m_forward_map;
+    std::unordered_map<Value, Key> m_reverse_map;
+
+public:
+    void insert(const Key& key, const Value& value) {
+        m_forward_map[key] = value;
+        m_reverse_map[value] = key;
+    }
+
+    bool erase_by_key(const Key& key) {
+        auto it = m_forward_map.find(key);
+        if (it != m_forward_map.end()) {
+            Value value = it->second;
+            m_forward_map.erase(it);
+            m_reverse_map.erase(value);
+            return true;
+        }
+        return false;
+    }
+
+    bool erase_by_value(const Value& value) {
+        auto it = m_reverse_map.find(value);
+        if (it != m_reverse_map.end()) {
+            Key key = it->second;
+            m_reverse_map.erase(it);
+            m_forward_map.erase(key);
+            return true;
+        }
+        return false;
+    }
+
+    Value* get_value(const Key& key) {
+        auto it = m_forward_map.find(key);
+        if (it != m_forward_map.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
+
+    Key* get_key(const Value& value) {
+        auto it = m_reverse_map.find(value);
+        if (it != m_reverse_map.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
 };
 
 struct instance {
@@ -406,7 +491,9 @@ struct instance {
     int screenshot_mode = IRIS_SCREENSHOT_MODE_INTERNAL;
     int docking_mode = 0;
     bool screenshot_shader_processing = false;
-
+    input_device* input_devices[2] = { nullptr };
+    std::unordered_map <SDL_JoystickID, SDL_Gamepad*> gamepads;
+    bidirectional_map <input_event, input_action> input_map;
     bool limit_fps = true;
     float fps_cap = 60.0f;
 
@@ -633,8 +720,8 @@ void show_bios_setting_window(iris::instance* iris);
 void show_memory_search(iris::instance* iris);
 // void show_gamelist(iris::instance* iris);
 
-void handle_keydown_event(iris::instance* iris, SDL_KeyboardEvent& key);
-void handle_keyup_event(iris::instance* iris, SDL_KeyboardEvent& key);
+void handle_keydown_event(iris::instance* iris, SDL_Event* event);
+void handle_keyup_event(iris::instance* iris, SDL_Event* event);
 void handle_scissor_event(void* udata);
 void handle_drag_and_drop_event(void* udata, const char* path);
 void handle_ee_tty_event(void* udata, char c);

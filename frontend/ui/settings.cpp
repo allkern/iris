@@ -43,6 +43,7 @@ int settings_fullscreen_flags[] = {
 const char* settings_buttons[] = {
     " " ICON_MS_DEPLOYED_CODE "  System",
     " " ICON_MS_MONITOR "  Graphics",
+    " " ICON_MS_STADIA_CONTROLLER "  Input",
     " " ICON_MS_BRUSH "  Shaders",
     " " ICON_MS_FOLDER "  Paths",
     " " ICON_MS_SD_CARD "  Memory cards",
@@ -394,6 +395,12 @@ void show_graphics_settings(iris::instance* iris) {
         changed = true;
     }
     PopStyleVar(2);
+}
+
+void show_input_settings(iris::instance* iris) {
+    using namespace ImGui;
+
+    Text("Input settings will go here.");
 }
 
 void show_paths_settings(iris::instance* iris) {
@@ -1117,10 +1124,11 @@ void show_settings(iris::instance* iris) {
             switch (selected_settings) {
                 case 0: show_system_settings(iris); break;
                 case 1: show_graphics_settings(iris); break;
-                case 2: show_shader_settings(iris); break;
-                case 3: show_paths_settings(iris); break;
-                case 4: show_memory_card_settings(iris); break;
-                case 5: show_misc_settings(iris); break;
+                case 2: show_input_settings(iris); break;
+                case 3: show_shader_settings(iris); break;
+                case 4: show_paths_settings(iris); break;
+                case 5: show_memory_card_settings(iris); break;
+                case 6: show_misc_settings(iris); break;
             }
         } EndChild();
 

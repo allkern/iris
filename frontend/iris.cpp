@@ -437,6 +437,8 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
     SDL_ShowWindow(iris->window);
 
+    iris->input_devices[0] = new iris::keyboard_device();
+
     return true;
 }
 
@@ -500,18 +502,75 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
             return SDL_APP_SUCCESS;
         } break;
 
+        case SDL_EVENT_GAMEPAD_ADDED: {
+            SDL_Gamepad* gamepad = SDL_OpenGamepad(event->gdevice.which);
+
+            if (!gamepad) {
+                SDL_Log("Failed to open gamepad ID %u: %s", (unsigned int) event->gdevice.which, SDL_GetError());
+            }
+
+            if ((iris->input_devices[0] == nullptr) || (iris->input_devices[0]->get_type() == 0)) {
+                if (iris->input_devices[0]) delete iris->input_devices[0];
+
+                iris->input_devices[0] = new iris::gamepad_device(event->gdevice.which);
+                iris->input_devices[0]->set_slot(0);
+
+                push_info(iris, "\'" + std::string(SDL_GetGamepadName(gamepad)) + "\' connected to slot 1");
+            } else if ((iris->input_devices[1] == nullptr) || (iris->input_devices[1]->get_type() == 0)) {
+                if (iris->input_devices[1]) delete iris->input_devices[1];
+
+                iris->input_devices[1] = new iris::gamepad_device(event->gdevice.which);
+                iris->input_devices[1]->set_slot(1);
+
+                push_info(iris, "\'" + std::string(SDL_GetGamepadName(gamepad)) + "\' connected to slot 2");
+            } else {
+                push_info(iris, "\'" + std::string(SDL_GetGamepadName(gamepad)) + "\' connected");
+            }
+
+            iris->gamepads[event->gdevice.which] = gamepad;
+
+            
+        } break;
+
+        case SDL_EVENT_GAMEPAD_REMOVED: {
+            SDL_Gamepad* gamepad = iris->gamepads[event->gdevice.which];
+
+            for (int i = 0; i < 2; i++) {
+                if (iris->input_devices[i] && iris->input_devices[i]->get_type() == 1) {
+                    iris::gamepad_device* gp = static_cast<iris::gamepad_device*>(iris->input_devices[i]);
+
+                    if (gp->get_id() == event->gdevice.which) {
+                        delete iris->input_devices[i];
+                        iris->input_devices[i] = new iris::keyboard_device();
+
+                        push_info(iris, "\'" + std::string(SDL_GetGamepadName(gamepad)) + "\' in slot " + std::to_string(i + 1) + " disconnected");
+                    }
+                }
+            }
+
+            if (gamepad) {
+                SDL_CloseGamepad(gamepad);
+
+                iris->gamepads.erase(event->gdevice.which);
+            }
+        } break;
+
         case SDL_EVENT_WINDOW_CLOSE_REQUESTED: {
             if (event->window.windowID == SDL_GetWindowID(iris->window)) {
                 return SDL_APP_SUCCESS;
             }
         } break;
 
-        case SDL_EVENT_KEY_DOWN: {
-            handle_keydown_event(iris, event->key);
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION:
+        case SDL_EVENT_KEY_UP: {
+            if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);
+            if (iris->input_devices[1]) iris->input_devices[1]->handle_event(iris, event);
         } break;
 
-        case SDL_EVENT_KEY_UP: {
-            handle_keyup_event(iris, event->key);
+        case SDL_EVENT_KEY_DOWN: {
+            handle_keydown_event(iris, event);
         } break;
 
         case SDL_EVENT_DROP_BEGIN: {
@@ -557,6 +616,13 @@ int get_menubar_height(iris::instance* iris) {
 }
 
 void destroy(iris::instance* iris) {
+    for (int i = 0; i < 2; i++) {
+        if (iris->input_devices[i]) {
+            delete iris->input_devices[i];
+            iris->input_devices[i] = nullptr;
+        }
+    }
+
     if (iris->imgui_enable_viewports) {
         iris->show_ee_control = false;
         iris->show_ee_state = false;
