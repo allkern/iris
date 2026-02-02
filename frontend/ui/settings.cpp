@@ -397,10 +397,90 @@ void show_graphics_settings(iris::instance* iris) {
     PopStyleVar(2);
 }
 
+void show_controller_slot(iris::instance* iris, int slot) {
+    using namespace ImGui;
+
+    char label[9] = "##slot0";
+
+    label[6] = '0' + slot;
+
+    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0) - 10.0, 0))) {
+        std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
+
+        ImVec4 col = GetStyleColorVec4(iris->ds[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+
+        col.w = 1.0;
+
+        InvisibleButton("##slot0", ImVec2(10, 10));
+
+        texture* tex = &iris->ps2_memory_card_icon;
+
+        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (tex->width / 2.0));
+
+        Image(
+            (ImTextureID)(intptr_t)tex->descriptor_set,
+            ImVec2(tex->width, tex->height),
+            ImVec2(0, 0), ImVec2(1, 1),
+            col,
+            ImVec4(0.0, 0.0, 0.0, 0.0)
+        );
+
+        InvisibleButton("##pad1", ImVec2(10, 10));
+
+        BeginDisabled(!iris->ds[slot]);
+
+        PushFont(iris->font_heading);
+        Text("Slot %d", slot+1);
+        PopFont();
+
+        Text("Input device");
+
+        std::string name = "None";
+
+        if (!iris->input_devices[slot]) {
+            name = "None";
+        } else if (iris->input_devices[slot]->get_type() == 0) {
+            name = "Keyboard";
+        } else if (iris->input_devices[slot]->get_type() == 1) {
+            gamepad_device* gp = static_cast<gamepad_device*>(iris->input_devices[slot]);
+
+            name = SDL_GetGamepadNameForID(gp->get_id());
+        }
+
+        if (BeginCombo("##devicetype", name.c_str())) {
+            if (Selectable("Keyboard")) {
+                if (iris->input_devices[slot]) {
+                    delete iris->input_devices[slot];
+
+                    iris->input_devices[slot] = nullptr;
+                }
+
+                iris->input_devices[slot] = new keyboard_device();
+            }
+
+            for (auto gamepad : iris->gamepads) {
+                if (Selectable(SDL_GetGamepadNameForID(gamepad.first))) {
+                    if (iris->input_devices[slot]) {
+                        delete iris->input_devices[slot];
+
+                        iris->input_devices[slot] = nullptr;
+                    }
+
+                    iris->input_devices[slot] = new gamepad_device(gamepad.first);
+                }
+            }
+
+            EndCombo();
+        }
+        EndDisabled();
+    } EndChild();
+}
+
 void show_input_settings(iris::instance* iris) {
     using namespace ImGui;
 
-    Text("Input settings will go here.");
+    show_controller_slot(iris, 0); SameLine(0.0, 10.0);
+    show_controller_slot(iris, 1);
 }
 
 void show_paths_settings(iris::instance* iris) {
@@ -659,7 +739,7 @@ void show_memory_card(iris::instance* iris, int slot) {
 
     label[7] = '0' + slot;
 
-    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0), 0))) {
+    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0) - 10.0, 0))) {
         std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
 
         ImVec4 col = GetStyleColorVec4(iris->mcd_slot_type[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
