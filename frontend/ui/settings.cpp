@@ -483,6 +483,14 @@ void show_controller_slot(iris::instance* iris, int slot) {
         SetNextItemWidth(avail_width);
 
         if (BeginCombo("##devicetype", name.c_str())) {
+            if (Selectable("None")) {
+                if (iris->input_devices[slot]) {
+                    delete iris->input_devices[slot];
+
+                    iris->input_devices[slot] = nullptr;
+                }
+            }
+
             if (Selectable("Keyboard")) {
                 if (iris->input_devices[slot]) {
                     delete iris->input_devices[slot];
