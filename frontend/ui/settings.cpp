@@ -407,19 +407,56 @@ void show_controller_slot(iris::instance* iris, int slot) {
     if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0) - 10.0, 0))) {
         std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
 
+        float avail_width = GetContentRegionAvail().x;
+
         ImVec4 col = GetStyleColorVec4(iris->ds[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
         col.w = 1.0;
 
+        PushFont(iris->font_heading);
+        Text("Slot %d", slot+1);
+        PopFont();
+
+        Text("Controller");
+
+        std::string controller_name = "None";
+
+        if (iris->ds[slot]) {
+            controller_name = "DualShock 2";
+        }
+
+        SetNextItemWidth(avail_width);
+
+        if (BeginCombo("##controller", controller_name.c_str())) {
+            if (Selectable("None")) {
+                if (iris->ds[slot]) {
+                    ps2_sio2_detach_device(iris->ps2->sio2, slot);
+
+                    iris->ds[slot] = nullptr;
+                }
+            }
+
+            if (Selectable("DualShock 2")) {
+                if (!iris->ds[slot]) {
+                    iris->ds[slot] = ds_attach(iris->ps2->sio2, slot);
+                }
+            }
+
+            EndCombo();
+        }
+
         InvisibleButton("##slot0", ImVec2(10, 10));
 
-        texture* tex = &iris->ps2_memory_card_icon;
+        texture* tex = &iris->dualshock2_icon;
 
-        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (tex->width / 2.0));
+        float width = 225.0f;
+        float height = (tex->height * width) / tex->width;
+
+        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (width / 2.0));
 
         Image(
             (ImTextureID)(intptr_t)tex->descriptor_set,
-            ImVec2(tex->width, tex->height),
+            ImVec2(width, height),
             ImVec2(0, 0), ImVec2(1, 1),
             col,
             ImVec4(0.0, 0.0, 0.0, 0.0)
@@ -428,10 +465,6 @@ void show_controller_slot(iris::instance* iris, int slot) {
         InvisibleButton("##pad1", ImVec2(10, 10));
 
         BeginDisabled(!iris->ds[slot]);
-
-        PushFont(iris->font_heading);
-        Text("Slot %d", slot+1);
-        PopFont();
 
         Text("Input device");
 
@@ -447,6 +480,8 @@ void show_controller_slot(iris::instance* iris, int slot) {
             name = SDL_GetGamepadNameForID(gp->get_id());
         }
 
+        SetNextItemWidth(avail_width);
+
         if (BeginCombo("##devicetype", name.c_str())) {
             if (Selectable("Keyboard")) {
                 if (iris->input_devices[slot]) {
@@ -456,6 +491,7 @@ void show_controller_slot(iris::instance* iris, int slot) {
                 }
 
                 iris->input_devices[slot] = new keyboard_device();
+                iris->input_devices[slot]->set_slot(slot);
             }
 
             for (auto gamepad : iris->gamepads) {
@@ -467,6 +503,7 @@ void show_controller_slot(iris::instance* iris, int slot) {
                     }
 
                     iris->input_devices[slot] = new gamepad_device(gamepad.first);
+                    iris->input_devices[slot]->set_slot(slot);
                 }
             }
 
@@ -1174,8 +1211,8 @@ void show_settings(iris::instance* iris) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking;
 
-    SetNextWindowSize(ImVec2(650, 560), ImGuiCond_FirstUseEver);
-    PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(650, 560));
+    SetNextWindowSize(ImVec2(675, 560), ImGuiCond_FirstUseEver);
+    PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(675, 560));
 
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
         flags |= ImGuiWindowFlags_NoTitleBar;

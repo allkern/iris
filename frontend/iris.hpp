@@ -370,6 +370,7 @@ struct instance {
     texture ps2_memory_card_icon = {};
     texture ps1_memory_card_icon = {};
     texture pocketstation_icon = {};
+    texture dualshock2_icon = {};
     texture iris_icon = {};
 
     ImFont* font_small_code = nullptr;

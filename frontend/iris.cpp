@@ -304,11 +304,11 @@ void update_window(iris::instance* iris) {
             menubar_offset += iris->menubar_height;
         }
 
-        GetBackgroundDrawList()->AddRectFilled(
-            ImVec2(width - ts.x - offset.x - padding.x, menubar_offset + offset.y - padding.y),
-            ImVec2(width - offset.x + padding.x, menubar_offset + ts.y + offset.y + padding.y),
-            GetColorU32(GetStyleColorVec4(ImGuiCol_WindowBg)), 8.0f
-        );
+        // GetBackgroundDrawList()->AddRectFilled(
+        //     ImVec2(width - ts.x - offset.x - padding.x, menubar_offset + offset.y - padding.y),
+        //     ImVec2(width - offset.x + padding.x, menubar_offset + ts.y + offset.y + padding.y),
+        //     GetColorU32(GetStyleColorVec4(ImGuiCol_WindowBg)), 8.0f
+        // );
 
         GetBackgroundDrawList(GetMainViewport())->AddText(
             ImVec2(width - ts.x - offset.x, menubar_offset + offset.y),
@@ -509,14 +509,14 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
                 SDL_Log("Failed to open gamepad ID %u: %s", (unsigned int) event->gdevice.which, SDL_GetError());
             }
 
-            if ((iris->input_devices[0] == nullptr) || (iris->input_devices[0]->get_type() == 0)) {
+            if (iris->ds[0] && ((iris->input_devices[0] == nullptr) || (iris->input_devices[0]->get_type() == 0))) {
                 if (iris->input_devices[0]) delete iris->input_devices[0];
 
                 iris->input_devices[0] = new iris::gamepad_device(event->gdevice.which);
                 iris->input_devices[0]->set_slot(0);
 
                 push_info(iris, "\'" + std::string(SDL_GetGamepadName(gamepad)) + "\' connected to slot 1");
-            } else if ((iris->input_devices[1] == nullptr) || (iris->input_devices[1]->get_type() == 0)) {
+            } else if (iris->ds[1] && ((iris->input_devices[1] == nullptr) || (iris->input_devices[1]->get_type() == 0))) {
                 if (iris->input_devices[1]) delete iris->input_devices[1];
 
                 iris->input_devices[1] = new iris::gamepad_device(event->gdevice.which);
@@ -528,8 +528,6 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
             }
 
             iris->gamepads[event->gdevice.which] = gamepad;
-
-            
         } break;
 
         case SDL_EVENT_GAMEPAD_REMOVED: {

@@ -25,6 +25,7 @@ INCBIN(symbols, "../res/MaterialSymbolsRounded.ttf");
 INCBIN(firacode, "../res/FiraCode-Regular.ttf");
 INCBIN(ps1_memory_card_icon, "../res/ps1_mcd.png");
 INCBIN(ps2_memory_card_icon, "../res/ps2_mcd.png");
+INCBIN(dualshock2_icon, "../res/ds2.png");
 INCBIN(pocketstation_icon, "../res/pocketstation.png");
 INCBIN(iris_icon, "../res/iris.png");
 INCBIN(vertex_shader, "../shaders/vertex.spv");
@@ -864,6 +865,7 @@ bool init(iris::instance* iris) {
     iris->ps1_memory_card_icon = load_texture(g_ps1_memory_card_icon_data, g_ps1_memory_card_icon_size);
     iris->ps2_memory_card_icon = load_texture(g_ps2_memory_card_icon_data, g_ps2_memory_card_icon_size);
     iris->pocketstation_icon = load_texture(g_pocketstation_icon_data, g_pocketstation_icon_size);
+    iris->dualshock2_icon = load_texture(g_dualshock2_icon_data, g_dualshock2_icon_size);
     iris->iris_icon = load_texture(g_iris_icon_data, g_iris_icon_size);
 
     return true;
@@ -873,6 +875,7 @@ void cleanup(iris::instance* iris) {
     vulkan::free_texture(iris, iris->ps1_memory_card_icon);
     vulkan::free_texture(iris, iris->ps2_memory_card_icon);
     vulkan::free_texture(iris, iris->pocketstation_icon);
+    vulkan::free_texture(iris, iris->dualshock2_icon);
     vulkan::free_texture(iris, iris->iris_icon);
 
     ImGui_ImplVulkan_Shutdown();
