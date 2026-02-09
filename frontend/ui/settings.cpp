@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <vector>
 #include <string>
 #include <cctype>
@@ -13,6 +14,82 @@ bool hovered = false;
 std::string tooltip = "";
 int selected_settings = 0;
 int saved = 0;
+
+mapping* get_input_mapping(iris::instance* iris, int slot) {
+    if (iris->input_map[slot] == -1)
+        return nullptr;
+
+    return &iris->input_maps[iris->input_map[slot]];
+}
+
+const char* get_input_name(input_action action) {
+    switch (action) {
+        case IRIS_DS_BT_SELECT: return "Select";
+        case IRIS_DS_BT_L3: return "L3";
+        case IRIS_DS_BT_R3: return "R3";
+        case IRIS_DS_BT_START: return "Start";
+        case IRIS_DS_BT_UP: return "D-pad Up";
+        case IRIS_DS_BT_RIGHT: return "D-pad Right";
+        case IRIS_DS_BT_DOWN: return "D-pad Down";
+        case IRIS_DS_BT_LEFT: return "D-pad Left";
+        case IRIS_DS_BT_L2: return "L2";
+        case IRIS_DS_BT_R2: return "R2";
+        case IRIS_DS_BT_L1: return "L1";
+        case IRIS_DS_BT_R1: return "R1";
+        case IRIS_DS_BT_TRIANGLE: return "Triangle";
+        case IRIS_DS_BT_CIRCLE: return "Circle";
+        case IRIS_DS_BT_CROSS: return "Cross";
+        case IRIS_DS_BT_SQUARE: return "Square";
+        case IRIS_DS_BT_ANALOG: return "Analog";
+        case IRIS_DS_AX_RIGHTV_POS: return "Right Stick Vertical+";
+        case IRIS_DS_AX_RIGHTV_NEG: return "Right Stick Vertical-";
+        case IRIS_DS_AX_RIGHTH_POS: return "Right Stick Horizontal+";
+        case IRIS_DS_AX_RIGHTH_NEG: return "Right Stick Horizontal-";
+        case IRIS_DS_AX_LEFTV_POS: return "Left Stick Vertical+";
+        case IRIS_DS_AX_LEFTV_NEG: return "Left Stick Vertical-";
+        case IRIS_DS_AX_LEFTH_POS: return "Left Stick Horizontal+";
+        case IRIS_DS_AX_LEFTH_NEG: return "Left Stick Horizontal-";
+    }
+
+    return "";
+}
+
+std::string get_event_name(const input_event& event) {
+    std::string name;
+
+    switch (event.type) {
+        case IRIS_EVENT_KEYBOARD: {
+            SDL_Keycode keycode = static_cast<SDL_Keycode>(event.id);
+            name = SDL_GetKeyName(keycode);
+        } break;
+
+        case IRIS_EVENT_GAMEPAD_BUTTON: {
+            SDL_GamepadButton button = static_cast<SDL_GamepadButton>(event.id);
+            name = SDL_GetGamepadStringForButton(button);
+        } break;
+
+        case IRIS_EVENT_GAMEPAD_AXIS_POS: {
+            SDL_GamepadAxis axis = static_cast<SDL_GamepadAxis>(event.id);
+            name = SDL_GetGamepadStringForAxis(axis) + std::string("+");
+        } break;
+
+        case IRIS_EVENT_GAMEPAD_AXIS_NEG: {
+            SDL_GamepadAxis axis = static_cast<SDL_GamepadAxis>(event.id);
+            name = SDL_GetGamepadStringForAxis(axis) + std::string("-");
+        } break;
+
+        default: {
+            name = "unknown";
+        } break;
+    }
+
+    // Capitalize first letter
+    if (!name.empty()) {
+        name[0] = std::toupper(name[0]);
+    }
+
+    return name;
+}
 
 const char* settings_renderer_names[] = {
     "Null",
@@ -42,10 +119,10 @@ int settings_fullscreen_flags[] = {
 
 const char* settings_buttons[] = {
     " " ICON_MS_DEPLOYED_CODE "  System",
-    " " ICON_MS_MONITOR "  Graphics",
-    " " ICON_MS_STADIA_CONTROLLER "  Input",
-    " " ICON_MS_BRUSH "  Shaders",
     " " ICON_MS_FOLDER "  Paths",
+    " " ICON_MS_MONITOR "  Graphics",
+    " " ICON_MS_BRUSH "  Shaders",
+    " " ICON_MS_STADIA_CONTROLLER "  Input",
     " " ICON_MS_SD_CARD "  Memory cards",
     " " ICON_MS_MORE_HORIZ "  Misc.",
     nullptr
@@ -400,23 +477,15 @@ void show_graphics_settings(iris::instance* iris) {
 void show_controller_slot(iris::instance* iris, int slot) {
     using namespace ImGui;
 
-    char label[9] = "##slot0";
+    char label[9] = "Slot #";
 
-    label[6] = '0' + slot;
+    label[5] = '1' + slot;
 
-    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0) - 10.0, 0))) {
-        std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
+    ImVec4 col = GetStyleColorVec4(iris->ds[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
-        float avail_width = GetContentRegionAvail().x;
+    col.w = 1.0;
 
-        ImVec4 col = GetStyleColorVec4(iris->ds[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
-
-        col.w = 1.0;
-
-        PushFont(iris->font_heading);
-        Text("Slot %d", slot+1);
-        PopFont();
-
+    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / 2.0 - 10.0, 50 * iris->ui_scale))) {
         Text("Controller");
 
         std::string controller_name = "None";
@@ -424,6 +493,8 @@ void show_controller_slot(iris::instance* iris, int slot) {
         if (iris->ds[slot]) {
             controller_name = "DualShock 2";
         }
+
+        float avail_width = GetContentRegionAvail().x;
 
         SetNextItemWidth(avail_width);
 
@@ -444,27 +515,12 @@ void show_controller_slot(iris::instance* iris, int slot) {
 
             EndCombo();
         }
+    } EndChild(); SameLine(0.0, 10.0);
 
-        InvisibleButton("##slot0", ImVec2(10, 10));
-
-        texture* tex = &iris->dualshock2_icon;
-
-        float width = 225.0f;
-        float height = (tex->height * width) / tex->width;
-
-        SetCursorPosX((GetContentRegionAvail().x / 2.0) - (width / 2.0));
-
-        Image(
-            (ImTextureID)(intptr_t)tex->descriptor_set,
-            ImVec2(width, height),
-            ImVec2(0, 0), ImVec2(1, 1),
-            col,
-            ImVec4(0.0, 0.0, 0.0, 0.0)
-        );
-
-        InvisibleButton("##pad1", ImVec2(10, 10));
-
+    if (BeginChild((std::string(label) + "##icon").c_str(), ImVec2(0, 50 * iris->ui_scale))) {
         BeginDisabled(!iris->ds[slot]);
+
+        float avail_width = GetContentRegionAvail().x;
 
         Text("Input device");
 
@@ -500,6 +556,10 @@ void show_controller_slot(iris::instance* iris, int slot) {
 
                 iris->input_devices[slot] = new keyboard_device();
                 iris->input_devices[slot]->set_slot(slot);
+
+                if (iris->input_map[slot] <= 1) {
+                    iris->input_map[slot] = 0;
+                }
             }
 
             for (auto gamepad : iris->gamepads) {
@@ -512,20 +572,192 @@ void show_controller_slot(iris::instance* iris, int slot) {
 
                     iris->input_devices[slot] = new gamepad_device(gamepad.first);
                     iris->input_devices[slot]->set_slot(slot);
+
+                    if (iris->input_map[slot] <= 1) {
+                        iris->input_map[slot] = 1;
+                    }
                 }
             }
 
             EndCombo();
         }
+
         EndDisabled();
     } EndChild();
+
+    InvisibleButton("##slot0", ImVec2(10, 10));
+
+    texture* tex = &iris->dualshock2_icon;
+
+    float width = 250.0f;
+    float height = (tex->height * width) / tex->width;
+
+    SetCursorPosX((GetContentRegionAvail().x / 2.0) - (width / 2.0));
+
+    Image(
+        (ImTextureID)(intptr_t)tex->descriptor_set,
+        ImVec2(width, height),
+        ImVec2(0, 0), ImVec2(1, 1),
+        col,
+        ImVec4(0.0, 0.0, 0.0, 0.0)
+    );
+
+    InvisibleButton("##pad1", ImVec2(10, 10));
+
+    Text("Mapping");
+
+    SetNextItemWidth(GetContentRegionAvail().x / 2.0 - 10.0);
+
+    mapping* mapping = get_input_mapping(iris, slot);
+
+    if (BeginCombo("##mapping", mapping ? mapping->name.c_str() : "None")) {
+        if (Selectable("None", mapping == nullptr)) {
+            iris->input_map[slot] = -1;
+        }
+
+        int i = 0;
+
+        for (auto& map : iris->input_maps) {
+            if (Selectable(map.name.c_str(), mapping == &map)) {
+                iris->input_map[slot] = i;
+            }
+
+            i++;
+        }
+
+        EndCombo();
+    }
+}
+
+int selected_mapping = 0;
+bool waiting_for_input = false;
+uint64_t mapping_editing = 0;
+
+void show_mappings_editor(iris::instance* iris) {
+    using namespace ImGui;
+
+    if (BeginCombo("##mapping", iris->input_maps[selected_mapping].name.c_str())) {
+        int i = 0;
+
+        for (auto& map : iris->input_maps) {
+            if (Selectable(map.name.c_str(), selected_mapping == i)) {
+                selected_mapping = i;
+            }
+
+            i++;
+        }
+
+        EndCombo();
+    }
+
+    if (BeginTable("##mappingeditor", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
+        TableSetupColumn("Input");
+        TableSetupColumn("Mapping");
+        TableHeadersRow();
+
+        std::vector<std::pair<uint64_t, input_action>> elems(
+            iris->input_maps[selected_mapping].map.forward_map().begin(),
+            iris->input_maps[selected_mapping].map.forward_map().end());
+
+        std::sort(elems.begin(), elems.end(), [](const std::pair<uint64_t, input_action>& a, const std::pair<uint64_t, input_action>& b) {
+            return a.second < b.second;
+        });
+
+        for (auto& entry : elems) {
+            TableNextRow();
+
+            std::string key_name = get_input_name(static_cast<input_action>(entry.second));
+
+            TableSetColumnIndex(0);
+            Text("%s", key_name.c_str());
+
+            TableSetColumnIndex(1);
+
+            input_event event;
+            event.u64 = entry.first;
+
+            std::string value_name = get_event_name(event) + "##" + key_name;
+
+            if (waiting_for_input && (mapping_editing == entry.first)) {
+                TextDisabled("Press a key or button...");
+
+                if (iris->last_input_event_read == false && iris->last_input_event_value > 0.5f) {
+                    iris->last_input_event_read = true;
+                    waiting_for_input = false;
+                    mapping_editing = 0;
+
+                    auto event = iris->last_input_event;
+                    auto action = entry.second;
+
+                    // printf("Mapping input event %s (%llu) to action %s (%llu)\n",
+                    //     get_event_name(iris->last_input_event).c_str(),
+                    //     iris->last_input_event.u64,
+                    //     get_input_name(action),
+                    //     static_cast<uint64_t>(entry.second)
+                    // );
+
+                    auto* value_ptr = iris->input_maps[selected_mapping].map.get_value(event.u64);
+
+                    if (value_ptr != nullptr) {
+                        // Remove previous mapping for this input event
+                        auto value = *value_ptr;
+                        auto key = *iris->input_maps[selected_mapping].map.get_key(action);
+
+                        // printf("Removing previous mapping of event %s (%llu) to action %s (%llu)\n",
+                        //     get_event_name(event).c_str(),
+                        //     event.u64,
+                        //     get_input_name(value),
+                        //     static_cast<uint64_t>(value)
+                        // );
+
+                        iris->input_maps[selected_mapping].map.erase_by_key(event.u64);
+                        iris->input_maps[selected_mapping].map.erase_by_value(action);
+                        iris->input_maps[selected_mapping].map.insert(event.u64, action);
+                        iris->input_maps[selected_mapping].map.insert(key, value);
+                    } else {
+                        iris->input_maps[selected_mapping].map.erase_by_value(action);
+                        iris->input_maps[selected_mapping].map.insert(event.u64, action);
+                    }
+                }
+            } else {
+                Selectable(value_name.c_str(), false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick);
+            }
+
+            if (IsMouseDoubleClicked(ImGuiMouseButton_Left) && IsItemHovered()) {
+                iris->last_input_event_read = true;
+                waiting_for_input = true;
+                mapping_editing = entry.first;
+            }
+        }
+
+        EndTable();
+    }
 }
 
 void show_input_settings(iris::instance* iris) {
     using namespace ImGui;
 
-    show_controller_slot(iris, 0); SameLine(0.0, 10.0);
-    show_controller_slot(iris, 1);
+    if (BeginTabBar("##inputtabs")) {
+        if (BeginTabItem("Slot 1")) {
+            show_controller_slot(iris, 0);
+
+            EndTabItem();
+        }
+
+        if (BeginTabItem("Slot 2")) {
+            show_controller_slot(iris, 1);
+
+            EndTabItem();
+        }
+
+        if (BeginTabItem("Mappings")) {
+            show_mappings_editor(iris);
+
+            EndTabItem();
+        }
+
+        EndTabBar();
+    }
 }
 
 void show_paths_settings(iris::instance* iris) {
@@ -1248,10 +1480,10 @@ void show_settings(iris::instance* iris) {
         if (BeginChild("##content", ImVec2(0, GetContentRegionAvail().y - 100.0), ImGuiChildFlags_AutoResizeY)) {
             switch (selected_settings) {
                 case 0: show_system_settings(iris); break;
-                case 1: show_graphics_settings(iris); break;
-                case 2: show_input_settings(iris); break;
+                case 1: show_paths_settings(iris); break;
+                case 2: show_graphics_settings(iris); break;
                 case 3: show_shader_settings(iris); break;
-                case 4: show_paths_settings(iris); break;
+                case 4: show_input_settings(iris); break;
                 case 5: show_memory_card_settings(iris); break;
                 case 6: show_misc_settings(iris); break;
             }

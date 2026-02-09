@@ -8,185 +8,117 @@
 
 namespace iris {
 
-uint32_t map_keyboard_button(iris::instance* iris, SDL_Keycode k) {
-    if (k == SDLK_X     ) return DS_BT_CROSS;
-    if (k == SDLK_A     ) return DS_BT_SQUARE;
-    if (k == SDLK_W     ) return DS_BT_TRIANGLE;
-    if (k == SDLK_D     ) return DS_BT_CIRCLE;
-    if (k == SDLK_RETURN) return DS_BT_START;
-    if (k == SDLK_S     ) return DS_BT_SELECT;
-    if (k == SDLK_UP    ) return DS_BT_UP;
-    if (k == SDLK_DOWN  ) return DS_BT_DOWN;
-    if (k == SDLK_LEFT  ) return DS_BT_LEFT;
-    if (k == SDLK_RIGHT ) return DS_BT_RIGHT;
-    if (k == SDLK_Q     ) return DS_BT_L1;
-    if (k == SDLK_E     ) return DS_BT_R1;
-    if (k == SDLK_1     ) return DS_BT_L2;
-    if (k == SDLK_3     ) return DS_BT_R2;
-    if (k == SDLK_Z     ) return DS_BT_L3;
-    if (k == SDLK_C     ) return DS_BT_R3;
-    if (k == SDLK_V     ) return DS_BT_ANALOG;
+void keyboard_device::handle_event(iris::instance* iris, SDL_Event* event) {
+    auto ievent = input::sdl_event_to_input_event(event);
+    auto action = input::get_input_action(iris, m_slot, ievent.u64);
 
-    return 0;
+    if (!action)
+        return;
+
+    input::execute_action(iris, *action, m_slot, event->type == SDL_EVENT_KEY_DOWN ? 1.0f : 0.0f);
 }
 
-static inline input_event sdl_event_to_input_event(SDL_Event* event) {
-    input_event ievent = {};
+void gamepad_device::handle_event(iris::instance* iris, SDL_Event* event) {
+    auto ievent = input::sdl_event_to_input_event(event);
+    auto action = input::get_input_action(iris, m_slot, ievent.u64);
 
-    ievent.type = event->type;
+    if (!action)
+        return;
+
+    if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
+        input::execute_action(iris, *action, m_slot, 1.0f);
+    } else if (event->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
+        input::execute_action(iris, *action, m_slot, 0.0f);
+    } else if (event->type == SDL_EVENT_GAMEPAD_AXIS_MOTION) {
+        // Convert from -32768->32767 to -1.0->1.0 and take absolute value
+        float value = fabs(event->gaxis.value / 32767.0f);
+
+        input::execute_action(iris, *action, m_slot, value);
+    }
+}
+
+}
+
+namespace iris::input {
+
+input_action* get_input_action(iris::instance* iris, int slot, uint64_t input) {
+    if (iris->input_map[slot] == -1)
+        return nullptr;
+
+    return iris->input_maps[iris->input_map[slot]].map.get_value(input);
+}
+
+static inline void change_button(iris::instance* iris, int slot, float value, uint32_t button) {
+    if (!iris->ds[slot]) return;
+
+    if (value > 0.5f) {
+        ds_button_press(iris->ds[slot], button);
+    } else {
+        ds_button_release(iris->ds[slot], button);
+    }
+}
+
+void execute_action(iris::instance* iris, input_action action, int slot, float value) {
+    if (!iris->ds[slot])
+        return;
+
+    switch (action) {
+        case IRIS_DS_BT_SELECT: change_button(iris, slot, value, DS_BT_SELECT); break;
+        case IRIS_DS_BT_L3: change_button(iris, slot, value, DS_BT_L3); break;
+        case IRIS_DS_BT_R3: change_button(iris, slot, value, DS_BT_R3); break;
+        case IRIS_DS_BT_START: change_button(iris, slot, value, DS_BT_START); break;
+        case IRIS_DS_BT_UP: change_button(iris, slot, value, DS_BT_UP); break;
+        case IRIS_DS_BT_RIGHT: change_button(iris, slot, value, DS_BT_RIGHT); break;
+        case IRIS_DS_BT_DOWN: change_button(iris, slot, value, DS_BT_DOWN); break;
+        case IRIS_DS_BT_LEFT: change_button(iris, slot, value, DS_BT_LEFT); break;
+        case IRIS_DS_BT_L2: change_button(iris, slot, value, DS_BT_L2); break;
+        case IRIS_DS_BT_R2: change_button(iris, slot, value, DS_BT_R2); break;
+        case IRIS_DS_BT_L1: change_button(iris, slot, value, DS_BT_L1); break;
+        case IRIS_DS_BT_R1: change_button(iris, slot, value, DS_BT_R1); break;
+        case IRIS_DS_BT_TRIANGLE: change_button(iris, slot, value, DS_BT_TRIANGLE); break;
+        case IRIS_DS_BT_CIRCLE: change_button(iris, slot, value, DS_BT_CIRCLE); break;
+        case IRIS_DS_BT_CROSS: change_button(iris, slot, value, DS_BT_CROSS); break;
+        case IRIS_DS_BT_SQUARE: change_button(iris, slot, value, DS_BT_SQUARE); break;
+        case IRIS_DS_BT_ANALOG: change_button(iris, slot, value, DS_BT_ANALOG); break;
+        case IRIS_DS_AX_RIGHTV_POS: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_V, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_RIGHTV_NEG: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_V, 0x7f - (value * 0x7f)); break;
+        case IRIS_DS_AX_RIGHTH_POS: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_H, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_RIGHTH_NEG: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_H, 0x7f - (value * 0x7f)); break;
+        case IRIS_DS_AX_LEFTV_POS: ds_analog_change(iris->ds[slot], DS_AX_LEFT_V, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_LEFTV_NEG: ds_analog_change(iris->ds[slot], DS_AX_LEFT_V, 0x7f - (value * 0x7f)); break;
+        case IRIS_DS_AX_LEFTH_POS: ds_analog_change(iris->ds[slot], DS_AX_LEFT_H, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_LEFTH_NEG: ds_analog_change(iris->ds[slot], DS_AX_LEFT_H, 0x7f - (value * 0x7f)); break;
+    }
+}
+
+input_event sdl_event_to_input_event(SDL_Event* event) {
+    input_event ievent = {};
 
     switch (event->type) {
         case SDL_EVENT_KEY_DOWN:
         case SDL_EVENT_KEY_UP: {
+            ievent.type = IRIS_EVENT_KEYBOARD;
             ievent.id = event->key.key;
         } break;
 
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
         case SDL_EVENT_GAMEPAD_BUTTON_UP: {
+            ievent.type = IRIS_EVENT_GAMEPAD_BUTTON;
             ievent.id = event->gbutton.button;
         } break;
 
         case SDL_EVENT_GAMEPAD_AXIS_MOTION: {
+            if (event->gaxis.value > 0) {
+                ievent.type = IRIS_EVENT_GAMEPAD_AXIS_POS;
+            } else {
+                ievent.type = IRIS_EVENT_GAMEPAD_AXIS_NEG;
+            }
+
             ievent.id = event->gaxis.axis;
         } break;
     }
 
     return ievent;
-}
-
-void handle_input_action(iris::instance* iris, input_action act, int slot, uint32_t value) {
-    switch (act.action) {
-        case INPUT_ACTION_PRESS_BUTTON: {
-            if (iris->ds[slot]) {
-                ds_button_press(iris->ds[slot], act.destination);
-            }
-        } break;
-
-        case INPUT_ACTION_RELEASE_BUTTON: {
-            if (iris->ds[slot]) {
-                ds_button_release(iris->ds[slot], act.destination);
-            }
-        } break;
-
-        case INPUT_ACTION_MOVE_AXIS: {
-            if (iris->ds[slot]) {
-                ds_analog_change(iris->ds[slot], act.destination, static_cast<uint8_t>(value));
-            }
-        } break;
-    }
-}
-
-void keyboard_device::handle_event(iris::instance* iris, SDL_Event* event) {
-    SDL_Keycode key = event->key.key;
-
-    uint32_t mask = map_keyboard_button(iris, key);
-
-    if (event->type == SDL_EVENT_KEY_DOWN) {
-        switch (key) {
-            case SDLK_I: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_V, 0x00); } break;
-            case SDLK_J: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_H, 0x00); } break;
-            case SDLK_K: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_V, 0xff); } break;
-            case SDLK_L: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_H, 0xff); } break;
-            case SDLK_T: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_V, 0x00); } break;
-            case SDLK_F: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_H, 0x00); } break;
-            case SDLK_G: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_V, 0xff); } break;
-            case SDLK_H: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_H, 0xff); } break;
-        }
-
-        if (iris->ds[m_slot]) {
-            ds_button_press(iris->ds[m_slot], mask);
-        }
-    } else if (event->type == SDL_EVENT_KEY_UP) {
-        switch (key) {
-            case SDLK_I: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_V, 0x7f); } break;
-            case SDLK_J: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_H, 0x7f); } break;
-            case SDLK_K: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_V, 0x7f); } break;
-            case SDLK_L: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_H, 0x7f); } break;
-            case SDLK_T: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_V, 0x7f); } break;
-            case SDLK_F: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_H, 0x7f); } break;
-            case SDLK_G: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_V, 0x7f); } break;
-            case SDLK_H: { if (iris->ds[m_slot]) ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_H, 0x7f); } break;
-        }
-
-        if (iris->ds[m_slot]) {
-            ds_button_release(iris->ds[m_slot], mask);
-        }
-    }
-}
-
-void gamepad_device::handle_event(iris::instance* iris, SDL_Event* event) {
-    if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN || event->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
-        if (event->gbutton.which != id)
-            return;
-
-        uint32_t mask = 0;
-
-        switch (event->gbutton.button) {
-            case SDL_GAMEPAD_BUTTON_SOUTH:          mask = DS_BT_CROSS; break;
-            case SDL_GAMEPAD_BUTTON_EAST:           mask = DS_BT_CIRCLE; break;
-            case SDL_GAMEPAD_BUTTON_WEST:           mask = DS_BT_SQUARE; break;
-            case SDL_GAMEPAD_BUTTON_NORTH:          mask = DS_BT_TRIANGLE; break;
-            case SDL_GAMEPAD_BUTTON_BACK:           mask = DS_BT_SELECT; break;
-            case SDL_GAMEPAD_BUTTON_START:          mask = DS_BT_START; break;
-            case SDL_GAMEPAD_BUTTON_DPAD_UP:        mask = DS_BT_UP; break;
-            case SDL_GAMEPAD_BUTTON_DPAD_DOWN:      mask = DS_BT_DOWN; break;
-            case SDL_GAMEPAD_BUTTON_DPAD_LEFT:      mask = DS_BT_LEFT; break;
-            case SDL_GAMEPAD_BUTTON_DPAD_RIGHT:     mask = DS_BT_RIGHT; break;
-            case SDL_GAMEPAD_BUTTON_LEFT_SHOULDER:  mask = DS_BT_L1; break;
-            case SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER: mask = DS_BT_R1; break;
-            case SDL_GAMEPAD_BUTTON_LEFT_STICK:     mask = DS_BT_L3; break;
-            case SDL_GAMEPAD_BUTTON_RIGHT_STICK:    mask = DS_BT_R3; break;
-        }
-
-        if (event->type == SDL_EVENT_GAMEPAD_BUTTON_DOWN) {
-            if (iris->ds[m_slot]) {
-                ds_button_press(iris->ds[m_slot], mask);
-            }
-        } else if (event->type == SDL_EVENT_GAMEPAD_BUTTON_UP) {
-            if (iris->ds[m_slot]) {
-                ds_button_release(iris->ds[m_slot], mask);
-            }
-        }
-    } else if (event->type == SDL_EVENT_GAMEPAD_AXIS_MOTION) {
-        if (event->gaxis.which != id)
-            return;
-
-        // Convert from -32768->32767 to 0.0->1.0
-        float value = event->gaxis.value / 32767.0f;
-
-        value = (value + 1.0f) / 2.0f;
-
-        if (iris->ds[m_slot]) {
-            switch (event->gaxis.axis) {
-                case SDL_GAMEPAD_AXIS_LEFT_TRIGGER: {
-                    if (value > 0.5f) {
-                        ds_button_press(iris->ds[m_slot], DS_BT_L2);
-                    } else {
-                        ds_button_release(iris->ds[m_slot], DS_BT_L2);
-                    }
-                } break;
-                case SDL_GAMEPAD_AXIS_RIGHT_TRIGGER: {
-                    if (value > 0.5f) {
-                        ds_button_press(iris->ds[m_slot], DS_BT_R2);
-                    } else {
-                        ds_button_release(iris->ds[m_slot], DS_BT_R2);
-                    }
-                } break;
-                case SDL_GAMEPAD_AXIS_LEFTX: {
-                    ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_H, (uint8_t)(value * 0xff));
-                } break;
-                case SDL_GAMEPAD_AXIS_LEFTY: {
-                    ds_analog_change(iris->ds[m_slot], DS_AX_LEFT_V, (uint8_t)(value * 0xff));
-                } break;
-                case SDL_GAMEPAD_AXIS_RIGHTX: {
-                    ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_H, (uint8_t)(value * 0xff));
-                } break;
-                case SDL_GAMEPAD_AXIS_RIGHTY: {
-                    ds_analog_change(iris->ds[m_slot], DS_AX_RIGHT_V, (uint8_t)(value * 0xff));
-                } break;
-            }
-        }
-    }
 }
 
 std::string get_default_screenshot_filename(iris::instance* iris) {
@@ -229,7 +161,7 @@ int get_screenshot_jpg_quality(iris::instance* iris) {
     return 90;
 }
 
-bool save_screenshot(iris::instance* iris, std::string path = "") {
+bool save_screenshot(iris::instance* iris, std::string path) {
     std::filesystem::path fn(path);
 
     std::string directory = iris->snap_path;
@@ -366,6 +298,10 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
             ps2_iop_intc_irq(iris->ps2->iop_intc, IOP_INTC_USB);
         } break;
     }
+
+    iris->last_input_event_read = false;
+    iris->last_input_event_value = 1.0f;
+    iris->last_input_event = sdl_event_to_input_event(event);
 
     if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);
     if (iris->input_devices[1]) iris->input_devices[1]->handle_event(iris, event);

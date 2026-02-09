@@ -1,10 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(iris LANGUAGES C CXX)
 
-# We need to build release always, unoptimized builds
-# won't cut it.
-set(CMAKE_BUILD_TYPE "RelWithDebInfo")
-
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
 set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
 set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
@@ -133,6 +129,7 @@ target_sources(iris PRIVATE
     src/list.c
     src/scheduler.c
     src/dev/ds.c
+    src/dev/guncon.c
     src/dev/mcd.c
     src/dev/mtap.c
     src/dev/ps1_mcd.c

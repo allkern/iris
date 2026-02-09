@@ -121,13 +121,6 @@ struct elf_symbol {
     uint32_t size;
 };
 
-// Event -> Action
-enum {
-    INPUT_ACTION_PRESS_BUTTON,
-    INPUT_ACTION_RELEASE_BUTTON,
-    INPUT_ACTION_MOVE_AXIS
-};
-
 enum {
     INPUT_CONTROLLER_DUALSHOCK2
 
@@ -178,14 +171,48 @@ public:
     void handle_event(iris::instance* iris, SDL_Event* event) override;
 };
 
-struct input_action {
-    int action;
-    int destination;
+union input_event {
+    struct {
+        uint32_t id;
+        uint32_t type;
+    };
+
+    uint64_t u64;
 };
 
-struct input_event {
-    int type;
-    uint32_t id;
+enum event {
+    IRIS_EVENT_KEYBOARD,
+    IRIS_EVENT_GAMEPAD_BUTTON,
+    IRIS_EVENT_GAMEPAD_AXIS_POS,
+    IRIS_EVENT_GAMEPAD_AXIS_NEG
+};
+
+enum input_action : uint32_t {
+    IRIS_DS_BT_CROSS,
+    IRIS_DS_BT_CIRCLE,
+    IRIS_DS_BT_SQUARE,
+    IRIS_DS_BT_TRIANGLE,
+    IRIS_DS_BT_START,
+    IRIS_DS_BT_SELECT,
+    IRIS_DS_BT_ANALOG,
+    IRIS_DS_BT_UP,
+    IRIS_DS_BT_DOWN,
+    IRIS_DS_BT_LEFT,
+    IRIS_DS_BT_RIGHT,
+    IRIS_DS_BT_L1,
+    IRIS_DS_BT_R1,
+    IRIS_DS_BT_L2,
+    IRIS_DS_BT_R2,
+    IRIS_DS_BT_L3,
+    IRIS_DS_BT_R3,
+    IRIS_DS_AX_RIGHTV_POS,
+    IRIS_DS_AX_RIGHTV_NEG,
+    IRIS_DS_AX_RIGHTH_POS,
+    IRIS_DS_AX_RIGHTH_NEG,
+    IRIS_DS_AX_LEFTV_POS,
+    IRIS_DS_AX_LEFTV_NEG,
+    IRIS_DS_AX_LEFTH_POS,
+    IRIS_DS_AX_LEFTH_NEG
 };
 
 struct vertex {
@@ -241,54 +268,72 @@ struct vulkan_gpu {
     uint32_t api_version = 0;
 };
 
-// template <typename Key, typename Value> class bidirectional_map {
-//     std::unordered_map<Key, Value> m_forward_map;
-//     std::unordered_map<Value, Key> m_reverse_map;
+template <typename Key, typename Value> class bidirectional_map {
+    std::unordered_map <Key, Value> m_forward_map;
+    std::unordered_map <Value, Key> m_reverse_map;
 
-// public:
-//     void insert(const Key& key, const Value& value) {
-//         m_forward_map[key] = value;
-//         m_reverse_map[value] = key;
-//     }
+public:
+    void insert(const Key& key, const Value& value) {
+        m_forward_map[key] = value;
+        m_reverse_map[value] = key;
+    }
 
-//     bool erase_by_key(const Key& key) {
-//         auto it = m_forward_map.find(key);
-//         if (it != m_forward_map.end()) {
-//             Value value = it->second;
-//             m_forward_map.erase(it);
-//             m_reverse_map.erase(value);
-//             return true;
-//         }
-//         return false;
-//     }
+    std::unordered_map <Key, Value>& forward_map() {
+        return m_forward_map;
+    }
 
-//     bool erase_by_value(const Value& value) {
-//         auto it = m_reverse_map.find(value);
-//         if (it != m_reverse_map.end()) {
-//             Key key = it->second;
-//             m_reverse_map.erase(it);
-//             m_forward_map.erase(key);
-//             return true;
-//         }
-//         return false;
-//     }
+    std::unordered_map <Value, Key>& reverse_map() {
+        return m_reverse_map;
+    }
 
-//     Value* get_value(const Key& key) {
-//         auto it = m_forward_map.find(key);
-//         if (it != m_forward_map.end()) {
-//             return &it->second;
-//         }
-//         return nullptr;
-//     }
+    bool erase_by_key(const Key& key) {
+        auto it = m_forward_map.find(key);
+        if (it != m_forward_map.end()) {
+            Value value = it->second;
+            m_forward_map.erase(it);
+            m_reverse_map.erase(value);
+            return true;
+        }
+        return false;
+    }
 
-//     Key* get_key(const Value& value) {
-//         auto it = m_reverse_map.find(value);
-//         if (it != m_reverse_map.end()) {
-//             return &it->second;
-//         }
-//         return nullptr;
-//     }
-// };
+    bool erase_by_value(const Value& value) {
+        auto it = m_reverse_map.find(value);
+        if (it != m_reverse_map.end()) {
+            Key key = it->second;
+            m_reverse_map.erase(it);
+            m_forward_map.erase(key);
+            return true;
+        }
+        return false;
+    }
+
+    void clear() {
+        m_forward_map.clear();
+        m_reverse_map.clear();
+    }
+
+    Value* get_value(const Key& key) {
+        auto it = m_forward_map.find(key);
+        if (it != m_forward_map.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
+
+    Key* get_key(const Value& value) {
+        auto it = m_reverse_map.find(value);
+        if (it != m_reverse_map.end()) {
+            return &it->second;
+        }
+        return nullptr;
+    }
+};
+
+struct mapping {
+    std::string name;
+    bidirectional_map <uint64_t, input_action> map;
+};
 
 struct instance {
     SDL_Window* window = nullptr;
@@ -475,6 +520,7 @@ struct instance {
 
     bool dump_to_file = true;
     std::string settings_path = "";
+    std::string mappings_path = "";
 
     int frames = 0;
     float fps = 0.0f;
@@ -494,7 +540,12 @@ struct instance {
     bool screenshot_shader_processing = false;
     input_device* input_devices[2] = { nullptr };
     std::unordered_map <SDL_JoystickID, SDL_Gamepad*> gamepads;
-    // bidirectional_map <input_event, input_action> input_map;
+    std::vector <mapping> input_maps = {};
+    int input_map[2] = { -1, -1 };
+    input_event last_input_event = {};
+    bool last_input_event_read = true;
+    float last_input_event_value = 0.0f;
+
     bool limit_fps = true;
     float fps_cap = 60.0f;
 
@@ -683,6 +734,16 @@ namespace render {
     void refresh(iris::instance* iris);
 }
 
+namespace input {
+    input_action* get_input_action(iris::instance* iris, int slot, uint64_t input);
+    input_event sdl_event_to_input_event(SDL_Event* event);
+    std::string get_default_screenshot_filename(iris::instance* iris);
+    void execute_action(iris::instance* iris, input_action action, int slot, float value);
+    bool save_screenshot(iris::instance* iris, std::string path = "");
+    void handle_keydown_event(iris::instance* iris, SDL_Event* event);
+    void handle_keyup_event(iris::instance* iris, SDL_Event* event);
+}
+
 iris::instance* create();
 bool init(iris::instance* iris, int argc, const char* argv[]);
 void destroy(iris::instance* iris);
@@ -735,8 +796,5 @@ void push_info(iris::instance* iris, std::string text);
 
 void add_recent(iris::instance* iris, std::string file);
 int open_file(iris::instance* iris, std::string file);
-
-bool save_screenshot(iris::instance* iris, std::string path);
-std::string get_default_screenshot_filename(iris::instance* iris);
 
 }

@@ -386,7 +386,7 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
                 audio::mute(iris);
 
-                std::string filename = get_default_screenshot_filename(iris);
+                std::string filename = input::get_default_screenshot_filename(iris);
 
                 auto f = pfd::save_file("Save screenshot", filename, {
                     "PNG (*.png)", "*.png",
@@ -401,7 +401,7 @@ void show_main_menubar(iris::instance* iris) {
                 audio::unmute(iris);
 
                 if (f.result().size()) {
-                    save_screenshot(iris, f.result());
+                    input::save_screenshot(iris, f.result());
                 }
             }
 
