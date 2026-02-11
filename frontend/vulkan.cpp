@@ -1017,6 +1017,9 @@ bool init(iris::instance* iris, bool enable_validation) {
 }
 
 void cleanup(iris::instance* iris) {
+    vkQueueWaitIdle(iris->queue);
+    vkDeviceWaitIdle(iris->device);
+
     if (iris->descriptor_set_layout) vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
     if (iris->descriptor_pool) vkDestroyDescriptorPool(iris->device, iris->descriptor_pool, nullptr);
 
@@ -1030,6 +1033,7 @@ void cleanup(iris::instance* iris) {
     if (iris->vertex_buffer_memory) vkFreeMemory(iris->device, iris->vertex_buffer_memory, nullptr);
     if (iris->index_buffer_memory) vkFreeMemory(iris->device, iris->index_buffer_memory, nullptr);
     if (iris->pipeline) vkDestroyPipeline(iris->device, iris->pipeline, nullptr);
+    if (iris->surface) SDL_Vulkan_DestroySurface(iris->instance, iris->surface, nullptr);
     if (iris->render_pass) vkDestroyRenderPass(iris->device, iris->render_pass, nullptr);
     if (iris->pipeline_layout) vkDestroyPipelineLayout(iris->device, iris->pipeline_layout, nullptr);
     if (iris->device) vkDestroyDevice(iris->device, nullptr);

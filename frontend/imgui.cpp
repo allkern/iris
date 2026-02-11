@@ -50,7 +50,7 @@ static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* 
     attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachment.initialLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     wd->AttachmentDesc = attachment;
@@ -555,7 +555,7 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
     VkAttachmentReference color_attachment_ref = {};
     color_attachment_ref.attachment = 0;
@@ -569,7 +569,7 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     VkSubpassDependency dependency = {};
     dependency.srcSubpass = 0;
     dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.srcStageMask = 0;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     dependency.srcAccessMask = 0;
     dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
@@ -871,6 +871,9 @@ bool init(iris::instance* iris) {
 }
 
 void cleanup(iris::instance* iris) {
+    vkQueueWaitIdle(iris->queue);
+    vkDeviceWaitIdle(iris->device);
+
     vulkan::free_texture(iris, iris->ps1_memory_card_icon);
     vulkan::free_texture(iris, iris->ps2_memory_card_icon);
     vulkan::free_texture(iris, iris->pocketstation_icon);
