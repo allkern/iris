@@ -2,7 +2,7 @@ name: macOS CI
 
 on:
   push:
-    branches: [ "vulkan" ]
+    branches: [ "master" ]
 
 jobs:
   macos-universal-build:
@@ -32,6 +32,7 @@ jobs:
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
 
 
 
