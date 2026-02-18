@@ -84,6 +84,8 @@ struct MemoryEditor
         DataFormat_COUNT
     };
 
+    ImFont*         FontOptions = nullptr;
+
     // Settings
     bool            Open;                                       // = true   // set to false when DrawWindow() was closed. ignore if not using DrawWindow().
     bool            ReadOnly;                                   // = false  // disable any editing.
@@ -129,7 +131,7 @@ struct MemoryEditor
         ReadOnly = false;
         Cols = 16;
         OptShowOptions = true;
-        OptShowDataPreview = false;
+        OptShowDataPreview = true;
         OptShowHexII = false;
         OptShowAscii = true;
         OptGreyOutZeroes = true;
@@ -137,12 +139,12 @@ struct MemoryEditor
         OptMidColsCount = 8;
         OptAddrDigitsCount = 0;
         OptFooterExtraHeight = 0.0f;
-        HighlightColor = IM_COL32(255, 255, 255, 50);
         ReadFn = nullptr;
         WriteFn = nullptr;
         HighlightFn = nullptr;
         BgColorFn = nullptr;
         UserData = nullptr;
+        FontOptions = nullptr;
 
         // State/Internals
         ContentsWidthChanged = false;
@@ -229,6 +231,8 @@ struct MemoryEditor
     // Memory Editor contents only
     void DrawContents(void* mem_data_void, size_t mem_size, size_t base_display_addr = 0x0000)
     {
+        HighlightColor = ImGui::GetColorU32(ImGuiCol_Text, 0.25f);
+
         if (Cols < 1)
             Cols = 1;
 
@@ -241,7 +245,7 @@ struct MemoryEditor
 
         // We begin into our scrolling region with the 'ImGuiWindowFlags_NoMove' in order to prevent click from moving the window.
         // This is used as a facility since our main click detection code doesn't assign an ActiveId so the click would normally be caught as a window-move.
-        const float height_separator = style.ItemSpacing.y;
+        const float height_separator = style.ItemSpacing.y + 4.0f;
         float footer_height = OptFooterExtraHeight;
         if (OptShowOptions)
             footer_height += height_separator + ImGui::GetFrameHeightWithSpacing() * 1;
@@ -503,9 +507,13 @@ struct MemoryEditor
         }
 
         const bool lock_show_data_preview = OptShowDataPreview;
+    
+        if (FontOptions) ImGui::PushFont(FontOptions);
+
         if (OptShowOptions)
         {
             ImGui::Separator();
+            
             DrawOptionsLine(s, mem_data, mem_size, base_display_addr);
         }
 
@@ -514,6 +522,8 @@ struct MemoryEditor
             ImGui::Separator();
             DrawPreviewLine(s, mem_data, mem_size, base_display_addr);
         }
+
+        if (FontOptions) ImGui::PopFont();
 
         const ImVec2 contents_pos_end(contents_pos_start.x + child_width, ImGui::GetCursorScreenPos().y);
         //ImGui::GetForegroundDrawList()->AddRect(contents_pos_start, contents_pos_end, IM_COL32(255, 0, 0, 255));
@@ -524,14 +534,18 @@ struct MemoryEditor
 
         if (ImGui::BeginPopup("OptionsPopup"))
         {
+            if (FontOptions) ImGui::PushFont(FontOptions);
             ImGui::SetNextItemWidth(s.GlyphWidth * 7 + style.FramePadding.x * 2.0f);
             if (ImGui::DragInt("##cols", &Cols, 0.2f, 4, 32, "%d cols")) { ContentsWidthChanged = true; if (Cols < 1) Cols = 1; }
+
+            ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0f);
             ImGui::Checkbox("Show Data Preview", &OptShowDataPreview);
             ImGui::Checkbox("Show HexII", &OptShowHexII);
             if (ImGui::Checkbox("Show Ascii", &OptShowAscii)) { ContentsWidthChanged = true; }
             ImGui::Checkbox("Grey out zeroes", &OptGreyOutZeroes);
             ImGui::Checkbox("Uppercase Hex", &OptUpperCaseHex);
-
+            ImGui::PopStyleVar();
+            ImGui::PopFont();
             ImGui::EndPopup();
         }
     }
@@ -540,13 +554,15 @@ struct MemoryEditor
     {
         IM_UNUSED(mem_data);
         ImGuiStyle& style = ImGui::GetStyle();
-        const char* format_range = OptUpperCaseHex ? "Range %0*" _PRISizeT "X..%0*" _PRISizeT "X" : "Range %0*" _PRISizeT "x..%0*" _PRISizeT "x";
+        const char* format_range = OptUpperCaseHex ? "%0*" _PRISizeT "X..%0*" _PRISizeT "X" : "%0*" _PRISizeT "x..%0*" _PRISizeT "x";
 
         // Options menu
         if (ImGui::Button("Options"))
             ImGui::OpenPopup("OptionsPopup");
 
         ImGui::SameLine();
+        ImGui::Text("Range "); ImGui::SameLine(0.0, 0.0);
+        if (FontOptions) ImGui::PopFont();
         ImGui::Text(format_range, s.AddrDigitsCount, base_display_addr, s.AddrDigitsCount, base_display_addr + mem_size - 1);
         ImGui::SameLine();
         ImGui::SetNextItemWidth((s.AddrDigitsCount + 1) * s.GlyphWidth + style.FramePadding.x * 2.0f);
@@ -559,6 +575,8 @@ struct MemoryEditor
                 HighlightMin = HighlightMax = (size_t)-1;
             }
         }
+
+        if (FontOptions) ImGui::PushFont(FontOptions);
 
         if (GotoAddr != (size_t)-1)
         {
@@ -608,16 +626,18 @@ struct MemoryEditor
         char buf[128] = "";
         float x = s.GlyphWidth * 6.0f;
         bool has_value = DataPreviewAddr != (size_t)-1;
+        if (FontOptions) ImGui::PopFont();
         if (has_value)
-            DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Dec, buf, (size_t)IM_ARRAYSIZE(buf));
+        DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Dec, buf, (size_t)IM_ARRAYSIZE(buf));
         ImGui::Text("Dec"); ImGui::SameLine(x); ImGui::TextUnformatted(has_value ? buf : "N/A");
         if (has_value)
-            DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Hex, buf, (size_t)IM_ARRAYSIZE(buf));
+        DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Hex, buf, (size_t)IM_ARRAYSIZE(buf));
         ImGui::Text("Hex"); ImGui::SameLine(x); ImGui::TextUnformatted(has_value ? buf : "N/A");
         if (has_value)
-            DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Bin, buf, (size_t)IM_ARRAYSIZE(buf));
+        DrawPreviewData(DataPreviewAddr, mem_data, mem_size, PreviewDataType, DataFormat_Bin, buf, (size_t)IM_ARRAYSIZE(buf));
         buf[IM_ARRAYSIZE(buf) - 1] = 0;
         ImGui::Text("Bin"); ImGui::SameLine(x); ImGui::TextUnformatted(has_value ? buf : "N/A");
+        if (FontOptions) ImGui::PushFont(FontOptions);
     }
 
     // Utilities for Data Preview (since we don't access imgui_internal.h)

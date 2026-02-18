@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define printf(fmt, ...)(0)
+
 static inline uint8_t ds_get_model_byte(struct ds_state* ds) {
     switch (ds->mode) {
         case 0: return 0x41;
@@ -56,14 +58,14 @@ static inline void ds_cmd_read_data(struct ps2_sio2* sio2, struct ds_state* ds) 
     queue_push(sio2->out, ds->buttons >> 8);
 
     if (ds->mode) {
-        queue_push(sio2->out, ds->ax_right_y);
         queue_push(sio2->out, ds->ax_right_x);
-        queue_push(sio2->out, ds->ax_left_y);
+        queue_push(sio2->out, ds->ax_right_y);
         queue_push(sio2->out, ds->ax_left_x);
+        queue_push(sio2->out, ds->ax_left_y);
 
         // Push pressure bytes (only in DualShock 2 mode)
         // Note: Some games (e.g. OutRun 2 SP/2006) won't register inputs
-        //       if the pressure  values are 0, so we push the max value
+        //       if the pressure values are 0, so we push the max value
         //       instead
         if (ds->mode == 2) {
             queue_push(sio2->out, 0xff);
@@ -97,10 +99,10 @@ static inline void ds_cmd_config_mode(struct ps2_sio2* sio2, struct ds_state* ds
         queue_push(sio2->out, ds->buttons >> 8);
 
         if (ds->mode) {
-            queue_push(sio2->out, ds->ax_right_y);
             queue_push(sio2->out, ds->ax_right_x);
-            queue_push(sio2->out, ds->ax_left_y);
+            queue_push(sio2->out, ds->ax_right_y);
             queue_push(sio2->out, ds->ax_left_x);
+            queue_push(sio2->out, ds->ax_left_y);
         }
     } else {
         queue_push(sio2->out, 0xff);
@@ -279,11 +281,11 @@ void ds_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
     exit(1);
 }
 
-struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
+struct ds_state* ds_attach(struct ps2_sio2* sio2, int port) {
     struct ds_state* ds = malloc(sizeof(struct ds_state));
     struct sio2_device dev;
 
-    dev.detach = ds_sio2_detach;
+    dev.detach = ds_detach;
     dev.handle_command = ds_handle_command;
     dev.udata = ds;
 
@@ -309,11 +311,18 @@ struct ds_state* ds_sio2_attach(struct ps2_sio2* sio2, int port) {
     return ds;
 }
 
-void ds_button_press(struct ds_state* ds, uint16_t mask) {
+void ds_button_press(struct ds_state* ds, uint32_t mask) {
+    if (mask == DS_BT_ANALOG) {
+        if (!ds->lock)
+            ds->mode = ds->mode ? 0 : 1;
+
+        return;
+    }
+
     ds->buttons &= ~mask;
 }
 
-void ds_button_release(struct ds_state* ds, uint16_t mask) {
+void ds_button_release(struct ds_state* ds, uint32_t mask) {
     ds->buttons |= mask;
 }
 
@@ -326,7 +335,7 @@ void ds_analog_change(struct ds_state* ds, int axis, uint8_t value) {
     }
 }
 
-void ds_sio2_detach(void* udata) {
+void ds_detach(void* udata) {
     struct ds_state* ds = (struct ds_state*)udata;
 
     free(ds);

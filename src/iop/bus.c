@@ -18,16 +18,23 @@ void iop_bus_init(struct iop_bus* bus, const char* bios_path) {
     }
 }
 
-void iop_bus_init_fastmem(struct iop_bus* bus) {
+#define RAM_MAX_SIZE 0x1000000
+
+void iop_bus_init_fastmem(struct iop_bus* bus, int ram_size) {
+    memset(bus->fastmem_r_table, 0, sizeof(bus->fastmem_r_table));
+    memset(bus->fastmem_w_table, 0, sizeof(bus->fastmem_w_table));
+
     // BIOS
     for (int i = 0; i < 0x200; i++) {
         bus->fastmem_r_table[i+0xfe00] = bus->bios->buf + (i * 0x2000);
     }
 
     // IOP RAM
-    for (int i = 0; i < 0x100; i++) {
-        bus->fastmem_r_table[i+0x0000] = bus->iop_ram->buf + (i * 0x2000);
-        bus->fastmem_w_table[i+0x0000] = bus->iop_ram->buf + (i * 0x2000);
+    int mask = ram_size - 1;
+
+    for (int i = 0; i < (RAM_MAX_SIZE / 0x2000); i++) {
+        bus->fastmem_r_table[i+0x0000] = bus->iop_ram->buf + ((i * 0x2000) & mask);
+        bus->fastmem_w_table[i+0x0000] = bus->iop_ram->buf + ((i * 0x2000) & mask);
     }
 }
 
@@ -91,6 +98,14 @@ void iop_bus_init_sbus(struct iop_bus* bus, struct ps2_sbus* sbus) {
     bus->sbus = sbus;
 }
 
+void iop_bus_init_dev9(struct iop_bus* bus, struct ps2_dev9* dev9) {
+    bus->dev9 = dev9;
+}
+
+void iop_bus_init_speed(struct iop_bus* bus, struct ps2_speed* speed) {
+    bus->speed = speed;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }
@@ -122,8 +137,16 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     MAP_REG_READ(8, 0x1F808200, 0x1F808280, sio2, sio2);
     MAP_MEM_READ(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
+    MAP_REG_READ(8, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ(8, 0x10000000, 0x1000FFFF, speed, speed);
 
-    if (addr == 0x1f80146e) { return 0x30; }
+    switch (addr) {
+        // Required for T10000 TOOL BIOS
+        // Otherwise the IOP hangs during initialization if the RAM size
+        // is 8 MB or hangs with a stack overflow after init if the RAM 
+        // size is 16 MB
+        case 0x1f803204: return 0x7c;
+    }
 
     printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
 
@@ -150,6 +173,11 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_REG_READ(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
     MAP_MEM_READ(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
+    MAP_REG_READ(16, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ(16, 0x10000000, 0x1000FFFF, speed, speed);
+
+    // PSX DESR
+    if (addr == 0x1000480c) return 0xffff;
 
     // 0x20 - PCMCIA (CXD9566)
     // 0x30 - Expansion bay
@@ -173,11 +201,6 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
 uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    // IOP BIU config
-    if (addr == 0xfffe0130) {
-        return 0;
-    }
-
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
 
     if (ptr) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
@@ -198,12 +221,16 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x1F808400, 0x1F80854F, fw, fw);
     MAP_MEM_READ(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
+    MAP_REG_READ(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     if (addr == 0x1f801450) return 0;
     if (addr == 0x1f801414) return 1;
     if (addr == 0x1f801560) return 0;
 
     if ((addr & 0xff000000) == 0x1e000000) return 0;
+    if (addr == 0xfffe0130) return 0xffffffff;
+
     // Bloody Roar 4 Wrong IOP CDVD DMA
     // if ((addr & 0xff000000) == 0x0c000000) { *(uint8_t*)0 = 0; }
 
@@ -233,6 +260,8 @@ void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x1F801570, 0x1F80157F, iop_dma, dma);
     MAP_REG_WRITE(32, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_REG_WRITE(8, 0x1F808200, 0x1F808280, sio2, sio2);
+    MAP_REG_WRITE(8, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE(8, 0x10000000, 0x1000FFFF, speed, speed);
 
     printf("iop_bus: Unhandled 8-bit write to physical address 0x%08x (0x%02x)\n", addr, data);
 }
@@ -259,6 +288,8 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(16, 0x1F801570, 0x1F80157F, iop_dma, dma);
     MAP_REG_WRITE(16, 0x1F8010F0, 0x1F8010F8, iop_dma, dma);
     MAP_REG_WRITE(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
+    MAP_REG_WRITE(16, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE(16, 0x10000000, 0x1000FFFF, speed, speed);
 
     // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
 }
@@ -273,6 +304,9 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
 
         return;
     }
+
+    // BIU config
+    if (addr == 0xfffe0130) return;
 
     // MAP_MEM_WRITE(32, 0x00000000, 0x001FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
@@ -289,6 +323,8 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x1F808200, 0x1F808280, sio2, sio2);
     MAP_REG_WRITE(32, 0x1F801600, 0x1F8016FF, usb, usb);
     MAP_REG_WRITE(32, 0x1F808400, 0x1F80854F, fw, fw);
+    MAP_REG_WRITE(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     // printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);
 }

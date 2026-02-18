@@ -56,7 +56,16 @@ void show_overlay(iris::instance* iris) {
     using namespace ImPlot;
 
     SetNextWindowBgAlpha(0.5f);
-    SetNextWindowPos(ImVec2(10.0, 10.0 + iris->menubar_height), ImGuiCond_Always);
+
+    ImVec2 pos = ImVec2(10.0f, 10.0f + iris->menubar_height);
+
+    if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        pos.x = GetMainViewport()->Pos.x + GetMainViewport()->Size.x + 10.0f;
+        pos.y = GetMainViewport()->Pos.y;
+    }
+
+    SetNextWindowPos(pos, ImGuiCond_Always);
+    SetNextWindowViewport(0);
 
     if (Begin("Overlay", nullptr,
         ImGuiWindowFlags_NoDecoration |
@@ -89,14 +98,14 @@ void show_overlay(iris::instance* iris) {
             EndPlot();
         }
 
-        renderer_stats* stats = renderer_get_debug_stats(iris->ctx);
+        renderer_stats* stats; // = renderer_get_debug_stats(iris->ctx);
 
         PushFont(iris->font_black);
         Text("%d fps", (int)std::roundf(1.0 / ImGui::GetIO().DeltaTime));
         PopFont();
-        Text("Primitives: %d", stats->primitives);
-        Text("Texture uploads: %d", stats->texture_uploads);
-        Text("Texture blits: %d", stats->texture_blits);
+        // Text("Primitives: %d", stats->primitives);
+        // Text("Texture uploads: %d", stats->texture_uploads);
+        // Text("Texture blits: %d", stats->texture_blits);
     } End();
 }
 

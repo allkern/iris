@@ -132,11 +132,6 @@ void iop_destroy(struct iop_state* iop) {
     free(iop);
 }
 
-// static FILE* file;
-
-// int qty = 1000000;
-// int loop = 0;
-
 void iop_init(struct iop_state* iop, struct iop_bus_s bus) {
     memset(iop, 0, sizeof(struct iop_state));
 
@@ -151,6 +146,11 @@ void iop_init(struct iop_state* iop, struct iop_bus_s bus) {
 void iop_init_kputchar(struct iop_state* iop, void (*kputchar)(void*, char), void* udata) {
     iop->kputchar = kputchar;
     iop->kputchar_udata = udata;
+}
+
+void iop_init_sm_putchar(struct iop_state* iop, void (*sm_putchar)(void*, char), void* udata) {
+    iop->sm_putchar = sm_putchar;
+    iop->sm_putchar_udata = udata;
 }
 
 static inline int iop_check_irq(struct iop_state* iop) {
@@ -790,7 +790,7 @@ static inline void iop_i_syscall(struct iop_state* iop) {
 static inline void iop_i_break(struct iop_state* iop) {
     DO_PENDING_LOAD;
 
-    iop_exception(iop, CAUSE_BP);
+    // iop_exception(iop, CAUSE_BP);
 }
 
 static inline void iop_i_mfhi(struct iop_state* iop) {

@@ -8,6 +8,7 @@
 "Bully (USA)" - Boots in-game, runs incredibly slow, textures broken, image looks yellow tinted (similar to GoW)
 "Dead or Alive 2 (Japan)" - Nothing, prints "Read Time Out 15000(msec)" to the terminal, possibly CDVD-related?
 "Final Fantasy XII (USA)" - Enables MFIFO through an 8-bit write to CTRL, uses transfer "mode 3" (actually just chain mode)
+"Gallop Racer 2006 (USA)" - Requires proper EE timings (at most 2x underclock)
 "Klonoa 2 - Lunatea's Veil (USA)" - Doesn't work on Release builds (!), requires 16-bit DMAC writes
 "Namco Museum 50th Anniversary (USA)" - Requires MFIFO
 "R-Type Final (Japan)" - Requires MFIFO

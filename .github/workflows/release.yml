@@ -26,7 +26,7 @@ jobs:
     - name: Generate artifact name
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-win"
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}-windows"
     - name: Zip artifact
       run: |
         $artifactName = "${{ steps.generate-name.outputs.artifact }}"
@@ -37,7 +37,7 @@ jobs:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
 
-  ubuntu-build:
+  linux-build:
     runs-on: ubuntu-latest
 
     steps:
@@ -67,11 +67,11 @@ jobs:
     - name: Generate artifact name
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-ubuntu"
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}-linux"
     - name: Generate AppImage artifact name
       id: generate-name-appimage
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-ubuntu-appimage"
+        echo "::set-output name=artifact::iris-${{ github.ref_name }}-linux-appimage"
     - name: Zip artifact
       run: |
         zip -rj ${{ steps.generate-name.outputs.artifact }}.zip dist

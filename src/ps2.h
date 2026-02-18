@@ -28,16 +28,39 @@ extern "C" {
 #include "shared/ram.h"
 #include "shared/sif.h"
 #include "shared/sbus.h"
+#include "shared/dev9.h"
+#include "shared/speed.h"
 #include "gs/gs.h"
 #include "ipu/ipu.h"
 
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
+#include "dev/guncon.h"
 #include "dev/mcd.h"
 #include "dev/ps1_mcd.h"
 #include "dev/mtap.h"
 
 #include "scheduler.h"
+#include "rom.h"
+
+#define PS2_TTY_EE 0
+#define PS2_TTY_IOP 1
+#define PS2_TTY_SYSMEM 2
+
+enum {
+    PS2_SYSTEM_AUTO = 0,
+    PS2_SYSTEM_RETAIL,
+    PS2_SYSTEM_RETAIL_DECKARD,
+    PS2_SYSTEM_DESR,
+    PS2_SYSTEM_TEST,
+    PS2_SYSTEM_TOOL,
+    PS2_SYSTEM_KONAMI_PYTHON,
+    PS2_SYSTEM_KONAMI_PYTHON2,
+    PS2_SYSTEM_NAMCO_S147,
+    PS2_SYSTEM_NAMCO_S148,
+    PS2_SYSTEM_NAMCO_S246,
+    PS2_SYSTEM_NAMCO_S256
+};
 
 struct ps2_elf_function {
     char* name;
@@ -82,11 +105,17 @@ struct ps2_state {
     struct ps2_sif* sif;
     struct ps2_usb* usb;
     struct ps2_sbus* sbus;
+    struct ps2_dev9* dev9;
+    struct ps2_speed* speed;
 
     struct sched_state* sched;
 
     int ee_cycles;
     int timescale;
+    int system, detected_system;
+
+    struct ps2_rom_info rom0_info;
+    struct ps2_rom_info rom1_info;
 
     // Debug
     struct ps2_elf_function* func;
@@ -96,16 +125,20 @@ struct ps2_state {
 
 struct ps2_state* ps2_create(void);
 void ps2_init(struct ps2_state* ps2);
-void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void*, void (*iop_kputchar)(void*, char), void*);
+void ps2_init_tty_handler(struct ps2_state* ps2, int tty, void (*handler)(void*, char), void* udata);
 void ps2_boot_file(struct ps2_state* ps2, const char* path);
 void ps2_reset(struct ps2_state* ps2);
-void ps2_load_bios(struct ps2_state* ps2, const char* path);
-void ps2_load_rom1(struct ps2_state* ps2, const char* path);
-void ps2_load_rom2(struct ps2_state* ps2, const char* path);
+int ps2_load_bios(struct ps2_state* ps2, const char* path);
+int ps2_load_rom1(struct ps2_state* ps2, const char* path);
+int ps2_load_rom2(struct ps2_state* ps2, const char* path);
 void ps2_cycle(struct ps2_state* ps2);
+void ps2_step_ee(struct ps2_state* ps2);
+void ps2_step_iop(struct ps2_state* ps2);
 void ps2_set_timescale(struct ps2_state* ps2, int timescale);
 void ps2_iop_cycle(struct ps2_state* ps2);
 void ps2_destroy(struct ps2_state* ps2);
+void ps2_set_system(struct ps2_state* ps2, int system);
+void ps2_set_mac_address(struct ps2_state* ps2, const uint8_t* mac);
 
 #ifdef __cplusplus
 }

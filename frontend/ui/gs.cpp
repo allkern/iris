@@ -521,105 +521,107 @@ void show_gs_memory(iris::instance* iris) {
         } break;
     }
 
-    if (Button("View")) {
-        addr = strtoul(buf0, NULL, 16);
-        width = strtoul(buf1, NULL, 0);
-        height = strtoul(buf2, NULL, 0);
+    // To-do: GS memory viewer
 
-        if (tex) {
-            SDL_ReleaseGPUTexture(iris->device, tex);
-        }
+    // if (Button("View")) {
+    //     addr = strtoul(buf0, NULL, 16);
+    //     width = strtoul(buf1, NULL, 0);
+    //     height = strtoul(buf2, NULL, 0);
 
-        SDL_GPUTextureCreateInfo tci = {};
+    //     if (tex) {
+    //         SDL_ReleaseGPUTexture(iris->device, tex);
+    //     }
 
-        tci.format = fmt;
-        tci.type = SDL_GPU_TEXTURETYPE_2D;
-        tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
-        tci.width = width;
-        tci.height = height;
-        tci.layer_count_or_depth = 1;
-        tci.num_levels = 1;
-        tci.sample_count = SDL_GPU_SAMPLECOUNT_1;
+    //     SDL_GPUTextureCreateInfo tci = {};
 
-        tex = SDL_CreateGPUTexture(iris->device, &tci);
+    //     tci.format = fmt;
+    //     tci.type = SDL_GPU_TEXTURETYPE_2D;
+    //     tci.usage = SDL_GPU_TEXTUREUSAGE_SAMPLER;
+    //     tci.width = width;
+    //     tci.height = height;
+    //     tci.layer_count_or_depth = 1;
+    //     tci.num_levels = 1;
+    //     tci.sample_count = SDL_GPU_SAMPLECOUNT_1;
 
-        SDL_GPUSamplerCreateInfo sci = {
-            .min_filter = SDL_GPU_FILTER_NEAREST,
-            .mag_filter = SDL_GPU_FILTER_NEAREST,
-            .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
-            .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-            .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-            .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
-        };
-    }
+    //     tex = SDL_CreateGPUTexture(iris->device, &tci);
 
-    if (!tex)
-        return;
+    //     SDL_GPUSamplerCreateInfo sci = {
+    //         .min_filter = SDL_GPU_FILTER_NEAREST,
+    //         .mag_filter = SDL_GPU_FILTER_NEAREST,
+    //         .mipmap_mode = SDL_GPU_SAMPLERMIPMAPMODE_NEAREST,
+    //         .address_mode_u = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+    //         .address_mode_v = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+    //         .address_mode_w = SDL_GPU_SAMPLERADDRESSMODE_CLAMP_TO_EDGE,
+    //     };
+    // }
 
-    SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(iris->device);
-    SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
+    // if (!tex)
+    //     return;
 
-    SDL_GPUTransferBufferCreateInfo ttbci = {
-        .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
-        .size = (width * stride) * height
-    };
+    // SDL_GPUCommandBuffer* cb = SDL_AcquireGPUCommandBuffer(iris->device);
+    // SDL_GPUCopyPass* cp = SDL_BeginGPUCopyPass(cb);
 
-    SDL_GPUTransferBuffer* ttb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
+    // SDL_GPUTransferBufferCreateInfo ttbci = {
+    //     .usage = SDL_GPU_TRANSFERBUFFERUSAGE_UPLOAD,
+    //     .size = (width * stride) * height
+    // };
 
-    // fill the transfer buffer
-    switch (format) {
-        case 0: {
-            uint32_t* ptr = (uint32_t*)(((uint8_t*)gs->vram) + addr);
-            uint32_t* data = (uint32_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
+    // SDL_GPUTransferBuffer* ttb = SDL_CreateGPUTransferBuffer(iris->device, &ttbci);
 
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    data[x + (y * width)] = ptr[x + (y * width)] | 0xff000000;
-                }
-            }
-        } break;
+    // // fill the transfer buffer
+    // switch (format) {
+    //     case 0: {
+    //         uint32_t* ptr = (uint32_t*)(((uint8_t*)gs->vram) + addr);
+    //         uint32_t* data = (uint32_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
 
-        case 1: {
-            uint16_t* ptr = (uint16_t*)(((uint8_t*)gs->vram) + addr);
-            uint16_t* data = (uint16_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
+    //         for (int y = 0; y < height; y++) {
+    //             for (int x = 0; x < width; x++) {
+    //                 data[x + (y * width)] = ptr[x + (y * width)] | 0xff000000;
+    //             }
+    //         }
+    //     } break;
 
-            for (int y = 0; y < height; y++) {
-                for (int x = 0; x < width; x++) {
-                    data[x + (y * width)] = ptr[x + (y * width)] | 0x8000;
-                }
-            }
-        } break;
-    }
+    //     case 1: {
+    //         uint16_t* ptr = (uint16_t*)(((uint8_t*)gs->vram) + addr);
+    //         uint16_t* data = (uint16_t*)SDL_MapGPUTransferBuffer(iris->device, ttb, false);
 
-    // SDL_memcpy(data, ptr, (width * stride) * height);
+    //         for (int y = 0; y < height; y++) {
+    //             for (int x = 0; x < width; x++) {
+    //                 data[x + (y * width)] = ptr[x + (y * width)] | 0x8000;
+    //             }
+    //         }
+    //     } break;
+    // }
 
-    SDL_UnmapGPUTransferBuffer(iris->device, ttb);
+    // // SDL_memcpy(data, ptr, (width * stride) * height);
 
-    SDL_GPUTextureTransferInfo tti = {
-        .transfer_buffer = ttb,
-        .offset = 0,
-    };
+    // SDL_UnmapGPUTransferBuffer(iris->device, ttb);
 
-    SDL_GPUTextureRegion tr = {
-        .texture = tex,
-        .w = width,
-        .h = height,
-        .d = 1,
-    };
+    // SDL_GPUTextureTransferInfo tti = {
+    //     .transfer_buffer = ttb,
+    //     .offset = 0,
+    // };
 
-    SDL_UploadToGPUTexture(cp, &tti, &tr, false);
+    // SDL_GPUTextureRegion tr = {
+    //     .texture = tex,
+    //     .w = width,
+    //     .h = height,
+    //     .d = 1,
+    // };
 
-    // end the copy pass
-    SDL_EndGPUCopyPass(cp);
-    SDL_SubmitGPUCommandBuffer(cb);
+    // SDL_UploadToGPUTexture(cp, &tti, &tr, false);
 
-    ImageWithBg((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
+    // // end the copy pass
+    // SDL_EndGPUCopyPass(cp);
+    // SDL_SubmitGPUCommandBuffer(cb);
+
+    // ImageWithBg((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
 }
 
 void show_gs_debugger(iris::instance* iris) {
     using namespace ImGui;
 
-    if (Begin("GS", &iris->show_gs_debugger, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("GS", &iris->show_gs_debugger, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {

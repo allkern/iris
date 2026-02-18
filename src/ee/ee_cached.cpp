@@ -289,14 +289,144 @@ static inline int fpu_min(int32_t a, int32_t b) {
     return (a < 0 && b < 0) ? max(a, b) : min(a, b);
 }
 
-static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t virt) {
-    struct ee_vtlb_entry* entry = NULL;
+void ee_exception_level1(struct ee_state* ee, uint32_t cause);
 
+#ifdef _EE_USE_MMU
+static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t virt) {
     for (int i = 0; i < 48; i++) {
-        ee->vtlb[i].mask;
+        struct ee_vtlb_entry* e = &ee->vtlb[i];
+
+        if (e->s) {
+            uint32_t mask = 0xffffc000;
+
+            if ((virt & mask) == (e->vpn2 & mask)) {
+                return e;
+            }
+        }
+
+        uint32_t mask = (~e->mask) & 0xffffe000;
+
+        // printf("ee: TLB search index=%d virt=%08x vpn2=%08x mask=%08x\n",
+        //     i,
+        //     virt,
+        //     e->vpn2,
+        //     mask
+        // );
+
+        if ((virt & mask) == (e->vpn2 & mask)) {
+            return e;
+        }
     }
+
+    return nullptr;
 }
 
+static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t* phys, int load) {
+    int seg = ee_get_segment(virt);
+
+    // Assume we're in kernel mode
+    if (seg == EE_KSEG0 || seg == EE_KSEG1) {
+        *phys = virt & 0x1fffffff;
+
+        return 0;
+    }
+
+    struct ee_vtlb_entry* entry = ee_search_vtlb(ee, virt);
+
+    if (!entry) {
+        ee_exception_level1(ee, load ? CAUSE_EXC1_TLBL : CAUSE_EXC1_TLBS);
+
+        ee->context &= 0x7ffff0;
+        ee->context |= (virt & 0xFFFFE000) >> 9;
+
+        printf("ee: TLB miss on %s at virt=%08x\n", load ? "load" : "store", virt);
+
+        return -1;
+    }
+
+    if (entry->s) {
+        *phys = virt & 0x00003fff;
+
+        return 1;
+    }
+
+    // printf("ee: virt=%08x vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
+    //     virt,
+    //     entry->vpn2,
+    //     entry->pfn0,
+    //     entry->v0,
+    //     entry->d0,
+    //     entry->pfn1,
+    //     entry->v1,
+    //     entry->d1,
+    //     entry->mask,
+    //     entry->s,
+    //     entry->g
+    // );
+
+    uint32_t nmask = 0xfffff000 & ~(entry->mask >> 1);
+    uint32_t pfn = entry->pfn0;
+
+    int odd = (virt & ((entry->mask >> 1) + 0x1000)) ? 1 : 0;
+
+    if (odd) {
+        pfn = entry->pfn1;
+    }
+
+    *phys = pfn | (virt & ~nmask);
+
+    // printf("ee: Translated virt=%08x to phys=%08x\n", virt, *phys);
+
+    // if (odd) exit(1);
+    return 0;
+}
+
+#define BUS_READ_FUNC(b)                                                        \
+    static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) {  \
+        uint32_t phys;                                                          \
+        if (ee_translate_virt(ee, addr, &phys, 1) == 1)                         \
+            return ps2_ram_read ## b(ee->spr, phys);                            \
+        if (phys == 0x1000f000) ee->intc_reads++;                               \
+        if (phys == 0x12001000) ee->csr_reads++;                                \
+        return ee->bus.read ## b(ee->bus.udata, phys);                          \
+    }
+
+#define BUS_WRITE_FUNC(b)                                                                   \
+    static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) {  \
+        uint32_t phys;                                                                      \
+        if (ee_translate_virt(ee, addr, &phys, 0) == 1)                                     \
+            { ps2_ram_write ## b(ee->spr, phys, data); return; }                            \
+        ee->bus.write ## b(ee->bus.udata, phys, data);                                      \
+    }
+
+BUS_READ_FUNC(8)
+BUS_READ_FUNC(16)
+BUS_READ_FUNC(32)
+BUS_READ_FUNC(64)
+
+static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
+    uint32_t phys;
+
+    if (ee_translate_virt(ee, addr, &phys, 1) == 1)
+        return ps2_ram_read128(ee->spr, phys);
+
+    return ee->bus.read128(ee->bus.udata, phys);
+}
+
+BUS_WRITE_FUNC(8)
+BUS_WRITE_FUNC(16)
+BUS_WRITE_FUNC(32)
+BUS_WRITE_FUNC(64)
+
+static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
+    uint32_t phys;
+
+    if (ee_translate_virt(ee, addr, &phys, 0) == 1)
+        { ps2_ram_write128(ee->spr, phys, data); return; }
+
+    ee->bus.write128(ee->bus.udata, phys, data);
+}
+#else
 static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t* phys) {
     int seg = ee_get_segment(virt);
 
@@ -307,8 +437,8 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
         return 0;
     }
 
-    if (virt >= 0x00000000 && virt <= 0x01FFFFFF) {
-        *phys = virt & 0x1FFFFFF;
+    if (virt >= 0x00000000 && virt <= ee->ram_size) {
+        *phys = virt & ee->ram_size;
 
         return 0;
     }
@@ -319,14 +449,14 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
         return 0;
     }
 
-    if (virt >= 0x20000000 && virt <= 0x21FFFFFF) {
-        *phys = virt & 0x1FFFFFF;
+    if (virt >= 0x20000000 && virt <= (0x20000000 | ee->ram_size)) {
+        *phys = virt & ee->ram_size;
 
         return 0;
     }
 
-    if (virt >= 0x30000000 && virt <= 0x31FFFFFF) {
-        *phys = virt & 0x1FFFFFF;
+    if (virt >= 0x30000000 && virt <= (0x30000000 | ee->ram_size)) {
+        *phys = virt & ee->ram_size;
 
         return 0;
     }
@@ -355,7 +485,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 #define BUS_READ_FUNC(b)                                                        \
     static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) {  \
         if ((addr & 0xf0000000) == 0x70000000)                                  \
-            return ps2_ram_read ## b(ee->scratchpad, addr & 0x3fff);            \
+            return ps2_ram_read ## b(ee->spr, addr & 0x3fff);                   \
         uint32_t phys;                                                          \
         ee_translate_virt(ee, addr, &phys);                                     \
         if (phys == 0x1000f000) ee->intc_reads++;                               \
@@ -366,7 +496,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 #define BUS_WRITE_FUNC(b)                                                                   \
     static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) {  \
         if ((addr & 0xf0000000) == 0x70000000)                                              \
-            { ps2_ram_write ## b(ee->scratchpad, addr & 0x3fff, data); return; }            \
+            { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                   \
         uint32_t phys;                                                                      \
         ee_translate_virt(ee, addr, &phys);                                                 \
         ee->bus.write ## b(ee->bus.udata, phys, data);                                      \
@@ -379,7 +509,7 @@ BUS_READ_FUNC(64)
 
 static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
     if ((addr & 0xf0000000) == 0x70000000)
-        return ps2_ram_read128(ee->scratchpad, addr & 0x3ff0);
+        return ps2_ram_read128(ee->spr, addr & 0x3ff0);
 
     uint32_t phys;
 
@@ -395,7 +525,7 @@ BUS_WRITE_FUNC(64)
 
 static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
     if ((addr & 0xf0000000) == 0x70000000) {
-        ps2_ram_write128(ee->scratchpad, addr & 0x3ff0, data);
+        ps2_ram_write128(ee->spr, addr & 0x3ff0, data);
 
         return;
     }
@@ -406,6 +536,7 @@ static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t da
 
     ee->bus.write128(ee->bus.udata, phys, data);
 }
+#endif
 
 #undef BUS_READ_FUNC
 #undef BUS_WRITE_FUNC
@@ -454,6 +585,20 @@ void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
 
     uint32_t vec = EE_VEC_COMMON;
 
+    switch (cause) {
+        case CAUSE_EXC1_TLBL:
+        case CAUSE_EXC1_TLBS:
+            vec = EE_VEC_TLB;
+            break;
+        case CAUSE_EXC1_TLBIL:
+        case CAUSE_EXC1_TLBIS:
+            cause <<= 2;
+            break;
+        case CAUSE_EXC1_INT:
+            vec = EE_VEC_IRQ;
+            break;
+    }
+
     ee->cause &= ~EE_CAUSE_EXC;
     ee->cause |= cause;
 
@@ -469,9 +614,6 @@ void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
     }
 
     ee->status |= EE_SR_EXL;
-
-    if (cause == CAUSE_EXC1_INT)
-        vec = EE_VEC_IRQ;
 
     uint32_t addr = ((ee->status & EE_SR_BEV) ? 0xbfc00200 : 0x80000000) + vec;
 
@@ -704,6 +846,12 @@ static inline void ee_i_break(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_cache(struct ee_state* ee, const ee_instruction& i) {
     /* To-do: Cache emulation */
+    switch (EE_D_RT) {
+        // CACHE.IXIN
+        case 0x07: {
+            ee->block_cache.clear();
+        } break;
+    } 
 } 
 static inline void ee_i_ceq(struct ee_state* ee, const ee_instruction& i) {
     if (EE_FS == EE_FT) {
@@ -1195,7 +1343,14 @@ static inline void ee_i_msubs(struct ee_state* ee, const ee_instruction& i) {
     fpu_check_underflow(ee, &ee->f[d]);
 }
 static inline void ee_i_mtc0(struct ee_state* ee, const ee_instruction& i) {
-    ee->cop0_r[EE_D_RD] = EE_RT32;
+    int d = EE_D_RD;
+
+    if (d == 4) {
+        ee->cop0_r[4] &= 0x7ffff0;
+        ee->cop0_r[4] |= (EE_RT32 & 0xff800000);
+    } else {
+        ee->cop0_r[EE_D_RD] = EE_RT32;
+    }
 }
 static inline void ee_i_mtc1(struct ee_state* ee, const ee_instruction& i) {
     EE_FS32 = EE_RT32;
@@ -1295,11 +1450,11 @@ static inline void ee_i_pabsh(struct ee_state* ee, const ee_instruction& i) {
     }
 #else
     __m128i b = _mm_set1_epi16((unsigned short)0x8000);
-    __m128i a = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((const __m128i*)t);
     __m128i f = _mm_cmpeq_epi16(a, b);
     __m128i r = _mm_add_epi16(_mm_abs_epi16(a), f);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pabsw(struct ee_state* ee, const ee_instruction& i) {
@@ -1312,11 +1467,11 @@ static inline void ee_i_pabsw(struct ee_state* ee, const ee_instruction& i) {
     }
 #else
     __m128i b = _mm_set1_epi32(0x80000000);
-    __m128i a = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((const __m128i*)t);
     __m128i f = _mm_cmpeq_epi32(a, b);
     __m128i r = _mm_add_epi32(_mm_abs_epi32(a), f);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddb(struct ee_state* ee, const ee_instruction& i) {
@@ -1329,11 +1484,11 @@ static inline void ee_i_paddb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = s->u8[i] + t->u8[i];
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_add_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddh(struct ee_state* ee, const ee_instruction& i) {
@@ -1346,11 +1501,11 @@ static inline void ee_i_paddh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = s->u16[i] + t->u16[i];
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_add_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddsb(struct ee_state* ee, const ee_instruction& i) {
@@ -1364,11 +1519,11 @@ static inline void ee_i_paddsb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = (r > 0x7f) ? 0x7f : ((r < -128) ? 0x80 : r);
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddsh(struct ee_state* ee, const ee_instruction& i) {
@@ -1382,11 +1537,11 @@ static inline void ee_i_paddsh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = (r > 0x7fff) ? 0x7fff : ((r < -0x8000) ? 0x8000 : r);
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddsw(struct ee_state* ee, const ee_instruction& i) {
@@ -1400,11 +1555,11 @@ static inline void ee_i_paddsw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = (r >= 0x7fffffff) ? 0x7fffffff : ((r < (int32_t)0x80000000) ? 0x80000000 : r);
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddub(struct ee_state* ee, const ee_instruction& i) {
@@ -1418,11 +1573,11 @@ static inline void ee_i_paddub(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = (r > 0xff) ? 0xff : r;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epu8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_padduh(struct ee_state* ee, const ee_instruction& i) {
@@ -1436,11 +1591,11 @@ static inline void ee_i_padduh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = (r > 0xffff) ? 0xffff : r;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epu16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_padduw(struct ee_state* ee, const ee_instruction& i) {
@@ -1454,11 +1609,11 @@ static inline void ee_i_padduw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = (r > 0xffffffff) ? 0xffffffff : r;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_adds_epu32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_paddw(struct ee_state* ee, const ee_instruction& i) {
@@ -1471,11 +1626,11 @@ static inline void ee_i_paddw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = s->u32[i] + t->u32[i];
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_add_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_padsbh(struct ee_state* ee, const ee_instruction& i) {
@@ -1493,13 +1648,13 @@ static inline void ee_i_padsbh(struct ee_state* ee, const ee_instruction& i) {
     d->u16[6] = s->u16[6] + t->u16[6];
     d->u16[7] = s->u16[7] + t->u16[7];
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i x = _mm_sub_epi16(a, b);
     __m128i y = _mm_add_epi16(a, b);
     __m128i r = _mm_blend_epi16(x, y, 15);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pand(struct ee_state* ee, const ee_instruction& i) {
@@ -1511,11 +1666,11 @@ static inline void ee_i_pand(struct ee_state* ee, const ee_instruction& i) {
     d->u64[0] = s->u64[0] & t->u64[0];
     d->u64[1] = s->u64[1] & t->u64[1];
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_and_si128(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pceqb(struct ee_state* ee, const ee_instruction& i) {
@@ -1528,11 +1683,11 @@ static inline void ee_i_pceqb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = (s->u8[i] == t->u8[i]) ? 0xff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpeq_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pceqh(struct ee_state* ee, const ee_instruction& i) {
@@ -1545,11 +1700,11 @@ static inline void ee_i_pceqh(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = (s->u16[i] == t->u16[i]) ? 0xffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpeq_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pceqw(struct ee_state* ee, const ee_instruction& i) {
@@ -1562,11 +1717,11 @@ static inline void ee_i_pceqw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = (s->u32[i] == t->u32[i]) ? 0xffffffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpeq_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcgtb(struct ee_state* ee, const ee_instruction& i) {
@@ -1579,11 +1734,11 @@ static inline void ee_i_pcgtb(struct ee_state* ee, const ee_instruction& i) {
         d->u8[i] = ((int8_t)s->u8[i] > (int8_t)t->u8[i]) ? 0xff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpgt_epi8(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcgth(struct ee_state* ee, const ee_instruction& i) {
@@ -1596,11 +1751,11 @@ static inline void ee_i_pcgth(struct ee_state* ee, const ee_instruction& i) {
         d->u16[i] = ((int16_t)s->u16[i] > (int16_t)t->u16[i]) ? 0xffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpgt_epi16(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcgtw(struct ee_state* ee, const ee_instruction& i) {
@@ -1613,11 +1768,11 @@ static inline void ee_i_pcgtw(struct ee_state* ee, const ee_instruction& i) {
         d->u32[i] = ((int32_t)s->u32[i] > (int32_t)t->u32[i]) ? 0xffffffff : 0;
     }
 #else
-    __m128i a = _mm_load_si128((void*)s);
-    __m128i b = _mm_load_si128((void*)t);
+    __m128i a = _mm_load_si128((__m128i*)s);
+    __m128i b = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_cmpgt_epi32(a, b);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcpyh(struct ee_state* ee, const ee_instruction& i) {
@@ -1641,11 +1796,11 @@ static inline void ee_i_pcpyh(struct ee_state* ee, const ee_instruction& i) {
         0x0908090809080908
     };
 
-    __m128i m = _mm_load_si128((void*)mask);
-    __m128i a = _mm_load_si128((void*)t);
+    __m128i m = _mm_load_si128((__m128i*)mask);
+    __m128i a = _mm_load_si128((__m128i*)t);
     __m128i r = _mm_shuffle_epi8(a, m);
 
-    _mm_store_si128((void*)d, r);
+    _mm_store_si128((__m128i*)d, r);
 #endif
 }
 static inline void ee_i_pcpyld(struct ee_state* ee, const ee_instruction& i) {
@@ -1657,11 +1812,11 @@ static inline void ee_i_pcpyld(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u64[0] = rt.u64[0];
     ee->r[d].u64[1] = rs.u64[0];
 #else
-    __m128i a = _mm_load_si128((void*)&ee->r[EE_D_RT]);
-    __m128i b = _mm_load_si128((void*)&ee->r[EE_D_RS]);
+    __m128i a = _mm_load_si128((__m128i*)&ee->r[EE_D_RT]);
+    __m128i b = _mm_load_si128((__m128i*)&ee->r[EE_D_RS]);
     __m128i r = _mm_unpacklo_epi64(a, b);
 
-    _mm_store_si128((void*)&ee->r[EE_D_RD], r);
+    _mm_store_si128((__m128i*)&ee->r[EE_D_RD], r);
 #endif
 }
 static inline void ee_i_pcpyud(struct ee_state* ee, const ee_instruction& i) {
@@ -2906,6 +3061,33 @@ static inline void ee_i_sync(struct ee_state* ee, const ee_instruction& i) {
 
 // #include "syscall.h"
 
+static inline void ee_get_thread_list(struct ee_state* ee) {
+    if (ee->thread_list_base) return;
+
+    uint32_t offset = 0;
+
+    while (offset < 0x5000) {
+        uint32_t inst[3];
+        uint32_t addr = 0x80000000 + offset;
+
+        inst[0] = bus_read32(ee, addr);
+        inst[1] = bus_read32(ee, addr + 4);
+        inst[2] = bus_read32(ee, addr + 8);
+
+        if (inst[0] == 0xac420000 && inst[1] == 0 && inst[2] == 0) {
+            uint32_t op = bus_read32(ee, 0x80000000 + offset + (4 * 6));
+
+            ee->thread_list_base = 0x80010000 + (op & 0xffff) - 8;
+
+            printf("ee: Found thread list base at %08x\n", ee->thread_list_base);
+
+            break;
+        }
+
+        offset += 4;
+    }
+}
+
 static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
     uint32_t id = ee->r[3].ul64;
 
@@ -2915,37 +3097,40 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
 
     // printf("ee: %s (%d, %08x) a0=%08x (%d)\n", ee_get_syscall(n), ee->r[3].ul32, ee->r[3].ul32, ee->r[4].ul32, ee->r[4].ul32);
 
-    // ChangeThreadPriority
-    if (id == 0x29 && !ee->thread_list_base) {
-        uint32_t offset = 0;
+    switch (id) {
+        // ChangeThreadPriority
+        case 0x29: {
+            ee_get_thread_list(ee);
+        } break;
 
-        while (offset < 0x5000) {
-            uint32_t inst[3];
-            uint32_t addr = 0x80000000 + offset;
+        // SetOsdConfigParam
+        case 0x4a: {
+            uint32_t ptr = ee->r[4].u32[0];
+            uint32_t value = bus_read32(ee, ptr);
 
-            inst[0] = bus_read32(ee, addr);
-            inst[1] = bus_read32(ee, addr + 4);
-            inst[2] = bus_read32(ee, addr + 8);
+            memcpy(&ee->osd_config, &value, 4);
 
-            if (inst[0] == 0xac420000 && inst[1] == 0 && inst[2] == 0) {
-                uint32_t op = bus_read32(ee, 0x80000000 + offset + (4 * 6));
+            return;
+        } break;
 
-                ee->thread_list_base = 0x80010000 + (op & 0xffff) - 8;
+        // GetOsdConfigParam
+        case 0x4b: {
+            uint32_t ptr = ee->r[4].u32[0];
+            uint32_t value;
 
-                printf("ee: Found thread list base at %08x\n", ee->thread_list_base);
+            memcpy(&value, &ee->osd_config, 4);
 
-                break;
-            }
+            bus_write32(ee, ptr, value);
 
-            offset += 4;
-        }
-    }
+            return;
+        } break;
 
-    // FlushCache
-    if (id == 0x64) {
-        // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
+        // FlushCache
+        case 0x64: {
+            // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
 
-        ee->block_cache.clear();
+            ee->block_cache.clear();
+        } break;
     }
 
     ee_exception_level1(ee, CAUSE_EXC1_SYS);
@@ -2962,19 +3147,72 @@ static inline void ee_i_tge(struct ee_state* ee, const ee_instruction& i) {
 static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbp unimplemented\n"); return; exit(1); }
-static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbr unimplemented\n"); return; exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbp unimplemented\n"); exit(1); }
+static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbr unimplemented\n"); exit(1); }
 static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
-    printf("ee: Index=%d EntryLo0=%08x EntryLo1=%08x EntryHi=%08x PageMask=%08x\n",
+    struct ee_vtlb_entry* entry = &ee->vtlb[ee->index & 0x3f];
+
+    entry->asid = ee->entryhi & 0xff;
+    entry->pfn0 = (ee->entrylo0 & 0x3ffffc0) << 6;
+    entry->pfn1 = (ee->entrylo1 & 0x3ffffc0) << 6;
+    entry->mask = ee->pagemask & 0x1ffe000;
+    entry->vpn2 = ee->entryhi & 0xffffe000;
+    entry->v0 = (ee->entrylo0 >> 1) & 1;
+    entry->d0 = (ee->entrylo0 >> 2) & 1;
+    entry->c0 = (ee->entrylo0 >> 3) & 7;
+    entry->v1 = (ee->entrylo1 >> 1) & 1;
+    entry->d1 = (ee->entrylo1 >> 2) & 1;
+    entry->c1 = (ee->entrylo1 >> 3) & 7;
+    entry->s = (ee->entrylo0 >> 31) & 1;
+    entry->g = (ee->entrylo0 & 1) && (ee->entrylo1 & 1);
+
+    printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
         ee->index,
-        ee->entrylo0,
-        ee->entrylo1,
-        ee->entryhi,
-        ee->pagemask
+        entry->vpn2,
+        entry->pfn0,
+        entry->v0,
+        entry->d0,
+        entry->pfn1,
+        entry->v1,
+        entry->d1,
+        entry->mask,
+        entry->s,
+        entry->g
     );
-    /* To-do: MMU */
 }
-static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) { return; fprintf(stderr, "ee: tlbwr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
+    int index = (ee->count % (48 - ee->wired)) + ee->wired;
+
+    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+
+    entry->asid = ee->entryhi & 0xff;
+    entry->pfn0 = (ee->entrylo0 & 0x3ffffc0) << 6;
+    entry->pfn1 = (ee->entrylo1 & 0x3ffffc0) << 6;
+    entry->mask = ee->pagemask & 0x1ffe000;
+    entry->vpn2 = ee->entryhi & 0xffffe000;
+    entry->v0 = (ee->entrylo0 >> 1) & 1;
+    entry->d0 = (ee->entrylo0 >> 2) & 1;
+    entry->c0 = (ee->entrylo0 >> 3) & 7;
+    entry->v1 = (ee->entrylo1 >> 1) & 1;
+    entry->d1 = (ee->entrylo1 >> 2) & 1;
+    entry->c1 = (ee->entrylo1 >> 3) & 7;
+    entry->s = (ee->entrylo0 >> 31) & 1;
+    entry->g = (ee->entrylo0 & 1) && (ee->entrylo1 & 1);
+
+    printf("ee: tlbwr Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
+        index,
+        entry->vpn2,
+        entry->pfn0,
+        entry->v0,
+        entry->d0,
+        entry->pfn1,
+        entry->v1,
+        entry->d1,
+        entry->mask,
+        entry->s,
+        entry->g
+    );
+}
 static inline void ee_i_tlt(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlt unimplemented\n"); exit(1); }
 static inline void ee_i_tlti(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlti unimplemented\n"); exit(1); }
 static inline void ee_i_tltiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tltiu unimplemented\n"); exit(1); }
@@ -3125,7 +3363,7 @@ struct ee_state* ee_create(void) {
     return new ee_state();
 }
 
-void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, struct ee_bus_s bus) {
+void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, int ram_size, struct ee_bus_s bus) {
     ee->prid = 0x2e20;
     ee->pc = EE_VEC_RESET;
     ee->next_pc = ee->pc + 4;
@@ -3135,13 +3373,23 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, st
 
     // To-do: Set SR
 
-    ee->scratchpad = ps2_ram_create();
-    ps2_ram_init(ee->scratchpad, 0x4000);
+    ee->spr = ps2_ram_create();
+    ps2_ram_init(ee->spr, 0x4000);
 
     // EE's FPU uses round to zero by default
     fesetround(FE_TOWARDZERO);
 
     ee->fcr = 0x01000001;
+    ee->ram_size = ram_size - 1;
+
+    ee->osd_config.screen_type = 0; // 4:3
+    ee->osd_config.ps1drv_config = 0; // ???
+    ee->osd_config.spdif_mode = 0; // Enabled
+    ee->osd_config.timezone_offset = 0;
+    ee->osd_config.video_output = 0; // RGB
+    ee->osd_config.jap_language = 1; // Indicates not Japanese
+    ee->osd_config.language = 1; // English
+    ee->osd_config.version = 1; // Indicates normal kernel without extended language settings
 }
 
 void ee_reset(struct ee_state* ee) {
@@ -3175,13 +3423,13 @@ void ee_reset(struct ee_state* ee) {
 
     fesetround(FE_TOWARDZERO);
 
-    ps2_ram_reset(ee->scratchpad);
+    ps2_ram_reset(ee->spr);
 
     ee->fcr = 0x01000001;
 }
 
 void ee_destroy(struct ee_state* ee) {
-    ps2_ram_destroy(ee->scratchpad);
+    ps2_ram_destroy(ee->spr);
 
     delete ee;
 }
@@ -3312,8 +3560,8 @@ ee_instruction ee_decode(uint32_t opcode) {
                 case 0x02000000 >> 21: {
                     switch (opcode & 0x0000003F) {
                         case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbr; return i;
-                        case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbwi; return i;
-                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbwr; return i;
+                        case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.func = ee_i_tlbwi; return i;
+                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.func = ee_i_tlbwr; return i;
                         case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_tlbp; return i;
                         case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.func = ee_i_eret; return i;
                         case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.func = ee_i_ei; return i;
@@ -3686,7 +3934,7 @@ ee_instruction ee_decode(uint32_t opcode) {
         case 0xB0000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sdl; return i;
         case 0xB4000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_sdr; return i;
         case 0xB8000000 >> 26: i.cycles = EE_CYC_STORE; i.func = ee_i_swr; return i;
-        case 0xBC000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_cache; return i;
+        case 0xBC000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 2; i.func = ee_i_cache; return i;
         case 0xC4000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lwc1; return i;
         case 0xCC000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.func = ee_i_pref; return i;
         case 0xD8000000 >> 26: i.cycles = EE_CYC_LOAD; i.func = ee_i_lqc2; return i;
@@ -3701,85 +3949,29 @@ ee_instruction ee_decode(uint32_t opcode) {
     return i;
 }
 
-int ee_run_block(struct ee_state* ee, int max_cycles) {
-    // This is the entrypoint to the EENULL thread.
-    // If we hit this address, the program is basically idling
-    // so we "fast-forward" 1024 cycles
-    if (ee->pc == 0x81fc0) {
-        ee_check_irq(ee);
+static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycles) {
+    ee->block_cache[ee->pc] = {};
 
-        ee->total_cycles += 8 * 128;
-        ee->count += 8 * 128;
-        // ee->eenull_counter += 8 * 64;
-
-        return 8 * 128;
-    }
-
-    if (ee->intc_reads >= 10000) {
-        ee_check_irq(ee);
-
-        return 1024;
-    }
-
-    // if (ee->csr_reads >= 1000) {
-    //     ee_check_irq(ee);
-
-    //     return 1024;
-    // }
-
-    if (ee->block_cache.contains(ee->pc)) {
-        const auto& block = ee->block_cache[ee->pc];
-
-        ee->block_pc = ee->pc;
-
-        int cycles = 0;
-
-        for (const auto& i : block.instructions) {
-            ee->delay_slot = ee->branch;
-            ee->branch = 0;
-
-            // If we need to handle an interrupt, break out of the loop
-            if (ee_check_irq(ee))
-                break;
-
-            // if (ee->pc >= 0x81fc0 && ee->pc <= 0x81fdc) {
-            //     ee->eenull_counter++;
-            // }
-
-            ee->pc = ee->next_pc;
-            ee->next_pc += 4;
-
-            i.func(ee, i);
-
-            ee->count++;
-            ee->r[0] = { 0 };
-
-            cycles++;
-
-            // An exception occurred or likely branch was taken
-            // break immediately and clear the exception flag
-            if (ee->exception) {
-                ee->exception = 0;
-
-                break;
-            }
-        }
-
-        // printf("ee: Block executed with %d cycles pc=%08x\n", cycles, ee->pc);
-
-        return cycles;
-    }
+    struct ee_block& block = ee->block_cache.at(ee->pc);
 
     uint32_t pc = ee->pc;
     uint32_t block_pc = ee->pc;
     ee_instruction i;
-    ee_block block;
 
     block.cycles = 0;
     block.instructions.reserve(max_cycles);
 
     while (max_cycles) {
         ee->opcode = bus_read32(ee, pc);
+
+        if (ee->exception) {
+            // An exception occurred while fetching the instruction
+            // Stop caching the block here
+            ee->exception = 0;
+
+            // Cache at the new location (handler)
+            return ee_cache_block(ee, max_cycles);
+        }
 
         if (ee->opcode != 0) {
             i = ee_decode(ee->opcode);
@@ -3805,9 +3997,117 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         pc += 4;
     }
 
-    ee->block_cache[block_pc] = block;
+    return &block;
+}
 
-    return 0;
+static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
+    const auto& block_it = ee->block_cache.find(pc);
+
+    if (block_it != ee->block_cache.end()) {
+        return &block_it->second;
+    }
+
+    return nullptr;
+}
+
+int ee_run_block(struct ee_state* ee, int max_cycles) {
+    // This is the entrypoint to the EENULL thread.
+    // If we hit this address, the program is basically idling
+    // so we "fast-forward" 1024 cycles
+    if (ee->pc == 0x81fc0) {
+        ee_check_irq(ee);
+
+        ee->total_cycles += 2048;
+        ee->count += 2048;
+        // ee->eenull_counter += 8 * 64;
+
+        return 2048;
+    }
+
+    if (ee->intc_reads >= 10000) {
+        ee_check_irq(ee);
+
+        return 2048;
+    }
+
+    // if (ee->csr_reads >= 1000) {
+    //     ee_check_irq(ee);
+
+    //     return 1024;
+    // }
+
+    struct ee_block* block = ee_find_block(ee, ee->pc);
+
+    if (!block) {
+        block = ee_cache_block(ee, max_cycles);
+    }
+
+    ee->block_pc = ee->pc;
+
+    int cycles = 0;
+
+    for (const auto& i : block->instructions) {
+        ee->delay_slot = ee->branch;
+        ee->branch = 0;
+
+        // If we need to handle an interrupt, break out of the loop
+        if (ee_check_irq(ee))
+            break;
+
+        ee->pc = ee->next_pc;
+        ee->next_pc += 4;
+
+        i.func(ee, i);
+
+        ee->count++;
+        ee->r[0] = { 0 };
+
+        cycles++;
+
+        // An exception occurred or likely branch was taken
+        // break immediately and clear the exception flag
+        if (ee->exception) {
+            ee->exception = 0;
+
+            break;
+        }
+    }
+
+    // printf("ee: Block executed with %d cycles pc=%08x\n", cycles, ee->pc);
+
+    return cycles;
+}
+
+int ee_step(struct ee_state* ee) {
+    static ee_instruction i;
+
+    ee->delay_slot = ee->branch;
+    ee->branch = 0;
+
+    // Would check for interrupts here, but we do this outside of the core
+    // to reduce overhead
+    ee_check_irq(ee);
+
+    ee->prev_pc = ee->pc;
+    ee->opcode = bus_read32(ee, ee->pc);
+    ee->pc = ee->next_pc;
+    ee->next_pc += 4;
+
+    i = ee_decode(ee->opcode);
+
+    i.func(ee, i);
+
+    ++ee->total_cycles;
+    ++ee->count;
+
+    ee->r[0].u64[0] = 0;
+    ee->r[0].u64[1] = 0;
+
+    return 1;
+}
+
+void ee_flush_cache(struct ee_state* ee) {
+    ee->block_cache.clear();
 }
 
 uint32_t ee_get_pc(struct ee_state* ee) {
@@ -3815,7 +4115,7 @@ uint32_t ee_get_pc(struct ee_state* ee) {
 }
 
 struct ps2_ram* ee_get_spr(struct ee_state* ee) {
-    return ee->scratchpad;
+    return ee->spr;
 }
 
 void ee_set_fmv_skip(struct ee_state* ee, int v) {
@@ -3828,4 +4128,16 @@ void ee_reset_intc_reads(struct ee_state* ee) {
 
 void ee_reset_csr_reads(struct ee_state* ee) {
     ee->csr_reads = 0;
+}
+
+void ee_set_ram_size(struct ee_state* ee, int ram_size) {
+    ee->ram_size = ram_size - 1;
+}
+
+void ee_set_osd_config(struct ee_state* ee, struct ee_osd_config config) {
+    ee->osd_config = config;
+}
+
+struct ee_osd_config ee_get_osd_config(struct ee_state* ee) {
+    return ee->osd_config;
 }

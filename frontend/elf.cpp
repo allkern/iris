@@ -1,4 +1,8 @@
-#include "elf.hpp"
+#include <cstdlib>
+#include <cstdint>
+#include <cstdio>
+
+#include "iris.hpp"
 
 #ifdef __linux__
 #include <elf.h>
@@ -6,9 +10,9 @@
 #include "elf.h"
 #endif
 
-namespace iris {
+namespace iris::elf {
 
-void load_elf_symbols_from_memory(iris::instance* iris, char* buf) {
+void load_symbols_from_memory(iris::instance* iris, char* buf) {
     if (!buf)
         return;
 
@@ -91,25 +95,27 @@ void load_elf_symbols_from_memory(iris::instance* iris, char* buf) {
     }
 }
 
-void load_elf_symbols_from_disc(iris::instance* iris) {
+bool load_symbols_from_disc(iris::instance* iris) {
     if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc) {
         printf("elf: No disc loaded\n");
 
-        return;
+        return false;
     }
 
     char* elf = disc_read_boot_elf(iris->ps2->cdvd->disc, 0);
 
-    load_elf_symbols_from_memory(iris, elf);
+    load_symbols_from_memory(iris, elf);
 
     free(elf);
+
+    return true;
 }
 
-void load_elf_symbols_from_file(iris::instance* iris, std::string path) {
+bool load_symbols_from_file(iris::instance* iris, std::string path) {
     if (path.empty()) {
         printf("elf: No file path provided\n");
 
-        return;
+        return false;
     }
 
     FILE* file = fopen(path.c_str(), "rb");
@@ -117,7 +123,7 @@ void load_elf_symbols_from_file(iris::instance* iris, std::string path) {
     if (!file) {
         printf("elf: Failed to open file %s\n", path.c_str());
 
-        return;
+        return false;
     }
 
     fseek(file, 0, SEEK_END);
@@ -129,9 +135,11 @@ void load_elf_symbols_from_file(iris::instance* iris, std::string path) {
     fread(buf, 1, size, file);
     fclose(file);
 
-    load_elf_symbols_from_memory(iris, buf);
+    load_symbols_from_memory(iris, buf);
 
     delete[] buf;
+
+    return true;
 }
 
 }

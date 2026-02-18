@@ -85,7 +85,7 @@ struct vu_state {
         struct {
             uint8_t reg;
             uint8_t field;
-        } dst, src[2];
+        } dst;
     } upper_pipeline[4], lower_pipeline[4];
 
 	int vi_backup_cycles;

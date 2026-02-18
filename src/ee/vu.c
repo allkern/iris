@@ -368,7 +368,7 @@ void vu_xgkick(struct vu_state* vu) {
 
         // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
-        ps2_gif_write128(vu->gif, 0, tag);
+        ps2_gif_fifo_write(vu->gif, tag, GIF_PATH1);
 
         eop = (tag.u64[0] & 0x8000) != 0;
 
@@ -418,7 +418,7 @@ void vu_xgkick(struct vu_state* vu) {
             //     vu->vu_mem[addr].u32[0]
             // );
 
-            ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
+            ps2_gif_fifo_write(vu->gif, vu_mem_read(vu, addr++), GIF_PATH1);
 
             addr &= 0x3ff;
 
@@ -2536,7 +2536,7 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
 
         // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
-        ps2_gif_write128(vu->gif, 0, tag);
+        ps2_gif_fifo_write(vu->gif, tag, GIF_PATH1);
 
         eop = (tag.u64[0] & 0x8000) != 0;
 
@@ -2586,7 +2586,7 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
             //     vu->vu_mem[addr].u32[0]
             // );
 
-            ps2_gif_write128(vu->gif, 0, vu_mem_read(vu, addr++));
+            ps2_gif_fifo_write(vu->gif, vu_mem_read(vu, addr++), GIF_PATH1);
 
             addr &= 0x3ff;
 
@@ -3199,35 +3199,25 @@ static inline void vu_advance_fmac_pipeline(struct vu_state* vu) {
     vu->upper_pipeline[1] = vu->upper_pipeline[0];
     vu->upper_pipeline[0].dst.reg = vu->upper.dst.reg;
     vu->upper_pipeline[0].dst.field = vu->upper.dst.field;
-    vu->upper_pipeline[0].src[0].reg = vu->upper.src[0].reg;
-    vu->upper_pipeline[0].src[0].field = vu->upper.src[0].field;
-    vu->upper_pipeline[0].src[1].reg = vu->upper.src[1].reg;
-    vu->upper_pipeline[0].src[1].field = vu->upper.src[1].field;
     vu->lower_pipeline[3] = vu->lower_pipeline[2];
     vu->lower_pipeline[2] = vu->lower_pipeline[1];
     vu->lower_pipeline[1] = vu->lower_pipeline[0];
     vu->lower_pipeline[0].dst.reg = vu->lower.dst.reg;
     vu->lower_pipeline[0].dst.field = vu->lower.dst.field;
-    vu->lower_pipeline[0].src[0].reg = vu->lower.src[0].reg;
-    vu->lower_pipeline[0].src[0].field = vu->lower.src[0].field;
-    vu->lower_pipeline[0].src[1].reg = vu->lower.src[1].reg;
-    vu->lower_pipeline[0].src[1].field = vu->lower.src[1].field;
 }
 
 static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
-    int stall = 0;
-
     for (int i = 0; i < 4; i++) {
         for (int j = 0; j < 2; j++) {
-            if (vu->upper.src[j].reg && (vu->upper.src[j].reg == vu->upper_pipeline[i].dst.reg)) {
-                if (vu->upper.src[j].field & vu->upper_pipeline[i].dst.field) {
-                    return 3 - i;
+            if (vu->upper.src[j].reg == vu->lower_pipeline[i].dst.reg) {
+                if (vu->upper.src[j].field & vu->lower_pipeline[i].dst.field) {
+                    return 4 - i;
                 }
             }
         }
     }
 
-    return stall;
+    return 0;
 }
 
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
@@ -3318,6 +3308,25 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
             // the VU stalls the pipeline until it is ready.
             if (hazard3) vu->q_delay = 0;
 
+            // Note: This code checks hazards and stalls pipes when the FMAC pipe stalls.
+            //       It's absolutely disgusting, so I'm commenting it out for now.
+
+            // Fixes:
+            // - Raiden III
+
+            /*
+            int stall = vu_get_fmac_stall_cycles(vu);
+
+            vu->q_delay -= stall;
+
+            if (vu->q_delay < 0)
+                vu->q_delay = 0;
+
+            for (int k = 0; k < stall; k++) {
+                vu_advance_fmac_pipeline(vu);
+            }
+            */
+
             if (!vu->upper.dst.reg) {
                 vu->upper.func(vu, &vu->upper);
                 vu->lower.func(vu, &vu->lower);
@@ -3357,7 +3366,7 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         //     exit(1);
         // }
 
-        // vu_advance_fmac_pipeline(vu);
+        vu_advance_fmac_pipeline(vu);
 
         vu->mac_pipeline[3] = vu->mac_pipeline[2];
         vu->mac_pipeline[2] = vu->mac_pipeline[1];
@@ -3378,13 +3387,13 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
             }
         }
 
-        if (vu->xgkick_pending) {
-            vu->xgkick_pending--;
+        // if (vu->xgkick_pending) {
+        //     vu->xgkick_pending--;
 
-            if (!vu->xgkick_pending) {
-                vu_xgkick(vu);
-            }
-        }
+        //     if (!vu->xgkick_pending) {
+        //         vu_xgkick(vu);
+        //     }
+        // }
     }
 }
 

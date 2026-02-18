@@ -63,30 +63,54 @@ void show_status_bar(iris::instance* iris) {
     using namespace ImGui;
 
     if (BeginMainStatusBar()) {
-        int vp_w, vp_h, disp_w, disp_h, disp_fmt, mode;
+        static const char* const modes[] = {
+            "Progressive",
+            "Interlaced (Field)",
+            "Progressive",
+            "Interlaced (Frame)"
+        };
 
-        renderer_get_viewport_size(iris->ctx, &vp_w, &vp_h);
-        renderer_get_display_size(iris->ctx, &disp_w, &disp_h);
-        renderer_get_display_format(iris->ctx, &disp_fmt);
-        renderer_get_interlace_mode(iris->ctx, &mode);
+        static const char* const renderers[] = {
+            "Null",
+            "Software",
+            "Hardware (Vulkan)"
+        };
 
-        if (vp_w) {
-            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
-                renderer_get_name(iris->ctx),
-                disp_w, disp_h,
-                vp_w, vp_h,
-                mode == 3 ? "Interlaced" : "Progressive",
-                get_format_bpp(disp_fmt),
+        int dispfb = 0;
+
+        if (!iris->image.image) {
+            Text(ICON_MS_MONITOR " %s | No image | %1.f fps",
+                renderers[iris->renderer_backend],
                 GetIO().Framerate
             );
-
-            // iris->avg_frames++;
-            // iris->avg_fps += iris->fps;
         } else {
-            Text(ICON_MS_MONITOR " %s | No image",
-                renderer_get_name(iris->ctx)
+            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
+                renderers[iris->renderer_backend],
+                iris->render_width, iris->render_height,
+                iris->image.width, iris->image.height,
+                modes[iris->ps2->gs->smode2 & 3],
+                32,
+                GetIO().Framerate
             );
         }
+
+        // if (vp_w) {
+        //     Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
+        //         "None", // renderer_get_name(iris->ctx),
+        //         disp_w, disp_h,
+        //         vp_w, vp_h,
+        //         mode == 3 ? "Interlaced" : "Progressive",
+        //         get_format_bpp(disp_fmt),
+        //         GetIO().Framerate
+        //     );
+
+        //     // iris->avg_frames++;
+        //     // iris->avg_fps += iris->fps;
+        // } else {
+        //     Text(ICON_MS_MONITOR " %s | No image",
+        //         "None" // renderer_get_name(iris->ctx)
+        //     );
+        // }
 
         EndMainStatusBar();
     }

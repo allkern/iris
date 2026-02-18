@@ -4,6 +4,8 @@
 #include <string.h>
 #include <assert.h>
 
+#define printf(fmt,...)(0)
+
 void ps1_mcd_flush_block(struct ps1_mcd_state* mcd, int addr) {
     fseek(mcd->file, addr, SEEK_SET);
     fwrite(&mcd->buf[addr], 1, 128, mcd->file);
@@ -133,7 +135,12 @@ void ps1_mcd_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
         case 0x52: ps1_mcd_cmd_read(sio2, mcd); return;
         case 0x53: ps1_mcd_cmd_get_id(sio2, mcd); return;
         case 0x57: ps1_mcd_cmd_write(sio2, mcd); return;
-        // case 0x58: ps1_mcd_cmd_detect_pocketstation(sio2, mcd); return;
+        case 0x58: {
+            if (mcd->type == 0)
+                break;
+
+            ps1_mcd_cmd_detect_pocketstation(sio2, mcd); return;
+        }
     }
 
     sio2->recv1 |= 0x2000;
@@ -141,7 +148,11 @@ void ps1_mcd_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
     ps1_mcd_cmd_invalid(sio2, mcd);
 }
 
-struct ps1_mcd_state* ps1_mcd_sio2_attach(struct ps2_sio2* sio2, int port, const char* path) {
+void ps1_mcd_set_type(struct ps1_mcd_state* mcd, int type) {
+    mcd->type = type;
+}
+
+struct ps1_mcd_state* ps1_mcd_attach(struct ps2_sio2* sio2, int port, const char* path) {
     FILE* file = fopen(path, "r+b");
 
     if (!file)
@@ -161,7 +172,7 @@ struct ps1_mcd_state* ps1_mcd_sio2_attach(struct ps2_sio2* sio2, int port, const
         path
     );
 
-    dev.detach = ps1_mcd_sio2_detach;
+    dev.detach = ps1_mcd_detach;
     dev.handle_command = ps1_mcd_handle_command;
     dev.udata = mcd;
 
@@ -170,7 +181,7 @@ struct ps1_mcd_state* ps1_mcd_sio2_attach(struct ps2_sio2* sio2, int port, const
     return mcd;
 }
 
-void ps1_mcd_sio2_detach(void* udata) {
+void ps1_mcd_detach(void* udata) {
     struct ps1_mcd_state* mcd = (struct ps1_mcd_state*)udata;
 
     // Flush buffer back to file

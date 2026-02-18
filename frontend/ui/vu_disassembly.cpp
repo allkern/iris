@@ -5,7 +5,7 @@
 
 #include "iris.hpp"
 
-#include "pfd/pfd.h"
+#include "portable-file-dialogs.h"
 #include "res/IconsMaterialSymbols.h"
 
 #include "ee/vu_dis.h"
@@ -65,7 +65,7 @@ bool add_padding = true;
 bool compact_view = false;
 bool show_address_opcode = true;
 
-void print_highlighted_vu1(const char* buf) {
+void print_highlighted_vu1(iris::instance* iris, const char* buf) {
     using namespace ImGui;
 
     std::vector <std::string> tokens;
@@ -119,24 +119,52 @@ void print_highlighted_vu1(const char* buf) {
     }
 
     for (const std::string& t : tokens) {
+        ImVec4 col = ImVec4(
+            iris->codeview_color_register.Value.x,
+            iris->codeview_color_register.Value.y,
+            iris->codeview_color_register.Value.z,
+            iris->codeview_color_register.Value.w
+        );
+
         if (t[0] == 'v' && (t[1] == 'f' || t[1] == 'i')) {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+            TextColored(col, "%s", t.c_str());
         } else if (rtrim(t) == "acc") {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+            TextColored(col, "%s", t.c_str());
         } else if (rtrim(t) == "q") {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+            TextColored(col, "%s", t.c_str());
         } else if (rtrim(t) == "p") {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+            TextColored(col, "%s", t.c_str());
         } else if (rtrim(t) == "i") {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+            TextColored(col, "%s", t.c_str());
         } else if (rtrim(t) == "r") {
-            TextColored(IM_RGB(68, 169, 240), "%s", t.c_str());
+            TextColored(col, "%s", t.c_str());
         } else if (isalpha(t[0])) {
-            TextColored(IM_RGB(211, 167, 30), "%s", t.c_str());
+            col = ImVec4(
+                iris->codeview_color_mnemonic.Value.x,
+                iris->codeview_color_mnemonic.Value.y,
+                iris->codeview_color_mnemonic.Value.z,
+                iris->codeview_color_mnemonic.Value.w
+            );
+
+            TextColored(col, "%s", t.c_str());
         } else if (isdigit(t[0]) || t[0] == '-') {
-            TextColored(IM_RGB(138, 143, 226), "%s", t.c_str());
+            col = ImVec4(
+                iris->codeview_color_number.Value.x,
+                iris->codeview_color_number.Value.y,
+                iris->codeview_color_number.Value.z,
+                iris->codeview_color_number.Value.w
+            );
+
+            TextColored(col, "%s", t.c_str());
         } else if (t[0] == '<') {
-            TextColored(IM_RGB(89, 89, 89), "%s", t.c_str());
+            col = ImVec4(
+                iris->codeview_color_other.Value.x,
+                iris->codeview_color_other.Value.y,
+                iris->codeview_color_other.Value.z,
+                iris->codeview_color_other.Value.w
+            );
+
+            TextColored(col, "%s", t.c_str());
         } else {
             Text("%s", t.c_str());
         }
@@ -150,7 +178,38 @@ void print_highlighted_vu1(const char* buf) {
 static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t size) {
     using namespace ImGui;
 
+    float font_scale = GetStyle().FontScaleMain;
+
+    GetStyle().FontScaleMain = iris->codeview_font_scale;
+
     PushFont(iris->font_code);
+
+    if (!iris->codeview_use_theme_background) {
+        PushStyleColor(ImGuiCol_TableRowBg, ImVec4(
+            iris->codeview_color_background.Value.x,
+            iris->codeview_color_background.Value.y,
+            iris->codeview_color_background.Value.z,
+            iris->codeview_color_background.Value.w
+        ));
+        PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(
+            iris->codeview_color_background.Value.x,
+            iris->codeview_color_background.Value.y,
+            iris->codeview_color_background.Value.z,
+            iris->codeview_color_background.Value.w
+        ));
+        PushStyleColor(ImGuiCol_Text, ImVec4(
+            iris->codeview_color_text.Value.x,
+            iris->codeview_color_text.Value.y,
+            iris->codeview_color_text.Value.z,
+            iris->codeview_color_text.Value.w
+        ));
+        PushStyleColor(ImGuiCol_TextDisabled, ImVec4(
+            iris->codeview_color_comment.Value.x,
+            iris->codeview_color_comment.Value.y,
+            iris->codeview_color_comment.Value.z,
+            iris->codeview_color_comment.Value.w
+        ));
+    }
 
     if (BeginTable("table1", compact_view ? 2 : 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Hideable)) {
         PushFont(iris->font_small_code);
@@ -201,13 +260,13 @@ static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t
 #endif
             }
 
-            print_highlighted_vu1(upper);
+            print_highlighted_vu1(iris, upper);
 
             if (!compact_view) {
                 TableSetColumnIndex(2);
             }
 
-            print_highlighted_vu1(lower);
+            print_highlighted_vu1(iris, lower);
 
             if (e_bit && stop_at_e_bit && !disassemble_all) break;
 
@@ -218,6 +277,12 @@ static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t
     }
 
     PopFont();
+
+    if (!iris->codeview_use_theme_background) {
+        PopStyleColor(4);
+    }
+
+    GetStyle().FontScaleMain = font_scale;
 }
 
 void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
@@ -264,7 +329,7 @@ void show_vu_disassembler(iris::instance* iris) {
 
     PushFont(iris->font_icons);
 
-    if (Begin("VU disassembler", &iris->show_vu_disassembler, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("VU disassembler", &iris->show_vu_disassembler, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("File")) {
                 if (MenuItem(ICON_MS_FILE_SAVE " Save disassembly as...", NULL)) {

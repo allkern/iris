@@ -65,6 +65,8 @@ struct ee_bus_s {
 #define CAUSE_EXC1_CPU  (11 << 2)
 #define CAUSE_EXC1_OV   (12 << 2)
 #define CAUSE_EXC1_TR   (13 << 2)
+#define CAUSE_EXC1_TLBIL (2 << 0)
+#define CAUSE_EXC1_TLBIS (3 << 0)
 
 #define CAUSE_EXC2_RES   (0 << 16)
 #define CAUSE_EXC2_NMI   (1 << 16)
@@ -72,7 +74,7 @@ struct ee_bus_s {
 #define CAUSE_EXC2_DBG   (3 << 16)
 
 #define EE_VEC_RESET   0xbfc00000
-#define EE_VEC_TLBR    0x00000000
+#define EE_VEC_TLB     0x00000000
 #define EE_VEC_COUNTER 0x00000080
 #define EE_VEC_DEBUG   0x00000100
 #define EE_VEC_COMMON  0x00000180
@@ -112,16 +114,37 @@ struct ee_vtlb_entry {
     int v0;
     int d0;
     int c0;
-    int pfn0;
+    uint32_t pfn0;
     int v1;
     int d1;
     int c1;
-    int pfn1;
+    uint32_t pfn1;
     int s;
     int asid;
     int g;
-    int vpn2;
-    int mask;
+    uint32_t vpn2;
+    uint32_t mask;
+};
+
+// Taken from PCSX2
+struct ee_osd_config {
+    /** 0=enabled, 1=disabled */
+    uint32_t spdif_mode : 1; /*00*/
+    /** 0=4:3, 1=fullscreen, 2=16:9 */
+    uint32_t screen_type : 2; /*01*/
+    /** 0=rgb(scart), 1=component */
+    uint32_t video_output : 1; /*03*/
+    /** 0=japanese, 1=english(non-japanese) */
+    /*04*/uint32_t jap_language : 1;
+    /** Playstation driver settings. */
+    uint32_t ps1drv_config : 8; /*05*/
+    /** 0 = early Japanese OSD, 1 = OSD2, 2 = OSD2 with extended languages.
+     * Early kernels cannot retain the value set in this field (Hence always 0). */
+    uint32_t version : 3; /*13*/
+    /** LANGUAGE_??? value */
+    uint32_t language : 5; /*16*/
+    /** timezone minutes offset from gmt */
+    uint32_t timezone_offset : 11; /*21*/
 };
 
 union ee_fpu_reg {
@@ -133,7 +156,7 @@ union ee_fpu_reg {
 struct ee_state;
 
 struct ee_state* ee_create(void);
-void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, struct ee_bus_s bus);
+void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, int ram_size, struct ee_bus_s bus);
 void ee_reset(struct ee_state* ee);
 void ee_destroy(struct ee_state* ee);
 void ee_set_int0(struct ee_state* ee, int v);
@@ -142,9 +165,14 @@ void ee_set_cpcond0(struct ee_state* ee, int v);
 uint32_t ee_get_pc(struct ee_state* ee);
 struct ps2_ram* ee_get_spr(struct ee_state* ee);
 int ee_run_block(struct ee_state* ee, int cycles);
+int ee_step(struct ee_state* ee);
 void ee_set_fmv_skip(struct ee_state* ee, int v);
 void ee_reset_intc_reads(struct ee_state* ee);
 void ee_reset_csr_reads(struct ee_state* ee);
+void ee_flush_cache(struct ee_state* ee);
+void ee_set_ram_size(struct ee_state* ee, int ram_size);
+void ee_set_osd_config(struct ee_state* ee, struct ee_osd_config config);
+struct ee_osd_config ee_get_osd_config(struct ee_state* ee);
 
 #undef EE_ALIGNED16
 

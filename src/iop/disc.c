@@ -5,6 +5,9 @@
 
 #include "disc.h"
 #include "disc/iso.h"
+#include "disc/cue.h"
+#include "disc/chd.h"
+#include "disc/ciso.h"
 #include "disc/bin.h"
 
 #ifdef _MSC_VER
@@ -55,6 +58,9 @@ static const char* disc_extensions[] = {
     "iso",
     "bin",
     "cue",
+    "chd",
+    "cso",
+    "zso",
     NULL
 };
 
@@ -123,38 +129,24 @@ static inline int disc_fetch_system_cnf(struct disc_state* disc) {
     return 1;
 }
 
-int disc_get_extension(char* path) {
+int disc_get_extension(const char* path) {
     if (!path)
         return DISC_EXT_UNSUPPORTED;
 
-    if (!(*path))
-        return DISC_EXT_UNSUPPORTED;
+    const char* ptr = strrchr(path, '.');
 
-    int len = strlen(path);
+    if (!ptr) {
+        return DISC_EXT_NONE;
+    }
 
-    char* lc = malloc(len + 1);
+    char* lc = strdup(ptr + 1);
 
-    strcpy(lc, path);
-
-    for (int i = 0; i < len; i++)
-        lc[i] = tolower(lc[i]);
-
-    path = lc;
-
-    const char* ptr = path + (len - 1);
-
-    while (*ptr != '.') {
-        if (ptr == path) {
-            free(lc);
-
-            return DISC_EXT_NONE;
-        }
-
-        --ptr;
+    for (char* p = lc; *p; p++) {
+        *p = tolower(*p);
     }
 
     for (int i = 0; disc_extensions[i]; i++) {
-        if (!strcmp(ptr + 1, disc_extensions[i])) {
+        if (!strcmp(lc, disc_extensions[i])) {
             free(lc);
 
             return i;
@@ -190,25 +182,74 @@ struct disc_state* disc_open(const char* path) {
             s->udata = iso;
             s->read_sector = iso_read_sector;
             s->get_size = iso_get_size;
-            s->get_volume_lba = iso_get_volume_lba;
             s->get_sector_size = iso_get_sector_size;
+            s->get_track_count = iso_get_track_count;
+            s->get_track_info = iso_get_track_info;
+            s->get_track_number = iso_get_track_number;
 
             // To-do: Check if path exists
             r = iso_init(iso, path);
         } break;
 
         // Raw 2352-byte sector disc image (CD)
+        case DISC_EXT_NONE:
         case DISC_EXT_BIN: {
             struct disc_bin* bin = bin_create();
 
             s->udata = bin;
             s->read_sector = bin_read_sector;
             s->get_size = bin_get_size;
-            s->get_volume_lba = bin_get_volume_lba;
             s->get_sector_size = bin_get_sector_size;
+            s->get_track_count = bin_get_track_count;
+            s->get_track_info = bin_get_track_info;
+            s->get_track_number = bin_get_track_number;
 
-            // To-do: Check if path exists
             r = bin_init(bin, path);
+        } break;
+
+        // CUE+BIN disc image (contains track information)
+        case DISC_EXT_CUE: {
+            struct disc_cue* cue = cue_create();
+
+            s->udata = cue;
+            s->read_sector = cue_read_sector;
+            s->get_size = cue_get_size;
+            s->get_sector_size = cue_get_sector_size;
+            s->get_track_count = cue_get_track_count;
+            s->get_track_info = cue_get_track_info;
+            s->get_track_number = cue_get_track_number;
+
+            r = cue_init(cue, path);
+        } break;
+
+        // MAME CHD disc image (Compressed Hunks of Data)
+        case DISC_EXT_CHD: {
+            struct disc_chd* chd = chd_create();
+
+            s->udata = chd;
+            s->read_sector = chd_read_sector;
+            s->get_size = chd_get_size;
+            s->get_sector_size = chd_get_sector_size;
+            s->get_track_count = chd_get_track_count;
+            s->get_track_info = chd_get_track_info;
+            s->get_track_number = chd_get_track_number;
+
+            r = chd_init(chd, path);
+        } break;
+
+        case DISC_EXT_CSO:
+        case DISC_EXT_ZSO: {
+            struct disc_ciso* ciso = ciso_create();
+
+            s->udata = ciso;
+            s->read_sector = ciso_read_sector;
+            s->get_size = ciso_get_size;
+            s->get_sector_size = ciso_get_sector_size;
+            s->get_track_count = ciso_get_track_count;
+            s->get_track_info = ciso_get_track_info;
+            s->get_track_number = ciso_get_track_number;
+
+            r = ciso_init(ciso, path);
         } break;
 
         default: {
@@ -218,12 +259,13 @@ struct disc_state* disc_open(const char* path) {
         } break;
     }
 
-    if (!r)
-        return s;
+    if (!r) {
+        free(s);
 
-    free(s);
+        return NULL;
+    }
 
-    return NULL;
+    return s;
 }
 
 #define CD_EXTRA_SIZE 800000000
@@ -268,16 +310,29 @@ static inline int disc_detect_type(struct disc_state* disc) {
     struct iso9660_pvd pvd = *(struct iso9660_pvd*)disc->pvd;
 
     // Not ISO 9660 format disc
-    if (strncmp(pvd.id, "\1CD001\1", 8))
+    if (strncmp(pvd.id, "\1CD001\1", 8)) {
+        // If the disc doesn't contain an ISO filesystem
+        // and it's a CUE image, it's probably a CD audio image
+        if (disc->ext == DISC_EXT_CUE) {
+            return DISC_TYPE_CDDA;
+        }
+
+        // Otherwise it's invalid
         return DISC_TYPE_INVALID;
+    }
 
     // Check for the "PLAYSTATION" string at PVD offset 08h
     // Patch 20 byte so comparison is done correctly
     disc->pvd[0x13] = 0;
 
+    // Disc contains a "valid" ISO filesystem, but it's not a
+    // PlayStation disc, it might be a DVD video disc or something
+    // else entirely, either way don't outright reject it just yet
     if (strncmp(&disc->pvd[0x8], "PLAYSTATION", 12))
-        return DISC_TYPE_CDDA;
+        return DISC_TYPE_UNKNOWN;
 
+    // Disc contains a valid ISO filesystem and the PlayStation string
+    // is present, so this is most likely a game disc.
     return DISC_TYPE_GAME;
 }
 
@@ -287,6 +342,10 @@ int disc_get_type(struct disc_state* disc) {
 
     if (type == DISC_TYPE_INVALID) {
         return CDVD_DISC_INVALID;
+    }
+
+    if (type == DISC_TYPE_CDDA) {
+        return CDVD_DISC_CDDA;
     }
 
     // Start final detection
@@ -322,9 +381,6 @@ int disc_get_type(struct disc_state* disc) {
 
     // Couldn't find SYSTEM.CNF file, non-playstation disc
     if (!dir->dr_len) {
-        if (media == DISC_MEDIA_CD)
-            return CDVD_DISC_CDDA;
-
         // Might be a DVD Video disc
         // Look for VIDEO_TS in the root dir
         dir = (struct iso9660_dirent*)buf;
@@ -347,7 +403,20 @@ int disc_get_type(struct disc_state* disc) {
             dir = (struct iso9660_dirent*)(ptr + dir->dr_len);
         }
 
-        return CDVD_DISC_PS2_DVD;
+        // SYSTEM.CNF not found and VIDEO_TS not found
+        // If the PLAYSTATION string is in the PVD, then this might actually
+        // be part of a multi-disc set, return as a PlayStation disc
+        // Otherwise it's probably something else entirely (like an Xbox disc)
+        // The PS2 wouldn't handle it anyways, return as invalid.
+
+        // The Linux for PlayStation 2 install disc is an example of this.
+        // Disc 2 contains a valid ISO filesystem and the PLAYSTATION string,
+        // but no SYSTEM.CNF file.
+        if (media == DISC_MEDIA_DVD) {
+            return type == DISC_TYPE_GAME ? CDVD_DISC_PS2_DVD : CDVD_DISC_INVALID;
+        }
+
+        return type == DISC_TYPE_GAME ? CDVD_DISC_PS2_CD : CDVD_DISC_INVALID;
     }
 
     // SYSTEM.CNF points to unreadable sector, invalid
@@ -433,12 +502,46 @@ int disc_get_sector_size(struct disc_state* disc) {
     return disc->get_sector_size(disc->udata);
 }
 
+int disc_get_track_count(struct disc_state* disc) {
+    if (!disc)
+        return 0;
+
+    if (!disc->get_track_count)
+        return 0;
+
+    return disc->get_track_count(disc->udata);
+}
+
+int disc_get_track_info(struct disc_state* disc, int track, struct track_info* info) {
+    if (!disc)
+        return 0;
+
+    if (!disc->get_track_info)
+        return 0;
+
+    return disc->get_track_info(disc->udata, track, info);
+}
+
+int disc_get_track_number(struct disc_state* disc, uint64_t lba) {
+    if (!disc)
+        return 0;
+
+    if (!disc->get_track_number)
+        return 0;
+
+    return disc->get_track_number(disc->udata, lba);
+}
+
 void disc_close(struct disc_state* disc) {
     switch (disc->ext) {
         // Standard raw 2048-byte sector ISO 9660 image
         // usually used for DVDs
         case DISC_EXT_ISO: {
             iso_destroy(disc->udata);
+        } break;
+
+        case DISC_EXT_CUE: {
+            cue_destroy(disc->udata);
         } break;
 
         // Raw 2352-byte sector disc image (CD)

@@ -106,7 +106,7 @@ void show_ee_interrupts(iris::instance* iris) {
 
     struct ps2_intc* intc = iris->ps2->ee_intc;
 
-    if (Begin("EE Interrupts", &iris->show_ee_interrupts)) {
+    if (imgui::BeginEx("EE Interrupts", &iris->show_ee_interrupts)) {
         if (Button(ICON_MS_REMOVE_SELECTION)) {
             intc->mask = 0;
         } SameLine();
@@ -180,7 +180,7 @@ void show_iop_interrupts(iris::instance* iris) {
 
     struct ps2_iop_intc* intc = iris->ps2->iop_intc;
 
-    if (Begin("IOP Interrupts", &iris->show_iop_interrupts)) {
+    if (imgui::BeginEx("IOP Interrupts", &iris->show_iop_interrupts)) {
         if (Button(ICON_MS_REMOVE_SELECTION)) {
             intc->mask = 0;
         } SameLine();

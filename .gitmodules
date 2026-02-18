@@ -1,16 +1,35 @@
 [submodule "imgui"]
-	path = imgui
+	path = deps/imgui
 	url = https://github.com/ocornut/imgui
 	branch = docking
 [submodule "tomlplusplus"]
-	path = tomlplusplus
+	path = deps/tomlplusplus
 	url = https://github.com/marzer/tomlplusplus
 [submodule "SDL"]
-	path = SDL
+	path = deps/SDL
 	url = https://github.com/libsdl-org/SDL
+	branch = release-3.2.24
 [submodule "incbin"]
-	path = incbin
+	path = deps/incbin
 	url = https://github.com/graphitemaster/incbin
 [submodule "implot"]
-	path = implot
+	path = deps/implot
 	url = https://github.com/epezent/implot
+[submodule "parallel-gs"]
+	path = deps/parallel-gs
+	url = https://github.com/Arntzen-software/parallel-gs
+[submodule "libchdr"]
+	path = deps/libchdr
+	url = https://github.com/rtissera/libchdr
+[submodule "stb"]
+	path = deps/stb
+	url = https://github.com/nothings/stb
+[submodule "portable-file-dialogs"]
+	path = deps/portable-file-dialogs
+	url = https://github.com/samhocevar/portable-file-dialogs
+[submodule "deps/libdeflate"]
+	path = deps/libdeflate
+	url = https://github.com/ebiggers/libdeflate
+[submodule "deps/lz4"]
+	path = deps/lz4
+	url = https://github.com/lz4/lz4

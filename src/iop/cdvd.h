@@ -20,12 +20,17 @@ extern "C" {
     5     Error (1=error occurred)
     6-7   Unknown
 */
-#define CDVD_STATUS_TRAY_OPEN 1
-#define CDVD_STATUS_SPINNING  2
-#define CDVD_STATUS_READING   4
-#define CDVD_STATUS_PAUSED    8
-#define CDVD_STATUS_SEEKING   16
-#define CDVD_STATUS_ERROR     32
+#define CDVD_STATUS_TRAY_OPEN_BIT 1
+#define CDVD_STATUS_SPINNING_BIT  2
+#define CDVD_STATUS_READING_BIT   4
+#define CDVD_STATUS_PAUSED_BIT    8
+#define CDVD_STATUS_SEEKING_BIT   16
+#define CDVD_STATUS_ERROR_BIT     32
+#define CDVD_STATUS_STOPPED       0x00
+#define CDVD_STATUS_SPINNING      0x02
+#define CDVD_STATUS_READING       0x06
+#define CDVD_STATUS_PAUSED        0x0A
+#define CDVD_STATUS_SEEKING       0x12
 
 /*
     0     Error (1=error occurred)
@@ -69,6 +74,7 @@ extern "C" {
 #define CDVD_CD_SS_2328 2328
 #define CDVD_CD_SS_2340 2340
 #define CDVD_CD_SS_2048 2048
+#define CDVD_CD_SS_2352 2352
 #define CDVD_DVD_SS 2064
 
 struct nvram_layout {
@@ -81,6 +87,11 @@ struct nvram_layout {
 	int32_t modelnum_offset;  // offset of ps2 model number (eg "SCPH-70002")
 	int32_t regparams_offset; // offset of RegionParams for PStwo
 	int32_t mac_offset;       // offset of MAC address on PStwo
+};
+
+enum {
+    CDVD_MECHACON_SPC970,
+    CDVD_MECHACON_DRAGON
 };
 
 struct ps2_cdvd {
@@ -114,7 +125,7 @@ struct ps2_cdvd {
     uint8_t cdkey[16];
 
     struct disc_state* disc;
-    uint8_t buf[2340];
+    uint8_t buf[2352];
     int buf_size;
 
     // Pending read
@@ -135,6 +146,9 @@ struct ps2_cdvd {
     uint32_t config_numblocks;
     uint32_t config_block_index;
 
+    int mechacon_model;
+    struct nvram_layout layout;
+
     // To-do:
     // void (*poweroff_handler)(void* udata)
     // void (*trayctrl_handler)(void* udata, uint8_t ctrl)
@@ -146,6 +160,8 @@ void ps2_cdvd_destroy(struct ps2_cdvd* cdvd);
 int ps2_cdvd_open(struct ps2_cdvd* cdvd, const char* path, int delay);
 void ps2_cdvd_close(struct ps2_cdvd* cdvd);
 void ps2_cdvd_power_off(struct ps2_cdvd* cdvd);
+int ps2_cdvd_load_nvram(struct ps2_cdvd* cdvd, const char* path);
+void ps2_cdvd_set_mechacon_model(struct ps2_cdvd* cdvd, int model);
 uint64_t ps2_cdvd_read8(struct ps2_cdvd* cdvd, uint32_t addr);
 void ps2_cdvd_write8(struct ps2_cdvd* cdvd, uint32_t addr, uint64_t data);
 void ps2_cdvd_reset(struct ps2_cdvd* cdvd);

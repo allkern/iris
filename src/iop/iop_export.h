@@ -11,10 +11,12 @@ extern "C" {
 
 #include "hle/ioman.h"
 #include "hle/loadcore.h"
+#include "hle/sysmem.h"
 
 #define MODULE_UNKNOWN  0
 #define MODULE_IOMAN    1
 #define MODULE_LOADCORE 2
+#define MODULE_SYSMEM   3
 
 #define IOMAN_OPEN      4
 #define IOMAN_CLOSE     5

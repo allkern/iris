@@ -127,17 +127,6 @@ extern "C" {
 
 struct ps2_gs;
 
-struct gs_renderer {
-    void (*render_point)(struct ps2_gs*, void*);
-    void (*render_line)(struct ps2_gs*, void*);
-    void (*render_triangle)(struct ps2_gs*, void*);
-    void (*render_sprite)(struct ps2_gs*, void*);
-    void (*transfer_start)(struct ps2_gs*, void*);
-    void (*transfer_write)(struct ps2_gs*, void*);
-    void (*transfer_read)(struct ps2_gs*, void*);
-    void* udata;
-};
-
 struct gs_vertex {
     uint64_t rgbaq;
     uint64_t xyz;
@@ -259,8 +248,6 @@ struct gs_context {
 #define GS_EVENT_SCISSOR 1
 
 struct ps2_gs {
-    struct gs_renderer backend;
-
     uint32_t* vram;
 
     int vblank;
@@ -299,6 +286,7 @@ struct ps2_gs {
     uint64_t imr;
     uint64_t busdir;
     uint64_t siglblid;
+    uint64_t csr_enable;
 
     // Internal registers
     uint64_t prim;
@@ -365,8 +353,6 @@ struct ps2_gs {
     // DIMX
     int dither[4][4];
 
-    struct gs_callback events[2];
-
     struct sched_state* sched;
     struct ps2_intc* ee_intc;
     struct ps2_iop_intc* iop_intc;
@@ -377,18 +363,38 @@ struct ps2_gs {
 struct ps2_gs* ps2_gs_create(void);
 void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_intc* iop_intc, struct ps2_ee_timers* ee_timers, struct ps2_iop_timers* iop_timers, struct sched_state* sched);
 void ps2_gs_reset(struct ps2_gs* gs);
-void ps2_gs_init_renderer(struct ps2_gs* gs, struct gs_renderer renderer);
 void ps2_gs_destroy(struct ps2_gs* gs);
 uint64_t ps2_gs_read64(struct ps2_gs* gs, uint32_t addr);
 void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data);
-void ps2_gs_write_internal(struct ps2_gs* gs, int reg, uint64_t data);
-uint64_t ps2_gs_read_internal(struct ps2_gs* gs, int reg);
-void ps2_gs_init_callback(struct ps2_gs* gs, int event, void (*func)(void*), void* udata);
-struct gs_callback* ps2_gs_get_callback(struct ps2_gs* gs, int event);
-void ps2_gs_remove_callback(struct ps2_gs* gs, int event);
 int ps2_gs_is_vblank(struct ps2_gs* gs);
 
-void gs_write_vertex(struct ps2_gs* gs, uint64_t data, int discard);
+struct gs_privileged_state {
+    uint64_t pmode;
+    uint64_t smode1;
+    uint64_t smode2;
+    uint64_t srfsh;
+    uint64_t synch1;
+    uint64_t synch2;
+    uint64_t syncv;
+    uint64_t dispfb1;
+    uint64_t display1;
+    uint64_t dispfb2;
+    uint64_t display2;
+    uint64_t extbuf;
+    uint64_t extdata;
+    uint64_t extwrite;
+    uint64_t bgcolor;
+    uint64_t csr;
+    uint64_t imr;
+    uint64_t busdir;
+    uint64_t siglblid;
+};
+
+void gs_get_privileged_state(struct ps2_gs* gs, struct gs_privileged_state* state);
+
+int ps2_gs_write_signal(struct ps2_gs* gs, uint64_t data);
+int ps2_gs_write_finish(struct ps2_gs* gs, uint64_t data);
+int ps2_gs_write_label(struct ps2_gs* gs, uint64_t data);
 
 #ifdef __cplusplus
 }

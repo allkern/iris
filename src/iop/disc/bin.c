@@ -3,17 +3,6 @@
 #include "../disc.h"
 #include "bin.h"
 
-#ifdef _MSC_VER
-#define fseek64 _fseeki64
-#define ftell64 _ftelli64
-#elif defined(_WIN32)
-#define fseek64 fseeko64
-#define ftell64 ftello64
-#else
-#define fseek64 fseek
-#define ftell64 ftell
-#endif
-
 struct disc_bin* bin_create(void) {
     return malloc(sizeof(struct disc_bin));
 }
@@ -24,10 +13,10 @@ int bin_init(struct disc_bin* bin, const char* path) {
     if (!bin->file) {
         free(bin);
 
-        return 1;
+        return 0;
     }
 
-    return 0;
+    return 1;
 }
 
 void bin_destroy(struct disc_bin* bin) {
@@ -60,12 +49,20 @@ uint64_t bin_get_size(void* udata) {
     return ftell64(bin->file);
 }
 
-uint64_t bin_get_volume_lba(void* udata) {
+int bin_get_sector_size(void* udata) {
+    return 2352;
+}
+
+int bin_get_track_count(void* udata) {
+    return 1;
+}
+
+int bin_get_track_info(void* udata, int track, struct track_info* info) {
     return 0;
 }
 
-int bin_get_sector_size(void* udata) {
-    return 2352;
+int bin_get_track_number(void* udata, uint64_t lba) {
+    return 1;
 }
 
 #undef fseek64

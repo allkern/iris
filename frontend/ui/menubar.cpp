@@ -3,7 +3,7 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
-#include "pfd/pfd.h"
+#include "portable-file-dialogs.h"
 
 #include "ps2_elf.h"
 #include "ps2_iso9660.h"
@@ -23,7 +23,7 @@ const char* aspect_mode_names[] = {
 const char* renderer_names[] = {
     "Null",
     "Software",
-    "Software (Threaded)"
+    "Hardware (Vulkan)"
 };
 
 const char* fullscreen_names[] = {
@@ -45,36 +45,49 @@ void show_main_menubar(iris::instance* iris) {
     if (BeginMainMenuBar()) {
         ImVec2 size = GetWindowSize();
 
-        iris->menubar_height = size.y;
-
         if (BeginMenu("Iris")) {
             if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Open...")) {
-                int prev_mute = iris->mute;
-
-                iris->mute = true;
+                audio::mute(iris);
 
                 auto f = pfd::open_file("Select a file to load", "", {
-                    "All File Types (*.iso; *.bin; *.cue; *.elf)", "*.iso *.bin *.cue *.elf",
-                    "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
+                    "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.elf)", "*.iso *.bin *.cue *.chd *.cso *.zso *.elf",
+                    "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
+                    "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
+                    "DVD Images (*.iso; *.chd; *.cso; *.zso)", "*.iso *.chd *.cso *.zso",
+                    "ISO Files (*.iso)", "*.iso",
+                    "CUE Files (*.cue)", "*.cue",
+                    "BIN Files (*.bin)", "*.bin",
+                    "CHD Files (*.chd)", "*.chd",
+                    "CSO/ZSO Files (*.cso; *.zso)", "*.cso *.zso",
                     "ELF Executables (*.elf)", "*.elf",
                     "All Files (*.*)", "*"
                 });
 
                 while (!f.ready());
 
-                iris->mute = prev_mute;
+                audio::unmute(iris);
 
                 if (f.result().size()) {
-                    open_file(iris, f.result().at(0));
-                    add_recent(iris, f.result().at(0));
+                    std::string path = f.result().at(0);
+
+                    if (path.size()) {
+                        if (open_file(iris, path)) {
+                            push_info(iris, "Failed to open file: " + path);
+                        } else {
+                            add_recent(iris, path);
+                        }
+                    }
                 }
             }
 
             if (BeginMenu(ICON_MS_HISTORY " Open Recent", iris->recents.size())) {
                 for (const std::string& s : iris->recents) {
                     if (MenuItem(s.c_str())) {
-                        open_file(iris, s);
-                        add_recent(iris, s);
+                        if (open_file(iris, s)) {
+                            push_info(iris, "Failed to open file: " + s);
+                        } else {
+                            add_recent(iris, s);
+                        }
                     }
                 }
 
@@ -186,18 +199,23 @@ void show_main_menubar(iris::instance* iris) {
             }
 
             if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
-                bool mute = iris->mute;
-
-                iris->mute = true;
+                audio::mute(iris);
 
                 auto f = pfd::open_file("Select CD/DVD image", "", {
-                    "Disc Images (*.iso; *.bin; *.cue)", "*.iso *.bin *.cue",
+                    "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
+                    "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
+                    "DVD Images (*.iso; *.chd; *.cso; *.zso)", "*.iso *.chd *.cso *.zso",
+                    "ISO Files (*.iso)", "*.iso",
+                    "CUE Files (*.cue)", "*.cue",
+                    "BIN Files (*.bin)", "*.bin",
+                    "CHD Files (*.chd)", "*.chd",
+                    "CSO/ZSO Files (*.cso; *.zso)", "*.cso *.zso",
                     "All Files (*.*)", "*"
                 });
 
                 while (!f.ready());
 
-                iris->mute = mute;
+                audio::unmute(iris);
 
                 if (f.result().size()) {
                     // 2-second delay to allow the disc to spin up
@@ -219,16 +237,13 @@ void show_main_menubar(iris::instance* iris) {
             if (BeginMenu(ICON_MS_MONITOR " Display")) {
                 if (BeginMenu(ICON_MS_BRUSH " Renderer")) {
                     for (int i = 0; i < 3; i++) {
-                        if (Selectable(renderer_names[i], i == iris->renderer_backend)) {
-                            iris->renderer_backend = i;
+                        BeginDisabled(i == RENDERER_BACKEND_SOFTWARE);
 
-                            renderer_init_backend(iris->ctx, iris->ps2->gs, iris->window, iris->device, i);
-                            renderer_set_scale(iris->ctx, iris->scale);
-                            renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
-                            renderer_set_bilinear(iris->ctx, iris->bilinear);
-                            renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
-                            renderer_set_size(iris->ctx, 0, 0);
+                        if (MenuItem(renderer_names[i], nullptr, i == iris->renderer_backend)) {
+                            render::switch_backend(iris, i);
                         }
+
+                        EndDisabled();
                     }
 
                     ImGui::EndMenu();
@@ -238,10 +253,10 @@ void show_main_menubar(iris::instance* iris) {
                     for (int i = 2; i <= 6; i++) {
                         char buf[16]; snprintf(buf, 16, "%.1fx", (float)i * 0.5f);
 
-                        if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
+                        if (MenuItem(buf, nullptr, ((float)i * 0.5f) == iris->scale)) {
                             iris->scale = (float)i * 0.5f;
 
-                            renderer_set_scale(iris->ctx, iris->scale);
+                            // renderer_set_scale(iris->ctx, iris->scale);
                         }
                     }
 
@@ -250,10 +265,10 @@ void show_main_menubar(iris::instance* iris) {
 
                 if (BeginMenu(ICON_MS_ASPECT_RATIO " Aspect mode")) {
                     for (int i = 0; i < 7; i++) {
-                        if (Selectable(aspect_mode_names[i], iris->aspect_mode == i)) {
+                        if (MenuItem(aspect_mode_names[i], nullptr, iris->aspect_mode == i)) {
                             iris->aspect_mode = i;
 
-                            renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
+                            // renderer_set_aspect_mode(iris->ctx, iris->aspect_mode);
                         }
                     }
 
@@ -261,16 +276,18 @@ void show_main_menubar(iris::instance* iris) {
                 }
 
                 if (BeginMenu(ICON_MS_FILTER " Scaling filter")) {
-                    if (Selectable("Nearest", !iris->bilinear)) {
-                        iris->bilinear = false;
+                    const char* filter_names[] = {
+                        "Nearest",
+                        "Bilinear",
+                        "Cubic"
+                    };
 
-                        renderer_set_bilinear(iris->ctx, false);
-                    }
-
-                    if (Selectable("Bilinear", iris->bilinear)) {
-                        iris->bilinear = true;
-
-                        renderer_set_bilinear(iris->ctx, true);
+                    for (int i = 0; i < 3; i++) {
+                        BeginDisabled(i == 2 && !iris->cubic_supported);
+                        if (MenuItem(filter_names[i], nullptr, iris->filter == i)) {
+                            iris->filter = i;
+                        }
+                        EndDisabled();
                     }
 
                     ImGui::EndMenu();
@@ -301,7 +318,7 @@ void show_main_menubar(iris::instance* iris) {
                             iris->window_width = widths[i];
                             iris->window_height = heights[i];
 
-                            SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height);
+                            SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
                         }
                     }
 
@@ -309,11 +326,15 @@ void show_main_menubar(iris::instance* iris) {
                 }
 
                 if (MenuItem(ICON_MS_SPEED_2X " Integer scaling", nullptr, &iris->integer_scaling)) {
-                    renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
+                    // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
 
                 if (MenuItem(ICON_MS_FULLSCREEN " Fullscreen", "F11", &iris->fullscreen)) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
+                }
+
+                if (MenuItem(ICON_MS_IMAGE " Enable shaders", nullptr, &iris->enable_shaders)) {
+                    // renderer_set_shaders_enabled(iris->ctx, iris->enable_shaders);
                 }
 
                 ImGui::EndMenu();
@@ -338,11 +359,14 @@ void show_main_menubar(iris::instance* iris) {
                 PopStyleVar();
  
                 MenuItem(ICON_MS_VOLUME_OFF " Mute", nullptr, &iris->mute);
+                MenuItem(ICON_MS_MUSIC_OFF " Mute ADMA", nullptr, &iris->mute_adma);
 
                 ImGui::EndMenu();
             }
 
-            MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar);
+            if (MenuItem(ICON_MS_DOCK_TO_BOTTOM " Show status bar", nullptr, &iris->show_status_bar)) {
+                SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
+            }
 
             if (MenuItem(ICON_MS_OPEN_IN_NEW " Open data folder")) {
                 SDL_OpenURL(iris->pref_path.c_str());
@@ -358,25 +382,31 @@ void show_main_menubar(iris::instance* iris) {
         }
         if (BeginMenu("Tools")) {
             if (MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->show_imgui_demo));
+            if (MenuItem(ICON_MS_SEARCH " Memory search", NULL, &iris->show_memory_search));
             if (MenuItem(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
-                bool mute = iris->mute;
+                audio::mute(iris);
 
-                iris->mute = true;
-
-                std::string filename = get_default_screenshot_filename(iris);
+                std::string filename = input::get_default_screenshot_filename(iris);
 
                 auto f = pfd::save_file("Save screenshot", filename, {
                     "PNG (*.png)", "*.png",
+                    "JPG (*.jpg)", "*.jpg",
+                    "BMP (*.bmp)", "*.bmp",
+                    "TGA (*.tga)", "*.tga",
                     "All Files (*.*)", "*"
                 });
 
                 while (!f.ready());
 
-                iris->mute = mute;
+                audio::unmute(iris);
 
                 if (f.result().size()) {
-                    save_screenshot(iris, f.result());
+                    input::save_screenshot(iris, f.result());
                 }
+            }
+
+            if (MenuItem(ICON_MS_SD_CARD " Memory Card tool")) {
+                iris->show_memory_card_tool = true;
             }
 
             ImGui::EndMenu();
@@ -418,6 +448,7 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->show_vu_disassembler));
             if (MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->show_pad_debugger));
             if (MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->show_overlay));
+            if (MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->show_sysmem_logs));
 
             Separator();
 
@@ -425,7 +456,7 @@ void show_main_menubar(iris::instance* iris) {
                 for (int i = 0; i < 9; i++) {
                     char buf[16]; snprintf(buf, 16, "%dx", 1 << i);
 
-                    if (Selectable(buf, iris->timescale == (1 << i))) {
+                    if (MenuItem(buf, nullptr, iris->timescale == (1 << i))) {
                         iris->timescale = (1 << i);
 
                         ps2_set_timescale(iris->ps2, iris->timescale);
@@ -455,11 +486,13 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_gs_debugger = false;
                 iris->show_spu2_debugger = false;
                 iris->show_memory_viewer = false;
+                iris->show_memory_search = false;
                 iris->show_vu_disassembler = false;
-                iris->show_pad_debugger = false;
-                iris->show_symbols = false;
-                iris->show_threads = false;
+                iris->show_status_bar = false;
                 iris->show_breakpoints = false;
+                iris->show_threads = false;
+                iris->show_sysmem_logs = false;
+                iris->show_imgui_demo = false;
                 iris->show_overlay = false;
             }
             
@@ -468,6 +501,10 @@ void show_main_menubar(iris::instance* iris) {
         if (BeginMenu("Help")) {
             if (MenuItem(ICON_MS_INFO " About")) {
                 iris->show_about_window = true;
+            }
+
+            if (MenuItem(ICON_MS_EXCLAMATION " Report an issue")) {
+                SDL_OpenURL("https://github.com/allkern/iris/issues/new");
             }
 
             ImGui::EndMenu();

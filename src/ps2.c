@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "ps2.h"
+#include "rom.h"
 
 struct ps2_state* ps2_create(void) {
     return malloc(sizeof(struct ps2_state));
@@ -45,6 +46,8 @@ void ps2_init(struct ps2_state* ps2) {
     ps2->usb = ps2_usb_create();
     ps2->fw = ps2_fw_create();
     ps2->sbus = ps2_sbus_create();
+    ps2->dev9 = ps2_dev9_create();
+    ps2->speed = ps2_speed_create();
 
     // Initialize EE
     ee_bus_init(ps2->ee_bus, NULL);
@@ -62,7 +65,7 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_data.write128 = ee_bus_write128;
     ee_bus_data.udata = ps2->ee_bus;
 
-    ee_init(ps2->ee, ps2->vu0, ps2->vu1, ee_bus_data);
+    ee_init(ps2->ee, ps2->vu0, ps2->vu1, RAM_SIZE_32MB, ee_bus_data);
     vu_init(ps2->vu0, 0, ps2->gif, ps2->vif0, ps2->vu1);
     vu_init(ps2->vu1, 1, ps2->gif, ps2->vif1, ps2->vu1);
 
@@ -101,6 +104,8 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_usb_init(ps2->usb);
     ps2_fw_init(ps2->fw, ps2->iop_intc);
     ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
+    ps2_dev9_init(ps2->dev9, DEV9_TYPE_EXPBAY);
+    ps2_speed_init(ps2->speed, ps2->iop_intc);
     ps2_bios_init(ps2->bios);
     ps2_bios_init(ps2->rom1);
     ps2_bios_init(ps2->rom2);
@@ -122,6 +127,8 @@ void ps2_init(struct ps2_state* ps2) {
     iop_bus_init_usb(ps2->iop_bus, ps2->usb);
     iop_bus_init_fw(ps2->iop_bus, ps2->fw);
     iop_bus_init_sbus(ps2->iop_bus, ps2->sbus);
+    iop_bus_init_dev9(ps2->iop_bus, ps2->dev9);
+    iop_bus_init_speed(ps2->iop_bus, ps2->speed);
     ee_bus_init_bios(ps2->ee_bus, ps2->bios);
     ee_bus_init_rom1(ps2->ee_bus, ps2->rom1);
     ee_bus_init_rom2(ps2->ee_bus, ps2->rom2);
@@ -140,17 +147,28 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_cdvd(ps2->ee_bus, ps2->cdvd);
     ee_bus_init_usb(ps2->ee_bus, ps2->usb);
     ee_bus_init_sbus(ps2->ee_bus, ps2->sbus);
+    ee_bus_init_dev9(ps2->ee_bus, ps2->dev9);
+    ee_bus_init_speed(ps2->ee_bus, ps2->speed);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
 
     ps2_ipu_reset(ps2->ipu);
 
-    ps2->ee_cycles = 7;
+    ps2->ee_cycles = 0;
     ps2->timescale = 1;
 }
 
-void ps2_init_kputchar(struct ps2_state* ps2, void (*ee_kputchar)(void*, char), void* ee_udata, void (*iop_kputchar)(void*, char), void* iop_udata) {
-    ee_bus_init_kputchar(ps2->ee_bus, ee_kputchar, ee_udata);
-    iop_init_kputchar(ps2->iop, iop_kputchar, iop_udata);
+void ps2_init_tty_handler(struct ps2_state* ps2, int tty, void (*handler)(void*, char), void* udata) {
+    switch (tty) {
+        case PS2_TTY_EE:  
+            ee_bus_init_kputchar(ps2->ee_bus, handler, udata);
+            break;
+        case PS2_TTY_IOP:
+            iop_init_kputchar(ps2->iop, handler, udata);
+            break;
+        case PS2_TTY_SYSMEM:
+            iop_init_sm_putchar(ps2->iop, handler, udata);
+            break;
+    }
 }
 
 void ps2_boot_file(struct ps2_state* ps2, const char* path) {
@@ -173,19 +191,41 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
     }
 }
 
-void ps2_load_bios(struct ps2_state* ps2, const char* path) {
-    ps2_bios_load(ps2->bios, path);
+int ps2_load_bios(struct ps2_state* ps2, const char* path) {
+    if (ps2_bios_load(ps2->bios, path)) {
+        return 0;
+    }
 
-    ee_bus_init_fastmem(ps2->ee_bus);
-    iop_bus_init_fastmem(ps2->iop_bus);
+    ee_bus_init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
+    iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
+
+    if (ps2->system == PS2_SYSTEM_AUTO) {
+        ps2->rom0_info = ps2_rom0_search(ps2->bios->buf, ps2->bios->size + 1);
+
+        ps2_set_system(ps2, ps2->rom0_info.system);
+
+        ps2->detected_system = ps2->rom0_info.system;
+    }
+
+    return 1;
 }
 
-void ps2_load_rom1(struct ps2_state* ps2, const char* path) {
-    ps2_bios_load(ps2->rom1, path);
+int ps2_load_rom1(struct ps2_state* ps2, const char* path) {
+    if (ps2_bios_load(ps2->rom1, path)) {
+        return 0;
+    }
+
+    ps2->rom1_info = ps2_rom1_search(ps2->rom1->buf, ps2->rom1->size + 1);
+
+    return 1;
 }
 
-void ps2_load_rom2(struct ps2_state* ps2, const char* path) {
-    ps2_bios_load(ps2->rom2, path);
+int ps2_load_rom2(struct ps2_state* ps2, const char* path) {
+    if (!ps2_bios_load(ps2->rom2, path)) {
+        return 0;
+    }
+
+    return 1;
 }
 
 void ps2_reset(struct ps2_state* ps2) {
@@ -197,7 +237,6 @@ void ps2_reset(struct ps2_state* ps2) {
     vu_init(ps2->vu1, 1, ps2->gif, ps2->vif1, ps2->vu1);
 
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->ee, ps2->sched, ps2->ee_bus);
-    ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
     ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
@@ -211,11 +250,14 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_cdvd_reset(ps2->cdvd);
 
+    ps2_gif_reset(ps2->gif);
     ps2_gs_reset(ps2->gs);
     ps2_ram_reset(ps2->ee_ram);
     ps2_ram_reset(ps2->iop_ram);
 
     ps2_ipu_reset(ps2->ipu);
+
+    ps2->ee_cycles = 0;
 }
 
 // To-do: This will soon be useless, need to integrate
@@ -245,10 +287,6 @@ void ps2_reset(struct ps2_state* ps2) {
 void ps2_cycle(struct ps2_state* ps2) {
     int cycles = ee_run_block(ps2->ee, 128);
 
-    while (!cycles) {
-        cycles = ee_run_block(ps2->ee, 128);
-    }
-
     ps2->ee_cycles += cycles;
 
     sched_tick(ps2->sched, ps2->timescale * cycles);
@@ -265,6 +303,36 @@ void ps2_cycle(struct ps2_state* ps2) {
 
         ps2->ee_cycles -= 8;
     }
+}
+
+void ps2_step_ee(struct ps2_state* ps2) {
+    ee_step(ps2->ee);
+    sched_tick(ps2->sched, 1);
+    ps2_ee_timers_tick(ps2->ee_timers);
+
+    ps2_ipu_run(ps2->ipu);
+
+    ps2->ee_cycles++; 
+
+    if (ps2->ee_cycles == 8) {
+        iop_cycle(ps2->iop);
+        ps2_iop_timers_tick(ps2->iop_timers);
+
+        ps2->ee_cycles = 0;
+    }
+}
+
+void ps2_step_iop(struct ps2_state* ps2) {
+    for (int i = 0; i < 8; i++) {
+        ps2_ee_timers_tick(ps2->ee_timers);
+        ee_step(ps2->ee);
+    }
+
+    sched_tick(ps2->sched, 8);
+    iop_cycle(ps2->iop);
+    ps2_iop_timers_tick(ps2->iop_timers);
+
+    ps2_ipu_run(ps2->ipu);
 }
 
 void ps2_iop_cycle(struct ps2_state* ps2) {
@@ -318,10 +386,139 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_usb_destroy(ps2->usb);
     ps2_fw_destroy(ps2->fw);
     ps2_sbus_destroy(ps2->sbus);
+    ps2_dev9_destroy(ps2->dev9);
+    ps2_speed_destroy(ps2->speed);
     ps2_bios_destroy(ps2->bios);
     ps2_bios_destroy(ps2->rom1);
     ps2_bios_destroy(ps2->rom2);
     ps2_sif_destroy(ps2->sif);
 
     free(ps2);
+}
+
+void ps2_set_system(struct ps2_state* ps2, int system) {
+    int ee_ram_size, iop_ram_size, mechacon_model;
+
+    switch (system) {
+        case PS2_SYSTEM_AUTO: {
+            ps2->rom0_info = ps2_rom0_search(ps2->bios->buf, ps2->bios->size + 1);
+
+            ps2_set_system(ps2, ps2->rom0_info.system);
+
+            ps2->detected_system = ps2->rom0_info.system;
+
+            return;
+        } break;
+        case PS2_SYSTEM_RETAIL: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_SPC970;
+        } break;
+
+        case PS2_SYSTEM_RETAIL_DECKARD: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_DESR: {
+            ee_ram_size = RAM_SIZE_64MB;
+            iop_ram_size = RAM_SIZE_8MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_TEST:
+        case PS2_SYSTEM_TOOL: {
+            ee_ram_size = RAM_SIZE_128MB;
+            iop_ram_size = RAM_SIZE_8MB;
+
+            // To-do: Separate mechacon model for TOOL/TEST
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_KONAMI_PYTHON: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_SPC970;
+        } break;
+
+        case PS2_SYSTEM_KONAMI_PYTHON2: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S147: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+
+            // This board actually has no MechaCon
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S148: {
+            ee_ram_size = RAM_SIZE_64MB;
+            iop_ram_size = RAM_SIZE_2MB;
+
+            // This board actually has no MechaCon
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S246: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        case PS2_SYSTEM_NAMCO_S256: {
+            ee_ram_size = RAM_SIZE_64MB;
+            iop_ram_size = RAM_SIZE_4MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+
+        default: {
+            ee_ram_size = RAM_SIZE_32MB;
+            iop_ram_size = RAM_SIZE_2MB;
+            mechacon_model = CDVD_MECHACON_DRAGON;
+        } break;
+    }
+
+    ps2->detected_system = system;
+
+    ps2_ram_destroy(ps2->ee_ram);
+    ps2_ram_destroy(ps2->iop_ram);
+
+    ps2->ee_ram = ps2_ram_create();
+    ps2->iop_ram = ps2_ram_create();
+
+    ps2_ram_init(ps2->ee_ram, ee_ram_size);
+    ps2_ram_init(ps2->iop_ram, iop_ram_size);
+
+    ps2_cdvd_set_mechacon_model(ps2->cdvd, mechacon_model);
+
+    struct ee_bus_s ee_bus_data;
+    ee_bus_data.read8 = ee_bus_read8;
+    ee_bus_data.read16 = ee_bus_read16;
+    ee_bus_data.read32 = ee_bus_read32;
+    ee_bus_data.read64 = ee_bus_read64;
+    ee_bus_data.read128 = ee_bus_read128;
+    ee_bus_data.write8 = ee_bus_write8;
+    ee_bus_data.write16 = ee_bus_write16;
+    ee_bus_data.write32 = ee_bus_write32;
+    ee_bus_data.write64 = ee_bus_write64;
+    ee_bus_data.write128 = ee_bus_write128;
+    ee_bus_data.udata = ps2->ee_bus;
+
+    ee_set_ram_size(ps2->ee, ee_ram_size);
+
+    ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
+    ee_bus_init_iop_ram(ps2->ee_bus, ps2->iop_ram);
+    iop_bus_init_iop_ram(ps2->iop_bus, ps2->iop_ram);
+
+    ee_bus_init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
+    iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
+}
+
+void ps2_set_mac_address(struct ps2_state* ps2, const uint8_t* mac) {
+    ps2_speed_set_mac_address(ps2->speed, mac);
 }
