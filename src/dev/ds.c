@@ -276,9 +276,9 @@ void ds_handle_command(struct ps2_sio2* sio2, void* udata, int cmd) {
         case 0x4F: ds_cmd_set_native_mode(sio2, ds); return;
     }
 
-    printf("ds: Unhandled command %02x\n", cmd);
+    fprintf(stderr, "ds: Unhandled command %02x\n", cmd);
 
-    exit(1);
+    // exit(1);
 }
 
 struct ds_state* ds_attach(struct ps2_sio2* sio2, int port) {
