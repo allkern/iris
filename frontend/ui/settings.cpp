@@ -265,7 +265,7 @@ void show_hardware_renderer_settings(iris::instance* iris) {
     Text("SSAA");
 
     if (BeginCombo("##ssaa", ssaa_names[iris->hardware_backend_config.super_sampling])) {
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < IM_ARRAYSIZE(ssaa_names); i++) {
             if (Selectable(ssaa_names[i], iris->hardware_backend_config.super_sampling == i)) {
                 iris->hardware_backend_config.super_sampling = i;
 
@@ -650,10 +650,11 @@ void show_mappings_editor(iris::instance* iris) {
         EndCombo();
     }
 
-    if (BeginTable("##mappingeditor", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
+    SetNextItemWidth(GetContentRegionAvail().x);
+
+    if (BeginTable("##mappingeditor", 2, ImGuiTableFlags_SizingStretchProp)) {
         TableSetupColumn("Input");
         TableSetupColumn("Mapping");
-        TableHeadersRow();
 
         std::vector<std::pair<uint64_t, input_action>> elems(
             iris->input_maps[selected_mapping].map.forward_map().begin(),
@@ -669,6 +670,7 @@ void show_mappings_editor(iris::instance* iris) {
             std::string key_name = get_input_name(static_cast<input_action>(entry.second));
 
             TableSetColumnIndex(0);
+            AlignTextToFramePadding();
             Text("%s", key_name.c_str());
 
             TableSetColumnIndex(1);
@@ -679,7 +681,13 @@ void show_mappings_editor(iris::instance* iris) {
             std::string value_name = get_event_name(event) + "##" + key_name;
 
             if (waiting_for_input && (mapping_editing == entry.first)) {
-                TextDisabled("Press a key or button...");
+                PushStyleColor(ImGuiCol_Text, GetStyleColorVec4(ImGuiCol_TextDisabled));
+
+                if (Button("Press a key or button...", ImVec2(GetContentRegionAvail().x, 0))) {
+                    waiting_for_input = false;
+                }
+
+                PopStyleColor();
 
                 if (iris->last_input_event_read == false && iris->last_input_event_value > 0.5f) {
                     iris->last_input_event_read = true;
@@ -720,14 +728,18 @@ void show_mappings_editor(iris::instance* iris) {
                     }
                 }
             } else {
-                Selectable(value_name.c_str(), false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick);
+                if (Button(value_name.c_str(), ImVec2(GetContentRegionAvail().x, 0))) {
+                    iris->last_input_event_read = true;
+                    waiting_for_input = true;
+                    mapping_editing = entry.first;
+                }
             }
 
-            if (IsMouseDoubleClicked(ImGuiMouseButton_Left) && IsItemHovered()) {
-                iris->last_input_event_read = true;
-                waiting_for_input = true;
-                mapping_editing = entry.first;
-            }
+            // if (IsMouseDoubleClicked(ImGuiMouseButton_Left) && IsItemHovered()) {
+            //     iris->last_input_event_read = true;
+            //     waiting_for_input = true;
+            //     mapping_editing = entry.first;
+            // }
         }
 
         EndTable();
@@ -1451,8 +1463,8 @@ void show_settings(iris::instance* iris) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking;
 
-    SetNextWindowSize(ImVec2(675, 560), ImGuiCond_FirstUseEver);
-    PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(675, 560));
+    SetNextWindowSize(ImVec2(675, 500), ImGuiCond_FirstUseEver);
+    PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(675, 500));
 
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
         flags |= ImGuiWindowFlags_NoTitleBar;
@@ -1461,7 +1473,7 @@ void show_settings(iris::instance* iris) {
         PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
         PushStyleVarY(ImGuiStyleVar_ItemSpacing, 6.0);
 
-        if (BeginChild("##sidebar", ImVec2(175, GetContentRegionAvail().y - 100.0), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
+        if (BeginChild("##sidebar", ImVec2(175, GetContentRegionAvail().y), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
             for (int i = 0; settings_buttons[i]; i++) {
                 if (selected_settings == i) PushStyleColor(ImGuiCol_Button, GetStyle().Colors[ImGuiCol_ButtonHovered]);
 
@@ -1477,7 +1489,7 @@ void show_settings(iris::instance* iris) {
 
         PopStyleVar(2);
 
-        if (BeginChild("##content", ImVec2(0, GetContentRegionAvail().y - 100.0), ImGuiChildFlags_AutoResizeY)) {
+        if (BeginChild("##content", ImVec2(0, GetContentRegionAvail().y), ImGuiChildFlags_AutoResizeY)) {
             switch (selected_settings) {
                 case 0: show_system_settings(iris); break;
                 case 1: show_paths_settings(iris); break;
@@ -1489,13 +1501,13 @@ void show_settings(iris::instance* iris) {
             }
         } EndChild();
 
-        Separator();
+        // Separator();
 
-        if (hovered) {
-            TextWrapped(tooltip.c_str());
-        } else {
-            Text("Hover over an item to get more information");
-        }
+        // if (hovered) {
+        //     TextWrapped(tooltip.c_str());
+        // } else {
+        //     Text("Hover over an item to get more information");
+        // }
     } End();
 
     PopStyleVar();
