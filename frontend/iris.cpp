@@ -435,6 +435,11 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 
     ImGui::EndFrame();
 
+    if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+        ImGui::UpdatePlatformWindows();
+        ImGui::RenderPlatformWindowsDefault();
+    }
+
     SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
     SDL_ShowWindow(iris->window);
 
