@@ -1,3 +1,5 @@
+struct ps2_dmac;
+
 #ifndef DMAC_H
 #define DMAC_H
 

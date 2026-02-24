@@ -1,3 +1,5 @@
+struct ps2_intc;
+
 #ifndef INTC_H
 #define INTC_H
 

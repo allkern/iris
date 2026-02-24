@@ -1,3 +1,5 @@
+struct vu_state;
+
 #ifndef VU_H
 #define VU_H
 
