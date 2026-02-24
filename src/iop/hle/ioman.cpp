@@ -15,6 +15,24 @@ struct ioman_hle_state {
     FILE* files[IOMAN_MAX_OPEN_FILES] = { nullptr };
 } state;
 
+struct iomanx_stat {
+    unsigned int mode;
+    unsigned int attr;
+    unsigned int size;
+    unsigned char ctime[8];
+    unsigned char atime[8];
+    unsigned char mtime[8];
+    unsigned int hisize;
+    /** Number of subs (main) / subpart number (sub) */
+    unsigned int private_0;
+    unsigned int private_1;
+    unsigned int private_2;
+    unsigned int private_3;
+    unsigned int private_4;
+    /** Sector start.  */
+    unsigned int private_5;
+};
+
 static inline int ioman_allocate_file(FILE* file) {
     for (int i = 0; i < IOMAN_MAX_OPEN_FILES; i++) {
         if (!state.files[i]) {
@@ -60,7 +78,7 @@ static inline int ioman_get_device(std::string path) {
     return IOMAN_DEV_UNKNOWN;
 }
 
-extern "C" int ioman_open(struct iop_state* iop) {
+extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
     char buf[256];
 
     for (int i = 0; i < 256; i++) {
@@ -76,11 +94,11 @@ extern "C" int ioman_open(struct iop_state* iop) {
 
     int device = ioman_get_device(path);
 
+    // printf("path=%s\n", path.c_str());
+
     // Only hook host files
     if (device != IOMAN_DEV_HOST && device != IOMAN_DEV_MASS)
         return 0;
-
-    // printf("path=%s\n", path.c_str());
 
     auto p = path.find_first_of(':');
 
@@ -115,7 +133,7 @@ extern "C" int ioman_open(struct iop_state* iop) {
 
     return 1;
 }
-extern "C" int ioman_close(struct iop_state* iop) {
+extern "C" int ioman_close(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
     if (!(fd >= 0x100 && fd < 0x140))
@@ -132,7 +150,7 @@ extern "C" int ioman_close(struct iop_state* iop) {
 
     return 1;
 }
-extern "C" int ioman_read(struct iop_state* iop) {
+extern "C" int ioman_read(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
     if (!(fd >= 0x100 && fd < 0x140))
@@ -160,7 +178,7 @@ extern "C" int ioman_read(struct iop_state* iop) {
 
     return 1;
 }
-extern "C" int ioman_write(struct iop_state* iop) {
+extern "C" int ioman_write(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
     // We only use this to HLE IOMAN stdout writes
@@ -185,7 +203,7 @@ extern "C" int ioman_write(struct iop_state* iop) {
 
     return 1;
 }
-extern "C" int ioman_lseek(struct iop_state* iop) {
+extern "C" int ioman_lseek(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
     if (!(fd >= 0x100 && fd < 0x140))
@@ -211,26 +229,43 @@ extern "C" int ioman_lseek(struct iop_state* iop) {
 
     return 1;
 }
-extern "C" int ioman_ioctl(struct iop_state* iop) { return 0; }
-extern "C" int ioman_remove(struct iop_state* iop) { return 0; }
-extern "C" int ioman_mkdir(struct iop_state* iop) { return 0; }
-extern "C" int ioman_rmdir(struct iop_state* iop) { return 0; }
-extern "C" int ioman_dopen(struct iop_state* iop) { return 0; }
-extern "C" int ioman_dclose(struct iop_state* iop) { return 0; }
-extern "C" int ioman_dread(struct iop_state* iop) { return 0; }
-extern "C" int ioman_getstat(struct iop_state* iop) { return 0; }
-extern "C" int ioman_chstat(struct iop_state* iop) { return 0; }
-extern "C" int ioman_format(struct iop_state* iop) { return 0; }
-extern "C" int ioman_adddrv(struct iop_state* iop) { return 0; }
-extern "C" int ioman_deldrv(struct iop_state* iop) { return 0; }
-extern "C" int ioman_stdioinit(struct iop_state* iop) { return 0; }
-extern "C" int ioman_rename(struct iop_state* iop) { return 0; }
-extern "C" int ioman_chdir(struct iop_state* iop) { return 0; }
-extern "C" int ioman_sync(struct iop_state* iop) { return 0; }
-extern "C" int ioman_mount(struct iop_state* iop) { return 0; }
-extern "C" int ioman_umount(struct iop_state* iop) { return 0; }
-extern "C" int ioman_lseek64(struct iop_state* iop) { return 0; }
-extern "C" int ioman_devctl(struct iop_state* iop) { return 0; }
-extern "C" int ioman_symlink(struct iop_state* iop) { return 0; }
-extern "C" int ioman_readlink(struct iop_state* iop) { return 0; }
-extern "C" int ioman_ioctl2(struct iop_state* iop) { return 0; }
+extern "C" int ioman_ioctl(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_remove(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_mkdir(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_rmdir(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_dopen(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_dclose(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_dread(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_getstat(struct iop_state* iop, int iomanx) {
+    char buf[256];
+
+    for (int i = 0; i < 256; i++) {
+        uint8_t d = iop_read8(iop, iop->r[4] + i);
+
+        buf[i] = d;
+
+        if (!d)
+            break;
+    }
+
+    fprintf(stderr, "%s: getstat(%s)\n", iomanx ? "iomanx" : "ioman", buf);
+
+    iop_return(iop, 0);
+
+    return 1;
+}
+extern "C" int ioman_chstat(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_format(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_adddrv(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_deldrv(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_stdioinit(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_rename(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_chdir(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_sync(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_mount(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_umount(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_lseek64(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_devctl(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_symlink(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_readlink(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_ioctl2(struct iop_state* iop, int iomanx) { return 0; }

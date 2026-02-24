@@ -15,8 +15,9 @@ extern "C" {
 
 #define MODULE_UNKNOWN  0
 #define MODULE_IOMAN    1
-#define MODULE_LOADCORE 2
-#define MODULE_SYSMEM   3
+#define MODULE_IOMANX   2
+#define MODULE_LOADCORE 3
+#define MODULE_SYSMEM   4
 
 #define IOMAN_OPEN      4
 #define IOMAN_CLOSE     5
