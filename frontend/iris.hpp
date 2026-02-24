@@ -440,6 +440,7 @@ struct instance {
     std::string snap_path = "";
     std::string flash_path = "";
     std::string ini_path = "";
+    std::string gcdb_path = "";
 
     uint8_t mac_address[6] = { 0 };
 
@@ -735,6 +736,9 @@ namespace render {
 }
 
 namespace input {
+    bool init(iris::instance* iris);
+    void load_db_default(iris::instance* iris);
+    bool load_db_from_file(iris::instance* iris, const char* path);
     input_action* get_input_action(iris::instance* iris, int slot, uint64_t input);
     input_event sdl_event_to_input_event(SDL_Event* event);
     std::string get_default_screenshot_filename(iris::instance* iris);

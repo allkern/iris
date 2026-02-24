@@ -758,8 +758,6 @@ bool init(iris::instance* iris) {
         return false;
     }
 
-    SDL_ShowWindow(iris->window);
-
     if (!setup_vulkan_window(iris, &iris->main_window_data, iris->window_width, iris->window_height, true)) {
         printf("imgui: Failed to setup Vulkan window\n");
 

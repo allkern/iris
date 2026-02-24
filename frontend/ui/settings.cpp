@@ -636,6 +636,54 @@ uint64_t mapping_editing = 0;
 void show_mappings_editor(iris::instance* iris) {
     using namespace ImGui;
 
+    static char buf[1024] = { 0 };
+    const char* hint = iris->gcdb_path.size() ? iris->gcdb_path.c_str() : "Not configured (using default)";
+
+    Text("Game controller DB");
+
+    SetNextItemWidth(300);
+
+    if (InputTextWithHint("##gcdbinput", hint, buf, 1024, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+        iris->gcdb_path = std::string(buf);
+
+        // To-do: Check return value
+        input::load_db_from_file(iris, iris->gcdb_path.c_str());
+    }
+
+    SameLine();
+
+    if (Button(ICON_MS_FOLDER "##gcdbbtn")) {
+        audio::mute(iris);
+
+        auto f = pfd::open_file("Select Game controller DB file", "", {
+            "Game controller DB (*.txt)", "*.txt",
+            "All Files (*.*)", "*"
+        });
+
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        if (f.result().size()) {
+            strncpy(buf, f.result().at(0).c_str(), 1024);
+
+            iris->gcdb_path = std::string(buf);
+
+            // To-do: Check return value
+            input::load_db_from_file(iris, iris->gcdb_path.c_str());
+        }
+    } SameLine();
+
+    if (Button(ICON_MS_CLEAR "##gcdbclear")) {
+        iris->gcdb_path = "";
+
+        memset(buf, 0, 1024);
+
+        input::load_db_default(iris);
+    }
+
+    Text("Mapping");
+
     if (BeginCombo("##mapping", iris->input_maps[selected_mapping].name.c_str())) {
         int i = 0;
 

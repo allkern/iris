@@ -66,7 +66,7 @@ bool parse_mappings_file(iris::instance* iris) {
     toml::table& tbl = result.table();
 
     for (auto& map : tbl) {
-        printf("Parsing input map \"%s\"...\n", map.first.data());
+        printf("input: Parsing input map \"%s\"...\n", map.first.data());
 
         mapping input_mapping {};
 
@@ -112,6 +112,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->mcd1_path = paths["mcd1_path"].value_or("");
     iris->snap_path = paths["snap_path"].value_or("snap");
     iris->flash_path = paths["flash_path"].value_or("");
+    iris->gcdb_path = paths["gcdb_path"].value_or("");
 
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
@@ -527,7 +528,8 @@ void close(iris::instance* iris) {
             { "mcd0_path", iris->mcd0_path },
             { "mcd1_path", iris->mcd1_path },
             { "snap_path", iris->snap_path },
-            { "flash_path", iris->flash_path }
+            { "flash_path", iris->flash_path },
+            { "gcdb_path", iris->gcdb_path },
         } },
         { "recents", toml::table {
             { "array", toml::array() }

@@ -49,6 +49,7 @@ add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
+target_compile_options(iris PUBLIC "-Wno-deprecated-declarations")
 # target_compile_definitions(iris PUBLIC _DEBUG)
 
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)

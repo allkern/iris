@@ -6,6 +6,13 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
+#define INCBIN_PREFIX g_
+#define INCBIN_STYLE INCBIN_STYLE_SNAKE
+
+#include "incbin.h"
+
+INCBIN(gamecontrollerdb, "../deps/SDL_GameControllerDB/gamecontrollerdb.txt");
+
 namespace iris {
 
 void keyboard_device::handle_event(iris::instance* iris, SDL_Event* event) {
@@ -40,6 +47,120 @@ void gamepad_device::handle_event(iris::instance* iris, SDL_Event* event) {
 }
 
 namespace iris::input {
+
+void load_db_default(iris::instance* iris) {
+    SDL_IOStream* ios = SDL_IOFromMem((void*)g_gamecontrollerdb_data, g_gamecontrollerdb_size);
+
+    SDL_AddGamepadMappingsFromIO(ios, true);
+}
+
+bool load_db_from_file(iris::instance* iris, const char* path) {
+    if (SDL_AddGamepadMappingsFromFile(path) == -1)
+        return false;
+
+    return true;
+}
+
+bool init(iris::instance* iris) {
+    if (!iris->gcdb_path.size()) {
+        fprintf(stdout, "input: Adding default database\n");
+
+        load_db_default(iris);
+    } else {
+        fprintf(stdout, "input: Adding database from file \'%s\'\n", iris->gcdb_path.c_str());
+
+        load_db_from_file(iris, iris->gcdb_path.c_str());
+    }
+
+    iris->input_devices[0] = new iris::keyboard_device();
+
+#define IEVENT(event, id) \
+    (((uint64_t)event << 32) | (id & 0xffffffff))
+
+    if (iris->input_maps.size() == 0) {
+        mapping map;
+
+        map.name = "Keyboard (default)";
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_X     ), IRIS_DS_BT_CROSS);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_A     ), IRIS_DS_BT_SQUARE);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_W     ), IRIS_DS_BT_TRIANGLE);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_D     ), IRIS_DS_BT_CIRCLE);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_RETURN), IRIS_DS_BT_START);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_S     ), IRIS_DS_BT_SELECT);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_UP    ), IRIS_DS_BT_UP);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_DOWN  ), IRIS_DS_BT_DOWN);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_LEFT  ), IRIS_DS_BT_LEFT);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_RIGHT ), IRIS_DS_BT_RIGHT);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_Q     ), IRIS_DS_BT_L1);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_E     ), IRIS_DS_BT_R1);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_1     ), IRIS_DS_BT_L2);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_3     ), IRIS_DS_BT_R2);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_Z     ), IRIS_DS_BT_L3);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_C     ), IRIS_DS_BT_R3);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_I     ), IRIS_DS_AX_LEFTV_POS);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_J     ), IRIS_DS_AX_LEFTH_NEG);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_K     ), IRIS_DS_AX_LEFTV_NEG);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_L     ), IRIS_DS_AX_LEFTH_POS);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_T     ), IRIS_DS_AX_RIGHTV_POS);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_F     ), IRIS_DS_AX_RIGHTH_NEG);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_G     ), IRIS_DS_AX_RIGHTV_NEG);
+        map.map.insert(IEVENT(IRIS_EVENT_KEYBOARD, SDLK_H     ), IRIS_DS_AX_RIGHTH_POS);
+
+        iris->input_maps.push_back(map);
+
+        map.map.clear();
+        map = {};
+
+        map.name = "Gamepad (default)";
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_SOUTH         ), IRIS_DS_BT_CROSS);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_WEST          ), IRIS_DS_BT_SQUARE);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_NORTH         ), IRIS_DS_BT_TRIANGLE);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_EAST          ), IRIS_DS_BT_CIRCLE);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_START         ), IRIS_DS_BT_START);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_BACK          ), IRIS_DS_BT_SELECT);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_UP       ), IRIS_DS_BT_UP);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_DOWN     ), IRIS_DS_BT_DOWN);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_LEFT     ), IRIS_DS_BT_LEFT);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_RIGHT    ), IRIS_DS_BT_RIGHT);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_LEFT_SHOULDER ), IRIS_DS_BT_L1);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER), IRIS_DS_BT_R1);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_LEFT_STICK    ), IRIS_DS_BT_L3);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_RIGHT_STICK   ), IRIS_DS_BT_R3);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER    ), IRIS_DS_BT_L2);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER   ), IRIS_DS_BT_R2);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFTY           ), IRIS_DS_AX_LEFTV_POS);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_LEFTY           ), IRIS_DS_AX_LEFTV_NEG);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFTX           ), IRIS_DS_AX_LEFTH_POS);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_LEFTX           ), IRIS_DS_AX_LEFTH_NEG);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHTY          ), IRIS_DS_AX_RIGHTV_POS);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_RIGHTY          ), IRIS_DS_AX_RIGHTV_NEG);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHTX          ), IRIS_DS_AX_RIGHTH_POS);
+        map.map.insert(IEVENT(IRIS_EVENT_GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_RIGHTX          ), IRIS_DS_AX_RIGHTH_NEG);
+
+        iris->input_maps.push_back(map);
+    }
+
+#undef IEVENT
+
+    // Ensure default mappings are in the correct order
+    if (iris->input_maps[0].name == "Gamepad (default)") {
+        auto map = iris->input_maps[0];
+
+        iris->input_maps[0] = iris->input_maps[1];
+        iris->input_maps[1] = map;
+    }
+
+    // Use keyboard mapping for slot 0 and none for slot 1 by default
+    if (iris->input_map[0] <= 1) {
+        iris->input_map[0] = 0;
+    }
+
+    if (iris->input_map[1] <= 1) {
+        iris->input_map[1] = -1;
+    }
+
+    return true;
+}
 
 input_action* get_input_action(iris::instance* iris, int slot, uint64_t input) {
     if (iris->input_map[slot] == -1)

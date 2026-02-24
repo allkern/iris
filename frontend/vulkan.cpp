@@ -1035,6 +1035,7 @@ void cleanup(iris::instance* iris) {
     if (iris->vertex_buffer_memory) vkFreeMemory(iris->device, iris->vertex_buffer_memory, nullptr);
     if (iris->index_buffer_memory) vkFreeMemory(iris->device, iris->index_buffer_memory, nullptr);
     if (iris->pipeline) vkDestroyPipeline(iris->device, iris->pipeline, nullptr);
+    // ImGui takes care of this apparently (probably shouldn't)
     // if (iris->surface) vkDestroySurfaceKHR(iris->instance, iris->surface, nullptr);
     if (iris->render_pass) vkDestroyRenderPass(iris->device, iris->render_pass, nullptr);
     if (iris->pipeline_layout) vkDestroyPipelineLayout(iris->device, iris->pipeline_layout, nullptr);
