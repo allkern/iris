@@ -49,7 +49,7 @@ void gamepad_device::handle_event(iris::instance* iris, SDL_Event* event) {
 namespace iris::input {
 
 void load_db_default(iris::instance* iris) {
-    SDL_IOStream* ios = SDL_IOFromMem((void*)g_gamecontrollerdb_data, g_gamecontrollerdb_size);
+    SDL_IOStream* ios = SDL_IOFromConstMem(g_gamecontrollerdb_data, g_gamecontrollerdb_size);
 
     SDL_AddGamepadMappingsFromIO(ios, true);
 }
