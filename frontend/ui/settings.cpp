@@ -240,7 +240,7 @@ void show_system_settings(iris::instance* iris) {
 
     SetNextItemWidth(w * 2.0);
 
-    if (InputScalarN("##macaddress", ImGuiDataType_U8, iris->mac_address, 6, nullptr, nullptr, "%02X", ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_CharsUppercase | ImGuiInputTextFlags_EnterReturnsTrue)) {
+    if (InputScalarN("##macaddress", ImGuiDataType_U8, iris->mac_address, 6, nullptr, nullptr, "%02X", ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_CharsUppercase)) {
         ps2_set_mac_address(iris->ps2, iris->mac_address);
     } SameLine();
 
