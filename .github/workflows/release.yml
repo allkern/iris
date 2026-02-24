@@ -17,7 +17,7 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G "MinGW Makefiles"
+        cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
         cmake --build build -j8
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
@@ -57,7 +57,7 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build -j8
         sudo cmake --install build
         mkdir dist
@@ -100,7 +100,7 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build
+        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
         cmake --build build -j8
         sudo cmake --install build
     - name: Generate artifact name
