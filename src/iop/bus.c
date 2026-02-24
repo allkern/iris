@@ -201,6 +201,8 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
 uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
+    if (addr == 0xfffe0130) return 0xffffffff;
+
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
 
     if (ptr) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
