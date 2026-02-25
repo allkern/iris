@@ -838,8 +838,9 @@ bool init(iris::instance* iris, bool enable_validation) {
     if (iris->vulkan_physical_device < 0) {
         iris->physical_device = find_suitable_physical_device(iris);
     } else {
-        if (iris->vulkan_physical_device > iris->vulkan_gpus.size()) {
-            iris->physical_device = VK_NULL_HANDLE;
+        if (iris->vulkan_physical_device >= iris->vulkan_gpus.size()) {
+            iris->physical_device = find_suitable_physical_device(iris);
+            iris->vulkan_physical_device = iris->vulkan_selected_device_index;
         } else {
             iris->physical_device = iris->vulkan_gpus[iris->vulkan_physical_device].device;
             iris->vulkan_selected_device_index = iris->vulkan_physical_device;
