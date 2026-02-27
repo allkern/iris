@@ -59,6 +59,30 @@ uint32_t ImageProcessingUnit::quantizer_nonlinear[0x20] =
     56,		64,		72,		80,		88,		96,		104,	112,
 };
 
+static const uint8_t default_intra_IQ[0x40] =
+{
+    8,  16, 19, 22, 26, 27, 29, 34,
+    16, 16, 22, 24, 27, 29, 34, 37,
+    19, 22, 26, 27, 29, 34, 34, 38,
+    22, 22, 26, 27, 29, 34, 37, 40,
+    22, 26, 27, 29, 32, 35, 40, 48,
+    26, 27, 29, 32, 35, 40, 48, 58,
+    26, 27, 29, 34, 38, 46, 56, 69,
+    27, 29, 35, 38, 46, 56, 69, 83,
+};
+
+static const uint8_t default_nonintra_IQ[0x40] =
+{
+    16, 17, 18, 19, 20, 21, 22, 23,
+    17, 18, 19, 20, 21, 22, 23, 24,
+    18, 19, 20, 21, 22, 23, 24, 25,
+    19, 20, 21, 22, 23, 24, 26, 27,
+    20, 21, 22, 23, 25, 26, 27, 28,
+    21, 22, 23, 24, 26, 27, 28, 30,
+    22, 23, 24, 26, 27, 28, 30, 31,
+    23, 24, 25, 27, 28, 30, 31, 33,
+};
+
 ImageProcessingUnit::ImageProcessingUnit(struct ps2_intc* intc, struct ps2_dmac* dmac) : intc(intc), dmac(dmac)
 {
     //Generate CrCb->RGB conversion map
@@ -101,6 +125,8 @@ void ImageProcessingUnit::reset()
     in_FIFO.reset();
     out_FIFO.reset();
     prepare_IDCT();
+    memcpy(intra_IQ, default_intra_IQ, sizeof(intra_IQ));
+    memcpy(nonintra_IQ, default_nonintra_IQ, sizeof(nonintra_IQ));
 
     ctrl.error_code = false;
     ctrl.start_code = false;
@@ -449,10 +475,10 @@ bool ImageProcessingUnit::process_BDEC()
                 printf("ipu: Read coeffs!\n");
                 if (!BDEC_read_coeffs())
                     return false;
-                printf("ipu: Inverse scan!\n");
-                inverse_scan(bdec.cur_block);
                 printf("ipu: Dequantize!\n");
                 dequantize(bdec.cur_block);
+                printf("ipu: Inverse scan!\n");
+                inverse_scan(bdec.cur_block);
                 printf("ipu: IDCT!\n");
 
                 int16_t temp[0x40];
