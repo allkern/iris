@@ -7,7 +7,11 @@
 #include "ee/dmac.h"
 #include "ee/intc.h"
 
-#define printf(fmt, ...)(0)
+#if defined(IRIS_IPU_TRACE)
+#define printf(...) std::printf(__VA_ARGS__)
+#else
+#define printf(...) ((void)0)
+#endif
 
 /**
   * The majority of this code is based upon Play!'s implementation of the IPU.
@@ -228,7 +232,7 @@ void ImageProcessingUnit::run()
         }
         catch (VLC_Error& e)
         {
-            printf("ipu: VLC error: %s\n", e.what());
+            std::fprintf(stderr, "ipu: VLC error: %s\n", e.what());
 
             ctrl.error_code = true;
             finish_command();
@@ -261,6 +265,10 @@ bool ImageProcessingUnit::process_IDEC()
     {
         switch (idec.state)
         {
+            case IDEC_STATE::DELAY:
+                //Play delays IDEC execution before consuming FIFO data.
+                idec.state = IDEC_STATE::ADVANCE;
+                return false;
             case IDEC_STATE::ADVANCE:
                 printf("ipu: Advance stream\n");
                 if (!in_FIFO.advance_stream(command_option & 0x3F))
@@ -281,6 +289,10 @@ bool ImageProcessingUnit::process_IDEC()
                     if (!in_FIFO.get_bits(value, 1))
                         return false;
                     in_FIFO.advance_stream(1);
+
+                    //Play expects this to be zero for IDEC intra path.
+                    if (value != 0)
+                        throw VLC_Error("IDEC unsupported DCT type");
                 }
                 idec.state = IDEC_STATE::QSC;
                 break;
@@ -367,11 +379,28 @@ bool ImageProcessingUnit::process_IDEC()
                 printf("ipu: Validate start code\n");
                 uint32_t code;
                 if (!in_FIFO.get_bits(code, 24))
-                    return false;
-                if (code == 1)
+                {
+                    //If we already detected 8 zero bits in CHECK_START_CODE but don't have
+                    //enough bits for a full 24-bit validation code, treat this as a valid
+                    //start-code boundary and finish the command.
                     idec.state = IDEC_STATE::DONE;
+                    break;
+                }
+
+                if (code == 0)
+                {
+                    //Consume one byte of zero padding and keep searching for 0x000001.
+                    if (!in_FIFO.advance_stream(8))
+                        return false;
+                }
+                else if (code == 1)
+                {
+                    idec.state = IDEC_STATE::DONE;
+                }
                 else
+                {
                     throw VLC_Error("IDEC start code invalid");
+                }
             }
                 break;
             case IDEC_STATE::MACRO_INC:
@@ -380,6 +409,10 @@ bool ImageProcessingUnit::process_IDEC()
                 uint32_t inc;
                 if (!macroblock_increment.get_symbol(in_FIFO, inc))
                     return false;
+
+                if ((inc & 0xFFFF) != 1)
+                    throw VLC_Error("IDEC invalid macroblock increment");
+
                 idec.state = IDEC_STATE::MACRO_I_TYPE;
             }
                 break;
@@ -607,8 +640,8 @@ void ImageProcessingUnit::dequantize(int16_t *block)
                     sign = (int16_t)0xFFFF;
             }
 
-            block[i] *= (int16_t)intra_IQ[i] * q_scale * 2;
-            block[i] /= 32;
+            int32_t scaled = (int32_t)block[i] * (int32_t)intra_IQ[i] * q_scale * 2;
+            block[i] = (int16_t)(scaled / 32);
 
             if (sign)
             {
@@ -635,8 +668,8 @@ void ImageProcessingUnit::dequantize(int16_t *block)
                     sign = 0xFFFF;
             }
 
-            block[i] = ((block[i] * 2) + sign) * (int16_t)nonintra_IQ[i] * q_scale;
-            block[i] /= 32;
+            int32_t scaled = (((int32_t)block[i] * 2) + sign) * (int32_t)nonintra_IQ[i] * q_scale;
+            block[i] = (int16_t)(scaled / 32);
 
             if (sign)
             {
@@ -788,6 +821,7 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
                 }
                 else
                 {
+                    throw VLC_Error("BDEC coefficient index overflow");
                 }
                 bdec.subblock_index++;
                 bdec.read_coeff_state = BDEC_Command::READ_COEFF::CHECK_END;
@@ -979,6 +1013,9 @@ bool ImageProcessingUnit::process_CSC()
                 uint8_t* cb_block = csc.block + 0x100;
                 uint8_t* cr_block = csc.block + 0x140;
 
+                uint16_t alphaTh0 = (TH0 & 0x1FF);
+                uint16_t alphaTh1 = (TH1 & 0x1FF);
+
                 for (int i = 0; i < 16; i++)
                 {
                     for (int j = 0; j < 16; j++)
@@ -1006,9 +1043,9 @@ bool ImageProcessingUnit::process_CSC()
                             b = 255;
 
                         uint8_t alpha;
-                        if (r < TH0 && g < TH0 && b < TH0)
+                        if (r < alphaTh0 && g < alphaTh0 && b < alphaTh0)
                             alpha = 0;
-                        else if (r < TH1 && g < TH1 && b < TH1)
+                        else if (r < alphaTh1 && g < alphaTh1 && b < alphaTh1)
                             alpha = 0x40;
                         else
                             alpha = 0x80;
@@ -1263,7 +1300,7 @@ void ImageProcessingUnit::write_command(uint32_t value)
                 break;
             case 0x01:
                 printf("ipu: IDEC\n");
-                idec.state = IDEC_STATE::ADVANCE;
+                idec.state = IDEC_STATE::DELAY;
                 idec.macro_type = 0;
                 idec.qsc = (command_option >> 16) & 0x1F;
                 idec.decodes_dct = command_option & (1 << 24);
@@ -1418,7 +1455,7 @@ extern "C" uint64_t ps2_ipu_read64(struct ps2_ipu* ipu, uint32_t addr) {
         case 0x10002030: return ipu->ipu->read_top();
     }
 
-    printf("ipu: Unhandled IPU read address %08x\n", addr);
+    std::fprintf(stderr, "ipu: Unhandled IPU read address %08x\n", addr);
 
     return 0;
 }
@@ -1453,7 +1490,7 @@ extern "C" void ps2_ipu_write128(struct ps2_ipu* ipu, uint32_t addr, uint128_t d
         case 0x10007010: ipu->ipu->write_FIFO(data); return;
     }
 
-    printf("ipu: Unhandled IPU write address %08x\n", addr);
+    std::fprintf(stderr, "ipu: Unhandled IPU write address %08x\n", addr);
 
     exit(1);
 }

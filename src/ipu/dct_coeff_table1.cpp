@@ -333,19 +333,40 @@ bool DCT_Coeff_Table1::get_runlevel_pair(IPU_FIFO &FIFO, RunLevelPair &pair, boo
 
         pair.run = run;
 
+        uint32_t level = 0;
         if (MPEG1)
         {
+            if (!peek_value(FIFO, 8, bit_count, level))
+                return false;
+
+            if (!level)
+            {
+                if (!peek_value(FIFO, 8, bit_count, level))
+                    return false;
+            }
+            else if ((uint8_t)level == 128)
+            {
+                if (!peek_value(FIFO, 8, bit_count, level))
+                    return false;
+                level -= 256;
+            }
+            else if (level > 128)
+            {
+                level -= 256;
+            }
         }
-
-        uint32_t level = 0;
-        if (!peek_value(FIFO, 12, bit_count, level))
-            return false;
-
-        if (level & 0x800)
+        else
         {
-            level |= 0xF000;
-            level = (int16_t)level;
+            if (!peek_value(FIFO, 12, bit_count, level))
+                return false;
+
+            if (level & 0x800)
+            {
+                level |= 0xF000;
+                level = (int16_t)level;
+            }
         }
+
         pair.level = level;
     }
     else
