@@ -706,6 +706,7 @@ namespace vulkan {
     texture upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride);
     void free_texture(iris::instance* iris, texture& tex);
     void* read_image(iris::instance* iris, VkImage image, VkFormat format, int width, int height);
+    void wait_idle(iris::instance* iris);
 }
 
 namespace platform {

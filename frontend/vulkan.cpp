@@ -1020,8 +1020,7 @@ bool init(iris::instance* iris, bool enable_validation) {
 static int ic = 0;
 
 void cleanup(iris::instance* iris) {
-    vkQueueWaitIdle(iris->queue);
-    vkDeviceWaitIdle(iris->device);
+    vulkan::wait_idle(iris);
 
     if (iris->descriptor_set_layout) vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
     if (iris->descriptor_pool) vkDestroyDescriptorPool(iris->device, iris->descriptor_pool, nullptr);
@@ -1334,6 +1333,11 @@ void* read_image(iris::instance* iris, VkImage src_image, VkFormat format, int w
     vkDestroyImage(iris->device, dst_image, nullptr);
 
     return buf;
+}
+
+void wait_idle(iris::instance* iris) {
+    vkQueueWaitIdle(iris->queue);
+    vkDeviceWaitIdle(iris->device);
 }
 
 }

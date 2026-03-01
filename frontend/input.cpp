@@ -402,8 +402,14 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
     SDL_Keycode key = event->key.key;
 
     switch (key) {
-        case SDLK_SPACE: iris->pause = !iris->pause; break;
+        case SDLK_SPACE: {
+            iris->pause = !iris->pause;
+
+            vulkan::wait_idle(iris);
+        } break;
         case SDLK_F9: {
+            vulkan::wait_idle(iris);
+
             bool saved = save_screenshot(iris);
         } break;
         case SDLK_F11: {

@@ -146,13 +146,13 @@ renderer_image hardware_get_frame(void* udata) {
 
 	VSyncInfo info = {};
 
+	info.phase = ctx->gs->csr & (1 << 13) ? 0 : 1;
+
 	if (ctx->config.super_sampling) {
-		info.phase = 0;
 		info.raw_circuit_scanout = true;
 		info.high_resolution_scanout = true;
 		info.anti_blur = true;
 	} else {
-		info.phase = ctx->config.force_progressive ? 0 : (ctx->gs->csr & (1 << 13) ? 0 : 1);
 		info.raw_circuit_scanout = false;
 		info.high_resolution_scanout = false;
 		info.anti_blur = false;

@@ -869,8 +869,7 @@ bool init(iris::instance* iris) {
 }
 
 void cleanup(iris::instance* iris) {
-    vkQueueWaitIdle(iris->queue);
-    vkDeviceWaitIdle(iris->device);
+    vulkan::wait_idle(iris);
 
     vulkan::free_texture(iris, iris->ps1_memory_card_icon);
     vulkan::free_texture(iris, iris->ps2_memory_card_icon);

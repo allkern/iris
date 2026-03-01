@@ -281,11 +281,11 @@ void show_hardware_renderer_settings(iris::instance* iris) {
     }
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    BeginDisabled(iris->hardware_backend_config.super_sampling != 0);
+    // BeginDisabled(iris->hardware_backend_config.super_sampling != 0);
     if (Checkbox(" Force progressive scan", &iris->hardware_backend_config.force_progressive)) {
         render::refresh(iris);
     }
-    EndDisabled();
+    // EndDisabled();
 
     if (Checkbox(" Overscan", &iris->hardware_backend_config.overscan)) {
         render::refresh(iris);

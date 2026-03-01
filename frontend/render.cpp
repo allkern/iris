@@ -90,8 +90,7 @@ bool rebuild_framebuffers(iris::instance* iris) {
     if (!shaders::count(iris))
         return true;
 
-    vkDeviceWaitIdle(iris->device);
-    vkQueueWaitIdle(iris->queue);
+    vulkan::wait_idle(iris);
 
     for (auto& fb : iris->shader_framebuffers) {
         if (fb.framebuffer) vkDestroyFramebuffer(iris->device, fb.framebuffer, nullptr);
@@ -485,8 +484,7 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     iris->image = image;
 
     if (need_rebuild && image.view != VK_NULL_HANDLE) {
-        vkDeviceWaitIdle(iris->device);
-        vkQueueWaitIdle(iris->queue);
+        vulkan::wait_idle(iris);
 
         for (auto& pass : shaders::vector(iris)) {
             pass->rebuild();
@@ -599,8 +597,7 @@ void refresh(iris::instance* iris) {
     if (shaders::count(iris) == 0)
         return;
 
-    vkDeviceWaitIdle(iris->device);
-    vkQueueWaitIdle(iris->queue);
+    vulkan::wait_idle(iris);
 
     for (auto& pass : shaders::vector(iris)) {
         pass->rebuild();
