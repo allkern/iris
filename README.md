@@ -44,6 +44,7 @@ Usage: iris [OPTION]... <path-to-disc-image>
 ```
 
 ## Features
+- 
 - Support for ISO, BIN/CUE, CHD and CSO/ZSO disc image formats
 - Hardware-accelerated Vulkan GS renderer with support for up to 16x SSAA
 - Feature-packed debugger
