@@ -7,14 +7,14 @@ Sony PlayStation 2 emulator for Windows, Linux and macOS
 
 ## Screenshots
 <div align="center" class="grid" markdown>
-    <img width="50%" alt="Metal Gear Solid 3 - Snake Eater (Japan)" src="https://github.com/user-attachments/assets/9ffd0131-5fa0-4e2f-97ee-6d180f7dcdcc" />
-    <img width="50%" alt="Resident Evil 4 (USA)" src="https://github.com/user-attachments/assets/d2f68c22-c6c9-4e00-9430-ecf609f9b269" />
-    <img width="50%" alt="God of War II (USA)" src="https://github.com/user-attachments/assets/40747140-1b0c-4834-b3ab-e5439cc1272d" />
-    <img width="50%" alt="Kingdom Hearts II (USA)" src="https://github.com/user-attachments/assets/53aa9486-958f-49c6-aa88-cd435260bb0a" />
-    <img width="50%" alt="Ace Combat Zero - The Belkan War (USA)" src="https://github.com/user-attachments/assets/1adfaf21-305d-4d2c-a828-00cbbbfba920" />
-    <img width="50%" alt="Virtua Fighter 4 (USA)" src="https://github.com/user-attachments/assets/1d1662ed-177d-48de-b21f-300a035da1b3" />
-    <img width="50%" alt="Devil May Cry 3 - Dante's Awakening (USA)" src="https://github.com/user-attachments/assets/a7fc4654-cdb1-4a00-8187-a99ab5b4f7ea" />
-    <img width="50%" alt="Ico (USA)" src="https://github.com/user-attachments/assets/419b76a4-5208-4e18-bebe-ab762c0e08ed" />
+    <img width="47%" alt="Metal Gear Solid 3 - Snake Eater (Japan)" src="https://github.com/user-attachments/assets/9ffd0131-5fa0-4e2f-97ee-6d180f7dcdcc" />
+    <img width="47%" alt="Resident Evil 4 (USA)" src="https://github.com/user-attachments/assets/d2f68c22-c6c9-4e00-9430-ecf609f9b269" />
+    <img width="47%" alt="God of War II (USA)" src="https://github.com/user-attachments/assets/40747140-1b0c-4834-b3ab-e5439cc1272d" />
+    <img width="47%" alt="Kingdom Hearts II (USA)" src="https://github.com/user-attachments/assets/53aa9486-958f-49c6-aa88-cd435260bb0a" />
+    <img width="47%" alt="Ace Combat Zero - The Belkan War (USA)" src="https://github.com/user-attachments/assets/1adfaf21-305d-4d2c-a828-00cbbbfba920" />
+    <img width="47%" alt="Virtua Fighter 4 (USA)" src="https://github.com/user-attachments/assets/1d1662ed-177d-48de-b21f-300a035da1b3" />
+    <img width="47%" alt="Devil May Cry 3 - Dante's Awakening (USA)" src="https://github.com/user-attachments/assets/a7fc4654-cdb1-4a00-8187-a99ab5b4f7ea" />
+    <img width="47%" alt="Ico (USA)" src="https://github.com/user-attachments/assets/419b76a4-5208-4e18-bebe-ab762c0e08ed" />
 </div>
 
 ## Usage
