@@ -97,6 +97,13 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
+    - name: Install Vulkan SDK
+      uses: jakoch/install-vulkan-sdk-action@v1
+      with:
+        optional_components: com.lunarg.vulkan.volk
+        install_runtime: true
+        cache: true
+        stripdown: true
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
