@@ -108,15 +108,6 @@ pass::~pass() {
     destroy();
 }
 
-<img width="40%" alt="screen9" src="https://github.com/user-attachments/assets/9ffd0131-5fa0-4e2f-97ee-6d180f7dcdcc" />
-<img width="40%" alt="screen12" src="https://github.com/user-attachments/assets/d2f68c22-c6c9-4e00-9430-ecf609f9b269" />
-<img width="40%" alt="screen4" src="https://github.com/user-attachments/assets/40747140-1b0c-4834-b3ab-e5439cc1272d" />
-<img width="40%" alt="screen7" src="https://github.com/user-attachments/assets/53aa9486-958f-49c6-aa88-cd435260bb0a" />
-<img width="40%" alt="screen10" src="https://github.com/user-attachments/assets/1adfaf21-305d-4d2c-a828-00cbbbfba920" />
-<img width="40%" alt="screen2" src="https://github.com/user-attachments/assets/1d1662ed-177d-48de-b21f-300a035da1b3" />
-<img width="40%" alt="screen11" src="https://github.com/user-attachments/assets/a7fc4654-cdb1-4a00-8187-a99ab5b4f7ea" />
-<img width="40%" alt="screen8" src="https://github.com/user-attachments/assets/419b76a4-5208-4e18-bebe-ab762c0e08ed" />
-
 bool pass::rebuild() {
     vulkan::wait_idle(m_iris);
 
