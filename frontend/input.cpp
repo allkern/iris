@@ -405,7 +405,7 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
         case SDLK_SPACE: {
             iris->pause = !iris->pause;
 
-            vulkan::wait_idle(iris);
+            // vulkan::wait_idle(iris);
         } break;
         case SDLK_F9: {
             vulkan::wait_idle(iris);
