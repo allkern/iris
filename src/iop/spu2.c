@@ -107,6 +107,23 @@ struct wav_chunk {
 //    BytePerBloc     (2 bytes) : Number of bytes per block (NbrChannels * BitsPerSample / 8).
 //    BitsPerSample   (2 bytes) : Number of bits per sample
 
+// void spu2_adma_cb(void* udata, int overshoot) {
+//     struct ps2_spu2* spu2 = (struct ps2_spu2*)udata;
+
+//     // Request more data
+//     if (spu2->dma->spu1.transfer_size)
+//         iop_dma_handle_spu1_adma(spu2->dma);
+
+//     struct sched_event event;
+
+//     event.name = "spu2 adma callback";
+//     event.callback = spu2_adma_cb;
+//     event.cycles = 49152;
+//     event.udata = spu2;
+
+//     sched_schedule(spu2->sched, event);
+// }
+
 void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct sched_state* sched) {
     memset(spu2, 0, sizeof(struct ps2_spu2));
 
@@ -123,6 +140,15 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
     // output = fopen("adma.wav", "wb");
 
     // fseek(output, sizeof(struct wav_hdr) + sizeof(struct wav_chunk), SEEK_SET);
+
+    // struct sched_event event;
+
+    // event.name = "spu2 adma callback";
+    // event.callback = spu2_adma_cb;
+    // event.cycles = 49152;
+    // event.udata = spu2;
+
+    // sched_schedule(spu2->sched, event);
 }
 
 void spu2_irq(struct ps2_spu2* spu2, int c) {
@@ -233,15 +259,10 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 
 void adma_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
     if (spu2->c[c].memin_write_addr < 0x100) {
-        spu2->ram[(c ? 0x2400 : 0x2000) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
+        spu2->ram[(c ? 0x1200 : 0x1000) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
     } else if (spu2->c[c].memin_write_addr < 0x200) {
-        spu2->ram[(c ? 0x2600 : 0x2200) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
+        spu2->ram[(c ? 0x1300 : 0x1100) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
     }
-    // } else if (spu2->c[c].memin_write_addr < 0x300) {
-    //     spu2->ram[(c ? 0x2500 : 0x2100) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
-    // } else if (spu2->c[c].memin_write_addr < 0x400) {
-    //     spu2->ram[(c ? 0x2700 : 0x2300) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
-    // }
 }
 
 void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
@@ -1028,8 +1049,9 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
 }
 
 static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
-    if (spu2->c[c].memin_write_addr < 0x200)
+    if (spu2->c[c].memin_write_addr < 0x200) {
         return silence;
+    }
 
     spu2->c[c].adma_playing = 1;
 
@@ -1037,8 +1059,8 @@ static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int
 
     // 32-bit HIFI PCM mode
     if (spu2->spdif_out & 4) {
-        int32_t left = *(int32_t*)(&spu2->ram[0x2400 + spu2->c[c].memin_read_addr]);
-        int32_t right = *(int32_t*)(&spu2->ram[0x2600 + spu2->c[c].memin_read_addr]);
+        int32_t left = *(int32_t*)(&spu2->ram[0x1200 + spu2->c[c].memin_read_addr]);
+        int32_t right = *(int32_t*)(&spu2->ram[0x1300 + spu2->c[c].memin_read_addr]);
 
         s.s16[0] = (int16_t)((left >> 16) & 0xffff);
         s.s16[1] = (int16_t)((right >> 16) & 0xffff);
@@ -1046,8 +1068,8 @@ static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int
         spu2->c[c].memin_read_addr++;
         spu2->c[c].memin_read_addr++;
     } else {
-        s.s16[0] = spu2->ram[(c ? 0x2400 : 0x2000) + spu2->c[c].memin_read_addr];
-        s.s16[1] = spu2->ram[(c ? 0x2600 : 0x2200) + spu2->c[c].memin_read_addr];
+        s.s16[0] = spu2->ram[(c ? 0x1200 : 0x1000) + spu2->c[c].memin_read_addr];
+        s.s16[1] = spu2->ram[(c ? 0x1300 : 0x1100) + spu2->c[c].memin_read_addr];
 
         spu2->c[c].memin_read_addr++;
     }
