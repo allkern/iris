@@ -15,6 +15,7 @@ INCBIN(default_vertex_shader, "../shaders/shader.spv");
 namespace iris::render {
 
 static int frame = 0;
+static constexpr uint32_t DESCRIPTOR_SET_RING_SIZE = 8;
 
 bool create_image(iris::instance* iris, uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkImage& image, VkImageView& view, VkDeviceMemory& memory) {
     VkImageCreateInfo image_info = {};
@@ -92,8 +93,18 @@ bool rebuild_framebuffers(iris::instance* iris) {
 
     vulkan::wait_idle(iris);
 
+    for (auto& pass_framebuffers : iris->shader_pass_framebuffers) {
+        for (VkFramebuffer& framebuffer : pass_framebuffers) {
+            if (framebuffer) {
+                vkDestroyFramebuffer(iris->device, framebuffer, nullptr);
+                framebuffer = VK_NULL_HANDLE;
+            }
+        }
+    }
+
+    iris->shader_pass_framebuffers.clear();
+
     for (auto& fb : iris->shader_framebuffers) {
-        if (fb.framebuffer) vkDestroyFramebuffer(iris->device, fb.framebuffer, nullptr);
         if (fb.view) vkDestroyImageView(iris->device, fb.view, nullptr);
         if (fb.image) vkDestroyImage(iris->device, fb.image, nullptr);
         if (fb.memory) vkFreeMemory(iris->device, fb.memory, nullptr);
@@ -113,26 +124,36 @@ bool rebuild_framebuffers(iris::instance* iris) {
 
             return false;
         }
+    }
 
-        VkFramebufferCreateInfo framebuffer_info = {};
-        framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    const size_t pass_count = shaders::count(iris);
 
-        // This field is misleading, it makes it seem like we would only ever be able
-        // to use this framebuffer in the specified renderpass, but in reality we can
-        // use this framebuffer in any renderpass that's **compatible** with the one
-        // we're specifying here. "compatible" as defined here:
-        // https://docs.vulkan.org/spec/latest/chapters/renderpass.html#renderpass-compatibility
-        framebuffer_info.renderPass = shaders::front(iris)->get_render_pass();
-        framebuffer_info.attachmentCount = 1;
-        framebuffer_info.pAttachments = &fb.view;
-        framebuffer_info.width = iris->image.width;
-        framebuffer_info.height = iris->image.height;
-        framebuffer_info.layers = 1;
+    iris->shader_pass_framebuffers.resize(pass_count);
 
-        if (vkCreateFramebuffer(iris->device, &framebuffer_info, nullptr, &fb.framebuffer) != VK_SUCCESS) {
-            fprintf(stderr, "render: Failed to create shader pass framebuffer\n");
+    for (size_t pass_index = 0; pass_index < pass_count; pass_index++) {
+        auto* pass = shaders::at(iris, (int)pass_index);
 
-            return false;
+        if (!pass || !pass->ready()) {
+            iris->shader_pass_framebuffers[pass_index] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+
+            continue;
+        }
+
+        for (int framebuffer_index = 0; framebuffer_index < 2; framebuffer_index++) {
+            VkFramebufferCreateInfo framebuffer_info = {};
+            framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebuffer_info.renderPass = pass->get_render_pass();
+            framebuffer_info.attachmentCount = 1;
+            framebuffer_info.pAttachments = &iris->shader_framebuffers[framebuffer_index].view;
+            framebuffer_info.width = iris->image.width;
+            framebuffer_info.height = iris->image.height;
+            framebuffer_info.layers = 1;
+
+            if (vkCreateFramebuffer(iris->device, &framebuffer_info, nullptr, &iris->shader_pass_framebuffers[pass_index][framebuffer_index]) != VK_SUCCESS) {
+                fprintf(stderr, "render: Failed to create shader pass framebuffer\n");
+
+                return false;
+            }
         }
     }
 
@@ -252,19 +273,48 @@ bool init(iris::instance* iris) {
         return false;
     }
 
+    const uint32_t shader_descriptor_set_count = DESCRIPTOR_SET_RING_SIZE * RENDER_MAX_SHADER_PASSES;
+
+    std::vector <VkDescriptorSetLayout> shader_layouts(shader_descriptor_set_count, iris->shader_descriptor_set_layout);
+
+    iris->shader_descriptor_sets.resize(shader_descriptor_set_count, VK_NULL_HANDLE);
+
     VkDescriptorSetAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorPool = iris->descriptor_pool;
-    alloc_info.descriptorSetCount = 1;
-    alloc_info.pSetLayouts = &iris->shader_descriptor_set_layout;
+    alloc_info.descriptorSetCount = shader_descriptor_set_count;
+    alloc_info.pSetLayouts = shader_layouts.data();
 
-    if (vkAllocateDescriptorSets(iris->device, &alloc_info, &iris->shader_descriptor_set) != VK_SUCCESS) {
+    if (vkAllocateDescriptorSets(iris->device, &alloc_info, iris->shader_descriptor_sets.data()) != VK_SUCCESS) {
         fprintf(stderr, "render: Failed to allocate descriptor sets\n");
 
         return false;
     }
 
+    iris->shader_descriptor_set = iris->shader_descriptor_sets[0];
+
     return true;
+}
+
+static inline VkDescriptorSet get_frame_descriptor_set(iris::instance* iris) {
+    if (!iris->descriptor_sets.size()) {
+        return iris->descriptor_set;
+    }
+
+    const uint32_t frame_index = iris->main_window_data.FrameIndex;
+
+    return iris->descriptor_sets[frame_index % iris->descriptor_sets.size()];
+}
+
+static inline VkDescriptorSet get_frame_shader_descriptor_set(iris::instance* iris, uint32_t pass_index) {
+    if (!iris->shader_descriptor_sets.size()) {
+        return iris->shader_descriptor_set;
+    }
+
+    const uint32_t frame_index = iris->main_window_data.FrameIndex % DESCRIPTOR_SET_RING_SIZE;
+    const uint32_t slot = (frame_index * RENDER_MAX_SHADER_PASSES) + (pass_index % RENDER_MAX_SHADER_PASSES);
+
+    return iris->shader_descriptor_sets[slot % iris->shader_descriptor_sets.size()];
 }
 
 static inline void update_vertex_buffer(iris::instance* iris, VkCommandBuffer command_buffer) {
@@ -367,7 +417,7 @@ static inline void update_vertex_buffer(iris::instance* iris, VkCommandBuffer co
     );
 }
 
-static inline void update_descriptor_set(iris::instance* iris, VkImageView view, VkSampler sampler) {
+static inline void update_descriptor_set(iris::instance* iris, VkDescriptorSet set, VkImageView view, VkSampler sampler) {
     VkDescriptorImageInfo image_info = {};
     image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     image_info.imageView = view;
@@ -375,7 +425,7 @@ static inline void update_descriptor_set(iris::instance* iris, VkImageView view,
 
     VkWriteDescriptorSet descriptor_write = {};
     descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    descriptor_write.dstSet = iris->descriptor_set;
+    descriptor_write.dstSet = set;
     descriptor_write.dstBinding = 0;
     descriptor_write.dstArrayElement = 0;
     descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -389,19 +439,41 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
     if (!shaders::count(iris))
         return;
 
-    if (iris->shader_framebuffers[0].framebuffer == VK_NULL_HANDLE ||
-        iris->shader_framebuffers[1].framebuffer == VK_NULL_HANDLE) {
-        rebuild_framebuffers(iris);
+    if (iris->shader_pass_framebuffers.size() != shaders::count(iris)) {
+        if (!rebuild_framebuffers(iris)) {
+            fprintf(stderr, "render: Failed to rebuild shader framebuffers\n");
+
+            return;
+        }
     }
 
     int i = 0;
 
-    for (auto& pass : shaders::vector(iris)) {
+    for (size_t pass_index = 0; pass_index < shaders::vector(iris).size(); pass_index++) {
+        auto& pass = shaders::vector(iris)[pass_index];
+
         if (pass->bypass || !pass->ready())
             continue;
 
         const int fb = i & 1;
         const VkImageView input_view = i == 0 ? iris->image.view : iris->shader_framebuffers[fb ^ 1].view;
+        VkFramebuffer framebuffer = iris->shader_pass_framebuffers[pass_index][fb];
+
+        if (framebuffer == VK_NULL_HANDLE) {
+            if (!rebuild_framebuffers(iris)) {
+                fprintf(stderr, "render: Failed to rebuild shader framebuffers\n");
+
+                return;
+            }
+
+            framebuffer = iris->shader_pass_framebuffers[pass_index][fb];
+
+            if (framebuffer == VK_NULL_HANDLE) {
+                fprintf(stderr, "render: Shader framebuffer is null after rebuild\n");
+
+                return;
+            }
+        }
 
         output_view = iris->shader_framebuffers[fb].view;
         output_image = iris->shader_framebuffers[fb].image;
@@ -409,7 +481,7 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         info.renderPass = pass->get_render_pass();
-        info.framebuffer = iris->shader_framebuffers[fb].framebuffer;
+        info.framebuffer = framebuffer;
         info.renderArea.extent.width = iris->image.width;
         info.renderArea.extent.height = iris->image.height;
         info.clearValueCount = 1;
@@ -422,7 +494,8 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 
         VkWriteDescriptorSet descriptor_write = {};
         descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptor_write.dstSet = iris->shader_descriptor_set;
+        const VkDescriptorSet shader_descriptor_set = get_frame_shader_descriptor_set(iris, i);
+        descriptor_write.dstSet = shader_descriptor_set;
         descriptor_write.dstBinding = 0;
         descriptor_write.dstArrayElement = 0;
         descriptor_write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
@@ -437,7 +510,7 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
 
         VkDeviceSize offsets[] = { 0 };
         vkCmdBindIndexBuffer(command_buffer, iris->index_buffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->get_pipeline_layout(), 0, 1, &iris->shader_descriptor_set, 0, nullptr);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->get_pipeline_layout(), 0, 1, &shader_descriptor_set, 0, nullptr);
 
         VkViewport viewport = {};
         viewport.x = 0.0f;
@@ -487,7 +560,17 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
         vulkan::wait_idle(iris);
 
         for (auto& pass : shaders::vector(iris)) {
-            pass->rebuild();
+            if (!pass->rebuild()) {
+                fprintf(stderr, "render: Failed to rebuild shader pass\n");
+
+                return false;
+            }
+        }
+
+        if (!rebuild_framebuffers(iris)) {
+            fprintf(stderr, "render: Failed to rebuild shader pass framebuffers\n");
+
+            return false;
         }
     }
 
@@ -500,7 +583,7 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
 
     VkRenderPassBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    info.renderPass = iris->render_pass;
+    info.renderPass = iris->main_window_data.RenderPass;
     info.framebuffer = framebuffer;
     info.renderArea.extent.width = iris->main_window_data.Width;
     info.renderArea.extent.height = iris->main_window_data.Height;
@@ -508,8 +591,10 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     info.pClearValues = &iris->clear_value;
 
     if (iris->output_image.view != VK_NULL_HANDLE) {
+        const VkDescriptorSet descriptor_set = get_frame_descriptor_set(iris);
+
         update_vertex_buffer(iris, command_buffer);
-        update_descriptor_set(iris, iris->output_image.view, iris->sampler[iris->filter]);
+        update_descriptor_set(iris, descriptor_set, iris->output_image.view, iris->sampler[iris->filter]);
     }
 
     vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
@@ -518,10 +603,11 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
 
     if (iris->output_image.view != VK_NULL_HANDLE) {
         VkDeviceSize offsets[] = { 0 };
+        const VkDescriptorSet descriptor_set = get_frame_descriptor_set(iris);
 
         vkCmdBindVertexBuffers(command_buffer, 0, 1, &iris->vertex_buffer, offsets);
         vkCmdBindIndexBuffer(command_buffer, iris->index_buffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->pipeline_layout, 0, 1, &iris->descriptor_set, 0, nullptr);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
     }
 
     VkViewport viewport = {};
@@ -613,8 +699,17 @@ void destroy(iris::instance* iris) {
     if (iris->device) vkDeviceWaitIdle(iris->device);
     if (iris->queue) vkQueueWaitIdle(iris->queue);
 
+    for (auto& pass_framebuffers : iris->shader_pass_framebuffers) {
+        for (VkFramebuffer& framebuffer : pass_framebuffers) {
+            if (framebuffer) {
+                vkDestroyFramebuffer(iris->device, framebuffer, nullptr);
+            }
+        }
+    }
+
+    iris->shader_pass_framebuffers.clear();
+
     for (auto& fb : iris->shader_framebuffers) {
-        if (fb.framebuffer) vkDestroyFramebuffer(iris->device, fb.framebuffer, nullptr);
         if (fb.view) vkDestroyImageView(iris->device, fb.view, nullptr);
         if (fb.image) vkDestroyImage(iris->device, fb.image, nullptr);
         if (fb.memory) vkFreeMemory(iris->device, fb.memory, nullptr);
