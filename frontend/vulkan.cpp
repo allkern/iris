@@ -809,7 +809,7 @@ bool init(iris::instance* iris, bool enable_validation) {
     VkInstanceCreateFlags flags = 0;
 
     // Needed for MoltenVK on macOS
-#ifdef VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME
+#if defined(__APPLE__) && defined(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME)
     extensions.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
 
     flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
