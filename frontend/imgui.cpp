@@ -38,6 +38,8 @@ INCBIN(fragment_shader, "../shaders/fragment.spv");
 
 namespace iris::imgui {
 
+static constexpr uint32_t DESCRIPTOR_SET_RING_SIZE = 8;
+
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
 static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
@@ -50,7 +52,7 @@ static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* 
     attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    attachment.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    attachment.initialLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     attachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     wd->AttachmentDesc = attachment;
@@ -546,52 +548,7 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
 
     iris->pipeline_layout = pipeline_layout;
 
-    // Create render pass
-    VkAttachmentDescription color_attachment = {};
-    color_attachment.format = iris->main_window_data.SurfaceFormat.format;
-    color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
-    color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference color_attachment_ref = {};
-    color_attachment_ref.attachment = 0;
-    color_attachment_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkSubpassDescription subpass = {};
-    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
-    subpass.colorAttachmentCount = 1;
-    subpass.pColorAttachments = &color_attachment_ref;
-
-    VkSubpassDependency dependency = {};
-    dependency.srcSubpass = 0;
-    dependency.dstSubpass = VK_SUBPASS_EXTERNAL;
-    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    dependency.srcAccessMask = 0;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-
-    VkRenderPass render_pass = VK_NULL_HANDLE;
-
-    VkRenderPassCreateInfo render_pass_info = {};
-    render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-    render_pass_info.attachmentCount = 1;
-    render_pass_info.pAttachments = &color_attachment;
-    render_pass_info.subpassCount = 1;
-    render_pass_info.pSubpasses = &subpass;
-    render_pass_info.dependencyCount = 1;
-    render_pass_info.pDependencies = &dependency;
-
-    if (vkCreateRenderPass(iris->device, &render_pass_info, nullptr, &render_pass) != VK_SUCCESS) {
-        fprintf(stderr, "vulkan: Failed to create render pass\n");
-
-        return VK_NULL_HANDLE;
-    }
-
-    iris->render_pass = render_pass;
+    VkRenderPass render_pass = iris->main_window_data.RenderPass;
 
     // Create graphics pipeline
     VkPipelineShaderStageCreateInfo shader_stages[2] = {};
@@ -740,17 +697,23 @@ bool init(iris::instance* iris) {
         return false;
     }
 
+    std::vector <VkDescriptorSetLayout> layouts(DESCRIPTOR_SET_RING_SIZE, iris->descriptor_set_layout);
+
+    iris->descriptor_sets.resize(DESCRIPTOR_SET_RING_SIZE, VK_NULL_HANDLE);
+
     VkDescriptorSetAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     alloc_info.descriptorPool = iris->descriptor_pool;
-    alloc_info.descriptorSetCount = 1;
-    alloc_info.pSetLayouts = &iris->descriptor_set_layout;
+    alloc_info.descriptorSetCount = DESCRIPTOR_SET_RING_SIZE;
+    alloc_info.pSetLayouts = layouts.data();
 
-    if (vkAllocateDescriptorSets(iris->device, &alloc_info, &iris->descriptor_set) != VK_SUCCESS) {
+    if (vkAllocateDescriptorSets(iris->device, &alloc_info, iris->descriptor_sets.data()) != VK_SUCCESS) {
         fprintf(stderr, "imgui: Failed to allocate descriptor sets\n");
 
         return false;
     }
+
+    iris->descriptor_set = iris->descriptor_sets[0];
 
     if (!SDL_Vulkan_CreateSurface(iris->window, iris->instance, VK_NULL_HANDLE, &iris->surface)) {
         printf("imgui: Failed to create Vulkan surface\n");
@@ -890,21 +853,7 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
         return true;
 
     ImGui_ImplVulkanH_Window* wd = &iris->main_window_data;
-    ImGui_ImplVulkanH_Frame* fd = &wd->Frames[wd->FrameIndex];
-
-    if (vkWaitForFences(iris->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to wait for fence\n");
-
-        return false;
-    }
-
-    if (vkResetFences(iris->device, 1, &fd->Fence) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to reset fence\n");
-
-        return false;
-    }
-
-    VkSemaphore acquire_semaphore = wd->FrameSemaphores[wd->FrameIndex].ImageAcquiredSemaphore;
+    VkSemaphore acquire_semaphore = wd->FrameSemaphores[wd->SemaphoreIndex].ImageAcquiredSemaphore;
 
     uint32_t image_index;
 
@@ -927,6 +876,22 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
         return true;
     } else if (err != VK_SUCCESS) {
         fprintf(stderr, "imgui: Failed to acquire next image\n");
+
+        return false;
+    }
+
+    wd->FrameIndex = image_index;
+
+    ImGui_ImplVulkanH_Frame* fd = &wd->Frames[wd->FrameIndex];
+
+    if (vkWaitForFences(iris->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
+        fprintf(stderr, "imgui: Failed to wait for fence\n");
+
+        return false;
+    }
+
+    if (vkResetFences(iris->device, 1, &fd->Fence) != VK_SUCCESS) {
+        fprintf(stderr, "imgui: Failed to reset fence\n");
 
         return false;
     }
@@ -1004,7 +969,7 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
     present_info.pWaitSemaphores = &submit_semaphore;
     present_info.swapchainCount = 1;
     present_info.pSwapchains = &wd->Swapchain;
-    present_info.pImageIndices = &wd->FrameIndex;
+    present_info.pImageIndices = &image_index;
 
     err = vkQueuePresentKHR(iris->queue, &present_info);
 
@@ -1019,7 +984,6 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
     }
 
     wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
-    wd->FrameIndex = (wd->FrameIndex + 1) % wd->Frames.size();
 
     return true;
 }
