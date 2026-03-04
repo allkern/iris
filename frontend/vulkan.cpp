@@ -494,12 +494,12 @@ bool copy_buffer(iris::instance* iris, VkBuffer src, VkBuffer dst, VkDeviceSize 
 
 bool create_descriptor_pool(iris::instance* iris) {
     VkDescriptorPoolSize pool_sizes[] = {
-        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 64 }
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 512 }
     };
 
     VkDescriptorPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT | VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     pool_info.maxSets = 0;
 
     for (VkDescriptorPoolSize& pool_size : pool_sizes)

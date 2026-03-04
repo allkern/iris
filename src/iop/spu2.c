@@ -258,11 +258,7 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 }
 
 void adma_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
-    if (spu2->c[c].memin_write_addr < 0x100) {
-        spu2->ram[(c ? 0x1200 : 0x1000) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
-    } else if (spu2->c[c].memin_write_addr < 0x200) {
-        spu2->ram[(c ? 0x1300 : 0x1100) + ((spu2->c[c].memin_write_addr++) & 0xff)] = data;
-    }
+    spu2->ram[(c ? 0x1200 : 0x1000) + ((spu2->c[c].memin_write_addr++) & 0x1ff)] = data;
 }
 
 void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
@@ -1127,10 +1123,10 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
         struct spu2_sample c1 = spu2_get_voice_sample(spu2, 1, i);
 
-        s.s16[0] += c0.s16[0];
-        s.s16[1] += c0.s16[1];
-        s.s16[0] += c1.s16[0];
-        s.s16[1] += c1.s16[1];
+        s.s16[0] += c0.s16[0] << 1;
+        s.s16[1] += c0.s16[1] << 1;
+        s.s16[0] += c1.s16[0] << 1;
+        s.s16[1] += c1.s16[1] << 1;
     }
 
     return s;

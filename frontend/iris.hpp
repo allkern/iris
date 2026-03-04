@@ -372,6 +372,7 @@ struct instance {
     bool cubic_supported = false;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
     VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+    std::vector <VkDescriptorSet> descriptor_sets = {};
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
     VkRenderPass render_pass = VK_NULL_HANDLE;
     VkPipeline pipeline = VK_NULL_HANDLE;
@@ -393,14 +394,16 @@ struct instance {
     std::vector <shaders::pass*> shader_passes = {};
     VkDescriptorSetLayout shader_descriptor_set_layout = VK_NULL_HANDLE;
     VkDescriptorSet shader_descriptor_set = VK_NULL_HANDLE;
+    std::vector <VkDescriptorSet> shader_descriptor_sets = {};
     VkShaderModule default_vert_shader = VK_NULL_HANDLE;
 
     struct {
         VkImage image = VK_NULL_HANDLE;
         VkDeviceMemory memory = VK_NULL_HANDLE;
         VkImageView view = VK_NULL_HANDLE;
-        VkFramebuffer framebuffer = VK_NULL_HANDLE;
     } shader_framebuffers[2];
+
+    std::vector <std::array <VkFramebuffer, 2>> shader_pass_framebuffers = {};
 
     struct ps2_state* ps2 = nullptr;
 
