@@ -1,11 +1,10 @@
 #pragma once
 
 #include <cstdint>
+#include <asmjit/ujit.h>
 
 #include "shared/ram.h"
-
 #include "u128.h"
-
 #include "vu.h"
 
 #include <unordered_map>
@@ -53,11 +52,6 @@ struct ee_instruction {
     int cycles;
 
     void (*func)(struct ee_state*, const ee_instruction&); 
-};
-
-struct ee_block {
-    std::vector <ee_instruction> instructions;
-    uint32_t cycles;
 };
 
 struct ee_state {

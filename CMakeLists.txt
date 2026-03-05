@@ -10,6 +10,8 @@ set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Reso
 
 # Statically link SDL3 for Linux targets
 set(SDL_STATIC ON)
+set(ASMJIT_STATIC TRUE)
+set(ASMJIT_DIR "deps/asmjit")
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(Git QUIET)
@@ -58,6 +60,7 @@ add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
 add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
+add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS -mssse3 -msse4.1)
@@ -135,7 +138,7 @@ target_sources(iris PRIVATE
     src/dev/mtap.c
     src/dev/ps1_mcd.c
     src/dev/ps1_mcd.c
-    src/ee/ee_cached.cpp
+    src/ee/ee_jit.cpp
     src/ee/bus.c
     src/ee/dmac.c
     src/ee/ee_dis.c
@@ -224,6 +227,7 @@ target_include_directories(iris PRIVATE
 )
 
 target_link_libraries(iris PUBLIC
+    asmjit::asmjit
     libdeflate::libdeflate_static
     tomlplusplus::tomlplusplus
     SDL3::SDL3-static
