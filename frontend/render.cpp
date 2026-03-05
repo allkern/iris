@@ -599,19 +599,6 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
 
     vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
-    VkClearAttachment clear_attachment = {};
-    clear_attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    clear_attachment.colorAttachment = 0;
-    clear_attachment.clearValue = iris->clear_value;
-
-    VkClearRect clear_rect = {};
-    clear_rect.rect.offset = { 0, 0 };
-    clear_rect.rect.extent = { (uint32_t)iris->main_window_data.Width, (uint32_t)iris->main_window_data.Height };
-    clear_rect.baseArrayLayer = 0;
-    clear_rect.layerCount = 1;
-
-    vkCmdClearAttachments(command_buffer, 1, &clear_attachment, 1, &clear_rect);
-
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->pipeline);
 
     if (iris->output_image.view != VK_NULL_HANDLE) {
