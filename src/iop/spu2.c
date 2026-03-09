@@ -258,7 +258,7 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 }
 
 void adma_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
-    spu2->ram[(c ? 0x1200 : 0x1000) + ((spu2->c[c].memin_write_addr++) & 0x1ff)] = data;
+    spu2->ram[(c ? 0x2400 : 0x2000) + ((spu2->c[c].memin_write_addr++) & 0x3ff)] = data;
 }
 
 void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
@@ -1045,7 +1045,7 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
 }
 
 static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
-    if (spu2->c[c].memin_write_addr < 0x200) {
+    if (spu2->c[c].memin_write_addr < 0x400) {
         return silence;
     }
 
@@ -1055,8 +1055,8 @@ static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int
 
     // 32-bit HIFI PCM mode
     if (spu2->spdif_out & 4) {
-        int32_t left = *(int32_t*)(&spu2->ram[0x1200 + spu2->c[c].memin_read_addr]);
-        int32_t right = *(int32_t*)(&spu2->ram[0x1300 + spu2->c[c].memin_read_addr]);
+        int32_t left = *(int32_t*)(&spu2->ram[0x2400 + spu2->c[c].memin_read_addr]);
+        int32_t right = *(int32_t*)(&spu2->ram[0x2600 + spu2->c[c].memin_read_addr]);
 
         s.s16[0] = (int16_t)((left >> 16) & 0xffff);
         s.s16[1] = (int16_t)((right >> 16) & 0xffff);
@@ -1064,8 +1064,8 @@ static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int
         spu2->c[c].memin_read_addr++;
         spu2->c[c].memin_read_addr++;
     } else {
-        s.s16[0] = spu2->ram[(c ? 0x1200 : 0x1000) + spu2->c[c].memin_read_addr];
-        s.s16[1] = spu2->ram[(c ? 0x1300 : 0x1100) + spu2->c[c].memin_read_addr];
+        s.s16[0] = spu2->ram[(c ? 0x2400 : 0x2000) + spu2->c[c].memin_read_addr];
+        s.s16[1] = spu2->ram[(c ? 0x2600 : 0x2200) + spu2->c[c].memin_read_addr];
 
         spu2->c[c].memin_read_addr++;
     }
@@ -1137,7 +1137,7 @@ struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v
 }
 
 int spu2_is_adma_active(struct ps2_spu2* spu2, int c) {
-    return spu2->c[c].memin_write_addr >= 0x200;
+    return spu2->c[c].memin_write_addr >= 0x400;
 }
 
 void spu2_start_adma(struct ps2_spu2* spu2, int c) {
