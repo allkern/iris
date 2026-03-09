@@ -36,3 +36,6 @@
 [submodule "deps/SDL_GameControllerDB"]
 	path = deps/SDL_GameControllerDB
 	url = https://github.com/mdqinc/SDL_GameControllerDB
+[submodule "deps/asmjit"]
+	path = deps/asmjit
+	url = https://github.com/asmjit/asmjit
