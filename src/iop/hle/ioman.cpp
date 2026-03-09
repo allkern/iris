@@ -11,9 +11,44 @@
 
 #define IOMAN_MAX_OPEN_FILES 64
 
-struct ioman_hle_state {
-    FILE* files[IOMAN_MAX_OPEN_FILES] = { nullptr };
-} state;
+/** Format mask */
+#define FIO_SO_IFMT  0x0038
+/** Symbolic link */
+#define FIO_SO_IFLNK 0x0008
+/** Regular file */
+#define FIO_SO_IFREG 0x0010
+/** Directory */
+#define FIO_SO_IFDIR 0x0020
+
+/** read */
+#define FIO_SO_IROTH 0x0004
+/** write */
+#define FIO_SO_IWOTH 0x0002
+/** execute */
+#define FIO_SO_IXOTH 0x0001
+
+std::string ioman_read_string(struct iop_state* iop, uint32_t addr) {
+    std::string str;
+
+    for (int i = 0; i < 256; i++) {
+        uint8_t d = iop_read8(iop, addr + i);
+
+        if (!d)
+            break;
+
+        str += d;
+    }
+
+    return str;
+}
+
+void ioman_read_ptr(struct iop_state* iop, uint32_t addr, void* buf, int size) {
+    unsigned char* ptr = (unsigned char*)buf;
+
+    for (int i = 0; i < size; i++) {
+        ptr[i] = iop_read8(iop, addr + i);
+    }
+}
 
 struct iomanx_stat {
     unsigned int mode;
@@ -33,6 +68,22 @@ struct iomanx_stat {
     unsigned int private_5;
 };
 
+struct iomanx_dirent {
+    iomanx_stat stat;
+    char name[256];
+    uint32_t privdata;
+};
+
+struct ioman_dirent {
+    std::filesystem::path* path;
+    int index;
+};
+
+struct ioman_hle_state {
+    FILE* files[IOMAN_MAX_OPEN_FILES] = { nullptr };
+    ioman_dirent directories[IOMAN_MAX_OPEN_FILES] = { nullptr };
+} state;
+
 static inline int ioman_allocate_file(FILE* file) {
     for (int i = 0; i < IOMAN_MAX_OPEN_FILES; i++) {
         if (!state.files[i]) {
@@ -43,6 +94,19 @@ static inline int ioman_allocate_file(FILE* file) {
     }
 
     // No free file slots
+    return -1;
+}
+
+static inline int ioman_allocate_directory(std::filesystem::path path) {
+    for (int i = 0; i < IOMAN_MAX_OPEN_FILES; i++) {
+        if (!state.directories[i].path) {
+            state.directories[i].path = new std::filesystem::path(path);
+
+            return i;
+        }
+    }
+
+    // No free directory slots
     return -1;
 }
 
@@ -78,36 +142,16 @@ static inline int ioman_get_device(std::string path) {
     return IOMAN_DEV_UNKNOWN;
 }
 
-extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
-    char buf[256];
-
-    for (int i = 0; i < 256; i++) {
-        uint8_t d = iop_read8(iop, iop->r[4] + i);
-
-        buf[i] = d;
-
-        if (!d)
-            break;
-    }
-
-    std::string path(buf);
-
-    int device = ioman_get_device(path);
-
-    // printf("path=%s\n", path.c_str());
-
-    // Only hook host files
-    if (device != IOMAN_DEV_HOST && device != IOMAN_DEV_MASS)
-        return 0;
-
+std::string ioman_get_host_path(std::string path) {
     auto p = path.find_first_of(':');
 
-    if (p == std::string::npos) return 0;
+    if (p == std::string::npos)
+        return "";
 
-    // Get access path
     std::string str = path.substr(p + 1);
 
-    if (!str.size()) return 0;
+    if (!str.size())
+        return "";
 
     if (str[0] == '/' || str[0] == '\\')
         str = str.substr(1);
@@ -117,6 +161,25 @@ extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
     if (p != std::string::npos)
         str = str.substr(p);
 
+    return str;
+}
+
+extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
+    std::string path = ioman_read_string(iop, iop->r[4]);
+
+    int device = ioman_get_device(path);
+
+    // printf("%s: path=%s\n", iomanx ? "iomanx" : "ioman", path.c_str());
+
+    // Only hook host files
+    if (device != IOMAN_DEV_HOST && device != IOMAN_DEV_MASS)
+        return 0;
+
+    // Get access path
+    std::string str = ioman_get_host_path(path);
+
+    if (!str.size()) return 0;
+
     std::filesystem::path absolute = std::filesystem::absolute(str);
 
     FILE* file = fopen(absolute.string().c_str(), "rb");
@@ -124,7 +187,7 @@ extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
     if (!file)
         return 0;
 
-    printf("ioman: Opened \'%s\'\n", absolute.string().c_str());
+    printf("%s: Opened \'%s\'\n", iomanx ? "iomanx" : "ioman", absolute.string().c_str());
 
     int slot = ioman_allocate_file(file);
 
@@ -233,9 +296,115 @@ extern "C" int ioman_ioctl(struct iop_state* iop, int iomanx) { return 0; }
 extern "C" int ioman_remove(struct iop_state* iop, int iomanx) { return 0; }
 extern "C" int ioman_mkdir(struct iop_state* iop, int iomanx) { return 0; }
 extern "C" int ioman_rmdir(struct iop_state* iop, int iomanx) { return 0; }
-extern "C" int ioman_dopen(struct iop_state* iop, int iomanx) { return 0; }
-extern "C" int ioman_dclose(struct iop_state* iop, int iomanx) { return 0; }
-extern "C" int ioman_dread(struct iop_state* iop, int iomanx) { return 0; }
+extern "C" int ioman_dopen(struct iop_state* iop, int iomanx) {
+    std::string path = ioman_read_string(iop, iop->r[4]);
+    int mode = iop->r[5];
+
+    int device = ioman_get_device(path);
+
+    if (device != IOMAN_DEV_HOST && device != IOMAN_DEV_MASS)
+        return 0;
+
+    // printf("%s: dopen path=%s mode=%d\n", iomanx ? "iomanx" : "ioman", path.c_str(), mode);
+
+    // Get access path
+    std::string str = ioman_get_host_path(path);
+
+    if (!str.size()) return 0;
+
+    std::filesystem::path absolute = std::filesystem::absolute(str);
+
+    if (!std::filesystem::exists(absolute) || !std::filesystem::is_directory(absolute)) {
+        fprintf(stderr, "ioman: Directory \'%s\' does not exist!\n", absolute.string().c_str());
+
+        return 0;
+    }
+
+    int slot = ioman_allocate_directory(absolute);
+
+    if (slot == -1)
+        return 0;
+
+    // printf("%s: Opened directory \'%s\' (fd=%x)\n", iomanx ? "iomanx" : "ioman", absolute.string().c_str(), 0x140 + slot);
+
+    iop_return(iop, 0x140 + slot);
+
+    return 1;
+}
+extern "C" int ioman_dclose(struct iop_state* iop, int iomanx) {
+    uint32_t fd = iop->r[4];
+
+    if (!(fd >= 0x140 && fd < 0x180))
+        return 0;
+
+    fd -= 0x140;
+
+    if (state.directories[fd].path)
+        delete state.directories[fd].path;
+
+    state.directories[fd].path = nullptr;
+    state.directories[fd].index = 0;
+
+    iop_return(iop, 0);
+
+    return 1;
+}
+extern "C" int ioman_dread(struct iop_state* iop, int iomanx) {
+    uint32_t fd = iop->r[4];
+    uint32_t ptr = iop->r[5];
+
+    if (!(fd >= 0x140 && fd < 0x180))
+        return 0;
+
+    fd -= 0x140;
+
+    if (!state.directories[fd].path)
+        return 0;
+
+    ioman_dirent* dir = &state.directories[fd];
+
+    std::filesystem::directory_entry entry;
+
+    bool found = false;
+    int i = 0;
+
+    for (const auto& e : std::filesystem::directory_iterator(*dir->path)) {
+        if (i == dir->index) {
+            entry = e;
+            found = true;
+
+            break;
+        }
+
+        i++;
+    }
+
+    if (!found) {
+        iop_return(iop, 0);
+
+        return 1;
+    }
+
+    iomanx_dirent dirent;
+
+    dirent.stat.mode = entry.is_directory() ? FIO_SO_IFDIR : FIO_SO_IFREG;
+
+    strncpy(dirent.name, entry.path().filename().string().c_str(), 256);
+
+    dirent.name[255] = '\0';
+
+    for (int i = 0; i < sizeof(dirent); i++) {
+        iop_write8(iop, ptr + i, ((uint8_t*)&dirent)[i]);
+    }
+
+    // printf("%s: dread index=%d name=%s\n", iomanx ? "iomanx" : "ioman", dir->index, dirent.name);
+
+    dir->index++;
+
+    iop_return(iop, fd + 0x140);
+
+    return 1;
+}
 extern "C" int ioman_getstat(struct iop_state* iop, int iomanx) {
     char buf[256];
 
@@ -248,7 +417,7 @@ extern "C" int ioman_getstat(struct iop_state* iop, int iomanx) {
             break;
     }
 
-    fprintf(stderr, "%s: getstat(%s)\n", iomanx ? "iomanx" : "ioman", buf);
+    // fprintf(stderr, "%s: getstat(%s)\n", iomanx ? "iomanx" : "ioman", buf);
 
     iop_return(iop, 0);
 
