@@ -9,7 +9,7 @@
 #include "../bus.h"
 #include "../iop_export.h"
 
-#define IOMAN_MAX_OPEN_FILES 64
+#define IOMAN_MAX_OPEN_FILES 128
 
 /** Format mask */
 #define FIO_SO_IFMT  0x0038
@@ -26,6 +26,21 @@
 #define FIO_SO_IWOTH 0x0002
 /** execute */
 #define FIO_SO_IXOTH 0x0001
+
+#define FIO_O_RDONLY       0x0001
+#define FIO_O_WRONLY       0x0002
+#define FIO_O_RDWR         0x0003
+#define FIO_O_DIROPEN      0x0008  // Internal use for dopen
+#define FIO_O_NBLOCK       0x0010
+#define FIO_O_APPEND       0x0100
+#define FIO_O_CREAT        0x0200
+#define FIO_O_TRUNC        0x0400
+#define FIO_O_EXCL         0x0800
+#define FIO_O_NOWAIT       0x8000
+
+#define FIO_SEEK_SET       0
+#define FIO_SEEK_CUR       1
+#define FIO_SEEK_END       2
 
 std::string ioman_read_string(struct iop_state* iop, uint32_t addr) {
     std::string str;
@@ -142,6 +157,16 @@ static inline int ioman_get_device(std::string path) {
     return IOMAN_DEV_UNKNOWN;
 }
 
+const char* ioman_get_mode_string(int mode) {
+    if ((mode & FIO_O_RDWR) == FIO_O_RDWR) {
+        return "r+b";
+    } else if ((mode & FIO_O_RDWR) == FIO_O_WRONLY) {
+        return "wb";
+    } else {
+        return "rb";
+    }
+}
+
 std::string ioman_get_host_path(std::string path) {
     auto p = path.find_first_of(':');
 
@@ -166,10 +191,11 @@ std::string ioman_get_host_path(std::string path) {
 
 extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
     std::string path = ioman_read_string(iop, iop->r[4]);
+    int mode = iop->r[5];
 
     int device = ioman_get_device(path);
 
-    // printf("%s: path=%s\n", iomanx ? "iomanx" : "ioman", path.c_str());
+    // printf("%s: path=%s mode=%d\n", iomanx ? "iomanx" : "ioman", path.c_str(), mode);
 
     // Only hook host files
     if (device != IOMAN_DEV_HOST && device != IOMAN_DEV_MASS)
@@ -182,7 +208,32 @@ extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
 
     std::filesystem::path absolute = std::filesystem::absolute(str);
 
-    FILE* file = fopen(absolute.string().c_str(), "rb");
+    FILE* file = NULL;
+
+    if (mode & FIO_O_TRUNC && mode & FIO_O_CREAT) {
+        // Truncate file if it exists, otherwise create new file
+        if (!(file = fopen(absolute.string().c_str(), "w+b"))) {
+            return 0;
+        }
+    } else if (mode & FIO_O_CREAT) {
+        // Only create file
+        if (!(file = fopen(absolute.string().c_str(), "a+b"))) {
+            return 0;
+        }
+    } else if (mode & FIO_O_TRUNC) {
+        // Check if file exists before truncating
+        if (!(file = fopen(absolute.string().c_str(), "r+b"))) {
+            return 0;
+        }
+
+        if (!(file = fopen(absolute.string().c_str(), "w+b"))) {
+            return 0;
+        }
+    }
+
+    fclose(file);
+
+    file = fopen(absolute.string().c_str(), ioman_get_mode_string(mode));
 
     if (!file)
         return 0;
@@ -245,26 +296,55 @@ extern "C" int ioman_write(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
     // We only use this to HLE IOMAN stdout writes
-    if (fd != 1)
-        return 0;
+    // if (fd != 1)
+    //     return 0;
 
-    uint32_t ptr = iop->r[5];
-    uint32_t size = iop->r[6] & 0xfff;
+    // printf("%s: write fd=%d\n", iomanx ? "iomanx" : "ioman", fd);
 
-    char c = iop_read8(iop, ptr++);
-    int cnt = 0;
+    if (fd >= 0x100 && fd < 0x140) {
+        fd -= 0x100;
 
-    while (c && ((cnt++) != size)) {
-        iop->kputchar(iop->kputchar_udata, c);
+        if (!state.files[fd])
+            return 0;
 
-        c = iop_read8(iop, ptr++);
+        uint32_t ptr = iop->r[5];
+        uint32_t size = iop->r[6];
+
+        uint8_t* buf = (uint8_t*)malloc(size);
+
+        for (int i = 0; i < size; i++) {
+            buf[i] = iop_read8(iop, ptr + i);
+        }
+
+        int ret = fwrite(buf, 1, size, state.files[fd]);
+
+        free(buf);
+
+        iop_return(iop, ret);
+
+        return 1;
+    } else if (fd == 1) {
+        // HLE IOMAN stdout writes
+        uint32_t ptr = iop->r[5];
+        uint32_t size = iop->r[6] & 0xfff;
+
+        char c = iop_read8(iop, ptr++);
+        int cnt = 0;
+
+        while (c && ((cnt++) != size)) {
+            iop->kputchar(iop->kputchar_udata, c);
+
+            c = iop_read8(iop, ptr++);
+        }
+
+        fflush(stdout);
+
+        iop_return(iop, size);
+
+        return 1;
     }
 
-    fflush(stdout);
-
-    iop_return(iop, size);
-
-    return 1;
+    return 0;
 }
 extern "C" int ioman_lseek(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
@@ -397,7 +477,7 @@ extern "C" int ioman_dread(struct iop_state* iop, int iomanx) {
         iop_write8(iop, ptr + i, ((uint8_t*)&dirent)[i]);
     }
 
-    // printf("%s: dread index=%d name=%s\n", iomanx ? "iomanx" : "ioman", dir->index, dirent.name);
+    printf("%s: dread index=%d name=%s\n", iomanx ? "iomanx" : "ioman", dir->index, dirent.name);
 
     dir->index++;
 
