@@ -393,11 +393,23 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_bios_destroy(ps2->rom2);
     ps2_sif_destroy(ps2->sif);
 
+    // Destroy optional hardware
+    if (ps2->s14x_nand) s14x_nand_destroy(ps2->s14x_nand);
+    if (ps2->s14x_syscon) s14x_syscon_destroy(ps2->s14x_syscon);
+    if (ps2->s14x_sram) s14x_sram_destroy(ps2->s14x_sram);
+    if (ps2->s14x_link) s14x_link_destroy(ps2->s14x_link);
+
     free(ps2);
 }
 
 void ps2_set_system(struct ps2_state* ps2, int system) {
     int ee_ram_size, iop_ram_size, mechacon_model;
+
+    // Destroy optional hardware
+    if (ps2->s14x_nand) { s14x_nand_destroy(ps2->s14x_nand); ps2->s14x_nand = NULL; }
+    if (ps2->s14x_syscon) { s14x_syscon_destroy(ps2->s14x_syscon); ps2->s14x_syscon = NULL; }
+    if (ps2->s14x_sram) { s14x_sram_destroy(ps2->s14x_sram); ps2->s14x_sram = NULL; }
+    if (ps2->s14x_link) { s14x_link_destroy(ps2->s14x_link); ps2->s14x_link = NULL; }
 
     switch (system) {
         case PS2_SYSTEM_AUTO: {
@@ -454,6 +466,22 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
 
             // This board actually has no MechaCon
             mechacon_model = CDVD_MECHACON_DRAGON;
+
+            // Wire up System 147/148 hardware
+            ps2->s14x_nand = s14x_nand_create();
+            ps2->s14x_syscon = s14x_syscon_create();
+            ps2->s14x_sram = s14x_sram_create();
+            ps2->s14x_link = s14x_link_create();
+
+            s14x_nand_init(ps2->s14x_nand);
+            s14x_syscon_init(ps2->s14x_syscon);
+            s14x_sram_init(ps2->s14x_sram, &ps2->s14x_syscon->sram_write_flag);
+            s14x_link_init(ps2->s14x_link);
+
+            iop_bus_init_s14x_nand(ps2->iop_bus, ps2->s14x_nand);
+            iop_bus_init_s14x_syscon(ps2->iop_bus, ps2->s14x_syscon);
+            iop_bus_init_s14x_sram(ps2->iop_bus, ps2->s14x_sram);
+            iop_bus_init_s14x_link(ps2->iop_bus, ps2->s14x_link);
         } break;
 
         case PS2_SYSTEM_NAMCO_S148: {
@@ -462,6 +490,22 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
 
             // This board actually has no MechaCon
             mechacon_model = CDVD_MECHACON_DRAGON;
+
+            // Wire up System 147/148 hardware
+            ps2->s14x_nand = s14x_nand_create();
+            ps2->s14x_syscon = s14x_syscon_create();
+            ps2->s14x_sram = s14x_sram_create();
+            ps2->s14x_link = s14x_link_create();
+
+            s14x_nand_init(ps2->s14x_nand);
+            s14x_syscon_init(ps2->s14x_syscon);
+            s14x_sram_init(ps2->s14x_sram, &ps2->s14x_syscon->sram_write_flag);
+            s14x_link_init(ps2->s14x_link);
+
+            iop_bus_init_s14x_nand(ps2->iop_bus, ps2->s14x_nand);
+            iop_bus_init_s14x_syscon(ps2->iop_bus, ps2->s14x_syscon);
+            iop_bus_init_s14x_sram(ps2->iop_bus, ps2->s14x_sram);
+            iop_bus_init_s14x_link(ps2->iop_bus, ps2->s14x_link);
         } break;
 
         case PS2_SYSTEM_NAMCO_S246: {

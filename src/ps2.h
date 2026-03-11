@@ -33,6 +33,13 @@ extern "C" {
 #include "gs/gs.h"
 #include "ipu/ipu.h"
 
+// Arcade hardware
+// Namco System 147/148
+#include "s14x/nand.h"
+#include "s14x/syscon.h"
+#include "s14x/sram.h"
+#include "s14x/link.h"
+
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
 #include "dev/guncon.h"
@@ -108,6 +115,11 @@ struct ps2_state {
     struct ps2_dev9* dev9;
     struct ps2_speed* speed;
 
+    // Namco System 147/148
+    struct s14x_nand* s14x_nand;
+    struct s14x_syscon* s14x_syscon;
+    struct s14x_sram* s14x_sram;
+    struct s14x_link* s14x_link;
     struct sched_state* sched;
 
     int ee_cycles;

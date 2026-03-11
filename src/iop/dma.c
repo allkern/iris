@@ -371,7 +371,24 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
     // }
 }
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
-    printf("dev9: DMA transfer started\n");
+    // Note: DEV9 DMA serves different purposes based on the system.
+
+    // On retail hardware, DEV9 DMA is used to transfer data in and out
+    // of the HDD. On the Namco Syste 147/148 arcade hardware, DEV9 DMA
+    // is used to transfer data to and from the Samsung NAND flash
+    // storage chip.
+
+    // We'll have to account for this once we implement HDD support, for
+    // now we're defaulting to the System 147/148 behavior, since it
+    // won't be used by any retail games anyways unless the HDD is present.
+
+    while (dma->dev9.transfer_size) {
+        uint32_t d = iop_bus_read8(dma->bus, 0x14000008);
+
+        iop_bus_write8(dma->bus, dma->dev9.madr++, d);
+
+        dma->dev9.transfer_size--;
+    }
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_DEV9);
     iop_dma_check_irq(dma);
