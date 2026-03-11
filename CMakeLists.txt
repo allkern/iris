@@ -194,6 +194,10 @@ target_sources(iris PRIVATE
     src/shared/speed/ata.c
     src/shared/speed/eeprom.c
     src/shared/speed/flash.c
+    src/s14x/nand.c
+    src/s14x/syscon.c
+    src/s14x/sram.c
+    src/s14x/link.c
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp
