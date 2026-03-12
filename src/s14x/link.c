@@ -66,6 +66,13 @@ struct s14x_link* s14x_link_create(void) {
 
 void s14x_link_init(struct s14x_link* link) {
     memset(link, 0, sizeof(struct s14x_link));
+
+    // ARCNET CORE interrupt (possibly sent after INIMODE was set?)
+    // TA bit set
+    link->stsl = 9;
+
+    // RECON bit set
+    link->comr0 = 4;
 }
 
 uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr) {
@@ -193,11 +200,21 @@ void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
         case S14X_LINK_NSTH: link->nsth = data; return;
         case S14X_LINK_NSTL: link->nstl = data; return;
         case S14X_LINK_STSH: link->stsh = data; return;
-        case S14X_LINK_STSL: link->stsl = data; return;
+        case S14X_LINK_STSL: link->stsl &= 0x01; link->stsl |= data & 0xfe; return;
         case S14X_LINK_MSKH: link->mskh = data; return;
         case S14X_LINK_MSKL: link->mskl = data; return;
         case S14X_LINK_PAD16: link->pad16 = data; return;
+<<<<<<< Updated upstream
         case S14X_LINK_ECCMD: link->eccmd = data; return;
+=======
+        case S14X_LINK_ECCMD: { 
+            link->eccmd = data;
+
+            if (link->eccmd == 0x16) {
+                link->comr0 &= ~4; // Clear RECON bit when ECCMD 0x16 is written, which is used to acknowledge an interrupt
+            }
+        } return;
+>>>>>>> Stashed changes
         case S14X_LINK_MRSID: link->mrsid = data; return;
         case S14X_LINK_RSID: link->rsid = data; return;
         case S14X_LINK_PAD1A: link->pad1a = data; return;
