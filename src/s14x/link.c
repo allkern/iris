@@ -204,9 +204,6 @@ void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
         case S14X_LINK_MSKH: link->mskh = data; return;
         case S14X_LINK_MSKL: link->mskl = data; return;
         case S14X_LINK_PAD16: link->pad16 = data; return;
-<<<<<<< Updated upstream
-        case S14X_LINK_ECCMD: link->eccmd = data; return;
-=======
         case S14X_LINK_ECCMD: { 
             link->eccmd = data;
 
@@ -214,7 +211,6 @@ void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
                 link->comr0 &= ~4; // Clear RECON bit when ECCMD 0x16 is written, which is used to acknowledge an interrupt
             }
         } return;
->>>>>>> Stashed changes
         case S14X_LINK_MRSID: link->mrsid = data; return;
         case S14X_LINK_RSID: link->rsid = data; return;
         case S14X_LINK_PAD1A: link->pad1a = data; return;
