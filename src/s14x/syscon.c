@@ -39,7 +39,7 @@ uint64_t s14x_syscon_read(struct s14x_syscon* syscon, uint32_t addr) {
                 }
             }
 
-            printf("s14x_rtc: read RTC_FLAG %d\n", syscon->rtc_flag);
+            // printf("s14x_rtc: read RTC_FLAG %d\n", syscon->rtc_flag);
 
             return b;
         }

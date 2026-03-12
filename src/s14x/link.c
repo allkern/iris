@@ -69,67 +69,83 @@ void s14x_link_init(struct s14x_link* link) {
 }
 
 uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr) {
-    if (addr != S14X_LINK_WATCHDOG_FLAG) {
-        printf("s14x_link: Read %s (%08x)\n", g_reg_names[addr], addr);
-    }
+    uint32_t r = 0;
 
     switch (addr) {
-        case S14X_LINK_PAD00: return link->pad00;
-        case S14X_LINK_COMR0: return link->comr0;
-        case S14X_LINK_PAD02: return link->pad02;
-        case S14X_LINK_COMR1: return link->comr1;
-        case S14X_LINK_PAD04: return link->pad04;
-        case S14X_LINK_COMR2: return link->comr2;
-        case S14X_LINK_PAD06: return link->pad06;
-        case S14X_LINK_COMR3: return link->comr3;
-        case S14X_LINK_PAD08: return link->pad08;
-        case S14X_LINK_COMR4: return link->comr4;
-        case S14X_LINK_PAD0A: return link->pad0a;
-        case S14X_LINK_COMR5: return link->comr5;
-        case S14X_LINK_PAD0C: return link->pad0c;
-        case S14X_LINK_COMR6: return link->comr6;
-        case S14X_LINK_PAD0E: return link->pad0e;
-        case S14X_LINK_COMR7: return link->comr7;
-        case S14X_LINK_NSTH: return link->nsth;
-        case S14X_LINK_NSTL: return link->nstl;
-        case S14X_LINK_STSH: return link->stsh;
-        case S14X_LINK_STSL: return link->stsl;
-        case S14X_LINK_MSKH: return link->mskh;
-        case S14X_LINK_MSKL: return link->mskl;
-        case S14X_LINK_PAD16: return link->pad16;
-        case S14X_LINK_ECCMD: return link->eccmd;
-        case S14X_LINK_MRSID: return link->mrsid;
-        case S14X_LINK_RSID: return link->rsid;
-        case S14X_LINK_PAD1A: return link->pad1a;
-        case S14X_LINK_SSID: return link->ssid;
-        case S14X_LINK_RXFHH: return link->rxfhh;
-        case S14X_LINK_RXFHL: return link->rxfhl;
-        case S14X_LINK_RXFLH: return link->rxflh;
-        case S14X_LINK_RXFLL: return link->rxfll;
-        case S14X_LINK_PAD20: return link->pad20;
-        case S14X_LINK_CMID: return link->cmid;
-        case S14X_LINK_MODEH: return link->modeh;
-        case S14X_LINK_MODEL: return link->model;
-        case S14X_LINK_CARRYH: return link->carryh;
-        case S14X_LINK_CARRYL: return link->carryl;
-        case S14X_LINK_RXMHH: return link->rxmhh;
-        case S14X_LINK_RXMHL: return link->rxmhl;
-        case S14X_LINK_RXMLH: return link->rxmlh;
-        case S14X_LINK_RXMLL: return link->rxmll;
-        case S14X_LINK_PAD2A: return link->pad2a;
-        case S14X_LINK_MAXID: return link->maxid;
-        case S14X_LINK_PAD2C: return link->pad2c;
-        case S14X_LINK_NID: return link->nid;
-        case S14X_LINK_PAD2E: return link->pad2e;
-        case S14X_LINK_PS: return link->ps;
-        case S14X_LINK_PAD30: return link->pad30;
-        case S14X_LINK_CKP: return link->ckp;
-        case S14X_LINK_NSTDIFH: return link->nstdifh;
-        case S14X_LINK_NSTDIFL: return link->nstdifl;
-        case S14X_LINK_WATCHDOG_FLAG: return link->watchdog_flag;
+        case S14X_LINK_PAD00: r = link->pad00; break;
+        case S14X_LINK_COMR0: r = link->comr0; break;
+        case S14X_LINK_PAD02: r = link->pad02; break;
+        case S14X_LINK_COMR1: r = link->comr1; break;
+        case S14X_LINK_PAD04: r = link->pad04; break;
+        case S14X_LINK_COMR2: r = link->comr2; break;
+        case S14X_LINK_PAD06: r = link->pad06; break;
+        case S14X_LINK_COMR3: r = link->comr3; break;
+        case S14X_LINK_PAD08: r = link->pad08; break;
+        case S14X_LINK_COMR4: {
+            uint32_t addr = link->ramadr;
+
+            if (link->comr2 & S14X_LINK_COMR2_AUTOINC) {
+                if (link->comr2 & S14X_LINK_COMR2_WRAPAR) {
+                    link->ramadr = (link->ramadr & 0x3c0) | ((link->ramadr + 1) & 0x3f);
+                } else {
+                    link->ramadr = (link->ramadr + 1) & 0x3ff;
+                }
+            }
+
+            printf("s14x_link: Read RAM[%04x] = %02x\n", addr, link->ram[addr]);
+
+            r = link->ram[addr];
+        } break;
+        case S14X_LINK_PAD0A: r = link->pad0a; break;
+        case S14X_LINK_COMR5: r = link->comr5; break;
+        case S14X_LINK_PAD0C: r = link->pad0c; break;
+        case S14X_LINK_COMR6: r = link->comr6; break;
+        case S14X_LINK_PAD0E: r = link->pad0e; break;
+        case S14X_LINK_COMR7: r = link->comr7; break;
+        case S14X_LINK_NSTH: r = link->nsth; break;
+        case S14X_LINK_NSTL: r = link->nstl; break;
+        case S14X_LINK_STSH: r = link->stsh; break;
+        case S14X_LINK_STSL: r = link->stsl; break;
+        case S14X_LINK_MSKH: r = link->mskh; break;
+        case S14X_LINK_MSKL: r = link->mskl; break;
+        case S14X_LINK_PAD16: r = link->pad16; break;
+        case S14X_LINK_ECCMD: r = link->eccmd; break;
+        case S14X_LINK_MRSID: r = link->mrsid; break;
+        case S14X_LINK_RSID: r = link->rsid; break;
+        case S14X_LINK_PAD1A: r = link->pad1a; break;
+        case S14X_LINK_SSID: r = link->ssid; break;
+        case S14X_LINK_RXFHH: r = link->rxfhh; break;
+        case S14X_LINK_RXFHL: r = link->rxfhl; break;
+        case S14X_LINK_RXFLH: r = link->rxflh; break;
+        case S14X_LINK_RXFLL: r = link->rxfll; break;
+        case S14X_LINK_PAD20: r = link->pad20; break;
+        case S14X_LINK_CMID: r = link->cmid; break;
+        case S14X_LINK_MODEH: r = link->modeh; break;
+        case S14X_LINK_MODEL: r = link->model; break;
+        case S14X_LINK_CARRYH: r = link->carryh; break;
+        case S14X_LINK_CARRYL: r = link->carryl; break;
+        case S14X_LINK_RXMHH: r = link->rxmhh; break;
+        case S14X_LINK_RXMHL: r = link->rxmhl; break;
+        case S14X_LINK_RXMLH: r = link->rxmlh; break;
+        case S14X_LINK_RXMLL: r = link->rxmll; break;
+        case S14X_LINK_PAD2A: r = link->pad2a; break;
+        case S14X_LINK_MAXID: r = link->maxid; break;
+        case S14X_LINK_PAD2C: r = link->pad2c; break;
+        case S14X_LINK_NID: r = link->nid; break;
+        case S14X_LINK_PAD2E: r = link->pad2e; break;
+        case S14X_LINK_PS: r = link->ps; break;
+        case S14X_LINK_PAD30: r = link->pad30; break;
+        case S14X_LINK_CKP: r = link->ckp; break;
+        case S14X_LINK_NSTDIFH: r = link->nstdifh; break;
+        case S14X_LINK_NSTDIFL: r = link->nstdifl; break;
+        case S14X_LINK_WATCHDOG_FLAG: r = link->watchdog_flag; break;
     }
 
-    return 0;
+    if (addr != S14X_LINK_WATCHDOG_FLAG) {
+        printf("s14x_link: Read %s (%08x) %08x\n", g_reg_names[addr], addr, r);
+    }
+
+    return r;
 }
 
 void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
@@ -143,11 +159,31 @@ void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
         case S14X_LINK_PAD02: link->pad02 = data; return;
         case S14X_LINK_COMR1: link->comr1 = data; return;
         case S14X_LINK_PAD04: link->pad04 = data; return;
-        case S14X_LINK_COMR2: link->comr2 = data; return;
+        case S14X_LINK_COMR2: {
+            link->comr2 = data;
+            link->ramadr = (link->ramadr & 0x3f) | ((data & 0xf) << 6);
+        }
         case S14X_LINK_PAD06: link->pad06 = data; return;
-        case S14X_LINK_COMR3: link->comr3 = data; return;
+        case S14X_LINK_COMR3: {
+            link->comr3 = data;
+            link->ramadr = (link->ramadr & 0x3c0) | (data & 0x3f);
+        } return;
         case S14X_LINK_PAD08: link->pad08 = data; return;
-        case S14X_LINK_COMR4: link->comr4 = data; return;
+        case S14X_LINK_COMR4: {
+            uint32_t addr = link->ramadr;
+
+            if (link->comr2 & S14X_LINK_COMR2_AUTOINC) {
+                if (link->comr2 & S14X_LINK_COMR2_WRAPAR) {
+                    link->ramadr = (link->ramadr + 1) & 0x3ff;
+                } else {
+                    link->ramadr = (link->ramadr & 0x3c0) | ((link->ramadr + 1) & 0x3f);
+                }
+            }
+
+            // printf("s14x_link: Write RAM[%04x] = %02x\n", addr, data);
+
+            link->ram[addr] = data;
+        } return;
         case S14X_LINK_PAD0A: link->pad0a = data; return;
         case S14X_LINK_COMR5: link->comr5 = data; return;
         case S14X_LINK_PAD0C: link->pad0c = data; return;
@@ -161,7 +197,7 @@ void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
         case S14X_LINK_MSKH: link->mskh = data; return;
         case S14X_LINK_MSKL: link->mskl = data; return;
         case S14X_LINK_PAD16: link->pad16 = data; return;
-        case S14X_LINK_ECCMD: link->eccmd = data; exit(1); return;
+        case S14X_LINK_ECCMD: link->eccmd = data; return;
         case S14X_LINK_MRSID: link->mrsid = data; return;
         case S14X_LINK_RSID: link->rsid = data; return;
         case S14X_LINK_PAD1A: link->pad1a = data; return;

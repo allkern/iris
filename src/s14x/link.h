@@ -62,6 +62,13 @@ extern "C" {
 #define S14X_LINK_NSTDIFL 0x33
 #define S14X_LINK_WATCHDOG_FLAG 0x34
 
+#define S14X_LINK_COMR2_RDDATA  0x80
+#define S14X_LINK_COMR2_AUTOINC 0x40
+#define S14X_LINK_COMR2_WRAPAR  0x20
+#define S14X_LINK_COMR2_PAGE    0x1f
+
+#define S14X_LINK_RAMSIZE 1024
+
 struct s14x_link {
 	uint8_t pad00;
 	uint8_t comr0;
@@ -116,6 +123,10 @@ struct s14x_link {
 	uint8_t nstdifh;
 	uint8_t nstdifl;
 	uint8_t watchdog_flag;
+
+	uint8_t ram[S14X_LINK_RAMSIZE];
+
+	uint32_t ramadr;
 };
 
 struct s14x_link* s14x_link_create(void);
