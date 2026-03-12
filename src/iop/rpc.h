@@ -7,7 +7,9 @@ extern "C" {
 
 #include <stdint.h>
 
-struct sif_cmd_header {
+#include "iop.h"
+
+struct __attribute__((packed)) sif_cmd_header {
     unsigned int psize : 8;
     unsigned int dsize : 24;
     unsigned int dest;
@@ -132,7 +134,7 @@ struct sif_rpc_other_data_pkt {
     unsigned int size;
 };
 
-char* rpc_decode_packet(char* buf, uint32_t* data);
+char* rpc_decode_packet(struct iop_state* iop, char* buf, uint32_t* data);
 
 #ifdef __cplusplus
 }

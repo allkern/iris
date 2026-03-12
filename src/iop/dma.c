@@ -477,11 +477,13 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
         int irq = !!(tag & 0x40000000);
         eot = !!(tag & 0x80000000);
 
-        // printf("iop: SIF1 tag addr=%08x size=%08x irq=%d eot=%d\n", addr, size, irq, eot);
+        // printf("iop: SIF1 tag read_index=%\n", dma->sif->sif1.read_index);
 
-        // char buf[128];
+        char buf[128];
 
-        // puts(rpc_decode_packet(buf, ((void*)dma->sif->fifo.data) + (dma->sif->fifo.read_index * 16)));
+        if (rpc_decode_packet(dma->intc->iop, buf, ((void*)dma->sif->sif1.data) + (dma->sif->sif1.read_index * 16))) {
+            printf("%s\n", buf);
+        }
 
         while (size) {
             uint128_t q = ps2_sif1_read(dma->sif);

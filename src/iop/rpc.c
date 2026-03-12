@@ -1,3 +1,4 @@
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -28,36 +29,48 @@ const char* rpc_get_server(uint32_t id) {
     return "<unknown>";
 }
 
-char* rpc_decode_packet(char* buf, uint32_t* data) {
+char* rpc_decode_packet(struct iop_state* iop, char* buf, uint32_t* data) {
     char* ptr = buf;
 
     struct sif_cmd_header* hdr = (struct sif_cmd_header*)data;
 
-    ptr += sprintf(ptr, "rpc: ");
+    // ptr += sprintf(ptr, "rpc: ");
 
     switch (hdr->cid) {
-        case 0x80000000: ptr += sprintf(ptr, "ChangeSaddr: "); break;
-        case 0x80000001: ptr += sprintf(ptr, "SetSreg: "); break;
+        case 0x80000000: ptr += sprintf(ptr, "rpc: ChangeSaddr: "); break;
+        case 0x80000001: ptr += sprintf(ptr, "rpc: SetSreg: "); break;
         case 0x80000002: {
             struct sif_init_pkt* init = (struct sif_init_pkt*)data;
 
-            ptr += sprintf(ptr, "Init (opt=%d)", init->header.opt);
+            ptr += sprintf(ptr, "rpc: Init (opt=%d)", init->header.opt);
         } break;
-        case 0x80000003: ptr += sprintf(ptr, "Reboot: "); break;
-        case 0x80000008: ptr += sprintf(ptr, "RequestEnd: "); break;
+        case 0x80000003: ptr += sprintf(ptr, "rpc: Reboot: "); break;
+        case 0x80000008: ptr += sprintf(ptr, "rpc: RequestEnd: "); break;
         case 0x80000009: {
             struct sif_rpc_bind_pkt* bind = (struct sif_rpc_bind_pkt*)data;
 
+            // if (bind->sid == 0x14799) {
+            //     printf("sifcmd: Received bind for 0x14799 <-----------------------------------------\n");
+            // }
+
             const char* server = rpc_get_server(bind->sid);
 
-            ptr += sprintf(ptr, "Bind (%s)", server); break;
+            ptr += sprintf(ptr, "rpc: Bind (%s)", server); break;
         } break;
         case 0x8000000A: {
             struct sif_rpc_call_pkt* call = (struct sif_rpc_call_pkt*)data;
 
-            ptr += sprintf(ptr, "Call: %08x", call->rpc_number);
+            uint32_t sid = iop_read32(iop, call->server);
+
+            // if (sid == 0x14799) {
+            //     printf("sifcmd: Received call for 0x14799, id=%08x <-----------------------------------------\n", call->rpc_number);
+            // }
+
+            ptr += sprintf(ptr, "rpc: Call Server=%08x Func=%08x", sid, call->rpc_number);
         } break;
-        case 0x8000000C: ptr += sprintf(ptr, "GetOtherData: "); break;    
+        case 0x8000000C: ptr += sprintf(ptr, "rpc: GetOtherData"); break;
+        // default: ptr += sprintf(ptr, "Unknown CID %08x", hdr->cid); break;
+        default: return NULL;
     }
 
     *ptr++ = '\0';
