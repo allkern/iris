@@ -54,15 +54,23 @@ void s14x_ioboard_handle_packet(void* udata, struct link_packet* in, struct link
             out->data[1] = ioboard->switches >> 8;
         } break;
 
+        case 0x11: {
+            out->data[0x32] = 0x20;
+            out->data[0x36] = ioboard->buttons & 0xff;
+            out->data[0x37] = ioboard->buttons >> 8;
+        } break;
         case 0x0d: // ?
-        case 0x11: // ?
         case 0x18: // Switch
         case 0x38: // SCI
         case 0x39: // GetSwitches
         case 0x48: // CoinSensor
         case 0x58: // MechanicalSensor
-        case 0xa5: // Reset
+        case 0xa5: { // Reset
+            out->data[0] = in->data[0];
+        } break;
         default: {
+            printf("s14x_ioboard: Unhandled command %02x\n", in->cmd);
+
             out->data[0] = in->data[0];
         } break;
     }
@@ -76,4 +84,12 @@ void s14x_ioboard_press_switch(struct s14x_ioboard* ioboard, uint16_t mask) {
 
 void s14x_ioboard_release_switch(struct s14x_ioboard* ioboard, uint16_t mask) {
     ioboard->switches |= mask;
+}
+
+void s14x_ioboard_press_button(struct s14x_ioboard* ioboard, uint16_t mask) {
+    ioboard->buttons |= mask;
+}
+
+void s14x_ioboard_release_button(struct s14x_ioboard* ioboard, uint16_t mask) {
+    ioboard->buttons &= ~mask;
 }

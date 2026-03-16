@@ -52,15 +52,33 @@ extern "C" {
 #define S14X_IOBOARD_SW_UP       0x0002
 #define S14X_IOBOARD_SW_ENTER    0x0004
 #define S14X_IOBOARD_SW_TEST     0x0008
-#define S14X_IOBOARD_SW_SERVICE  0x0010
-#define S14X_IOBOARD_SW_P4_ENTER 0x0020
-#define S14X_IOBOARD_SW_P3_ENTER 0x0040
-#define S14X_IOBOARD_SW_P2_ENTER 0x0080
-#define S14X_IOBOARD_SW_P1_ENTER 0x0100
+#define S14X_IOBOARD_SW_SERVICE  0x0020
+#define S14X_IOBOARD_SW_P4_START 0x0100
+#define S14X_IOBOARD_SW_P3_START 0x0200
+#define S14X_IOBOARD_SW_P2_START 0x0400
+#define S14X_IOBOARD_SW_P1_START 0x0800
+
+#define S14X_IOBOARD_BT_P4_UP    0x0001
+#define S14X_IOBOARD_BT_P4_DOWN  0x0002
+#define S14X_IOBOARD_BT_P4_RIGHT 0x0004
+#define S14X_IOBOARD_BT_P4_LEFT  0x0008
+#define S14X_IOBOARD_BT_P2_UP    0x0010
+#define S14X_IOBOARD_BT_P2_DOWN  0x0020
+#define S14X_IOBOARD_BT_P2_RIGHT 0x0040
+#define S14X_IOBOARD_BT_P2_LEFT  0x0080
+#define S14X_IOBOARD_BT_P3_UP    0x0100
+#define S14X_IOBOARD_BT_P3_DOWN  0x0200
+#define S14X_IOBOARD_BT_P3_RIGHT 0x0400
+#define S14X_IOBOARD_BT_P3_LEFT  0x0800
+#define S14X_IOBOARD_BT_P1_UP    0x1000
+#define S14X_IOBOARD_BT_P1_DOWN  0x2000
+#define S14X_IOBOARD_BT_P1_RIGHT 0x4000
+#define S14X_IOBOARD_BT_P1_LEFT  0x8000
 
 struct s14x_ioboard {
     uint16_t version;
     uint16_t switches;
+    uint16_t buttons;
 
     int mode;
 };
@@ -71,6 +89,8 @@ void s14x_ioboard_destroy(struct s14x_ioboard* ioboard);
 
 void s14x_ioboard_press_switch(struct s14x_ioboard* ioboard, uint16_t mask);
 void s14x_ioboard_release_switch(struct s14x_ioboard* ioboard, uint16_t mask);
+void s14x_ioboard_press_button(struct s14x_ioboard* ioboard, uint16_t mask);
+void s14x_ioboard_release_button(struct s14x_ioboard* ioboard, uint16_t mask);
 
 void s14x_ioboard_handle_packet(void* udata, struct link_packet* in, struct link_packet* out);
 
