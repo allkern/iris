@@ -19,17 +19,19 @@
 
 namespace iris {
 
-void add_recent(iris::instance* iris, std::string file) {
-    auto it = std::find(iris->recents.begin(), iris->recents.end(), file);
+void add_recent(iris::instance* iris, std::string file, int type) {
+    auto it = std::find_if(iris->recents.begin(), iris->recents.end(), [file, type](const recent& a) {
+        return a.type == type && a.path == file;
+    });
 
     if (it != iris->recents.end()) {
         iris->recents.erase(it);
-        iris->recents.push_front(file);
+        iris->recents.push_front({file, type});
 
         return;
     }
 
-    iris->recents.push_front(file);
+    iris->recents.push_front({file, type});
 
     if (iris->recents.size() == 11)
         iris->recents.pop_back();
@@ -57,6 +59,8 @@ int open_file(iris::instance* iris, std::string file) {
 
         renderer_reset(iris->renderer);
 
+        ps2_set_system(iris->ps2, iris->system);
+        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
         ps2_boot_file(iris->ps2, boot_file);
 
         iris->loaded = file;
@@ -72,9 +76,15 @@ int open_file(iris::instance* iris, std::string file) {
 
     renderer_reset(iris->renderer);
 
+    ps2_set_system(iris->ps2, iris->system);
+    ps2_load_bios(iris->ps2, iris->bios_path.c_str());
     ps2_boot_file(iris->ps2, file.c_str());
 
     iris->loaded = file;
+
+    if (iris->autostart) {
+        iris->pause = false;
+    }
 
     return 0;
 }
@@ -453,6 +463,10 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 }
 
 SDL_AppResult update(iris::instance* iris) {
+    if (iris->double_click_counter) {
+        iris->double_click_counter--;
+    }
+
     if (iris->pause) {
         iris->step_out = false;
         iris->step_over = false;
@@ -510,6 +524,22 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
     switch (event->type) {
         case SDL_EVENT_QUIT: {
             return SDL_APP_SUCCESS;
+        } break;
+
+        case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+            if (event->button.button == SDL_BUTTON_LEFT && event->button.windowID == SDL_GetWindowID(iris->window)) {
+                if (iris->double_click_counter) {
+                    if ((SDL_GetTicks() - iris->double_click_counter) > iris->double_click_interval) {
+                        iris->double_click_counter = SDL_GetTicks();
+                    } else {
+                        iris->fullscreen = !iris->fullscreen;
+
+                        SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
+                    }
+                } else {
+                    iris->double_click_counter = SDL_GetTicks();
+                }
+            }
         } break;
 
         case SDL_EVENT_GAMEPAD_ADDED: {
@@ -585,6 +615,38 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
         case SDL_EVENT_GAMEPAD_BUTTON_UP:
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
         case SDL_EVENT_KEY_UP: {
+            if (event->type == SDL_EVENT_KEY_UP) {
+                SDL_Keycode key = event->key.key;
+
+                switch (key) {
+                    case SDLK_0: {
+                        if (iris->ps2->s14x_ioboard) {
+                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_SERVICE);
+                        }
+                    } break;
+                    case SDLK_9: {
+                        if (iris->ps2->s14x_ioboard) {
+                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_TEST);
+                        }
+                    } break;
+                    case SDLK_8: {
+                        if (iris->ps2->s14x_ioboard) {
+                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_ENTER);
+                        }
+                    } break;
+                    case SDLK_7: {
+                        if (iris->ps2->s14x_ioboard) {
+                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_UP);
+                        }
+                    } break;
+                    case SDLK_6: {
+                        if (iris->ps2->s14x_ioboard) {
+                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_DOWN);
+                        }
+                    } break;
+                }
+            }
+
             iris->last_input_event_read = false;
             iris->last_input_event = input::sdl_event_to_input_event(event);
 
@@ -622,10 +684,20 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
 
             std::string path(event->drop.data);
 
-            if (open_file(iris, path)) {
-                push_info(iris, "Failed to open file: " + path);
+            std::filesystem::path p(path);
+
+            if (std::filesystem::is_regular_file(p)) {
+                if (open_file(iris, path)) {
+                    push_info(iris, "Failed to open file: " + path);
+                } else {
+                    add_recent(iris, path, RECENT_TYPE_PS2);
+                }
             } else {
-                add_recent(iris, path);
+                if (emu::load_arcade(iris, path)) {
+                    add_recent(iris, path, RECENT_TYPE_ARCADE);
+                } else {
+                    push_info(iris, "Failed to boot arcade: " + path);
+                }
             }
 
             // Maybe not needed anymore?
@@ -669,7 +741,6 @@ void destroy(iris::instance* iris) {
         iris->show_memory_viewer = false;
         iris->show_memory_search = false;
         iris->show_vu_disassembler = false;
-        iris->show_status_bar = false;
         iris->show_breakpoints = false;
         iris->show_threads = false;
         iris->show_sysmem_logs = false;

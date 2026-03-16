@@ -122,6 +122,11 @@ struct elf_symbol {
 };
 
 enum {
+    RECENT_TYPE_PS2,
+    RECENT_TYPE_ARCADE
+};
+
+enum {
     INPUT_CONTROLLER_DUALSHOCK2
 
     // Large To-do list here, we're missing the Namco GunCon
@@ -335,6 +340,11 @@ struct mapping {
     bidirectional_map <uint64_t, input_action> map;
 };
 
+struct recent {
+    std::string path;
+    int type;
+};
+
 struct instance {
     SDL_Window* window = nullptr;
     SDL_AudioStream* stream = nullptr;
@@ -519,8 +529,14 @@ struct instance {
     ImColor codeview_color_highlight = IM_COL32(75, 75, 75, 255);
     float codeview_font_scale = 1.0f;
     bool codeview_use_theme_background = true;
+    bool autostart = true;
+    int angle = 0;
+    bool flip_x = false;
+    bool flip_y = false;
+    uint64_t double_click_interval = 500;
+    uint64_t double_click_counter = 0;
 
-    std::deque <std::string> recents;
+    std::deque <recent> recents;
 
     bool dump_to_file = true;
     std::string settings_path = "";
@@ -726,8 +742,12 @@ namespace elf {
 namespace emu {
     bool init(iris::instance* iris);
     void destroy(iris::instance* iris);
+    bool load_arcade(iris::instance* iris, std::string path);
     int attach_memory_card(iris::instance* iris, int slot, const char* path);
     void detach_memory_card(iris::instance* iris, int slot);
+    const char* get_system_name(iris::instance* iris, int system);
+    const char* get_current_system_name(iris::instance* iris);
+    int get_system_count(iris::instance* iris);
 }
 
 namespace render {
@@ -802,7 +822,7 @@ void handle_animations(iris::instance* iris);
 
 void push_info(iris::instance* iris, std::string text);
 
-void add_recent(iris::instance* iris, std::string file);
+void add_recent(iris::instance* iris, std::string file, int type);
 int open_file(iris::instance* iris, std::string file);
 
 }
