@@ -121,6 +121,30 @@ void show_memory_viewer(iris::instance* iris) {
                 EndTabItem();
             }
 
+            if (ps2->s14x_sram) {
+                if (BeginTabItem("S14X SRAM")) {
+                    PushFont(iris->font_code);
+
+                    editor.DrawContents(ps2->s14x_sram->buf, 0x8000, 0);
+
+                    PopFont();
+
+                    EndTabItem();
+                }
+            }
+
+            if (ps2->s14x_link) {
+                if (BeginTabItem("CircLink RAM")) {
+                    PushFont(iris->font_code);
+
+                    editor.DrawContents(ps2->s14x_link->ram, 1024, 0);
+
+                    PopFont();
+
+                    EndTabItem();
+                }
+            }
+
             EndTabBar();
         }
     } End();
