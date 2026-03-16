@@ -232,6 +232,9 @@ uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
     if (addr == 0x00189A40) return 0x34630009;
+    if (addr == 0x001A2834) return 0x0;
+    if (addr == 0x001AAC9C) return 0x24040002;
+    if (addr == 0x001AAE08) return 0x0;
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
