@@ -402,6 +402,32 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
     SDL_Keycode key = event->key.key;
 
     switch (key) {
+        case SDLK_0: {
+            if (iris->ps2->s14x_ioboard) {
+                s14x_ioboard_press_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_SERVICE);
+            }
+        } break;
+        case SDLK_9: {
+            if (iris->ps2->s14x_ioboard) {
+                s14x_ioboard_press_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_TEST);
+            }
+        } break;
+        case SDLK_8: {
+            if (iris->ps2->s14x_ioboard) {
+                s14x_ioboard_press_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_ENTER);
+            }
+        } break;
+        case SDLK_7: {
+            if (iris->ps2->s14x_ioboard) {
+                s14x_ioboard_press_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_UP);
+            }
+        } break;
+        case SDLK_6: {
+            if (iris->ps2->s14x_ioboard) {
+                s14x_ioboard_press_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_DOWN);
+            }
+        } break;
+
         case SDLK_SPACE: {
             iris->pause = !iris->pause;
 
@@ -421,9 +447,6 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
             printf("ps2: Sending poweroff signal\n");
             ps2_cdvd_power_off(iris->ps2->cdvd);
         } break;
-        case SDLK_0: {
-            ps2_iop_intc_irq(iris->ps2->iop_intc, IOP_INTC_USB);
-        } break;
     }
 
     iris->last_input_event_read = false;
@@ -435,8 +458,6 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
 }
 
 void handle_keyup_event(iris::instance* iris, SDL_Event* event) {
-    SDL_Keycode key = event->key.key;
-
     // Add special keyup handling here if needed
 
     if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);
