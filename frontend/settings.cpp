@@ -128,6 +128,9 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->window_width = display["window_width"].value_or(960);
     iris->window_height = display["window_height"].value_or(720);
     iris->menubar_height = display["menubar_height"].value_or(0);
+    iris->angle = display["angle"].value_or(0);
+    iris->flip_x = display["flip_x"].value_or(false);
+    iris->flip_y = display["flip_y"].value_or(false);
 
     auto audio = tbl["audio"];
     iris->mute = audio["mute"].value_or(false);
@@ -165,6 +168,7 @@ bool parse_toml_settings(iris::instance* iris) {
 
     auto system = tbl["system"];
     iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
+    iris->autostart = system["autostart"].value_or(true);
 
     toml::array* mac_array = system["mac_address"].as_array();
 
@@ -232,8 +236,25 @@ bool parse_toml_settings(iris::instance* iris) {
     toml::array* recents = tbl["recents"]["array"].as_array();
 
     if (recents) {
-        for (int i = 0; i < recents->size(); i++)
-            iris->recents.push_back(recents->at(i).as_string()->get());
+        for (int i = 0; i < recents->size(); i++) {
+            toml::table* entry = recents->at(i).as_table();
+
+            if (!entry) {
+                // Provided for backcompat with older settings files
+                std::string str = recents->at(i).as_string()->get();
+
+                iris->recents.push_back({ str, 0 });
+
+                continue;
+            }
+
+            iris::recent r = {
+                entry->operator[]("path").value_or(std::string()),
+                entry->operator[]("type").value_or(0)
+            };
+
+            iris->recents.push_back(r);
+        }
     }
 
     toml::array* shaders = tbl["shaders"]["array"].as_array();
@@ -353,12 +374,16 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     }
 
     if (iris->elf_path.size()) {
+        ps2_set_system(iris->ps2, iris->system);
+        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
         ps2_elf_load(iris->ps2, iris->elf_path.c_str());
 
         iris->loaded = iris->elf_path;
     }
 
     if (iris->boot_path.size()) {
+        ps2_set_system(iris->ps2, iris->system);
+        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
         ps2_boot_file(iris->ps2, iris->boot_path.c_str());
 
         iris->loaded = iris->boot_path;
@@ -373,6 +398,8 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
         if (!boot_file)
             return;
 
+        ps2_set_system(iris->ps2, iris->system);
+        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
         ps2_boot_file(iris->ps2, boot_file);
 
         iris->loaded = iris->disc_path;
@@ -424,7 +451,8 @@ void close(iris::instance* iris) {
                 iris->mac_address[3],
                 iris->mac_address[4],
                 iris->mac_address[5]
-            } }
+            } },
+            { "autostart", iris->autostart }
         } },
         { "input", toml::table {
             { "slot1_device", iris->input_devices[0] ? iris->input_devices[0]->get_type() : 0 },
@@ -495,7 +523,10 @@ void close(iris::instance* iris) {
             { "renderer", iris->renderer_backend },
             { "window_width", iris->window_width },
             { "window_height", iris->window_height },
-            { "menubar_height", iris->menubar_height }
+            { "menubar_height", iris->menubar_height },
+            { "angle", iris->angle },
+            { "flip_x", iris->flip_x },
+            { "flip_y", iris->flip_y }
         } },
         { "ui", toml::table {
             { "theme", iris->theme },
@@ -542,8 +573,8 @@ void close(iris::instance* iris) {
 
     toml::array* recents = tbl["recents"]["array"].as_array();
 
-    for (const std::string& s : iris->recents)
-        recents->push_back(s);
+    for (const auto& s : iris->recents)
+        recents->push_back(toml::table { { "type", s.type }, { "path", s.path } });
 
     toml::array* shaders = tbl["shaders"]["array"].as_array();
 

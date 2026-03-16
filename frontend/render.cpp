@@ -320,6 +320,17 @@ static inline VkDescriptorSet get_frame_shader_descriptor_set(iris::instance* ir
 static inline void update_vertex_buffer(iris::instance* iris, VkCommandBuffer command_buffer) {
     SDL_Rect size, rect, display;
 
+    const int normalized_angle = ((iris->angle % 360) + 360) % 360;
+    const bool swap_axes = normalized_angle == 90 || normalized_angle == 270;
+
+    float aspect_ratio = 4.0 / 3.0;
+
+    if (swap_axes) {
+        aspect_ratio = 3.0 / 4.0;
+    }
+
+    float aspect_ratio_inv = 1.0f / aspect_ratio;
+
     SDL_GetWindowSize(iris->window, &size.w, &size.h);
 
     display.w = size.w;
@@ -369,16 +380,26 @@ static inline void update_vertex_buffer(iris::instance* iris, VkCommandBuffer co
 
         case RENDER_ASPECT_AUTO:
         case RENDER_ASPECT_STRETCH_KEEP: {
+            if (swap_axes) {
+                std::swap(rect.w, rect.h);
+            }
+
             rect.h = display.h;
-            rect.w = (float)rect.h * (4.0f / 3.0f);
+            rect.w = (float)rect.h * aspect_ratio;
 
             // Scale vertically if the rect ends up being bigger
             // than our display area
             if (rect.w > display.w) {
                 rect.w = display.w;
-                rect.h = (float)rect.w * (3.0f / 4.0f);
+                rect.h = (float)rect.w * aspect_ratio_inv;
             }
         } break;
+    }
+
+    if (iris->aspect_mode != RENDER_ASPECT_AUTO && iris->aspect_mode != RENDER_ASPECT_STRETCH_KEEP) {
+        if (swap_axes) {
+            std::swap(rect.w, rect.h);
+        }
     }
 
     iris->render_width = rect.w;
@@ -392,10 +413,54 @@ static inline void update_vertex_buffer(iris::instance* iris, VkCommandBuffer co
     float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;
     float y1 = ((rect.y + rect.h) / ((float)size.h / 2.0f)) - 1.0f;
 
-    iris->vertices[0] = vertex{ { x0, y0 }, {0.0f, 1.0f} };
-    iris->vertices[1] = vertex{ { x1, y0 }, {1.0f, 1.0f} };
-    iris->vertices[2] = vertex{ { x1, y1 }, {1.0f, 0.0f} };
-    iris->vertices[3] = vertex{ { x0, y1 }, {0.0f, 0.0f} };
+    float uvs[4][2] = {
+        {0.0f, 1.0f},
+        {1.0f, 1.0f},
+        {1.0f, 0.0f},
+        {0.0f, 0.0f}
+    };
+
+    for (int i = 0; i < 4; i++) {
+        float u = uvs[i][0];
+        float v = uvs[i][1];
+
+        if (iris->flip_x) {
+            u = 1.0f - u;
+        }
+
+        if (iris->flip_y) {
+            v = 1.0f - v;
+        }
+
+        switch (normalized_angle) {
+            case 90: {
+                // Rotate clockwise in UV space.
+                const float prev_u = u;
+                u = v;
+                v = 1.0f - prev_u;
+            } break;
+
+            case 180: {
+                u = 1.0f - u;
+                v = 1.0f - v;
+            } break;
+
+            case 270: {
+                // Rotate counter-clockwise in UV space.
+                const float prev_u = u;
+                u = 1.0f - v;
+                v = prev_u;
+            } break;
+        }
+
+        uvs[i][0] = u;
+        uvs[i][1] = v;
+    }
+
+    iris->vertices[0] = vertex{ { x0, y0 }, {uvs[0][0], uvs[0][1]} };
+    iris->vertices[1] = vertex{ { x1, y0 }, {uvs[1][0], uvs[1][1]} };
+    iris->vertices[2] = vertex{ { x1, y1 }, {uvs[2][0], uvs[2][1]} };
+    iris->vertices[3] = vertex{ { x0, y1 }, {uvs[3][0], uvs[3][1]} };
 
     void* ptr;
 

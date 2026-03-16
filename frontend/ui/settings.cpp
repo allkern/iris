@@ -112,6 +112,13 @@ const char* settings_fullscreen_names[] = {
     "Fullscreen (Desktop)",
 };
 
+const char* settings_rotation_names[] = {
+    "0 degrees",
+    "90 degrees",
+    "180 degrees",
+    "270 degrees"
+};
+
 int settings_fullscreen_flags[] = {
     0,
     SDL_WINDOW_FULLSCREEN
@@ -249,6 +256,13 @@ void show_system_settings(iris::instance* iris) {
     if (Button(ICON_MS_REFRESH "##macaddress")) {
         ps2_set_mac_address(iris->ps2, iris->mac_address);
     }
+
+    SeparatorText("Misc.");
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox("Start games automatically", &iris->autostart);
+    Checkbox("Skip FMVs", &iris->skip_fmv);
+    PopStyleVar();
 }
 
 const char* ssaa_names[] = {
@@ -398,8 +412,25 @@ void show_graphics_settings(iris::instance* iris) {
         EndCombo();
     }
 
+    const int normalized_angle = ((iris->angle % 360) + 360) % 360;
+    const int rotation_index = normalized_angle / 90;
+
+    Text("Rotation");
+
+    if (BeginCombo("##rotation", settings_rotation_names[rotation_index])) {
+        for (int i = 0; i < 4; i++) {
+            if (Selectable(settings_rotation_names[i], rotation_index == i)) {
+                iris->angle = i * 90;
+            }
+        }
+
+        EndCombo();
+    }
+
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     Checkbox(" Integer scaling", &iris->integer_scaling);
+    Checkbox(" Flip horizontally", &iris->flip_x);
+    Checkbox(" Flip vertically", &iris->flip_y);
     PopStyleVar();
 
     Text("Window mode");

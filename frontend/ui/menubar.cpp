@@ -31,6 +31,13 @@ const char* fullscreen_names[] = {
     "Fullscreen"
 };
 
+const char* rotation_names[] = {
+    "0 degrees",
+    "90 degrees",
+    "180 degrees",
+    "270 degrees"
+};
+
 int fullscreen_flags[] = {
     0,
     SDL_WINDOW_FULLSCREEN
@@ -74,19 +81,27 @@ void show_main_menubar(iris::instance* iris) {
                         if (open_file(iris, path)) {
                             push_info(iris, "Failed to open file: " + path);
                         } else {
-                            add_recent(iris, path);
+                            add_recent(iris, path, RECENT_TYPE_PS2);
                         }
                     }
                 }
             }
 
             if (BeginMenu(ICON_MS_HISTORY " Open Recent", iris->recents.size())) {
-                for (const std::string& s : iris->recents) {
-                    if (MenuItem(s.c_str())) {
-                        if (open_file(iris, s)) {
-                            push_info(iris, "Failed to open file: " + s);
+                for (const auto& recent : iris->recents) {
+                    if (MenuItem(recent.path.c_str())) {
+                        if (recent.type == RECENT_TYPE_PS2) {
+                            if (open_file(iris, recent.path)) {
+                                push_info(iris, "Failed to open file: " + recent.path);
+                            } else {
+                                add_recent(iris, recent.path, recent.type);
+                            }
                         } else {
-                            add_recent(iris, s);
+                            if (!emu::load_arcade(iris, recent.path)) {
+                                push_info(iris, "Failed to boot arcade: " + recent.path);
+                            } else {
+                                add_recent(iris, recent.path, RECENT_TYPE_ARCADE);
+                            }
                         }
                     }
                 }
@@ -107,6 +122,28 @@ void show_main_menubar(iris::instance* iris) {
                 // }
 
                 ImGui::EndMenu();
+            }
+
+            if (MenuItem(ICON_MS_JOYSTICK " Open Arcade...")) {
+                audio::mute(iris);
+
+                auto f = pfd::select_folder("Select arcade game folder", "", pfd::opt::none);
+
+                while (!f.ready());
+
+                audio::unmute(iris);
+
+                if (f.result().size()) {
+                    std::string path = f.result();
+
+                    if (path.size()) {
+                        if (!emu::load_arcade(iris, path)) {
+                            push_info(iris, "Failed to boot arcade: " + path);
+                        } else {
+                            add_recent(iris, path, RECENT_TYPE_ARCADE);
+                        }
+                    }
+                }
             }
 
             // if (MenuItem(ICON_MS_DRIVE_FILE_MOVE " Load disc...")) {
@@ -293,6 +330,19 @@ void show_main_menubar(iris::instance* iris) {
                     ImGui::EndMenu();
                 }
 
+                if (BeginMenu(ICON_MS_SCREEN_ROTATION " Rotation")) {
+                    const int normalized_angle = ((iris->angle % 360) + 360) % 360;
+                    const int rotation_index = normalized_angle / 90;
+
+                    for (int i = 0; i < 4; i++) {
+                        if (MenuItem(rotation_names[i], nullptr, rotation_index == i)) {
+                            iris->angle = i * 90;
+                        }
+                    }
+
+                    ImGui::EndMenu();
+                }
+
                 if (BeginMenu(ICON_MS_ASPECT_RATIO " Window size")) {
                     const char* sizes[] = {
                         "640x480",
@@ -328,6 +378,9 @@ void show_main_menubar(iris::instance* iris) {
                 if (MenuItem(ICON_MS_SPEED_2X " Integer scaling", nullptr, &iris->integer_scaling)) {
                     // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
+
+                MenuItem(ICON_MS_FLIP " Flip horizontally", nullptr, &iris->flip_x);
+                MenuItem(ICON_MS_FLIP " Flip vertically", nullptr, &iris->flip_y);
 
                 if (MenuItem(ICON_MS_FULLSCREEN " Fullscreen", "F11", &iris->fullscreen)) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
