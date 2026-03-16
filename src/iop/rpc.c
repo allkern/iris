@@ -4,6 +4,8 @@
 
 #include "rpc.h"
 
+#define printf(fmt, ...)(0)
+
 const char* rpc_get_server(uint32_t id) {
     switch (id) {
         case 0x80000001: return "FILEIO";
@@ -49,10 +51,6 @@ char* rpc_decode_packet(struct iop_state* iop, char* buf, uint32_t* data) {
         case 0x80000009: {
             struct sif_rpc_bind_pkt* bind = (struct sif_rpc_bind_pkt*)data;
 
-            // if (bind->sid == 0x14799) {
-            //     printf("sifcmd: Received bind for 0x14799 <-----------------------------------------\n");
-            // }
-
             const char* server = rpc_get_server(bind->sid);
 
             ptr += sprintf(ptr, "rpc: Bind (%s)", server); break;
@@ -62,11 +60,52 @@ char* rpc_decode_packet(struct iop_state* iop, char* buf, uint32_t* data) {
 
             uint32_t sid = iop_read32(iop, call->server);
 
-            // if (sid == 0x14799) {
-            //     printf("sifcmd: Received call for 0x14799, id=%08x <-----------------------------------------\n", call->rpc_number);
-            // }
-
             ptr += sprintf(ptr, "rpc: Call Server=%08x Func=%08x", sid, call->rpc_number);
+
+            if (sid == 0x01470201) {
+                printf(ptr, "rpc: ReadBackupRam Func=%08x SendSize=%d PktAddr=%08x\n",
+                    call->rpc_number,
+                    call->send_size,
+                    call->pkt_addr
+                );
+            }
+
+            if (sid == 0x01470200) {
+                printf(ptr, "rpc: WriteBackupRam Func=%08x SendSize=%d PktAddr=%08x\n",
+                    call->rpc_number,
+                    call->send_size,
+                    call->pkt_addr
+                );
+            }
+
+            if (sid == 0x14799) {
+                struct MODULE_99_PACKET {
+                    uint8_t type;
+                    uint8_t unknown[4];
+                    uint8_t command;
+                    uint8_t data[0x39];
+                    uint8_t checksum;
+                };
+
+                switch (call->rpc_number) {
+                    case 0x02000000: printf("s14x_link: RPC ReceiveData\n"); break;
+                	case 0x03004002: {
+                        uint8_t* buf = malloc(call->send_size);
+
+                        for (int i = 0; i < call->send_size; i++)
+                            buf[i] = iop_read8(iop, call->pkt_addr + i);
+
+                        struct MODULE_99_PACKET* packet = (struct MODULE_99_PACKET*)buf;
+
+                        printf("s14x_link: RPC SendData(type=%d, command=%02x)\n",
+                            packet->type,
+                            packet->command
+                        );
+                    } break;
+                    case 0x08000000: printf("s14x_link: RPC CheckOnline\n"); break;
+                    default: printf("s14x_link: RPC LINK_%08X\n", call->rpc_number); break;
+                }
+            }
         } break;
         case 0x8000000C: ptr += sprintf(ptr, "rpc: GetOtherData"); break;
         // default: ptr += sprintf(ptr, "Unknown CID %08x", hdr->cid); break;
