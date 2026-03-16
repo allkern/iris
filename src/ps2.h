@@ -39,6 +39,8 @@ extern "C" {
 #include "s14x/syscon.h"
 #include "s14x/sram.h"
 #include "s14x/link.h"
+#include "s14x/ioboard.h"
+#include "s14x/aiboard.h"
 
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
@@ -120,6 +122,9 @@ struct ps2_state {
     struct s14x_syscon* s14x_syscon;
     struct s14x_sram* s14x_sram;
     struct s14x_link* s14x_link;
+    struct s14x_ioboard* s14x_ioboard;
+    struct s14x_aiboard* s14x_aiboard;
+
     struct sched_state* sched;
 
     int ee_cycles;

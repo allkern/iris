@@ -398,6 +398,8 @@ void ps2_destroy(struct ps2_state* ps2) {
     if (ps2->s14x_syscon) s14x_syscon_destroy(ps2->s14x_syscon);
     if (ps2->s14x_sram) s14x_sram_destroy(ps2->s14x_sram);
     if (ps2->s14x_link) s14x_link_destroy(ps2->s14x_link);
+    if (ps2->s14x_ioboard) s14x_ioboard_destroy(ps2->s14x_ioboard);
+    if (ps2->s14x_aiboard) s14x_aiboard_destroy(ps2->s14x_aiboard);
 
     free(ps2);
 }
@@ -410,6 +412,8 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
     if (ps2->s14x_syscon) { s14x_syscon_destroy(ps2->s14x_syscon); ps2->s14x_syscon = NULL; }
     if (ps2->s14x_sram) { s14x_sram_destroy(ps2->s14x_sram); ps2->s14x_sram = NULL; }
     if (ps2->s14x_link) { s14x_link_destroy(ps2->s14x_link); ps2->s14x_link = NULL; }
+    if (ps2->s14x_ioboard) { s14x_ioboard_destroy(ps2->s14x_ioboard); ps2->s14x_ioboard = NULL; }
+    if (ps2->s14x_aiboard) { s14x_aiboard_destroy(ps2->s14x_aiboard); ps2->s14x_aiboard = NULL; }
 
     switch (system) {
         case PS2_SYSTEM_AUTO: {
@@ -472,16 +476,23 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             ps2->s14x_syscon = s14x_syscon_create();
             ps2->s14x_sram = s14x_sram_create();
             ps2->s14x_link = s14x_link_create();
+            ps2->s14x_ioboard = s14x_ioboard_create();
+            ps2->s14x_aiboard = s14x_aiboard_create();
 
             s14x_nand_init(ps2->s14x_nand);
             s14x_syscon_init(ps2->s14x_syscon);
             s14x_sram_init(ps2->s14x_sram, &ps2->s14x_syscon->sram_write_flag);
-            s14x_link_init(ps2->s14x_link);
+            s14x_link_init(ps2->s14x_link, ps2->iop_intc, ps2->sched);
+            s14x_ioboard_init(ps2->s14x_ioboard, 0);
+            s14x_aiboard_init(ps2->s14x_aiboard);
 
             iop_bus_init_s14x_nand(ps2->iop_bus, ps2->s14x_nand);
             iop_bus_init_s14x_syscon(ps2->iop_bus, ps2->s14x_syscon);
             iop_bus_init_s14x_sram(ps2->iop_bus, ps2->s14x_sram);
             iop_bus_init_s14x_link(ps2->iop_bus, ps2->s14x_link);
+
+            s14x_link_register_node(ps2->s14x_link, 2, s14x_ioboard_handle_packet, ps2->s14x_ioboard);
+            s14x_link_register_node(ps2->s14x_link, 3, s14x_aiboard_handle_packet, ps2->s14x_aiboard);
         } break;
 
         case PS2_SYSTEM_NAMCO_S148: {
@@ -496,16 +507,23 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             ps2->s14x_syscon = s14x_syscon_create();
             ps2->s14x_sram = s14x_sram_create();
             ps2->s14x_link = s14x_link_create();
+            ps2->s14x_ioboard = s14x_ioboard_create();
+            ps2->s14x_aiboard = s14x_aiboard_create();
 
             s14x_nand_init(ps2->s14x_nand);
             s14x_syscon_init(ps2->s14x_syscon);
             s14x_sram_init(ps2->s14x_sram, &ps2->s14x_syscon->sram_write_flag);
-            s14x_link_init(ps2->s14x_link);
+            s14x_link_init(ps2->s14x_link, ps2->iop_intc, ps2->sched);
+            s14x_ioboard_init(ps2->s14x_ioboard, 0);
+            s14x_aiboard_init(ps2->s14x_aiboard);
 
             iop_bus_init_s14x_nand(ps2->iop_bus, ps2->s14x_nand);
             iop_bus_init_s14x_syscon(ps2->iop_bus, ps2->s14x_syscon);
             iop_bus_init_s14x_sram(ps2->iop_bus, ps2->s14x_sram);
             iop_bus_init_s14x_link(ps2->iop_bus, ps2->s14x_link);
+
+            s14x_link_register_node(ps2->s14x_link, 2, s14x_ioboard_handle_packet, ps2->s14x_ioboard);
+            s14x_link_register_node(ps2->s14x_link, 3, s14x_aiboard_handle_packet, ps2->s14x_aiboard);
         } break;
 
         case PS2_SYSTEM_NAMCO_S246: {
