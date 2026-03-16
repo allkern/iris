@@ -10,6 +10,7 @@ set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Reso
 
 # Statically link SDL3 for Linux targets
 set(SDL_STATIC ON)
+set(ASMJIT_STATIC ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(Git QUIET)
@@ -53,6 +54,7 @@ target_compile_options(iris PUBLIC "-Wno-deprecated-declarations")
 # target_compile_definitions(iris PUBLIC _DEBUG)
 
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
+add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
 add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
@@ -198,6 +200,8 @@ target_sources(iris PRIVATE
     src/s14x/syscon.c
     src/s14x/sram.c
     src/s14x/link.c
+    src/s14x/ioboard.c
+    src/s14x/aiboard.c
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp
@@ -212,6 +216,7 @@ target_sources(iris PRIVATE
 )
 
 target_include_directories(iris PRIVATE
+    deps/asmjit
     deps/imgui
     deps/imgui/backends
     deps/implot
@@ -228,6 +233,7 @@ target_include_directories(iris PRIVATE
 )
 
 target_link_libraries(iris PUBLIC
+    asmjit::asmjit
     libdeflate::libdeflate_static
     tomlplusplus::tomlplusplus
     SDL3::SDL3-static
