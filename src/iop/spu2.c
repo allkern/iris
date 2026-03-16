@@ -1045,7 +1045,7 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
 }
 
 static inline struct spu2_sample spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
-    if (spu2->c[c].memin_write_addr < 0x400) {
+    if (spu2->c[c].memin_write_addr < 0x200) {
         return silence;
     }
 
