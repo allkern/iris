@@ -482,7 +482,7 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
         char buf[128];
 
         if (rpc_decode_packet(dma->intc->iop, buf, ((void*)dma->sif->sif1.data) + (dma->sif->sif1.read_index * 16))) {
-            printf("%s\n", buf);
+            // printf("%s\n", buf);
         }
 
         while (size) {
