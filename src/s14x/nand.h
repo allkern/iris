@@ -44,7 +44,8 @@ struct s14x_nand {
 };
 
 struct s14x_nand* s14x_nand_create(void);
-void s14x_nand_init(struct s14x_nand* nand);
+int s14x_nand_init(struct s14x_nand* nand);
+int s14x_nand_load(struct s14x_nand* nand, const char* path);
 uint64_t s14x_nand_read(struct s14x_nand* nand, uint32_t addr);
 void s14x_nand_write(struct s14x_nand* nand, uint32_t addr, uint64_t data);
 void s14x_nand_destroy(struct s14x_nand* nand);

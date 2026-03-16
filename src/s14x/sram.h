@@ -11,12 +11,14 @@ extern "C" {
 #define S14X_SRAM_SIZE 0x8000
 
 struct s14x_sram {
+    const char* path;
     int* write_flag;
     uint8_t buf[S14X_SRAM_SIZE];
 };
 
 struct s14x_sram* s14x_sram_create(void);
-void s14x_sram_init(struct s14x_sram* sram, int* write_flag);
+int s14x_sram_init(struct s14x_sram* sram, int* write_flag);
+int s14x_sram_load(struct s14x_sram* sram, const char* path);
 uint64_t s14x_sram_read8(struct s14x_sram* sram, uint32_t addr);
 uint64_t s14x_sram_read16(struct s14x_sram* sram, uint32_t addr);
 uint64_t s14x_sram_read32(struct s14x_sram* sram, uint32_t addr);

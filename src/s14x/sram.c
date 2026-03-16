@@ -8,17 +8,35 @@ struct s14x_sram* s14x_sram_create(void) {
     return malloc(sizeof(struct s14x_sram));
 }
 
-void s14x_sram_init(struct s14x_sram* sram, int* write_flag) {
+int s14x_sram_init(struct s14x_sram* sram, int* write_flag) {
     memset(sram, 0, sizeof(struct s14x_sram));
 
     sram->write_flag = write_flag;
 
-    FILE* file = fopen("s14x_sram.bin", "rb");
+    return 0;
+}
 
-    if (file) {
-        fread(sram->buf, 1, S14X_SRAM_SIZE, file);
+int s14x_sram_load(struct s14x_sram* sram, const char* path) {
+    FILE* file = fopen(path, "rb");
+
+    sram->path = path;
+
+    // If the file doesn't exist then we'll create it
+    if (!file) {
         fclose(file);
+
+        file = fopen(path, "wb");
+
+        fwrite(sram->buf, 1, S14X_SRAM_SIZE, file);
+        fclose(file);
+
+        return 0;
     }
+
+    fread(sram->buf, 1, S14X_SRAM_SIZE, file);
+    fclose(file);
+
+    return 1;
 }
 
 uint64_t s14x_sram_read8(struct s14x_sram* sram, uint32_t addr) {
@@ -52,9 +70,9 @@ void s14x_sram_write32(struct s14x_sram* sram, uint32_t addr, uint64_t data) {
 }
 
 void s14x_sram_destroy(struct s14x_sram* sram) {
-    FILE* file = fopen("s14x_sram.bin", "wb");
+    if (sram->path) {
+        FILE* file = fopen(sram->path, "wb");
 
-    if (file) {
         fwrite(sram->buf, 1, S14X_SRAM_SIZE, file);
         fclose(file);
     }
