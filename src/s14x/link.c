@@ -3,6 +3,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#include <ctype.h>
+
+#define printf(fmt, ...)(0)
 
 const char* g_reg_names[] = {
     "S14X_LINK_PAD00",
@@ -64,15 +67,27 @@ struct s14x_link* s14x_link_create(void) {
     return malloc(sizeof(struct s14x_link));
 }
 
-void s14x_link_init(struct s14x_link* link) {
+void s14x_link_init(struct s14x_link* link, struct ps2_iop_intc* intc, struct sched_state* sched) {
     memset(link, 0, sizeof(struct s14x_link));
 
     // ARCNET CORE interrupt (possibly sent after INIMODE was set?)
     // TA bit set
-    link->stsl = 9;
+    link->stsl = 1;
 
     // RECON bit set
     link->comr0 = 4;
+
+    link->ioboard_switch_state = 0xffff;
+
+    link->intc = intc;
+    link->sched = sched;
+}
+
+void link_send_irq(struct s14x_link* link, uint16_t irq) {
+    link->stsl |= irq & 0xff;
+    link->stsh |= (irq >> 8) & 0xff;
+
+    ps2_iop_intc_irq(link->intc, IOP_INTC_DEV9);
 }
 
 uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr) {
@@ -99,7 +114,7 @@ uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr) {
                 }
             }
 
-            printf("s14x_link: Read RAM[%04x] = %02x\n", addr, link->ram[addr]);
+            // printf("s14x_link: Read RAM[%04x] = %02x\n", addr, link->ram[addr]);
 
             r = link->ram[addr];
         } break;
@@ -155,21 +170,71 @@ uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr) {
     return r;
 }
 
+void s14x_link_register_node(struct s14x_link* link, int node, link_packet_handler handler, void* udata) {
+    link->nodes[node].handler = handler;
+    link->nodes[node].udata = udata;
+}
+
+// Note: pacmanap reverse engineering
+//       mynode = 1, maxnodes = 2
+//       Main board is at node 1
+//       I/O board is at node 2
+
+//       pacmanbr
+//       node = 1, maxnodes = 3
+//       Main board is at node 1
+//       I/O board is at node 2
+//       A.I./Standalone board is at node 3
+
+void link_recv_reply(void* udata, int overshoot) {
+    struct s14x_link* link = (struct s14x_link*)udata;
+
+    struct link_packet* tx = (struct link_packet*)&link->ram[0x40];
+    struct link_packet* rx = (struct link_packet*)&link->ram[tx->dst_node * 0x40];
+
+    memset(rx, 0, sizeof(struct link_packet));
+
+    // Set TA and TMA bits (transmitter available)
+    link->stsl |= S14X_LINK_STSL_TA;
+    link->comr0 |= S14X_LINK_COMR0_R_TA | S14X_LINK_COMR0_R_TMA;
+
+    struct link_node* node = &link->nodes[tx->dst_node];
+
+    if (!node->handler)
+        return;
+
+    // Set packet pending flag
+    link->rxfll = 1 << tx->dst_node;
+
+    // Get response from the requested node
+    node->handler(node->udata, tx, rx);
+
+    // Send DEV9 IRQ to IOP
+    ps2_iop_intc_irq(link->intc, IOP_INTC_DEV9);
+}
+
 void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
     if (addr != S14X_LINK_WATCHDOG_FLAG) {
-        printf("s14x_link: Write %s (%08x) %08x\n", g_reg_names[addr], addr, data);
+        printf(stdout, "s14x_link: Write %s (%08x) %08x\n", g_reg_names[addr], addr, data);
     }
 
     switch (addr) {
         case S14X_LINK_PAD00: link->pad00 = data; return;
-        case S14X_LINK_COMR0: link->comr0 = data; return;
+        case S14X_LINK_COMR0: {
+            link->comr0 &= ~(S14X_LINK_COMR0_R_RECON | S14X_LINK_COMR0_W_TA);
+            link->comr0 |= data & (S14X_LINK_COMR0_R_RECON | S14X_LINK_COMR0_W_TA);
+
+            if (data & 0xf) {
+                link_send_irq(link, S14X_LINK_IRQ_COM);
+            }
+        } return;
         case S14X_LINK_PAD02: link->pad02 = data; return;
         case S14X_LINK_COMR1: link->comr1 = data; return;
         case S14X_LINK_PAD04: link->pad04 = data; return;
         case S14X_LINK_COMR2: {
             link->comr2 = data;
             link->ramadr = (link->ramadr & 0x3f) | ((data & 0xf) << 6);
-        }
+        } return;
         case S14X_LINK_PAD06: link->pad06 = data; return;
         case S14X_LINK_COMR3: {
             link->comr3 = data;
@@ -199,29 +264,74 @@ void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
         case S14X_LINK_COMR7: link->comr7 = data; return;
         case S14X_LINK_NSTH: link->nsth = data; return;
         case S14X_LINK_NSTL: link->nstl = data; return;
-        case S14X_LINK_STSH: link->stsh = data; return;
-        case S14X_LINK_STSL: link->stsl &= 0x01; link->stsl |= data & 0xfe; return;
-        case S14X_LINK_MSKH: link->mskh = data; return;
-        case S14X_LINK_MSKL: link->mskl = data; return;
+        case S14X_LINK_STSH: {
+            link->stsh &= 0x30;
+            link->stsh |= data & 0xcf;
+        } return;
+        case S14X_LINK_STSL: {
+            link->stsl &= 0x09;
+            link->stsl |= data & 0xf6;
+        } return;
+        case S14X_LINK_MSKH: {
+            link->mskh = data;
+        } return;
+        case S14X_LINK_MSKL: {
+            link->mskl = data;
+        } return;
         case S14X_LINK_PAD16: link->pad16 = data; return;
         case S14X_LINK_ECCMD: { 
             link->eccmd = data;
 
-            if (link->eccmd == 0x16) {
-                link->comr0 &= ~4; // Clear RECON bit when ECCMD 0x16 is written, which is used to acknowledge an interrupt
+            switch (link->eccmd) {
+                case 0x03: {
+                    struct sched_event event;
+
+                    event.callback = link_recv_reply;
+                    event.udata = link;
+                    event.cycles = 10000;
+                    event.name = "Link reply";
+
+                    link->stsl &= ~S14X_LINK_STSL_TA;
+                    link->comr0 &= ~(S14X_LINK_COMR0_R_TA | S14X_LINK_COMR0_R_TMA);
+
+                    sched_schedule(link->sched, event);
+                } break;
+
+                case 0x16: {
+                    // Clear RECON bit
+                    link->comr0 &= ~S14X_LINK_COMR0_W_RECON;
+                } break;
+
+                default: {
+                    printf("s14x_link: Unhandled EC command %02x\n", link->eccmd);
+                } break;
             }
         } return;
         case S14X_LINK_MRSID: link->mrsid = data; return;
         case S14X_LINK_RSID: link->rsid = data; return;
         case S14X_LINK_PAD1A: link->pad1a = data; return;
         case S14X_LINK_SSID: link->ssid = data; return;
-        case S14X_LINK_RXFHH: link->rxfhh = data; return;
-        case S14X_LINK_RXFHL: link->rxfhl = data; return;
-        case S14X_LINK_RXFLH: link->rxflh = data; return;
-        case S14X_LINK_RXFLL: link->rxfll = data; return;
+
+        // Writing clears receive flags
+        case S14X_LINK_RXFHH: link->rxfhh &= ~data; return;
+        case S14X_LINK_RXFHL: link->rxfhl &= ~data; return;
+        case S14X_LINK_RXFLH: link->rxflh &= ~data; return;
+        case S14X_LINK_RXFLL: link->rxfll &= ~data; return;
         case S14X_LINK_PAD20: link->pad20 = data; return;
         case S14X_LINK_CMID: link->cmid = data; return;
-        case S14X_LINK_MODEH: link->modeh = data; return;
+        case S14X_LINK_MODEH: {
+            // Software reset
+            if (link->modeh & S14X_LINK_MODEH_INIMODE != data & S14X_LINK_MODEH_INIMODE) {
+                link->stsl = 0;
+                link->stsh = 0;
+                link->mskl = 0;
+                link->mskh = 0;
+                link->comr0 = 0;
+                link->comr1 = 0;
+            }
+
+            link->modeh = data;
+        } break;
         case S14X_LINK_MODEL: link->model = data; return;
         case S14X_LINK_CARRYH: link->carryh = data; return;
         case S14X_LINK_CARRYL: link->carryl = data; return;

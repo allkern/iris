@@ -1,3 +1,5 @@
+struct s14x_link;
+
 #ifndef S14X_LINK_H
 #define S14X_LINK_H
 
@@ -7,6 +9,9 @@ extern "C" {
 
 #include <stdint.h>
 #include <stdio.h>
+
+#include "iop/intc.h"
+#include "scheduler.h"
 
 #define S14X_LINK_PAD00 0x00
 #define S14X_LINK_COMR0 0x01
@@ -67,7 +72,103 @@ extern "C" {
 #define S14X_LINK_COMR2_WRAPAR  0x20
 #define S14X_LINK_COMR2_PAGE    0x1f
 
+#define S14X_LINK_COMR0_W_EXCNAK 8
+#define S14X_LINK_COMR0_W_RECON 4
+#define S14X_LINK_COMR0_W_NXTIDERR 2
+#define S14X_LINK_COMR0_W_TA 1
+
+#define S14X_LINK_COMR0_R_POR 0x10
+#define S14X_LINK_COMR0_R_RECON 4
+#define S14X_LINK_COMR0_R_TMA 2
+#define S14X_LINK_COMR0_R_TA 1
+
+#define S14X_LINK_IRQ_RXERR 0x8000
+#define S14X_LINK_IRQ_CMIECC 0x4000
+#define S14X_LINK_IRQ_NSTUNLOC 0x2000
+#define S14X_LINK_IRQ_WARTERR 0x1000
+#define S14X_LINK_IRQ_FRCV 0x0800
+#define S14X_LINK_IRQ_RRCV 0x0300
+#define S14X_LINK_IRQ_MRCV 0x0200
+#define S14X_LINK_IRQ_SIDF 0x0100
+#define S14X_LINK_IRQ_TKNRETF 0x0080
+#define S14X_LINK_IRQ_ACKNAKF 0x0040
+#define S14X_LINK_IRQ_HUBWDTO 0x0020
+#define S14X_LINK_IRQ_CPERR 0x0010
+#define S14X_LINK_IRQ_COM 0x0008
+#define S14X_LINK_IRQ_FBENR 0x0003
+#define S14X_LINK_IRQ_TXERR 0x0002
+#define S14X_LINK_IRQ_TA 0x0001
+
+#define S14X_LINK_MODEH_CMIERRMD 0x10
+#define S14X_LINK_MODEH_NSTSEND 0x08
+#define S14X_LINK_MODEH_NSTSTOP 0x04
+#define S14X_LINK_MODEH_INIMODE 0x02
+#define S14X_LINK_MODEH_TXEN 0x01
+#define S14X_LINK_MODEL_ECRI 0x80
+#define S14X_LINK_MODEL_BRE 0x40
+#define S14X_LINK_MODEL_TXM 0x20
+#define S14X_LINK_MODEL_RTO 0x10
+#define S14X_LINK_MODEL_WDMD 0x08
+#define S14X_LINK_MODEL_NTKNRTY 0x04
+#define S14X_LINK_MODEL_NACKNAK 0x02
+#define S14X_LINK_MODEL_NACLR 0x01
+
+#define S14X_LINK_MSKH_RXERR 0x80
+#define S14X_LINK_MSKH_CMIECC 0x40
+#define S14X_LINK_MSKH_NSTUNLOC 0x20
+#define S14X_LINK_MSKH_WARTERR 0x10
+#define S14X_LINK_MSKH_FRCV 0x08
+#define S14X_LINK_MSKH_RRCV 0x03
+#define S14X_LINK_MSKH_MRCV 0x02
+#define S14X_LINK_MSKH_SIDF 0x01
+#define S14X_LINK_MSKL_TKNRETF 0x80
+#define S14X_LINK_MSKL_ACKNAKF 0x40
+#define S14X_LINK_MSKL_HUBWDTO 0x20
+#define S14X_LINK_MSKL_CPERR 0x10
+#define S14X_LINK_MSKL_COM 0x08
+#define S14X_LINK_MSKL_FBENR 0x03
+#define S14X_LINK_MSKL_TXERR 0x02
+#define S14X_LINK_MSKL_TA 0x01
+
+#define S14X_LINK_STSH_RXERR 0x80
+#define S14X_LINK_STSH_CMIECC 0x40
+#define S14X_LINK_STSH_NSTUNLOC 0x20
+#define S14X_LINK_STSH_WARTERR 0x10
+#define S14X_LINK_STSH_FRCV 0x08
+#define S14X_LINK_STSH_RRCV 0x03
+#define S14X_LINK_STSH_MRCV 0x02
+#define S14X_LINK_STSH_SIDF 0x01
+#define S14X_LINK_STSL_TKNRETF 0x80
+#define S14X_LINK_STSL_ACKNAKF 0x40
+#define S14X_LINK_STSL_HUBWDTO 0x20
+#define S14X_LINK_STSL_CPERR 0x10
+#define S14X_LINK_STSL_COM 0x08
+#define S14X_LINK_STSL_FBENR 0x03
+#define S14X_LINK_STSL_TXERR 0x02
+#define S14X_LINK_STSL_TA 0x01
+
 #define S14X_LINK_RAMSIZE 1024
+
+// ARCNET packets are 64 bytes long
+struct link_packet {
+	uint8_t src_node;
+	uint8_t dst_node;
+	uint8_t cp;
+	uint8_t unk03;
+	uint8_t seq_number;
+	uint8_t cmd;
+	uint8_t data[0x39];
+	uint8_t checksum;
+};
+
+typedef void (*link_packet_handler)(void*, struct link_packet*, struct link_packet*);
+
+struct link_node {
+	link_packet_handler handler;
+	void* udata;
+};
+
+static uint8_t link_calculate_checksum(struct link_packet* packet);
 
 struct s14x_link {
 	uint8_t pad00;
@@ -127,13 +228,22 @@ struct s14x_link {
 	uint8_t ram[S14X_LINK_RAMSIZE];
 
 	uint32_t ramadr;
+
+	struct link_node nodes[32];
+
+	struct ps2_iop_intc* intc;
+	struct sched_state* sched;
 };
 
 struct s14x_link* s14x_link_create(void);
-void s14x_link_init(struct s14x_link* link);
+void s14x_link_init(struct s14x_link* link, struct ps2_iop_intc* intc, struct sched_state* sched);
 uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr);
 void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data);
+void s14x_link_register_node(struct s14x_link* link, int node, link_packet_handler handler, void* udata);
+void s14x_link_send_packet(struct s14x_link* link, struct link_packet packet);
 void s14x_link_destroy(struct s14x_link* link);
+
+uint8_t link_calculate_checksum(struct link_packet* packet);
 
 #ifdef __cplusplus
 }
