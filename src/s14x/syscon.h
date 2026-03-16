@@ -14,6 +14,7 @@ extern "C" {
 #define S14X_SYSCON_REG_SECURITY_UNLOCK 2
 #define S14X_SYSCON_REG_RTC_FLAG 4
 #define S14X_SYSCON_REG_WATCHDOG_FLAG2 5
+#define S14X_SYSCON_REG_BATTERY_LEVEL 6
 #define S14X_SYSCON_REG_SRAM_WRITE_FLAG 7
 #define S14X_SYSCON_REG_SECURITY_UNLOCK_SET1 12
 #define S14X_SYSCON_REG_SECURITY_UNLOCK_SET2 13
@@ -30,6 +31,7 @@ struct s14x_syscon {
 	uint8_t led;
 	uint8_t security_unlock;
 	uint8_t rtc_flag;
+	uint8_t battery_level;
 	uint8_t watchdog_flag2;
 	uint8_t security_unlock_set1;
 	uint8_t security_unlock_set2;

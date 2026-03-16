@@ -10,6 +10,8 @@ struct s14x_syscon* s14x_syscon_create(void) {
 
 void s14x_syscon_init(struct s14x_syscon* syscon) {
     memset(syscon, 0, sizeof(struct s14x_syscon));
+
+    syscon->battery_level = 0x0; // 0 - OK, non-zero - NG
 }
 
 uint64_t s14x_syscon_read(struct s14x_syscon* syscon, uint32_t addr) {
@@ -44,9 +46,11 @@ uint64_t s14x_syscon_read(struct s14x_syscon* syscon, uint32_t addr) {
             return b;
         }
         case S14X_SYSCON_REG_WATCHDOG_FLAG2: return syscon->watchdog_flag2;
+        case S14X_SYSCON_REG_BATTERY_LEVEL: return syscon->battery_level;
         case S14X_SYSCON_REG_SRAM_WRITE_FLAG: return syscon->sram_write_flag;
         case S14X_SYSCON_REG_SECURITY_UNLOCK_SET1: return syscon->security_unlock_set1;
         case S14X_SYSCON_REG_SECURITY_UNLOCK_SET2: return syscon->security_unlock_set2;
+        default: printf("s14x_syscon: Unknown register read %08x\n", addr); return 0;
     }
 
     return 0;
@@ -58,9 +62,11 @@ void s14x_syscon_write(struct s14x_syscon* syscon, uint32_t addr, uint64_t data)
         case S14X_SYSCON_REG_SECURITY_UNLOCK: syscon->security_unlock = data; return;
         // case S14X_SYSCON_REG_RTC_FLAG: syscon->rtc_flag = data; return;
         case S14X_SYSCON_REG_WATCHDOG_FLAG2: syscon->watchdog_flag2 = data; return;
+        case S14X_SYSCON_REG_BATTERY_LEVEL: syscon->battery_level = data; return;
         case S14X_SYSCON_REG_SRAM_WRITE_FLAG: syscon->sram_write_flag = data; return;
         case S14X_SYSCON_REG_SECURITY_UNLOCK_SET1: syscon->security_unlock_set1 = data; return;
         case S14X_SYSCON_REG_SECURITY_UNLOCK_SET2: syscon->security_unlock_set2 = data; return;
+        default: return; // printf("s14x_syscon: Unknown register write %08x %08lx\n", addr, data); return;
     }
 }
 
