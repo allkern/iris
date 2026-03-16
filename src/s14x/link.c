@@ -77,8 +77,6 @@ void s14x_link_init(struct s14x_link* link, struct ps2_iop_intc* intc, struct sc
     // RECON bit set
     link->comr0 = 4;
 
-    link->ioboard_switch_state = 0xffff;
-
     link->intc = intc;
     link->sched = sched;
 }
