@@ -48,7 +48,7 @@ void EndMainStatusBar()
 
 namespace iris {
 
-int get_format_bpp(int fmt) {
+int get_format_bpp(VkFormat fmt) {
     switch (fmt) {
         case GS_PSMCT32: return 32;
         case GS_PSMCT24: return 24;
@@ -78,21 +78,47 @@ void show_status_bar(iris::instance* iris) {
 
         int dispfb = 0;
 
+        char buf[128];
+
+        sprintf(buf, "%s", emu::get_current_system_name(iris));
+
+        float width = CalcTextSize(buf).x;
+
+        ImVec4 col = GetStyleColorVec4(ImGuiCol_Text);
+
+        col.w = 0.2;
+
+        PushStyleColor(ImGuiCol_Separator, col);
+        PushStyleVarX(ImGuiStyleVar_ItemSpacing, 4.0f);
+
         if (!iris->image.image) {
-            Text(ICON_MS_MONITOR " %s | No image | %1.f fps",
-                renderers[iris->renderer_backend],
-                GetIO().Framerate
-            );
+            Text(ICON_MS_MONITOR " %s", renderers[iris->renderer_backend]);
+            SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            Text("No image");
+            SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            Text("%.1f fps", GetIO().Framerate);
+
+            SetCursorPosX(GetWindowWidth() - width - 5);
+            Text(buf);
         } else {
-            Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
-                renderers[iris->renderer_backend],
-                iris->render_width, iris->render_height,
-                iris->image.width, iris->image.height,
-                modes[iris->ps2->gs->smode2 & 3],
-                32,
-                GetIO().Framerate
-            );
+            // | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
+            Text(ICON_MS_MONITOR " %s", renderers[iris->renderer_backend]);
+            SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            Text("%dx%d", iris->render_width, iris->render_height);
+            SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            Text("%dx%d", iris->image.width, iris->image.height);
+            SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            Text("%s", modes[iris->ps2->gs->smode2 & 3]);
+            SeparatorEx(ImGuiSeparatorFlags_Vertical);
+            Text("%.1f fps", GetIO().Framerate);
+
+            SetCursorPosX(GetWindowWidth() - width - 5);
+            Text(buf);
         }
+
+
+        PopStyleColor();
+        PopStyleVar();
 
         // if (vp_w) {
         //     Text(ICON_MS_MONITOR " %s | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
