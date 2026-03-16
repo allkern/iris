@@ -217,7 +217,18 @@ enum input_action : uint32_t {
     IRIS_DS_AX_LEFTV_POS,
     IRIS_DS_AX_LEFTV_NEG,
     IRIS_DS_AX_LEFTH_POS,
-    IRIS_DS_AX_LEFTH_NEG
+    IRIS_DS_AX_LEFTH_NEG,
+
+    IRIS_S14X_SW_DOWN,
+    IRIS_S14X_SW_UP,
+    IRIS_S14X_SW_ENTER,
+    IRIS_S14X_SW_TEST,
+    IRIS_S14X_SW_SERVICE,
+    IRIS_S14X_SW_P1_START,
+    IRIS_S14X_SW_P2_START,
+    IRIS_S14X_SW_P3_START,
+    IRIS_S14X_SW_P4_START,
+    IRIS_INPUT_ACTION_MAX
 };
 
 struct vertex {
@@ -761,6 +772,7 @@ namespace render {
 
 namespace input {
     bool init(iris::instance* iris);
+    void init_default_mapping(iris::instance* iris, int id);
     void load_db_default(iris::instance* iris);
     bool load_db_from_file(iris::instance* iris, const char* path);
     input_action* get_input_action(iris::instance* iris, int slot, uint64_t input);

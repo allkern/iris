@@ -615,38 +615,6 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
         case SDL_EVENT_GAMEPAD_BUTTON_UP:
         case SDL_EVENT_GAMEPAD_AXIS_MOTION:
         case SDL_EVENT_KEY_UP: {
-            if (event->type == SDL_EVENT_KEY_UP) {
-                SDL_Keycode key = event->key.key;
-
-                switch (key) {
-                    case SDLK_0: {
-                        if (iris->ps2->s14x_ioboard) {
-                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_SERVICE);
-                        }
-                    } break;
-                    case SDLK_9: {
-                        if (iris->ps2->s14x_ioboard) {
-                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_TEST);
-                        }
-                    } break;
-                    case SDLK_8: {
-                        if (iris->ps2->s14x_ioboard) {
-                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_ENTER);
-                        }
-                    } break;
-                    case SDLK_7: {
-                        if (iris->ps2->s14x_ioboard) {
-                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_UP);
-                        }
-                    } break;
-                    case SDLK_6: {
-                        if (iris->ps2->s14x_ioboard) {
-                            s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, S14X_IOBOARD_SW_DOWN);
-                        }
-                    } break;
-                }
-            }
-
             iris->last_input_event_read = false;
             iris->last_input_event = input::sdl_event_to_input_event(event);
 

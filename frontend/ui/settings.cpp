@@ -49,6 +49,16 @@ const char* get_input_name(input_action action) {
         case IRIS_DS_AX_LEFTV_NEG: return "Left Stick Vertical-";
         case IRIS_DS_AX_LEFTH_POS: return "Left Stick Horizontal+";
         case IRIS_DS_AX_LEFTH_NEG: return "Left Stick Horizontal-";
+
+        case IRIS_S14X_SW_DOWN: return "System 147/148 Down";
+        case IRIS_S14X_SW_UP: return "System 147/148 Up";
+        case IRIS_S14X_SW_ENTER: return "System 147/148 Enter";
+        case IRIS_S14X_SW_TEST: return "System 147/148 Test";
+        case IRIS_S14X_SW_SERVICE: return "System 147/148 Service";
+        case IRIS_S14X_SW_P1_START: return "System 147/148 P1 Start";
+        case IRIS_S14X_SW_P2_START: return "System 147/148 P2 Start";
+        case IRIS_S14X_SW_P3_START: return "System 147/148 P3 Start";
+        case IRIS_S14X_SW_P4_START: return "System 147/148 P4 Start";
     }
 
     return "";
@@ -727,6 +737,12 @@ void show_mappings_editor(iris::instance* iris) {
         }
 
         EndCombo();
+    } SameLine();
+
+    if (selected_mapping <= 1) {
+        if (Button(ICON_MS_REFRESH " Default")) {
+            input::init_default_mapping(iris, selected_mapping);
+        }
     }
 
     SetNextItemWidth(GetContentRegionAvail().x);
