@@ -5,6 +5,8 @@
 #include "bus.h"
 #include "bus_decl.h"
 
+#define printf(fmt, ...)(0)
+
 struct iop_bus* iop_bus_create(void) {
     return malloc(sizeof(struct iop_bus));
 }
@@ -153,6 +155,11 @@ void iop_bus_destroy(struct iop_bus* bus) {
 uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
+    if (addr == 0x00189A40) return 0x09;
+    if (addr == 0x00189A41) return 0x00;
+    if (addr == 0x00189A42) return 0x63;
+    if (addr == 0x00189A43) return 0x34;
+
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
 
     if (ptr) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
@@ -191,6 +198,9 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
 
 uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
+
+    if (addr == 0x00189A40) return 0x0009;
+    if (addr == 0x00189A42) return 0x3463;
 
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
 
@@ -232,6 +242,8 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     // if (addr == 0x1000205c) { return 0xffff; }
     // if (addr == 0x1000205e) { return 0xffff; }
 
+    if (addr == 0x1241c000) return 0xffff;
+
     printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
 
     return 0;
@@ -240,6 +252,7 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
 uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
+    if (addr == 0x00189A40) return 0x34630009;
     if (addr == 0xfffe0130) return 0xffffffff;
 
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
@@ -278,7 +291,7 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     // Bloody Roar 4 Wrong IOP CDVD DMA
     // if ((addr & 0xff000000) == 0x0c000000) { *(uint8_t*)0 = 0; }
 
-    // printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
