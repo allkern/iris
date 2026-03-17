@@ -65,6 +65,10 @@ int open_file(iris::instance* iris, std::string file) {
 
         iris->loaded = file;
 
+        if (iris->autostart) {
+            iris->pause = false;
+        }
+
         return 0;
     }
 
@@ -527,6 +531,10 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
         } break;
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
+            if (ImGui::GetIO().WantCaptureMouse) {
+                break;
+            }
+
             if (event->button.button == SDL_BUTTON_LEFT && event->button.windowID == SDL_GetWindowID(iris->window)) {
                 if (iris->double_click_counter) {
                     if ((SDL_GetTicks() - iris->double_click_counter) > iris->double_click_interval) {
