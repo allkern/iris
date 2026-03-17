@@ -155,11 +155,6 @@ void iop_bus_destroy(struct iop_bus* bus) {
 uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    if (addr == 0x00189A40) return 0x09;
-    if (addr == 0x00189A41) return 0x00;
-    if (addr == 0x00189A42) return 0x63;
-    if (addr == 0x00189A43) return 0x34;
-
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
 
     if (ptr) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
@@ -198,9 +193,6 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
 
 uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
-
-    if (addr == 0x00189A40) return 0x0009;
-    if (addr == 0x00189A42) return 0x3463;
 
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
 
@@ -252,7 +244,6 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
 uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
-    if (addr == 0x00189A40) return 0x34630009;
     if (addr == 0xfffe0130) return 0xffffffff;
 
     void* ptr = bus->fastmem_r_table[(addr & 0x1fffffff) >> 13];
