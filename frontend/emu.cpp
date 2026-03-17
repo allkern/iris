@@ -83,6 +83,8 @@ bool load_arcade(iris::instance* iris, std::string path) {
             std::string bios = query_arcade_value<std::string>(id, "bios").value_or("");
             std::string nand = query_arcade_value<std::string>(id, "nand").value_or("");
 
+            int ioboard_mode = query_arcade_value<int>(id, "ioboard_mode").value_or(0);
+
             std::filesystem::path bios_path = base_path / bios;
             std::filesystem::path nand_path = base_path / nand;
             std::filesystem::path sram_path = base_path / "sram.bin";
@@ -107,6 +109,11 @@ bool load_arcade(iris::instance* iris, std::string path) {
             ps2_load_bios(iris->ps2, bios_path.string().c_str());
             s14x_nand_load(iris->ps2->s14x_nand, nand_path.string().c_str());
             s14x_sram_load(iris->ps2->s14x_sram, sram_path.string().c_str());
+
+            if (iris->ps2->s14x_ioboard) {
+                iris->ps2->s14x_ioboard->mode = ioboard_mode;
+            }
+
             ps2_reset(iris->ps2);
 
             iris->loaded = name + " (" + id + ")";

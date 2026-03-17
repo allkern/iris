@@ -19,17 +19,19 @@ const toml::table g_arcade_definitions = toml::table {
     }},
     { "akaiser", toml::table {
         { "system", PS2_SYSTEM_NAMCO_S147 },
-        { "name", "Animal Kaiser" },
+        { "name", "Animal Kaiser: The King of Animals" },
         { "nand", "kp005a_ana1004-na-b.ic26" },
         { "bios", "common_system147b_bootrom.ic1" },
-        { "boot", "atfile0:main.elf" }
+        { "boot", "atfile0:main.elf" },
+        { "ioboard_mode", 1 }
     }},
     { "akaievo", toml::table {
         { "system", PS2_SYSTEM_NAMCO_S147 },
         { "name", "Animal Kaiser Evolution" },
         { "nand", "kp012b_k9k8g08u0b.ic31" },
         { "bios", "common_system147b_bootrom.ic1" },
-        { "boot", "atfile0:main.elf" }
+        { "boot", "atfile0:main.elf" },
+        { "ioboard_mode", 1 }
     }},
     { "umilucky", toml::table {
         { "system", PS2_SYSTEM_NAMCO_S148 },
