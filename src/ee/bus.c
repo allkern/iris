@@ -231,10 +231,28 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
 uint64_t ee_bus_read32(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
-    if (addr == 0x00189A40) return 0x34630009;
-    if (addr == 0x001A2834) return 0x0;
-    if (addr == 0x001AAC9C) return 0x24040002;
-    if (addr == 0x001AAE08) return 0x0;
+    // pacmanbr
+    // if (addr == 0x00189A40) return 0x34630009;
+
+    // umilucky
+    // if (addr == 0x001A2834) return 0x0;
+    // if (addr == 0x001AAC9C) return 0x24040002;
+    // if (addr == 0x001AAE08) return 0x0;
+
+    // akaiser
+    // if (addr == 0x00102110) return 0x0;
+    // if (addr == 0x00102130) return 0x0;
+    // if (addr == 0x0013e388) return 0x0;
+    // if (addr == 0x001c2b0c) return 0x24027FFF;
+    // if (addr == 0x00104d7c) return 0x240F0064;
+
+    // akaievo
+    // if (addr == 0x001021E8) return 0x0;
+    // if (addr == 0x00102208) return 0x0;
+    // if (addr == 0x0015FA18) return 0x0;
+    // if (addr == 0x0015FC20) return 0x0;
+    // if (addr == 0x001D8A0C) return 0x24027FFF;
+    // if (addr == 0x001051b4) return 0x240F02BC;
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
