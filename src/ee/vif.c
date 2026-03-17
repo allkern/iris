@@ -129,7 +129,10 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
             sched_schedule(vif->sched, event);
 
-            // printf("vif%d: Requested IRQ\n", vif->id);
+            // fprintf(stderr, "vif%d: Requested IRQ command=%02x\n", vif->id, vif->cmd);
+            vif->stat |= 0x00000c02;
+            vif->stat ^= 0x0f000000;
+            vif->code = data;
         }
 
         switch ((data >> 24) & 0x7f) {
@@ -192,11 +195,6 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 //       This is admittedly a huge hack, but we can't really
                 //       emulate any of this without properly implementing
                 //       DMA timings.
-                if (data & 0x80000000) {
-                    vif->stat |= 0x00000c02;
-                    vif->stat ^= 0x0f000000;
-                    vif->code = data;
-                }
                 // printf("vif%d: FLUSH\n", vif->id);
             } break;
             case VIF_CMD_FLUSHA: {
@@ -334,7 +332,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 if (flg) addr += vif->tops;
 
                 if (filling) {
-                    // fprintf(stderr, "vif%d: Filling mode unimplemented\n", vif->id);
+                    fprintf(stderr, "vif%d: Filling mode unimplemented\n", vif->id);
 
                     return;
                     // exit(1);
