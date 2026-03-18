@@ -151,88 +151,109 @@ extern "C" {
 
 // ARCNET packets are 64 bytes long
 struct link_packet {
-	uint8_t src_node;
-	uint8_t dst_node;
-	uint8_t cp;
-	uint8_t unk03;
-	uint8_t seq_number;
-	uint8_t cmd;
-	uint8_t data[0x39];
-	uint8_t checksum;
+    union {
+        uint8_t raw[64];
+
+        struct {
+            // Offset 00h - Node of the sender
+            uint8_t src_node;
+
+            // Offset 01h - Node of the receiver
+            uint8_t dst_node;
+
+            // Offset 02h - Continuation Pointer (data offset within packet)
+            uint8_t cp;
+
+            // Offset 03h - Unknown (must be 00h)
+            uint8_t unk03;
+
+            // Offset 04h - Packet number in a sequence
+            uint8_t seq_number;
+
+            // Offset 05h - I/O board command
+            uint8_t cmd;
+
+            // Offset 06h-3Eh - Command payload/data
+            uint8_t data[0x39];
+
+            // Offsset 3Fh - Checksum of all the data bytes
+            uint8_t checksum;
+        };
+    };
 };
 
 typedef void (*link_packet_handler)(void*, struct link_packet*, struct link_packet*);
 
 struct link_node {
-	link_packet_handler handler;
-	void* udata;
+    link_packet_handler handler;
+    void* udata;
 };
 
 static uint8_t link_calculate_checksum(struct link_packet* packet);
 
 struct s14x_link {
-	uint8_t pad00;
-	uint8_t comr0;
-	uint8_t pad02;
-	uint8_t comr1;
-	uint8_t pad04;
-	uint8_t comr2;
-	uint8_t pad06;
-	uint8_t comr3;
-	uint8_t pad08;
-	uint8_t comr4;
-	uint8_t pad0a;
-	uint8_t comr5;
-	uint8_t pad0c;
-	uint8_t comr6;
-	uint8_t pad0e;
-	uint8_t comr7;
-	uint8_t nsth;
-	uint8_t nstl;
-	uint8_t stsh;
-	uint8_t stsl;
-	uint8_t mskh;
-	uint8_t mskl;
-	uint8_t pad16;
-	uint8_t eccmd;
-	uint8_t mrsid;
-	uint8_t rsid;
-	uint8_t pad1a;
-	uint8_t ssid;
-	uint8_t rxfhh;
-	uint8_t rxfhl;
-	uint8_t rxflh;
-	uint8_t rxfll;
-	uint8_t pad20;
-	uint8_t cmid;
-	uint8_t modeh;
-	uint8_t model;
-	uint8_t carryh;
-	uint8_t carryl;
-	uint8_t rxmhh;
-	uint8_t rxmhl;
-	uint8_t rxmlh;
-	uint8_t rxmll;
-	uint8_t pad2a;
-	uint8_t maxid;
-	uint8_t pad2c;
-	uint8_t nid;
-	uint8_t pad2e;
-	uint8_t ps;
-	uint8_t pad30;
-	uint8_t ckp;
-	uint8_t nstdifh;
-	uint8_t nstdifl;
-	uint8_t watchdog_flag;
+    uint8_t pad00;
+    uint8_t comr0;
+    uint8_t pad02;
+    uint8_t comr1;
+    uint8_t pad04;
+    uint8_t comr2;
+    uint8_t pad06;
+    uint8_t comr3;
+    uint8_t pad08;
+    uint8_t comr4;
+    uint8_t pad0a;
+    uint8_t comr5;
+    uint8_t pad0c;
+    uint8_t comr6;
+    uint8_t pad0e;
+    uint8_t comr7;
+    uint8_t nsth;
+    uint8_t nstl;
+    uint8_t stsh;
+    uint8_t stsl;
+    uint8_t mskh;
+    uint8_t mskl;
+    uint8_t pad16;
+    uint8_t eccmd;
+    uint8_t mrsid;
+    uint8_t rsid;
+    uint8_t pad1a;
+    uint8_t ssid;
+    uint8_t rxfhh;
+    uint8_t rxfhl;
+    uint8_t rxflh;
+    uint8_t rxfll;
+    uint8_t pad20;
+    uint8_t cmid;
+    uint8_t modeh;
+    uint8_t model;
+    uint8_t carryh;
+    uint8_t carryl;
+    uint8_t rxmhh;
+    uint8_t rxmhl;
+    uint8_t rxmlh;
+    uint8_t rxmll;
+    uint8_t pad2a;
+    uint8_t maxid;
+    uint8_t pad2c;
+    uint8_t nid;
+    uint8_t pad2e;
+    uint8_t ps;
+    uint8_t pad30;
+    uint8_t ckp;
+    uint8_t nstdifh;
+    uint8_t nstdifl;
+    uint8_t watchdog_flag;
 
-	uint8_t ram[S14X_LINK_RAMSIZE];
+    uint8_t ram[S14X_LINK_RAMSIZE];
 
-	uint32_t ramadr;
+    uint32_t ramadr;
 
-	struct link_node nodes[32];
+    struct link_node nodes[32];
 
-	struct ps2_iop_intc* intc;
-	struct sched_state* sched;
+    struct ps2_iop_intc* intc;
+    struct sched_state* sched;
 };
 
 struct s14x_link* s14x_link_create(void);

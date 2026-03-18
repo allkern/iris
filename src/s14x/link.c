@@ -198,8 +198,15 @@ void link_recv_reply(void* udata, int overshoot) {
 
     struct link_node* node = &link->nodes[tx->dst_node];
 
-    if (!node->handler)
+    if (!node->handler) {
+        fprintf(stdout, "s14x_link: Packet sent to disconnected node %d (cmd=%02x cp=%02x)\n",
+            tx->dst_node,
+            tx->cmd,
+            tx->cp
+        );
+
         return;
+    }
 
     // Set packet pending flag
     link->rxfll = 1 << tx->dst_node;
