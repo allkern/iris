@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <fenv.h>
+#include <utility>
 
 #include "vu.h"
 #include "vu_def.hpp"
@@ -28,6 +29,22 @@
 #define VU_UD_D (ins->ud_d)
 #define VU_UD_S (ins->ud_s)
 #define VU_UD_T (ins->ud_t)
+#define VU_D_FLD (0x01e00000)
+#define VU_D_X (0x01000000)
+#define VU_D_Y (0x00800000)
+#define VU_D_Z (0x00400000)
+#define VU_D_W (0x00200000)
+
+[[noreturn]] inline void unreachable() {
+    // Uses compiler specific extensions if possible.
+    // Even if no extension is used, undefined behavior is still raised by
+    // an empty function body and the noreturn attribute.
+#if defined(_MSC_VER) && !defined(__clang__) // MSVC
+    __assume(false);
+#else // GCC, Clang
+    __builtin_unreachable();
+#endif
+}
 
 struct vu_state* vu_create(void) {
     return (struct vu_state*)malloc(sizeof(struct vu_state));
@@ -431,66 +448,83 @@ void vu_xgkick(struct vu_state* vu) {
     } while (!eop);
 }
 
+template <typename F, std::size_t... Is>
+void seq(F f, std::index_sequence<Is...>) {
+    // Parameter pack expansion
+    (f(std::integral_constant<std::size_t, Is>{}), ...);
+}
+
+template <size_t N, typename F>
+void template_seq(F f) {
+    seq(f, std::make_index_sequence<N>{});
+}
+
 // Upper pipeline
 template <uint32_t di>
 void vu_i_abs(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, fabsf(vu_vf_i(vu, s, i)));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vf(vu, t, i, fabsf(vu_vf_i(vu, s, i)));
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_add(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+         if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + vu_vf_i(vu, t, i);
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addi(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + vu->i.f;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addx(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -498,18 +532,19 @@ void vu_i_addx(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addy(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -517,18 +552,19 @@ void vu_i_addy(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addz(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -536,18 +572,19 @@ void vu_i_addz(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addw(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -555,187 +592,198 @@ void vu_i_addw(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_adda(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + vu_vf_i(vu, t, i);
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + vu->i.f;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_adday(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_addaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) + bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_sub(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - vu_vf_i(vu, t, i);
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subi(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - vu->i.f;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subx(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -743,18 +791,19 @@ void vu_i_subx(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_suby(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -762,18 +811,19 @@ void vu_i_suby(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subz(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -781,18 +831,19 @@ void vu_i_subz(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subw(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -800,187 +851,198 @@ void vu_i_subw(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_suba(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - vu_vf_i(vu, t, i);
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - vu->i.f;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
             
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subay(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
             
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
             
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_subaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) - bc;
             
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mul(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_muli(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * vu->i.f;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulq(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulx(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -988,18 +1050,19 @@ void vu_i_mulx(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_muly(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -1007,18 +1070,19 @@ void vu_i_muly(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulz(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -1026,18 +1090,19 @@ void vu_i_mulz(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulw(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -1045,187 +1110,198 @@ void vu_i_mulw(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mula(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * vu->i.f;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulay(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_mulaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_madd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu->i.f;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * q;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddx(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1233,18 +1309,19 @@ void vu_i_maddx(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddy(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1252,18 +1329,19 @@ void vu_i_maddy(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1271,18 +1349,19 @@ void vu_i_maddz(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1290,187 +1369,198 @@ void vu_i_maddw(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_madda(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu->i.f;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu->acc.f[i] + vu_vf_i(vu, s, i) * q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_madday(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_maddaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msub(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
     int d = VU_UD_D;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu->i.f;
             
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - (vu_vf_i(vu, s, i) * q);
 
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubx(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1478,18 +1568,19 @@ void vu_i_msubx(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
             
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msuby(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1497,18 +1588,19 @@ void vu_i_msuby(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
             
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1516,18 +1608,19 @@ void vu_i_msubz(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
             
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1535,137 +1628,145 @@ void vu_i_msubw(struct vu_state* vu, const struct vu_instruction* ins) {
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
             
             vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msuba(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubai(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu->i.f;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubaq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     float q = vu_get_q(vu).f;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu->acc.f[i] - vu_vf_i(vu, s, i) * q;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubax(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_x(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubay(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_y(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubaz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_z(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_msubaw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
     float bc = vu_vf_w(vu, t);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
 
             vu->acc.f[i] = vu_update_flags(vu, result, i);
         } else {
             vu_clear_flags(vu, i);
         }
-    }
+    });
 
     vu_update_status(vu);
 }
+template <uint32_t di>
 void vu_i_max(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1673,24 +1774,26 @@ void vu_i_max(struct vu_state* vu, const struct vu_instruction* ins) {
 
     if (!d) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], vu->vf[t].s32[i]);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_maxi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
     if (!d) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], vu->i.s32);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_maxx(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1700,14 +1803,15 @@ void vu_i_maxx(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[0];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float fs = vu_vf_i(vu, s, i);
 
             vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_maxy(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1717,14 +1821,15 @@ void vu_i_maxy(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[1];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float fs = vu_vf_i(vu, s, i);
 
             vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_maxz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1734,14 +1839,15 @@ void vu_i_maxz(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[2];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float fs = vu_vf_i(vu, s, i);
 
             vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_maxw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1751,14 +1857,15 @@ void vu_i_maxw(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[3];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             float fs = vu_vf_i(vu, s, i);
 
             vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_mini(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1766,24 +1873,26 @@ void vu_i_mini(struct vu_state* vu, const struct vu_instruction* ins) {
 
     if (!d) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], vu->vf[t].s32[i]);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_minii(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int d = VU_UD_D;
 
     if (!d) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], vu->i.s32);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_minix(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1793,12 +1902,13 @@ void vu_i_minix(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[0];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_miniy(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1808,12 +1918,13 @@ void vu_i_miniy(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[1];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_miniz(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1823,12 +1934,13 @@ void vu_i_miniz(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[2];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
+template <uint32_t di>
 void vu_i_miniw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -1838,11 +1950,11 @@ void vu_i_miniw(struct vu_state* vu, const struct vu_instruction* ins) {
 
     int32_t bc = vu->vf[t].s32[3];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) {
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
             vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
         }
-    }
+    });
 }
 void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
@@ -1918,69 +2030,93 @@ void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_nop(struct vu_state* vu, const struct vu_instruction* ins) {
     // No operation
 }
+template <uint32_t di>
 void vu_i_ftoi0(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i)));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i)));
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_ftoi4(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.0625f)));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.0625f)));
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_ftoi12(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000244140625f)));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000244140625f)));
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_ftoi15(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000030517578125f)));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000030517578125f)));
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_itof0(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)vu->vf[s].s32[i]);
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vf(vu, t, i, (float)vu->vf[s].s32[i]);
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_itof4(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.0625f));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.0625f));
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_itof12(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000244140625f));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000244140625f));
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_itof15(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_UD_DI(i)) vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000030517578125f));
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000030517578125f));
+        }
+    });
 }
 void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_UD_T;
@@ -2247,6 +2383,7 @@ void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
         vu->next_tpc = vu->tpc + VU_LD_IMM11;
     }
 }
+template <uint32_t di>
 void vu_i_ilw(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
@@ -2255,10 +2392,13 @@ void vu_i_ilw(struct vu_state* vu, const struct vu_instruction* ins) {
     uint32_t addr = VU_IS + VU_LD_IMM11;
     uint128_t data = vu_mem_read(vu, addr);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vi[t] = data.u32[i];
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vi[t] = data.u32[i];
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_ilwr(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -2268,9 +2408,11 @@ void vu_i_ilwr(struct vu_state* vu, const struct vu_instruction* ins) {
     uint32_t addr = vu->vi[s];
     uint128_t data = vu_mem_read(vu, addr);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vi[t] = data.u32[i];
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vi[t] = data.u32[i];
+        }
+    });
 }
 void vu_i_ior(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_write_branch_pipeline(vu, VU_LD_D);
@@ -2287,25 +2429,31 @@ void vu_i_isubiu(struct vu_state* vu, const struct vu_instruction* ins) {
 
     vu_set_vi(vu, VU_LD_T, VU_IS - VU_LD_IMM15);
 }
+template <uint32_t di>
 void vu_i_isw(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
     uint32_t addr = vu->vi[s] + VU_LD_IMM11;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vi[t], i);
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_mem_write(vu, addr, vu->vi[t], i);
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_iswr(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
     uint32_t addr = vu->vi[s];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vi[t], i);
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_mem_write(vu, addr, vu->vi[t], i);
+        }
+    });
 }
 void vu_i_jalr(struct vu_state* vu, const struct vu_instruction* ins) {
     uint16_t s = VU_IS;
@@ -2317,6 +2465,7 @@ void vu_i_jalr(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_jr(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->next_tpc = VU_IS;
 }
+template <uint32_t di>
 void vu_i_lq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -2326,10 +2475,13 @@ void vu_i_lq(struct vu_state* vu, const struct vu_instruction* ins) {
 
     if (!t) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vf[t].u32[i] = data.u32[i];
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_lqd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -2343,10 +2495,13 @@ void vu_i_lqd(struct vu_state* vu, const struct vu_instruction* ins) {
 
     if (!t) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vf[t].u32[i] = data.u32[i];
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_lqi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -2357,41 +2512,53 @@ void vu_i_lqi(struct vu_state* vu, const struct vu_instruction* ins) {
         uint32_t addr = vu->vi[s];
         uint128_t data = vu_mem_read(vu, addr);
 
-        for (int i = 0; i < 4; i++) {
-            if (VU_LD_DI(i)) vu->vf[t].u32[i] = data.u32[i];
-        }
+        template_seq<4>([&](auto i) {
+            if constexpr (di & (VU_D_X >> i)) {
+                vu->vf[t].u32[i] = data.u32[i];
+            }
+        });
     }
 
     vu_set_vi(vu, s, vu->vi[s] + 1);
 }
+template <uint32_t di>
 void vu_i_mfir(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = (int32_t)(int16_t)VU_IS;
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vf[t].u32[i] = (int32_t)(int16_t)VU_IS;
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_mfp(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->p.f;
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vf[t].u32[i] = vu->p.f;
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_move(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
 
     if (!t) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->vf[s].u32[i];
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vf[t].u32[i] = vu->vf[s].u32[i];
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_mr32(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
@@ -2401,28 +2568,41 @@ void vu_i_mr32(struct vu_state* vu, const struct vu_instruction* ins) {
 
     uint32_t x = vu->vf[s].u32[0];
 
-    // for (int i = 0; i < 4; i++) {
-    //     if (VU_LD_DI(i)) vu->vf[t].u32[i] = rs.u32[(i + 1) & 3];
-    // }
+    // template_seq<4>([&](auto i) {
+    //     if constexpr (di & (VU_D_X >> i)) {
+    //         vu->vf[t].u32[i] = vu->vf[s].u32[(i + 1) & 3];
+    //     }
+    // });
 
-    if (VU_LD_DI(0)) vu->vf[t].u32[0] = vu->vf[s].u32[1];
-    if (VU_LD_DI(1)) vu->vf[t].u32[1] = vu->vf[s].u32[2];
-    if (VU_LD_DI(2)) vu->vf[t].u32[2] = vu->vf[s].u32[3];
-    if (VU_LD_DI(3)) vu->vf[t].u32[3] = x;
+    if constexpr (di & VU_D_X) {
+        vu->vf[t].u32[0] = vu->vf[s].u32[1];
+    }
+    if constexpr (di & VU_D_Y) {
+        vu->vf[t].u32[1] = vu->vf[s].u32[2];
+    }
+    if constexpr (di & VU_D_Z) {
+        vu->vf[t].u32[2] = vu->vf[s].u32[3];
+    }
+    if constexpr (di & VU_D_W) {
+        vu->vf[t].u32[3] = x;
+    }
 }
 void vu_i_mtir(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_write_branch_pipeline(vu, VU_LD_T);
 
     vu_set_vi(vu, VU_LD_T, vu->vf[VU_LD_S].u32[VU_LD_SF] & 0xffff);
 }
+template <uint32_t di>
 void vu_i_rget(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->r.u32;
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vf[t].u32[i] = vu->r.u32;
+        }
+    });
 }
 void vu_i_rinit(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
@@ -2433,6 +2613,7 @@ void vu_i_rinit(struct vu_state* vu, const struct vu_instruction* ins) {
 
     vu->r.u32 |= vu->vf[s].u32[VU_LD_SF] & 0x007fffff;
 }
+template <uint32_t di>
 void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
@@ -2445,9 +2626,11 @@ void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->r.u32 ^= x ^ y;
     vu->r.u32 = (vu->r.u32 & 0x7FFFFF) | 0x3F800000;
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu->vf[t].u32[i] = vu->r.u32;
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu->vf[t].u32[i] = vu->r.u32;
+        }
+    });
 }
 void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
     struct vu_reg32 q;
@@ -2460,6 +2643,7 @@ void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_rxor(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[VU_LD_S].u32[VU_LD_SF]) & 0x007FFFFF);
 }
+template <uint32_t di>
 void vu_i_sq(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -2468,10 +2652,13 @@ void vu_i_sq(struct vu_state* vu, const struct vu_instruction* ins) {
 
     // printf("vu: sq addr=%08x vf%02d=%08x %08x %08x %08x\n", addr, s, vu->vf[s].u32[3], vu->vf[s].u32[2], vu->vf[s].u32[1], vu->vf[s].u32[0]);
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_sqd(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -2482,10 +2669,13 @@ void vu_i_sqd(struct vu_state* vu, const struct vu_instruction* ins) {
 
     uint32_t addr = vu->vi[t];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
+        }
+    });
 }
+template <uint32_t di>
 void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_LD_S;
     int t = VU_LD_T;
@@ -2494,9 +2684,11 @@ void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins) {
 
     uint32_t addr = vu->vi[t];
 
-    for (int i = 0; i < 4; i++) {
-        if (VU_LD_DI(i)) vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
-    }
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
+        }
+    });
 
     vu_set_vi(vu, t, vu->vi[t] + 1);
 }
@@ -2946,12 +3138,35 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     vu->lower.src[0].field = vu->lower.ld_sf; \
     vu->lower.func = f;
 
-#define VU_DEC_MR32() \
+#define VU_DEC_MR32(f) \
     vu->lower.dst.reg = vu->lower.ld_t; \
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = (vu->lower.dst.field >> 1) | ((vu->lower.dst.field & 1) << 3); \
-    vu->lower.func = vu_i_mr32;
+    vu->lower.func = f;
+
+#define GET_TEMPLATE_FN(i) \
+    [&](uint32_t opcode) { \
+        switch ((opcode >> 21) & 0xf) { \
+            case 0: return &i<0>; \
+            case 1: return &i<VU_D_W>; \
+            case 2: return &i<VU_D_Z>; \
+            case 3: return &i<VU_D_Z | VU_D_W>; \
+            case 4: return &i<VU_D_Y>; \
+            case 5: return &i<VU_D_Y | VU_D_W>; \
+            case 6: return &i<VU_D_Y | VU_D_Z>; \
+            case 7: return &i<VU_D_Y | VU_D_Z | VU_D_W>; \
+            case 8: return &i<VU_D_X>; \
+            case 9: return &i<VU_D_X | VU_D_W>; \
+            case 10: return &i<VU_D_X | VU_D_Z>; \
+            case 11: return &i<VU_D_X | VU_D_Z | VU_D_W>; \
+            case 12: return &i<VU_D_X | VU_D_Y>; \
+            case 13: return &i<VU_D_X | VU_D_Y | VU_D_W>; \
+            case 14: return &i<VU_D_X | VU_D_Y | VU_D_Z>; \
+            case 15: return &i<VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>; \
+            default: __builtin_unreachable(); \
+        } \
+    __builtin_unreachable(); }(opcode)
 
 void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
     vu->upper.ud_d = (opcode >> 6) & 0x1f;
@@ -2980,105 +3195,106 @@ void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
         // bits 0-1 and bits 6-9 (6 bits) are enough to decode
         // all of the following
         switch (((opcode & 0x3c0) >> 4) | (opcode & 3)) {
-            case 0x00: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_addax); return;
-            case 0x01: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_adday); return;
-            case 0x02: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_addaz); return;
-            case 0x03: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_addaw); return;
-            case 0x04: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_subax); return;
-            case 0x05: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_subay); return;
-            case 0x06: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_subaz); return;
-            case 0x07: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_subaw); return;
-            case 0x08: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_maddax); return;
-            case 0x09: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_madday); return;
-            case 0x0A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_maddaz); return;
-            case 0x0B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_maddaw); return;
-            case 0x0C: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_msubax); return;
-            case 0x0D: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_msubay); return;
-            case 0x0E: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_msubaz); return;
-            case 0x0F: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_msubaw); return;
-            case 0x10: VU_DEC_UD_T_DST_S_SRC(vu_i_itof0); return;
-            case 0x11: VU_DEC_UD_T_DST_S_SRC(vu_i_itof4); return;
-            case 0x12: VU_DEC_UD_T_DST_S_SRC(vu_i_itof12); return;
-            case 0x13: VU_DEC_UD_T_DST_S_SRC(vu_i_itof15); return;
-            case 0x14: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi0); return;
-            case 0x15: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi4); return;
-            case 0x16: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi12); return;
-            case 0x17: VU_DEC_UD_T_DST_S_SRC(vu_i_ftoi15); return;
-            case 0x18: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_mulax); return;
-            case 0x19: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_mulay); return;
-            case 0x1A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_mulaz); return;
-            case 0x1B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_mulaw); return;
-            case 0x1C: VU_DEC_UD_S_SRC_Q_SRC(vu_i_mulaq); return;
-            case 0x1D: VU_DEC_UD_T_DST_S_SRC(vu_i_abs); return;
-            case 0x1E: VU_DEC_UD_S_SRC(vu_i_mulai); return;
+            case 0x00: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_addax)); return;
+            case 0x01: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_adday)); return;
+            case 0x02: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_addaz)); return;
+            case 0x03: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_addaw)); return;
+            case 0x04: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_subax)); return;
+            case 0x05: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_subay)); return;
+            case 0x06: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_subaz)); return;
+            case 0x07: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_subaw)); return;
+            case 0x08: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_maddax)); return;
+            case 0x09: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_madday)); return;
+            case 0x0A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_maddaz)); return;
+            case 0x0B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_maddaw)); return;
+            case 0x0C: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_msubax)); return;
+            case 0x0D: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_msubay)); return;
+            case 0x0E: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_msubaz)); return;
+            case 0x0F: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_msubaw)); return;
+            case 0x10: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof0)); return;
+            case 0x11: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof4)); return;
+            case 0x12: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof12)); return;
+            case 0x13: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof15)); return;
+            case 0x14: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi0)); return;
+            case 0x15: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi4)); return;
+            case 0x16: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi12)); return;
+            case 0x17: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi15)); return;
+            case 0x18: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_mulax)); return;
+            case 0x19: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_mulay)); return;
+            case 0x1A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_mulaz)); return;
+            case 0x1B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_mulaw)); return;
+            case 0x1C: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_mulaq)); return;
+            case 0x1D: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_abs)); return;
+            case 0x1E: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_mulai)); return;
             case 0x1F: VU_DEC_CLIP(); return;
-            case 0x20: VU_DEC_UD_S_SRC_Q_SRC(vu_i_addaq); return;
-            case 0x21: VU_DEC_UD_S_SRC_Q_SRC(vu_i_maddaq); return;
-            case 0x22: VU_DEC_UD_S_SRC(vu_i_addai); return;
-            case 0x23: VU_DEC_UD_S_SRC(vu_i_maddai); return;
-            case 0x24: VU_DEC_UD_S_SRC_Q_SRC(vu_i_subaq); return;
-            case 0x25: VU_DEC_UD_S_SRC_Q_SRC(vu_i_msubaq); return;
-            case 0x26: VU_DEC_UD_S_SRC(vu_i_subai); return;
-            case 0x27: VU_DEC_UD_S_SRC(vu_i_msubai); return;
-            case 0x28: VU_DEC_UD_S_SRC_T_SRC(vu_i_adda); return;
-            case 0x29: VU_DEC_UD_S_SRC_T_SRC(vu_i_madda); return;
-            case 0x2A: VU_DEC_UD_S_SRC_T_SRC(vu_i_mula); return;
-            case 0x2C: VU_DEC_UD_S_SRC_T_SRC(vu_i_suba); return;
-            case 0x2D: VU_DEC_UD_S_SRC_T_SRC(vu_i_msuba); return;
+            case 0x20: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_addaq)); return;
+            case 0x21: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_maddaq)); return;
+            case 0x22: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_addai)); return;
+            case 0x23: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_maddai)); return;
+            case 0x24: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_subaq)); return;
+            case 0x25: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_msubaq)); return;
+            case 0x26: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_subai)); return;
+            case 0x27: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_msubai)); return;
+            case 0x28: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_adda)); return;
+            case 0x29: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_madda)); return;
+            case 0x2A: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_mula)); return;
+            case 0x2C: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_suba)); return;
+            case 0x2D: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_msuba)); return;
             case 0x2E: VU_DEC_OPMULA(); return;
             case 0x2F: VU_DEC_UD_NONE(vu_i_nop); return;
+            default: printf("vu: unknown 000007FF style opcode %02x\n", opcode & 0x3ff); exit(1);
         }
     } else {
         // Decode 0000003F style instruction
         switch (opcode & 0x3f) {
-            case 0x00: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_addx); return;
-            case 0x01: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_addy); return;
-            case 0x02: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_addz); return;
-            case 0x03: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_addw); return;
-            case 0x04: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_subx); return;
-            case 0x05: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_suby); return;
-            case 0x06: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_subz); return;
-            case 0x07: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_subw); return;
-            case 0x08: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_maddx); return;
-            case 0x09: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_maddy); return;
-            case 0x0A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_maddz); return;
-            case 0x0B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_maddw); return;
-            case 0x0C: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_msubx); return;
-            case 0x0D: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_msuby); return;
-            case 0x0E: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_msubz); return;
-            case 0x0F: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_msubw); return;
-            case 0x10: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_maxx); return;
-            case 0x11: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_maxy); return;
-            case 0x12: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_maxz); return;
-            case 0x13: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_maxw); return;
-            case 0x14: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_minix); return;
-            case 0x15: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_miniy); return;
-            case 0x16: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_miniz); return;
-            case 0x17: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_miniw); return;
-            case 0x18: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, vu_i_mulx); return;
-            case 0x19: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, vu_i_muly); return;
-            case 0x1A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, vu_i_mulz); return;
-            case 0x1B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, vu_i_mulw); return;
-            case 0x1C: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_mulq); return;
-            case 0x1D: VU_DEC_UD_D_DST_S_SRC(vu_i_maxi); return;
-            case 0x1E: VU_DEC_UD_D_DST_S_SRC(vu_i_muli); return;
-            case 0x1F: VU_DEC_UD_D_DST_S_SRC(vu_i_minii); return;
-            case 0x20: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_addq); return;
-            case 0x21: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_maddq); return;
-            case 0x22: VU_DEC_UD_D_DST_S_SRC(vu_i_addi); return;
-            case 0x23: VU_DEC_UD_D_DST_S_SRC(vu_i_maddi); return;
-            case 0x24: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_subq); return;
-            case 0x25: VU_DEC_UD_D_DST_S_SRC_Q_SRC(vu_i_msubq); return;
-            case 0x26: VU_DEC_UD_D_DST_S_SRC(vu_i_subi); return;
-            case 0x27: VU_DEC_UD_D_DST_S_SRC(vu_i_msubi); return;
-            case 0x28: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_add); return;
-            case 0x29: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_madd); return;
-            case 0x2A: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_mul); return;
-            case 0x2B: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_max); return;
-            case 0x2C: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_sub); return;
-            case 0x2D: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_msub); return;
+            case 0x00: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_addx)); return;
+            case 0x01: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_addy)); return;
+            case 0x02: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_addz)); return;
+            case 0x03: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_addw)); return;
+            case 0x04: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_subx)); return;
+            case 0x05: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_suby)); return;
+            case 0x06: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_subz)); return;
+            case 0x07: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_subw)); return;
+            case 0x08: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_maddx)); return;
+            case 0x09: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_maddy)); return;
+            case 0x0A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_maddz)); return;
+            case 0x0B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_maddw)); return;
+            case 0x0C: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_msubx)); return;
+            case 0x0D: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_msuby)); return;
+            case 0x0E: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_msubz)); return;
+            case 0x0F: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_msubw)); return;
+            case 0x10: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_maxx)); return;
+            case 0x11: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_maxy)); return;
+            case 0x12: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_maxz)); return;
+            case 0x13: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_maxw)); return;
+            case 0x14: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_minix)); return;
+            case 0x15: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_miniy)); return;
+            case 0x16: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_miniz)); return;
+            case 0x17: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_miniw)); return;
+            case 0x18: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_mulx)); return;
+            case 0x19: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_muly)); return;
+            case 0x1A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_mulz)); return;
+            case 0x1B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_mulw)); return;
+            case 0x1C: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_mulq)); return;
+            case 0x1D: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_maxi)); return;
+            case 0x1E: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_muli)); return;
+            case 0x1F: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_minii)); return;
+            case 0x20: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_addq)); return;
+            case 0x21: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_maddq)); return;
+            case 0x22: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_addi)); return;
+            case 0x23: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_maddi)); return;
+            case 0x24: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_subq)); return;
+            case 0x25: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_msubq)); return;
+            case 0x26: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_subi)); return;
+            case 0x27: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_msubi)); return;
+            case 0x28: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_add)); return;
+            case 0x29: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_madd)); return;
+            case 0x2A: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_mul)); return;
+            case 0x2B: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_max)); return;
+            case 0x2C: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_sub)); return;
+            case 0x2D: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_msub)); return;
             case 0x2E: VU_DEC_OPMSUB(); return;
-            case 0x2F: VU_DEC_UD_D_DST_S_SRC_T_SRC(vu_i_mini); return;
+            case 0x2F: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_mini)); return;
         }
     }
 }
@@ -3110,10 +3326,10 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
     vu->lower.vi_dst = 0;
 
     switch ((opcode & 0xFE000000) >> 25) {
-        case 0x00: VU_DEC_LD_T_DST_S_VISRC(vu_i_lq); return;
-        case 0x01: VU_DEC_LD_S_SRC_T_VISRC(vu_i_sq); return;
-        case 0x04: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_ilw); return;
-        case 0x05: VU_DEC_LD_S_VISRC_T_VISRC(vu_i_isw); return;
+        case 0x00: VU_DEC_LD_T_DST_S_VISRC(GET_TEMPLATE_FN(vu_i_lq)); return;
+        case 0x01: VU_DEC_LD_S_SRC_T_VISRC(GET_TEMPLATE_FN(vu_i_sq)); return;
+        case 0x04: VU_DEC_LD_T_VIDST_S_VISRC(GET_TEMPLATE_FN(vu_i_ilw)); return;
+        case 0x05: VU_DEC_LD_S_VISRC_T_VISRC(GET_TEMPLATE_FN(vu_i_isw)); return;
         case 0x08: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_iaddiu); return;
         case 0x09: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_isubiu); return;
 
@@ -3145,25 +3361,25 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
         case 0x40: {
             if ((opcode & 0x3C) == 0x3C) {
                 switch (((opcode & 0x7C0) >> 4) | (opcode & 3)) {
-                    case 0x30: VU_DEC_LD_T_DST_S_SRC(vu_i_move); return;
-                    case 0x31: VU_DEC_MR32(); return;
-                    case 0x34: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(vu_i_lqi); return;
-                    case 0x35: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(vu_i_sqi); return;
-                    case 0x36: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(vu_i_lqd); return;
-                    case 0x37: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(vu_i_sqd); return;
+                    case 0x30: VU_DEC_LD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_move)); return;
+                    case 0x31: VU_DEC_MR32(GET_TEMPLATE_FN(vu_i_mr32)); return;
+                    case 0x34: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(GET_TEMPLATE_FN(vu_i_lqi)); return;
+                    case 0x35: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(GET_TEMPLATE_FN(vu_i_sqi)); return;
+                    case 0x36: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(GET_TEMPLATE_FN(vu_i_lqd)); return;
+                    case 0x37: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(GET_TEMPLATE_FN(vu_i_sqd)); return;
                     case 0x38: VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(vu_i_div); return;
                     case 0x39: VU_DEC_LD_Q_DST_T_TF_SRC(vu_i_sqrt); return;
                     case 0x3A: VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(vu_i_rsqrt); return;
                     case 0x3B: VU_DEC_LD_NONE(vu_i_waitq); return;
                     case 0x3C: VU_DEC_LD_T_VIDST_S_SF_SRC(vu_i_mtir); return;
-                    case 0x3D: VU_DEC_LD_T_DST_S_VISRC(vu_i_mfir); return;
-                    case 0x3E: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_ilwr); return;
-                    case 0x3F: VU_DEC_LD_T_VISRC_S_VISRC(vu_i_iswr); return;
-                    case 0x40: VU_DEC_LD_T_DST(vu_i_rnext); return;
-                    case 0x41: VU_DEC_LD_T_DST(vu_i_rget); return;
+                    case 0x3D: VU_DEC_LD_T_DST_S_VISRC(GET_TEMPLATE_FN(vu_i_mfir)); return;
+                    case 0x3E: VU_DEC_LD_T_VIDST_S_VISRC(GET_TEMPLATE_FN(vu_i_ilwr)); return;
+                    case 0x3F: VU_DEC_LD_T_VISRC_S_VISRC(GET_TEMPLATE_FN(vu_i_iswr)); return;
+                    case 0x40: VU_DEC_LD_T_DST(GET_TEMPLATE_FN(vu_i_rnext)); return;
+                    case 0x41: VU_DEC_LD_T_DST(GET_TEMPLATE_FN(vu_i_rget)); return;
                     case 0x42: VU_DEC_LD_S_SF_SRC(vu_i_rinit); return;
                     case 0x43: VU_DEC_LD_S_SF_SRC(vu_i_rxor); return;
-                    case 0x64: VU_DEC_LD_T_DST(vu_i_mfp); return;
+                    case 0x64: VU_DEC_LD_T_DST(GET_TEMPLATE_FN(vu_i_mfp)); return;
                     case 0x68: VU_DEC_LD_T_VIDST(vu_i_xtop); return;
                     case 0x69: VU_DEC_LD_T_VIDST(vu_i_xitop); return;
                     case 0x6C: VU_DEC_LD_S_VISRC(vu_i_xgkick); return;
@@ -3545,6 +3761,23 @@ uint64_t* vu_get_micro_mem_ptr(struct vu_state* vu, uint32_t addr) {
 
 uint32_t vu_get_tpc(struct vu_state* vu) {
     return vu->tpc;
+}
+
+void ps2_vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
+    vu_decode_lower(vu, opcode);
+
+    if (!vu->lower.func) {
+        printf("vu%d: Unimplemented lower instruction at %08x\n", vu->id, opcode);
+        exit(1);
+    }
+
+    vu->lower.func(vu, &vu->lower);
+}
+
+void ps2_vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
+    vu_decode_upper(vu, opcode);
+
+    vu->upper.func(vu, &vu->upper);
 }
 
 // #undef printf
