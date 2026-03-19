@@ -91,8 +91,10 @@ void show_status_bar(iris::instance* iris) {
         PushStyleColor(ImGuiCol_Separator, col);
         PushStyleVarX(ImGuiStyleVar_ItemSpacing, 4.0f);
 
+        SetCursorPosX(5.0);
+
         if (!iris->image.image) {
-            Text(ICON_MS_MONITOR " %s", renderers[iris->renderer_backend]);
+            Text("%s", renderers[iris->renderer_backend]);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
             Text("No image");
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
@@ -102,7 +104,7 @@ void show_status_bar(iris::instance* iris) {
             Text(buf);
         } else {
             // | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
-            Text(ICON_MS_MONITOR " %s", renderers[iris->renderer_backend]);
+            Text("%s", renderers[iris->renderer_backend]);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
             Text("%dx%d", iris->render_width, iris->render_height);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
