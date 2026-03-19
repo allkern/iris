@@ -8,6 +8,7 @@
 #include "iris.hpp"
 #include "config.hpp"
 #include "ee/ee_def.hpp"
+#include "ee/vu_def.hpp"
 
 // ImGui includes
 #include "imgui.h"

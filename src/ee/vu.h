@@ -76,76 +76,7 @@ struct vu_instruction {
     void (*func)(struct vu_state* vu, const struct vu_instruction* i);
 };
 
-struct vu_state {
-    struct vu_reg128 vf[32];
-    uint16_t vi[16];
-    struct vu_reg128 acc;
-
-    struct vu_instruction upper, lower;
-
-    struct {
-        struct {
-            uint8_t reg;
-            uint8_t field;
-        } dst;
-    } upper_pipeline[4], lower_pipeline[4];
-
-	int vi_backup_cycles;
-    int vi_backup_reg;
-    int vi_backup_value;
-
-    uint64_t micro_mem[0x800];
-    uint128_t vu_mem[0x400];
-
-    int micro_mem_size;
-    int vu_mem_size;
-    int id;
-
-    int i_bit;
-    int e_bit;
-    int m_bit;
-    int d_bit;
-    int t_bit;
-    uint32_t next_tpc;
-
-    // MAC flags pipeline
-    uint32_t mac_pipeline[4];
-    uint32_t clip_pipeline[4];
-
-    int q_delay;
-    struct vu_reg32 prev_q;
-    struct vu_reg32 p;
-
-    int xgkick_pending;
-    int xgkick_addr;
-
-    union {
-        uint32_t cr[16];
-
-        struct {
-            uint32_t status;
-            uint32_t mac;
-            uint32_t clip;
-            uint32_t rsv0;
-            struct vu_reg32 r;
-            struct vu_reg32 i;
-            struct vu_reg32 q;
-            uint32_t rsv1;
-            uint32_t rsv2;
-            uint32_t rsv3;
-            uint32_t tpc;
-            uint32_t cmsar0;
-            uint32_t fbrst;
-            uint32_t vpu_stat;
-            uint32_t rsv4;
-            uint32_t cmsar1;
-        };
-    };
-
-    struct ps2_gif* gif;
-    struct ps2_vif* vif;
-    struct vu_state* vu1;
-};
+struct vu_state;
 
 struct vu_state* vu_create(void);
 void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* vif, struct vu_state* vu1);
@@ -338,6 +269,10 @@ void ps2_vu_decode_lower(struct vu_state* vu, uint32_t opcode);
 
 void vu_cycle(struct vu_state* vu);
 void vu_execute_program(struct vu_state* vu, uint32_t addr);
+void vu_execute_program_tpc(struct vu_state* vu);
+uint128_t* vu_get_vu_mem_ptr(struct vu_state* vu, uint32_t addr);
+uint64_t* vu_get_micro_mem_ptr(struct vu_state* vu, uint32_t addr);
+uint32_t vu_get_tpc(struct vu_state* vu);
 
 #ifdef __cplusplus
 }

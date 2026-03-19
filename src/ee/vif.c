@@ -63,7 +63,7 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
             } else {
                 // m=3 masks this fields' write, so we fetch
                 // the value from VU mem instead
-                data.u32[i] = vif->vu->vu_mem[vif->addr & 0x3ff].u32[i];
+                data.u32[i] = vu_get_vu_mem_ptr(vif->vu, vif->addr)->u32[i];
             }
         }
     } else {
@@ -86,10 +86,10 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
 
     if (vif->unpack_cl == vif->unpack_wl) {
         // Write data normally
-        vif->vu->vu_mem[(vif->addr++) & 0x3ff] = data;
+        *vu_get_vu_mem_ptr(vif->vu, vif->addr++) = data;
     } else if (vif->unpack_cl > vif->unpack_wl) {
         // Write data until unpack_wl is reached, then skip unpack_skip
-        vif->vu->vu_mem[(vif->addr++) & 0x3ff] = data;
+        *vu_get_vu_mem_ptr(vif->vu, vif->addr++) = data;
     } else {
         fprintf(stderr, "vif%d: Unpack error: unpack_cl (%d) < unpack_wl (%d)\n", vif->id, vif->unpack_cl, vif->unpack_wl);
         exit(1);
@@ -233,7 +233,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vu_execute_program(vif->vu, data & 0xffff);
             } break;
             case VIF_CMD_MSCNT: {
-                // printf("vif%d: MSCNT(%08x)\n", vif->id, vif->vu->tpc);
+                // printf("vif%d: MSCNT(%08x)\n", vif->id, vu_get_tpc(vif->vu));
 
                 vif->top = vif->tops;
 
@@ -246,7 +246,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                     vif->tops += vif->ofst;
                 }
 
-                vu_execute_program(vif->vu, vif->vu->tpc);
+                vu_execute_program_tpc(vif->vu);
             } break;
             case VIF_CMD_STMASK: {
                 // printf("vif%d: STMASK(%04x)\n", vif->id, data & 0xffff);
@@ -392,7 +392,8 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
 
                     // fprintf(stdout, "vif%d: Writing %08x %08x to MicroMem addr=%04x\n", vif->id, vif->data.u32[0], vif->data.u32[1], vif->addr);
 
-                    vif->vu->micro_mem[(vif->addr++) & 0x7ff] = vif->data.u64[0];
+                    *vu_get_micro_mem_ptr(vif->vu, vif->addr++) = vif->data.u64[0];
+
                     vif->shift = 0;
                 }
 

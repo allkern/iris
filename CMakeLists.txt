@@ -145,7 +145,7 @@ target_sources(iris PRIVATE
     src/ee/intc.c
     src/ee/timers.c
     src/ee/vif.c
-    src/ee/vu.c
+    src/ee/vu_cached.cpp
     src/ee/vu_dis.c
     src/gs/gs.c
     src/gs/renderer/null.cpp

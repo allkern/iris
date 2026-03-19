@@ -7,6 +7,7 @@
 #include "u128.h"
 
 #include "vu.h"
+#include "vu_def.hpp"
 
 #include <unordered_map>
 #include <vector>

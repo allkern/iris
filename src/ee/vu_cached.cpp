@@ -5,6 +5,7 @@
 #include <fenv.h>
 
 #include "vu.h"
+#include "vu_def.hpp"
 #include "vu_dis.h"
 
 // #define printf(fmt, ...)(0)
@@ -431,6 +432,7 @@ void vu_xgkick(struct vu_state* vu) {
 }
 
 // Upper pipeline
+template <uint32_t di>
 void vu_i_abs(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -3207,7 +3209,7 @@ static inline void vu_advance_fmac_pipeline(struct vu_state* vu) {
 }
 
 static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 0xbaba; i++) {
         for (int j = 0; j < 2; j++) {
             if (vu->upper.src[j].reg == vu->lower_pipeline[i].dst.reg) {
                 if (vu->upper.src[j].field & vu->lower_pipeline[i].dst.field) {
@@ -3527,6 +3529,22 @@ void ps2_vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
 
 void ps2_vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
     vu_decode_lower(vu, opcode);
+}
+
+void vu_execute_program_tpc(struct vu_state* vu) {
+    vu_execute_program(vu, vu->tpc);
+}
+
+uint128_t* vu_get_vu_mem_ptr(struct vu_state* vu, uint32_t addr) {
+    return &vu->vu_mem[addr & vu->vu_mem_size];
+}
+
+uint64_t* vu_get_micro_mem_ptr(struct vu_state* vu, uint32_t addr) {
+    return &vu->micro_mem[addr & vu->micro_mem_size];
+}
+
+uint32_t vu_get_tpc(struct vu_state* vu) {
+    return vu->tpc;
 }
 
 // #undef printf

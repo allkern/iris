@@ -10,6 +10,7 @@
 #include "iris.hpp"
 #include "config.hpp"
 #include "ee/ee_def.hpp"
+#include "ee/vu_def.hpp"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
