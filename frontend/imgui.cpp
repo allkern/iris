@@ -846,6 +846,8 @@ void cleanup(iris::instance* iris) {
     ImGui::DestroyContext();
 
     ImGui_ImplVulkanH_DestroyWindow(iris->instance, iris->device, &iris->main_window_data, VK_NULL_HANDLE);
+
+    iris->instance = NULL;
 }
 
 bool render_frame(iris::instance* iris, ImDrawData* draw_data) {

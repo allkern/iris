@@ -774,8 +774,7 @@ void destroy(iris::instance* iris) {
     if (!iris->window)
         return;
 
-    if (iris->device) vkDeviceWaitIdle(iris->device);
-    if (iris->queue) vkQueueWaitIdle(iris->queue);
+    vulkan::wait_idle(iris);
 
     for (auto& pass_framebuffers : iris->shader_pass_framebuffers) {
         for (VkFramebuffer& framebuffer : pass_framebuffers) {

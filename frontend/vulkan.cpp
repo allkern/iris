@@ -1336,8 +1336,11 @@ void* read_image(iris::instance* iris, VkImage src_image, VkFormat format, int w
 }
 
 void wait_idle(iris::instance* iris) {
-    vkQueueWaitIdle(iris->queue);
-    vkDeviceWaitIdle(iris->device);
+    if (iris->device) {
+        vkDeviceWaitIdle(iris->device);
+    } else if (iris->queue) {
+        vkQueueWaitIdle(iris->queue);
+    }
 }
 
 }
