@@ -1,13 +1,34 @@
 #pragma once
 
 #include <cstdint>
+#include <unordered_map>
+#include <vector>
 
 #include "vu.h"
+
+struct vu_block_entry {
+    struct vu_instruction upper, lower;
+    int e_bit;
+    int i_bit;
+    int hazard0;
+    int hazard1;
+    int hazard2;
+    int hazard3;
+    int branch;
+};
+
+struct vu_block {
+    std::vector <vu_block_entry> entries;
+
+    uint32_t tpc;
+};
 
 struct vu_state {
     struct vu_reg128 vf[32];
     uint16_t vi[16];
     struct vu_reg128 acc;
+
+    std::unordered_map <uint32_t, vu_block> block_cache;
 
     struct vu_instruction upper, lower;
 

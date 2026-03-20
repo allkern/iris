@@ -277,6 +277,8 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 vif->state = VIF_RECV_DATA;
                 vif->pending_words = num * 2;
                 vif->shift = 0;
+
+                vu_clear_block_cache(vif->vu);
             } break;
             case VIF_CMD_DIRECT: {
                 // fprintf(stdout, "vif%d: DIRECT(%04x)\n", vif->id, data & 0xffff);

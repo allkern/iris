@@ -47,12 +47,10 @@
 }
 
 struct vu_state* vu_create(void) {
-    return (struct vu_state*)malloc(sizeof(struct vu_state));
+    return new struct vu_state;
 }
 
 void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* vif, struct vu_state* vu1) {
-    memset(vu, 0, sizeof(struct vu_state));
-
     vu->id = id;
     vu->vu1 = vu1;
     vu->vif = vif;
@@ -71,12 +69,14 @@ void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* v
     vu->vf[0].z = 0.0;
     vu->vf[0].w = 1.0;
 
+    ps2_vu_reset(vu);
+
     // VU uses round to zero by default
     fesetround(FE_TOWARDZERO);
 }
 
 void vu_destroy(struct vu_state* vu) {
-    free(vu);
+    delete vu;
 }
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -3169,6 +3169,7 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     __builtin_unreachable(); }(opcode)
 
 void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
+    vu->upper.opcode = opcode;
     vu->upper.ud_d = (opcode >> 6) & 0x1f;
     vu->upper.ud_s = (opcode >> 11) & 0x1f;
     vu->upper.ud_t = (opcode >> 16) & 0x1f;
@@ -3242,7 +3243,6 @@ void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
             case 0x2D: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_msuba)); return;
             case 0x2E: VU_DEC_OPMULA(); return;
             case 0x2F: VU_DEC_UD_NONE(vu_i_nop); return;
-            default: printf("vu: unknown 000007FF style opcode %02x\n", opcode & 0x3ff); exit(1);
         }
     } else {
         // Decode 0000003F style instruction
@@ -3300,6 +3300,7 @@ void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
 }
 
 void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
+    vu->lower.opcode = opcode;
     vu->lower.ld_d = (opcode >> 6) & 0x1f;
     vu->lower.ld_s = (opcode >> 11) & 0x1f;
     vu->lower.ld_t = (opcode >> 16) & 0x1f;
@@ -3324,6 +3325,7 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
     vu->lower.vi_src[0] = 0;
     vu->lower.vi_src[1] = 0;
     vu->lower.vi_dst = 0;
+    vu->lower.branch = 0;
 
     switch ((opcode & 0xFE000000) >> 25) {
         case 0x00: VU_DEC_LD_T_DST_S_VISRC(GET_TEMPLATE_FN(vu_i_lq)); return;
@@ -3348,16 +3350,16 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
         case 0x1A: VU_DEC_LD_S_VISRC(vu_i_fmand); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmand); return;
         case 0x1B: VU_DEC_LD_S_VISRC(vu_i_fmor); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmor); return;
         case 0x1C: VU_DEC_LD_NONE(vu_i_fcget); return; // VU_DEC_LD_T_VIDST(vu_i_fcget); return;
-        case 0x20: VU_DEC_LD_NONE(vu_i_b); return;
-        case 0x21: VU_DEC_LD_T_VIDST(vu_i_bal); return;
-        case 0x24: VU_DEC_LD_S_VISRC(vu_i_jr); return;
-        case 0x25: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_jalr); return;
-        case 0x28: VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibeq); return;
-        case 0x29: VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibne); return;
-        case 0x2C: VU_DEC_LD_S_VISRC(vu_i_ibltz); return;
-        case 0x2D: VU_DEC_LD_S_VISRC(vu_i_ibgtz); return;
-        case 0x2E: VU_DEC_LD_S_VISRC(vu_i_iblez); return;
-        case 0x2F: VU_DEC_LD_S_VISRC(vu_i_ibgez); return;
+        case 0x20: vu->lower.branch = 1; VU_DEC_LD_NONE(vu_i_b); return;
+        case 0x21: vu->lower.branch = 1; VU_DEC_LD_T_VIDST(vu_i_bal); return;
+        case 0x24: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_jr); return;
+        case 0x25: vu->lower.branch = 1; VU_DEC_LD_T_VIDST_S_VISRC(vu_i_jalr); return;
+        case 0x28: vu->lower.branch = 1; VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibeq); return;
+        case 0x29: vu->lower.branch = 1; VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibne); return;
+        case 0x2C: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_ibltz); return;
+        case 0x2D: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_ibgtz); return;
+        case 0x2E: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_iblez); return;
+        case 0x2F: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_ibgez); return;
         case 0x40: {
             if ((opcode & 0x3C) == 0x3C) {
                 switch (((opcode & 0x7C0) >> 4) | (opcode & 3)) {
@@ -3425,7 +3427,7 @@ static inline void vu_advance_fmac_pipeline(struct vu_state* vu) {
 }
 
 static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
-    for (int i = 0; i < 0xbaba; i++) {
+    for (int i = 0; i < 0x4; i++) {
         for (int j = 0; j < 2; j++) {
             if (vu->upper.src[j].reg == vu->lower_pipeline[i].dst.reg) {
                 if (vu->upper.src[j].field & vu->lower_pipeline[i].dst.field) {
@@ -3438,180 +3440,204 @@ static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
     return 0;
 }
 
-void vu_execute_program(struct vu_state* vu, uint32_t addr) {
-    // printf("vu%d: Executing program at %08x (%08x) TOP=%08x\n", vu->id, addr, addr << 3, vu->vif->top);
-    // Disable VU1
-    // if (vu->id == 1)
-    //     return;
+vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
+    const auto& block_it = vu->block_cache.find(tpc);
 
-    struct vu_dis_state ds;
+    if (block_it != vu->block_cache.end()) {
+        return &block_it->second;
+    }
 
-    ds.print_address = 0;
-    ds.print_opcode = 0;
+    return nullptr;
+}
 
-    vu->tpc = addr;
-    vu->next_tpc = addr + 1;
+static int c = 0;
 
-    vu->i_bit = 0;
-    vu->e_bit = 0;
-    vu->m_bit = 0;
-    vu->d_bit = 0;
-    vu->t_bit = 0;
+vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
+    vu->block_cache[tpc] = vu_block();
 
-    int delayed_e_bit = 0;
+    vu_block* block = &vu->block_cache[tpc];
 
-    while (!delayed_e_bit) {
-        uint32_t tpc = vu->tpc;
-        uint64_t liw = vu->micro_mem[vu->tpc];
+    block->tpc = tpc;
 
+    // printf("vu: caching block at %04x\n", tpc);
+
+    for (int i = 0; i < max_cycles; i++) {
+        vu_block_entry entry = { 0 };
+
+        uint64_t liw = vu->micro_mem[tpc++ & 0x7ff];
+        uint32_t upper = liw >> 32;
+        uint32_t lower = liw & 0xffffffff;
+
+        entry.i_bit = (upper & 0x80000000) != 0;
+        entry.e_bit = (upper & 0x40000000) != 0;
+
+        vu_decode_upper(vu, upper & 0x7ffffff);
+
+        entry.upper = vu->upper;
+
+        if (!entry.i_bit) {
+            vu_decode_lower(vu, lower);
+
+            entry.lower = vu->lower;
+            entry.branch = vu->lower.branch;
+            entry.hazard0 = vu->upper.dst.reg == vu->lower.src[0].reg;
+            entry.hazard1 = vu->upper.dst.reg == vu->lower.src[1].reg;
+            entry.hazard2 = vu->upper.dst.reg == vu->lower.dst.reg;
+            entry.hazard3 = vu->lower.dst.reg == VU_REG_Q;
+        }
+
+        // If this entry is a branch or has the E bit set, we end the block here
+        if (entry.branch || entry.e_bit) {
+            i = max_cycles - 2;
+        }
+
+        block->entries.push_back(entry);
+    }
+
+    // vu_dis_state ds;
+
+    // ds.addr = block->tpc;
+    // ds.print_address = 0;
+    // ds.print_opcode = 0;
+
+    // for (const vu_block_entry& entry : block->entries) {
+    //     char upper_buf[512];
+    //     char lower_buf[512];
+
+    //     printf(" %s %04x: %08x %08x %-40s %s\n",
+    //         entry.i_bit ? "I" : entry.e_bit ? "E" : " ",
+    //         ds.addr++,
+    //         entry.upper.opcode,
+    //         entry.lower.opcode,
+    //         vu_disassemble_upper(upper_buf, entry.upper.opcode, &ds),
+    //         vu_disassemble_lower(lower_buf, entry.lower.opcode, &ds)
+    //     );
+    // }
+
+    return block;
+}
+
+bool vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
+    if (vu->q_delay)
+        vu->q_delay--;
+
+    vu_update_status(vu);
+
+    int lower_dst_reg = entry.lower.dst.reg;
+    int lower_dst_field = entry.lower.dst.field;
+
+    if (entry.i_bit) {
+        entry.upper.func(vu, &entry.upper);
+
+        // LOI
+        vu->i.u32 = entry.lower.opcode;
+
+        lower_dst_reg = 0;
+        lower_dst_field = 0;
+    } else {
+        if (entry.hazard3 && vu->q_delay) vu->q_delay = 0;
+
+        bool waitq = entry.lower.func == vu_i_waitq;
+
+        if (!entry.upper.dst.reg) {
+            entry.upper.func(vu, &entry.upper);
+            entry.lower.func(vu, &entry.lower);
+        } else if (entry.hazard0 || entry.hazard1 || waitq) {
+            // Upper instruction writes to a register that the lower
+            // instruction reads from. In this case the lower instruction
+            // gets the previous value of the register, executing the lower
+            // instruction first does the trick.
+
+            // We also execute WAITQ first, since it will stall the pipeline
+            // if the upper instruction reads Q
+
+            entry.lower.func(vu, &entry.lower);
+            entry.upper.func(vu, &entry.upper);
+        } else if (entry.hazard2) {
+            // Upper and lower instructions write to the same register.
+            // In this case the upper instruction takes priority, so we
+            // restore the value of the register after executing the lower
+            // instruction.
+
+            entry.upper.func(vu, &entry.upper);
+
+            struct vu_reg128 tmp = vu->vf[entry.upper.dst.reg];
+
+            entry.lower.func(vu, &entry.lower);
+
+            vu->vf[entry.upper.dst.reg] = tmp;
+        } else {
+            entry.upper.func(vu, &entry.upper);
+            entry.lower.func(vu, &entry.lower);
+        }
+    }
+
+    // Advance FMAC pipe
+    // vu->upper_pipeline[3] = vu->upper_pipeline[2];
+    // vu->upper_pipeline[2] = vu->upper_pipeline[1];
+    // vu->upper_pipeline[1] = vu->upper_pipeline[0];
+    // vu->upper_pipeline[0].dst.reg = entry.upper.dst.reg;
+    // vu->upper_pipeline[0].dst.field = entry.upper.dst.field;
+    // vu->lower_pipeline[3] = vu->lower_pipeline[2];
+    // vu->lower_pipeline[2] = vu->lower_pipeline[1];
+    // vu->lower_pipeline[1] = vu->lower_pipeline[0];
+    // vu->lower_pipeline[0].dst.reg = lower_dst_reg;
+    // vu->lower_pipeline[0].dst.field = lower_dst_field;
+
+    vu->mac_pipeline[3] = vu->mac_pipeline[2];
+    vu->mac_pipeline[2] = vu->mac_pipeline[1];
+    vu->mac_pipeline[1] = vu->mac_pipeline[0];
+    vu->mac_pipeline[0] = vu->mac;
+    
+    vu->clip_pipeline[3] = vu->clip_pipeline[2];
+    vu->clip_pipeline[2] = vu->clip_pipeline[1];
+    vu->clip_pipeline[1] = vu->clip_pipeline[0];
+    vu->clip_pipeline[0] = vu->clip;
+
+    if (vu->vi_backup_cycles) {
+        vu->vi_backup_cycles--;
+
+        if (!vu->vi_backup_cycles) {
+            vu->vi_backup_reg = 0;
+            vu->vi_backup_value = 0;
+        }
+    }
+
+    return entry.e_bit;
+}
+
+bool vu_execute_block(struct vu_state* vu, vu_block* block) {
+    bool e_bit = false;
+
+    // printf("vu: Input TPC %04x\n", vu->tpc);
+
+    for (const vu_block_entry& entry : block->entries) {
         vu->tpc = vu->next_tpc;
         vu->next_tpc = vu->tpc + 1;
         vu->tpc &= 0x7ff;
         vu->next_tpc &= 0x7ff;
 
-        ds.addr = tpc;
+        e_bit |= vu_execute_block_entry(vu, entry);
+    }
 
-        delayed_e_bit = vu->e_bit != 0;
+    // printf("vu: Output TPC %04x\n", vu->tpc);
 
-        uint32_t upper = liw >> 32;
-        uint32_t lower = liw & 0xffffffff;
+    return e_bit;
+}
 
-        vu->i_bit = (upper & 0x80000000) != 0;
-        vu->e_bit = (upper & 0x40000000) != 0;
-        vu->m_bit = (upper & 0x20000000) != 0;
-        vu->d_bit = (upper & 0x10000000) != 0;
-        vu->t_bit = (upper & 0x08000000) != 0;
+void vu_execute_program(struct vu_state* vu, uint32_t addr) {
+    vu->tpc = addr;
+    vu->next_tpc = addr + 1;
 
-        if (vu->q_delay)
-            vu->q_delay--;
+    while (true) {
+        vu_block* block = vu_find_block(vu, vu->tpc);
 
-        vu_update_status(vu);
-        
-        vu_decode_upper(vu, upper & 0x7ffffff);
-
-        // char ubuf[512];
-        // printf("%04x: %08x %08x ", tpc, upper, lower);
-        // printf("%-40s", vu_disassemble_upper(ubuf, upper & 0x7ffffff, &ds));
-
-        if (vu->i_bit) {
-            // printf("%-12s0x%08x\n", "loi", lower);
-
-            vu->upper.func(vu, &vu->upper);
-
-            // LOI
-            vu->i.u32 = lower;
-            vu->lower.func = NULL;
-            vu->lower.dst.reg = 0;
-            vu->lower.dst.field = 0;
-            vu->lower.src[0].reg = 0;
-            vu->lower.src[0].field = 0;
-            vu->lower.src[1].reg = 0;
-            vu->lower.src[1].field = 0;
-            vu->lower.vi_src[0] = 0;
-            vu->lower.vi_src[1] = 0;
-            vu->lower.vi_dst = 0;
-        } else {
-            vu_decode_lower(vu, lower);
-
-            // char lbuf[512];
-            // printf("%-40s\n", vu_disassemble_lower(lbuf, lower & 0xffffffff, &ds));
-
-            int hazard0 = vu->upper.dst.reg == vu->lower.src[0].reg;
-            int hazard1 = vu->upper.dst.reg == vu->lower.src[1].reg;
-            int hazard2 = vu->upper.dst.reg == vu->lower.dst.reg;
-            int hazard3 = (vu->lower.dst.reg == VU_REG_Q) && vu->q_delay;
-            int waitq = vu->lower.func == vu_i_waitq;
-
-            // If the lower instruction writes to Q and Q is not ready yet,
-            // the VU stalls the pipeline until it is ready.
-            if (hazard3) vu->q_delay = 0;
-
-            // Note: This code checks hazards and stalls pipes when the FMAC pipe stalls.
-            //       It's absolutely disgusting, so I'm commenting it out for now.
-
-            // Fixes:
-            // - Raiden III
-
-            /*
-            int stall = vu_get_fmac_stall_cycles(vu);
-
-            vu->q_delay -= stall;
-
-            if (vu->q_delay < 0)
-                vu->q_delay = 0;
-
-            for (int k = 0; k < stall; k++) {
-                vu_advance_fmac_pipeline(vu);
-            }
-            */
-
-            if (!vu->upper.dst.reg) {
-                vu->upper.func(vu, &vu->upper);
-                vu->lower.func(vu, &vu->lower);
-            } else if (hazard0 || hazard1 || waitq) {
-                // Upper instruction writes to a register that the lower
-                // instruction reads from. In this case the lower instruction
-                // gets the previous value of the register, executing the lower
-                // instruction first does the trick.
-
-                // We also execute WAITQ first, since it will stall the pipeline
-                // if the upper instruction reads Q
-
-                vu->lower.func(vu, &vu->lower);
-                vu->upper.func(vu, &vu->upper);
-            } else if (hazard2) {
-                // Upper and lower instructions write to the same register.
-                // In this case the upper instruction takes priority, so we
-                // restore the value of the register after executing the lower
-                // instruction.
-
-                vu->upper.func(vu, &vu->upper);
-
-                struct vu_reg128 tmp = vu->vf[vu->upper.dst.reg];
-
-                vu->lower.func(vu, &vu->lower);
-
-                vu->vf[vu->upper.dst.reg] = tmp;
-            } else {
-                vu->upper.func(vu, &vu->upper);
-                vu->lower.func(vu, &vu->lower);
-            }
+        if (!block) {
+            block = vu_cache_block(vu, vu->tpc, 64);
         }
 
-        // if (vu_get_fmac_stall_cycles(vu)) {
-        //     printf("vu%d: FMAC hazard detected at %04x, stalling %d cycles (q_delay=%d)\n", vu->id, tpc, vu_get_fmac_stall_cycles(vu), vu->q_delay);
-
-        //     exit(1);
-        // }
-
-        vu_advance_fmac_pipeline(vu);
-
-        vu->mac_pipeline[3] = vu->mac_pipeline[2];
-        vu->mac_pipeline[2] = vu->mac_pipeline[1];
-        vu->mac_pipeline[1] = vu->mac_pipeline[0];
-        vu->mac_pipeline[0] = vu->mac;
-        
-        vu->clip_pipeline[3] = vu->clip_pipeline[2];
-        vu->clip_pipeline[2] = vu->clip_pipeline[1];
-        vu->clip_pipeline[1] = vu->clip_pipeline[0];
-        vu->clip_pipeline[0] = vu->clip;
-
-        if (vu->vi_backup_cycles) {
-            vu->vi_backup_cycles--;
-
-            if (!vu->vi_backup_cycles) {
-                vu->vi_backup_reg = 0;
-                vu->vi_backup_value = 0;
-            }
-        }
-
-        // if (vu->xgkick_pending) {
-        //     vu->xgkick_pending--;
-
-        //     if (!vu->xgkick_pending) {
-        //         vu_xgkick(vu);
-        //     }
-        // }
+        if (vu_execute_block(vu, block))
+            break;
     }
 }
 
@@ -3766,11 +3792,6 @@ uint32_t vu_get_tpc(struct vu_state* vu) {
 void ps2_vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
     vu_decode_lower(vu, opcode);
 
-    if (!vu->lower.func) {
-        printf("vu%d: Unimplemented lower instruction at %08x\n", vu->id, opcode);
-        exit(1);
-    }
-
     vu->lower.func(vu, &vu->lower);
 }
 
@@ -3778,6 +3799,10 @@ void ps2_vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
     vu_decode_upper(vu, opcode);
 
     vu->upper.func(vu, &vu->upper);
+}
+
+void vu_clear_block_cache(struct vu_state* vu) {
+    vu->block_cache.clear();
 }
 
 // #undef printf

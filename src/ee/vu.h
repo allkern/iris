@@ -64,6 +64,8 @@ struct vu_instruction {
     uint32_t ud_d;
     uint32_t ud_s;
     uint32_t ud_t;
+    uint32_t opcode;
+    int branch;
 
     struct {
         int reg;
@@ -107,6 +109,7 @@ void vu_execute_program_tpc(struct vu_state* vu);
 uint128_t* vu_get_vu_mem_ptr(struct vu_state* vu, uint32_t addr);
 uint64_t* vu_get_micro_mem_ptr(struct vu_state* vu, uint32_t addr);
 uint32_t vu_get_tpc(struct vu_state* vu);
+void vu_clear_block_cache(struct vu_state* vu);
 
 #ifdef __cplusplus
 }
