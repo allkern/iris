@@ -4,10 +4,18 @@
 
 #include "timers.h"
 
-#define min(a, b) (((a) < (b)) ? (a) : (b))
-
 struct ps2_ee_timers* ps2_ee_timers_create(void) {
     return malloc(sizeof(struct ps2_ee_timers));
+}
+
+static inline void ee_timers_update_active_mask(struct ps2_ee_timers* timers, int t, int cue) {
+    uint8_t bit = 1u << t;
+
+    if (cue) {
+        timers->active_mask |= bit;
+    } else {
+        timers->active_mask &= ~bit;
+    }
 }
 
 void ps2_ee_timers_init(struct ps2_ee_timers* timers, struct ps2_intc* intc, struct sched_state* sched) {
@@ -17,31 +25,29 @@ void ps2_ee_timers_init(struct ps2_ee_timers* timers, struct ps2_intc* intc, str
     timers->sched = sched;
 
     for (int i = 0; i < 4; i++) {
-        timers->timer[i].compare = 0;
-        timers->timer[i].mode = 0;
-        timers->timer[i].counter = 0;
-        timers->timer[i].hold = 0;
         timers->timer[i].id = i;
     }
 }
 
-static inline int ee_timers_update_event(struct ee_timer* t) {
-    int counter = t->counter & 0xffff;
+static inline void ee_timers_update_event(struct ee_timer* t) {
+    uint32_t counter = t->counter & 0xffff;
+    uint32_t compare = t->compare & 0xffff;
 
-    unsigned int cycles_until_compare;
-    unsigned int cycles_until_overflow = 0x10000 - counter;
+    uint32_t cycles_until_compare;
+    uint32_t cycles_until_overflow = 0x10000 - counter;
 
-    if (counter < t->compare) {
-        cycles_until_compare = t->compare - counter;
+    if (counter < compare) {
+        cycles_until_compare = compare - counter;
     } else {
-        cycles_until_compare = 0x10000 - counter + t->compare;
+        cycles_until_compare = 0x10000 - counter + compare;
     }
 
-    // Arbitrary unreachable value
-    if (!t->cmpe) cycles_until_compare = 0x80000000;
+    // Compare events are needed for IRQ and for ZRET.
+    if (!(t->cmpe || t->zret)) cycles_until_compare = 0x80000000;
     if (!t->ovfe) cycles_until_overflow = 0x80000000;
 
-    t->cycles_until_check = min(cycles_until_compare, cycles_until_overflow);
+    t->cycles_until_check = cycles_until_compare < cycles_until_overflow ?
+        cycles_until_compare : cycles_until_overflow;
 
     // printf("timer %d: cycles_until_check=%04x counter=%04x compare=%04x until_compare=%04x until_overflow=%04x\n",
     //     t, t->cycles_until_check, t->counter, t->compare, cycles_until_compare, cycles_until_overflow
@@ -113,8 +119,12 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uin
     timer->cmpe = (data >> 8) & 1;
     timer->ovfe = (data >> 9) & 1;
 
-    if (!timer->cue)
+    ee_timers_update_active_mask(timers, t, timer->cue);
+
+    if (!timer->cue) {
+        timer->check_enabled = 0;
         return;
+    }
 
     if (timer->gate) {
         printf("timers: Timer %d gate write %08x\n", t, data);
@@ -140,7 +150,7 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uin
 
     timer->delta_reload = timer->delta;
 
-    if (timer->cmpe || timer->ovfe) {
+    if (timer->cmpe || timer->ovfe || timer->zret) {
         timer->check_enabled = 1;
 
         ee_timers_update_event(timer);
@@ -162,75 +172,82 @@ void ps2_ee_timers_write32(struct ps2_ee_timers* timers, uint32_t addr, uint64_t
     }
 }
 
-void ps2_ee_timers_tick(struct ps2_ee_timers* timers) {
-    for (int i = 0; i < 4; i++) {
-        struct ee_timer* t = &timers->timer[i];
+static inline void ee_timers_tick_one(struct ps2_ee_timers* timers, struct ee_timer* t, int i) {
+    if (--t->delta)
+        return;
 
-        if (!t->cue)
-            continue;
+    t->delta = t->delta_reload;
 
-        t->delta--;
+    uint32_t counter = t->counter + 1;
 
-        if (t->delta)
-            continue;
+    if (!t->check_enabled) {
+        t->counter = counter & 0xffff;
+        return;
+    }
 
-        t->delta = t->delta_reload;
+    if (t->cycles_until_check > 1) {
+        t->cycles_until_check--;
+        t->counter = counter & 0xffff;
+        return;
+    }
 
-        t->counter++;
+    uint32_t low_counter = counter & 0xffff;
+    int cmp = low_counter == (t->compare & 0xffff);
+    int ovf = counter == 0x10000;
 
-        if (t->check_enabled) {
-            if ((t->cycles_until_check - 1) > 0) {
-                t->cycles_until_check--;
-                t->counter &= 0xffff;
+    if (!(cmp || ovf)) {
+        fprintf(stderr, "timer %d: error counter=%04x compare=%04x cycles_until-check=%d\n", i, counter, t->compare, t->cycles_until_check);
 
-                continue;
-            }
+        exit(1);
+    }
 
-            int cmp = (t->counter & 0xffff) == t->compare;
-            int ovf = t->counter == 0x10000;
+    if (cmp) {
+        if (t->cmpe)
+            t->mode |= 0x400;
 
-            if (!(cmp || ovf)) {
-                fprintf(stderr, "timer %d: error counter=%04x compare=%04x cycles_until-check=%d\n", i, t->counter, t->compare, t->cycles_until_check);
-
-                exit(1);
-            }
-
-            // printf("timer %d: counter=%04x target=%04x cycles_until_check=%04x\n", i, t->counter, t->compare, t->cycles_until_check);
-
-            // if (!loop2--)
-            //     exit(1);
-
-            if ((t->counter & 0xffff) == t->compare) {
-                t->mode |= 0x400;
-
-                if (t->zret) {
-                    t->counter = 0;
-                }
-
-                if (t->cmpe) {
-                    // printf("timer %d: compare IRQ\n", i);
-                    
-                    ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
-                }
-
-                ee_timers_update_event(t);
-            }
-
-            if (t->counter == 0x10000) {
-                t->mode |= 0x800;
-
-                if (t->ovfe) {
-                    // printf("timer %d: overflow IRQ\n", i);
-
-                    ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
-                }
-
-                ee_timers_update_event(t);
-            }
+        if (t->zret) {
+            counter = 0;
         }
 
-        t->counter &= 0xffff;
+        if (t->cmpe) {
+            // printf("timer %d: compare IRQ\n", i);
+
+            ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
+        }
+
+        t->counter = counter;
+        ee_timers_update_event(t);
+        counter = t->counter;
     }
+
+    if (counter == 0x10000) {
+        if (t->ovfe)
+            t->mode |= 0x800;
+
+        if (t->ovfe) {
+            // printf("timer %d: overflow IRQ\n", i);
+
+            ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
+        }
+
+        t->counter = counter;
+        ee_timers_update_event(t);
+        counter = t->counter;
+    }
+
+    t->counter = counter & 0xffff;
+}
+
+void ps2_ee_timers_tick(struct ps2_ee_timers* timers) {
+    uint8_t active = timers->active_mask;
+
+    if (!active)
+        return;
+
+    if (active & 0x1) ee_timers_tick_one(timers, &timers->timer[0], 0);
+    if (active & 0x2) ee_timers_tick_one(timers, &timers->timer[1], 1);
+    if (active & 0x4) ee_timers_tick_one(timers, &timers->timer[2], 2);
+    if (active & 0x8) ee_timers_tick_one(timers, &timers->timer[3], 3);
 }
 
 void ps2_ee_timers_write16(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data) {
@@ -266,5 +283,3 @@ uint64_t ps2_ee_timers_read16(struct ps2_ee_timers* timers, uint32_t addr) {
 
     return 0;
 }
-
-#undef min

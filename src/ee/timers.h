@@ -40,6 +40,7 @@ struct ee_timer {
 
 struct ps2_ee_timers {
     struct ee_timer timer[4];
+    uint8_t active_mask;
 
     struct ps2_intc* intc;
     struct sched_state* sched;
