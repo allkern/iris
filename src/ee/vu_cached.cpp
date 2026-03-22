@@ -2861,6 +2861,8 @@ uint128_t ps2_vu_read128(struct vu_state* vu, uint32_t addr) {
 }
 void ps2_vu_write8(struct vu_state* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
+        vu_invalidate_range(vu, addr, 1);
+
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
         *(uint8_t*)(&ptr[addr & ((vu->micro_mem_size << 3) | 7)]) = data;
@@ -2872,6 +2874,8 @@ void ps2_vu_write8(struct vu_state* vu, uint32_t addr, uint64_t data) {
 }
 void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
+        vu_invalidate_range(vu, addr, 2);
+
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
         *(uint16_t*)(&ptr[addr & ((vu->micro_mem_size << 3) | 7)]) = data;
@@ -2883,6 +2887,8 @@ void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data) {
 }
 void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
+        vu_invalidate_range(vu, addr, 4);
+
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
         *(uint32_t*)(&ptr[addr & ((vu->micro_mem_size << 3) | 7)]) = data;
@@ -2894,6 +2900,8 @@ void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data) {
 }
 void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
+        vu_invalidate_range(vu, addr, 8);
+
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
         *(uint64_t*)(&ptr[addr & ((vu->micro_mem_size << 3) | 7)]) = data;
@@ -2905,6 +2913,8 @@ void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data) {
 }
 void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     if (addr <= 0x3FFF) {
+        vu_invalidate_range(vu, addr, 16);
+
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
         *(uint128_t*)(&ptr[addr & ((vu->micro_mem_size << 3) | 7)]) = data;
@@ -3441,21 +3451,33 @@ static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
 }
 
 vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
-    const auto& block_it = vu->block_cache.find(tpc);
-
-    if (block_it != vu->block_cache.end()) {
-        return &block_it->second;
+    if (tpc == vu->last_block_lookup_tpc) {
+        return vu->last_block_ptr;
     }
 
-    return nullptr;
+    const auto& block_it = vu->block_cache.find(tpc);
+    vu_block* result = nullptr;
+
+    if (block_it != vu->block_cache.end()) {
+        result = &block_it->second;
+    }
+
+    // Update cache for next lookup
+    vu->last_block_lookup_tpc = tpc;
+    vu->last_block_ptr = result;
+
+    return result;
 }
 
 static int c = 0;
 
 vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
-    vu->block_cache[tpc] = vu_block();
+    // Insertion can rehash the map and invalidate cached pointers.
+    vu->last_block_lookup_tpc = ~0u;
+    vu->last_block_ptr = nullptr;
 
-    vu_block* block = &vu->block_cache[tpc];
+    auto cache_it = vu->block_cache.insert_or_assign(tpc, vu_block()).first;
+    vu_block* block = &cache_it->second;
 
     block->tpc = tpc;
 
@@ -3467,6 +3489,9 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
         uint64_t liw = vu->micro_mem[tpc++ & 0x7ff];
         uint32_t upper = liw >> 32;
         uint32_t lower = liw & 0xffffffff;
+
+        // LOI consumes the raw lower word when the i-bit is set.
+        entry.lower.opcode = lower;
 
         entry.i_bit = (upper & 0x80000000) != 0;
         entry.e_bit = (upper & 0x40000000) != 0;
@@ -3514,6 +3539,10 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
     //     );
     // }
 
+    // Prime fast lookup with a pointer known to be valid after this insertion.
+    vu->last_block_lookup_tpc = block->tpc;
+    vu->last_block_ptr = block;
+
     return block;
 }
 
@@ -3523,17 +3552,11 @@ bool vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
 
     vu_update_status(vu);
 
-    int lower_dst_reg = entry.lower.dst.reg;
-    int lower_dst_field = entry.lower.dst.field;
-
     if (entry.i_bit) {
         entry.upper.func(vu, &entry.upper);
 
         // LOI
         vu->i.u32 = entry.lower.opcode;
-
-        lower_dst_reg = 0;
-        lower_dst_field = 0;
     } else {
         if (entry.hazard3 && vu->q_delay) vu->q_delay = 0;
 
@@ -3572,17 +3595,7 @@ bool vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
         }
     }
 
-    // Advance FMAC pipe
-    // vu->upper_pipeline[3] = vu->upper_pipeline[2];
-    // vu->upper_pipeline[2] = vu->upper_pipeline[1];
-    // vu->upper_pipeline[1] = vu->upper_pipeline[0];
-    // vu->upper_pipeline[0].dst.reg = entry.upper.dst.reg;
-    // vu->upper_pipeline[0].dst.field = entry.upper.dst.field;
-    // vu->lower_pipeline[3] = vu->lower_pipeline[2];
-    // vu->lower_pipeline[2] = vu->lower_pipeline[1];
-    // vu->lower_pipeline[1] = vu->lower_pipeline[0];
-    // vu->lower_pipeline[0].dst.reg = lower_dst_reg;
-    // vu->lower_pipeline[0].dst.field = lower_dst_field;
+    // vu_advance_fmac_pipeline(vu);
 
     vu->mac_pipeline[3] = vu->mac_pipeline[2];
     vu->mac_pipeline[2] = vu->mac_pipeline[1];
@@ -3628,12 +3641,18 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
     vu->tpc = addr;
     vu->next_tpc = addr + 1;
+    vu->i_bit = 0;
+    vu->e_bit = 0;
 
     while (true) {
         vu_block* block = vu_find_block(vu, vu->tpc);
 
         if (!block) {
+            vu->cache_misses++;
+
             block = vu_cache_block(vu, vu->tpc, 64);
+        } else {
+            vu->cache_hits++;
         }
 
         if (vu_execute_block(vu, block))
@@ -3762,6 +3781,9 @@ void ps2_vu_reset(struct vu_state* vu) {
     vu->q_delay = 0;
     vu->prev_q.u32 = 0;
 
+    vu->last_block_lookup_tpc = ~0u;
+    vu->last_block_ptr = nullptr;
+
     vu->vf[0].w = 1.0;
 }
 
@@ -3803,6 +3825,78 @@ void ps2_vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
 
 void vu_clear_block_cache(struct vu_state* vu) {
     vu->block_cache.clear();
+    vu->last_block_lookup_tpc = ~0u;
+    vu->last_block_ptr = nullptr;
+}
+
+void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
+    if (!size || vu->block_cache.empty()) {
+        return;
+    }
+
+    const uint32_t micro_mem_bytes = ((vu->micro_mem_size << 3) | 7) + 1;
+
+    // Invalidate everything if the write covers the full micro memory space.
+    if (size >= micro_mem_bytes) {
+        vu_clear_block_cache(vu);
+        return;
+    }
+
+    uint8_t dirty_tpc[0x800] = { 0 };
+
+    const uint32_t byte_mask = micro_mem_bytes - 1;
+    const uint32_t first_byte = addr & byte_mask;
+    const uint32_t last_byte = (first_byte + size - 1) & byte_mask;
+
+    auto mark_dirty_tpc = [&](uint32_t range_first_byte, uint32_t range_last_byte) {
+        uint32_t first_tpc = (range_first_byte >> 3) & 0x7ff;
+        uint32_t last_tpc = (range_last_byte >> 3) & 0x7ff;
+
+        for (;;) {
+            dirty_tpc[first_tpc] = 1;
+
+            if (first_tpc == last_tpc) {
+                break;
+            }
+
+            first_tpc = (first_tpc + 1) & 0x7ff;
+        }
+    };
+
+    if (first_byte <= last_byte) {
+        mark_dirty_tpc(first_byte, last_byte);
+    } else {
+        mark_dirty_tpc(first_byte, micro_mem_bytes - 1);
+        mark_dirty_tpc(0, last_byte);
+    }
+
+    for (auto it = vu->block_cache.begin(); it != vu->block_cache.end();) {
+        const vu_block& block = it->second;
+
+        uint32_t tpc = block.tpc & 0x7ff;
+        bool overlaps_dirty_range = false;
+
+        for (size_t i = 0; i < block.entries.size(); i++) {
+            if (dirty_tpc[tpc]) {
+                overlaps_dirty_range = true;
+                break;
+            }
+
+            tpc = (tpc + 1) & 0x7ff;
+        }
+
+        if (!overlaps_dirty_range) {
+            ++it;
+            continue;
+        }
+
+        if (vu->last_block_ptr == &it->second) {
+            vu->last_block_lookup_tpc = ~0u;
+            vu->last_block_ptr = nullptr;
+        }
+
+        it = vu->block_cache.erase(it);
+    }
 }
 
 // #undef printf

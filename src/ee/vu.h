@@ -110,6 +110,7 @@ uint128_t* vu_get_vu_mem_ptr(struct vu_state* vu, uint32_t addr);
 uint64_t* vu_get_micro_mem_ptr(struct vu_state* vu, uint32_t addr);
 uint32_t vu_get_tpc(struct vu_state* vu);
 void vu_clear_block_cache(struct vu_state* vu);
+void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size);
 
 #ifdef __cplusplus
 }

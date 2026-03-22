@@ -30,6 +30,13 @@ struct vu_state {
 
     std::unordered_map <uint32_t, vu_block> block_cache;
 
+    // Single-entry block cache for fast lookup (avoid hash computation)
+    uint32_t last_block_lookup_tpc;
+    struct vu_block* last_block_ptr;
+
+    uint64_t cache_hits;
+    uint64_t cache_misses;
+
     struct vu_instruction upper, lower;
 
     struct {
