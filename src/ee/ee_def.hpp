@@ -67,6 +67,11 @@ struct ee_state {
     uint32_t block_pc;
 
     std::unordered_map <uint32_t, ee_block> block_cache;
+    
+    // Single-entry block cache for fast lookup (avoid hash computation)
+    // Exploits temporal locality since we execute the same block repeatedly
+    uint32_t last_block_lookup_pc;
+    struct ee_block* last_block_ptr;
 
     uint128_t r[32] EE_ALIGNED16;
     uint128_t hi EE_ALIGNED16;
@@ -145,6 +150,11 @@ struct ee_state {
     int csr_reads;
     int intc_reads;
     int ram_size;
+
+    // Stats
+    uint64_t cache_misses;
+    uint64_t cache_hits;
+    uint64_t idle_skips;
 };
 
 #define THS_RUN 0x01

@@ -3420,6 +3420,10 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
     ee->vu0 = vu0;
     ee->vu1 = vu1;
 
+    // Initialize block lookup cache (intentionally mismatches so first real lookup succeeds)
+    ee->last_block_lookup_pc = ~0u;
+    ee->last_block_ptr = nullptr;
+
     // To-do: Set SR
 
     ee->spr = ps2_ram_create();
@@ -3469,6 +3473,10 @@ void ee_reset(struct ee_state* ee) {
     ee->csr_reads = 0;
 
     ee->block_cache.clear();
+
+    // Clear block lookup cache
+    ee->last_block_lookup_pc = ~0u;
+    ee->last_block_ptr = nullptr;
 
     fesetround(FE_TOWARDZERO);
 
@@ -4050,13 +4058,23 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
 }
 
 static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
-    const auto& block_it = ee->block_cache.find(pc);
-
-    if (block_it != ee->block_cache.end()) {
-        return &block_it->second;
+    // Fast path: check single-entry cache first (avoids hash computation)
+    if (pc == ee->last_block_lookup_pc) {
+        return ee->last_block_ptr;
     }
 
-    return nullptr;
+    const auto& block_it = ee->block_cache.find(pc);
+    struct ee_block* result = nullptr;
+
+    if (block_it != ee->block_cache.end()) {
+        result = &block_it->second;
+    }
+
+    // Update cache for next lookup
+    ee->last_block_lookup_pc = pc;
+    ee->last_block_ptr = result;
+
+    return result;
 }
 
 int ee_run_block(struct ee_state* ee, int max_cycles) {
@@ -4070,11 +4088,18 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         ee->count += 2048;
         // ee->eenull_counter += 8 * 64;
 
+        ee->idle_skips++;
+
         return 2048;
     }
 
     if (ee->intc_reads >= 10000) {
         ee_check_irq(ee);
+
+        ee->total_cycles += 2048;
+        ee->count += 2048;
+
+        ee->idle_skips++;
 
         return 2048;
     }
@@ -4088,7 +4113,10 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     struct ee_block* block = ee_find_block(ee, ee->pc);
 
     if (!block) {
+        ee->cache_misses++;
         block = ee_cache_block(ee, max_cycles);
+    } else {
+        ee->cache_hits++;
     }
 
     ee->block_pc = ee->pc;
@@ -4157,6 +4185,8 @@ int ee_step(struct ee_state* ee) {
 
 void ee_flush_cache(struct ee_state* ee) {
     ee->block_cache.clear();
+    ee->last_block_lookup_pc = ~0u;
+    ee->last_block_ptr = nullptr;
 }
 
 uint32_t ee_get_pc(struct ee_state* ee) {
