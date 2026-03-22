@@ -131,6 +131,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->angle = display["angle"].value_or(0);
     iris->flip_x = display["flip_x"].value_or(false);
     iris->flip_y = display["flip_y"].value_or(false);
+    iris->vsync = display["vsync"].value_or(true);
 
     auto audio = tbl["audio"];
     iris->mute = audio["mute"].value_or(false);
@@ -526,7 +527,8 @@ void close(iris::instance* iris) {
             { "menubar_height", iris->menubar_height },
             { "angle", iris->angle },
             { "flip_x", iris->flip_x },
-            { "flip_y", iris->flip_y }
+            { "flip_y", iris->flip_y },
+            { "vsync", iris->vsync }
         } },
         { "ui", toml::table {
             { "theme", iris->theme },
