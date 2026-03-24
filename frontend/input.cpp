@@ -325,7 +325,12 @@ input_event sdl_event_to_input_event(SDL_Event* event) {
 
             // Devious hack, we have enough spare bits in the 
             // SDL_Keycode so we can actually do this
-            ievent.id |= (event->key.mod & 0xffff) << 12;
+            const uint16_t mask =
+                SDL_KMOD_LSHIFT | SDL_KMOD_RSHIFT |
+                SDL_KMOD_LCTRL  | SDL_KMOD_RCTRL  |
+                SDL_KMOD_LALT   | SDL_KMOD_RALT;
+
+            ievent.id |= (event->key.mod & mask) << 12;
         } break;
 
         case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
