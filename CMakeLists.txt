@@ -66,13 +66,13 @@ if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
 endif()
 
 if (X11_API)
-	target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_XLIB_KHR)
+    target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_XLIB_KHR)
 endif()
 if (WAYLAND_API)
-	target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
+    target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_WAYLAND_KHR)
 endif()
 if (WIN32)
-	target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_WIN32_KHR)
+    target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_WIN32_KHR)
 endif()
 
 if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
@@ -293,10 +293,10 @@ message(STATUS "CMake System Name: ${CMAKE_SYSTEM_NAME}")
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
     # tell Install about the target, otherwise fixup won't know about the transitive dependencies
     install(TARGETS iris
-    	BUNDLE DESTINATION ./install COMPONENT Runtime
-   	    RUNTIME DESTINATION ./install/bin COMPONENT Runtime
+        BUNDLE DESTINATION ./install COMPONENT Runtime
+           RUNTIME DESTINATION ./install/bin COMPONENT Runtime
     )
-	
+    
     set(BUNDLE_PATH "${CMAKE_BINARY_DIR}/iris.app") # where to look for dependencies when fixing up
     file(GLOB VULKAN_DYLIBS $ENV{VULKAN_SDK}/lib/libvulkan.*.dylib)
     set(VULKAN_DYLIBS ${VULKAN_DYLIBS} $ENV{VULKAN_SDK}/lib/libMoltenVK.dylib)

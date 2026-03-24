@@ -89,7 +89,7 @@ char* rpc_decode_packet(struct iop_state* iop, char* buf, uint32_t* data) {
 
                 switch (call->rpc_number) {
                     case 0x02000000: printf("s14x_link: RPC ReceiveData\n"); break;
-                	case 0x03004002: {
+                    case 0x03004002: {
                         uint8_t* buf = malloc(call->send_size);
 
                         for (int i = 0; i < call->send_size; i++)

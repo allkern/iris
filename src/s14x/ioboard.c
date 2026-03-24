@@ -42,7 +42,7 @@ void ioboard_process_ic_card(struct link_packet* in, struct link_packet* out) {
 
     int out_size = 0;
 
-	switch (cmd) {
+    switch (cmd) {
         case 0x78: {
             out_size = 6;
 
@@ -66,9 +66,9 @@ void ioboard_process_ic_card(struct link_packet* in, struct link_packet* out) {
         } break;
 
         case 0x80: {
-		    out_size = 4;
+            out_size = 4;
 
-		    out->data[base + 3] = 0x0D; // Command result?
+            out->data[base + 3] = 0x0D; // Command result?
         } break;
 
         case 0x9F: {
@@ -110,19 +110,19 @@ void ioboard_process_ic_card(struct link_packet* in, struct link_packet* out) {
         } break;
     }
 
-	uint8_t out_size_with_parity = out_size + 1;
+    uint8_t out_size_with_parity = out_size + 1;
 
     out->data[0] = channel;
-	out->data[1] = out_size_with_parity; // This needs to be at least 5
-	out->data[base + 2] = out_size_with_parity - 5;
+    out->data[1] = out_size_with_parity; // This needs to be at least 5
+    out->data[base + 2] = out_size_with_parity - 5;
 
-	uint8_t parity = 0;
+    uint8_t parity = 0;
 
-	for (int i = 1; i < out_size; i++) {
-		parity ^= out->data[base + i];
-	}
+    for (int i = 1; i < out_size; i++) {
+        parity ^= out->data[base + i];
+    }
 
-	out->data[base + out_size] = parity;
+    out->data[base + out_size] = parity;
 }
 
 void s14x_ioboard_handle_packet(void* udata, struct link_packet* in, struct link_packet* out) {

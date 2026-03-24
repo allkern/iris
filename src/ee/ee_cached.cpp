@@ -303,7 +303,7 @@ static inline int fpu_check_underflow(struct ee_state* ee, union ee_fpu_reg* reg
         ee->fcr |= FPU_FLG_U | FPU_FLG_SU;
 
         return 1;
-	}
+    }
 
     ee->fcr &= ~FPU_FLG_U;
 
@@ -325,7 +325,7 @@ static inline int fpu_check_underflow_no_flags(struct ee_state* ee, union ee_fpu
         reg->u32 &= 0x80000000;
 
         return 1;
-	}
+    }
 
     return 0;
 }
@@ -1007,31 +1007,31 @@ static inline void ee_i_div(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
     int s = EE_D_RS;
 
-	if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
+    if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
         EE_LO0 = (int32_t)0x80000000;
         EE_HI0 = 0;
-	} else if (ee->r[t].ul32 != 0) {
+    } else if (ee->r[t].ul32 != 0) {
         EE_HI0 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
         EE_LO0 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
     } else {
         EE_HI0 = SE6432(ee->r[s].ul32);
         EE_LO0 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
-	}
+    }
 }
 static inline void ee_i_div1(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
     int s = EE_D_RS;
 
-	if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
+    if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
         EE_LO1 = (int32_t)0x80000000;
         EE_HI1 = 0;
-	} else if (ee->r[t].ul32 != 0) {
+    } else if (ee->r[t].ul32 != 0) {
         EE_HI1 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
         EE_LO1 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
     } else {
         EE_HI1 = SE6432(ee->r[s].ul32);
         EE_LO1 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
-	}
+    }
 }
 static inline void ee_i_divs(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
@@ -1042,17 +1042,17 @@ static inline void ee_i_divs(struct ee_state* ee, const ee_instruction& i) {
 
     // If both the dividend and divisor are zero, set I/SI,
     // else set D/SD
-	if ((ee->f[t].u32 & 0x7F800000) == 0) {
+    if ((ee->f[t].u32 & 0x7F800000) == 0) {
         if ((ee->f[s].u32 & 0x7F800000) == 0) {
             ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
         } else {
             ee->fcr |= FPU_FLG_D | FPU_FLG_SD;
         }
 
-		ee->f[d].u32 = ((ee->f[t].u32 ^ ee->f[s].u32) & 0x80000000) | 0x7f7fffff;
+        ee->f[d].u32 = ((ee->f[t].u32 ^ ee->f[s].u32) & 0x80000000) | 0x7f7fffff;
 
         return;
-	}
+    }
 
     ee->f[d].f = EE_FS / EE_FT;
 
@@ -1295,12 +1295,12 @@ static inline void ee_i_maddas(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_madds(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
-	int d = EE_D_FD;
+    int d = EE_D_FD;
     int s = EE_D_FS;
 
     float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
 
-	ee->f[d].f = fpu_cvtf(ee->a.f) + fpu_cvtf(temp);
+    ee->f[d].f = fpu_cvtf(ee->a.f) + fpu_cvtf(temp);
 
     if (fpu_check_overflow(ee, &ee->f[d]))
         return;
@@ -1379,12 +1379,12 @@ static inline void ee_i_msubas(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_msubs(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
-	int d = EE_D_FD;
+    int d = EE_D_FD;
     int s = EE_D_FS;
 
     float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
 
-	ee->f[d].f = fpu_cvtf(ee->a.f) - fpu_cvtf(temp);
+    ee->f[d].f = fpu_cvtf(ee->a.f) - fpu_cvtf(temp);
 
     if (fpu_check_overflow(ee, &ee->f[d]))
         return;

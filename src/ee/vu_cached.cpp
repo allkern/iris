@@ -345,11 +345,11 @@ static inline void vu_write_branch_pipeline(struct vu_state* vu, int dst) {
         return;
 
     //On repeat writes we need to remember the value from before the chain
-	if (vu->vi_backup_cycles && dst == vu->vi_backup_reg) {
-		vu->vi_backup_cycles = 2;
+    if (vu->vi_backup_cycles && dst == vu->vi_backup_reg) {
+        vu->vi_backup_cycles = 2;
 
-		return;
-	}
+        return;
+    }
 
     vu->vi_backup_cycles = 2;
     vu->vi_backup_reg = dst;

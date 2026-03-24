@@ -46,7 +46,7 @@ struct vu_state {
         } dst;
     } upper_pipeline[4], lower_pipeline[4];
 
-	int vi_backup_cycles;
+    int vi_backup_cycles;
     int vi_backup_reg;
     int vi_backup_value;
 

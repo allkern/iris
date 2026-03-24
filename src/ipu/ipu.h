@@ -41,6 +41,7 @@ struct ps2_ipu;
 struct ps2_ipu* ps2_ipu_create(void);
 void ps2_ipu_init(struct ps2_ipu* ipu, struct ps2_dmac* dmac, struct ps2_intc* intc);
 void ps2_ipu_reset(struct ps2_ipu* ipu);
+int ps2_ipu_is_busy(struct ps2_ipu* ipu);
 uint64_t ps2_ipu_read64(struct ps2_ipu* ipu, uint32_t addr);
 uint128_t ps2_ipu_read128(struct ps2_ipu* ipu, uint32_t addr);
 void ps2_ipu_write64(struct ps2_ipu* ipu, uint32_t addr, uint64_t data);

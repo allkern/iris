@@ -46,23 +46,23 @@ extern "C" {
 #include <stdlib.h>
 #include <stdio.h>
 
-#define FLASH_ID_64MBIT		0xe6
-#define FLASH_ID_128MBIT	0x73
-#define FLASH_ID_256MBIT	0x75
-#define FLASH_ID_512MBIT	0x76
-#define FLASH_ID_1024MBIT	0x79
+#define FLASH_ID_64MBIT     0xe6
+#define FLASH_ID_128MBIT    0x73
+#define FLASH_ID_256MBIT    0x75
+#define FLASH_ID_512MBIT    0x76
+#define FLASH_ID_1024MBIT   0x79
 
 /* SmartMedia commands.  */
-#define SM_CMD_READ1		0x00
-#define SM_CMD_READ2		0x01
-#define SM_CMD_READ3		0x50
-#define SM_CMD_RESET		0xff
-#define SM_CMD_WRITEDATA	0x80
-#define SM_CMD_PROGRAMPAGE	0x10
-#define SM_CMD_ERASEBLOCK	0x60
-#define SM_CMD_ERASECONFIRM	0xd0
-#define SM_CMD_GETSTATUS	0x70
-#define SM_CMD_READID		0x90
+#define SM_CMD_READ1        0x00
+#define SM_CMD_READ2        0x01
+#define SM_CMD_READ3        0x50
+#define SM_CMD_RESET        0xff
+#define SM_CMD_WRITEDATA    0x80
+#define SM_CMD_PROGRAMPAGE  0x10
+#define SM_CMD_ERASEBLOCK   0x60
+#define SM_CMD_ERASECONFIRM 0xd0
+#define SM_CMD_GETSTATUS    0x70
+#define SM_CMD_READID       0x90
 
 #define FLASH_CTRL_READY (1 << 0)   // r/w /BUSY
 #define FLASH_CTRL_WRITE (1 << 7)   // -/w WRITE data

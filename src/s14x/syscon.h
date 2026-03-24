@@ -28,17 +28,17 @@ extern "C" {
 #define S14X_RTC_STATE_READ_SECONDS 6
 
 struct s14x_syscon {
-	uint8_t led;
-	uint8_t security_unlock;
-	uint8_t rtc_flag;
-	uint8_t battery_level;
-	uint8_t watchdog_flag2;
-	uint8_t security_unlock_set1;
-	uint8_t security_unlock_set2;
-	int sram_write_flag;
+    uint8_t led;
+    uint8_t security_unlock;
+    uint8_t rtc_flag;
+    uint8_t battery_level;
+    uint8_t watchdog_flag2;
+    uint8_t security_unlock_set1;
+    uint8_t security_unlock_set2;
+    int sram_write_flag;
 
-	int rtc_state;
-	int rtc_bit;
+    int rtc_state;
+    int rtc_bit;
 };
 
 struct s14x_syscon* s14x_syscon_create(void);

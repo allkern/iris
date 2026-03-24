@@ -932,21 +932,21 @@ static inline void cdvd_n_get_toc(struct ps2_cdvd* cdvd) {
         int size_ff = (disc_size % (60 * 75)) % 75;
 
         cdvd->buf[0] = 0x41;
-		cdvd->buf[1] = 0x00;
+        cdvd->buf[1] = 0x00;
 
-		//Number of FirstTrack
-		cdvd->buf[2] = 0xa0;
-		cdvd->buf[7] = 0x01;
+        //Number of FirstTrack
+        cdvd->buf[2] = 0xa0;
+        cdvd->buf[7] = 0x01;
 
-		//Number of LastTrack
-		cdvd->buf[12] = 0xa1;
-		cdvd->buf[17] = itob_table[track_count];
+        //Number of LastTrack
+        cdvd->buf[12] = 0xa1;
+        cdvd->buf[17] = itob_table[track_count];
 
-		//DiskLength
-		cdvd->buf[22] = 0xa2;
-		cdvd->buf[27] = itob_table[size_mm]; // mm
-		cdvd->buf[28] = itob_table[size_ss]; // ss
-		cdvd->buf[29] = itob_table[size_ff]; // ff
+        //DiskLength
+        cdvd->buf[22] = 0xa2;
+        cdvd->buf[27] = itob_table[size_mm]; // mm
+        cdvd->buf[28] = itob_table[size_ss]; // ss
+        cdvd->buf[29] = itob_table[size_ff]; // ff
 
         for (int i = 0; i < track_count; i++) {
             int num = i + 1;
