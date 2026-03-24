@@ -562,6 +562,7 @@ struct instance {
     float volume = 1.0f;
     int timescale = 8;
     bool mute_adma = true;
+    bool vsync = true;
     float ui_scale = 1.0f;
     int screenshot_format = IRIS_SCREENSHOT_FORMAT_PNG;
     int screenshot_jpg_quality_mode = IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM;
@@ -725,6 +726,7 @@ namespace imgui {
     void set_codeview_scheme(iris::instance* iris, int scheme);
     bool render_frame(iris::instance* iris, ImDrawData* draw_data);
     void cleanup(iris::instance* iris);
+    void set_vsync(iris::instance* iris, bool vsync);
 
     // Wrapper for ImGui::Begin that sets a default size
     bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);

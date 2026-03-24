@@ -122,6 +122,25 @@ static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* 
     return true;
 }
 
+void set_vsync(iris::instance* iris, bool vsync) {
+    std::vector <VkPresentModeKHR> present_modes;
+
+    if (vsync) {
+        present_modes.push_back(VK_PRESENT_MODE_FIFO_KHR);
+    } else {
+        present_modes.push_back(VK_PRESENT_MODE_MAILBOX_KHR);
+        present_modes.push_back(VK_PRESENT_MODE_IMMEDIATE_KHR);
+        present_modes.push_back(VK_PRESENT_MODE_FIFO_KHR);
+    }
+ 
+    iris->main_window_data.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(
+        iris->physical_device,
+        iris->main_window_data.Surface,
+        present_modes.data(),
+        present_modes.size()
+    );
+}
+
 bool setup_fonts(iris::instance* iris, ImGuiIO& io) {
     io.Fonts->AddFontDefault();
 
@@ -721,7 +740,7 @@ bool init(iris::instance* iris) {
         return false;
     }
 
-    if (!setup_vulkan_window(iris, &iris->main_window_data, iris->window_width, iris->window_height, true)) {
+    if (!setup_vulkan_window(iris, &iris->main_window_data, iris->window_width, iris->window_height, iris->vsync)) {
         printf("imgui: Failed to setup Vulkan window\n");
 
         return false;
@@ -914,7 +933,9 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
         return false;
     }
 
-    render::render_frame(iris, fd->CommandBuffer, fd->Framebuffer);
+    if (iris->instance) {
+        render::render_frame(iris, fd->CommandBuffer, fd->Framebuffer);
+    }
 
     {
         VkRenderPassBeginInfo render_pass_info = {};
