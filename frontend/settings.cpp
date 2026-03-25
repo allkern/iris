@@ -12,7 +12,7 @@ namespace iris::settings {
 void print_version() {
     puts(
         "iris (" STR(_IRIS_VERSION) " " STR(_IRIS_OSVERSION) ")\n"
-        "Copyright (C) 2025 Allkern/Lisandro Alarcon\n\n"
+        "Copyright (C) 2026 Allkern/Lisandro Alarcon\n\n"
         "MIT License\n"
         "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n"
         "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n"
