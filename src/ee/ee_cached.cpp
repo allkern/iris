@@ -15,6 +15,7 @@
 #endif
 
 #include "ee.h"
+#include "vu.h"
 #include "ee_dis.h"
 #include "ee_def.hpp"
 
@@ -34,9 +35,57 @@
 #define SSUBOVF64 __builtin_ssubll_overflow
 #endif
 
+#define VU_D_FLD (0x01e00000)
+#define VU_D_X (0x01000000)
+#define VU_D_Y (0x00800000)
+#define VU_D_Z (0x00400000)
+#define VU_D_W (0x00200000)
+
 // file = fopen("vu.dump", "a"); fprintf(file, #ins "\n"); fclose(file);
 #define VU_LOWER(ins) { ps2_vu_decode_lower(ee->vu0, i.opcode); vu_i_ ## ins(ee->vu0, &ee->vu0->lower); }
 #define VU_UPPER(ins) { ps2_vu_decode_upper(ee->vu0, i.opcode); vu_i_ ## ins(ee->vu0, &ee->vu0->upper); }
+#define VU_LOWER_TEMPLATE(ins) { \
+    ps2_vu_decode_lower(ee->vu0, i.opcode); \
+    switch ((i.opcode >> 21) & 0xf) { \
+        case 0: vu_i_ ## ins <0>(ee->vu0, &ee->vu0->lower); break; \
+        case 1: vu_i_ ## ins <VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 2: vu_i_ ## ins <VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 3: vu_i_ ## ins <VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 4: vu_i_ ## ins <VU_D_Y>(ee->vu0, &ee->vu0->lower); break; \
+        case 5: vu_i_ ## ins <VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 6: vu_i_ ## ins <VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 7: vu_i_ ## ins <VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 8: vu_i_ ## ins <VU_D_X>(ee->vu0, &ee->vu0->lower); break; \
+        case 9: vu_i_ ## ins <VU_D_X | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 10: vu_i_ ## ins <VU_D_X | VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 11: vu_i_ ## ins <VU_D_X | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 12: vu_i_ ## ins <VU_D_X | VU_D_Y>(ee->vu0, &ee->vu0->lower); break; \
+        case 13: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 14: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 15: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        default: __builtin_unreachable(); \
+    } }
+#define VU_UPPER_TEMPLATE(ins) { \
+    ps2_vu_decode_upper(ee->vu0, i.opcode); \
+    switch ((i.opcode >> 21) & 0xf) { \
+        case 0: vu_i_ ## ins <0>(ee->vu0, &ee->vu0->upper); break; \
+        case 1: vu_i_ ## ins <VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 2: vu_i_ ## ins <VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 3: vu_i_ ## ins <VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 4: vu_i_ ## ins <VU_D_Y>(ee->vu0, &ee->vu0->upper); break; \
+        case 5: vu_i_ ## ins <VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 6: vu_i_ ## ins <VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 7: vu_i_ ## ins <VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 8: vu_i_ ## ins <VU_D_X>(ee->vu0, &ee->vu0->upper); break; \
+        case 9: vu_i_ ## ins <VU_D_X | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 10: vu_i_ ## ins <VU_D_X | VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 11: vu_i_ ## ins <VU_D_X | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 12: vu_i_ ## ins <VU_D_X | VU_D_Y>(ee->vu0, &ee->vu0->upper); break; \
+        case 13: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 14: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 15: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        default: __builtin_unreachable(); \
+    } }
 
 static inline int fast_abs32(int a) {
     uint32_t m = a >> 31;
@@ -254,7 +303,7 @@ static inline int fpu_check_underflow(struct ee_state* ee, union ee_fpu_reg* reg
         ee->fcr |= FPU_FLG_U | FPU_FLG_SU;
 
         return 1;
-	}
+    }
 
     ee->fcr &= ~FPU_FLG_U;
 
@@ -276,7 +325,7 @@ static inline int fpu_check_underflow_no_flags(struct ee_state* ee, union ee_fpu
         reg->u32 &= 0x80000000;
 
         return 1;
-	}
+    }
 
     return 0;
 }
@@ -958,31 +1007,31 @@ static inline void ee_i_div(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
     int s = EE_D_RS;
 
-	if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
+    if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
         EE_LO0 = (int32_t)0x80000000;
         EE_HI0 = 0;
-	} else if (ee->r[t].ul32 != 0) {
+    } else if (ee->r[t].ul32 != 0) {
         EE_HI0 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
         EE_LO0 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
     } else {
         EE_HI0 = SE6432(ee->r[s].ul32);
         EE_LO0 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
-	}
+    }
 }
 static inline void ee_i_div1(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
     int s = EE_D_RS;
 
-	if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
+    if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
         EE_LO1 = (int32_t)0x80000000;
         EE_HI1 = 0;
-	} else if (ee->r[t].ul32 != 0) {
+    } else if (ee->r[t].ul32 != 0) {
         EE_HI1 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
         EE_LO1 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
     } else {
         EE_HI1 = SE6432(ee->r[s].ul32);
         EE_LO1 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
-	}
+    }
 }
 static inline void ee_i_divs(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
@@ -993,17 +1042,17 @@ static inline void ee_i_divs(struct ee_state* ee, const ee_instruction& i) {
 
     // If both the dividend and divisor are zero, set I/SI,
     // else set D/SD
-	if ((ee->f[t].u32 & 0x7F800000) == 0) {
+    if ((ee->f[t].u32 & 0x7F800000) == 0) {
         if ((ee->f[s].u32 & 0x7F800000) == 0) {
             ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
         } else {
             ee->fcr |= FPU_FLG_D | FPU_FLG_SD;
         }
 
-		ee->f[d].u32 = ((ee->f[t].u32 ^ ee->f[s].u32) & 0x80000000) | 0x7f7fffff;
+        ee->f[d].u32 = ((ee->f[t].u32 ^ ee->f[s].u32) & 0x80000000) | 0x7f7fffff;
 
         return;
-	}
+    }
 
     ee->f[d].f = EE_FS / EE_FT;
 
@@ -1246,12 +1295,12 @@ static inline void ee_i_maddas(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_madds(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
-	int d = EE_D_FD;
+    int d = EE_D_FD;
     int s = EE_D_FS;
 
     float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
 
-	ee->f[d].f = fpu_cvtf(ee->a.f) + fpu_cvtf(temp);
+    ee->f[d].f = fpu_cvtf(ee->a.f) + fpu_cvtf(temp);
 
     if (fpu_check_overflow(ee, &ee->f[d]))
         return;
@@ -1330,12 +1379,12 @@ static inline void ee_i_msubas(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_msubs(struct ee_state* ee, const ee_instruction& i) {
     int t = EE_D_RT;
-	int d = EE_D_FD;
+    int d = EE_D_FD;
     int s = EE_D_FS;
 
     float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
 
-	ee->f[d].f = fpu_cvtf(ee->a.f) - fpu_cvtf(temp);
+    ee->f[d].f = fpu_cvtf(ee->a.f) - fpu_cvtf(temp);
 
     if (fpu_check_overflow(ee, &ee->f[d]))
         return;
@@ -3221,21 +3270,21 @@ static inline void ee_i_tne(struct ee_state* ee, const ee_instruction& i) {
     if (EE_RS != EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
 }
 static inline void ee_i_tnei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tnei unimplemented\n"); exit(1); }
-static inline void ee_i_vabs(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(abs) }
-static inline void ee_i_vadd(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(add) }
-static inline void ee_i_vadda(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(adda) }
-static inline void ee_i_vaddai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addai) }
-static inline void ee_i_vaddaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addaq) }
-static inline void ee_i_vaddaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addaw) }
-static inline void ee_i_vaddax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addax) }
-static inline void ee_i_vadday(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(adday) }
-static inline void ee_i_vaddaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addaz) }
-static inline void ee_i_vaddi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addi) }
-static inline void ee_i_vaddq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addq) }
-static inline void ee_i_vaddw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addw) }
-static inline void ee_i_vaddx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addx) }
-static inline void ee_i_vaddy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addy) }
-static inline void ee_i_vaddz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(addz) }
+static inline void ee_i_vabs(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(abs) }
+static inline void ee_i_vadd(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(add) }
+static inline void ee_i_vadda(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(adda) }
+static inline void ee_i_vaddai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addai) }
+static inline void ee_i_vaddaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addaq) }
+static inline void ee_i_vaddaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addaw) }
+static inline void ee_i_vaddax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addax) }
+static inline void ee_i_vadday(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(adday) }
+static inline void ee_i_vaddaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addaz) }
+static inline void ee_i_vaddi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addi) }
+static inline void ee_i_vaddq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addq) }
+static inline void ee_i_vaddw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addw) }
+static inline void ee_i_vaddx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addx) }
+static inline void ee_i_vaddy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addy) }
+static inline void ee_i_vaddz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addz) }
 static inline void ee_i_vcallms(struct ee_state* ee, const ee_instruction& i) {
     vu_execute_program(ee->vu0, EE_D_I15);
 }
@@ -3244,106 +3293,106 @@ static inline void ee_i_vcallmsr(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_vclipw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(clip) }
 static inline void ee_i_vdiv(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(div) }
-static inline void ee_i_vftoi0(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(ftoi0) }
-static inline void ee_i_vftoi12(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(ftoi12) }
-static inline void ee_i_vftoi15(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(ftoi15) }
-static inline void ee_i_vftoi4(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(ftoi4) }
+static inline void ee_i_vftoi0(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi0) }
+static inline void ee_i_vftoi12(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi12) }
+static inline void ee_i_vftoi15(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi15) }
+static inline void ee_i_vftoi4(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi4) }
 static inline void ee_i_viadd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(iadd) }
 static inline void ee_i_viaddi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(iaddi) }
 static inline void ee_i_viand(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(iand) }
-static inline void ee_i_vilwr(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(ilwr) }
+static inline void ee_i_vilwr(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(ilwr) }
 static inline void ee_i_vior(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(ior) }
 static inline void ee_i_visub(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(isub) }
-static inline void ee_i_viswr(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(iswr) }
-static inline void ee_i_vitof0(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(itof0) }
-static inline void ee_i_vitof12(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(itof12) }
-static inline void ee_i_vitof15(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(itof15) }
-static inline void ee_i_vitof4(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(itof4) }
-static inline void ee_i_vlqd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(lqd) }
-static inline void ee_i_vlqi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(lqi) }
-static inline void ee_i_vmadd(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(madd) }
-static inline void ee_i_vmadda(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(madda) }
-static inline void ee_i_vmaddai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddai) }
-static inline void ee_i_vmaddaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddaq) }
-static inline void ee_i_vmaddaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddaw) }
-static inline void ee_i_vmaddax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddax) }
-static inline void ee_i_vmadday(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(madday) }
-static inline void ee_i_vmaddaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddaz) }
-static inline void ee_i_vmaddi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddi) }
-static inline void ee_i_vmaddq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddq) }
-static inline void ee_i_vmaddw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddw) }
-static inline void ee_i_vmaddx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddx) }
-static inline void ee_i_vmaddy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddy) }
-static inline void ee_i_vmaddz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maddz) }
-static inline void ee_i_vmax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(max) }
-static inline void ee_i_vmaxi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maxi) }
-static inline void ee_i_vmaxw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maxw) }
-static inline void ee_i_vmaxx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maxx) }
-static inline void ee_i_vmaxy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maxy) }
-static inline void ee_i_vmaxz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(maxz) }
-static inline void ee_i_vmfir(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mfir) }
-static inline void ee_i_vmini(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mini) }
-static inline void ee_i_vminii(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(minii) }
-static inline void ee_i_vminiw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(miniw) }
-static inline void ee_i_vminix(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(minix) }
-static inline void ee_i_vminiy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(miniy) }
-static inline void ee_i_vminiz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(miniz) }
-static inline void ee_i_vmove(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(move) }
-static inline void ee_i_vmr32(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(mr32) }
-static inline void ee_i_vmsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msub) }
-static inline void ee_i_vmsuba(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msuba) }
-static inline void ee_i_vmsubai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubai) }
-static inline void ee_i_vmsubaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubaq) }
-static inline void ee_i_vmsubaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubaw) }
-static inline void ee_i_vmsubax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubax) }
-static inline void ee_i_vmsubay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubay) }
-static inline void ee_i_vmsubaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubaz) }
-static inline void ee_i_vmsubi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubi) }
-static inline void ee_i_vmsubq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubq) }
-static inline void ee_i_vmsubw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubw) }
-static inline void ee_i_vmsubx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubx) }
-static inline void ee_i_vmsuby(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msuby) }
-static inline void ee_i_vmsubz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(msubz) }
+static inline void ee_i_viswr(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(iswr) }
+static inline void ee_i_vitof0(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof0) }
+static inline void ee_i_vitof12(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof12) }
+static inline void ee_i_vitof15(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof15) }
+static inline void ee_i_vitof4(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof4) }
+static inline void ee_i_vlqd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(lqd) }
+static inline void ee_i_vlqi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(lqi) }
+static inline void ee_i_vmadd(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(madd) }
+static inline void ee_i_vmadda(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(madda) }
+static inline void ee_i_vmaddai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddai) }
+static inline void ee_i_vmaddaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddaq) }
+static inline void ee_i_vmaddaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddaw) }
+static inline void ee_i_vmaddax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddax) }
+static inline void ee_i_vmadday(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(madday) }
+static inline void ee_i_vmaddaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddaz) }
+static inline void ee_i_vmaddi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddi) }
+static inline void ee_i_vmaddq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddq) }
+static inline void ee_i_vmaddw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddw) }
+static inline void ee_i_vmaddx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddx) }
+static inline void ee_i_vmaddy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddy) }
+static inline void ee_i_vmaddz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddz) }
+static inline void ee_i_vmax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(max) }
+static inline void ee_i_vmaxi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxi) }
+static inline void ee_i_vmaxw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxw) }
+static inline void ee_i_vmaxx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxx) }
+static inline void ee_i_vmaxy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxy) }
+static inline void ee_i_vmaxz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxz) }
+static inline void ee_i_vmfir(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mfir) }
+static inline void ee_i_vmini(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mini) }
+static inline void ee_i_vminii(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(minii) }
+static inline void ee_i_vminiw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(miniw) }
+static inline void ee_i_vminix(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(minix) }
+static inline void ee_i_vminiy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(miniy) }
+static inline void ee_i_vminiz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(miniz) }
+static inline void ee_i_vmove(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(move) }
+static inline void ee_i_vmr32(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(mr32) }
+static inline void ee_i_vmsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msub) }
+static inline void ee_i_vmsuba(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msuba) }
+static inline void ee_i_vmsubai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubai) }
+static inline void ee_i_vmsubaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubaq) }
+static inline void ee_i_vmsubaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubaw) }
+static inline void ee_i_vmsubax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubax) }
+static inline void ee_i_vmsubay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubay) }
+static inline void ee_i_vmsubaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubaz) }
+static inline void ee_i_vmsubi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubi) }
+static inline void ee_i_vmsubq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubq) }
+static inline void ee_i_vmsubw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubw) }
+static inline void ee_i_vmsubx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubx) }
+static inline void ee_i_vmsuby(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msuby) }
+static inline void ee_i_vmsubz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubz) }
 static inline void ee_i_vmtir(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(mtir) }
-static inline void ee_i_vmul(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mul) }
-static inline void ee_i_vmula(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mula) }
-static inline void ee_i_vmulai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulai) }
-static inline void ee_i_vmulaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulaq) }
-static inline void ee_i_vmulaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulaw) }
-static inline void ee_i_vmulax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulax) }
-static inline void ee_i_vmulay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulay) }
-static inline void ee_i_vmulaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulaz) }
-static inline void ee_i_vmuli(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(muli) }
-static inline void ee_i_vmulq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulq) }
-static inline void ee_i_vmulw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulw) }
-static inline void ee_i_vmulx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulx) }
-static inline void ee_i_vmuly(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(muly) }
-static inline void ee_i_vmulz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(mulz) }
+static inline void ee_i_vmul(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mul) }
+static inline void ee_i_vmula(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mula) }
+static inline void ee_i_vmulai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulai) }
+static inline void ee_i_vmulaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulaq) }
+static inline void ee_i_vmulaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulaw) }
+static inline void ee_i_vmulax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulax) }
+static inline void ee_i_vmulay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulay) }
+static inline void ee_i_vmulaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulaz) }
+static inline void ee_i_vmuli(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(muli) }
+static inline void ee_i_vmulq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulq) }
+static inline void ee_i_vmulw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulw) }
+static inline void ee_i_vmulx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulx) }
+static inline void ee_i_vmuly(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(muly) }
+static inline void ee_i_vmulz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulz) }
 static inline void ee_i_vnop(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(nop) }
 static inline void ee_i_vopmsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(opmsub) }
 static inline void ee_i_vopmula(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(opmula) }
-static inline void ee_i_vrget(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rget) }
+static inline void ee_i_vrget(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(rget) }
 static inline void ee_i_vrinit(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rinit) }
-static inline void ee_i_vrnext(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rnext) }
+static inline void ee_i_vrnext(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(rnext) }
 static inline void ee_i_vrsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rsqrt) }
 static inline void ee_i_vrxor(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rxor) }
-static inline void ee_i_vsqd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(sqd) }
-static inline void ee_i_vsqi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(sqi) }
+static inline void ee_i_vsqd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(sqd) }
+static inline void ee_i_vsqi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(sqi) }
 static inline void ee_i_vsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(sqrt) }
-static inline void ee_i_vsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(sub) }
-static inline void ee_i_vsuba(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(suba) }
-static inline void ee_i_vsubai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subai) }
-static inline void ee_i_vsubaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subaq) }
-static inline void ee_i_vsubaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subaw) }
-static inline void ee_i_vsubax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subax) }
-static inline void ee_i_vsubay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subay) }
-static inline void ee_i_vsubaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subaz) }
-static inline void ee_i_vsubi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subi) }
-static inline void ee_i_vsubq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subq) }
-static inline void ee_i_vsubw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subw) }
-static inline void ee_i_vsubx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subx) }
-static inline void ee_i_vsuby(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(suby) }
-static inline void ee_i_vsubz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(subz) }
+static inline void ee_i_vsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(sub) }
+static inline void ee_i_vsuba(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(suba) }
+static inline void ee_i_vsubai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subai) }
+static inline void ee_i_vsubaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subaq) }
+static inline void ee_i_vsubaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subaw) }
+static inline void ee_i_vsubax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subax) }
+static inline void ee_i_vsubay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subay) }
+static inline void ee_i_vsubaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subaz) }
+static inline void ee_i_vsubi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subi) }
+static inline void ee_i_vsubq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subq) }
+static inline void ee_i_vsubw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subw) }
+static inline void ee_i_vsubx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subx) }
+static inline void ee_i_vsuby(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(suby) }
+static inline void ee_i_vsubz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subz) }
 static inline void ee_i_vwaitq(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(waitq) }
 static inline void ee_i_xor(struct ee_state* ee, const ee_instruction& i) {
     EE_RD = EE_RS ^ EE_RT;
@@ -3370,6 +3419,10 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
     ee->bus = bus;
     ee->vu0 = vu0;
     ee->vu1 = vu1;
+
+    // Initialize block lookup cache (intentionally mismatches so first real lookup succeeds)
+    ee->last_block_lookup_pc = ~0u;
+    ee->last_block_ptr = nullptr;
 
     // To-do: Set SR
 
@@ -3420,6 +3473,10 @@ void ee_reset(struct ee_state* ee) {
     ee->csr_reads = 0;
 
     ee->block_cache.clear();
+
+    // Clear block lookup cache
+    ee->last_block_lookup_pc = ~0u;
+    ee->last_block_ptr = nullptr;
 
     fesetround(FE_TOWARDZERO);
 
@@ -4001,13 +4058,23 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
 }
 
 static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
-    const auto& block_it = ee->block_cache.find(pc);
-
-    if (block_it != ee->block_cache.end()) {
-        return &block_it->second;
+    // Fast path: check single-entry cache first (avoids hash computation)
+    if (pc == ee->last_block_lookup_pc) {
+        return ee->last_block_ptr;
     }
 
-    return nullptr;
+    const auto& block_it = ee->block_cache.find(pc);
+    struct ee_block* result = nullptr;
+
+    if (block_it != ee->block_cache.end()) {
+        result = &block_it->second;
+    }
+
+    // Update cache for next lookup
+    ee->last_block_lookup_pc = pc;
+    ee->last_block_ptr = result;
+
+    return result;
 }
 
 int ee_run_block(struct ee_state* ee, int max_cycles) {
@@ -4021,11 +4088,18 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         ee->count += 2048;
         // ee->eenull_counter += 8 * 64;
 
+        ee->idle_skips++;
+
         return 2048;
     }
 
     if (ee->intc_reads >= 10000) {
         ee_check_irq(ee);
+
+        ee->total_cycles += 2048;
+        ee->count += 2048;
+
+        ee->idle_skips++;
 
         return 2048;
     }
@@ -4039,7 +4113,10 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     struct ee_block* block = ee_find_block(ee, ee->pc);
 
     if (!block) {
+        ee->cache_misses++;
         block = ee_cache_block(ee, max_cycles);
+    } else {
+        ee->cache_hits++;
     }
 
     ee->block_pc = ee->pc;
@@ -4108,6 +4185,8 @@ int ee_step(struct ee_state* ee) {
 
 void ee_flush_cache(struct ee_state* ee) {
     ee->block_cache.clear();
+    ee->last_block_lookup_pc = ~0u;
+    ee->last_block_ptr = nullptr;
 }
 
 uint32_t ee_get_pc(struct ee_state* ee) {

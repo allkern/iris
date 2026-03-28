@@ -6,6 +6,7 @@
 
 #include "iris.hpp"
 #include "ee/ee_def.hpp"
+#include "ee/vu_def.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"

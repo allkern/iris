@@ -70,21 +70,33 @@ std::string get_event_name(const input_event& event) {
     switch (event.type) {
         case IRIS_EVENT_KEYBOARD: {
             SDL_Keycode keycode = static_cast<SDL_Keycode>(event.id);
-            name = SDL_GetKeyName(keycode);
+
+            name = SDL_GetKeyName(keycode & 0xf0000fff);
+
+            // Append modifier names
+            if ((keycode >> 12) & SDL_KMOD_LSHIFT) name = "Left Shift + " + name;
+            if ((keycode >> 12) & SDL_KMOD_RSHIFT) name = "Right Shift + " + name;
+            if ((keycode >> 12) & SDL_KMOD_LCTRL) name = "Left Ctrl + " + name;
+            if ((keycode >> 12) & SDL_KMOD_RCTRL) name = "Right Ctrl + " + name;
+            if ((keycode >> 12) & SDL_KMOD_LALT) name = "Left Alt + " + name;
+            if ((keycode >> 12) & SDL_KMOD_RALT) name = "Right Alt + " + name;
         } break;
 
         case IRIS_EVENT_GAMEPAD_BUTTON: {
             SDL_GamepadButton button = static_cast<SDL_GamepadButton>(event.id);
+
             name = SDL_GetGamepadStringForButton(button);
         } break;
 
         case IRIS_EVENT_GAMEPAD_AXIS_POS: {
             SDL_GamepadAxis axis = static_cast<SDL_GamepadAxis>(event.id);
+
             name = SDL_GetGamepadStringForAxis(axis) + std::string("+");
         } break;
 
         case IRIS_EVENT_GAMEPAD_AXIS_NEG: {
             SDL_GamepadAxis axis = static_cast<SDL_GamepadAxis>(event.id);
+
             name = SDL_GetGamepadStringForAxis(axis) + std::string("-");
         } break;
 
@@ -670,6 +682,21 @@ void show_controller_slot(iris::instance* iris, int slot) {
     }
 }
 
+bool event_is_mod_key(const input_event& event) {
+    if (event.type != IRIS_EVENT_KEYBOARD) {
+        return false;
+    }
+
+    SDL_Keycode keycode = static_cast<SDL_Keycode>(event.id);
+
+    return (keycode & 0xf0000fff) == SDLK_LSHIFT ||
+           (keycode & 0xf0000fff) == SDLK_RSHIFT ||
+           (keycode & 0xf0000fff) == SDLK_LCTRL ||
+           (keycode & 0xf0000fff) == SDLK_RCTRL ||
+           (keycode & 0xf0000fff) == SDLK_LALT ||
+           (keycode & 0xf0000fff) == SDLK_RALT;
+}
+
 int selected_mapping = 0;
 bool waiting_for_input = false;
 uint64_t mapping_editing = 0;
@@ -784,8 +811,9 @@ void show_mappings_editor(iris::instance* iris) {
 
                 PopStyleColor();
 
-                if (iris->last_input_event_read == false && iris->last_input_event_value > 0.5f) {
+                if (iris->last_input_event_read == false && iris->last_input_event_value > 0.5f && !event_is_mod_key(iris->last_input_event)) {
                     iris->last_input_event_read = true;
+
                     waiting_for_input = false;
                     mapping_editing = 0;
 

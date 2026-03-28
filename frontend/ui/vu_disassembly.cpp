@@ -9,6 +9,7 @@
 #include "res/IconsMaterialSymbols.h"
 
 #include "ee/vu_dis.h"
+#include "ee/vu_def.hpp"
 
 #include <algorithm> 
 #include <cctype>
@@ -376,7 +377,10 @@ void show_vu_disassembler(iris::instance* iris) {
                         FILE* f = fopen(file.result().c_str(), "w");
 
                         if (f) {
-                            save_disassembly(f, iris->ps2->vu0->micro_mem, 512);
+                            uint64_t* ptr = vu_get_micro_mem_ptr(iris->ps2->vu0, 0);
+
+                            save_disassembly(f, ptr, 512);
+
                             fclose(f);
                         } else {
                             pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
@@ -391,7 +395,7 @@ void show_vu_disassembler(iris::instance* iris) {
                     addr = 0;
 
                     for (int i = prev; i < 512; i++) {
-                        uint32_t upper = iris->ps2->vu0->micro_mem[i] >> 32;
+                        uint32_t upper = *vu_get_micro_mem_ptr(iris->ps2->vu0, i) >> 32;
 
                         if (upper & 0x40000000) {
                             addr = i + 2;
@@ -405,7 +409,9 @@ void show_vu_disassembler(iris::instance* iris) {
                 SeparatorText("Disassembly");
 
                 if (BeginChild("vu0##disassembly")) {
-                    show_vu_disassembly_view(iris, iris->ps2->vu0->micro_mem, 512);
+                    uint64_t* ptr = vu_get_micro_mem_ptr(iris->ps2->vu0, 0);
+
+                    show_vu_disassembly_view(iris, ptr, 512);
                 } EndChild();
             
                 EndTabItem();

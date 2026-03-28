@@ -202,7 +202,6 @@ struct ImageProcessingUnit
         static uint32_t quantizer_linear[0x20];
         static uint32_t quantizer_nonlinear[0x20];
 
-        IPU_CTRL ctrl;
         bool command_decoding;
         uint8_t command;
         uint32_t command_option;
@@ -236,6 +235,8 @@ struct ImageProcessingUnit
         bool process_CSC();
         bool process_PACK();
     public:
+        IPU_CTRL ctrl;
+
         ImageProcessingUnit(struct ps2_intc* intc, struct ps2_dmac* dmac);
 
         void reset();

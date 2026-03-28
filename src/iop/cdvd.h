@@ -78,15 +78,15 @@ extern "C" {
 #define CDVD_DVD_SS 2064
 
 struct nvram_layout {
-	uint32_t bios_version;   // bios version that this eeprom layout is for
-	int32_t config0_offset;   // offset of 1st config block
-	int32_t config1_offset;   // offset of 2nd config block
-	int32_t config2_offset;   // offset of 3rd config block
-	int32_t console_id_offset; // offset of console id (?)
-	int32_t ilink_id_offset;   // offset of ilink id (ilink mac address)
-	int32_t modelnum_offset;  // offset of ps2 model number (eg "SCPH-70002")
-	int32_t regparams_offset; // offset of RegionParams for PStwo
-	int32_t mac_offset;       // offset of MAC address on PStwo
+    uint32_t bios_version;   // bios version that this eeprom layout is for
+    int32_t config0_offset;   // offset of 1st config block
+    int32_t config1_offset;   // offset of 2nd config block
+    int32_t config2_offset;   // offset of 3rd config block
+    int32_t console_id_offset; // offset of console id (?)
+    int32_t ilink_id_offset;   // offset of ilink id (ilink mac address)
+    int32_t modelnum_offset;  // offset of ps2 model number (eg "SCPH-70002")
+    int32_t regparams_offset; // offset of RegionParams for PStwo
+    int32_t mac_offset;       // offset of MAC address on PStwo
 };
 
 enum {

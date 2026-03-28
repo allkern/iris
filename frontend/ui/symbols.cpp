@@ -95,7 +95,7 @@ void show_symbols(iris::instance* iris) {
 
                 MenuItem(ICON_MS_SEARCH_CHECK " Auto search", NULL, &autosearch);
 
-                EndMenu();
+                ImGui::EndMenu();
             }
 
             EndMenuBar();
