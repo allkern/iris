@@ -10,7 +10,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: 'recursive'
         fetch-depth: 0
@@ -32,7 +32,7 @@ jobs:
         $artifactName = "${{ steps.generate-name.outputs.artifact }}"
         Compress-Archive -Path "dist\*" -DestinationPath "$artifactName.zip"
     - name: Upload to release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2.6.1
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: 'recursive'
         fetch-depth: 0
@@ -79,12 +79,12 @@ jobs:
       run: |
         zip -rj ${{ steps.generate-name-appimage.outputs.artifact }}.zip appimage
     - name: Upload normal binary to release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@vv2.6.1
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
     - name: Upload AppImage to release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2.6.1
       with:
         files: |
           ${{ steps.generate-name-appimage.outputs.artifact }}.zip
@@ -93,7 +93,7 @@ jobs:
     runs-on: macos-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: 'recursive'
         fetch-depth: 0
@@ -118,7 +118,7 @@ jobs:
       run: |
         cd build; zip -r ../${{ steps.generate-name.outputs.artifact }}.zip ./iris.app; cd ..
     - name: Upload to release
-      uses: softprops/action-gh-release@v1
+      uses: softprops/action-gh-release@v2.6.1
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
