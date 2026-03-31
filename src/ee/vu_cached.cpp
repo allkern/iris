@@ -73,6 +73,10 @@ void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* v
 
     // VU uses round to zero by default
     fesetround(FE_TOWARDZERO);
+
+    vu->block_cache_size = 0;
+    vu->block_cache.clear();
+    vu->block_cache.resize(vu->micro_mem_size+1);
 }
 
 void vu_destroy(struct vu_state* vu) {
@@ -3455,31 +3459,29 @@ vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
         return vu->last_block_ptr;
     }
 
-    const auto& block_it = vu->block_cache.find(tpc);
-    vu_block* result = nullptr;
+    vu_block* block = &vu->block_cache[tpc];
 
-    if (block_it != vu->block_cache.end()) {
-        result = &block_it->second;
+    if (!block->cycles) {
+        return nullptr;
     }
 
     // Update cache for next lookup
     vu->last_block_lookup_tpc = tpc;
-    vu->last_block_ptr = result;
+    vu->last_block_ptr = block;
 
-    return result;
+    return block;
 }
 
 static int c = 0;
 
 vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
-    // Insertion can rehash the map and invalidate cached pointers.
-    vu->last_block_lookup_tpc = ~0u;
-    vu->last_block_ptr = nullptr;
+    vu_block* block = &vu->block_cache[tpc];
 
-    auto cache_it = vu->block_cache.insert_or_assign(tpc, vu_block()).first;
-    vu_block* block = &cache_it->second;
+    vu->block_cache_size++;
 
     block->tpc = tpc;
+    block->cycles = 0;
+    block->entries.clear();
 
     // printf("vu: caching block at %04x\n", tpc);
 
@@ -3515,6 +3517,8 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
         if (entry.branch || entry.e_bit) {
             i = max_cycles - 2;
         }
+
+        block->cycles++;
 
         block->entries.push_back(entry);
     }
@@ -3784,6 +3788,10 @@ void ps2_vu_reset(struct vu_state* vu) {
     vu->last_block_lookup_tpc = ~0u;
     vu->last_block_ptr = nullptr;
 
+    vu->block_cache_size = 0;
+    vu->block_cache.clear();
+    vu->block_cache.resize(vu->micro_mem_size+1);
+
     vu->vf[0].w = 1.0;
 }
 
@@ -3824,7 +3832,10 @@ void ps2_vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
 }
 
 void vu_clear_block_cache(struct vu_state* vu) {
+    vu->block_cache_size = 0;
     vu->block_cache.clear();
+    vu->block_cache.resize(vu->micro_mem_size+1);
+
     vu->last_block_lookup_tpc = ~0u;
     vu->last_block_ptr = nullptr;
 }
@@ -3834,69 +3845,73 @@ void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
         return;
     }
 
-    const uint32_t micro_mem_bytes = ((vu->micro_mem_size << 3) | 7) + 1;
+    const uint32_t word_mask = (uint32_t)vu->micro_mem_size;
+    const uint32_t word_count = word_mask + 1;
+    const uint32_t byte_mask = (word_mask << 3) | 7;
+    const uint32_t byte_count = word_count << 3;
 
-    // Invalidate everything if the write covers the full micro memory space.
-    if (size >= micro_mem_bytes) {
-        vu_clear_block_cache(vu);
+    if (size >= byte_count) {
+        for (vu_block& block : vu->block_cache) {
+            if (!block.cycles) {
+                continue;
+            }
+
+            block.cycles = 0;
+            block.entries.clear();
+        }
+
+        vu->block_cache_size = 0;
+        vu->last_block_lookup_tpc = ~0u;
+        vu->last_block_ptr = nullptr;
+
         return;
     }
 
-    uint8_t dirty_tpc[0x800] = { 0 };
+    const uint32_t start_byte = addr & byte_mask;
+    const uint32_t start_word = start_byte >> 3;
+    const uint32_t offset_in_word = start_byte & 7;
+    const uint32_t invalid_word_count = (offset_in_word + size + 7) >> 3;
 
-    const uint32_t byte_mask = micro_mem_bytes - 1;
-    const uint32_t first_byte = addr & byte_mask;
-    const uint32_t last_byte = (first_byte + size - 1) & byte_mask;
+    int invalidated = 0;
 
-    auto mark_dirty_tpc = [&](uint32_t range_first_byte, uint32_t range_last_byte) {
-        uint32_t first_tpc = (range_first_byte >> 3) & 0x7ff;
-        uint32_t last_tpc = (range_last_byte >> 3) & 0x7ff;
-
-        for (;;) {
-            dirty_tpc[first_tpc] = 1;
-
-            if (first_tpc == last_tpc) {
-                break;
-            }
-
-            first_tpc = (first_tpc + 1) & 0x7ff;
-        }
-    };
-
-    if (first_byte <= last_byte) {
-        mark_dirty_tpc(first_byte, last_byte);
-    } else {
-        mark_dirty_tpc(first_byte, micro_mem_bytes - 1);
-        mark_dirty_tpc(0, last_byte);
-    }
-
-    for (auto it = vu->block_cache.begin(); it != vu->block_cache.end();) {
-        const vu_block& block = it->second;
-
-        uint32_t tpc = block.tpc & 0x7ff;
-        bool overlaps_dirty_range = false;
-
-        for (size_t i = 0; i < block.entries.size(); i++) {
-            if (dirty_tpc[tpc]) {
-                overlaps_dirty_range = true;
-                break;
-            }
-
-            tpc = (tpc + 1) & 0x7ff;
-        }
-
-        if (!overlaps_dirty_range) {
-            ++it;
+    for (vu_block& block : vu->block_cache) {
+        if (!block.cycles) {
             continue;
         }
 
-        if (vu->last_block_ptr == &it->second) {
-            vu->last_block_lookup_tpc = ~0u;
-            vu->last_block_ptr = nullptr;
+        bool intersects = false;
+
+        for (int i = 0; i < block.cycles; i++) {
+            const uint32_t block_word = (block.tpc + (uint32_t)i) & word_mask;
+            const uint32_t rel = (block_word - start_word) & word_mask;
+
+            if (rel < invalid_word_count) {
+                intersects = true;
+                break;
+            }
         }
 
-        it = vu->block_cache.erase(it);
+        if (!intersects) {
+            continue;
+        }
+
+        block.cycles = 0;
+        block.entries.clear();
+        invalidated++;
     }
+
+    if (!invalidated) {
+        return;
+    }
+
+    vu->block_cache_size -= invalidated;
+
+    if (vu->block_cache_size < 0) {
+        vu->block_cache_size = 0;
+    }
+
+    vu->last_block_lookup_tpc = ~0u;
+    vu->last_block_ptr = nullptr;
 }
 
 // #undef printf

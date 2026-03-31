@@ -21,6 +21,7 @@ struct vu_block {
     std::vector <vu_block_entry> entries;
 
     uint32_t tpc;
+    int cycles = 0;
 };
 
 struct vu_state {
@@ -28,7 +29,8 @@ struct vu_state {
     uint16_t vi[16];
     struct vu_reg128 acc;
 
-    std::unordered_map <uint32_t, vu_block> block_cache;
+    std::vector <vu_block> block_cache;
+    int block_cache_size;
 
     // Single-entry block cache for fast lookup (avoid hash computation)
     uint32_t last_block_lookup_tpc;
