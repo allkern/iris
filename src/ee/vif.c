@@ -334,7 +334,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 if (flg) addr += vif->tops;
 
                 if (filling) {
-                    fprintf(stderr, "vif%d: Filling mode unimplemented\n", vif->id);
+                    // fprintf(stderr, "vif%d: Filling mode unimplemented\n", vif->id);
 
                     return;
                     // exit(1);
@@ -892,6 +892,7 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
 
         case 0x10003c20: vif->err = data; break;
         case 0x10003c30: vif->mark = data; break;
+        case 0x10003c80: /* Unknown */ break;
 
         // VIF FIFOs
         case 0x10004000: vif_handle_fifo_write(vif, data); break;
