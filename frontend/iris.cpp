@@ -371,7 +371,7 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     iris->main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
 
     // Init preferences path
-    if (std::filesystem::exists("portable")) {
+    if (std::filesystem::exists("portable") || std::filesystem::exists("portable.txt")) {
         iris->pref_path = "./";
     } else {
         char* pref = SDL_GetPrefPath("Allkern", "Iris");

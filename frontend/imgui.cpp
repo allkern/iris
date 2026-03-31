@@ -139,6 +139,8 @@ void set_vsync(iris::instance* iris, bool vsync) {
         present_modes.data(),
         present_modes.size()
     );
+
+    render::refresh(iris);
 }
 
 bool setup_fonts(iris::instance* iris, ImGuiIO& io) {

@@ -386,6 +386,11 @@ void show_main_menubar(iris::instance* iris) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
                 }
 
+                if (MenuItem(ICON_MS_SYNC " VSync", nullptr, &iris->vsync)) {
+                    imgui::set_vsync(iris, iris->vsync);
+                    iris->swapchain_rebuild = true;
+                }
+
                 if (MenuItem(ICON_MS_IMAGE " Enable shaders", nullptr, &iris->enable_shaders)) {
                     // renderer_set_shaders_enabled(iris->ctx, iris->enable_shaders);
                 }

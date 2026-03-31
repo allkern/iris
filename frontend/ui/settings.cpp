@@ -449,12 +449,6 @@ void show_graphics_settings(iris::instance* iris) {
         EndCombo();
     }
 
-    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    Checkbox(" Integer scaling", &iris->integer_scaling);
-    Checkbox(" Flip horizontally", &iris->flip_x);
-    Checkbox(" Flip vertically", &iris->flip_y);
-    PopStyleVar();
-
     Text("Window mode");
 
     if (BeginCombo("##windowmode", settings_fullscreen_names[iris->fullscreen])) {
@@ -468,6 +462,18 @@ void show_graphics_settings(iris::instance* iris) {
 
         EndCombo();
     }
+
+    SeparatorText("Misc.");
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    if (Checkbox(" VSync", &iris->vsync)) {
+        imgui::set_vsync(iris, iris->vsync);
+        iris->swapchain_rebuild = true;
+    }
+    Checkbox(" Integer scaling", &iris->integer_scaling);
+    Checkbox(" Flip horizontally", &iris->flip_x);
+    Checkbox(" Flip vertically", &iris->flip_y);
+    PopStyleVar();
 
     if (iris->renderer_backend == RENDERER_BACKEND_HARDWARE) {
         SeparatorText("Renderer settings");
