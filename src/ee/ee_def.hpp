@@ -58,7 +58,7 @@ struct ee_instruction {
 
 struct ee_block {
     std::vector <ee_instruction> instructions;
-    uint32_t cycles;
+    uint32_t cycles = 0;
 };
 
 struct ee_state {
@@ -66,7 +66,7 @@ struct ee_state {
 
     uint32_t block_pc;
 
-    std::unordered_map <uint32_t, ee_block> block_cache;
+    std::vector <ee_block*> block_cache;
     
     // Single-entry block cache for fast lookup (avoid hash computation)
     // Exploits temporal locality since we execute the same block repeatedly

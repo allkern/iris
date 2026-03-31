@@ -531,24 +531,38 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
     return 0;
 }
 
-#define BUS_READ_FUNC(b)                                                        \
-    static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) {  \
-        if ((addr & 0xf0000000) == 0x70000000)                                  \
-            return ps2_ram_read ## b(ee->spr, addr & 0x3fff);                   \
-        uint32_t phys;                                                          \
-        ee_translate_virt(ee, addr, &phys);                                     \
-        if (phys == 0x1000f000) ee->intc_reads++;                               \
-        if (phys == 0x12001000) ee->csr_reads++;                                \
-        return ee->bus.read ## b(ee->bus.udata, phys);                          \
+#ifndef _EE_CACHE_PAGESIZE
+#define _EE_CACHE_PAGESIZE 512
+#endif
+
+#define EE_CACHE_PAGECOUNT (0x100000000ull / _EE_CACHE_PAGESIZE)
+
+#define INVALIDATE_CACHE_PAGE(addr) { \
+    if (ee->block_cache[(addr) / _EE_CACHE_PAGESIZE]) { \
+        delete[] ee->block_cache[(addr) / _EE_CACHE_PAGESIZE]; \
+        ee->block_cache[(addr) / _EE_CACHE_PAGESIZE] = nullptr; \
+    } \
+}
+
+#define BUS_READ_FUNC(b)                                                       \
+    static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) { \
+        if ((addr & 0xf0000000) == 0x70000000)                                 \
+            return ps2_ram_read ## b(ee->spr, addr & 0x3fff);                  \
+        uint32_t phys;                                                         \
+        ee_translate_virt(ee, addr, &phys);                                    \
+        if (phys == 0x1000f000) ee->intc_reads++;                              \
+        if (phys == 0x12001000) ee->csr_reads++;                               \
+        return ee->bus.read ## b(ee->bus.udata, phys);                         \
     }
 
-#define BUS_WRITE_FUNC(b)                                                                   \
-    static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) {  \
-        if ((addr & 0xf0000000) == 0x70000000)                                              \
-            { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                   \
-        uint32_t phys;                                                                      \
-        ee_translate_virt(ee, addr, &phys);                                                 \
-        ee->bus.write ## b(ee->bus.udata, phys, data);                                      \
+#define BUS_WRITE_FUNC(b)                                                                  \
+    static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) { \
+        INVALIDATE_CACHE_PAGE(addr);                                                       \
+        if ((addr & 0xf0000000) == 0x70000000)                                             \
+            { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                  \
+        uint32_t phys;                                                                     \
+        ee_translate_virt(ee, addr, &phys);                                                \
+        ee->bus.write ## b(ee->bus.udata, phys, data);                                     \
     }
 
 BUS_READ_FUNC(8)
@@ -573,6 +587,8 @@ BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
 static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
+    INVALIDATE_CACHE_PAGE(addr);
+
     if ((addr & 0xf0000000) == 0x70000000) {
         ps2_ram_write128(ee->spr, addr & 0x3ff0, data);
 
@@ -3443,6 +3459,9 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
     ee->osd_config.jap_language = 1; // Indicates not Japanese
     ee->osd_config.language = 1; // English
     ee->osd_config.version = 1; // Indicates normal kernel without extended language settings
+
+    ee->block_cache.clear();
+    ee->block_cache.resize(EE_CACHE_PAGECOUNT);
 }
 
 void ee_reset(struct ee_state* ee) {
@@ -3473,6 +3492,7 @@ void ee_reset(struct ee_state* ee) {
     ee->csr_reads = 0;
 
     ee->block_cache.clear();
+    ee->block_cache.resize(EE_CACHE_PAGECOUNT);
 
     // Clear block lookup cache
     ee->last_block_lookup_pc = ~0u;
@@ -4007,9 +4027,14 @@ ee_instruction ee_decode(uint32_t opcode) {
 }
 
 static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycles) {
-    ee->block_cache[ee->pc] = {};
+    uint32_t page = ee->pc / _EE_CACHE_PAGESIZE;
+    uint32_t offset = (ee->pc & (_EE_CACHE_PAGESIZE - 1)) >> 2;
 
-    struct ee_block& block = ee->block_cache.at(ee->pc);
+    if (!ee->block_cache[page]) {
+        ee->block_cache[page] = new struct ee_block[_EE_CACHE_PAGESIZE >> 2];
+    }
+
+    struct ee_block& block = ee->block_cache[page][offset];
 
     uint32_t pc = ee->pc;
     uint32_t block_pc = ee->pc;
@@ -4063,27 +4088,39 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
         return ee->last_block_ptr;
     }
 
-    const auto& block_it = ee->block_cache.find(pc);
-    struct ee_block* result = nullptr;
+    uint32_t page = pc / _EE_CACHE_PAGESIZE;
 
-    if (block_it != ee->block_cache.end()) {
-        result = &block_it->second;
+    if (!ee->block_cache[page]) {
+        return nullptr;
+    }
+
+    uint32_t offset = (pc & (_EE_CACHE_PAGESIZE - 1)) >> 2;
+
+    struct ee_block& block = ee->block_cache[page][offset];
+
+    if (!block.cycles) {
+        return nullptr;
     }
 
     // Update cache for next lookup
     ee->last_block_lookup_pc = pc;
-    ee->last_block_ptr = result;
+    ee->last_block_ptr = &block;
 
-    return result;
+    return &block;
 }
 
 int ee_run_block(struct ee_state* ee, int max_cycles) {
     // This is the entrypoint to the EENULL thread.
     // If we hit this address, the program is basically idling
     // so we "fast-forward" 1024 cycles
-    if (ee->pc == 0x81fc0) {
-        ee_check_irq(ee);
 
+    ee->branch = 0;
+    ee->delay_slot = 0;
+
+    if (ee_check_irq(ee))
+        return 0;
+
+    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000) { // ee->csr_reads >= 1000
         ee->total_cycles += 2048;
         ee->count += 2048;
         // ee->eenull_counter += 8 * 64;
@@ -4093,30 +4130,12 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         return 2048;
     }
 
-    if (ee->intc_reads >= 10000) {
-        ee_check_irq(ee);
-
-        ee->total_cycles += 2048;
-        ee->count += 2048;
-
-        ee->idle_skips++;
-
-        return 2048;
-    }
-
-    // if (ee->csr_reads >= 1000) {
-    //     ee_check_irq(ee);
-
-    //     return 1024;
-    // }
-
     struct ee_block* block = ee_find_block(ee, ee->pc);
 
     if (!block) {
         ee->cache_misses++;
+
         block = ee_cache_block(ee, max_cycles);
-    } else {
-        ee->cache_hits++;
     }
 
     ee->block_pc = ee->pc;
@@ -4128,8 +4147,8 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         ee->branch = 0;
 
         // If we need to handle an interrupt, break out of the loop
-        if (ee_check_irq(ee))
-            break;
+        // if (ee_check_irq(ee))
+        //     break;
 
         ee->pc = ee->next_pc;
         ee->next_pc += 4;
@@ -4184,7 +4203,12 @@ int ee_step(struct ee_state* ee) {
 }
 
 void ee_flush_cache(struct ee_state* ee) {
-    ee->block_cache.clear();
+    for (auto& page : ee->block_cache) {
+        delete[] page;
+
+        page = nullptr;
+    }
+
     ee->last_block_lookup_pc = ~0u;
     ee->last_block_ptr = nullptr;
 }
