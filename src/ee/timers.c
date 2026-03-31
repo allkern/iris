@@ -238,16 +238,128 @@ static inline void ee_timers_tick_one(struct ps2_ee_timers* timers, struct ee_ti
     t->counter = counter & 0xffff;
 }
 
-void ps2_ee_timers_tick(struct ps2_ee_timers* timers) {
-    uint8_t active = timers->active_mask;
-
-    if (!active)
+static inline void ee_timers_advance_counter(struct ps2_ee_timers* timers, struct ee_timer* t, int i, uint32_t increments) {
+    if (!increments)
         return;
 
-    if (active & 0x1) ee_timers_tick_one(timers, &timers->timer[0], 0);
-    if (active & 0x2) ee_timers_tick_one(timers, &timers->timer[1], 1);
-    if (active & 0x4) ee_timers_tick_one(timers, &timers->timer[2], 2);
-    if (active & 0x8) ee_timers_tick_one(timers, &timers->timer[3], 3);
+    if (!t->check_enabled) {
+        t->counter = (t->counter + increments) & 0xffff;
+        return;
+    }
+
+    while (increments) {
+        if (t->cycles_until_check > 1) {
+            uint32_t skip = t->cycles_until_check - 1;
+
+            if (skip > increments)
+                skip = increments;
+
+            t->counter = (t->counter + skip) & 0xffff;
+            t->cycles_until_check -= skip;
+            increments -= skip;
+
+            if (!increments)
+                break;
+        }
+
+        uint32_t counter = t->counter + 1;
+        uint32_t low_counter = counter & 0xffff;
+        int cmp = low_counter == (t->compare & 0xffff);
+        int ovf = counter == 0x10000;
+
+        if (!(cmp || ovf)) {
+            fprintf(stderr, "timer %d: error counter=%04x compare=%04x cycles_until-check=%d\n", i, counter, t->compare, t->cycles_until_check);
+
+            exit(1);
+        }
+
+        if (cmp) {
+            if (t->cmpe)
+                t->mode |= 0x400;
+
+            if (t->zret) {
+                counter = 0;
+            }
+
+            if (t->cmpe) {
+                ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
+            }
+
+            t->counter = counter;
+            ee_timers_update_event(t);
+            counter = t->counter;
+        }
+
+        if (counter == 0x10000) {
+            if (t->ovfe)
+                t->mode |= 0x800;
+
+            if (t->ovfe) {
+                ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
+            }
+
+            t->counter = counter;
+            ee_timers_update_event(t);
+            counter = t->counter;
+        }
+
+        t->counter = counter & 0xffff;
+        increments--;
+    }
+}
+
+static inline void ee_timers_tick_many(struct ps2_ee_timers* timers, struct ee_timer* t, int i, uint32_t cycles) {
+    if (!cycles)
+        return;
+
+    if (cycles < t->delta) {
+        t->delta -= cycles;
+        return;
+    }
+
+    cycles -= t->delta;
+
+    uint32_t increments = 1;
+    uint32_t period = t->delta_reload;
+
+    if (period) {
+        increments += cycles / period;
+
+        uint32_t rem = cycles % period;
+        t->delta = period - rem;
+
+        if (t->delta == 0)
+            t->delta = period;
+    } else {
+        t->delta = 0;
+    }
+
+    ee_timers_advance_counter(timers, t, i, increments);
+}
+
+void ps2_ee_timers_tick(struct ps2_ee_timers* timers) {
+    ps2_ee_timers_tick_cycles(timers, 1);
+}
+
+void ps2_ee_timers_tick_cycles(struct ps2_ee_timers* timers, uint32_t cycles) {
+    uint8_t active = timers->active_mask;
+
+    if (!active || !cycles)
+        return;
+
+    if (cycles == 1) {
+        if (active & 0x1) ee_timers_tick_one(timers, &timers->timer[0], 0);
+        if (active & 0x2) ee_timers_tick_one(timers, &timers->timer[1], 1);
+        if (active & 0x4) ee_timers_tick_one(timers, &timers->timer[2], 2);
+        if (active & 0x8) ee_timers_tick_one(timers, &timers->timer[3], 3);
+
+        return;
+    }
+
+    if (active & 0x1) ee_timers_tick_many(timers, &timers->timer[0], 0, cycles);
+    if (active & 0x2) ee_timers_tick_many(timers, &timers->timer[1], 1, cycles);
+    if (active & 0x4) ee_timers_tick_many(timers, &timers->timer[2], 2, cycles);
+    if (active & 0x8) ee_timers_tick_many(timers, &timers->timer[3], 3, cycles);
 }
 
 void ps2_ee_timers_write16(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data) {
