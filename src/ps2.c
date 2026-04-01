@@ -293,8 +293,7 @@ void ps2_cycle(struct ps2_state* ps2) {
 
     ps2_ipu_run(ps2->ipu);
 
-    for (int i = 0; i < cycles; i++)
-        ps2_ee_timers_tick(ps2->ee_timers);
+    ps2_ee_timers_tick_cycles(ps2->ee_timers, cycles);
 
     while (ps2->ee_cycles > 8) {
         iop_cycle(ps2->iop);
