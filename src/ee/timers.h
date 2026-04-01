@@ -47,6 +47,8 @@ struct ps2_ee_timers {
     
     // Global cycle tracking for lazy evaluation
     uint64_t current_cycle;
+    uint64_t scheduler_advanced_cycles;
+    int irq_event_pending;
 
     struct ps2_intc* intc;
     struct sched_state* sched;

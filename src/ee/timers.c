@@ -4,6 +4,10 @@
 
 #include "timers.h"
 
+#define EE_TIMER_SCHED_QUANTUM 64
+
+static void ee_timers_schedule_next_irq_event(struct ps2_ee_timers* timers);
+
 struct ps2_ee_timers* ps2_ee_timers_create(void) {
     return malloc(sizeof(struct ps2_ee_timers));
 }
@@ -24,6 +28,8 @@ void ps2_ee_timers_init(struct ps2_ee_timers* timers, struct ps2_intc* intc, str
     timers->intc = intc;
     timers->sched = sched;
     timers->current_cycle = 0;
+    timers->scheduler_advanced_cycles = 0;
+    timers->irq_event_pending = 0;
 
     for (int i = 0; i < 4; i++) {
         timers->timer[i].id = i;
@@ -56,6 +62,100 @@ static inline void ee_timers_update_event(struct ee_timer* t) {
     // );
 }
 
+static inline uint32_t ee_timers_cycles_until_check(struct ee_timer* t) {
+    if (!t->cue || !t->check_enabled)
+        return 0xffffffffu;
+
+    uint32_t period = t->delta_reload;
+
+    if (!period)
+        return 0xffffffffu;
+
+    uint64_t cycles = t->delta;
+
+    if (t->cycles_until_check > 1) {
+        cycles += (uint64_t)(t->cycles_until_check - 1) * period;
+    }
+
+    if (!cycles)
+        cycles = 1;
+
+    if (cycles > 0x7fffffffu)
+        cycles = 0x7fffffffu;
+
+    return (uint32_t)cycles;
+}
+
+static inline void ee_timers_advance_counter(struct ps2_ee_timers* timers, struct ee_timer* t, int i, uint32_t increments) {
+    if (!increments)
+        return;
+
+    if (!t->check_enabled) {
+        t->counter = (t->counter + increments) & 0xffff;
+        return;
+    }
+
+    while (increments) {
+        if (t->cycles_until_check > 1) {
+            uint32_t skip = t->cycles_until_check - 1;
+
+            if (skip > increments)
+                skip = increments;
+
+            t->counter = (t->counter + skip) & 0xffff;
+            t->cycles_until_check -= skip;
+            increments -= skip;
+
+            if (!increments)
+                break;
+        }
+
+        uint32_t counter = t->counter + 1;
+        uint32_t low_counter = counter & 0xffff;
+        int cmp = low_counter == (t->compare & 0xffff);
+        int ovf = counter == 0x10000;
+
+        if (!(cmp || ovf)) {
+            fprintf(stderr, "timer %d: error counter=%04x compare=%04x cycles_until-check=%d\n", i, counter, t->compare, t->cycles_until_check);
+
+            exit(1);
+        }
+
+        if (cmp) {
+            if (t->cmpe)
+                t->mode |= 0x400;
+
+            if (t->zret) {
+                counter = 0;
+            }
+
+            if (t->cmpe) {
+                ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
+            }
+
+            t->counter = counter;
+            ee_timers_update_event(t);
+            counter = t->counter;
+        }
+
+        if (counter == 0x10000) {
+            if (t->ovfe)
+                t->mode |= 0x800;
+
+            if (t->ovfe) {
+                ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
+            }
+
+            t->counter = counter;
+            ee_timers_update_event(t);
+            counter = t->counter;
+        }
+
+        t->counter = counter & 0xffff;
+        increments--;
+    }
+}
+
 static inline void ee_timers_sync_timer(struct ps2_ee_timers* timers, struct ee_timer* t, int i) {
     if (!t->cue) {
         t->last_sync_cycle = timers->current_cycle;
@@ -69,67 +169,89 @@ static inline void ee_timers_sync_timer(struct ps2_ee_timers* timers, struct ee_
 
     t->last_sync_cycle = timers->current_cycle;
 
-    if (!t->check_enabled) {
-        // Just advance counter without checking for events
-        uint64_t remaining = cycles_since_sync;
-
-        while (remaining > 0) {
-            if (remaining >= t->delta) {
-                remaining -= t->delta;
-                t->counter = (t->counter + 1) & 0xffff;
-                t->delta = t->delta_reload;
-            } else {
-                t->delta -= remaining;
-                remaining = 0;
-            }
-        }
+    if (cycles_since_sync < t->delta) {
+        t->delta -= (uint32_t)cycles_since_sync;
         return;
     }
 
-    // Need to check for compare and overflow events
-    uint64_t remaining_cycles = cycles_since_sync;
+    cycles_since_sync -= t->delta;
 
-    while (remaining_cycles > 0) {
-        if (remaining_cycles >= t->delta) {
-            remaining_cycles -= t->delta;
-            t->delta = t->delta_reload;
+    uint32_t increments = 1;
+    uint32_t period = t->delta_reload;
 
-            uint32_t counter = (t->counter + 1) & 0xffff;
-            uint32_t low_counter = counter & 0xffff;
-            int cmp = low_counter == (t->compare & 0xffff);
-            int ovf = counter == 0x10000;
+    if (period) {
+        increments += (uint32_t)(cycles_since_sync / period);
 
-            if (cmp) {
-                if (t->cmpe)
-                    t->mode |= 0x400;
+        uint32_t rem = (uint32_t)(cycles_since_sync % period);
+        t->delta = period - rem;
 
-                if (t->zret) {
-                    counter = 0;
-                }
+        if (t->delta == 0)
+            t->delta = period;
+    } else {
+        t->delta = 0;
+    }
 
-                if (t->cmpe) {
-                    ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
-                }
-            }
+    ee_timers_advance_counter(timers, t, i, increments);
+}
 
-            if (counter == 0x10000) {
-                if (t->ovfe)
-                    t->mode |= 0x800;
+static void ee_timers_irq_event_cb(void* udata, int overshoot) {
+    struct ps2_ee_timers* timers = (struct ps2_ee_timers*)udata;
+    uint64_t elapsed = EE_TIMER_SCHED_QUANTUM;
 
-                if (t->ovfe) {
-                    ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
-                }
-                counter = 0;
-            }
+    if (timers->sched && timers->sched->offset)
+        elapsed = timers->sched->offset;
 
-            t->counter = counter & 0xffff;
-        } else {
-            t->delta -= remaining_cycles;
-            remaining_cycles = 0;
+    if (overshoot < 0)
+        elapsed += (uint64_t)(-overshoot);
+
+    timers->irq_event_pending = 0;
+
+    timers->current_cycle += elapsed;
+    timers->scheduler_advanced_cycles += elapsed;
+
+    for (int i = 0; i < 4; i++) {
+        if (timers->timer[i].cue) {
+            ee_timers_sync_timer(timers, &timers->timer[i], i);
         }
     }
 
-    ee_timers_update_event(t);
+    ee_timers_schedule_next_irq_event(timers);
+}
+
+static void ee_timers_schedule_next_irq_event(struct ps2_ee_timers* timers) {
+    if (!timers->sched)
+        return;
+
+    if (timers->irq_event_pending)
+        return;
+
+    uint32_t min_cycles = 0xffffffffu;
+
+    for (int i = 0; i < 4; i++) {
+        if (timers->timer[i].cue) {
+            ee_timers_sync_timer(timers, &timers->timer[i], i);
+
+            uint32_t wait = ee_timers_cycles_until_check(&timers->timer[i]);
+
+            if (wait < min_cycles)
+                min_cycles = wait;
+        }
+    }
+
+    if (min_cycles == 0xffffffffu)
+        return;
+
+    if (min_cycles > EE_TIMER_SCHED_QUANTUM)
+        min_cycles = EE_TIMER_SCHED_QUANTUM;
+
+    struct sched_event event;
+    event.name = "EE Timer IRQ";
+    event.udata = timers;
+    event.callback = ee_timers_irq_event_cb;
+    event.cycles = (long)min_cycles;
+
+    sched_schedule(timers->sched, event);
+    timers->irq_event_pending = 1;
 }
 
 void ee_timers_write_counter(struct ps2_ee_timers* timers, int t, uint32_t data) {
@@ -146,6 +268,8 @@ void ee_timers_write_counter(struct ps2_ee_timers* timers, int t, uint32_t data)
     if (timer->check_enabled) {
         ee_timers_update_event(timer);
     }
+
+    ee_timers_schedule_next_irq_event(timers);
 }
 
 void ee_timers_write_compare(struct ps2_ee_timers* timers, int t, uint32_t data) {
@@ -172,6 +296,8 @@ void ee_timers_write_compare(struct ps2_ee_timers* timers, int t, uint32_t data)
     if (timer->check_enabled) {
         ee_timers_update_event(timer);
     }
+
+    ee_timers_schedule_next_irq_event(timers);
 }
 
 void ps2_ee_timers_destroy(struct ps2_ee_timers* timers) {
@@ -238,6 +364,8 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uin
     } else {
         timer->check_enabled = 0;
     }
+
+    ee_timers_schedule_next_irq_event(timers);
 }
 
 void ps2_ee_timers_tick(struct ps2_ee_timers* timers) {
@@ -248,7 +376,19 @@ void ps2_ee_timers_tick_cycles(struct ps2_ee_timers* timers, uint32_t cycles) {
     // Lazy evaluation: just advance the global cycle counter
     // No timer updates happen until reads/writes or event checks
     if (timers->active_mask && cycles) {
-        timers->current_cycle += cycles;
+        uint64_t step = cycles;
+
+        if (timers->scheduler_advanced_cycles) {
+            if (timers->scheduler_advanced_cycles >= step) {
+                timers->scheduler_advanced_cycles -= step;
+                step = 0;
+            } else {
+                step -= timers->scheduler_advanced_cycles;
+                timers->scheduler_advanced_cycles = 0;
+            }
+        }
+
+        timers->current_cycle += step;
     }
 }
 
