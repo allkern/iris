@@ -26,7 +26,10 @@ struct ee_timer {
     int cycles_until_overflow;
     int cycles_until_check;
     int check_enabled;
-
+    
+    // Lazy evaluation
+    uint64_t last_sync_cycle;
+    
     // Mode fields
     int clks;
     int gate;
@@ -41,6 +44,9 @@ struct ee_timer {
 struct ps2_ee_timers {
     struct ee_timer timer[4];
     uint8_t active_mask;
+    
+    // Global cycle tracking for lazy evaluation
+    uint64_t current_cycle;
 
     struct ps2_intc* intc;
     struct sched_state* sched;
