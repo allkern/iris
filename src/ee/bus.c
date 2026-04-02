@@ -157,11 +157,6 @@ void ee_bus_destroy(struct ee_bus* bus) {
 uint64_t ee_bus_read8(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
 
-    if (addr == 0x00189A40) return 0x09;
-    if (addr == 0x00189A41) return 0x00;
-    if (addr == 0x00189A42) return 0x63;
-    if (addr == 0x00189A43) return 0x34;
-
     void* ptr = bus->fastmem_r_table[addr >> 13];
 
     if (likely(ptr)) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
@@ -191,9 +186,6 @@ uint64_t ee_bus_read8(void* udata, uint32_t addr) {
 
 uint64_t ee_bus_read16(void* udata, uint32_t addr) {
     struct ee_bus* bus = (struct ee_bus*)udata;
-
-    if (addr == 0x00189A40) return 0x0009;
-    if (addr == 0x00189A42) return 0x3463;
 
     void* ptr = bus->fastmem_r_table[addr >> 13];
 

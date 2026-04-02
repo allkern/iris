@@ -5,6 +5,9 @@ bin/
 tools/
 elf/
 roms/
+.vs/
+ac/
+screens/
 main2.cpp
 compare
 compare.cpp
