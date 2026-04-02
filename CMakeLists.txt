@@ -157,9 +157,9 @@ target_sources(iris PRIVATE
     src/iop/dma.c
     src/iop/fw.c
     src/iop/intc.c
-    src/iop/iop.c
+    src/iop/iop_cached.cpp
+    src/iop/iop_export.cpp
     src/iop/iop_dis.c
-    src/iop/iop_export.c
     src/iop/rpc.c
     src/iop/sio2.c
     src/iop/spu2.c
@@ -171,8 +171,8 @@ target_sources(iris PRIVATE
     src/iop/disc/ciso.c
     src/iop/disc/iso.c
     src/iop/hle/ioman.cpp
-    src/iop/hle/loadcore.c
-    src/iop/hle/sysmem.c
+    src/iop/hle/loadcore.cpp
+    src/iop/hle/sysmem.cpp
     src/ipu/chromtable.cpp
     src/ipu/codedblockpattern.cpp
     src/ipu/dct_coeff.cpp

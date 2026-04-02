@@ -48,34 +48,9 @@ struct iop_bus_s {
     void (*write32)(void* udata, uint32_t addr, uint32_t data);
 };
 
-struct iop_state {
-    struct iop_bus_s bus;
+struct iop_state;
 
-    uint32_t r[32];
-    uint32_t opcode;
-    uint32_t pc, next_pc, saved_pc;
-    uint32_t hi, lo;
-    uint32_t load_d, load_v;
-    uint32_t last_cycles;
-    uint32_t total_cycles;
-    uint32_t biu_config;
-    int branch, delay_slot, branch_taken;
-
-    void (*kputchar)(void*, char);
-    void* kputchar_udata;
-    void (*sm_putchar)(void*, char);
-    void* sm_putchar_udata;
-
-    uint32_t cop0_r[16];
-
-    int p;
-
-    uint32_t module_list_addr;
-
-    /* cache module list */
-    int module_count;
-    struct iop_module *module_list;
-};
+void iop_invalidate_cache_page(struct iop_state* iop, uint32_t addr);
 
 /*
   0     IEc Current Interrupt Enable  (0=Disable, 1=Enable) ;rfe pops IUp here
@@ -152,9 +127,9 @@ void iop_init_sm_putchar(struct iop_state* iop, void (*sm_putchar)(void*, char),
 void iop_destroy(struct iop_state* iop);
 void iop_cycle(struct iop_state* iop);
 void iop_reset(struct iop_state* iop);
-void iop_set_irq_pending(struct iop_state* iop);
-void iop_fetch(struct iop_state* iop);
-int iop_execute(struct iop_state* iop);
+void iop_set_irq_pending(struct iop_state* iop, int value);
+int iop_run_block(struct iop_state* iop, int max_cycles);
+void iop_flush_cache(struct iop_state* iop);
 
 // External bus access functions
 uint32_t iop_read8(struct iop_state* iop, uint32_t addr);

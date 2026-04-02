@@ -19,11 +19,7 @@ void ps2_iop_intc_init(struct ps2_iop_intc* intc, struct iop_state* iop) {
 void ps2_iop_intc_irq(struct ps2_iop_intc* intc, int dev) {
     intc->stat |= dev;
 
-    if (intc->ctrl && (intc->stat & intc->mask)) {
-        iop_set_irq_pending(intc->iop);
-    } else {
-        intc->iop->cop0_r[COP0_CAUSE] &= ~SR_IM2;
-    }
+    iop_set_irq_pending(intc->iop, intc->ctrl && (intc->stat & intc->mask));
 }
 
 void ps2_iop_intc_destroy(struct ps2_iop_intc* intc) {
@@ -47,13 +43,7 @@ uint64_t ps2_iop_intc_read32(struct ps2_iop_intc* intc, uint32_t addr) {
         case 0x1f801078: intc->ctrl = 0; break;
     }
 
-    int n = intc->ctrl && (intc->stat & intc->mask);
-
-    if (!n) {
-        intc->iop->cop0_r[COP0_CAUSE] &= ~SR_IM2;
-    } else {
-        iop_set_irq_pending(intc->iop);
-    }
+    iop_set_irq_pending(intc->iop, intc->ctrl && (intc->stat & intc->mask));
 
     return ctrl;
 }
@@ -73,11 +63,5 @@ void ps2_iop_intc_write32(struct ps2_iop_intc* intc, uint32_t addr, uint64_t dat
         case 0x1f801078: intc->ctrl = data; break;
     }
 
-    int n = intc->ctrl && (intc->stat & intc->mask);
-
-    if (!n) {
-        intc->iop->cop0_r[COP0_CAUSE] &= ~SR_IM2;
-    } else {
-        iop_set_irq_pending(intc->iop);
-    }
+    iop_set_irq_pending(intc->iop, intc->ctrl && (intc->stat & intc->mask));
 }

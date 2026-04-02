@@ -61,6 +61,9 @@ struct iop_bus {
 
     void* fastmem_r_table[0x10000];
     void* fastmem_w_table[0x10000];
+
+    void (*invalidate_cache)(void* udata, uint32_t addr);
+    void* invalidate_cache_udata;
 };
 
 void iop_bus_init_bios(struct iop_bus* bus, struct ps2_bios* bios);

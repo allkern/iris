@@ -544,6 +544,13 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
     } \
 }
 
+// #define INVALIDATE_CACHE_PAGE(addr) { \
+//     uint32_t page = (addr) / _EE_CACHE_PAGESIZE; \
+//     if (ee->block_cache[page]) { \
+//         ee->block_cache[page][((addr) & (_EE_CACHE_PAGESIZE - 1)) >> 2].cycles = 0; \
+//     } \
+// }
+
 #define BUS_READ_FUNC(b)                                                       \
     static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) { \
         if ((addr & 0xf0000000) == 0x70000000)                                 \
@@ -3194,7 +3201,7 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
         case 0x64: {
             // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
 
-            ee->block_cache.clear();
+            // ee->block_cache.clear();
         } break;
     }
 

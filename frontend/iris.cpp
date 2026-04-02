@@ -11,6 +11,7 @@
 #include "config.hpp"
 #include "ee/ee_def.hpp"
 #include "ee/vu_def.hpp"
+#include "iop/iop_def.hpp"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
@@ -472,6 +473,9 @@ SDL_AppResult update(iris::instance* iris) {
         iris->double_click_counter--;
     }
 
+    int iop_count = iris->ps2->iop->total_cycles;
+    int ee_count = iris->ps2->ee->total_cycles;
+
     if (iris->pause) {
         iris->step_out = false;
         iris->step_over = false;
@@ -511,6 +515,8 @@ SDL_AppResult update(iris::instance* iris) {
             return SDL_APP_CONTINUE;
         }
     }
+
+    printf("%ld iop cycles, %ld ee cycles executed this frame\n", iris->ps2->iop->total_cycles - iop_count, iris->ps2->ee->total_cycles - ee_count);
 
     // float p = ((float)iris->ps2->ee->eenull_counter / (float)(4920115)) * 100.0f;
 

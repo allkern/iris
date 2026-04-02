@@ -82,6 +82,8 @@ void ps2_init(struct ps2_state* ps2) {
     iop_bus_data.udata = ps2->iop_bus;
 
     iop_init(ps2->iop, iop_bus_data);
+    ps2->iop_bus->invalidate_cache = (void (*)(void*, uint32_t))iop_invalidate_cache_page;
+    ps2->iop_bus->invalidate_cache_udata = ps2->iop;
 
     // Initialize devices
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->ee, ps2->sched, ps2->ee_bus);
@@ -285,23 +287,35 @@ void ps2_reset(struct ps2_state* ps2) {
 // }
 
 void ps2_cycle(struct ps2_state* ps2) {
-    int cycles = ee_run_block(ps2->ee, 128);
+    ps2->ee_cycles = 16*16;
 
-    ps2->ee_cycles += cycles;
+    // Run at least 16 IOP instructions per cycle
+    // while (ps2->ee_cycles < (16 * 16)) {
+    //     ps2->ee_cycles += ee_run_block(ps2->ee, 128);
+    // }
 
-    sched_tick(ps2->sched, ps2->timescale * cycles);
+    sched_tick(ps2->sched, ps2->timescale * ps2->ee_cycles);
 
     ps2_ipu_run(ps2->ipu);
 
-    ps2_ee_timers_tick_cycles(ps2->ee_timers, cycles);
+    // The timer runs at BUSCLK speed, that is 1 BUSCLK cycle every 2 EE instructions
+    ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles * 2);
 
-    while (ps2->ee_cycles > 8) {
-        iop_cycle(ps2->iop);
+    int iop_cycles = ps2->ee_cycles / 16;
 
-        ps2_iop_timers_tick(ps2->iop_timers);
+    while (iop_cycles > 0) {
+        int executed = iop_run_block(ps2->iop, iop_cycles);
 
-        ps2->ee_cycles -= 8;
+        if (executed <= 0) {
+            break;
+        }
+
+        for (int i = 0; i < executed; i++)
+            ps2_iop_timers_tick(ps2->iop_timers);
+
+        iop_cycles -= executed;
     }
+
 }
 
 void ps2_step_ee(struct ps2_state* ps2) {
@@ -314,7 +328,7 @@ void ps2_step_ee(struct ps2_state* ps2) {
     ps2->ee_cycles++; 
 
     if (ps2->ee_cycles == 8) {
-        iop_cycle(ps2->iop);
+        // iop_cycle(ps2->iop);
         ps2_iop_timers_tick(ps2->iop_timers);
 
         ps2->ee_cycles = 0;
@@ -328,7 +342,7 @@ void ps2_step_iop(struct ps2_state* ps2) {
     }
 
     sched_tick(ps2->sched, 8);
-    iop_cycle(ps2->iop);
+    // iop_cycle(ps2->iop);
     ps2_iop_timers_tick(ps2->iop_timers);
 
     ps2_ipu_run(ps2->ipu);

@@ -1,6 +1,6 @@
 #include "loadcore.h"
 
-#include "../iop.h"
+#include "../iop_def.hpp"
 
 #include <stdlib.h>
 #include <string.h>
@@ -57,7 +57,7 @@ static void cache_loaded_modules(struct iop_state* iop, unsigned list)
         count++;
     }
 
-    mod = calloc(count, sizeof(*mod));
+    mod = (struct iop_module*)calloc(count, sizeof(*mod));
 
     ent = iop_read32(iop, list);
     int i = 0;

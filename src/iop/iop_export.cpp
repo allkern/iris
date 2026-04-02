@@ -1,4 +1,5 @@
 #include "iop_export.h"
+#include "iop_def.hpp"
 
 static inline uint32_t irx_import_table_addr(struct iop_state* iop, int entry) {
     uint32_t i = entry - 0x18;
