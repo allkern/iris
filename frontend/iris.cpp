@@ -516,7 +516,7 @@ SDL_AppResult update(iris::instance* iris) {
         }
     }
 
-    printf("%ld iop cycles, %ld ee cycles executed this frame\n", iris->ps2->iop->total_cycles - iop_count, iris->ps2->ee->total_cycles - ee_count);
+    // printf("ee: %ld cycles, iop: %ld cycles\n", iris->ps2->ee->total_cycles - ee_count, iris->ps2->iop->total_cycles - iop_count);
 
     // float p = ((float)iris->ps2->ee->eenull_counter / (float)(4920115)) * 100.0f;
 

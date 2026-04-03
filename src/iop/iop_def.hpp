@@ -122,7 +122,7 @@ struct iop_state {
     uint32_t hi = 0, lo = 0;
     uint32_t load_d = 0, load_v = 0;
     uint32_t last_cycles = 0;
-    uint32_t total_cycles = 0;
+    uint64_t total_cycles = 0;
     uint32_t biu_config = 0;
     int branch = 0, delay_slot = 0, branch_taken = 0;
 

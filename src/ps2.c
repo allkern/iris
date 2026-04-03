@@ -287,12 +287,12 @@ void ps2_reset(struct ps2_state* ps2) {
 // }
 
 void ps2_cycle(struct ps2_state* ps2) {
-    ps2->ee_cycles = 16*16;
+    ps2->ee_cycles = 0;
 
     // Run at least 16 IOP instructions per cycle
-    // while (ps2->ee_cycles < (16 * 16)) {
-    //     ps2->ee_cycles += ee_run_block(ps2->ee, 128);
-    // }
+    while (ps2->ee_cycles < (16 * 16)) {
+        ps2->ee_cycles += ee_run_block(ps2->ee, 128);
+    }
 
     sched_tick(ps2->sched, ps2->timescale * ps2->ee_cycles);
 
@@ -304,18 +304,13 @@ void ps2_cycle(struct ps2_state* ps2) {
     int iop_cycles = ps2->ee_cycles / 16;
 
     while (iop_cycles > 0) {
-        int executed = iop_run_block(ps2->iop, iop_cycles);
+        int cycles = iop_run_block(ps2->iop, iop_cycles);
 
-        if (executed <= 0) {
-            break;
-        }
-
-        for (int i = 0; i < executed; i++)
+        for (int i = 0; i < cycles; i++)
             ps2_iop_timers_tick(ps2->iop_timers);
 
-        iop_cycles -= executed;
+        iop_cycles -= cycles;
     }
-
 }
 
 void ps2_step_ee(struct ps2_state* ps2) {
