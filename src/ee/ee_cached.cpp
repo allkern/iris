@@ -535,12 +535,19 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 #define _EE_CACHE_PAGESIZE 512
 #endif
 
-#define EE_CACHE_PAGECOUNT (0x100000000ull / _EE_CACHE_PAGESIZE)
+#define EE_CACHE_PAGECOUNT (0x20000000 / _EE_CACHE_PAGESIZE)
+
+static inline bool ee_is_executable_region(uint32_t addr) {
+    // EE should only ever execute from RAM (and its mirrors), and the BIOS
+    return addr < 0x2000000 || (addr >= 0x1fc00000 && addr < 0x20000000);
+}
 
 #define INVALIDATE_CACHE_PAGE(addr) { \
-    if (ee->block_cache[(addr) / _EE_CACHE_PAGESIZE]) { \
-        delete[] ee->block_cache[(addr) / _EE_CACHE_PAGESIZE]; \
-        ee->block_cache[(addr) / _EE_CACHE_PAGESIZE] = nullptr; \
+    if (ee_is_executable_region(addr)) { \
+        uint32_t page = (addr) / _EE_CACHE_PAGESIZE; \
+        if (ee->block_cache[page]) { \
+            ee->block_cache_dirty[page] = true; \
+        } \
     } \
 }
 
@@ -564,11 +571,11 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
 #define BUS_WRITE_FUNC(b)                                                                  \
     static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) { \
-        INVALIDATE_CACHE_PAGE(addr);                                                       \
         if ((addr & 0xf0000000) == 0x70000000)                                             \
-            { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                  \
+        { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                      \
         uint32_t phys;                                                                     \
         ee_translate_virt(ee, addr, &phys);                                                \
+        INVALIDATE_CACHE_PAGE(phys);                                                       \
         ee->bus.write ## b(ee->bus.udata, phys, data);                                     \
     }
 
@@ -594,8 +601,6 @@ BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
 static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
-    INVALIDATE_CACHE_PAGE(addr);
-
     if ((addr & 0xf0000000) == 0x70000000) {
         ps2_ram_write128(ee->spr, addr & 0x3ff0, data);
 
@@ -605,6 +610,8 @@ static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t da
     uint32_t phys;
 
     ee_translate_virt(ee, addr, &phys);
+
+    INVALIDATE_CACHE_PAGE(phys);
 
     ee->bus.write128(ee->bus.udata, phys, data);
 }
@@ -918,12 +925,6 @@ static inline void ee_i_break(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_cache(struct ee_state* ee, const ee_instruction& i) {
     /* To-do: Cache emulation */
-    switch (EE_D_RT) {
-        // CACHE.IXIN
-        case 0x07: {
-            ee->block_cache.clear();
-        } break;
-    } 
 } 
 static inline void ee_i_ceq(struct ee_state* ee, const ee_instruction& i) {
     if (EE_FS == EE_FT) {
@@ -3167,8 +3168,6 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
         id = (~id) + 1;
     }
 
-    // printf("ee: %s (%d, %08x) a0=%08x (%d)\n", ee_get_syscall(n), ee->r[3].ul32, ee->r[3].ul32, ee->r[4].ul32, ee->r[4].ul32);
-
     switch (id) {
         // ChangeThreadPriority
         case 0x29: {
@@ -3200,8 +3199,6 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
         // FlushCache
         case 0x64: {
             // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
-
-            // ee->block_cache.clear();
         } break;
     }
 
@@ -3469,6 +3466,8 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
 
     ee->block_cache.clear();
     ee->block_cache.resize(EE_CACHE_PAGECOUNT);
+    ee->block_cache_dirty.clear();
+    ee->block_cache_dirty.resize(EE_CACHE_PAGECOUNT);
 }
 
 void ee_reset(struct ee_state* ee) {
@@ -3500,6 +3499,8 @@ void ee_reset(struct ee_state* ee) {
 
     ee->block_cache.clear();
     ee->block_cache.resize(EE_CACHE_PAGECOUNT);
+    ee->block_cache_dirty.clear();
+    ee->block_cache_dirty.resize(EE_CACHE_PAGECOUNT);
 
     // Clear block lookup cache
     ee->last_block_lookup_pc = ~0u;
@@ -4034,17 +4035,23 @@ ee_instruction ee_decode(uint32_t opcode) {
 }
 
 static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycles) {
-    uint32_t page = ee->pc / _EE_CACHE_PAGESIZE;
-    uint32_t offset = (ee->pc & (_EE_CACHE_PAGESIZE - 1)) >> 2;
+    uint32_t phys;
+
+    ee_translate_virt(ee, ee->pc, &phys);
+
+    uint32_t page = phys / _EE_CACHE_PAGESIZE;
+    uint32_t offset = (phys & (_EE_CACHE_PAGESIZE - 1)) >> 2;
 
     if (!ee->block_cache[page]) {
         ee->block_cache[page] = new struct ee_block[_EE_CACHE_PAGESIZE >> 2];
+        ee->block_cache_dirty[page] = false;
     }
 
     struct ee_block& block = ee->block_cache[page][offset];
 
     uint32_t pc = ee->pc;
     uint32_t block_pc = ee->pc;
+
     ee_instruction i;
 
     block.cycles = 0;
@@ -4090,18 +4097,31 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
 }
 
 static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
-    // Fast path: check single-entry cache first (avoids hash computation)
     if (pc == ee->last_block_lookup_pc) {
         return ee->last_block_ptr;
     }
 
-    uint32_t page = pc / _EE_CACHE_PAGESIZE;
+    uint32_t phys;
+
+    ee_translate_virt(ee, pc, &phys);
+
+    uint32_t page = phys / _EE_CACHE_PAGESIZE;
 
     if (!ee->block_cache[page]) {
         return nullptr;
     }
 
-    uint32_t offset = (pc & (_EE_CACHE_PAGESIZE - 1)) >> 2;
+    if (ee->block_cache_dirty[page]) {
+        // Invalidate entire page if it's dirty (code was modified)
+        delete[] ee->block_cache[page];
+
+        ee->block_cache[page] = nullptr;
+        ee->block_cache_dirty[page] = false;
+
+        return nullptr;
+    }
+
+    uint32_t offset = (phys & (_EE_CACHE_PAGESIZE - 1)) >> 2;
 
     struct ee_block& block = ee->block_cache[page][offset];
 
@@ -4128,13 +4148,13 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         return 0;
 
     if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000) { // ee->csr_reads >= 1000
-        ee->total_cycles += 2048;
-        ee->count += 2048;
+        ee->total_cycles += 256;
+        ee->count += 256;
         // ee->eenull_counter += 8 * 64;
 
         ee->idle_skips++;
 
-        return 2048;
+        return 16*16;
     }
 
     struct ee_block* block = ee_find_block(ee, ee->pc);
@@ -4214,6 +4234,10 @@ void ee_flush_cache(struct ee_state* ee) {
         delete[] page;
 
         page = nullptr;
+    }
+
+    for (int i = 0; i < EE_CACHE_PAGECOUNT; i++) {
+        ee->block_cache_dirty[i] = false;
     }
 
     ee->last_block_lookup_pc = ~0u;

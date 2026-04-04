@@ -67,6 +67,7 @@ struct ee_state {
     uint32_t block_pc;
 
     std::vector <ee_block*> block_cache;
+    std::vector <int> block_cache_dirty;
     
     // Single-entry block cache for fast lookup (avoid hash computation)
     // Exploits temporal locality since we execute the same block repeatedly

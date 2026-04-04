@@ -287,11 +287,8 @@ void ps2_reset(struct ps2_state* ps2) {
 // }
 
 void ps2_cycle(struct ps2_state* ps2) {
-    ps2->ee_cycles = 0;
-
-    // Run at least 16 IOP instructions per cycle
-    while (ps2->ee_cycles < (16 * 16)) {
-        ps2->ee_cycles += ee_run_block(ps2->ee, 128);
+    while (ps2->ee_cycles < 16*16) {
+        ps2->ee_cycles += ee_run_block(ps2->ee, 64);
     }
 
     sched_tick(ps2->sched, ps2->timescale * ps2->ee_cycles);
@@ -299,18 +296,23 @@ void ps2_cycle(struct ps2_state* ps2) {
     ps2_ipu_run(ps2->ipu);
 
     // The timer runs at BUSCLK speed, that is 1 BUSCLK cycle every 2 EE instructions
-    ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles * 2);
+    ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles);
 
-    int iop_cycles = ps2->ee_cycles / 16;
+    ps2->iop_cycles += ps2->ee_cycles / 16;
+    
+    // printf("ee: cycles=%d iop cycles=%d\n", ps2->ee_cycles, ps2->iop_cycles);
 
-    while (iop_cycles > 0) {
-        int cycles = iop_run_block(ps2->iop, iop_cycles);
+    while (ps2->iop_cycles > 0) {
+        int cycles = iop_run_block(ps2->iop, 16);
 
         for (int i = 0; i < cycles; i++)
             ps2_iop_timers_tick(ps2->iop_timers);
 
-        iop_cycles -= cycles;
+        ps2->iop_cycles -= cycles;
+        ps2->ee_cycles -= cycles * 8;
     }
+
+    // printf("iop: cycles=%d\n", ps2->iop_cycles);
 }
 
 void ps2_step_ee(struct ps2_state* ps2) {

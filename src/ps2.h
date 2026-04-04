@@ -128,6 +128,7 @@ struct ps2_state {
     struct sched_state* sched;
 
     int ee_cycles;
+    int iop_cycles;
     int timescale;
     int system, detected_system;
 
