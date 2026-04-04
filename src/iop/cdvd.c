@@ -618,14 +618,14 @@ static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
 
     // Small delta
     if (delta < 8)
-        return ((block_timing * delta) + contiguous_cycles) / 4;
+        return ((block_timing * delta) + contiguous_cycles);
 
     // Fast seek: ~30ms
     if (delta < 4371)
-        return (((36864000 / 1000) * 30) + contiguous_cycles) / 4;
+        return (((36864000 / 1000) * 30) + contiguous_cycles);
 
     // Full seek: ~100ms
-    return (((36864000 / 1000) * 100) + contiguous_cycles) / 4;
+    return (((36864000 / 1000) * 100) + contiguous_cycles);
 }
 
 static inline void cdvd_set_status(struct ps2_cdvd* cdvd, uint8_t data) {
