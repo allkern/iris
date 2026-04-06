@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: 'recursive'
         fetch-depth: 0
@@ -32,11 +32,11 @@ jobs:
         mv ./build/iris ./dist
         mkdir appimage
         mv ./build/*.AppImage ./appimage
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: iris-latest-linux
         path: ./dist
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v7
       with:
         name: iris-latest-linux-appimage
         path: ./appimage
