@@ -64,6 +64,11 @@ namespace iris {
 #define IRIS_TITLEBAR_DEFAULT 0
 #define IRIS_TITLEBAR_SEAMLESS 1
 
+#define IRIS_PRESENT_MODE_30FPS 0
+#define IRIS_PRESENT_MODE_60FPS 1
+#define IRIS_PRESENT_MODE_VSYNC 2
+#define IRIS_PRESENT_MODE_UNCAPPED 3
+
 class instance;
 
 // class widget {
@@ -562,7 +567,7 @@ struct instance {
     float volume = 1.0f;
     int timescale = 8;
     bool mute_adma = true;
-    bool vsync = true;
+    int present_mode = IRIS_PRESENT_MODE_60FPS;
     float ui_scale = 1.0f;
     int screenshot_format = IRIS_SCREENSHOT_FORMAT_PNG;
     int screenshot_jpg_quality_mode = IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM;

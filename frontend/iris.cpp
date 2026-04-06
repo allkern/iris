@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <chrono>
 #include <thread>
 #include <cmath>
 
@@ -469,6 +470,8 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 }
 
 SDL_AppResult update(iris::instance* iris) {
+    auto start = std::chrono::high_resolution_clock::now();
+
     if (iris->double_click_counter) {
         iris->double_click_counter--;
     }
@@ -525,6 +528,38 @@ SDL_AppResult update(iris::instance* iris) {
     iris->ps2->ee->eenull_counter = 0;
     iris->ps2->ee->intc_reads = 0;
     iris->ps2->ee->csr_reads = 0;
+
+    switch (iris->present_mode) {
+        case IRIS_PRESENT_MODE_30FPS: {
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+            auto frame_us = (int64_t)duration.count();
+            auto target_us = (int64_t)((1.0f / 30.0f) * 1000000);
+
+            if (frame_us < target_us) {
+                auto sleep_start = std::chrono::high_resolution_clock::now();
+                auto sleep_time = std::chrono::microseconds(target_us - frame_us);
+
+                while (std::chrono::high_resolution_clock::now() - sleep_start < sleep_time);
+            }
+        } break;
+
+        case IRIS_PRESENT_MODE_60FPS: {
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+            auto frame_us = (int64_t)duration.count();
+            auto target_us = (int64_t)((1.0f / 60.0f) * 1000000);
+
+            if (frame_us < target_us) {
+                auto sleep_start = std::chrono::high_resolution_clock::now();
+                auto sleep_time = std::chrono::microseconds(target_us - frame_us);
+
+                while (std::chrono::high_resolution_clock::now() - sleep_start < sleep_time);
+            }
+        } break;
+    }
 
     return SDL_APP_CONTINUE;
 }
