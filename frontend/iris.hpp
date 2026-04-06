@@ -565,7 +565,7 @@ struct instance {
     bool mute = false;
     bool prev_mute = false;
     float volume = 1.0f;
-    int timescale = 8;
+    int timescale = 2;
     bool mute_adma = true;
     int present_mode = IRIS_PRESENT_MODE_60FPS;
     float ui_scale = 1.0f;

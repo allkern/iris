@@ -165,7 +165,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
-    iris->timescale = debugger["timescale"].value_or(8);
+    iris->timescale = debugger["timescale"].value_or(2);
 
     auto system = tbl["system"];
     iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
