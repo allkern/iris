@@ -110,6 +110,8 @@ uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr);
 void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data);
 uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr);
 void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data);
+uint32_t ps2_vif_fifo_read(struct ps2_vif* vif);
+void ps2_vif_fifo_write(struct ps2_vif* vif, uint32_t data);
 
 #ifdef __cplusplus
 }

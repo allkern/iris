@@ -64,16 +64,7 @@ struct dmac_channel {
 struct ps2_dmac {
     struct ee_bus* bus;
 
-    struct dmac_channel vif0;
-    struct dmac_channel vif1;
-    struct dmac_channel gif;
-    struct dmac_channel ipu_from;
-    struct dmac_channel ipu_to;
-    struct dmac_channel sif0;
-    struct dmac_channel sif1;
-    struct dmac_channel sif2;
-    struct dmac_channel spr_from;
-    struct dmac_channel spr_to;
+    struct dmac_channel channels[10];
     struct dmac_channel* mfifo_drain;
 
     uint32_t ctrl;
@@ -84,6 +75,10 @@ struct ps2_dmac {
     uint32_t rbor;
     uint32_t enable;
 
+    struct ps2_gif* gif;
+    struct ps2_vif* vif0;
+    struct ps2_vif* vif1;
+    struct ps2_ipu* ipu;
     struct ps2_ram* spr;
     struct ps2_sif* sif;
     struct ps2_iop_dma* iop_dma;
@@ -92,7 +87,7 @@ struct ps2_dmac {
 };
 
 struct ps2_dmac* ps2_dmac_create(void);
-void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dma* iop_dma, struct ps2_ram* spr, struct ee_state* ee, struct sched_state* sched, struct ee_bus* bus);
+void ps2_dmac_init(struct ps2_dmac* dmac, struct ps2_sif* sif, struct ps2_iop_dma* iop_dma, struct ps2_ram* spr, struct ps2_gif* gif, struct ps2_ipu* ipu, struct ps2_vif* vif0, struct ps2_vif* vif1, struct ee_state* ee, struct sched_state* sched, struct ee_bus* bus);
 void ps2_dmac_destroy(struct ps2_dmac* dmac);
 uint64_t ps2_dmac_read8(struct ps2_dmac* dmac, uint32_t addr);
 uint64_t ps2_dmac_read16(struct ps2_dmac* dmac, uint32_t addr);

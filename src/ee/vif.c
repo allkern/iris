@@ -945,4 +945,14 @@ void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {
     }
 }
 
+uint32_t ps2_vif_fifo_read(struct ps2_vif* vif) {
+    // printf("vif%d: 32-bit FIFO read\n", vif->id);
+
+    return 0;
+}
+
+void ps2_vif_fifo_write(struct ps2_vif* vif, uint32_t data) {
+    vif_handle_fifo_write(vif, data);
+}
+
 #undef printf
