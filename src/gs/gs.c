@@ -419,7 +419,7 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
                 // gs->vblank |= 1;
             }
 
-            gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
+            gs->csr = (gs->csr & 0xfffffe02) | (gs->csr & ~(data & 0xd));
             gs->csr_enable = data;
 
             if (data & 1) {

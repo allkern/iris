@@ -4147,9 +4147,9 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     if (ee_check_irq(ee))
         return 0;
 
-    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000) { // ee->csr_reads >= 1000
-        ee->total_cycles += 256;
-        ee->count += 256;
+    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000) {
+        ee->total_cycles += 16*16;
+        ee->count += 16*16;
         // ee->eenull_counter += 8 * 64;
 
         ee->idle_skips++;
