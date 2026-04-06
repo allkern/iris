@@ -9,7 +9,7 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v6
       with:
         submodules: 'recursive'
         fetch-depth: 0
@@ -23,7 +23,7 @@ jobs:
         Copy-Item ".\build\*.dll" "dist"
         Copy-Item "C:\mingw64\bin\*.dll" "dist"
     - name: Upload artifact
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: iris-latest-windows
         path: dist/
