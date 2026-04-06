@@ -107,10 +107,11 @@ int iop_test_module_hooks(struct iop_state* iop) {
 }
 
 void iop_return(struct iop_state* iop, int ret) {
+    // printf("hle: ret=%d pc=%08x ra=%08x\n", ret, iop->saved_pc, iop->r[31]);
     // Set v0 (return register) to ret
-    // iop->r[2] = ret;
+    iop->r[2] = ret;
 
     // // Emulate jal ra
     // iop->pc = iop->r[31];
-    // iop->next_pc = iop->pc + 4;
+    iop->next_pc = iop->r[31];
 }
