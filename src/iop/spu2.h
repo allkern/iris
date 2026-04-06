@@ -69,13 +69,13 @@ struct spu2_voice {
     uint16_t pitch;
     uint16_t adsr1;
     uint16_t adsr2;
-    uint16_t envx;
     uint16_t volxl;
     uint16_t volxr;
     uint32_t ssa;
     uint32_t lsax;
     uint32_t nax;
-
+    int32_t envx;
+    
     // Internal stuff
     int playing;
     unsigned int counter;

@@ -220,18 +220,34 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         v->adsr_step = 0;
         v->adsr_pending_step = 0;
         v->adsr_sustain_level = 0;
+        v->loop_addr_specified = 0;
 
         v->nax = v->ssa;
         v->adsr_sustain_level = ((v->adsr1 & 0xf) + 1) * 0x800;
 
         cr->endx &= ~(1u << idx);
 
-        // printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
+        // if (c == 1 && idx == 0)
+        //     printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
 
         adsr_load_attack(spu2, cr, v);
         spu2_decode_adpcm_block(spu2, v);
 
-        v->envx = 0x7fff;
+        // if (c == 1 && idx == 0) {
+        //     printf("adsr: attack mode=%d shift=%d step=%d dir=%d envx=%d cycles=%d level_step=%d\n",
+        //         v->adsr_mode,
+        //         v->adsr_shift,
+        //         v->adsr_step,
+        //         v->adsr_dir,
+        //         v->envx,
+        //         v->adsr_cycles,
+        //         v->adsr_pending_step
+        //     );
+        // }
+
+        // Hack: Prevent the game from thinking the voice is done playing by
+        //       reading the current envelope value as 0.
+        // v->envx = 1;
     }
 }
 
@@ -307,7 +323,7 @@ void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
         printf("spu2: Resetting core%d\n", c);
 
         event.callback = c ? spu2_core1_reset_handler : spu2_core0_reset_handler;
-        event.cycles = 10000;
+        event.cycles = 80000;
         event.name = "SPU2 Reset";
         event.udata = spu2;
 
@@ -315,6 +331,16 @@ void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
 
         spu2->c[c].stat = 0;
     }
+}
+
+uint16_t spu2_get_voice_envx(struct ps2_spu2* spu2, int c, int v) {
+    uint16_t envx = spu2->c[c].v[v].envx;
+
+    if (!spu2->c[c].v[v].playing) {
+        return 0;
+    }
+
+    return !envx ? 0x7fff : envx;
 }
 
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
@@ -330,7 +356,7 @@ uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
             case 0x4: return spu2->c[core].v[voice].pitch;
             case 0x6: return spu2->c[core].v[voice].adsr1;
             case 0x8: return spu2->c[core].v[voice].adsr2;
-            case 0xA: return spu2->c[core].v[voice].envx;
+            case 0xA: return spu2_get_voice_envx(spu2, core, voice);
             case 0xC: return spu2->c[core].v[voice].volxl;
             case 0xE: return spu2->c[core].v[voice].volxr;
         }
@@ -567,8 +593,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         switch (addr % 12) {
             case 0x0: SPU2_WRITEH_V(core, voice, ssa); spu2->c[core].v[voice].ssa &= 0xfffff; return;
             case 0x2: SPU2_WRITEL_V(core, voice, ssa); spu2->c[core].v[voice].ssa &= 0xfffff; return;
-            case 0x4: SPU2_WRITEH_V(core, voice, lsax); spu2->c[core].v[voice].lsax &= 0xfffff; return;
-            case 0x6: SPU2_WRITEL_V(core, voice, lsax); spu2->c[core].v[voice].lsax &= 0xfffff; return;
+            case 0x4: SPU2_WRITEH_V(core, voice, lsax); spu2->c[core].v[voice].lsax &= 0xfffff; spu2->c[core].v[voice].loop_addr_specified = 1; return;
+            case 0x6: SPU2_WRITEL_V(core, voice, lsax); spu2->c[core].v[voice].lsax &= 0xfffff; spu2->c[core].v[voice].loop_addr_specified = 1; return;
             case 0x8: SPU2_WRITEH_V(core, voice, nax); spu2->c[core].v[voice].nax &= 0xfffff; return;
             case 0xA: SPU2_WRITEL_V(core, voice, nax); spu2->c[core].v[voice].nax &= 0xfffff; return;
         }
@@ -967,7 +993,10 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         v->counter &= 0xfff;
         v->counter |= sample_index << 12;
 
-        if (v->loop_start)
+        // if (cr == 1 && vc == 0 && (v->loop_start || v->loop_end))
+        //     printf("spu2: end=%d loop=%d start=%d ssa=%08x lsax=%08x nax=%08x\n", v->loop_end, v->loop, v->loop_start, v->ssa, v->lsax, v->nax);
+
+        if (v->loop_start && !v->loop_addr_specified)
             v->lsax = v->nax;
 
         v->nax += 8;
@@ -1032,8 +1061,8 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         spu2_check_irq(spu2, addr);
     }
 
-    s.s16[0] = (out * v->voll) >> 15;
-    s.s16[1] = (out * v->volr) >> 15;
+    s.s16[0] = (out * (int16_t)(v->voll << 1)) >> 15;
+    s.s16[1] = (out * (int16_t)(v->volr << 1)) >> 15;
     s.s16[0] = ((int32_t)s.s16[0] * v->envx) >> 15;
     s.s16[1] = ((int32_t)s.s16[1] * v->envx) >> 15;
 
@@ -1123,10 +1152,10 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
         struct spu2_sample c1 = spu2_get_voice_sample(spu2, 1, i);
 
-        s.s16[0] += c0.s16[0] << 1;
-        s.s16[1] += c0.s16[1] << 1;
-        s.s16[0] += c1.s16[0] << 1;
-        s.s16[1] += c1.s16[1] << 1;
+        s.s16[0] += c0.s16[0];
+        s.s16[1] += c0.s16[1];
+        s.s16[0] += c1.s16[0];
+        s.s16[1] += c1.s16[1];
     }
 
     return s;
