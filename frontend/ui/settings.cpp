@@ -134,6 +134,13 @@ const char* settings_fullscreen_names[] = {
     "Fullscreen (Desktop)",
 };
 
+const char* settings_present_mode_names[] = {
+    "Limit to 30 FPS",
+    "Limit to 60 FPS",
+    "VSync",
+    "Uncapped"
+};
+
 const char* settings_rotation_names[] = {
     "0 degrees",
     "90 degrees",
@@ -465,11 +472,19 @@ void show_graphics_settings(iris::instance* iris) {
 
     SeparatorText("Misc.");
 
-    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    if (Checkbox(" VSync", &iris->vsync)) {
-        imgui::set_vsync(iris, iris->vsync);
-        iris->swapchain_rebuild = true;
+    Text("Present mode");
+
+    if (BeginCombo("##presentmode", settings_present_mode_names[iris->present_mode])) {
+        for (int i = 0; i < IM_ARRAYSIZE(settings_present_mode_names); i++) {
+            if (Selectable(settings_present_mode_names[i], iris->present_mode == i)) {
+                iris->present_mode = i;
+            }
+        }
+
+        EndCombo();
     }
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     Checkbox(" Integer scaling", &iris->integer_scaling);
     Checkbox(" Flip horizontally", &iris->flip_x);
     Checkbox(" Flip vertically", &iris->flip_y);

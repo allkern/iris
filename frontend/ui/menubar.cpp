@@ -375,6 +375,31 @@ void show_main_menubar(iris::instance* iris) {
                     ImGui::EndMenu();
                 }
 
+                if (BeginMenu(ICON_MS_SYNC " Present mode")) {
+                    const char* settings_present_mode_names[] = {
+                        "Limit to 30 FPS",
+                        "Limit to 60 FPS",
+                        "VSync",
+                        "Uncapped"
+                    };
+
+                    for (int i = 0; i < IM_ARRAYSIZE(settings_present_mode_names); i++) {
+                        if (MenuItem(settings_present_mode_names[i], nullptr, iris->present_mode == i)) {
+                            iris->present_mode = i;
+
+                            if (iris->present_mode == IRIS_PRESENT_MODE_VSYNC) {
+                                imgui::set_vsync(iris, true);
+                            } else {
+                                imgui::set_vsync(iris, false);
+                            }
+
+                            iris->swapchain_rebuild = true;
+                        }
+                    }
+
+                    ImGui::EndMenu();
+                }
+
                 if (MenuItem(ICON_MS_SPEED_2X " Integer scaling", nullptr, &iris->integer_scaling)) {
                     // renderer_set_integer_scaling(iris->ctx, iris->integer_scaling);
                 }
@@ -384,11 +409,6 @@ void show_main_menubar(iris::instance* iris) {
 
                 if (MenuItem(ICON_MS_FULLSCREEN " Fullscreen", "F11", &iris->fullscreen)) {
                     SDL_SetWindowFullscreen(iris->window, iris->fullscreen);
-                }
-
-                if (MenuItem(ICON_MS_SYNC " VSync", nullptr, &iris->vsync)) {
-                    imgui::set_vsync(iris, iris->vsync);
-                    iris->swapchain_rebuild = true;
                 }
 
                 if (MenuItem(ICON_MS_IMAGE " Enable shaders", nullptr, &iris->enable_shaders)) {
