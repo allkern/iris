@@ -110,6 +110,7 @@ struct iop_state {
     struct iop_bus_s bus = { nullptr };
 
     std::vector <iop_block*> block_cache;
+    std::vector <int> block_cache_dirty;
 
     iop_block* last_cached_block = nullptr;
     uint32_t last_cached_block_pc = 0;
