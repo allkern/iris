@@ -324,7 +324,7 @@ void ps2_cycle(struct ps2_state* ps2) {
         ps2->ee_cycles += cycles;
     }
 
-    ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles * 2);
+    ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles);
 
     // The timer runs at BUSCLK speed, that is 1 BUSCLK cycle every 2 EE instructions
 
@@ -341,7 +341,7 @@ void ps2_cycle(struct ps2_state* ps2) {
         //     ps2_iop_timers_tick(ps2->iop_timers);
 
         ps2->iop_cycles -= cycles;
-        ps2->ee_cycles -= cycles * 8;
+        ps2->ee_cycles -= cycles * 16;
     }
 
     // printf("iop: cycles=%d\n", ps2->iop_cycles);
