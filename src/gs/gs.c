@@ -16,8 +16,6 @@ static inline void gs_test_gs_irq(struct ps2_gs* gs) {
     uint32_t stat = gs->csr & 0x1f;
 
     if (stat & (~mask)) {
-        // printf("gs: IRQ triggered! stat=%02x mask=%02x\n", stat, mask);
-
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 }
@@ -885,7 +883,7 @@ int ps2_gs_write_signal(struct ps2_gs* gs, uint64_t data) {
 
     gs_test_gs_irq(gs);
 
-    return 0;
+    return 1;
 }
 
 int ps2_gs_write_finish(struct ps2_gs* gs, uint64_t data) {
@@ -905,5 +903,5 @@ int ps2_gs_write_label(struct ps2_gs* gs, uint64_t data) {
     gs->siglblid &= (~mask) << 32;
     gs->siglblid |= (data & mask) << 32;
 
-    return 0;
+    return 1;
 }

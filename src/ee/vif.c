@@ -120,14 +120,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
         vif->cmd = (data >> 24) & 0xff;
 
         if (vif->cmd & 0x80) {
-            struct sched_event event;
-
-            event.callback = vif->id ? vif1_send_irq : vif0_send_irq;
-            event.cycles = 1000;
-            event.name = vif->id ? "VIF1 Interrupt" : "VIF0 Interrupt";
-            event.udata = vif;
-
-            sched_schedule(vif->sched, event);
+            ps2_intc_irq(vif->intc, vif->id ? EE_INTC_VIF1 : EE_INTC_VIF0);
 
             // fprintf(stderr, "vif%d: Requested IRQ command=%02x\n", vif->id, vif->cmd);
             vif->stat |= 0x00000c02;

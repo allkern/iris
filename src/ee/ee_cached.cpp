@@ -4183,6 +4183,7 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         i.func(ee, i);
 
         ee->count++;
+        ee->total_cycles++;
         ee->r[0] = { 0 };
 
         cycles++;
