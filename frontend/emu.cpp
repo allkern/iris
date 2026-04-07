@@ -2,6 +2,7 @@
 #include "arcade.hpp"
 
 #include <filesystem>
+#include <algorithm>
 #include <optional>
 
 namespace iris::emu {
@@ -232,6 +233,77 @@ const char* get_current_system_name(iris::instance* iris) {
 
 int get_system_count(iris::instance* iris) {
     return sizeof(g_system_names) / sizeof(const char*);
+}
+
+std::string& tolower(std::string& str) {
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c){ return std::tolower(c); });
+
+    return str;
+}
+
+std::string& toupper(std::string& str) {
+    std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c){ return std::toupper(c); });
+
+    return str;
+}
+
+std::filesystem::path get_rom_path(std::filesystem::path filename, std::string ext) {
+    std::filesystem::path path_lc = filename;
+    std::filesystem::path path_uc = filename;
+
+    path_lc += "." + tolower(ext);
+    path_uc += "." + toupper(ext);
+
+    if (std::filesystem::exists(path_lc)) {
+        return path_lc;
+    } else if (std::filesystem::exists(path_uc)) {
+        return path_uc;
+    }
+
+    return "";
+}
+
+bool load_rom_files(iris::instance* iris) {
+    ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+
+    if (iris->auto_paths) {
+        std::filesystem::path bios_path(iris->bios_path);
+
+        // Get full path without extension
+        bios_path = bios_path.parent_path() / bios_path.stem();
+
+        std::filesystem::path rom1_path = get_rom_path(bios_path, "rom1");
+        std::filesystem::path rom2_path = get_rom_path(bios_path, "rom2");
+        std::filesystem::path nvm_path = get_rom_path(bios_path, "nvm");
+
+        if (rom1_path.string().size()) {
+            ps2_load_rom1(iris->ps2, rom1_path.string().c_str());
+        }
+
+        if (rom2_path.string().size()) {
+            ps2_load_rom2(iris->ps2, rom2_path.string().c_str());
+        }
+
+        if (nvm_path.string().size()) {
+            ps2_cdvd_load_nvram(iris->ps2->cdvd, nvm_path.string().c_str());
+        }
+
+        return true;
+    }
+
+    if (iris->rom1_path.size()) {
+        ps2_load_rom1(iris->ps2, iris->rom1_path.c_str());
+    }
+
+    if (iris->rom2_path.size()) {
+        ps2_load_rom2(iris->ps2, iris->rom2_path.c_str());
+    }
+
+    if (iris->nvram_path.size()) {
+        ps2_cdvd_load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
+    }
+
+    return true;
 }
 
 }

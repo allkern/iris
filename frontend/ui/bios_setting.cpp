@@ -166,6 +166,8 @@ void show_bios_stage(iris::instance* iris) {
 
             stage = 0;
         } else {
+            emu::load_rom_files(iris);
+
             stage = 1;
         }
     }

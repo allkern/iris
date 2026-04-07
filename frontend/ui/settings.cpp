@@ -996,6 +996,12 @@ void show_paths_settings(iris::instance* iris) {
 
     Separator();
 
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox("Auto-detect", &iris->auto_paths);
+    PopStyleVar();
+
+    BeginDisabled(iris->auto_paths);
+
     Text("DVD Player (rom1)");
 
     SetNextItemWidth(300);
@@ -1109,7 +1115,11 @@ void show_paths_settings(iris::instance* iris) {
         iris->nvram_path = "";
 
         memset(nvram_buf, 0, 512);
-    } 
+    }
+
+    EndDisabled();
+
+    Separator();
 
     Text("Flash memory (xfrom)");
 

@@ -470,6 +470,7 @@ struct instance {
     std::string flash_path = "";
     std::string ini_path = "";
     std::string gcdb_path = "";
+    bool auto_paths = true;
 
     uint8_t mac_address[6] = { 0 };
 
@@ -766,6 +767,7 @@ namespace emu {
     const char* get_system_name(iris::instance* iris, int system);
     const char* get_current_system_name(iris::instance* iris);
     int get_system_count(iris::instance* iris);
+    bool load_rom_files(iris::instance* iris);
 }
 
 namespace render {

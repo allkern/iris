@@ -113,6 +113,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->snap_path = paths["snap_path"].value_or("snap");
     iris->flash_path = paths["flash_path"].value_or("");
     iris->gcdb_path = paths["gcdb_path"].value_or("");
+    iris->auto_paths = paths["auto"].value_or(true);
 
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
@@ -412,8 +413,7 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 
     parse_cli_settings(iris, argc, argv);
 
-    if (iris->nvram_path.size())
-        ps2_cdvd_load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
+    emu::load_rom_files(iris);
 
     if (iris->mcd0_path.size())
         emu::attach_memory_card(iris, 0, iris->mcd0_path.c_str());
@@ -563,6 +563,7 @@ void close(iris::instance* iris) {
             { "snap_path", iris->snap_path },
             { "flash_path", iris->flash_path },
             { "gcdb_path", iris->gcdb_path },
+            { "auto", iris->auto_paths }
         } },
         { "recents", toml::table {
             { "array", toml::array() }

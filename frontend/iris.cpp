@@ -63,7 +63,7 @@ int open_file(iris::instance* iris, std::string file) {
         renderer_reset(iris->renderer);
 
         ps2_set_system(iris->ps2, iris->system);
-        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+        emu::load_rom_files(iris);
         ps2_boot_file(iris->ps2, boot_file);
 
         iris->loaded = file;
@@ -84,7 +84,7 @@ int open_file(iris::instance* iris, std::string file) {
     renderer_reset(iris->renderer);
 
     ps2_set_system(iris->ps2, iris->system);
-    ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+    emu::load_rom_files(iris);
     ps2_boot_file(iris->ps2, file.c_str());
 
     iris->loaded = file;
