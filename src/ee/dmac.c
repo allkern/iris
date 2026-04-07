@@ -266,6 +266,13 @@ static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
     dmac_test_irq(dmac);
 }
 
+static inline void dmac_end_transfer(struct ps2_dmac* dmac, int id) {
+    dmac_set_irq(dmac, id);
+    
+    dmac->channels[id].chcr &= ~0x100;
+    dmac->channels[id].qwc = 0;
+}
+
 void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {
     // printf("ee: VIF0 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
     //     dmac->channels[DMAC_VIF0].chcr & 1,
@@ -292,10 +299,7 @@ void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {
     }
 
     if (mode == 0) {
-        dmac->channels[DMAC_VIF0].chcr &= ~0x100;
-        dmac->channels[DMAC_VIF0].qwc = 0;
-
-        dmac_set_irq(dmac, DMAC_VIF0);
+        dmac_end_transfer(dmac, DMAC_VIF0);
 
         return;
     }
@@ -341,10 +345,7 @@ void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {
         }
     } while (!channel_is_done(&dmac->channels[DMAC_VIF0]));
 
-    dmac->channels[DMAC_VIF0].chcr &= ~0x100;
-    dmac->channels[DMAC_VIF0].qwc = 0;
-
-    dmac_set_irq(dmac, DMAC_VIF0);
+    dmac_end_transfer(dmac, DMAC_VIF0);
 }
 
 void dmac_send_vif1_irq(void* udata, int overshoot) {
@@ -384,6 +385,7 @@ void mfifo_handle_ref_tag(struct ps2_dmac* dmac) {
         dmac_set_irq(dmac, c == &dmac->channels[DMAC_VIF1] ? DMAC_VIF1 : DMAC_GIF);
 
         c->chcr &= ~0x100;
+        c->qwc = 0;
 
         return;
     }
@@ -421,6 +423,7 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
                 dmac_set_irq(dmac, c == &dmac->channels[DMAC_VIF1] ? DMAC_VIF1 : DMAC_GIF);
 
                 c->chcr &= ~0x100;
+                c->qwc = 0;
 
                 return;
             }
@@ -472,6 +475,7 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
             dmac_set_irq(dmac, c == &dmac->channels[DMAC_VIF1] ? DMAC_VIF1 : DMAC_GIF);
 
             c->chcr &= ~0x100;
+            c->qwc = 0;
 
             return;
         }
@@ -523,9 +527,7 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
         if (dmac->channels[DMAC_VIF1].qwc == 0)
             return;
 
-        dmac->channels[DMAC_VIF1].qwc = 0;
-
-        sched_schedule(dmac->sched, event);
+        dmac_end_transfer(dmac, DMAC_VIF1);
 
         return;
     }
@@ -545,7 +547,7 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     dmac->channels[DMAC_VIF1].qwc = 0;
 
     if (dmac->channels[DMAC_VIF1].tag.end) {
-        sched_schedule(dmac->sched, event);
+        dmac_end_transfer(dmac, DMAC_VIF1);
 
         return;
     }
@@ -590,7 +592,7 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
         }
     } while (!channel_is_done(&dmac->channels[DMAC_VIF1]));
 
-    sched_schedule(dmac->sched, event);
+    dmac_end_transfer(dmac, DMAC_VIF1);
 }
 
 void dmac_send_gif_irq(void* udata, int overshoot) {
@@ -608,13 +610,6 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
     assert(((dmac->channels[DMAC_GIF].chcr >> 6) & 1) == 0);
 
     int mode = (dmac->channels[DMAC_GIF].chcr >> 2) & 3;
-
-    event.name = "GIF DMA IRQ";
-    event.udata = dmac;
-    event.callback = dmac_send_gif_irq;
-    event.cycles = 1000;
-
-    sched_schedule(dmac->sched, event);
 
     // fprintf(stderr, "dmac: GIF DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
     //     dmac->channels[DMAC_GIF].chcr & 1,
@@ -659,6 +654,8 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
     }
 
     if (dmac->channels[DMAC_GIF].tag.end) {
+        dmac_end_transfer(dmac, DMAC_GIF);
+
         return;
     }
 
@@ -693,6 +690,8 @@ void dmac_handle_gif_transfer(struct ps2_dmac* dmac) {
             dmac->channels[DMAC_GIF].tadr = dmac->channels[DMAC_GIF].madr;
         }
     } while (!channel_is_done(&dmac->channels[DMAC_GIF]));
+
+    dmac_end_transfer(dmac, DMAC_GIF);
 }
 
 void dmac_handle_ipu_from_transfer(struct ps2_dmac* dmac) {
