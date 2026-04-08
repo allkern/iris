@@ -17,7 +17,7 @@ jobs:
       run: |
         git fetch --all --tags
         cmake -S . -B build -G "MinGW Makefiles"
-        cmake --build build -j8
+        cmake --build build -j $(nproc)
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
         Copy-Item ".\build\*.dll" "dist"

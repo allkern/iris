@@ -13,23 +13,60 @@
 // External includes
 #include "res/IconsMaterialSymbols.h"
 
-// INCBIN stuff
-#define INCBIN_PREFIX g_
-#define INCBIN_STYLE INCBIN_STYLE_SNAKE
+constexpr unsigned char g_roboto_data[] = {
+#embed "../res/Roboto-Regular.ttf"
+};
+constexpr unsigned int g_roboto_size = sizeof(g_roboto_data);
 
-#include "incbin.h"
+constexpr unsigned char g_roboto_black_data[] = {
+#embed "../res/Roboto-Black.ttf"
+};
+constexpr unsigned int g_roboto_black_size = sizeof(g_roboto_black_data);
 
-INCBIN(roboto, "../res/Roboto-Regular.ttf");
-INCBIN(roboto_black, "../res/Roboto-Black.ttf");
-INCBIN(symbols, "../res/MaterialSymbolsRounded.ttf");
-INCBIN(firacode, "../res/FiraCode-Regular.ttf");
-INCBIN(ps1_memory_card_icon, "../res/ps1_mcd.png");
-INCBIN(ps2_memory_card_icon, "../res/ps2_mcd.png");
-INCBIN(dualshock2_icon, "../res/ds2.png");
-INCBIN(pocketstation_icon, "../res/pocketstation.png");
-INCBIN(iris_icon, "../res/iris.png");
-INCBIN(vertex_shader, "../shaders/vertex.spv");
-INCBIN(fragment_shader, "../shaders/fragment.spv");
+constexpr unsigned char g_symbols_data[] = {
+#embed "../res/MaterialSymbolsRounded.ttf"
+};
+constexpr unsigned int g_symbols_size = sizeof(g_symbols_data);
+
+constexpr unsigned char g_firacode_data[] = {
+#embed "../res/FiraCode-Regular.ttf"
+};
+constexpr unsigned int g_firacode_size = sizeof(g_firacode_data);
+
+constexpr unsigned char g_ps1_memory_card_icon_data[] = {
+#embed "../res/ps1_mcd.png"
+};
+constexpr unsigned int g_ps1_memory_card_icon_size = sizeof(g_ps1_memory_card_icon_data);
+
+constexpr unsigned char g_ps2_memory_card_icon_data[] = {
+#embed "../res/ps2_mcd.png"
+};
+constexpr unsigned int g_ps2_memory_card_icon_size = sizeof(g_ps2_memory_card_icon_data);
+
+constexpr unsigned char g_dualshock2_icon_data[] = {
+#embed "../res/ds2.png"
+};
+constexpr unsigned int g_dualshock2_icon_size = sizeof(g_dualshock2_icon_data);
+
+constexpr unsigned char g_pocketstation_icon_data[] = {
+#embed "../res/pocketstation.png"
+};
+constexpr unsigned int g_pocketstation_icon_size = sizeof(g_pocketstation_icon_data);
+
+constexpr unsigned char g_iris_icon_data[] = {
+#embed "../res/iris.png"
+};
+constexpr unsigned int g_iris_icon_size = sizeof(g_iris_icon_data);
+
+constexpr unsigned char g_vertex_shader_data[] = {
+#embed "../shaders/vertex.spv"
+};
+constexpr unsigned int g_vertex_shader_size = sizeof(g_vertex_shader_data);
+
+constexpr unsigned char g_fragment_shader_data[] = {
+#embed "../shaders/fragment.spv"
+};
+constexpr unsigned int g_fragment_shader_size = sizeof(g_fragment_shader_data);
 
 #include "stb_image.h"
 

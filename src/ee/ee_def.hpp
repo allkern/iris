@@ -13,11 +13,7 @@
 #include <vector>
 
 #ifdef _EE_USE_INTRINSICS
-#ifdef _MSC_VER
-#define EE_ALIGNED16 __declspec(align(16))
-#else
-#define EE_ALIGNED16 __attribute__((aligned(16)))
-#endif
+#define EE_ALIGNED16 alignas(16)
 #else
 #define EE_ALIGNED16
 #endif
@@ -73,9 +69,9 @@ struct ee_state {
     uint32_t last_block_lookup_pc;
     struct ee_block* last_block_ptr;
 
-    uint128_t r[32] EE_ALIGNED16;
-    uint128_t hi EE_ALIGNED16;
-    uint128_t lo EE_ALIGNED16;
+    EE_ALIGNED16 uint128_t r[32];
+    EE_ALIGNED16 uint128_t hi;
+    EE_ALIGNED16 uint128_t lo;
 
     uint64_t total_cycles;
 

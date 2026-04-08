@@ -24,7 +24,7 @@ jobs:
       run: |
         git fetch --all --tags
         cmake -S . -B build -G "Unix Makefiles"
-        cmake --build build -j8
+        cmake --build build -j$(sysctl -n hw.logicalcpu)
         sudo cmake --install build
         mkdir -p ./build/dist
         cp -R ./build/iris.app ./build/dist

@@ -4,17 +4,30 @@
 #include "config.hpp"
 #include "iris.hpp"
 
-// INCBIN stuff
-#define INCBIN_PREFIX g_
-#define INCBIN_STYLE INCBIN_STYLE_SNAKE
+constexpr unsigned char g_encoder_frag_shader_data[] = {
+#embed "../shaders/encoder.spv"
+};
+constexpr unsigned int g_encoder_frag_shader_size = sizeof(g_encoder_frag_shader_data);
 
-#include "incbin.h"
+constexpr unsigned char g_decoder_frag_shader_data[] = {
+#embed "../shaders/decoder.spv"
+};
+constexpr unsigned int g_decoder_frag_shader_size = sizeof(g_decoder_frag_shader_data);
 
-INCBIN(encoder_frag_shader, "../shaders/encoder.spv");
-INCBIN(decoder_frag_shader, "../shaders/decoder.spv");
-INCBIN(curvature_frag_shader, "../shaders/curvature.spv");
-INCBIN(scanlines_frag_shader, "../shaders/scanlines.spv");
-INCBIN(noise_frag_shader, "../shaders/noise.spv");
+constexpr unsigned char g_curvature_frag_shader_data[] = {
+#embed "../shaders/curvature.spv"
+};
+constexpr unsigned int g_curvature_frag_shader_size = sizeof(g_curvature_frag_shader_data);
+
+constexpr unsigned char g_scanlines_frag_shader_data[] = {
+#embed "../shaders/scanlines.spv"
+};
+constexpr unsigned int g_scanlines_frag_shader_size = sizeof(g_scanlines_frag_shader_data);
+
+constexpr unsigned char g_noise_frag_shader_data[] = {
+#embed "../shaders/noise.spv"
+};
+constexpr unsigned int g_noise_frag_shader_size = sizeof(g_noise_frag_shader_data);
 
 namespace iris::shaders {
 
