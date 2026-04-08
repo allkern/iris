@@ -6,12 +6,10 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 
-#define INCBIN_PREFIX g_
-#define INCBIN_STYLE INCBIN_STYLE_SNAKE
-
-#include "incbin.h"
-
-INCBIN(gamecontrollerdb, "../deps/SDL_GameControllerDB/gamecontrollerdb.txt");
+constexpr unsigned char g_gamecontrollerdb_data[] = {
+#embed "../deps/SDL_GameControllerDB/gamecontrollerdb.txt"
+};
+constexpr unsigned int g_gamecontrollerdb_size = sizeof(g_gamecontrollerdb_data);
 
 namespace iris {
 

@@ -6,26 +6,30 @@
 #include "gs/gs.h"
 #include "software_thread.hpp"
 
-// INCBIN stuff
-#define INCBIN_PREFIX g_
-#define INCBIN_STYLE INCBIN_STYLE_SNAKE
-
-#include "incbin.h"
-
 #ifdef __APPLE__
 #define SHADER_FORMAT SDL_GPU_SHADERFORMAT_MSL
 #define SHADER_ENTRYPOINT "main0"
-INCBIN(vertex_shader, "../shaders/vertex.msl");
-INCBIN(fragment_shader, "../shaders/fragment.msl");
-INCBIN_EXTERN(vertex_shader);
-INCBIN_EXTERN(fragment_shader);
+constexpr unsigned char g_vertex_shader_data[] = {
+#embed "../shaders/vertex.msl"
+};
+constexpr unsigned int g_vertex_shader_size = sizeof(g_vertex_shader_data);
+
+constexpr unsigned char g_fragment_shader_data[] = {
+#embed "../shaders/fragment.msl"
+};
+constexpr unsigned int g_fragment_shader_size = sizeof(g_fragment_shader_data);
 #else
 #define SHADER_FORMAT SDL_GPU_SHADERFORMAT_SPIRV
 #define SHADER_ENTRYPOINT "main"
-INCBIN(vertex_shader, "../shaders/vertex.spv");
-INCBIN(fragment_shader, "../shaders/fragment.spv");
-INCBIN_EXTERN(vertex_shader);
-INCBIN_EXTERN(fragment_shader);
+constexpr unsigned char g_vertex_shader_data[] = {
+#embed "../shaders/vertex.spv"
+};
+constexpr unsigned int g_vertex_shader_size = sizeof(g_vertex_shader_data);
+
+constexpr unsigned char g_fragment_shader_data[] = {
+#embed "../shaders/fragment.spv"
+};
+constexpr unsigned int g_fragment_shader_size = sizeof(g_fragment_shader_data);
 #endif
 
 #include <SDL3/SDL.h>

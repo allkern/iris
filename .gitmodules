@@ -9,9 +9,6 @@
 	path = deps/SDL
 	url = https://github.com/libsdl-org/SDL
 	branch = release-3.2.24
-[submodule "incbin"]
-	path = deps/incbin
-	url = https://github.com/graphitemaster/incbin
 [submodule "implot"]
 	path = deps/implot
 	url = https://github.com/epezent/implot

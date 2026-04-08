@@ -4,13 +4,10 @@
 
 #define RENDER_MAX_SHADER_PASSES 16
 
-// INCBIN stuff
-#define INCBIN_PREFIX g_
-#define INCBIN_STYLE INCBIN_STYLE_SNAKE
-
-#include "incbin.h"
-
-INCBIN(default_vertex_shader, "../shaders/shader.spv");
+constexpr unsigned char g_default_vertex_shader_data[] = {
+#embed "../shaders/shader.spv"
+};
+constexpr unsigned int g_default_vertex_shader_size = sizeof(g_default_vertex_shader_data);
 
 namespace iris::render {
 

@@ -78,11 +78,11 @@ cmake --build build -j8
 Optionally run `cmake --install build` to generate an AppImage.
 
 ### Windows
-We currently only support GCC as a compiler on Windows, this is because MSVC doesn't have an inline assembler, which we need to embed resources into the executable. This might eventually be fixed though!
+MSVC doesn't have an inline assembler. So we currently only support Clang.
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
-cmake -S . -B build -G "MinGW Makefiles"
+cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
 cmake --build build -j8
 ```
 
@@ -130,7 +130,6 @@ This project makes use of the following third-party libraries:
 - [ImPlot](https://github.com/epezent/implot)
 - [SDL3](https://github.com/libsdl-org/SDL)
 - [SDL_GameControllerDB](https://github.com/mdqinc/SDL_GameControllerDB)
-- [incbin](https://github.com/graphitemaster/incbin)
 - [Parallel-GS](https://github.com/Arntzen-software/parallel-gs)
 - [libchdr](https://github.com/rtissera/libchdr)
 - [libdeflate](https://github.com/ebiggers/libdeflate)

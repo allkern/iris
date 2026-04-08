@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.25)
 project(iris LANGUAGES C CXX)
 
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
@@ -50,9 +50,10 @@ add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
-target_compile_options(iris PUBLIC "-Wno-deprecated-declarations")
+target_compile_options(iris PUBLIC "-Wno-deprecated-declarations" "-Wno-c++11-narrowing")
 # target_compile_definitions(iris PUBLIC _DEBUG)
 
+set(MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
 add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
@@ -84,7 +85,8 @@ if (NOT CMAKE_SYSTEM_NAME MATCHES "Windows")
     endif()
 endif()
 
-set_property(TARGET iris PROPERTY CXX_STANDARD 20)
+set_property(TARGET iris PROPERTY C_STANDARD 23)
+set_property(TARGET iris PROPERTY CXX_STANDARD 23)
 add_definitions("-D_IRIS_VERSION=${GIT_VERSION_STRING}")
 
 target_sources(iris PRIVATE
@@ -221,7 +223,6 @@ target_include_directories(iris PRIVATE
     deps/imgui/backends
     deps/implot
     deps/SDL/include
-    deps/incbin
     deps/parallel-gs
     deps/libchdr/include
     deps/lz4/lib
