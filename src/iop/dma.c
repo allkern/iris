@@ -66,11 +66,11 @@ void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct
     dma->intc = intc;
     dma->bus = bus;
     dma->sif = sif;
-    dma->drive = cdvd;
+    dma->cdvd = cdvd;
     dma->sched = sched;
     dma->ee_dma = ee_dma;
     dma->sio2 = sio2;
-    dma->spu = spu;
+    dma->spu2 = spu;
 
     dma->dmacinten = 0x01;
 }
@@ -81,19 +81,19 @@ void ps2_iop_dma_destroy(struct ps2_iop_dma* dma) {
 
 static inline struct iop_dma_channel* iop_dma_get_channel(struct ps2_iop_dma* dma, uint32_t addr) {
     switch (addr & 0xff0) {
-        case 0x080: return &dma->mdec_in;
-        case 0x090: return &dma->mdec_out;
-        case 0x0a0: return &dma->sif2;
-        case 0x0b0: return &dma->cdvd;
-        case 0x0c0: return &dma->spu1;
-        case 0x0d0: return &dma->pio;
-        case 0x0e0: return &dma->otc;
-        case 0x500: return &dma->spu2;
-        case 0x510: return &dma->dev9;
-        case 0x520: return &dma->sif0;
-        case 0x530: return &dma->sif1;
-        case 0x540: return &dma->sio2_in;
-        case 0x550: return &dma->sio2_out;
+        case 0x080: return &dma->channels[IOP_DMA_MDEC_IN];
+        case 0x090: return &dma->channels[IOP_DMA_MDEC_OUT];
+        case 0x0a0: return &dma->channels[IOP_DMA_SIF2];
+        case 0x0b0: return &dma->channels[IOP_DMA_CDVD];
+        case 0x0c0: return &dma->channels[IOP_DMA_SPU1];
+        case 0x0d0: return &dma->channels[IOP_DMA_PIO];
+        case 0x0e0: return &dma->channels[IOP_DMA_OTC];
+        case 0x500: return &dma->channels[IOP_DMA_SPU2];
+        case 0x510: return &dma->channels[IOP_DMA_DEV9];
+        case 0x520: return &dma->channels[IOP_DMA_SIF0];
+        case 0x530: return &dma->channels[IOP_DMA_SIF1];
+        case 0x540: return &dma->channels[IOP_DMA_SIO2_IN];
+        case 0x550: return &dma->channels[IOP_DMA_SIO2_OUT];
     }
 
     return NULL;
@@ -144,37 +144,37 @@ void iop_dma_handle_sif2_transfer(struct ps2_iop_dma* dma) {
 }
 void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     // No data in CDVD buffer yet
-    if (!dma->drive->buf_size)
+    if (!dma->cdvd->buf_size)
         return;
 
     // Channel not yet started
-    if (!(dma->cdvd.chcr & 0x1000000)) {
-        printf("iop: CDVD transfer incoming, channel not yet started (%08x)\n", dma->cdvd.chcr);
+    if (!(dma->channels[IOP_DMA_CDVD].chcr & 0x1000000)) {
+        printf("iop: CDVD transfer incoming, channel not yet started (%08x)\n", dma->channels[IOP_DMA_CDVD].chcr);
 
         // exit(1);
 
         return;
     }
 
-    // printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->drive->buf_size, dma->cdvd.madr, dma->cdvd.bcr);
+    // printf("iop: Writing %d bytes of sector data to %08x (%08x)\n", dma->cdvd->buf_size, dma->channels[IOP_DMA_CDVD].madr, dma->channels[IOP_DMA_CDVD].bcr);
 
-    // uint32_t addr = dma->cdvd.madr;
+    // uint32_t addr = dma->channels[IOP_DMA_CDVD].madr;
 
     int i = 0;
 
-    while (dma->cdvd.transfer_size && dma->drive->buf_size) {
-        iop_bus_write8(dma->bus, dma->cdvd.madr++, dma->drive->buf[i++]);
+    while (dma->channels[IOP_DMA_CDVD].transfer_size && dma->cdvd->buf_size) {
+        iop_bus_write8(dma->bus, dma->channels[IOP_DMA_CDVD].madr++, dma->cdvd->buf[i++]);
 
-        dma->drive->buf_size--;
-        dma->cdvd.transfer_size--;
+        dma->cdvd->buf_size--;
+        dma->channels[IOP_DMA_CDVD].transfer_size--;
     }
 
     // printf("dma: buf_size=%d transfer_size=%d\n",
-    //     dma->drive->buf_size,
-    //     dma->cdvd.transfer_size
+    //     dma->cdvd->buf_size,
+    //     dma->channels[IOP_DMA_CDVD].transfer_size
     // );
 
-    // int size = dma->drive->buf_size;
+    // int size = dma->cdvd->buf_size;
 
     // while (size > 0) {
     //     printf("%08x: ", addr);
@@ -199,7 +199,7 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
 
     // Only end the transfer when there aren't any
     // blocks left to copy
-    if (dma->cdvd.transfer_size)
+    if (dma->channels[IOP_DMA_CDVD].transfer_size)
         return;
 
     // printf("dma: Sending IRQ to IOP\n");
@@ -207,8 +207,8 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     iop_dma_check_irq(dma);
 
     // printf("cdvd: Ending transfer\n");
-    dma->cdvd.chcr &= ~0x1000000;
-    dma->cdvd.bcr = 0;
+    dma->channels[IOP_DMA_CDVD].chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_CDVD].bcr = 0;
 }
 
 void spu1_dma_irq_event_handler(void* udata, int overshoot) {
@@ -217,26 +217,26 @@ void spu1_dma_irq_event_handler(void* udata, int overshoot) {
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
     iop_dma_check_irq(dma);
 
-    dma->spu1.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SPU1].chcr &= ~0x1000000;
 }
 
 void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
-    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr,
-    //     (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, dma->spu->c[1].admas
+    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->channels[IOP_DMA_SPU2].chcr, dma->channels[IOP_DMA_SPU2].madr, dma->channels[IOP_DMA_SPU2].bcr,
+    //     (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16) * 4, (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16) * 4, dma->spu2->c[1].admas
     // );
 
     // If ADMA is off, then transfer all the data at once and trigger
     // an IRQ event to signal the end of the transfer
-    if (!(dma->spu->c[0].admas & 1)) {
-        unsigned int size = (dma->spu1.bcr & 0xffff) * (dma->spu1.bcr >> 16);
+    if (!(dma->spu2->c[0].admas & 1)) {
+        unsigned int size = (dma->channels[IOP_DMA_SPU1].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU1].bcr >> 16);
 
         for (int i = 0; i < size; i++) {
-            uint32_t d = iop_bus_read32(dma->bus, dma->spu1.madr);
+            uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU1].madr);
 
             iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
             iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
 
-            dma->spu1.madr += 4;
+            dma->channels[IOP_DMA_SPU1].madr += 4;
         }
 
         struct sched_event spu1_dma_irq_event;
@@ -251,32 +251,38 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
         return;
     }
 
-    if ((dma->spu1.chcr & 0x1000000) == 0)
+    if ((dma->channels[IOP_DMA_SPU1].chcr & 0x01000000) == 0)
         return;
 
-    // else we need to do an ADMA transfer
-    spu2_start_adma(dma->spu, 0);
+    uint32_t size = dma->channels[IOP_DMA_SPU1].transfer_size;
+    uint16_t* buf = malloc(size);
 
-    // Transfer data as long as the SPU2 isn't streaming ADMA
-    // samples and we still have data to transfer
-    while (dma->spu1.transfer_size && !spu2_is_adma_active(dma->spu, 0)) {
-        uint32_t d = iop_bus_read32(dma->bus, dma->spu1.madr);
+    // printf("dma: CORE0 ADMA transfer size=%d bytes cycles=%d\n", size, size * 192);
 
-        iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
-        iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
+    int index = 0;
 
-        dma->spu1.madr += 4;
-        dma->spu1.transfer_size -= 4;
+    while (dma->channels[IOP_DMA_SPU1].transfer_size) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU1].madr);
+
+        buf[index++] = d & 0xffff;
+        buf[index++] = d >> 16;
+
+        dma->channels[IOP_DMA_SPU1].madr += 4;
+        dma->channels[IOP_DMA_SPU1].transfer_size -= 4;
     }
 
-    // if (!dma->spu1.transfer_size) {
-    //     // If we have no more data to transfer, then we can end the transfer
-    //     // and trigger an IRQ event
-    //     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
-    //     iop_dma_check_irq(dma);
+    spu2_adma_write(dma->spu2, 0, buf, index);
 
-    //     dma->spu1.chcr &= ~0x1000000;
-    // }
+    free(buf);
+
+    struct sched_event event;
+
+    event.callback = spu1_dma_irq_event_handler;
+    event.cycles = size * 192;
+    event.name = "SPU1 ADMA transfer finish event";
+    event.udata = dma;
+
+    sched_schedule(dma->sched, event);
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
     fprintf(stderr, "iop: PIO channel unimplemented\n"); exit(1);
@@ -291,32 +297,32 @@ void spu2_dma_irq_event_handler(void* udata, int overshoot) {
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
     iop_dma_check_irq(dma);
 
-    dma->spu2.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SPU2].chcr &= ~0x1000000;
 }
 
 void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
-    if ((dma->spu2.chcr & 0x1000000) == 0)
+    if ((dma->channels[IOP_DMA_SPU2].chcr & 0x1000000) == 0)
         return;
 
-    // printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->spu2.chcr, dma->spu2.madr, dma->spu2.bcr,
-    //     (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16) * 4, dma->spu->c[1].admas
+    // printf("spu2 core1: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->channels[IOP_DMA_SPU2].chcr, dma->channels[IOP_DMA_SPU2].madr, dma->channels[IOP_DMA_SPU2].bcr,
+    //     (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16) * 4, (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16) * 4, dma->spu2->c[1].admas
     // );
 
-    if (!dma->spu2.transfer_size)
+    if (!dma->channels[IOP_DMA_SPU2].transfer_size)
         return;
 
     // If ADMA is off, then transfer all the data at once and trigger
     // an IRQ event to signal the end of the transfer
-    if (!(dma->spu->c[1].admas & 2)) {
-        unsigned int size = (dma->spu2.bcr & 0xffff) * (dma->spu2.bcr >> 16);
+    if (!(dma->spu2->c[1].admas & 2)) {
+        unsigned int size = (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16);
 
         for (int i = 0; i < size; i++) {
-            uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
+            uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU2].madr);
 
             iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
             iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
 
-            dma->spu2.madr += 4;
+            dma->channels[IOP_DMA_SPU2].madr += 4;
         }
 
         struct sched_event spu2_dma_irq_event;
@@ -331,44 +337,38 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
         return;
     }
 
-    if ((dma->spu2.chcr & 0x01000000) == 0)
+    if ((dma->channels[IOP_DMA_SPU2].chcr & 0x01000000) == 0)
         return;
 
-    // printf("spu2 core1: transfer start (%d bytes pending)\n", dma->spu2.transfer_size);
+    uint32_t size = dma->channels[IOP_DMA_SPU2].transfer_size;
+    uint16_t* buf = malloc(size);
 
-    // else we need to do an ADMA transfer
-    spu2_start_adma(dma->spu, 1);
+    // printf("dma: CORE1 ADMA transfer size=%d bytes cycles=%d\n", size, size * 192);
 
-    // Transfer data as long as the SPU2 isn't streaming ADMA
-    // samples and we still have data to transfer
-    while (dma->spu2.transfer_size && !spu2_is_adma_active(dma->spu, 1)) {
-        uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
+    int index = 0;
 
-        // int transfer_size = dma->spu2.transfer_size;
+    for (int i = 0; i < size; i += 4) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU2].madr);
 
-        iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
-        iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
+        buf[index++] = d & 0xffff;
+        buf[index++] = d >> 16;
 
-        // if (dma->spu2.transfer_size != transfer_size) {
-        //     printf("iop: SPU2 transfer size changed from %d to %d (loop=%d)\n", transfer_size, dma->spu2.transfer_size, loop);
-        //     *(int*)0 = 0;
-        //     dma->spu2.transfer_size = transfer_size;
-        // }
-
-        dma->spu2.madr += 4;
-        dma->spu2.transfer_size -= 4;
+        dma->channels[IOP_DMA_SPU2].madr += 4;
+        dma->channels[IOP_DMA_SPU2].transfer_size -= 4;
     }
 
-    // if (!dma->spu2.transfer_size) {
-    //     // If we have no more data to transfer, then we can end the transfer
-    //     // and trigger an IRQ event
-    //     printf("spu2 core1: ending transfer\n");
+    spu2_adma_write(dma->spu2, 1, buf, index);
 
-    //     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
-    //     iop_dma_check_irq(dma);
+    free(buf);
 
-    //     dma->spu2.chcr &= ~0x1000000;
-    // }
+    struct sched_event event;
+
+    event.callback = spu2_dma_irq_event_handler;
+    event.cycles = size * 192 * 2;
+    event.name = "SPU2 ADMA transfer finish event";
+    event.udata = dma;
+
+    sched_schedule(dma->sched, event);
 }
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     // Note: DEV9 DMA serves different purposes based on the system.
@@ -382,18 +382,18 @@ void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     // now we're defaulting to the System 147/148 behavior, since it
     // won't be used by any retail games anyways unless the HDD is present.
 
-    while (dma->dev9.transfer_size) {
+    while (dma->channels[IOP_DMA_DEV9].transfer_size) {
         uint32_t d = iop_bus_read8(dma->bus, 0x14000008);
 
-        iop_bus_write8(dma->bus, dma->dev9.madr++, d);
+        iop_bus_write8(dma->bus, dma->channels[IOP_DMA_DEV9].madr++, d);
 
-        dma->dev9.transfer_size--;
+        dma->channels[IOP_DMA_DEV9].transfer_size--;
     }
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_DEV9);
     iop_dma_check_irq(dma);
 
-    dma->dev9.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_DEV9].chcr &= ~0x1000000;
 }
 void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
     // if (!ps2_sif0_is_empty(dma->sif)) {
@@ -404,61 +404,61 @@ void iop_dma_handle_sif0_transfer(struct ps2_iop_dma* dma) {
 
     // ps2_sif0_reset(dma->sif);
 
-    dma->sif0.eot = 0;
+    dma->channels[IOP_DMA_SIF0].eot = 0;
 
     do {
-        dma_fetch_tag(dma, &dma->sif0);
+        dma_fetch_tag(dma, &dma->channels[IOP_DMA_SIF0]);
 
         // printf("iop: SIF0 tag at %08x extra=%u addr=%08x size=%08x irq=%d eot=%d\n",
-        //     dma->sif0.tadr, dma->sif0.extra, dma->sif0.addr, dma->sif0.size, dma->sif0.irq, dma->sif0.eot
+        //     dma->channels[IOP_DMA_SIF0].tadr, dma->channels[IOP_DMA_SIF0].extra, dma->channels[IOP_DMA_SIF0].addr, dma->channels[IOP_DMA_SIF0].size, dma->channels[IOP_DMA_SIF0].irq, dma->channels[IOP_DMA_SIF0].eot
         // );
 
         uint128_t q;
 
-        if (dma->sif0.extra) {
-            q.u32[0] = iop_bus_read32(dma->bus, dma->sif0.tadr + 8);
-            q.u32[1] = iop_bus_read32(dma->bus, dma->sif0.tadr + 12);
-            q.u32[2] = iop_bus_read32(dma->bus, dma->sif0.tadr + 0);
-            q.u32[3] = iop_bus_read32(dma->bus, dma->sif0.tadr + 4);
+        if (dma->channels[IOP_DMA_SIF0].extra) {
+            q.u32[0] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].tadr + 8);
+            q.u32[1] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].tadr + 12);
+            q.u32[2] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].tadr + 0);
+            q.u32[3] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].tadr + 4);
 
             ps2_sif0_write(dma->sif, q);
         }
 
-        while (dma->sif0.size) {
-            q.u32[0] = iop_bus_read32(dma->bus, dma->sif0.addr);
-            q.u32[1] = iop_bus_read32(dma->bus, dma->sif0.addr + 4);
-            q.u32[2] = iop_bus_read32(dma->bus, dma->sif0.addr + 8);
-            q.u32[3] = iop_bus_read32(dma->bus, dma->sif0.addr + 12);
+        while (dma->channels[IOP_DMA_SIF0].size) {
+            q.u32[0] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].addr);
+            q.u32[1] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].addr + 4);
+            q.u32[2] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].addr + 8);
+            q.u32[3] = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIF0].addr + 12);
 
             ps2_sif0_write(dma->sif, q);
 
-            dma->sif0.addr += 16;
-            dma->sif0.size -= 4;
+            dma->channels[IOP_DMA_SIF0].addr += 16;
+            dma->channels[IOP_DMA_SIF0].size -= 4;
         }
 
-        dma->sif0.tadr += (dma->sif0.extra ? 4 : 2) * 4;
-    } while (!dma->sif0.eot);
+        dma->channels[IOP_DMA_SIF0].tadr += (dma->channels[IOP_DMA_SIF0].extra ? 4 : 2) * 4;
+    } while (!dma->channels[IOP_DMA_SIF0].eot);
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIF0);
     iop_dma_check_irq(dma);
 
     dmac_handle_sif0_transfer(dma->ee_dma);
 
-    dma->sif0.tadr += dma->sif0.extra ? 4 : 2;
-    dma->sif0.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SIF0].tadr += dma->channels[IOP_DMA_SIF0].extra ? 4 : 2;
+    dma->channels[IOP_DMA_SIF0].chcr &= ~0x1000000;
 }
 
 #include "rpc.h"
 
 void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
-    int madr_increment = ((dma->sif1.chcr >> 1) & 1) ? -4 : 4;
+    int madr_increment = ((dma->channels[IOP_DMA_SIF1].chcr >> 1) & 1) ? -4 : 4;
 
     // No data in the SIF FIFO yet
     if (ps2_sif1_is_empty(dma->sif))
         return;
 
     // Data ready but channel isn't ready yet, keep waiting
-    if (!(dma->sif1.chcr & 0x1000000)) {
+    if (!(dma->channels[IOP_DMA_SIF1].chcr & 0x1000000)) {
         // printf("iop: EE sent SIF1 but channel isn't ready\n");
 
         return;
@@ -510,17 +510,17 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
 
     // ps2_sif1_reset(dma->sif);
 
-    dma->sif1.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SIF1].chcr &= ~0x1000000;
 }
 void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
-    uint32_t size = (dma->sio2_in.bcr & 0xffff) * (dma->sio2_in.bcr >> 16);
+    uint32_t size = (dma->channels[IOP_DMA_SIO2_IN].bcr & 0xffff) * (dma->channels[IOP_DMA_SIO2_IN].bcr >> 16);
 
     // printf("dma: SIO2 in transfer size=%d\n", size);
 
     sio2_dma_reset(dma->sio2);
 
     for (int i = 0; i < size; i++) {
-        uint32_t w = iop_bus_read32(dma->bus, dma->sio2_in.madr);
+        uint32_t w = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SIO2_IN].madr);
 
         iop_bus_write8(dma->bus, 0x1F808260, (w >> 0) & 0xff);
         iop_bus_write8(dma->bus, 0x1F808260, (w >> 8) & 0xff);
@@ -534,13 +534,13 @@ void iop_dma_handle_sio2_in_transfer(struct ps2_iop_dma* dma) {
         //     (w >> 24) & 0xff
         // );
 
-        dma->sio2_in.madr += 4;
+        dma->channels[IOP_DMA_SIO2_IN].madr += 4;
     }
 
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_IN);
     iop_dma_check_irq(dma);
 
-    dma->sio2_in.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SIO2_IN].chcr &= ~0x1000000;
 }
 
 void dma_handle_sio2_out_irq_event(void* udata, int overshoot) {
@@ -549,10 +549,10 @@ void dma_handle_sio2_out_irq_event(void* udata, int overshoot) {
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
     iop_dma_check_irq(dma);
 
-    dma->sio2_out.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SIO2_OUT].chcr &= ~0x1000000;
 }
 void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
-    if ((dma->sio2_out.chcr & 0x1000000) == 0) {
+    if ((dma->channels[IOP_DMA_SIO2_OUT].chcr & 0x1000000) == 0) {
         fprintf(stderr, "dma: SIO2_out not requested\n");
 
         exit(1);
@@ -561,35 +561,35 @@ void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
     }
     
     if (queue_is_empty(dma->sio2->out)) {
-        // printf("dma: SIO2_out waiting size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
+        // printf("dma: SIO2_out waiting size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->channels[IOP_DMA_SIO2_OUT].bcr, dma->channels[IOP_DMA_SIO2_OUT].madr);
         
         return;
     }
 
-    fprintf(stderr, "dma: WHAT? Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
+    fprintf(stderr, "dma: WHAT? Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->channels[IOP_DMA_SIO2_OUT].bcr, dma->channels[IOP_DMA_SIO2_OUT].madr);
 
     exit(1);
 
-    for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
-        for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
+    for (int b = 0; b < (dma->channels[IOP_DMA_SIO2_OUT].bcr >> 16); b++) {
+        for (int i = 0; i < (dma->channels[IOP_DMA_SIO2_OUT].bcr & 0xffff); i++) {
             for (int j = 0; j < 4; j++) {
                 uint8_t b = iop_bus_read8(dma->bus, 0x1F808264);
 
-                iop_bus_write8(dma->bus, dma->sio2_out.madr++, b);    
+                iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, b);    
             } 
 
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
         }
     }
-    // for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
-    //     for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
+    // for (int b = 0; b < (dma->channels[IOP_DMA_SIO2_OUT].bcr >> 16); b++) {
+    //     for (int i = 0; i < (dma->channels[IOP_DMA_SIO2_OUT].bcr & 0xffff); i++) {
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
     //     }
     // }
 
@@ -605,11 +605,11 @@ void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
     iop_dma_check_irq(dma);
 
-    dma->sio2_out.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SIO2_OUT].chcr &= ~0x1000000;
 }
 
 void iop_dma_end_sio2_out_transfer(struct ps2_iop_dma* dma) {
-    if ((dma->sio2_out.chcr & 0x1000000) == 0) {
+    if ((dma->channels[IOP_DMA_SIO2_OUT].chcr & 0x1000000) == 0) {
         // printf("dma: SIO2_out not requested\n");
 
         return;
@@ -621,34 +621,34 @@ void iop_dma_end_sio2_out_transfer(struct ps2_iop_dma* dma) {
         iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
         iop_dma_check_irq(dma);
 
-        dma->sio2_out.chcr &= ~0x1000000;
-        // printf("dma: SIO2_out waiting size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
+        dma->channels[IOP_DMA_SIO2_OUT].chcr &= ~0x1000000;
+        // printf("dma: SIO2_out waiting size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->channels[IOP_DMA_SIO2_OUT].bcr, dma->channels[IOP_DMA_SIO2_OUT].madr);
         
         return;
     }
 
-    // printf("dma: Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->sio2_out.bcr, dma->sio2_out.madr);
+    // printf("dma: Doing SIO2 out transfer size=%d bcr=%08x madr=%08x\n", queue_size(dma->sio2->out), dma->channels[IOP_DMA_SIO2_OUT].bcr, dma->channels[IOP_DMA_SIO2_OUT].madr);
 
-    for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
-        for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
+    for (int b = 0; b < (dma->channels[IOP_DMA_SIO2_OUT].bcr >> 16); b++) {
+        for (int i = 0; i < (dma->channels[IOP_DMA_SIO2_OUT].bcr & 0xffff); i++) {
             for (int j = 0; j < 4; j++) {
                 uint8_t b = iop_bus_read8(dma->bus, 0x1F808264);
 
-                iop_bus_write8(dma->bus, dma->sio2_out.madr++, b);    
+                iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, b);    
             } 
 
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
-            // iop_bus_write8(dma->bus, dma->sio2_out.madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
+            // iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, queue_pop(dma->sio2->out));
         }
     }
-    // for (int b = 0; b < (dma->sio2_out.bcr >> 16); b++) {
-    //     for (int i = 0; i < (dma->sio2_out.bcr & 0xffff); i++) {
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
-    //         iop_bus_write8(dma->bus, dma->sio2_out.madr++, 0);
+    // for (int b = 0; b < (dma->channels[IOP_DMA_SIO2_OUT].bcr >> 16); b++) {
+    //     for (int i = 0; i < (dma->channels[IOP_DMA_SIO2_OUT].bcr & 0xffff); i++) {
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
+    //         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, 0);
     //     }
     // }
 
@@ -664,7 +664,7 @@ void iop_dma_end_sio2_out_transfer(struct ps2_iop_dma* dma) {
     iop_dma_set_dicr_flag(dma, IOP_DMA_SIO2_OUT);
     iop_dma_check_irq(dma);
 
-    dma->sio2_out.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SIO2_OUT].chcr &= ~0x1000000;
 }
 
 uint64_t ps2_iop_dma_read32(struct ps2_iop_dma* dma, uint32_t addr) {
@@ -852,69 +852,69 @@ void iop_dma_end_spu1_transfer(struct ps2_iop_dma* dma) {
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
     iop_dma_check_irq(dma);
 
-    dma->spu1.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SPU1].chcr &= ~0x1000000;
 }
 
 void iop_dma_end_spu2_transfer(struct ps2_iop_dma* dma) {
     iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
     iop_dma_check_irq(dma);
 
-    dma->spu2.chcr &= ~0x1000000;
+    dma->channels[IOP_DMA_SPU2].chcr &= ~0x1000000;
 }
 
 void iop_dma_handle_spu1_adma(struct ps2_iop_dma* dma) {
-    if (!dma->spu1.transfer_size) {
+    if (!dma->channels[IOP_DMA_SPU1].transfer_size) {
         // If we have no more data to transfer, then we can end the transfer
         // and trigger an IRQ event
         iop_dma_set_dicr_flag(dma, IOP_DMA_SPU1);
         iop_dma_check_irq(dma);
 
-        dma->spu1.chcr &= ~0x1000000;
+        dma->channels[IOP_DMA_SPU1].chcr &= ~0x1000000;
 
-        // printf("spu2 core0: transfer done (chcr=%08x)\n", dma->spu1.chcr);
+        // printf("spu2 core0: transfer done (chcr=%08x)\n", dma->channels[IOP_DMA_SPU1].chcr);
 
         return;
     }
 
-    // printf("spu2 core0: transfer update (%d bytes pending)\n", dma->spu1.transfer_size);
+    // printf("spu2 core0: transfer update (%d bytes pending)\n", dma->channels[IOP_DMA_SPU1].transfer_size);
 
     // Transfer data as long as the spu1 isn't streaming ADMA
     // samples and we still have data to transfer
-    while (dma->spu1.transfer_size && !spu2_is_adma_active(dma->spu, 0)) {
-        uint32_t d = iop_bus_read32(dma->bus, dma->spu1.madr);
+    while (dma->channels[IOP_DMA_SPU1].transfer_size && !spu2_is_adma_active(dma->spu2, 0)) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU1].madr);
 
         iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
         iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
 
-        dma->spu1.madr += 4;
-        dma->spu1.transfer_size -= 4;
+        dma->channels[IOP_DMA_SPU1].madr += 4;
+        dma->channels[IOP_DMA_SPU1].transfer_size -= 4;
     }
 }
 void iop_dma_handle_spu2_adma(struct ps2_iop_dma* dma) {
-    if (!dma->spu2.transfer_size) {
+    if (!dma->channels[IOP_DMA_SPU2].transfer_size) {
         // If we have no more data to transfer, then we can end the transfer
         // and trigger an IRQ event
         iop_dma_set_dicr_flag(dma, IOP_DMA_SPU2);
         iop_dma_check_irq(dma);
 
-        dma->spu2.chcr &= ~0x1000000;
+        dma->channels[IOP_DMA_SPU2].chcr &= ~0x1000000;
 
-        // printf("spu2 core1: transfer done (chcr=%08x)\n", dma->spu2.chcr);
+        // printf("spu2 core1: transfer done (chcr=%08x)\n", dma->channels[IOP_DMA_SPU2].chcr);
 
         return;
     }
     
-    // printf("spu2 core1: transfer update (%d bytes pending)\n", dma->spu2.transfer_size);
+    // printf("spu2 core1: transfer update (%d bytes pending)\n", dma->channels[IOP_DMA_SPU2].transfer_size);
 
     // Transfer data as long as the SPU2 isn't streaming ADMA
     // samples and we still have data to transfer
-    while (dma->spu2.transfer_size && !spu2_is_adma_active(dma->spu, 1)) {
-        uint32_t d = iop_bus_read32(dma->bus, dma->spu2.madr);
+    while (dma->channels[IOP_DMA_SPU2].transfer_size && !spu2_is_adma_active(dma->spu2, 1)) {
+        uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU2].madr);
 
         iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
         iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
 
-        dma->spu2.madr += 4;
-        dma->spu2.transfer_size -= 4;
+        dma->channels[IOP_DMA_SPU2].madr += 4;
+        dma->channels[IOP_DMA_SPU2].transfer_size -= 4;
     }
 }

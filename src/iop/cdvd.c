@@ -730,7 +730,7 @@ void cdvd_do_read(void* udata, int overshoot) {
 
     // Ugly hack!!
     // Some games will send
-    if (!(cdvd->dma->cdvd.chcr & 0x1000000)) {
+    if (!(cdvd->dma->channels[IOP_DMA_CDVD].chcr & 0x1000000)) {
         // printf("cdvd: CDVD DMA not yet ready\n");
 
         struct sched_event event;

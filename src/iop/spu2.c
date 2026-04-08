@@ -1126,8 +1126,8 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
     s.u16[1] = 0;
 
     // ADMA
-    struct spu2_sample c0_adma = spu2_get_adma_sample(spu2, 0);
-    struct spu2_sample c1_adma = spu2_get_adma_sample(spu2, 1);
+    // struct spu2_sample c0_adma = spu2_get_adma_sample(spu2, 0);
+    // struct spu2_sample c1_adma = spu2_get_adma_sample(spu2, 1);
 
     // if (output) {
     //     if (spu2->c[0].adma_playing) {
@@ -1141,12 +1141,12 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
     //     }
     // }
 
-    if (adma_enable) {
-        s.s16[0] += c0_adma.s16[0];
-        s.s16[1] += c0_adma.s16[1];
-        s.s16[0] += c1_adma.s16[0];
-        s.s16[1] += c1_adma.s16[1];
-    }
+    // if (adma_enable) {
+    //     s.s16[0] += c0_adma.s16[0];
+    //     s.s16[1] += c0_adma.s16[1];
+    //     s.s16[0] += c1_adma.s16[0];
+    //     s.s16[1] += c1_adma.s16[1];
+    // }
 
     for (int i = 0; i < 24; i++) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
@@ -1173,4 +1173,33 @@ void spu2_start_adma(struct ps2_spu2* spu2, int c) {
     spu2->c[c].adma_playing = 0;
     spu2->c[c].memin_read_addr = 0;
     spu2->c[c].memin_write_addr = 0;
+}
+
+int spu2_adma_write(struct ps2_spu2* spu2, int core, uint16_t* buf, uint32_t size) {
+    struct spu2_core* c = &spu2->c[core];
+
+    // printf("spu2: ADMA write core=%d stereo=%d mono=%d bytes=%d\n", core, size >> 2, size >> 1, size);
+    
+    uint32_t samples = size >> 1;
+
+    for (int i = 0; i < samples;) {
+        uint32_t offset = c->adma_buffer_size + (i & 0xff);
+
+        c->adma_buffer[offset].s16[c->adma_channel] = buf[i];
+
+        ++i;
+
+        // 256 mono samples per channel, then switch
+        if (((c->adma_buffer_size + i) & 0xff) == 0) {
+            c->adma_channel ^= 1;
+
+            // If both channels are ready, then start writing the
+            // next block
+            if (c->adma_channel == 0) {
+                c->adma_buffer_size += 256;
+            }
+        }
+    }
+
+    return 1;
 }
