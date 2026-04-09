@@ -3217,7 +3217,16 @@ static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { fpr
 static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeu unimplemented\n"); exit(1); }
 static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbp unimplemented\n"); exit(1); }
-static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) {
+    int index = ee->index & 0x3f;
+
+    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+
+    ee->entryhi = entry->vpn2 | entry->asid;
+    ee->entrylo0 = (entry->pfn0 >> 6) | (entry->v0 << 1) | (entry->d0 << 2) | (entry->c0 << 3) | (entry->s << 31) | (entry->g);
+    ee->entrylo1 = (entry->pfn1 >> 6) | (entry->v1 << 1) | (entry->d1 << 2) | (entry->c1 << 3) | (entry->s << 31) | (entry->g);
+    ee->pagemask = entry->mask;
+}
 static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     struct ee_vtlb_entry* entry = &ee->vtlb[ee->index & 0x3f];
 
@@ -3235,19 +3244,19 @@ static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     entry->s = (ee->entrylo0 >> 31) & 1;
     entry->g = (ee->entrylo0 & 1) && (ee->entrylo1 & 1);
 
-    printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
-        ee->index,
-        entry->vpn2,
-        entry->pfn0,
-        entry->v0,
-        entry->d0,
-        entry->pfn1,
-        entry->v1,
-        entry->d1,
-        entry->mask,
-        entry->s,
-        entry->g
-    );
+    // printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
+    //     ee->index,
+    //     entry->vpn2,
+    //     entry->pfn0,
+    //     entry->v0,
+    //     entry->d0,
+    //     entry->pfn1,
+    //     entry->v1,
+    //     entry->d1,
+    //     entry->mask,
+    //     entry->s,
+    //     entry->g
+    // );
 }
 static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
     int index = (ee->count % (48 - ee->wired)) + ee->wired;
@@ -4147,15 +4156,15 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     if (ee_check_irq(ee))
         return 0;
 
-    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000) {
-        ee->total_cycles += 16*16;
-        ee->count += 16*16;
-        // ee->eenull_counter += 8 * 64;
+    // if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
+    //     ee->total_cycles += 16*16;
+    //     ee->count += 16*16;
+    //     // ee->eenull_counter += 8 * 64;
 
-        ee->idle_skips++;
+    //     ee->idle_skips++;
 
-        return 16*16;
-    }
+    //     return 16*16;
+    // }
 
     struct ee_block* block = ee_find_block(ee, ee->pc);
 
@@ -4163,6 +4172,10 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         ee->cache_misses++;
 
         block = ee_cache_block(ee, max_cycles);
+    }
+
+    if (ee->pc == 0x0010386c) {
+        printf("ee: Hit known idle loop at pc=%08x, skipping block with %d instructions\n", ee->pc, (int)block->instructions.size());
     }
 
     ee->block_pc = ee->pc;

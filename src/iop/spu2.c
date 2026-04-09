@@ -137,6 +137,9 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
     spu2->c[0].endx = 0x00ffffff;
     spu2->c[1].endx = 0x00ffffff;
 
+    spu2->c[0].adma_buffer = (struct spu2_sample*)malloc(48000 * sizeof(struct spu2_sample) * 4);
+    spu2->c[1].adma_buffer = (struct spu2_sample*)malloc(48000 * sizeof(struct spu2_sample) * 4);
+
     // output = fopen("adma.wav", "wb");
 
     // fseek(output, sizeof(struct wav_hdr) + sizeof(struct wav_chunk), SEEK_SET);
@@ -1179,7 +1182,7 @@ int spu2_adma_write(struct ps2_spu2* spu2, int core, uint16_t* buf, uint32_t siz
     struct spu2_core* c = &spu2->c[core];
 
     // printf("spu2: ADMA write core=%d stereo=%d mono=%d bytes=%d\n", core, size >> 2, size >> 1, size);
-    
+
     uint32_t samples = size >> 1;
 
     for (int i = 0; i < samples;) {

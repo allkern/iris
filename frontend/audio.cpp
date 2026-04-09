@@ -24,62 +24,41 @@ void update(void* userdata, SDL_AudioStream* stream, int additional_amount, int 
 
     struct ps2_spu2* spu2 = iris->ps2->spu2;
 
-    iris->audio_buf.resize(additional_amount);
+    // FILE* file = fopen("audio.raw", "ab");
 
-    for (int i = 0; i < additional_amount; i++) {
-        iris->audio_buf[i] = ps2_spu2_get_sample(spu2, !iris->mute_adma);
-        iris->audio_buf[i].s16[0] *= iris->mute ? 0.0f : iris->volume;
-        iris->audio_buf[i].s16[1] *= iris->mute ? 0.0f : iris->volume;
-    }
-
-    FILE* file = fopen("audio.raw", "ab");
+    memset(iris->audio_buf.data(), 0, iris->audio_buf.size() * sizeof(spu2_sample));
 
     for (int c = 0; c < 2; c++) {
-        if (spu2->c[c].adma_buffer_size == 0)
+        if (spu2->c[c].adma_buffer_size == 0) {
+            iris->audio_buf.resize(additional_amount);
+
             continue;
+        }
 
-        printf("audio: mixing in %d ADMA samples from core%d amount=%d\n", spu2->c[c].adma_buffer_size, c, additional_amount);
+        iris->audio_buf.resize(spu2->c[c].adma_buffer_size);
 
-        int samples = spu2->c[c].adma_buffer_size > additional_amount ? additional_amount : spu2->c[c].adma_buffer_size;
-
-        fwrite(spu2->c[c].adma_buffer, sizeof(struct spu2_sample), spu2->c[c].adma_buffer_size, file);
-
-        for (int i = 1; i < samples; i++) {
-            // struct spu2_sample a = spu2->c[c].adma_buffer[(int)std::roundf(((i-1)*ratio))];
-            // struct spu2_sample b = spu2->c[c].adma_buffer[(int)std::roundf((i*ratio))];
-
-            // iris->audio_buf[i].s16[0] += (a.s16[0] + b.s16[0]) / ratio;
-            // iris->audio_buf[i].s16[1] += (a.s16[1] + b.s16[1]) / ratio;
+        for (int i = 0; i < spu2->c[c].adma_buffer_size; i++) {
             struct spu2_sample s = spu2->c[c].adma_buffer[i];
 
-            iris->audio_buf[i].s16[0] += s.s16[0];
-            iris->audio_buf[i].s16[1] += s.s16[1];
+            iris->audio_buf[i].s16[0] = s.s16[0];
+            iris->audio_buf[i].s16[1] = s.s16[1];
         }
 
         spu2->c[c].adma_buffer_size = 0;
+
+        break;
     }
 
-    fclose(file);
+    for (int i = 0; i < iris->audio_buf.size(); i++) {
+        struct spu2_sample s = ps2_spu2_get_sample(spu2, !iris->mute_adma);
 
-    // printf("audio: generated %d adma samples\n", spu2->c[0].adma_buffer_size + spu2->c[1].adma_buffer_size);
+        iris->audio_buf[i].s16[0] += iris->mute ? 0.0f : s.s16[0] * iris->volume;
+        iris->audio_buf[i].s16[1] += iris->mute ? 0.0f : s.s16[1] * iris->volume;
+    }
 
-    // if (spu2->c[0].adma_buffer_size) {
-    //     printf("audio: core0 %d adma samples\n", spu2->c[0].adma_buffer_size);
+    // printf("audio: Outputting %d samples (%d required)\n", iris->audio_buf.size(), additional_amount);
 
-    //     spu2->c[0].adma_buffer_size = 0;
-
-    //     exit(1);
-    // }
-
-    // if (spu2->c[1].adma_buffer_size) {
-    //     printf("audio: core1 %d adma samples\n", spu2->c[1].adma_buffer_size);
-
-    //     spu2->c[1].adma_buffer_size = 0;
-
-    //     exit(1);
-    // }
-
-    SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), additional_amount * sizeof(spu2_sample));
+    SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), iris->audio_buf.size() * sizeof(spu2_sample));
 }
 
 bool init(iris::instance* iris) {

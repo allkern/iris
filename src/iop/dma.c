@@ -211,6 +211,21 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     dma->channels[IOP_DMA_CDVD].bcr = 0;
 }
 
+/* Notes on SPU ADMA timing:
+
+   IOP runs at 36.864 MHz, that is, 36864000 cycles per second. The SPU outputs at
+   48 KHz, 36864000 / 48000 = 768 cycles per *stereo* sample. Each stereo sample is
+   4 bytes, so that's 192 "cycles per byte", we use this metric to calculate how long
+   a transfer should take based on the number of bytes being transferred.
+
+   Our scheduler works in terms of EE cycles, so after we get the number of IOP cycles
+   a transfer should take, we multiply it by 8 to get the number of EE cycles.
+
+   e.g. Marvel vs. Capcom 2 sends 2048 bytes per transfer, that's 1024 mono samples
+        or 512 stereo samples. The transfer should take 2048 * 192 = 393216 IOP cycles
+        or 393216 * 8 = 3145728 EE cycles.
+*/
+
 void spu1_dma_irq_event_handler(void* udata, int overshoot) {
     struct ps2_iop_dma* dma = (struct ps2_iop_dma*)udata;
 
@@ -242,7 +257,7 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
         struct sched_event spu1_dma_irq_event;
 
         spu1_dma_irq_event.callback = spu1_dma_irq_event_handler;
-        spu1_dma_irq_event.cycles = 1000000;
+        spu1_dma_irq_event.cycles = 10000;
         spu1_dma_irq_event.name = "SPU1 DMA IRQ event";
         spu1_dma_irq_event.udata = dma;
 
@@ -271,14 +286,14 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
         dma->channels[IOP_DMA_SPU1].transfer_size -= 4;
     }
 
-    spu2_adma_write(dma->spu2, 0, buf, index);
+    spu2_adma_write(dma->spu2, 0, buf, size);
 
     free(buf);
 
     struct sched_event event;
 
     event.callback = spu1_dma_irq_event_handler;
-    event.cycles = size * 192;
+    event.cycles = size * 192 * 8;
     event.name = "SPU1 ADMA transfer finish event";
     event.udata = dma;
 
@@ -337,9 +352,6 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
         return;
     }
 
-    if ((dma->channels[IOP_DMA_SPU2].chcr & 0x01000000) == 0)
-        return;
-
     uint32_t size = dma->channels[IOP_DMA_SPU2].transfer_size;
     uint16_t* buf = malloc(size);
 
@@ -357,14 +369,14 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
         dma->channels[IOP_DMA_SPU2].transfer_size -= 4;
     }
 
-    spu2_adma_write(dma->spu2, 1, buf, index);
+    spu2_adma_write(dma->spu2, 1, buf, size);
 
     free(buf);
 
     struct sched_event event;
 
     event.callback = spu2_dma_irq_event_handler;
-    event.cycles = size * 192 * 2;
+    event.cycles = size * 192 * 8;
     event.name = "SPU2 ADMA transfer finish event";
     event.udata = dma;
 
