@@ -4156,15 +4156,14 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     if (ee_check_irq(ee))
         return 0;
 
-    // if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
-    //     ee->total_cycles += 16*16;
-    //     ee->count += 16*16;
-    //     // ee->eenull_counter += 8 * 64;
+    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
+        ee->total_cycles += 16*16;
+        ee->count += 16*16;
 
-    //     ee->idle_skips++;
+        ee->idle_skips++;
 
-    //     return 16*16;
-    // }
+        return 16*16;
+    }
 
     struct ee_block* block = ee_find_block(ee, ee->pc);
 
@@ -4172,10 +4171,6 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         ee->cache_misses++;
 
         block = ee_cache_block(ee, max_cycles);
-    }
-
-    if (ee->pc == 0x0010386c) {
-        printf("ee: Hit known idle loop at pc=%08x, skipping block with %d instructions\n", ee->pc, (int)block->instructions.size());
     }
 
     ee->block_pc = ee->pc;
