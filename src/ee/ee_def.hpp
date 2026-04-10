@@ -59,6 +59,8 @@ struct ee_instruction {
 struct ee_block {
     std::vector <ee_instruction> instructions;
     uint32_t cycles = 0;
+    uint32_t start_pc = 0;
+    uint32_t end_pc = 0;
 };
 
 struct ee_state {
