@@ -40,8 +40,8 @@ void update(void* userdata, SDL_AudioStream* stream, int additional_amount, int 
         for (int i = 0; i < spu2->c[c].adma_buffer_size; i++) {
             struct spu2_sample s = spu2->c[c].adma_buffer[i];
 
-            iris->audio_buf[i].s16[0] = s.s16[0];
-            iris->audio_buf[i].s16[1] = s.s16[1];
+            iris->audio_buf[i].s16[0] = iris->mute_adma ? 0 : s.s16[0] * iris->volume;
+            iris->audio_buf[i].s16[1] = iris->mute_adma ? 0 : s.s16[1] * iris->volume;
         }
 
         spu2->c[c].adma_buffer_size = 0;
