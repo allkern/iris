@@ -191,6 +191,7 @@ struct spu2_core {
     uint16_t cb_out3_addr;
 
     struct spu2_sample* adma_buffer;
+    uint32_t adma_buffer_max_size;
     uint32_t adma_buffer_size;
     int adma_channel;
 };

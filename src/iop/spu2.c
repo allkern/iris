@@ -137,8 +137,10 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
     spu2->c[0].endx = 0x00ffffff;
     spu2->c[1].endx = 0x00ffffff;
 
-    spu2->c[0].adma_buffer = (struct spu2_sample*)malloc(48000 * sizeof(struct spu2_sample) * 4);
-    spu2->c[1].adma_buffer = (struct spu2_sample*)malloc(48000 * sizeof(struct spu2_sample) * 4);
+    spu2->c[0].adma_buffer_max_size = 48000 * 4;
+    spu2->c[1].adma_buffer_max_size = 48000 * 4;
+    spu2->c[0].adma_buffer = (struct spu2_sample*)malloc(spu2->c[0].adma_buffer_max_size * sizeof(struct spu2_sample));
+    spu2->c[1].adma_buffer = (struct spu2_sample*)malloc(spu2->c[1].adma_buffer_max_size * sizeof(struct spu2_sample));
 
     // output = fopen("adma.wav", "wb");
 
@@ -1200,6 +1202,7 @@ int spu2_adma_write(struct ps2_spu2* spu2, int core, uint16_t* buf, uint32_t siz
             // next block
             if (c->adma_channel == 0) {
                 c->adma_buffer_size += 256;
+                c->adma_buffer_size %= c->adma_buffer_max_size;
             }
         }
     }
