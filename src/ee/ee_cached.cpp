@@ -3199,7 +3199,17 @@ static inline void ee_i_tge(struct ee_state* ee, const ee_instruction& i) {
 static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbp unimplemented\n"); exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) {
+    int index = ee->index & 0x3f;
+
+    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+
+    if ((ee->entryhi & 0xffffe000) == entry->vpn2 && (ee->entryhi & 0xff) == entry->asid) {
+        ee->index |= 0x80000000;
+    } else {
+        ee->index &= ~0x80000000;
+    }
+}
 static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) {
     int index = ee->index & 0x3f;
 
@@ -4045,12 +4055,6 @@ void ee_optimize_block(struct ee_block* block) {
 
             i++;
         }
-
-        // if (a.cycles != EE_CYC_LOAD && a.cycles != EE_CYC_STORE) {
-        //     if (a.rt == 0) {
-        //         block->instructions.erase(block->instructions.begin() + i);
-        //     }
-        // }
     }
 }
 
@@ -4153,27 +4157,16 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
     return &block;
 }
 
-int ee_run_block(struct ee_state* ee, int max_cycles) {
-    // This is the entrypoint to the EENULL thread.
-    // If we hit this address, the program is basically idling
-    // so we "fast-forward" 1024 cycles
+static inline bool ee_is_irq_pending(struct ee_state* ee) {
+    int irq_enabled = (ee->status & EE_SR_IE) && (ee->status & EE_SR_EIE) &&
+        (!(ee->status & EE_SR_EXL)) && (!(ee->status & EE_SR_ERL));
+    int int0_pending = (ee->status & EE_SR_IM2) && (ee->cause & EE_CAUSE_IP2);
+    int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
 
-    // ee->branch = 0;
-    // ee->delay_slot = 0;
+    return irq_enabled && (int0_pending || int1_pending);
+}
 
-    if (ee_check_irq(ee))
-        return 0;
-
-    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
-        ee->total_cycles += 16*16;
-        ee->count += 16*16;
-        // ee->eenull_counter += 8 * 64;
-
-        ee->idle_skips++;
-
-        return 16*16;
-    }
-
+static inline int _ee_run_block(struct ee_state* ee, int max_cycles) {
     struct ee_block* block = ee_find_block(ee, ee->pc);
 
     if (!block) {
@@ -4208,6 +4201,28 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     ee->pc = ee->next_pc;
 
     return block->cycles;
+}
+
+int ee_run_block(struct ee_state* ee, int max_cycles) {
+    if (ee_is_irq_pending(ee)) {
+        int cycles = _ee_run_block(ee, 4);
+
+        ee_exception_level1(ee, CAUSE_EXC1_INT);
+
+        return cycles;
+    }
+
+    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
+        ee->total_cycles += 16*16;
+        ee->count += 16*16;
+        // ee->eenull_counter += 8 * 64;
+
+        ee->idle_skips++;
+
+        return 16*16;
+    }
+
+    return _ee_run_block(ee, max_cycles);
 }
 
 int ee_step(struct ee_state* ee) {

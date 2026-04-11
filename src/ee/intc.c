@@ -75,14 +75,17 @@ void ps2_intc_write32(struct ps2_intc* intc, uint32_t addr, uint64_t data) {
         default: printf("intc: Unhandled INTC write %08x %08lx\n", addr, data); exit(1);
     }
 
-    struct sched_event event;
+    // struct sched_event event;
 
-    event.callback = intc_check_irq_event;
-    event.cycles = 16;
-    event.name = "INTC IRQ check";
-    event.udata = intc;
+    // event.callback = intc_check_irq_event;
+    // event.cycles = 16;
+    // event.name = "INTC IRQ check";
+    // event.udata = intc;
 
-    sched_schedule(intc->sched, event);
+    // sched_schedule(intc->sched, event);
+    ee_reset_intc_reads(intc->ee);
+
+    ee_set_int0(intc->ee, intc->stat & intc->mask);
 }
 
 void ps2_intc_write64(struct ps2_intc* intc, uint32_t addr, uint64_t data) {
@@ -119,15 +122,7 @@ void ps2_intc_irq(struct ps2_intc* intc, int dev) {
         "VU0_WD"
     };
 
-    struct sched_event event;
-
-    event.callback = intc_check_irq_event;
-    event.cycles = 64;
-    event.name = "INTC IRQ check";
-    event.udata = intc;
-
-    // Notify EE that an interrupt has occurred
     ee_reset_intc_reads(intc->ee);
 
-    sched_schedule(intc->sched, event);
+    ee_set_int0(intc->ee, intc->stat & intc->mask);
 }
