@@ -145,7 +145,7 @@ void mcd_cmd_write_data(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     uint32_t addr = mcd->addr;
 
     for (int i = 0; i < size; i++) {
-        mcd->buf[mcd->addr++] = queue_at(sio2->in, 3 + i);
+        mcd->buf[mcd->addr++ % mcd->buf_size] = queue_at(sio2->in, 3 + i);
 
         queue_push(sio2->out, 0);
     }
@@ -169,7 +169,7 @@ void mcd_cmd_read_data(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     uint8_t checksum = 0;
 
     for (int i = 0; i < queue_at(sio2->in, 2); i++) {
-        uint8_t data = mcd->buf[mcd->addr++];
+        uint8_t data = mcd->buf[mcd->addr++ % mcd->buf_size];
 
         checksum ^= data;
 
@@ -198,7 +198,7 @@ void mcd_cmd_erase_block(struct ps2_sio2* sio2, struct mcd_state* mcd) {
     uint32_t addr = mcd->addr;
 
     for (int i = 0; i < MCD_SECTOR_SIZE * 16; i++) {
-        mcd->buf[mcd->addr++] = 0xff;
+        mcd->buf[mcd->addr++ % mcd->buf_size] = 0xff;
     }
 
     mcd_flush_block(mcd, addr, MCD_SECTOR_SIZE * 16);

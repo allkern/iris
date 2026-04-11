@@ -1399,6 +1399,10 @@ bool ImageProcessingUnit::can_write_FIFO()
 
 uint128_t ImageProcessingUnit::read_FIFO()
 {
+    if (!out_FIFO.f.size()) {
+        dmac->channels[DMAC_IPU_FROM].dreq = 0;
+        return { 0 };
+    }
     uint128_t quad = out_FIFO.f.front();
     out_FIFO.f.pop_front();
     if (!out_FIFO.f.size()) {
