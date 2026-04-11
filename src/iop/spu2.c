@@ -998,9 +998,6 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         v->counter &= 0xfff;
         v->counter |= sample_index << 12;
 
-        // if (cr == 1 && vc == 0 && (v->loop_start || v->loop_end))
-        //     printf("spu2: end=%d loop=%d start=%d ssa=%08x lsax=%08x nax=%08x\n", v->loop_end, v->loop, v->loop_start, v->ssa, v->lsax, v->nax);
-
         if (v->loop_start && !v->loop_addr_specified)
             v->lsax = v->nax;
 
@@ -1129,29 +1126,6 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
 
     s.u16[0] = 0;
     s.u16[1] = 0;
-
-    // ADMA
-    // struct spu2_sample c0_adma = spu2_get_adma_sample(spu2, 0);
-    // struct spu2_sample c1_adma = spu2_get_adma_sample(spu2, 1);
-
-    // if (output) {
-    //     if (spu2->c[0].adma_playing) {
-    //         chunk_size += sizeof(int16_t) * 2;
-    //         fwrite(&c0_adma.s16, sizeof(int16_t), 2, output);
-    //     }
-
-    //     if (spu2->c[1].adma_playing) {
-    //         chunk_size += sizeof(int16_t) * 2;
-    //         fwrite(&c1_adma.s16, sizeof(int16_t), 2, output);
-    //     }
-    // }
-
-    // if (adma_enable) {
-    //     s.s16[0] += c0_adma.s16[0];
-    //     s.s16[1] += c0_adma.s16[1];
-    //     s.s16[0] += c1_adma.s16[0];
-    //     s.s16[1] += c1_adma.s16[1];
-    // }
 
     for (int i = 0; i < 24; i++) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
