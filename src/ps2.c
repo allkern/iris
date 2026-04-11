@@ -325,7 +325,7 @@ void ps2_cycle(struct ps2_state* ps2) {
     }
 
     // The timer runs at BUSCLK speed, that is 1 BUSCLK cycle every 2 EE instructions
-    ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles / 2);
+    ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles);
 
     ps2->iop_cycles += ps2->ee_cycles / 8;
 
