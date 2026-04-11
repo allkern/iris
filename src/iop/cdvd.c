@@ -630,7 +630,7 @@ static inline long cdvd_get_read_timing(struct ps2_cdvd* cdvd, int dvd, int from
     }
 
     // Convert to EE cycles
-    return cycles >> 3;
+    return cycles * 8;
 }
 
 static inline void cdvd_set_status(struct ps2_cdvd* cdvd, uint8_t data) {
