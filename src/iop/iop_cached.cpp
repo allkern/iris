@@ -163,11 +163,7 @@ static const uint32_t g_iop_cop0_write_mask_table[] = {
 #define SE8(v) ((int32_t)((int8_t)v))
 #define SE16(v) ((int32_t)((int16_t)v))
 
-#define BRANCH(offset) { \
-    iop->next_pc = iop->next_pc + (offset); \
-    iop->next_pc = iop->next_pc - 4; \
-    iop->branch = 1; \
-    iop->branch_taken = 1; }
+#define BRANCH(offset) { iop->next_pc = iop->pc + (offset); }
 
 struct iop_state* iop_create(void) {
     return new iop_state();
@@ -229,7 +225,7 @@ static inline void iop_exception(struct iop_state* iop, uint32_t cause) {
 
     // printf("iop: Exception with cause %02x at pc=%08x next=%08x saved=%08x\n", cause >> 2, iop->pc, iop->next_pc, iop->saved_pc);
 
-    iop->cop0_r[COP0_EPC] = iop->saved_pc;
+    iop->cop0_r[COP0_EPC] = iop->pc;
 
     if (iop->delay_slot) {
         iop->cop0_r[COP0_EPC] -= 4;
@@ -1060,6 +1056,10 @@ static inline void iop_i_rfe(struct iop_state* iop, iop_instruction& ins) {
     iop->cop0_r[COP0_SR] |= mode >> 2;
 }
 
+static inline void iop_i_nop(struct iop_state* iop, iop_instruction& ins) {
+    DO_PENDING_LOAD;
+}
+
 iop_instruction iop_decode(uint32_t opcode) {
     iop_instruction i = { 0 };
 
@@ -1221,10 +1221,10 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
 
     struct iop_block& block = iop->block_cache[page][offset];
 
-    uint32_t pc = addr;
-    uint32_t block_pc = addr;
-
     iop_instruction i;
+
+    block.start_pc = addr;
+    block.end_pc = addr;
 
     block.cycles = 0;
     block.instructions.reserve(max_cycles);
@@ -1232,11 +1232,19 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
     // fprintf(stderr, "Caching block at %08x\n", block_pc);
 
     while (max_cycles) {
-        uint32_t opcode = iop_bus_read32(iop, pc);
+        uint32_t opcode = iop_bus_read32(iop, block.end_pc);
 
-        i = iop_decode(opcode);
+        if (opcode) {
+            i = iop_decode(opcode);
 
-        block.instructions.push_back(i);
+            block.instructions.push_back(i);
+        } else {
+            i.func = iop_i_nop;
+            i.branch = 0;
+
+            block.instructions.push_back(i);
+        }
+
         block.cycles += 1;
 
         if (i.branch == 1) {
@@ -1247,7 +1255,7 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
 
         max_cycles--;
 
-        pc += 4;
+        block.end_pc += 4;
     }
 
     return &block;
@@ -1258,41 +1266,24 @@ int iop_execute_block(struct iop_state* iop, iop_block* block) {
     iop->branch = 0;
 
     if (iop_check_irq(iop)) {
-        iop->saved_pc = iop->pc;
-
         iop_exception(iop, CAUSE_INT);
 
         return 0;
     }
 
-    int cycles = 0;
+    iop->next_pc = block->end_pc;
+    iop->pc = iop->next_pc - 4;
 
     for (iop_instruction& ins : block->instructions) {
-        iop->delay_slot = iop->branch;
-        iop->branch = 0;
-        iop->saved_pc = iop->pc;
-
-        // iop_print_disassembly(iop->pc, ins.opcode);
-
-        iop->pc = iop->next_pc;
-        iop->next_pc += 4;
-
-        // if (iop_check_irq(iop)) {
-        //     iop_exception(iop, CAUSE_INT);
-
-        //     return cycles;
-        // }
-
         ins.func(iop, ins);
-
-        cycles++;
-
-        iop->total_cycles++;
 
         iop->r[0] = 0;
     }
 
-    return cycles;
+    iop->total_cycles += block->cycles;
+    iop->pc = iop->next_pc;
+
+    return block->cycles;
 }
 
 int iop_run_block(struct iop_state* iop, int max_cycles) {

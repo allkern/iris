@@ -99,6 +99,8 @@ struct iop_instruction {
 
 struct iop_block {
     std::vector <iop_instruction> instructions;
+    uint32_t start_pc = 0;
+    uint32_t end_pc = 0;
 
     union {
         uint32_t cycles = 0;
