@@ -261,7 +261,7 @@ static inline void dmac_test_irq(struct ps2_dmac* dmac) {
 static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
     dmac->stat |= 1 << ch;
 
-    // printf("dmac: channel=%d flag=%08x mask=%08x irq=%08x\n", ch, dmac->stat & 0x3ff, (dmac->stat >> 16) & 0x3ff, (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff));
+    // fprintf(stdout, "dmac: channel=%d flag=%08x mask=%08x irq=%08x\n", ch, dmac->stat & 0x3ff, (dmac->stat >> 16) & 0x3ff, (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff));
 
     dmac_test_irq(dmac);
 }
@@ -519,13 +519,27 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     event.callback = dmac_send_vif1_irq;
     event.cycles = 4000;
 
-    // We don't handle VIF1 reads
     if ((dmac->channels[DMAC_VIF1].chcr & 1) == 0) {
         // Gran Turismo 3 sends a VIF1 read with QWC=0, presumably to
         // wait until the GIF FIFO is actually full, so we shouldn't send
         // an interrupt there.
         if (dmac->channels[DMAC_VIF1].qwc == 0)
             return;
+
+        // Trash GS readback implementation, whatever...
+        uint128_t* buf = (uint128_t*)malloc(dmac->channels[DMAC_VIF1].qwc * 16);
+
+        dmac->gif->readback(dmac->gif, buf, dmac->channels[DMAC_VIF1].qwc * 16);
+
+        for (int i = 0; i < dmac->channels[DMAC_VIF1].qwc; i++) {
+            uint128_t q = buf[i];
+
+            dmac_write_qword(dmac, dmac->channels[DMAC_VIF1].madr, 0, q);
+
+            dmac->channels[DMAC_VIF1].madr += 16;
+        }
+
+        free(buf);
 
         dmac_end_transfer(dmac, DMAC_VIF1);
 

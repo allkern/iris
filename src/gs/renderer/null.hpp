@@ -16,4 +16,5 @@ renderer_image null_get_frame(void* udata);
 
 extern "C" {
 void null_transfer(void* udata, int path, const void* data, size_t size);
+void null_readback(void* udata, void* data, size_t size);
 }

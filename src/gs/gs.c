@@ -30,7 +30,6 @@ static inline int gs_assert_vblank(struct ps2_gs* gs) {
     return 0;
 }
 
-
 static inline int gs_assert_hblank(struct ps2_gs* gs) {
     if ((gs->csr & 4) == 0) {
         if (gs->csr_enable & 4)
