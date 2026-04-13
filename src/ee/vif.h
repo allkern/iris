@@ -11,6 +11,7 @@ extern "C" {
 #include "bus.h"
 
 #include "ee/intc.h"
+#include "ee/dmac.h"
 #include "ee/vu.h"
 #include "scheduler.h"
 
@@ -74,6 +75,7 @@ struct ps2_vif {
     uint32_t r[4];
     uint32_t c[4];
 
+    int dreq;
     int state;
     int pending_words;
     int shift;
@@ -98,13 +100,14 @@ struct ps2_vif {
 
     struct vu_state* vu;
     struct sched_state* sched;
+    struct ps2_dmac* dmac;
     struct ps2_gif* gif;
     struct ps2_intc* intc;
     struct ee_bus* bus;
 };
 
 struct ps2_vif* ps2_vif_create(void);
-void ps2_vif_init(struct ps2_vif* vif, int id, struct vu_state* vu, struct ps2_gif* gif, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus);
+void ps2_vif_init(struct ps2_vif* vif, int id, struct vu_state* vu, struct ps2_gif* gif, struct ps2_intc* intc, struct ps2_dmac* dmac, struct sched_state* sched, struct ee_bus* bus);
 void ps2_vif_destroy(struct ps2_vif* vif);
 uint64_t ps2_vif_read32(struct ps2_vif* vif, uint32_t addr);
 void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data);
@@ -112,6 +115,8 @@ uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr);
 void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data);
 uint32_t ps2_vif_fifo_read(struct ps2_vif* vif);
 void ps2_vif_fifo_write(struct ps2_vif* vif, uint32_t data);
+
+int ps2_vif_get_dreq(struct ps2_vif* vif);
 
 #ifdef __cplusplus
 }

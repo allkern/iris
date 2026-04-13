@@ -89,8 +89,8 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->gif, ps2->ipu, ps2->vif0, ps2->vif1, ps2->ee, ps2->sched, ps2->ee_bus);
     ps2_ram_init(ps2->ee_ram, RAM_SIZE_32MB);
     ps2_gif_init(ps2->gif, ps2->vu1, ps2->gs);
-    ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
-    ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->ee_dma, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->ee_dma, ps2->sched, ps2->ee_bus);
     ps2_gs_init(ps2->gs, ps2->ee_intc, ps2->iop_intc, ps2->ee_timers, ps2->iop_timers, ps2->sched);
     ps2_ipu_init(ps2->ipu, ps2->ee_dma, ps2->ee_intc);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
@@ -266,8 +266,8 @@ void ps2_reset(struct ps2_state* ps2) {
     vu_init(ps2->vu1, 1, ps2->gif, ps2->vif1, ps2->vu1);
 
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->gif, ps2->ipu, ps2->vif0, ps2->vif1, ps2->ee, ps2->sched, ps2->ee_bus);
-    ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
-    ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif0, 0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->ee_dma, ps2->sched, ps2->ee_bus);
+    ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->ee_dma, ps2->sched, ps2->ee_bus);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
     ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->sched, ps2->iop_bus);

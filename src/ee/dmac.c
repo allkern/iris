@@ -16,6 +16,15 @@ static inline uint128_t dmac_read_qword(struct ps2_dmac* dmac, uint32_t addr) {
     return ps2_ram_read128(dmac->spr, addr & 0x3ff0);
 }
 
+static inline uint32_t dmac_read_word(struct ps2_dmac* dmac, uint32_t addr) {
+    int spr = addr & 0x80000000;
+
+    if (!spr)
+        return ee_bus_read32(dmac->bus, addr & 0xffffffff);
+
+    return ps2_ram_read32(dmac->spr, addr & 0x3fff);
+}
+
 static inline void dmac_write_qword(struct ps2_dmac* dmac, uint32_t addr, int mem, uint128_t value) {
     int spr = mem || (addr & 0x80000000);
 
@@ -268,95 +277,117 @@ static inline void dmac_set_irq(struct ps2_dmac* dmac, int ch) {
 
 static inline void dmac_end_transfer(struct ps2_dmac* dmac, int id) {
     dmac_set_irq(dmac, id);
-    
+
+    dmac->channels[id].tag.end = 0;
+    dmac->channels[id].tag.irq = 0;
     dmac->channels[id].chcr &= ~0x100;
     dmac->channels[id].qwc = 0;
 }
 
+int dmac_transfer_vif0_word(struct ps2_dmac* dmac) {
+    if ((dmac->channels[DMAC_VIF0].chcr & 0x100) == 0) {
+        fprintf(stderr, "dmac: vif0 channel not started\n");
+
+        return 0;
+    }
+
+    if (!ps2_vif_get_dreq(dmac->bus->vif0)) {
+        // fprintf(stderr, "dmac: vif0 dreq cleared\n");
+
+        return 0;
+    }
+
+    if (dmac->channels[DMAC_VIF0].qwc) {
+        uint32_t w = dmac_read_word(dmac, dmac->channels[DMAC_VIF0].madr);
+
+        ps2_vif_fifo_write(dmac->bus->vif0, w);
+
+        dmac->channels[DMAC_VIF0].madr += 4;
+        dmac->channels[DMAC_VIF0].index++;
+
+        if (dmac->channels[DMAC_VIF0].index == 4) {
+            dmac->channels[DMAC_VIF0].index = 0;
+            dmac->channels[DMAC_VIF0].qwc--;
+        }
+
+        return 1;
+    }
+
+    if (channel_is_done(&dmac->channels[DMAC_VIF0])) {
+        dmac_end_transfer(dmac, DMAC_VIF0);
+
+        // fprintf(stdout, "dmac: vif0 transfer done\n");
+
+        return 0;
+    }
+
+    if (dmac->channels[DMAC_VIF0].tag.id == 1) {
+        dmac->channels[DMAC_VIF0].tadr = dmac->channels[DMAC_VIF0].madr;
+
+        // fprintf(stderr, "dmac: vif0 tag id=1, setting tadr to %08x\n", dmac->channels[DMAC_VIF0].tadr);
+        // exit(1);
+    }
+
+    uint128_t tag = dmac_read_qword(dmac, dmac->channels[DMAC_VIF0].tadr);
+
+    dmac_process_source_tag(dmac, &dmac->channels[DMAC_VIF0], tag);
+
+    // fprintf(stderr, "dmac: vif0 tag tag.qwc=%08lx qwc=%08lx id=%ld irq=%ld addr=%08lx data=%016lx end=%d tte=%d\n",
+    //     dmac->channels[DMAC_VIF0].tag.qwc,
+    //     dmac->channels[DMAC_VIF0].qwc,
+    //     dmac->channels[DMAC_VIF0].tag.id,
+    //     dmac->channels[DMAC_VIF0].tag.irq,
+    //     dmac->channels[DMAC_VIF0].tag.addr,
+    //     dmac->channels[DMAC_VIF0].tag.data,
+    //     dmac->channels[DMAC_VIF0].tag.end,
+    //     (dmac->channels[DMAC_VIF0].chcr >> 7) & 1
+    // );
+
+    if ((dmac->channels[DMAC_VIF0].chcr >> 6) & 1) {
+        ps2_vif_fifo_write(dmac->bus->vif0, dmac->channels[DMAC_VIF0].tag.data & 0xffffffff);
+
+        if (!ps2_vif_get_dreq(dmac->bus->vif0)) {
+            // fprintf(stderr, "dmac: vif0 dreq cleared while writing tag data\n");
+
+            // exit(1);
+        }
+
+        ps2_vif_fifo_write(dmac->bus->vif0, dmac->channels[DMAC_VIF0].tag.data >> 32);
+
+        if (!ps2_vif_get_dreq(dmac->bus->vif0)) {
+            // fprintf(stderr, "dmac: vif0 dreq cleared while writing tag data\n");
+
+            // exit(1);
+        }
+    }
+
+    return 1;
+}
 void dmac_handle_vif0_transfer(struct ps2_dmac* dmac) {
-    // printf("ee: VIF0 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x\n",
+    if ((dmac->channels[DMAC_VIF0].chcr & 0x100) == 0)
+        return;
+
+    // fprintf(stdout, "dmac: VIF0 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x end=%d dreq=%d\n",
     //     dmac->channels[DMAC_VIF0].chcr & 1,
     //     (dmac->channels[DMAC_VIF0].chcr >> 2) & 3,
     //     (dmac->channels[DMAC_VIF0].chcr >> 6) & 1,
     //     (dmac->channels[DMAC_VIF0].chcr >> 7) & 1,
     //     dmac->channels[DMAC_VIF0].qwc,
     //     dmac->channels[DMAC_VIF0].madr,
-    //     dmac->channels[DMAC_VIF0].tadr
+    //     dmac->channels[DMAC_VIF0].tadr,
+    //     dmac->channels[DMAC_VIF0].tag.end,
+    //     ps2_vif_get_dreq(dmac->bus->vif0)
     // );
 
+    int tte = (dmac->channels[DMAC_VIF0].chcr >> 6) & 1;
     int mode = (dmac->channels[DMAC_VIF0].chcr >> 2) & 3;
 
-    for (int i = 0; i < dmac->channels[DMAC_VIF0].qwc; i++) {
-        uint128_t q = dmac_read_qword(dmac, dmac->channels[DMAC_VIF0].madr);
+    if (mode == 3)
+        mode = 1;
 
-        // VIF0 FIFO address
-        ps2_vif_fifo_write(dmac->bus->vif0, q.u32[0]);
-        ps2_vif_fifo_write(dmac->bus->vif0, q.u32[1]);
-        ps2_vif_fifo_write(dmac->bus->vif0, q.u32[2]);
-        ps2_vif_fifo_write(dmac->bus->vif0, q.u32[3]);
-
-        dmac->channels[DMAC_VIF0].madr += 16;
+    while (dmac_transfer_vif0_word(dmac)) {
+        // Transfer words until we run out of data or DREQ is cleared
     }
-
-    if (mode == 0) {
-        dmac_end_transfer(dmac, DMAC_VIF0);
-
-        return;
-    }
-
-    // Chain mode
-    do {
-        uint128_t tag = dmac_read_qword(dmac, dmac->channels[DMAC_VIF0].tadr);
-
-        dmac_process_source_tag(dmac, &dmac->channels[DMAC_VIF0], tag);
-
-        // printf("ee: vif0 tag qwc=%08x madr=%08x tadr=%08x id=%d addr=%08x\n",
-        //     dmac->channels[DMAC_VIF0].tag.qwc,
-        //     dmac->channels[DMAC_VIF0].madr,
-        //     dmac->channels[DMAC_VIF0].tadr,
-        //     dmac->channels[DMAC_VIF0].tag.id,
-        //     dmac->channels[DMAC_VIF0].tag.addr
-        // );
-
-        // CHCR.TTE: Transfer tag DATA field
-        if ((dmac->channels[DMAC_VIF0].chcr >> 6) & 1) {
-            ps2_vif_fifo_write(dmac->bus->vif0, dmac->channels[DMAC_VIF0].tag.data & 0xffffffff);
-            ps2_vif_fifo_write(dmac->bus->vif0, dmac->channels[DMAC_VIF0].tag.data >> 32);
-        }
-
-        for (int i = 0; i < dmac->channels[DMAC_VIF0].qwc; i++) {
-            uint128_t q = dmac_read_qword(dmac, dmac->channels[DMAC_VIF0].madr);
-
-            // printf("ee: Sending %016lx%016lx from %08x to VIF0 FIFO\n",
-            //     q.u64[1], q.u64[0],
-            //     dmac->channels[DMAC_VIF0].madr
-            // );
-
-            ps2_vif_fifo_write(dmac->bus->vif0, q.u32[0]);
-            ps2_vif_fifo_write(dmac->bus->vif0, q.u32[1]);
-            ps2_vif_fifo_write(dmac->bus->vif0, q.u32[2]);
-            ps2_vif_fifo_write(dmac->bus->vif0, q.u32[3]);
-
-            dmac->channels[DMAC_VIF0].madr += 16;
-        }
-
-        if (dmac->channels[DMAC_VIF0].tag.id == 1) {
-            dmac->channels[DMAC_VIF0].tadr = dmac->channels[DMAC_VIF0].madr;
-        }
-    } while (!channel_is_done(&dmac->channels[DMAC_VIF0]));
-
-    dmac_end_transfer(dmac, DMAC_VIF0);
-}
-
-void dmac_send_vif1_irq(void* udata, int overshoot) {
-    struct ps2_dmac* dmac = (struct ps2_dmac*)udata;
-
-    dmac->channels[DMAC_VIF1].chcr &= ~0x100;
-    dmac->channels[DMAC_VIF1].qwc = 0;
-
-    // printf("dmac: VIF1 interrupt\n");
-
-    dmac_set_irq(dmac, DMAC_VIF1);
 }
 
 void mfifo_handle_ref_tag(struct ps2_dmac* dmac) {
@@ -488,8 +519,115 @@ void mfifo_write_qword(struct ps2_dmac* dmac, uint128_t q) {
     }
 }
 
+void dmac_handle_vif1_read_transfer(struct ps2_dmac* dmac) {
+    // Gran Turismo 3 sends a VIF1 read with QWC=0, presumably to
+    // wait until the GIF FIFO is actually full, so we shouldn't send
+    // an interrupt there.
+    if (dmac->channels[DMAC_VIF1].qwc == 0)
+        return;
+
+    // Trash GS readback implementation, whatever...
+    uint128_t* buf = (uint128_t*)malloc(dmac->channels[DMAC_VIF1].qwc * 16);
+
+    dmac->gif->readback(dmac->gif, buf, dmac->channels[DMAC_VIF1].qwc * 16);
+
+    for (int i = 0; i < dmac->channels[DMAC_VIF1].qwc; i++) {
+        uint128_t q = buf[i];
+
+        dmac_write_qword(dmac, dmac->channels[DMAC_VIF1].madr, 0, q);
+
+        dmac->channels[DMAC_VIF1].madr += 16;
+    }
+
+    free(buf);
+
+    dmac_end_transfer(dmac, DMAC_VIF1);
+}
+
+int dmac_transfer_vif1_word(struct ps2_dmac* dmac) {
+    if ((dmac->channels[DMAC_VIF1].chcr & 0x100) == 0) {
+        fprintf(stderr, "dmac: vif1 channel not started\n");
+
+        return 0;
+    }
+
+    if (!ps2_vif_get_dreq(dmac->bus->vif1)) {
+        // fprintf(stderr, "dmac: vif1 dreq cleared\n");
+
+        return 0;
+    }
+
+    if (dmac->channels[DMAC_VIF1].qwc) {
+        uint32_t w = dmac_read_word(dmac, dmac->channels[DMAC_VIF1].madr);
+
+        ps2_vif_fifo_write(dmac->bus->vif1, w);
+
+        dmac->channels[DMAC_VIF1].madr += 4;
+        dmac->channels[DMAC_VIF1].index++;
+
+        if (dmac->channels[DMAC_VIF1].index == 4) {
+            dmac->channels[DMAC_VIF1].index = 0;
+            dmac->channels[DMAC_VIF1].qwc--;
+        }
+
+        return 1;
+    }
+
+    if (channel_is_done(&dmac->channels[DMAC_VIF1])) {
+        dmac_end_transfer(dmac, DMAC_VIF1);
+
+        // fprintf(stdout, "dmac: vif1 transfer done\n");
+
+        return 0;
+    }
+
+    if (dmac->channels[DMAC_VIF1].tag.id == 1) {
+        dmac->channels[DMAC_VIF1].tadr = dmac->channels[DMAC_VIF1].madr;
+
+        // fprintf(stderr, "dmac: vif1 tag id=1, setting tadr to %08x\n", dmac->channels[DMAC_VIF1].tadr);
+        // exit(1);
+    }
+
+    uint128_t tag = dmac_read_qword(dmac, dmac->channels[DMAC_VIF1].tadr);
+
+    dmac_process_source_tag(dmac, &dmac->channels[DMAC_VIF1], tag);
+
+    // fprintf(stderr, "dmac: vif1 tag tag.qwc=%08lx qwc=%08lx id=%ld irq=%ld addr=%08lx data=%016lx end=%d tte=%d\n",
+    //     dmac->channels[DMAC_VIF1].tag.qwc,
+    //     dmac->channels[DMAC_VIF1].qwc,
+    //     dmac->channels[DMAC_VIF1].tag.id,
+    //     dmac->channels[DMAC_VIF1].tag.irq,
+    //     dmac->channels[DMAC_VIF1].tag.addr,
+    //     dmac->channels[DMAC_VIF1].tag.data,
+    //     dmac->channels[DMAC_VIF1].tag.end,
+    //     (dmac->channels[DMAC_VIF1].chcr >> 7) & 1
+    // );
+
+    if ((dmac->channels[DMAC_VIF1].chcr >> 6) & 1) {
+        ps2_vif_fifo_write(dmac->bus->vif1, dmac->channels[DMAC_VIF1].tag.data & 0xffffffff);
+
+        if (!ps2_vif_get_dreq(dmac->bus->vif1)) {
+            // fprintf(stderr, "dmac: vif1 dreq cleared while writing tag data\n");
+
+            // exit(1);
+        }
+
+        ps2_vif_fifo_write(dmac->bus->vif1, dmac->channels[DMAC_VIF1].tag.data >> 32);
+
+        if (!ps2_vif_get_dreq(dmac->bus->vif1)) {
+            // fprintf(stderr, "dmac: vif1 dreq cleared while writing tag data\n");
+
+            // exit(1);
+        }
+    }
+
+    return 1;
+}
 void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
-    // fprintf(stdout, "dmac: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x end=%d\n",
+    if ((dmac->channels[DMAC_VIF1].chcr & 0x100) == 0)
+        return;
+
+    // fprintf(stdout, "dmac: VIF1 DMA dir=%d mode=%d tte=%d tie=%d qwc=%d madr=%08x tadr=%08x end=%d dreq=%d\n",
     //     dmac->channels[DMAC_VIF1].chcr & 1,
     //     (dmac->channels[DMAC_VIF1].chcr >> 2) & 3,
     //     (dmac->channels[DMAC_VIF1].chcr >> 6) & 1,
@@ -497,7 +635,8 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     //     dmac->channels[DMAC_VIF1].qwc,
     //     dmac->channels[DMAC_VIF1].madr,
     //     dmac->channels[DMAC_VIF1].tadr,
-    //     dmac->channels[DMAC_VIF1].tag.end
+    //     dmac->channels[DMAC_VIF1].tag.end,
+    //     ps2_vif_get_dreq(dmac->bus->vif1)
     // );
 
     int mfifo_drain = (dmac->ctrl >> 2) & 3;
@@ -512,101 +651,15 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     if (mode == 3)
         mode = 1;
 
-    struct sched_event event;
-
-    event.name = "VIF1 DMA IRQ";
-    event.udata = dmac;
-    event.callback = dmac_send_vif1_irq;
-    event.cycles = 4000;
-
     if ((dmac->channels[DMAC_VIF1].chcr & 1) == 0) {
-        // Gran Turismo 3 sends a VIF1 read with QWC=0, presumably to
-        // wait until the GIF FIFO is actually full, so we shouldn't send
-        // an interrupt there.
-        if (dmac->channels[DMAC_VIF1].qwc == 0)
-            return;
-
-        // Trash GS readback implementation, whatever...
-        uint128_t* buf = (uint128_t*)malloc(dmac->channels[DMAC_VIF1].qwc * 16);
-
-        dmac->gif->readback(dmac->gif, buf, dmac->channels[DMAC_VIF1].qwc * 16);
-
-        for (int i = 0; i < dmac->channels[DMAC_VIF1].qwc; i++) {
-            uint128_t q = buf[i];
-
-            dmac_write_qword(dmac, dmac->channels[DMAC_VIF1].madr, 0, q);
-
-            dmac->channels[DMAC_VIF1].madr += 16;
-        }
-
-        free(buf);
-
-        dmac_end_transfer(dmac, DMAC_VIF1);
+        dmac_handle_vif1_read_transfer(dmac);
 
         return;
     }
 
-    for (int i = 0; i < dmac->channels[DMAC_VIF1].qwc; i++) {
-        uint128_t q = dmac_read_qword(dmac, dmac->channels[DMAC_VIF1].madr);
-
-        // VIF1 FIFO address
-        ps2_vif_fifo_write(dmac->bus->vif1, q.u32[0]);
-        ps2_vif_fifo_write(dmac->bus->vif1, q.u32[1]);
-        ps2_vif_fifo_write(dmac->bus->vif1, q.u32[2]);
-        ps2_vif_fifo_write(dmac->bus->vif1, q.u32[3]);
-
-        dmac->channels[DMAC_VIF1].madr += 16;
+    while (dmac_transfer_vif1_word(dmac)) {
+        // Transfer words until we run out of data or DREQ is cleared
     }
-
-    dmac->channels[DMAC_VIF1].qwc = 0;
-
-    if (dmac->channels[DMAC_VIF1].tag.end) {
-        dmac_end_transfer(dmac, DMAC_VIF1);
-
-        return;
-    }
-
-    // Chain mode
-    do {
-        uint128_t tag = dmac_read_qword(dmac, dmac->channels[DMAC_VIF1].tadr);
-
-        dmac_process_source_tag(dmac, &dmac->channels[DMAC_VIF1], tag);
-
-        // fprintf(stdout, "ee: vif1 tag qwc=%08x madr=%08x tadr=%08x id=%d addr=%08x data=%08x %08x tte=%d mem=%d\n",
-        //     dmac->channels[DMAC_VIF1].tag.qwc,
-        //     dmac->channels[DMAC_VIF1].madr,
-        //     dmac->channels[DMAC_VIF1].tadr,
-        //     dmac->channels[DMAC_VIF1].tag.id,
-        //     dmac->channels[DMAC_VIF1].tag.addr,
-        //     dmac->channels[DMAC_VIF1].tag.data & 0xffffffff,
-        //     dmac->channels[DMAC_VIF1].tag.data >> 32,
-        //     (dmac->channels[DMAC_VIF1].chcr >> 6) & 1,
-        //     dmac->channels[DMAC_VIF1].tag.mem
-        // );
-
-        // CHCR.TTE: Transfer tag DATA field
-        if ((dmac->channels[DMAC_VIF1].chcr >> 6) & 1) {
-            ps2_vif_fifo_write(dmac->bus->vif1, dmac->channels[DMAC_VIF1].tag.data & 0xffffffff);
-            ps2_vif_fifo_write(dmac->bus->vif1, dmac->channels[DMAC_VIF1].tag.data >> 32);
-        }
-
-        for (int i = 0; i < dmac->channels[DMAC_VIF1].qwc; i++) {
-            uint128_t q = dmac_read_qword(dmac, dmac->channels[DMAC_VIF1].madr);
-
-            ps2_vif_fifo_write(dmac->bus->vif1, q.u32[0]);
-            ps2_vif_fifo_write(dmac->bus->vif1, q.u32[1]);
-            ps2_vif_fifo_write(dmac->bus->vif1, q.u32[2]);
-            ps2_vif_fifo_write(dmac->bus->vif1, q.u32[3]);
-
-            dmac->channels[DMAC_VIF1].madr += 16;
-        }
-
-        if (dmac->channels[DMAC_VIF1].tag.id == 1) {
-            dmac->channels[DMAC_VIF1].tadr = dmac->channels[DMAC_VIF1].madr;
-        }
-    } while (!channel_is_done(&dmac->channels[DMAC_VIF1]));
-
-    dmac_end_transfer(dmac, DMAC_VIF1);
 }
 
 void dmac_send_gif_irq(void* udata, int overshoot) {

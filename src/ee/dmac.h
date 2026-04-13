@@ -58,6 +58,11 @@ struct dmac_channel {
 
     int dreq;
 
+    // We need to keep track of the current word index
+    // for VIF transfers, since the channel can be stopped
+    // and restarted in the middle of a qword
+    int index;
+
     struct dmac_tag tag;
 };
 
