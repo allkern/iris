@@ -249,7 +249,7 @@ static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t
             g_vu_dis_state.addr = row;
 
             vu_disassemble_upper(upper, u, &g_vu_dis_state);
-            vu_disassemble_lower(lower, l, &g_vu_dis_state);
+            vu_disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
 
             if (add_padding && !compact_view) {
 #ifdef _WIN32
@@ -300,7 +300,7 @@ void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
         g_vu_dis_state.addr = row;
 
         vu_disassemble_upper(upper, u, &g_vu_dis_state);
-        vu_disassemble_lower(lower, l, &g_vu_dis_state);
+        vu_disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
 
         if (add_padding && !compact_view) {
 #ifdef _WIN32

@@ -14,7 +14,7 @@ struct vu_dis_state {
 };
 
 char* vu_disassemble_upper(char* buf, uint64_t opcode, struct vu_dis_state* s);
-char* vu_disassemble_lower(char* buf, uint64_t opcode, struct vu_dis_state* s);
+char* vu_disassemble_lower(char* buf, uint64_t opcode, struct vu_dis_state* s, int ibit);
 
 #ifdef __cplusplus
 }

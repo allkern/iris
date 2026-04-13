@@ -680,7 +680,7 @@ char* vu_disassemble_upper(char* buf, uint64_t opcode, struct vu_dis_state* s) {
     return buf;
 }
 
-char* vu_disassemble_lower(char* buf, uint64_t opcode, struct vu_dis_state* s) {
+char* vu_disassemble_lower(char* buf, uint64_t opcode, struct vu_dis_state* s, int ibit) {
     char* ptr = buf;
 
     ptr = buf;
@@ -690,6 +690,13 @@ char* vu_disassemble_lower(char* buf, uint64_t opcode, struct vu_dis_state* s) {
 
     if (s) if (s->print_opcode)
         ptr += sprintf(ptr, "%08x ", opcode);
+
+    if (ibit) {
+        ptr = vu_d_mnemonic_nd(s, ptr, "loi");
+        ptr += sprintf(ptr, "%f", *(float*)&opcode);
+
+        return buf;
+    }
 
     switch ((opcode & 0xFE000000) >> 25) {
         case 0x00: vu_d_lq(s, ptr, opcode); return buf;
