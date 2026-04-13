@@ -122,6 +122,7 @@ target_sources(iris PRIVATE
     frontend/ui/statusbar.cpp
     frontend/ui/symbols.cpp
     frontend/ui/threads.cpp
+    frontend/ui/timers.cpp
     frontend/ui/vu_disassembly.cpp
     src/ps2.c
     src/ps2_elf.c

@@ -512,6 +512,7 @@ struct instance {
     bool show_vu_disassembler = false;
     bool show_overlay = false;
     bool show_memory_search = false;
+    bool show_timers = false;
 
     // Special windows
     bool show_bios_setting_window = false;
@@ -829,6 +830,7 @@ void show_overlay(iris::instance* iris);
 void show_memory_card_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
 void show_memory_search(iris::instance* iris);
+void show_timers(iris::instance* iris);
 // void show_gamelist(iris::instance* iris);
 
 void handle_keydown_event(iris::instance* iris, SDL_Event* event);

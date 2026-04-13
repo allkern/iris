@@ -525,6 +525,7 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->show_memory_viewer));
             if (MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->show_vu_disassembler));
             if (MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->show_pad_debugger));
+            if (MenuItem(ICON_MS_TIMER " Timers", NULL, &iris->show_timers));
             if (MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->show_overlay));
             if (MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->show_sysmem_logs));
 
