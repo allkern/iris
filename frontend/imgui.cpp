@@ -779,7 +779,7 @@ bool init(iris::instance* iris) {
         return false;
     }
 
-    if (!setup_vulkan_window(iris, &iris->main_window_data, iris->window_width, iris->window_height, iris->vsync)) {
+    if (!setup_vulkan_window(iris, &iris->main_window_data, iris->window_width, iris->window_height, iris->present_mode == IRIS_PRESENT_MODE_VSYNC)) {
         printf("imgui: Failed to setup Vulkan window\n");
 
         return false;

@@ -113,6 +113,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->snap_path = paths["snap_path"].value_or("snap");
     iris->flash_path = paths["flash_path"].value_or("");
     iris->gcdb_path = paths["gcdb_path"].value_or("");
+    iris->auto_paths = paths["auto"].value_or(true);
 
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
@@ -131,7 +132,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->angle = display["angle"].value_or(0);
     iris->flip_x = display["flip_x"].value_or(false);
     iris->flip_y = display["flip_y"].value_or(false);
-    iris->vsync = display["vsync"].value_or(true);
+    iris->present_mode = display["present_mode"].value_or(IRIS_PRESENT_MODE_60FPS);
 
     auto audio = tbl["audio"];
     iris->mute = audio["mute"].value_or(false);
@@ -158,6 +159,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->show_status_bar = debugger["show_status_bar"].value_or(true);
     iris->show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
     iris->show_threads = debugger["show_threads"].value_or(false);
+    iris->show_timers = debugger["show_timers"].value_or(false);
     iris->show_sysmem_logs = debugger["show_sysmem_logs"].value_or(false);
     iris->show_overlay = debugger["show_overlay"].value_or(false);
 
@@ -165,7 +167,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
-    iris->timescale = debugger["timescale"].value_or(8);
+    iris->timescale = debugger["timescale"].value_or(2);
 
     auto system = tbl["system"];
     iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
@@ -412,8 +414,7 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 
     parse_cli_settings(iris, argc, argv);
 
-    if (iris->nvram_path.size())
-        ps2_cdvd_load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
+    emu::load_rom_files(iris);
 
     if (iris->mcd0_path.size())
         emu::attach_memory_card(iris, 0, iris->mcd0_path.c_str());
@@ -509,6 +510,7 @@ void close(iris::instance* iris) {
             { "show_pad_debugger", iris->show_pad_debugger },
             { "show_breakpoints", iris->show_breakpoints },
             { "show_threads", iris->show_threads },
+            { "show_timers", iris->show_timers },
             { "show_sysmem_logs", iris->show_sysmem_logs },
             { "show_imgui_demo", iris->show_imgui_demo },
             { "show_overlay", iris->show_overlay },
@@ -528,7 +530,7 @@ void close(iris::instance* iris) {
             { "angle", iris->angle },
             { "flip_x", iris->flip_x },
             { "flip_y", iris->flip_y },
-            { "vsync", iris->vsync }
+            { "present_mode", iris->present_mode }
         } },
         { "ui", toml::table {
             { "theme", iris->theme },
@@ -563,6 +565,7 @@ void close(iris::instance* iris) {
             { "snap_path", iris->snap_path },
             { "flash_path", iris->flash_path },
             { "gcdb_path", iris->gcdb_path },
+            { "auto", iris->auto_paths }
         } },
         { "recents", toml::table {
             { "array", toml::array() }

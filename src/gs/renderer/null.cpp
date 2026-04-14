@@ -37,4 +37,8 @@ void null_transfer(void* udata, int path, const void* data, size_t size) {
     // Do nothing
 }
 
+void null_readback(void* udata, void* data, size_t size) {
+    // Do nothing
+}
+
 }

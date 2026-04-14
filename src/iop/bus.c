@@ -152,6 +152,11 @@ void iop_bus_destroy(struct iop_bus* bus) {
 #define MAP_MEM_WRITE_S14X(b, l, u, d, n) \
     if (bus->n && (addr >= l) && (addr <= u)) { d ## _write ## b (bus->n, addr - l, data); return; }
 
+#define IOP_BUS_INVALIDATE(addr) \
+    if (bus->invalidate_cache) { \
+        bus->invalidate_cache(bus->invalidate_cache_udata, addr); \
+    }
+
 uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     struct iop_bus* bus = (struct iop_bus*)udata;
 
@@ -295,6 +300,8 @@ void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
     if (ptr) {
         *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
 
+        IOP_BUS_INVALIDATE(addr);
+
         return;
     }
 
@@ -319,6 +326,8 @@ void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
     // System 147/148 syscon overlays retail SPEED
     MAP_REG_WRITE(8, 0x10000000, 0x1000FFFF, speed, speed);
 
+    IOP_BUS_INVALIDATE(addr);
+
     printf("iop_bus: Unhandled 8-bit write to physical address 0x%08x (0x%02x)\n", addr, data);
 }
 
@@ -329,6 +338,8 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
 
     if (ptr) {
         *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        IOP_BUS_INVALIDATE(addr);
 
         return;
     }
@@ -350,6 +361,8 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     // System 147/148 mappings
     MAP_MEM_WRITE_S14X(16, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
 
+    IOP_BUS_INVALIDATE(addr);
+
     // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
 }
 
@@ -360,6 +373,8 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
 
     if (ptr) {
         *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
+
+        IOP_BUS_INVALIDATE(addr);
 
         return;
     }
@@ -387,6 +402,8 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
 
     // System 147/148 mappings
     MAP_MEM_WRITE_S14X(32, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+
+    IOP_BUS_INVALIDATE(addr);
 
     // printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);
 }

@@ -187,6 +187,12 @@ extern "C" void hardware_transfer(void* udata, int path, const void* data, size_
     ctx->interface.gif_transfer(path, data, size);
 }
 
+void hardware_readback(void* udata, void* data, size_t size) {
+    hardware_state* ctx = static_cast<hardware_state*>(udata);
+
+    ctx->interface.read_transfer_fifo((void*)data, size / 16);
+}
+
 void hardware_set_config(void* udata, void* config) {
     hardware_state* ctx = (hardware_state*)udata;
 

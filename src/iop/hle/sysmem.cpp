@@ -1,3 +1,5 @@
+#include "../iop_def.hpp"
+
 #include "sysmem.h"
 
 #define SM_PUTCHAR(c) \

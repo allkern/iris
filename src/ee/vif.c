@@ -12,15 +12,18 @@ struct ps2_vif* ps2_vif_create(void) {
     return malloc(sizeof(struct ps2_vif));
 }
 
-void ps2_vif_init(struct ps2_vif* vif, int id, struct vu_state* vu, struct ps2_gif* gif, struct ps2_intc* intc, struct sched_state* sched, struct ee_bus* bus) {
+void ps2_vif_init(struct ps2_vif* vif, int id, struct vu_state* vu, struct ps2_gif* gif, struct ps2_intc* intc, struct ps2_dmac* dmac, struct sched_state* sched, struct ee_bus* bus) {
     memset(vif, 0, sizeof(struct ps2_vif));
 
     vif->sched = sched;
     vif->intc = intc;
     vif->gif = gif;
+    vif->dmac = dmac;
     vif->bus = bus;
     vif->vu = vu;
     vif->id = id;
+
+    vif->dreq = 1;
 }
 
 void ps2_vif_destroy(struct ps2_vif* vif) {
@@ -120,19 +123,14 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
         vif->cmd = (data >> 24) & 0xff;
 
         if (vif->cmd & 0x80) {
-            struct sched_event event;
-
-            event.callback = vif->id ? vif1_send_irq : vif0_send_irq;
-            event.cycles = 1000;
-            event.name = vif->id ? "VIF1 Interrupt" : "VIF0 Interrupt";
-            event.udata = vif;
-
-            sched_schedule(vif->sched, event);
+            ps2_intc_irq(vif->intc, vif->id ? EE_INTC_VIF1 : EE_INTC_VIF0);
 
             // fprintf(stderr, "vif%d: Requested IRQ command=%02x\n", vif->id, vif->cmd);
-            vif->stat |= 0x00000c02;
-            vif->stat ^= 0x0f000000;
+
+            vif->stat |= 0x00000c00;
+            // vif->stat ^= 0x0f000000;
             vif->code = data;
+            vif->dreq = 0;
         }
 
         switch ((data >> 24) & 0x7f) {
@@ -875,6 +873,14 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
             vif->pending_words = 0;
             vif->unpack_shift = 0;
             vif->shift = 0;
+            vif->dreq = 1;
+
+            // Clear VSS, VFS, VIS, INT, ER0, ER1
+            if (data & 8) {
+                vif->stat &= ~0x3f00;
+            }
+
+            dmac_handle_vif0_transfer(vif->dmac);
         } break;
 
         case 0x10003820: vif->err = data; break;
@@ -888,6 +894,14 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
             vif->pending_words = 0;
             vif->unpack_shift = 0;
             vif->shift = 0;
+            vif->dreq = 1;
+
+            // Clear VSS, VFS, VIS, INT, ER0, ER1
+            if (data & 8) {
+                vif->stat &= ~0x3f00;
+            }
+
+            dmac_handle_vif1_transfer(vif->dmac);
         } break;
 
         case 0x10003c20: vif->err = data; break;
@@ -896,7 +910,9 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
 
         // VIF FIFOs
         case 0x10004000: vif_handle_fifo_write(vif, data); break;
+        case 0x10004010: vif_handle_fifo_write(vif, data); break;
         case 0x10005000: vif_handle_fifo_write(vif, data); break;
+        case 0x10005010: vif_handle_fifo_write(vif, data); break;
 
         default: {
             fprintf(stderr, "vif%d: Unhandled 32-bit write to %08x\n", vif->id, addr);
@@ -923,14 +939,16 @@ uint128_t ps2_vif_read128(struct ps2_vif* vif, uint32_t addr) {
 
 void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {
     switch (addr) {
-        case 0x10004000: {
+        case 0x10004000:
+        case 0x10004010: {
             vif_handle_fifo_write(vif, data.u32[0]);
             vif_handle_fifo_write(vif, data.u32[1]);
             vif_handle_fifo_write(vif, data.u32[2]);
             vif_handle_fifo_write(vif, data.u32[3]);
         } break;
 
-        case 0x10005000: {
+        case 0x10005000:
+        case 0x10005010: {
             vif_handle_fifo_write(vif, data.u32[0]);
             vif_handle_fifo_write(vif, data.u32[1]);
             vif_handle_fifo_write(vif, data.u32[2]);
@@ -943,6 +961,20 @@ void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {
             exit(1);
         } break;
     }
+}
+
+uint32_t ps2_vif_fifo_read(struct ps2_vif* vif) {
+    // printf("vif%d: 32-bit FIFO read\n", vif->id);
+
+    return 0;
+}
+
+void ps2_vif_fifo_write(struct ps2_vif* vif, uint32_t data) {
+    vif_handle_fifo_write(vif, data);
+}
+
+int ps2_vif_get_dreq(struct ps2_vif* vif) {
+    return vif->dreq;
 }
 
 #undef printf

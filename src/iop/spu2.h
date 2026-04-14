@@ -63,19 +63,27 @@ extern "C" {
     1f9007c0-1f9007cf S/PDIF settings
 */
 
+struct spu2_sample {
+    union {
+        uint32_t u32;
+        uint16_t u16[2];
+        int16_t s16[2];
+    };
+};
+
 struct spu2_voice {
     uint16_t voll;
     uint16_t volr;
     uint16_t pitch;
     uint16_t adsr1;
     uint16_t adsr2;
-    uint16_t envx;
     uint16_t volxl;
     uint16_t volxr;
     uint32_t ssa;
     uint32_t lsax;
     uint32_t nax;
-
+    int32_t envx;
+    
     // Internal stuff
     int playing;
     unsigned int counter;
@@ -181,6 +189,11 @@ struct spu2_core {
     // Capture buffers
     uint16_t cb_out1_addr;
     uint16_t cb_out3_addr;
+
+    struct spu2_sample* adma_buffer;
+    uint32_t adma_buffer_max_size;
+    uint32_t adma_buffer_size;
+    int adma_channel;
 };
 
 struct ps2_spu2 {
@@ -201,14 +214,6 @@ struct ps2_spu2 {
     struct sched_state* sched;
 };
 
-struct spu2_sample {
-    union {
-        uint32_t u32;
-        uint16_t u16[2];
-        int16_t s16[2];
-    };
-};
-
 struct ps2_spu2* ps2_spu2_create(void);
 void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct sched_state* sched);
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr);
@@ -218,6 +223,7 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu, int adma_enable);
 struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v);
 struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c);
 void spu2_start_adma(struct ps2_spu2* spu2, int c);
+int spu2_adma_write(struct ps2_spu2* spu2, int c, uint16_t* buf, uint32_t size);
 int spu2_is_adma_active(struct ps2_spu2* spu2, int c);
 
 #ifdef __cplusplus

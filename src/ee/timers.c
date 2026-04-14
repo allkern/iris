@@ -5,8 +5,17 @@
 #include "timers.h"
 
 #define EE_TIMER_SCHED_QUANTUM 64
+#define EE_TO_BUSCLK_SHIFT 1
 
 static void ee_timers_schedule_next_irq_event(struct ps2_ee_timers* timers);
+
+static inline uint64_t ee_timers_ee_cycles_to_busclk(struct ps2_ee_timers* timers, uint64_t ee_cycles) {
+    uint64_t total = ee_cycles + timers->ee_cycle_phase;
+
+    timers->ee_cycle_phase = (uint8_t)(total & ((1u << EE_TO_BUSCLK_SHIFT) - 1));
+
+    return total >> EE_TO_BUSCLK_SHIFT;
+}
 
 struct ps2_ee_timers* ps2_ee_timers_create(void) {
     return malloc(sizeof(struct ps2_ee_timers));
@@ -30,6 +39,7 @@ void ps2_ee_timers_init(struct ps2_ee_timers* timers, struct ps2_intc* intc, str
     timers->current_cycle = 0;
     timers->scheduler_advanced_cycles = 0;
     timers->irq_event_pending = 0;
+    timers->ee_cycle_phase = 0;
 
     for (int i = 0; i < 4; i++) {
         timers->timer[i].id = i;
@@ -130,6 +140,8 @@ static inline void ee_timers_advance_counter(struct ps2_ee_timers* timers, struc
             }
 
             if (t->cmpe) {
+                // printf("timer %d: compare match counter=%04x compare=%04x\n", i, counter, t->compare);
+
                 ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
             }
 
@@ -143,6 +155,8 @@ static inline void ee_timers_advance_counter(struct ps2_ee_timers* timers, struc
                 t->mode |= 0x800;
 
             if (t->ovfe) {
+                // printf("timer %d: overflow match counter=%04x compare=%04x\n", i, counter, t->compare);
+
                 ps2_intc_irq(timers->intc, EE_INTC_TIMER0 + i);
             }
 
@@ -158,6 +172,13 @@ static inline void ee_timers_advance_counter(struct ps2_ee_timers* timers, struc
 
 static inline void ee_timers_sync_timer(struct ps2_ee_timers* timers, struct ee_timer* t, int i) {
     if (!t->cue) {
+        t->last_sync_cycle = timers->current_cycle;
+        return;
+    }
+
+    // CLKS=3 uses HBLANK as the clock source, so it is stepped by
+    // ps2_ee_timers_handle_hblank rather than EE/BUSCLK cycle deltas.
+    if (t->clks == 3) {
         t->last_sync_cycle = timers->current_cycle;
         return;
     }
@@ -196,18 +217,20 @@ static inline void ee_timers_sync_timer(struct ps2_ee_timers* timers, struct ee_
 
 static void ee_timers_irq_event_cb(void* udata, int overshoot) {
     struct ps2_ee_timers* timers = (struct ps2_ee_timers*)udata;
-    uint64_t elapsed = EE_TIMER_SCHED_QUANTUM;
+    uint64_t elapsed_ee_cycles = EE_TIMER_SCHED_QUANTUM;
 
     if (timers->sched && timers->sched->offset)
-        elapsed = timers->sched->offset;
+        elapsed_ee_cycles = timers->sched->offset;
 
     if (overshoot < 0)
-        elapsed += (uint64_t)(-overshoot);
+        elapsed_ee_cycles += (uint64_t)(-overshoot);
+
+    uint64_t elapsed_busclk_cycles = ee_timers_ee_cycles_to_busclk(timers, elapsed_ee_cycles);
 
     timers->irq_event_pending = 0;
 
-    timers->current_cycle += elapsed;
-    timers->scheduler_advanced_cycles += elapsed;
+    timers->current_cycle += elapsed_busclk_cycles;
+    timers->scheduler_advanced_cycles += elapsed_busclk_cycles;
 
     for (int i = 0; i < 4; i++) {
         if (timers->timer[i].cue) {
@@ -244,11 +267,13 @@ static void ee_timers_schedule_next_irq_event(struct ps2_ee_timers* timers) {
     if (min_cycles > EE_TIMER_SCHED_QUANTUM)
         min_cycles = EE_TIMER_SCHED_QUANTUM;
 
+    uint64_t sched_cycles = (uint64_t)min_cycles << EE_TO_BUSCLK_SHIFT;
+
     struct sched_event event;
     event.name = "EE Timer IRQ";
     event.udata = timers;
     event.callback = ee_timers_irq_event_cb;
-    event.cycles = (long)min_cycles;
+    event.cycles = (long)sched_cycles;
 
     sched_schedule(timers->sched, event);
     timers->irq_event_pending = 1;
@@ -325,6 +350,16 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uin
 
     ee_timers_update_active_mask(timers, t, timer->cue);
 
+    // if (t == 0)
+    // printf("timers: Timer %d mode write %08x mode=%08x counter=%04x compare=%04x clks=%d gate=%d gats=%d gatm=%d zret=%d cue=%d cmpe=%d ovfe=%d\n",
+    //     t, data,
+    //     timer->mode,
+    //     timer->counter,
+    //     timer->compare,
+    //     timer->clks, timer->gate, timer->gats, timer->gatm,
+    //     timer->zret, timer->cue, timer->cmpe, timer->ovfe
+    // );
+
     if (!timer->cue) {
         timer->check_enabled = 0;
         return;
@@ -339,6 +374,7 @@ static inline void ee_timers_write_mode(struct ps2_ee_timers* timers, int t, uin
         // exit(1);
     }
 
+    // if (t == 0)
     // printf("timers: Timer %d mode write %08x mode=%08x counter=%04x compare=%04x clks=%d gate=%d gats=%d gatm=%d zret=%d cue=%d cmpe=%d ovfe=%d\n",
     //     t, data,
     //     timer->mode,
@@ -376,7 +412,7 @@ void ps2_ee_timers_tick_cycles(struct ps2_ee_timers* timers, uint32_t cycles) {
     // Lazy evaluation: just advance the global cycle counter
     // No timer updates happen until reads/writes or event checks
     if (timers->active_mask && cycles) {
-        uint64_t step = cycles;
+        uint64_t step = ee_timers_ee_cycles_to_busclk(timers, cycles);
 
         if (timers->scheduler_advanced_cycles) {
             if (timers->scheduler_advanced_cycles >= step) {
@@ -390,6 +426,31 @@ void ps2_ee_timers_tick_cycles(struct ps2_ee_timers* timers, uint32_t cycles) {
 
         timers->current_cycle += step;
     }
+}
+
+void ps2_ee_timers_handle_hblank(struct ps2_ee_timers* timers) {
+    if (!timers)
+        return;
+
+    for (int i = 0; i < 4; i++) {
+        struct ee_timer* t = &timers->timer[i];
+
+        if (!t->cue)
+            continue;
+
+        if (t->clks != 3)
+            continue;
+
+        ee_timers_advance_counter(timers, t, i, 1);
+    }
+}
+
+void ps2_ee_timers_handle_vblank_in(struct ps2_ee_timers* timers) {
+    (void)timers;
+}
+
+void ps2_ee_timers_handle_vblank_out(struct ps2_ee_timers* timers) {
+    (void)timers;
 }
 
 void ps2_ee_timers_write16(struct ps2_ee_timers* timers, uint32_t addr, uint64_t data) {

@@ -604,28 +604,33 @@ static inline uint8_t cdvd_read_s_response(struct ps2_cdvd* cdvd) {
     return data;
 }
 
-static inline long cdvd_get_cd_read_timing(struct ps2_cdvd* cdvd, int from) {
-    long block_timing = (36864000L * cdvd->read_size) / (24 * 153600);
+static inline long cdvd_get_read_timing(struct ps2_cdvd* cdvd, int dvd, int from) {
+    long read_speed = dvd ? 4 * 1382400 : 24 * 153600;
+    long block_timing = (36864000L * cdvd->read_size) / read_speed;
     long delta = cdvd->read_lba - from;
     long contiguous_cycles = block_timing * cdvd->read_count;
 
-    if (!delta)
-        return 1000;
+    long cycles = 0;
 
-    if (delta < 0) {
+    if (!delta) {
+        delta = 1;
+    } else if (delta < 0) {
         delta = -delta;
     }
 
-    // Small delta
-    if (delta < 8)
-        return ((block_timing * delta) + contiguous_cycles) / 4;
+    if (delta < (dvd ? 16 : 8)) {
+        // Small delta
+        cycles = (block_timing * delta) + contiguous_cycles;
+    } else if (delta < (dvd ? 16764 : 4371)) {
+        // Fast seek: ~30ms
+        cycles = ((36864000 / 1000) * 30) + contiguous_cycles;
+    } else {
+        // Full seek: ~100ms
+        cycles = ((36864000 / 1000) * 100) + contiguous_cycles;
+    }
 
-    // Fast seek: ~30ms
-    if (delta < 4371)
-        return (((36864000 / 1000) * 30) + contiguous_cycles) / 4;
-
-    // Full seek: ~100ms
-    return (((36864000 / 1000) * 100) + contiguous_cycles) / 4;
+    // Convert to EE cycles
+    return cycles * 8;
 }
 
 static inline void cdvd_set_status(struct ps2_cdvd* cdvd, uint8_t data) {
@@ -725,7 +730,7 @@ void cdvd_do_read(void* udata, int overshoot) {
 
     // Ugly hack!!
     // Some games will send
-    if (!(cdvd->dma->cdvd.chcr & 0x1000000)) {
+    if (!(cdvd->dma->channels[IOP_DMA_CDVD].chcr & 0x1000000)) {
         // printf("cdvd: CDVD DMA not yet ready\n");
 
         struct sched_event event;
@@ -851,7 +856,7 @@ static inline void cdvd_n_read_cd(struct ps2_cdvd* cdvd) {
     event.name = "CDVD ReadCd";
     event.udata = cdvd;
     event.callback = cdvd_do_read;
-    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
+    event.cycles = cdvd_get_read_timing(cdvd, 0, prev_lba);
 
     sched_schedule(cdvd->sched, event);
 
@@ -912,7 +917,7 @@ static inline void cdvd_n_read_dvd(struct ps2_cdvd* cdvd) {
     event.name = "CDVD ReadDvd";
     event.udata = cdvd;
     event.callback = cdvd_do_read;
-    event.cycles = cdvd_get_cd_read_timing(cdvd, prev_lba);
+    event.cycles = cdvd_get_read_timing(cdvd, 1, prev_lba) >> 3;
 
     sched_schedule(cdvd->sched, event);
 

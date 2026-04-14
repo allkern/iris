@@ -10,6 +10,7 @@
 #include "ee/ee_dis.h"
 #include "ee/ee_def.hpp"
 #include "ee/vu_def.hpp"
+#include "iop/iop_def.hpp"
 #include "iop/iop_dis.h"
 
 #define IM_RGB(r, g, b) ImVec4(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), 1.0)
@@ -537,6 +538,10 @@ void show_ee_control(iris::instance* iris) {
             ee_flush_cache(iris->ps2->ee);
         }
 
+        if (InputInt("Address", (int32_t*)&iris->ee_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
+            iris->ee_control_follow_pc = false;
+        }
+
         if (iris->symbols.size()) {
             TextDisabled("Current function:"); SameLine();
 
@@ -577,15 +582,15 @@ void show_iop_control(iris::instance* iris) {
             iris->pause = true;
 
             ps2_step_iop(iris->ps2);
+        } SameLine();
+
+        if (Button(ICON_MS_MOVE_DOWN)) {
+            iris->iop_control_follow_pc = true;
         }
 
         if (InputInt("Address", (int32_t*)&iris->iop_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
             iris->iop_control_follow_pc = false;
         }
-
-        if (Button(ICON_MS_MOVE_DOWN)) {
-            iris->iop_control_follow_pc = true;
-        } SameLine();
 
         SeparatorText("Disassembly");
 

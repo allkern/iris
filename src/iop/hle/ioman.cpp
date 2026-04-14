@@ -5,7 +5,7 @@
 
 #include "ioman.h"
 
-#include "../iop.h"
+#include "../iop_def.hpp"
 #include "../bus.h"
 #include "../iop_export.h"
 

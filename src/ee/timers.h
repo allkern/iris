@@ -44,6 +44,7 @@ struct ee_timer {
 struct ps2_ee_timers {
     struct ee_timer timer[4];
     uint8_t active_mask;
+    uint8_t ee_cycle_phase;
     
     // Global cycle tracking for lazy evaluation
     uint64_t current_cycle;

@@ -16,8 +16,6 @@ static inline void gs_test_gs_irq(struct ps2_gs* gs) {
     uint32_t stat = gs->csr & 0x1f;
 
     if (stat & (~mask)) {
-        // printf("gs: IRQ triggered! stat=%02x mask=%02x\n", stat, mask);
-
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 }
@@ -31,7 +29,6 @@ static inline int gs_assert_vblank(struct ps2_gs* gs) {
 
     return 0;
 }
-
 
 static inline int gs_assert_hblank(struct ps2_gs* gs) {
     if ((gs->csr & 4) == 0) {
@@ -66,6 +63,8 @@ void gs_handle_vblank_out(void* udata, int overshoot) {
     ps2_iop_intc_irq(gs->iop_intc, IOP_INTC_VBLANK_OUT);
 
     gs->vblank = 0;
+
+    ps2_ee_timers_handle_vblank_out(gs->ee_timers);
 }
 
 void gs_flip_field(void* udata, int overshoot) {
@@ -112,6 +111,8 @@ void gs_handle_vblank_in(void* udata, int overshoot) {
     sched_schedule(gs->sched, field_flip_event);
 
     gs->vblank = 1;
+
+    ps2_ee_timers_handle_vblank_in(gs->ee_timers);
 }
 
 void gs_handle_hblank(void* udata, int overshoot) {
@@ -120,7 +121,7 @@ void gs_handle_hblank(void* udata, int overshoot) {
     struct sched_event hblank_event;
 
     hblank_event.callback = gs_handle_hblank;
-    hblank_event.cycles = GS_SCANLINE_NTSC;
+    hblank_event.cycles = GS_SCANLINE_NTSC*2;
     hblank_event.name = "Hblank event";
     hblank_event.udata = gs;
 
@@ -128,7 +129,9 @@ void gs_handle_hblank(void* udata, int overshoot) {
         ps2_intc_irq(gs->ee_intc, EE_INTC_GS);
     }
 
-    gs->csr ^= 1 << 13 | 1 << 14;
+    ps2_ee_timers_handle_hblank(gs->ee_timers);
+
+    // gs->csr ^= 1 << 13 | 1 << 14;
 
     sched_schedule(gs->sched, hblank_event);
 }
@@ -152,13 +155,13 @@ void ps2_gs_init(struct ps2_gs* gs, struct ps2_intc* ee_intc, struct ps2_iop_int
 
     sched_schedule(gs->sched, vblank_event);
 
-    // struct sched_event hblank_event;
-    // hblank_event.callback = gs_handle_hblank;
-    // hblank_event.cycles = GS_SCANLINE_NTSC;
-    // hblank_event.name = "Hblank event";
-    // hblank_event.udata = gs;
+    struct sched_event hblank_event;
+    hblank_event.callback = gs_handle_hblank;
+    hblank_event.cycles = GS_SCANLINE_NTSC*2;
+    hblank_event.name = "Hblank event";
+    hblank_event.udata = gs;
 
-    // sched_schedule(gs->sched, hblank_event);
+    sched_schedule(gs->sched, hblank_event);
 
     gs->ctx = &gs->context[0];
     gs->imr = 0x00007f00;
@@ -178,13 +181,13 @@ void ps2_gs_reset(struct ps2_gs* gs) {
 
     sched_schedule(gs->sched, vblank_event);
 
-    // struct sched_event hblank_event;
-    // hblank_event.callback = gs_handle_hblank;
-    // hblank_event.cycles = GS_SCANLINE_NTSC;
-    // hblank_event.name = "Hblank event";
-    // hblank_event.udata = gs;
+    struct sched_event hblank_event;
+    hblank_event.callback = gs_handle_hblank;
+    hblank_event.cycles = GS_SCANLINE_NTSC*2;
+    hblank_event.name = "Hblank event";
+    hblank_event.udata = gs;
 
-    // sched_schedule(gs->sched, hblank_event);
+    sched_schedule(gs->sched, hblank_event);
 
     memset(gs->vram, 0, 0x400000);
 }
@@ -419,7 +422,7 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
                 // gs->vblank |= 1;
             }
 
-            gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
+            gs->csr = (gs->csr & 0xfffffe02) | (gs->csr & ~(data & 0xd));
             gs->csr_enable = data;
 
             if (data & 1) {
@@ -446,8 +449,6 @@ void ps2_gs_write64(struct ps2_gs* gs, uint32_t addr, uint64_t data) {
     }
 
     fprintf(stderr, "gs: Unhandled write to %08x with data %016lx\n", addr, data);
-
-    exit(1);
 }
 
 // static inline void gs_load_clut_cache(struct ps2_gs* gs, int i) {
@@ -885,7 +886,7 @@ int ps2_gs_write_signal(struct ps2_gs* gs, uint64_t data) {
 
     gs_test_gs_irq(gs);
 
-    return 0;
+    return 1;
 }
 
 int ps2_gs_write_finish(struct ps2_gs* gs, uint64_t data) {
@@ -905,5 +906,5 @@ int ps2_gs_write_label(struct ps2_gs* gs, uint64_t data) {
     gs->siglblid &= (~mask) << 32;
     gs->siglblid |= (data & mask) << 32;
 
-    return 0;
+    return 1;
 }

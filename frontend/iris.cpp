@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <chrono>
 #include <thread>
 #include <cmath>
 
@@ -11,6 +12,7 @@
 #include "config.hpp"
 #include "ee/ee_def.hpp"
 #include "ee/vu_def.hpp"
+#include "iop/iop_def.hpp"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
@@ -61,7 +63,7 @@ int open_file(iris::instance* iris, std::string file) {
         renderer_reset(iris->renderer);
 
         ps2_set_system(iris->ps2, iris->system);
-        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+        emu::load_rom_files(iris);
         ps2_boot_file(iris->ps2, boot_file);
 
         iris->loaded = file;
@@ -82,7 +84,7 @@ int open_file(iris::instance* iris, std::string file) {
     renderer_reset(iris->renderer);
 
     ps2_set_system(iris->ps2, iris->system);
-    ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+    emu::load_rom_files(iris);
     ps2_boot_file(iris->ps2, file.c_str());
 
     iris->loaded = file;
@@ -298,6 +300,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_pad_debugger) show_pad_debugger(iris);
     if (iris->show_symbols) show_symbols(iris);
     if (iris->show_threads) show_threads(iris);
+    if (iris->show_timers) show_timers(iris);
     if (iris->show_sysmem_logs) show_sysmem_logs(iris);
     if (iris->show_memory_card_tool) show_memory_card_tool(iris);
     if (iris->show_memory_search) show_memory_search(iris);
@@ -468,9 +471,14 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 }
 
 SDL_AppResult update(iris::instance* iris) {
+    auto start = std::chrono::high_resolution_clock::now();
+
     if (iris->double_click_counter) {
         iris->double_click_counter--;
     }
+
+    int iop_count = iris->ps2->iop->total_cycles;
+    int ee_count = iris->ps2->ee->total_cycles;
 
     if (iris->pause) {
         iris->step_out = false;
@@ -512,6 +520,8 @@ SDL_AppResult update(iris::instance* iris) {
         }
     }
 
+    // printf("ee: %ld cycles, iop: %ld cycles\n", iris->ps2->ee->total_cycles - ee_count, iris->ps2->iop->total_cycles - iop_count);
+
     // float p = ((float)iris->ps2->ee->eenull_counter / (float)(4920115)) * 100.0f;
 
     // printf("ee: Time spent idling: %ld cycles (%.2f%%) INTC reads: %d CSR reads: %d (%.1f fps)\n", iris->ps2->ee->eenull_counter, p, iris->ps2->ee->intc_reads, iris->ps2->ee->csr_reads, 1.0f / ImGui::GetIO().DeltaTime);
@@ -519,6 +529,38 @@ SDL_AppResult update(iris::instance* iris) {
     iris->ps2->ee->eenull_counter = 0;
     iris->ps2->ee->intc_reads = 0;
     iris->ps2->ee->csr_reads = 0;
+
+    switch (iris->present_mode) {
+        case IRIS_PRESENT_MODE_30FPS: {
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+            auto frame_us = (int64_t)duration.count();
+            auto target_us = (int64_t)((1.0f / 30.0f) * 1000000);
+
+            if (frame_us < target_us) {
+                auto sleep_start = std::chrono::high_resolution_clock::now();
+                auto sleep_time = std::chrono::microseconds(target_us - frame_us);
+
+                while (std::chrono::high_resolution_clock::now() - sleep_start < sleep_time);
+            }
+        } break;
+
+        case IRIS_PRESENT_MODE_60FPS: {
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+            auto frame_us = (int64_t)duration.count();
+            auto target_us = (int64_t)((1.0f / 60.0f) * 1000000);
+
+            if (frame_us < target_us) {
+                auto sleep_start = std::chrono::high_resolution_clock::now();
+                auto sleep_time = std::chrono::microseconds(target_us - frame_us);
+
+                while (std::chrono::high_resolution_clock::now() - sleep_start < sleep_time);
+            }
+        } break;
+    }
 
     return SDL_APP_CONTINUE;
 }
@@ -720,6 +762,7 @@ void destroy(iris::instance* iris) {
         iris->show_vu_disassembler = false;
         iris->show_breakpoints = false;
         iris->show_threads = false;
+        iris->show_timers = false;
         iris->show_sysmem_logs = false;
         iris->show_imgui_demo = false;
         iris->show_overlay = false;

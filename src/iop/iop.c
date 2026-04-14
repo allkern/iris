@@ -237,8 +237,8 @@ void iop_cycle(struct iop_state* iop) {
         iop_exception(iop, CAUSE_RI);
     }
 
-    iop->last_cycles += cyc;
-    iop->total_cycles += iop->last_cycles;
+    iop->last_cycles += 1;
+    iop->total_cycles += 1;
 
     iop->r[0] = 0;
 }

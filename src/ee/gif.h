@@ -48,6 +48,7 @@ struct ps2_gif {
     // Renderer state
     void* udata;
     void (*transfer)(void*, int, const void*, size_t);
+    void (*readback)(void*, void*, size_t);
     struct queue_state* queue[3];
 
     struct ps2_gs* gs;
@@ -68,7 +69,8 @@ uint64_t ps2_gif_read32(struct ps2_gif* gif, uint32_t addr);
 void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data);
 void ps2_gif_write128(struct ps2_gif* gif, uint32_t addr, uint128_t data);
 void ps2_gif_fifo_write(struct ps2_gif* gif, uint128_t data, int path);
-void ps2_gif_set_backend(struct ps2_gif* gif, void* udata, void (*func)(void*, int, const void*, size_t));
+uint128_t ps2_gif_fifo_read(struct ps2_gif* gif);
+void ps2_gif_set_backend(struct ps2_gif* gif, void* udata, void (*transfer)(void*, int, const void*, size_t), void (*readback)(void*, void*, size_t));
 
 #ifdef __cplusplus
 }

@@ -200,6 +200,10 @@ uint64_t ee_bus_read16(void* udata, uint32_t addr) {
     MAP_REG_READ(16, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_READ(16, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_READ(16, 0x11008000, 0x1100FFFF, vu, vu1);
+    MAP_REG_READ(32, 0x10003800, 0x10003BFF, vif, vif0);
+    MAP_REG_READ(32, 0x10003C00, 0x10003FFF, vif, vif1);
+    MAP_REG_READ(32, 0x10004000, 0x10004FFF, vif, vif0);
+    MAP_REG_READ(32, 0x10005000, 0x10005FFF, vif, vif1);
     MAP_MEM_READ(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
     MAP_REG_READ(16, 0x10000000, 0x10001FFF, ee_timers, timers);

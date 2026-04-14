@@ -55,19 +55,7 @@ struct iop_dma_channel {
 struct ps2_iop_dma {
     struct iop_bus* bus;
 
-    struct iop_dma_channel mdec_in;
-    struct iop_dma_channel mdec_out;
-    struct iop_dma_channel sif2;
-    struct iop_dma_channel cdvd;
-    struct iop_dma_channel spu1;
-    struct iop_dma_channel pio;
-    struct iop_dma_channel otc;
-    struct iop_dma_channel spu2;
-    struct iop_dma_channel dev9;
-    struct iop_dma_channel sif0;
-    struct iop_dma_channel sif1;
-    struct iop_dma_channel sio2_in;
-    struct iop_dma_channel sio2_out;
+    struct iop_dma_channel channels[13];
 
     uint32_t dpcr;
     uint32_t dpcr2;
@@ -78,10 +66,10 @@ struct ps2_iop_dma {
 
     struct ps2_iop_intc* intc;
     struct ps2_sif* sif;
-    struct ps2_cdvd* drive;
+    struct ps2_cdvd* cdvd;
     struct ps2_dmac* ee_dma;
     struct ps2_sio2* sio2;
-    struct ps2_spu2* spu;
+    struct ps2_spu2* spu2;
     struct sched_state* sched;
 };
 

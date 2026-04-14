@@ -64,6 +64,11 @@ namespace iris {
 #define IRIS_TITLEBAR_DEFAULT 0
 #define IRIS_TITLEBAR_SEAMLESS 1
 
+#define IRIS_PRESENT_MODE_30FPS 0
+#define IRIS_PRESENT_MODE_60FPS 1
+#define IRIS_PRESENT_MODE_VSYNC 2
+#define IRIS_PRESENT_MODE_UNCAPPED 3
+
 class instance;
 
 // class widget {
@@ -465,6 +470,7 @@ struct instance {
     std::string flash_path = "";
     std::string ini_path = "";
     std::string gcdb_path = "";
+    bool auto_paths = true;
 
     uint8_t mac_address[6] = { 0 };
 
@@ -506,6 +512,7 @@ struct instance {
     bool show_vu_disassembler = false;
     bool show_overlay = false;
     bool show_memory_search = false;
+    bool show_timers = false;
 
     // Special windows
     bool show_bios_setting_window = false;
@@ -560,9 +567,9 @@ struct instance {
     bool mute = false;
     bool prev_mute = false;
     float volume = 1.0f;
-    int timescale = 8;
+    int timescale = 2;
     bool mute_adma = true;
-    bool vsync = true;
+    int present_mode = IRIS_PRESENT_MODE_60FPS;
     float ui_scale = 1.0f;
     int screenshot_format = IRIS_SCREENSHOT_FORMAT_PNG;
     int screenshot_jpg_quality_mode = IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM;
@@ -761,6 +768,7 @@ namespace emu {
     const char* get_system_name(iris::instance* iris, int system);
     const char* get_current_system_name(iris::instance* iris);
     int get_system_count(iris::instance* iris);
+    bool load_rom_files(iris::instance* iris);
 }
 
 namespace render {
@@ -822,6 +830,7 @@ void show_overlay(iris::instance* iris);
 void show_memory_card_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
 void show_memory_search(iris::instance* iris);
+void show_timers(iris::instance* iris);
 // void show_gamelist(iris::instance* iris);
 
 void handle_keydown_event(iris::instance* iris, SDL_Event* event);

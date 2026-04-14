@@ -149,8 +149,8 @@ void ImageProcessingUnit::run()
 {
     if (ctrl.busy)
     {
-        try
-        {
+        // try
+        // {
             switch (command)
             {
                 case 0x01:
@@ -229,22 +229,22 @@ void ImageProcessingUnit::run()
                     }
                     break;
             }
-        }
-        catch (VLC_Error& e)
-        {
-            std::fprintf(stderr, "ipu: VLC error: %s\n", e.what());
+        // }
+        // catch (VLC_Error& e)
+        // {
+        //     std::fprintf(stderr, "ipu: VLC error: %s\n", e.what());
 
-            ctrl.error_code = true;
-            finish_command();
-        }
+        //     ctrl.error_code = true;
+        //     finish_command();
+        // }
     }
     if (can_write_FIFO()) {
-        dmac->ipu_to.dreq = 1;
+        dmac->channels[DMAC_IPU_TO].dreq = 1;
         // printf("ipu: set ipu_to dreq\n");
         dmac_handle_ipu_to_transfer(dmac);
     }
     if (can_read_FIFO()) {
-        dmac->ipu_from.dreq = 1;
+        dmac->channels[DMAC_IPU_FROM].dreq = 1;
         printf("ipu: Output FIFO ready\n");
         // printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
         dmac_handle_ipu_from_transfer(dmac);
@@ -291,8 +291,8 @@ bool ImageProcessingUnit::process_IDEC()
                     in_FIFO.advance_stream(1);
 
                     //Play expects this to be zero for IDEC intra path.
-                    if (value != 0)
-                        throw VLC_Error("IDEC unsupported DCT type");
+                    // if (value != 0)
+                    //     throw VLC_Error("IDEC unsupported DCT type");
                 }
                 idec.state = IDEC_STATE::QSC;
                 break;
@@ -399,7 +399,7 @@ bool ImageProcessingUnit::process_IDEC()
                 }
                 else
                 {
-                    throw VLC_Error("IDEC start code invalid");
+                    // throw VLC_Error("IDEC start code invalid");
                 }
             }
                 break;
@@ -410,8 +410,8 @@ bool ImageProcessingUnit::process_IDEC()
                 if (!macroblock_increment.get_symbol(in_FIFO, inc))
                     return false;
 
-                if ((inc & 0xFFFF) != 1)
-                    throw VLC_Error("IDEC invalid macroblock increment");
+                // if ((inc & 0xFFFF) != 1)
+                //     throw VLC_Error("IDEC invalid macroblock increment");
 
                 idec.state = IDEC_STATE::MACRO_I_TYPE;
             }
@@ -821,7 +821,7 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
                 }
                 else
                 {
-                    throw VLC_Error("BDEC coefficient index overflow");
+                    // throw VLC_Error("BDEC coefficient index overflow");
                 }
                 bdec.subblock_index++;
                 bdec.read_coeff_state = BDEC_Command::READ_COEFF::CHECK_END;
@@ -1092,7 +1092,7 @@ bool ImageProcessingUnit::process_CSC()
                 }
                 csc.macroblocks--;
                 csc.state = CSC_STATE::BEGIN;
-                dmac->ipu_from.dreq = 1;
+                dmac->channels[DMAC_IPU_FROM].dreq = 1;
                 printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
                 dmac_handle_ipu_from_transfer(dmac);
             }
@@ -1201,7 +1201,7 @@ bool ImageProcessingUnit::process_PACK()
                 }
                 pack.macroblocks--;
                 pack.state = PACK_STATE::BEGIN;
-                dmac->ipu_from.dreq = 1;
+                dmac->channels[DMAC_IPU_FROM].dreq = 1;
                 printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
                 dmac_handle_ipu_from_transfer(dmac);
             }
@@ -1399,11 +1399,15 @@ bool ImageProcessingUnit::can_write_FIFO()
 
 uint128_t ImageProcessingUnit::read_FIFO()
 {
+    if (!out_FIFO.f.size()) {
+        dmac->channels[DMAC_IPU_FROM].dreq = 0;
+        return { 0 };
+    }
     uint128_t quad = out_FIFO.f.front();
     out_FIFO.f.pop_front();
     if (!out_FIFO.f.size()) {
         printf("ipu: clear ipu_from dreq\n");
-        dmac->ipu_from.dreq = 0;
+        dmac->channels[DMAC_IPU_FROM].dreq = 0;
     }
     return quad;
 }
@@ -1422,7 +1426,7 @@ void ImageProcessingUnit::write_FIFO(uint128_t quad)
     }
     if (in_FIFO.f.size() == 7)
     {
-        dmac->ipu_to.dreq = 0;
+        dmac->channels[DMAC_IPU_TO].dreq = 0;
     }
     if (in_FIFO.f.size() >= 8)
     {
@@ -1507,4 +1511,12 @@ extern "C" void ps2_ipu_destroy(struct ps2_ipu* ipu) {
     delete ipu->ipu;
 
     free(ipu);
+}
+
+uint128_t ps2_ipu_fifo_read(struct ps2_ipu* ipu) {
+    return ipu->ipu->read_FIFO();
+}
+
+void ps2_ipu_fifo_write(struct ps2_ipu* ipu, uint128_t data) {
+    ipu->ipu->write_FIFO(data);
 }

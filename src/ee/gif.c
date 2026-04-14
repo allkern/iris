@@ -370,9 +370,10 @@ void ps2_gif_fifo_write(struct ps2_gif* gif, uint128_t data, int path) {
     }
 }
 
-void ps2_gif_set_backend(struct ps2_gif* gif, void* udata, void (*func)(void*, int, const void*, size_t)) {
+void ps2_gif_set_backend(struct ps2_gif* gif, void* udata, void (*transfer)(void*, int, const void*, size_t), void (*readback)(void*, void*, size_t)) {
     gif->udata = udata;
-    gif->transfer = func; 
+    gif->transfer = transfer;
+    gif->readback = readback;
 }
 
 #undef printf

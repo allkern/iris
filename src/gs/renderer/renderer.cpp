@@ -19,6 +19,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
             renderer->get_frame = null_get_frame;
             renderer->set_config = null_set_config;
             renderer->transfer = null_transfer;
+            renderer->readback = null_readback;
         } break;
 
         case RENDERER_BACKEND_SOFTWARE: {
@@ -30,6 +31,7 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
             renderer->get_frame = null_get_frame;
             renderer->set_config = null_set_config;
             renderer->transfer = null_transfer;
+            renderer->readback = null_readback;
         } break;
 
         case RENDERER_BACKEND_HARDWARE: {
@@ -40,12 +42,13 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
             renderer->get_frame = hardware_get_frame;
             renderer->set_config = hardware_set_config;
             renderer->transfer = hardware_transfer;
+            renderer->readback = hardware_readback;
         } break;
     }
 
     renderer->udata = renderer->create();
 
-    ps2_gif_set_backend(info.gif, renderer->udata, renderer->transfer);
+    ps2_gif_set_backend(info.gif, renderer->udata, renderer->transfer, renderer->readback);
 
     return renderer->init(renderer->udata, info);
 }

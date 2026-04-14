@@ -116,4 +116,5 @@ renderer_image hardware_get_frame(void* udata);
 
 extern "C" {
 void hardware_transfer(void* udata, int path, const void* data, size_t size);
+void hardware_readback(void* udata, void* data, size_t size);
 }

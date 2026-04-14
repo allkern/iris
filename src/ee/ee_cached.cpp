@@ -196,14 +196,11 @@ static inline uint32_t unpack_5551_8888(uint32_t v) {
 #define EE_HI1 ee->hi.u64[1]
 #define EE_LO1 ee->lo.u64[1]
 
-#define BRANCH(cond, offset) if (cond) { \
-    ee->next_pc = ee->next_pc + (offset); \
-    ee->next_pc = ee->next_pc - 4; \
-    ee->branch = 1; \
-    ee->branch_taken = 1; }
+#define BRANCH(cond, offset) \
+    if (cond) { ee->next_pc = ee->pc + (offset); }
 
 #define BRANCH_LIKELY(cond, offset) \
-    BRANCH(cond, offset) else { ee->exception = 1; ee->pc += 4; ee->next_pc += 4; }
+    BRANCH(cond, offset) else { ee->exception = 1; }
 
 #define SE6432(v) ((int64_t)((int32_t)(v)))
 #define SE6416(v) ((int64_t)((int16_t)(v)))
@@ -535,14 +532,28 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 #define _EE_CACHE_PAGESIZE 512
 #endif
 
-#define EE_CACHE_PAGECOUNT (0x100000000ull / _EE_CACHE_PAGESIZE)
+#define EE_CACHE_PAGECOUNT (0x20000000 / _EE_CACHE_PAGESIZE)
+
+static inline bool ee_is_executable_region(uint32_t addr) {
+    // EE should only ever execute from RAM (and its mirrors), and the BIOS
+    return addr < 0x2000000 || (addr >= 0x1fc00000 && addr < 0x20000000);
+}
 
 #define INVALIDATE_CACHE_PAGE(addr) { \
-    if (ee->block_cache[(addr) / _EE_CACHE_PAGESIZE]) { \
-        delete[] ee->block_cache[(addr) / _EE_CACHE_PAGESIZE]; \
-        ee->block_cache[(addr) / _EE_CACHE_PAGESIZE] = nullptr; \
+    if (ee_is_executable_region(addr)) { \
+        uint32_t page = (addr) / _EE_CACHE_PAGESIZE; \
+        if (ee->block_cache[page]) { \
+            ee->block_cache_dirty[page] = true; \
+        } \
     } \
 }
+
+// #define INVALIDATE_CACHE_PAGE(addr) { \
+//     uint32_t page = (addr) / _EE_CACHE_PAGESIZE; \
+//     if (ee->block_cache[page]) { \
+//         ee->block_cache[page][((addr) & (_EE_CACHE_PAGESIZE - 1)) >> 2].cycles = 0; \
+//     } \
+// }
 
 #define BUS_READ_FUNC(b)                                                       \
     static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) { \
@@ -557,11 +568,11 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
 #define BUS_WRITE_FUNC(b)                                                                  \
     static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) { \
-        INVALIDATE_CACHE_PAGE(addr);                                                       \
         if ((addr & 0xf0000000) == 0x70000000)                                             \
-            { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                  \
+        { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                      \
         uint32_t phys;                                                                     \
         ee_translate_virt(ee, addr, &phys);                                                \
+        INVALIDATE_CACHE_PAGE(phys);                                                       \
         ee->bus.write ## b(ee->bus.udata, phys, data);                                     \
     }
 
@@ -587,8 +598,6 @@ BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
 static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
-    INVALIDATE_CACHE_PAGE(addr);
-
     if ((addr & 0xf0000000) == 0x70000000) {
         ps2_ram_write128(ee->spr, addr & 0x3ff0, data);
 
@@ -598,6 +607,8 @@ static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t da
     uint32_t phys;
 
     ee_translate_virt(ee, addr, &phys);
+
+    INVALIDATE_CACHE_PAGE(phys);
 
     ee->bus.write128(ee->bus.udata, phys, data);
 }
@@ -632,22 +643,10 @@ static inline void ee_set_pc(struct ee_state* ee, uint32_t addr) {
         if (ee_skip_fmv(ee, addr)) return;
     }
 
-    ee->pc = addr;
-    ee->next_pc = addr + 4;
-}
-
-static inline void ee_set_pc_delayed(struct ee_state* ee, uint32_t addr) {
-    if (ee->fmv_skip) {
-        if (ee_skip_fmv(ee, addr)) return;
-    }
-
     ee->next_pc = addr;
-    ee->branch = 1;
 }
 
 void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
-    ee->exception = 1;
-
     uint32_t vec = EE_VEC_COMMON;
 
     switch (cause) {
@@ -668,14 +667,8 @@ void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
     ee->cause |= cause;
 
     if (!(ee->status & EE_SR_EXL)) {
-        ee->epc = ee->pc - 4;
-
-        if (ee->delay_slot) {
-            ee->epc -= 4;
-            ee->cause |= EE_CAUSE_BD;
-        } else {
-            ee->cause &= ~EE_CAUSE_BD;
-        }
+        ee->epc = ee->pc;
+        ee->cause &= ~EE_CAUSE_BD;
     }
 
     ee->status |= EE_SR_EXL;
@@ -683,6 +676,10 @@ void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
     uint32_t addr = ((ee->status & EE_SR_BEV) ? 0xbfc00200 : 0x80000000) + vec;
 
     ee_set_pc(ee, addr);
+
+    ee->pc = addr;
+
+    // printf("ee: Exception level 1, cause=%d, vec=%08x, pc=%08x next_pc=%08x\n", cause, addr, ee->pc, ee->next_pc);
 }
 
 static inline void ee_exception_level2(struct ee_state* ee, uint32_t cause) {
@@ -724,8 +721,6 @@ static inline int ee_check_irq(struct ee_state* ee) {
     int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
 
     if (irq_enabled && (int0_pending || int1_pending)) {
-        ee->pc += 4;
-
         // printf("ee: Handling irq at pc=%08x (int0=%d (%d) int1=%d (%d)) sr=%08x delay_slot=%d\n",
         //     ee->pc,
         //     int0_pending, !!(ee->status & EE_SR_IM2),
@@ -911,12 +906,6 @@ static inline void ee_i_break(struct ee_state* ee, const ee_instruction& i) {
 }
 static inline void ee_i_cache(struct ee_state* ee, const ee_instruction& i) {
     /* To-do: Cache emulation */
-    switch (EE_D_RT) {
-        // CACHE.IXIN
-        case 0x07: {
-            ee->block_cache.clear();
-        } break;
-    } 
 } 
 static inline void ee_i_ceq(struct ee_state* ee, const ee_instruction& i) {
     if (EE_FS == EE_FT) {
@@ -1163,24 +1152,26 @@ static inline void ee_i_eret(struct ee_state* ee, const ee_instruction& i) {
 
         ee->status &= ~EE_SR_EXL;
     }
+
+    // printf("ee: ERET at pc=%08x next_pc=%08x\n", ee->pc, ee->next_pc);
 }
 static inline void ee_i_j(struct ee_state* ee, const ee_instruction& i) {
-    ee_set_pc_delayed(ee, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
+    ee_set_pc(ee, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
 }
 static inline void ee_i_jal(struct ee_state* ee, const ee_instruction& i) {
     ee->r[31].ul64 = ee->next_pc;
 
-    ee_set_pc_delayed(ee, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
+    ee_set_pc(ee, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
 }
 static inline void ee_i_jalr(struct ee_state* ee, const ee_instruction& i) {
     uint32_t next_pc = ee->next_pc;
 
-    ee_set_pc_delayed(ee, EE_RS32);
+    ee_set_pc(ee, EE_RS32);
 
     EE_RD = next_pc;
 }
 static inline void ee_i_jr(struct ee_state* ee, const ee_instruction& i) {
-    ee_set_pc_delayed(ee, EE_RS32);
+    ee_set_pc(ee, EE_RS32);
 }
 static inline void ee_i_lb(struct ee_state* ee, const ee_instruction& i) {
     EE_RT = SE648(bus_read8(ee, EE_RS32 + SE3216(EE_D_I16)));
@@ -3160,8 +3151,6 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
         id = (~id) + 1;
     }
 
-    // printf("ee: %s (%d, %08x) a0=%08x (%d)\n", ee_get_syscall(n), ee->r[3].ul32, ee->r[3].ul32, ee->r[4].ul32, ee->r[4].ul32);
-
     switch (id) {
         // ChangeThreadPriority
         case 0x29: {
@@ -3193,8 +3182,6 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
         // FlushCache
         case 0x64: {
             // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
-
-            ee->block_cache.clear();
         } break;
     }
 
@@ -3212,8 +3199,27 @@ static inline void ee_i_tge(struct ee_state* ee, const ee_instruction& i) {
 static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgei unimplemented\n"); exit(1); }
 static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeiu unimplemented\n"); exit(1); }
 static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbp unimplemented\n"); exit(1); }
-static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlbr unimplemented\n"); exit(1); }
+static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) {
+    int index = ee->index & 0x3f;
+
+    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+
+    if ((ee->entryhi & 0xffffe000) == entry->vpn2 && (ee->entryhi & 0xff) == entry->asid) {
+        ee->index |= 0x80000000;
+    } else {
+        ee->index &= ~0x80000000;
+    }
+}
+static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) {
+    int index = ee->index & 0x3f;
+
+    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+
+    ee->entryhi = entry->vpn2 | entry->asid;
+    ee->entrylo0 = (entry->pfn0 >> 6) | (entry->v0 << 1) | (entry->d0 << 2) | (entry->c0 << 3) | (entry->s << 31) | (entry->g);
+    ee->entrylo1 = (entry->pfn1 >> 6) | (entry->v1 << 1) | (entry->d1 << 2) | (entry->c1 << 3) | (entry->s << 31) | (entry->g);
+    ee->pagemask = entry->mask;
+}
 static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     struct ee_vtlb_entry* entry = &ee->vtlb[ee->index & 0x3f];
 
@@ -3231,19 +3237,19 @@ static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     entry->s = (ee->entrylo0 >> 31) & 1;
     entry->g = (ee->entrylo0 & 1) && (ee->entrylo1 & 1);
 
-    printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
-        ee->index,
-        entry->vpn2,
-        entry->pfn0,
-        entry->v0,
-        entry->d0,
-        entry->pfn1,
-        entry->v1,
-        entry->d1,
-        entry->mask,
-        entry->s,
-        entry->g
-    );
+    // printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
+    //     ee->index,
+    //     entry->vpn2,
+    //     entry->pfn0,
+    //     entry->v0,
+    //     entry->d0,
+    //     entry->pfn1,
+    //     entry->v1,
+    //     entry->d1,
+    //     entry->mask,
+    //     entry->s,
+    //     entry->g
+    // );
 }
 static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
     int index = (ee->count % (48 - ee->wired)) + ee->wired;
@@ -3421,7 +3427,12 @@ static inline void ee_i_invalid(struct ee_state* ee, const ee_instruction& i) {
 
     exit(1);
 }
-static inline void ee_i_nop(struct ee_state* ee, const ee_instruction& i) {
+
+// Macro/custom instructions
+// LI - Fused LUI+ORI
+static inline void ee_i_li(struct ee_state* ee, const ee_instruction& i) {
+    // i16 here is actually the full 32-bit immediate
+    EE_RT = SE6432(EE_D_I16);
 }
 
 struct ee_state* ee_create(void) {
@@ -3462,6 +3473,8 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
 
     ee->block_cache.clear();
     ee->block_cache.resize(EE_CACHE_PAGECOUNT);
+    ee->block_cache_dirty.clear();
+    ee->block_cache_dirty.resize(EE_CACHE_PAGECOUNT);
 }
 
 void ee_reset(struct ee_state* ee) {
@@ -3493,6 +3506,8 @@ void ee_reset(struct ee_state* ee) {
 
     ee->block_cache.clear();
     ee->block_cache.resize(EE_CACHE_PAGECOUNT);
+    ee->block_cache_dirty.clear();
+    ee->block_cache_dirty.resize(EE_CACHE_PAGECOUNT);
 
     // Clear block lookup cache
     ee->last_block_lookup_pc = ~0u;
@@ -4026,47 +4041,67 @@ ee_instruction ee_decode(uint32_t opcode) {
     return i;
 }
 
+void ee_optimize_block(struct ee_block* block) {
+    for (int i = 0; i < block->instructions.size(); i++) {
+        auto& a = block->instructions[i];
+        auto& b = block->instructions[i+1];
+ 
+        // Fuse LUI/ORI into LI
+        if (a.func == ee_i_lui && b.func == ee_i_ori && a.rt == b.rt && b.rs == b.rt) {
+            a.func = ee_i_li;
+            a.i16 = (a.i16 << 16) | b.i16;
+
+            block->instructions.erase(block->instructions.begin() + i + 1);
+
+            i++;
+        }
+    }
+}
+
 static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycles) {
-    uint32_t page = ee->pc / _EE_CACHE_PAGESIZE;
-    uint32_t offset = (ee->pc & (_EE_CACHE_PAGESIZE - 1)) >> 2;
+    uint32_t phys;
+
+    ee_translate_virt(ee, ee->pc, &phys);
+
+    uint32_t page = phys / _EE_CACHE_PAGESIZE;
+    uint32_t offset = (phys & (_EE_CACHE_PAGESIZE - 1)) >> 2;
 
     if (!ee->block_cache[page]) {
         ee->block_cache[page] = new struct ee_block[_EE_CACHE_PAGESIZE >> 2];
+        ee->block_cache_dirty[page] = false;
     }
 
     struct ee_block& block = ee->block_cache[page][offset];
 
-    uint32_t pc = ee->pc;
-    uint32_t block_pc = ee->pc;
+    block.start_pc = ee->pc;
+    block.end_pc = ee->pc;
+
     ee_instruction i;
 
     block.cycles = 0;
     block.instructions.reserve(max_cycles);
 
     while (max_cycles) {
-        ee->opcode = bus_read32(ee, pc);
+        ee->opcode = bus_read32(ee, block.end_pc);
 
-        if (ee->exception) {
-            // An exception occurred while fetching the instruction
-            // Stop caching the block here
-            ee->exception = 0;
+        // if (ee->exception) {
+        //     // An exception occurred while fetching the instruction
+        //     // Stop caching the block here
+        //     ee->exception = 0;
 
-            // Cache at the new location (handler)
-            return ee_cache_block(ee, max_cycles);
-        }
+        //     // Cache at the new location (handler)
+        //     return ee_cache_block(ee, max_cycles);
+        // }
 
         if (ee->opcode != 0) {
             i = ee_decode(ee->opcode);
 
             block.instructions.push_back(i);
         } else {
-            i.func = ee_i_nop;
             i.branch = 0;
-
-            block.instructions.push_back(i);
         }
 
-        block.cycles += i.cycles;
+        block.cycles++; // += i.cycles;
 
         if (i.branch == 1 || i.branch == 3) {
             max_cycles = 2;
@@ -4076,25 +4111,38 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
 
         max_cycles--;
 
-        pc += 4;
+        block.end_pc += 4;
     }
 
     return &block;
 }
 
 static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
-    // Fast path: check single-entry cache first (avoids hash computation)
     if (pc == ee->last_block_lookup_pc) {
         return ee->last_block_ptr;
     }
 
-    uint32_t page = pc / _EE_CACHE_PAGESIZE;
+    uint32_t phys;
+
+    ee_translate_virt(ee, pc, &phys);
+
+    uint32_t page = phys / _EE_CACHE_PAGESIZE;
 
     if (!ee->block_cache[page]) {
         return nullptr;
     }
 
-    uint32_t offset = (pc & (_EE_CACHE_PAGESIZE - 1)) >> 2;
+    if (ee->block_cache_dirty[page]) {
+        // Invalidate entire page if it's dirty (code was modified)
+        delete[] ee->block_cache[page];
+
+        ee->block_cache[page] = nullptr;
+        ee->block_cache_dirty[page] = false;
+
+        return nullptr;
+    }
+
+    uint32_t offset = (phys & (_EE_CACHE_PAGESIZE - 1)) >> 2;
 
     struct ee_block& block = ee->block_cache[page][offset];
 
@@ -4109,59 +4157,37 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
     return &block;
 }
 
-int ee_run_block(struct ee_state* ee, int max_cycles) {
-    // This is the entrypoint to the EENULL thread.
-    // If we hit this address, the program is basically idling
-    // so we "fast-forward" 1024 cycles
+static inline bool ee_is_irq_pending(struct ee_state* ee) {
+    int irq_enabled = (ee->status & EE_SR_IE) && (ee->status & EE_SR_EIE) &&
+        (!(ee->status & EE_SR_EXL)) && (!(ee->status & EE_SR_ERL));
+    int int0_pending = (ee->status & EE_SR_IM2) && (ee->cause & EE_CAUSE_IP2);
+    int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
 
-    ee->branch = 0;
-    ee->delay_slot = 0;
+    return irq_enabled && (int0_pending || int1_pending);
+}
 
-    if (ee_check_irq(ee))
-        return 0;
-
-    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000) { // ee->csr_reads >= 1000
-        ee->total_cycles += 2048;
-        ee->count += 2048;
-        // ee->eenull_counter += 8 * 64;
-
-        ee->idle_skips++;
-
-        return 2048;
-    }
-
+static inline int _ee_run_block(struct ee_state* ee, int max_cycles) {
     struct ee_block* block = ee_find_block(ee, ee->pc);
 
     if (!block) {
         ee->cache_misses++;
 
         block = ee_cache_block(ee, max_cycles);
+
+        ee_optimize_block(block);
     }
 
     ee->block_pc = ee->pc;
-
-    int cycles = 0;
+    ee->pc = block->end_pc - 4;
+    ee->next_pc = block->end_pc;
 
     for (const auto& i : block->instructions) {
-        ee->delay_slot = ee->branch;
-        ee->branch = 0;
-
-        // If we need to handle an interrupt, break out of the loop
-        // if (ee_check_irq(ee))
-        //     break;
-
-        ee->pc = ee->next_pc;
-        ee->next_pc += 4;
-
         i.func(ee, i);
 
-        ee->count++;
         ee->r[0] = { 0 };
 
-        cycles++;
-
-        // An exception occurred or likely branch was taken
-        // break immediately and clear the exception flag
+        // A likely branch was not taken, break immediately
+        // and clear the exception flag
         if (ee->exception) {
             ee->exception = 0;
 
@@ -4169,9 +4195,34 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
         }
     }
 
-    // printf("ee: Block executed with %d cycles pc=%08x\n", cycles, ee->pc);
+    ee->count += block->cycles;
+    ee->total_cycles += block->cycles;
 
-    return cycles;
+    ee->pc = ee->next_pc;
+
+    return block->cycles;
+}
+
+int ee_run_block(struct ee_state* ee, int max_cycles) {
+    if (ee_is_irq_pending(ee)) {
+        int cycles = _ee_run_block(ee, 4);
+
+        ee_exception_level1(ee, CAUSE_EXC1_INT);
+
+        return cycles;
+    }
+
+    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
+        ee->total_cycles += 16*16;
+        ee->count += 16*16;
+        // ee->eenull_counter += 8 * 64;
+
+        ee->idle_skips++;
+
+        return 16*16;
+    }
+
+    return _ee_run_block(ee, max_cycles);
 }
 
 int ee_step(struct ee_state* ee) {
@@ -4207,6 +4258,10 @@ void ee_flush_cache(struct ee_state* ee) {
         delete[] page;
 
         page = nullptr;
+    }
+
+    for (int i = 0; i < EE_CACHE_PAGECOUNT; i++) {
+        ee->block_cache_dirty[i] = false;
     }
 
     ee->last_block_lookup_pc = ~0u;

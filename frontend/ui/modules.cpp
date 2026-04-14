@@ -1,5 +1,6 @@
 #include "iris.hpp"
 
+#include "iop/iop_def.hpp"
 #include "iop/hle/loadcore.h"
 
 #include "res/IconsMaterialSymbols.h"
