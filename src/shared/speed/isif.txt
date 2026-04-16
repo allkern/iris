@@ -1,35 +1,44 @@
 Iris Shrunken Image Format version 1 (ISIF-1) specification
-----------------------------------------------------------
+-----------------------------------------------------------
 
 ISIF is a very simple format for efficient storage of blockwise rewritable media images, such as HDD images.
+Space efficiency is achieved by only storing blocks of data that have been used, with optional discarding of
+blocks that are no longer in use. We approach this with the BAT (Block Allocation Table), a table that contains
+offsets or pointers to blocks that are actually allocated in the file.
 
 Files in the ISIF format use the .ISIF extension.
 
-Files in the ISIF format are comprised of three separate regions, namely the Header, Block Allocation Table and Data region.
+Files in the ISIF format are comprised of three core regions, namely the Header, Block Allocation Table and Data region.
+A file may additionally contain an extension or metadata region that contains user-defined data.
+The data region always comes last and is of variable size.
+The BAT region size can be calculated based on the block count and block mode 
 
-The header region starts at offset 0 and contains the following fields
+The header region is 64 bytes in size, it starts at offset 0 and contains the following fields:
 
 Offset  Size  Value       Description
 -------------------------------------
-0x0     4     0x49534946  Magic (ISIF)
-0x4     4     0x00000001  Version (1)
+0x0     4     0x49534946  Magic
+0x4     4     0x00000001  Version
 0x8     8     -           Block count
 0x10    4     -           Block size
 0x14    2     -           Block mode
 0x16    2     -           Block compression
-0x18    8     -           Data region offset
-0x20    16    -           Reserved
+0x18    8     -           BAT region offset
+0x20    8     -           Extension region offset
+0x28    8     -           Data region offset
+0x30    8     -           BAT allocated blocks count
+0x38    8     -           Reserved
 
-- Block mode
-  00 - Uncompressed, 32-bit offsets balanced, leaning time efficient
-  01 - Uncompressed, 64-bit offsets size-intensive, leaning time efficient
-  02 - Compressed, 32-bit offsets   most space efficient
-  03 - Compressed, 64-bit offsets   balanced, leaning space efficient
+- Block mode                         Usage
+  00 - Uncompressed, 32-bit offsets  Balanced, leaning time efficient
+  01 - Uncompressed, 64-bit offsets  Size-intensive, leaning time efficient
+  02 - Compressed, 32-bit offsets    Most space efficient
+  03 - Compressed, 64-bit offsets    Balanced, leaning space efficient
 
 - Block compression (when block mode is 2 or 3)
   00 - RLE
 
-Immediately following the header is the Block Allocation Table, which is a table of either 32 or 64-bit offsets. The size
+Following the header is usually the Block Allocation Table, which is a table of either 32 or 64-bit offsets. The size
 of which depends on the block mode (it is enough to check bit 0 of the mode to determine the offset size)
 
 Offset32  Offset64  Description
@@ -41,3 +50,46 @@ Offset32  Offset64  Description
 ...
 
 The allocation state of a block is defined to be 0 if it's unallocated, or an offset into the file if it's allocated.
+
+Data region
+
+The data region contains allocated blocks of data
+
+Offset     Size       Description
+---------------------------------
+0x00       blocksize  Block A
+blocksize  blocksize  Block B
+...
+
+Reading a block from the file
+
+In order to read a block from the file we index the BAT to find whether this block is actually allocated in the file
+or not, If it is allocated (offset != 0), we seek to (data_region_offset+bat_block_offset) to read the requested
+block of data. If the block is otherwise unallocated, we read a blocksize's worth of zeroes.
+
+Writing a block to the file
+
+In order to write a block to the file we first need to determine if data is actually being written to the block.
+If the write contains all zeroes then we should either deallocate the corresponding block in case it exists, Otherwise
+the write is discarded (no blocks are allocated).
+
+If the write contains data, then we need to determine if the block was already allocated or not, if it was allocated,
+we simply seek to the corresponding block in the data region and overwrite its contents. If it wasn't allocated prior
+to the write, then we need to allocate a new block by appending the written data to the end of the file and storing
+the offset of the new block in the corresponding BAT entry.
+
+Deallocating blocks
+
+The process for deallocating a block is expensive, it entails removing a block from the file and subsequently relocating
+all blocks following the deallocated block. In order to do this we first iterate over the blocks following the
+soon-to-be-deallocated block, subtracting 1 from each of their BAT entries. Then we remove the block data from the file
+and finally we relocate all following blocks one blocksize's worth of bytes backwards. Lastly the BAT and header need to
+be updated (BAT entry zeroed, BAT allocated blocks count header field decremented by one).
+
+Implementations may choose to deallocate blocks by simply updating the BAT and header to signal the block was deallocated
+without physically removing the data from the file, this greatly improves performance of writes in expense of potentially
+wasting storage space.
+
+Optimizations to the processes of writing/reading blocks are left up to the implementation. E.g. an implementation may
+queue block deallocations to then commit them at file close time, this would prevent storage waste while keeping
+write performance high. Optimizations like these are allowed but not part of the specification.
