@@ -1,0 +1,43 @@
+Iris Shrunken Image Format version 1 (ISIF-1) specification
+----------------------------------------------------------
+
+ISIF is a very simple format for efficient storage of blockwise rewritable media images, such as HDD images.
+
+Files in the ISIF format use the .ISIF extension.
+
+Files in the ISIF format are comprised of three separate regions, namely the Header, Block Allocation Table and Data region.
+
+The header region starts at offset 0 and contains the following fields
+
+Offset  Size  Value       Description
+-------------------------------------
+0x0     4     0x49534946  Magic (ISIF)
+0x4     4     0x00000001  Version (1)
+0x8     8     -           Block count
+0x10    4     -           Block size
+0x14    2     -           Block mode
+0x16    2     -           Block compression
+0x18    8     -           Data region offset
+0x20    16    -           Reserved
+
+- Block mode
+  00 - Uncompressed, 32-bit offsets balanced, leaning time efficient
+  01 - Uncompressed, 64-bit offsets size-intensive, leaning time efficient
+  02 - Compressed, 32-bit offsets   most space efficient
+  03 - Compressed, 64-bit offsets   balanced, leaning space efficient
+
+- Block compression (when block mode is 2 or 3)
+  00 - RLE
+
+Immediately following the header is the Block Allocation Table, which is a table of either 32 or 64-bit offsets. The size
+of which depends on the block mode (it is enough to check bit 0 of the mode to determine the offset size)
+
+Offset32  Offset64  Description
+-------------------------------
+0x00      0x00      Block 0 allocation state
+0x04      0x08      Block 1 allocation state
+0x08      0x10      Block 2 allocation state
+0x0c      0x18      Block 3 allocation state
+...
+
+The allocation state of a block is defined to be 0 if it's unallocated, or an offset into the file if it's allocated.
