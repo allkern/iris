@@ -7,32 +7,39 @@ on:
 
 jobs:
   windows-build:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
 
     steps:
     - uses: actions/checkout@v6
       with:
         submodules: 'recursive'
         fetch-depth: 0
+
+    - name: Configure build for amd64
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: amd64
+
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G "MinGW Makefiles" -DCMAKE_BUILD_TYPE=Release
-        cmake --build build -j $(nproc)
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+        cmake --build build
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
-        Copy-Item ".\build\*.dll" "dist"
-        Copy-Item "C:\mingw64\bin\*.dll" "dist"
+
     - name: Generate artifact name
       id: generate-name
       run: |
         echo "::set-output name=artifact::iris-${{ github.ref_name }}-windows"
+
     - name: Zip artifact
       run: |
         $artifactName = "${{ steps.generate-name.outputs.artifact }}"
         Compress-Archive -Path "dist\*" -DestinationPath "$artifactName.zip"
+
     - name: Upload to release
-      uses: softprops/action-gh-release@v2.6.1
+      uses: softprops/action-gh-release@v3
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
@@ -45,6 +52,7 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
+
     - name: Install deps
       run: |
         sudo add-apt-repository universe
@@ -54,37 +62,44 @@ jobs:
         libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
         libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
         libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libfuse2t64
+
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
-        cmake --build build -j$(nproc)
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
+        cmake --build build
         sudo cmake --install build
         mkdir dist
         mv ./build/iris ./dist
         mkdir appimage
         mv ./build/*.AppImage ./appimage
+
     - name: Generate artifact name
       id: generate-name
       run: |
         echo "::set-output name=artifact::iris-${{ github.ref_name }}-linux"
+
     - name: Generate AppImage artifact name
       id: generate-name-appimage
       run: |
         echo "::set-output name=artifact::iris-${{ github.ref_name }}-linux-appimage"
+
     - name: Zip artifact
       run: |
         zip -rj ${{ steps.generate-name.outputs.artifact }}.zip dist
+
     - name: Zip AppImage
       run: |
         zip -rj ${{ steps.generate-name-appimage.outputs.artifact }}.zip appimage
+
     - name: Upload normal binary to release
-      uses: softprops/action-gh-release@vv2.6.1
+      uses: softprops/action-gh-release@v3
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
+
     - name: Upload AppImage to release
-      uses: softprops/action-gh-release@v2.6.1
+      uses: softprops/action-gh-release@v3
       with:
         files: |
           ${{ steps.generate-name-appimage.outputs.artifact }}.zip
@@ -97,6 +112,7 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
+
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1
       with:
@@ -104,21 +120,25 @@ jobs:
         install_runtime: true
         cache: true
         stripdown: true
+
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-        cmake --build build -j$(sysctl -n hw.logicalcpu)
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake --build build
         sudo cmake --install build
+
     - name: Generate artifact name
       id: generate-name
       run: |
         echo "::set-output name=artifact::iris-${{ github.ref_name }}-macos-universal"
+
     - name: Zip artifact
       run: |
         cd build; zip -r ../${{ steps.generate-name.outputs.artifact }}.zip ./iris.app; cd ..
+
     - name: Upload to release
-      uses: softprops/action-gh-release@v2.6.1
+      uses: softprops/action-gh-release@v3
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip

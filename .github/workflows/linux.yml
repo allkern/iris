@@ -2,7 +2,7 @@ name: Ubuntu CI
 
 on:
   push:
-    branches: [ "master" ]
+  pull_request:
 
 jobs:
   build:
@@ -13,6 +13,7 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
+
     - name: Install deps
       run: |
         sudo add-apt-repository universe
@@ -22,24 +23,24 @@ jobs:
         libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
         libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
         libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libfuse2t64
+
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
-        cmake --build build -j$(nproc)
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
+        cmake --build build
         sudo cmake --install build
         mkdir dist
         mv ./build/iris ./dist
         mkdir appimage
         mv ./build/*.AppImage ./appimage
+
     - uses: actions/upload-artifact@v7
       with:
         name: iris-latest-linux
         path: ./dist
+
     - uses: actions/upload-artifact@v7
       with:
         name: iris-latest-linux-appimage
         path: ./appimage
-
-
-

@@ -2,31 +2,32 @@ name: Windows CI
 
 on:
   push:
-    branches: [ "master" ]
+  pull_request:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: windows-2025-vs2026
 
     steps:
     - uses: actions/checkout@v6
       with:
         submodules: 'recursive'
         fetch-depth: 0
+
+    - name: Configure build for amd64
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: amd64
+
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G "MinGW Makefiles"
-        cmake --build build -j $(nproc)
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+        cmake --build build
         New-Item -Path "dist" -ItemType Directory
         Copy-Item -Path ".\build\iris.exe" "dist"
-        Copy-Item ".\build\*.dll" "dist"
-        Copy-Item "C:\mingw64\bin\*.dll" "dist"
-    - name: Upload artifact
-      uses: actions/upload-artifact@v7
+
+    - uses: actions/upload-artifact@v7
       with:
         name: iris-latest-windows
         path: dist/
-
-
-

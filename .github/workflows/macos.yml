@@ -2,7 +2,7 @@ name: macOS CI
 
 on:
   push:
-    branches: [ "master" ]
+  pull_request:
 
 jobs:
   macos-universal-build:
@@ -13,6 +13,7 @@ jobs:
       with:
         submodules: 'recursive'
         fetch-depth: 0
+
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1
       with:
@@ -20,24 +21,17 @@ jobs:
         install_runtime: true
         cache: true
         stripdown: true
+
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G "Unix Makefiles"
-        cmake --build build -j$(sysctl -n hw.logicalcpu)
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake --build build
         sudo cmake --install build
         mkdir -p ./build/dist
         cp -R ./build/iris.app ./build/dist
+
     - uses: actions/upload-artifact@v7
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
-
-
-
-
-
-
-
-
-
