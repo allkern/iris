@@ -62,7 +62,7 @@ sudo apt update
 sudo apt upgrade
 sudo add-apt-repository universe
 sudo apt-get install build-essential git make \
-    pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
+    pkg-config cmake clang ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
     libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev \
     libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
     libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
@@ -72,18 +72,18 @@ Then clone the repository and run CMake:
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
-cmake -S . -B build
-cmake --build build -j8
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+cmake --build build
 ```
 Optionally run `cmake --install build` to generate an AppImage.
 
 ### Windows
-MSVC doesn't have an inline assembler. So we currently only support Clang.
+MSVC doesn't have an inline assembler and GCC extensions. So we currently only support Clang.
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
-cmake -S . -B build -G Ninja -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
-cmake --build build -j8
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+cmake --build build
 ```
 
 ### macOS
@@ -91,8 +91,8 @@ cmake --build build -j8
 ```
 git clone https://github.com/allkern/iris --recursive
 cd iris
-cmake -S . -B build
-cmake --build build -j8
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
 ```
 Optionally run `sudo cmake --install build` to generate a macOS App Bundle
 
