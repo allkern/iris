@@ -358,30 +358,72 @@ static inline void cdvd_s_close_config(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline uint16_t cdvd_get_u16_le(const uint8_t* p, size_t ofs) {
+    return (uint16_t)(p[ofs] | ((uint16_t)p[ofs + 1] << 8));
+}
+
+static inline void cdvd_mg_fail(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+    cdvd->s_fifo[0] = 0x80;
+}
+
+static int mg_BIToffset(const uint8_t* buffer) {
+    int ofs = 0x20;
+    uint16_t count = cdvd_get_u16_le(buffer, 0x1A);
+    uint16_t flags = cdvd_get_u16_le(buffer, 0x18);
+
+    for (int i = 0; i < count; i++)
+        ofs += 0x10;
+
+    if (flags & 1)
+        ofs += buffer[ofs];
+
+    if ((flags & 0xF000) == 0)
+        ofs += 8;
+
+    return ofs + 0x20;
+}
+
+static inline void cdvd_mg_clear(struct ps2_cdvd* cdvd) {
+    cdvd->mg_size = 0;
+    cdvd->mg_maxsize = 0;
+    cdvd->mg_datatype = 0;
+    memset(cdvd->mg_buffer, 0, sizeof(cdvd->mg_buffer));
+    memset(cdvd->mg_kbit, 0, sizeof(cdvd->mg_kbit));
+    memset(cdvd->mg_kcon, 0, sizeof(cdvd->mg_kcon));
+}
+
 static inline void cdvd_s_mechacon_auth_80(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 80\n");
     cdvd_init_s_fifo(cdvd, 1);
-
+    cdvd->mg_datatype = 0;
     cdvd->s_fifo[0] = 0;
 }
+
 static inline void cdvd_s_mechacon_auth_81(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 81\n");
     cdvd_init_s_fifo(cdvd, 1);
-
+    cdvd->mg_datatype = 0;
     cdvd->s_fifo[0] = 0;
 }
+
 static inline void cdvd_s_mechacon_auth_82(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 82\n");
     cdvd_init_s_fifo(cdvd, 1);
-
     cdvd->s_fifo[0] = 0;
 }
+
 static inline void cdvd_s_mechacon_auth_83(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 83\n");
     cdvd_init_s_fifo(cdvd, 1);
-
     cdvd->s_fifo[0] = 0;
 }
-static inline void cdvd_s_mechacon_auth_84(struct ps2_cdvd* cdvd) {
-    cdvd_init_s_fifo(cdvd, 1+8+4);
 
+static inline void cdvd_s_mechacon_auth_84(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 84\n");
+    cdvd_init_s_fifo(cdvd, 13);
     cdvd->s_fifo[0] = 0;
+
     cdvd->s_fifo[1] = 0x21;
     cdvd->s_fifo[2] = 0xdc;
     cdvd->s_fifo[3] = 0x31;
@@ -390,15 +432,17 @@ static inline void cdvd_s_mechacon_auth_84(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[6] = 0x72;
     cdvd->s_fifo[7] = 0xe0;
     cdvd->s_fifo[8] = 0xc8;
-    cdvd->s_fifo[9]  = 0x69;
+    cdvd->s_fifo[9] = 0x69;
     cdvd->s_fifo[10] = 0xda;
     cdvd->s_fifo[11] = 0x34;
     cdvd->s_fifo[12] = 0x9b;
 }
-static inline void cdvd_s_mechacon_auth_85(struct ps2_cdvd* cdvd) {
-    cdvd_init_s_fifo(cdvd, 1+4+8);
 
+static inline void cdvd_s_mechacon_auth_85(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 85\n");
+    cdvd_init_s_fifo(cdvd, 13);
     cdvd->s_fifo[0] = 0;
+
     cdvd->s_fifo[1] = 0xeb;
     cdvd->s_fifo[2] = 0x01;
     cdvd->s_fifo[3] = 0xc7;
@@ -412,55 +456,199 @@ static inline void cdvd_s_mechacon_auth_85(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[11] = 0xb3;
     cdvd->s_fifo[12] = 0xa3;
 }
+
 static inline void cdvd_s_mechacon_auth_86(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 86\n");
     cdvd_init_s_fifo(cdvd, 1);
-
     cdvd->s_fifo[0] = 0;
 }
+
 static inline void cdvd_s_mechacon_auth_87(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 87\n");
     cdvd_init_s_fifo(cdvd, 1);
-
     cdvd->s_fifo[0] = 0;
 }
+
 static inline void cdvd_s_mechacon_auth_88(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 88\n");
+
     cdvd_init_s_fifo(cdvd, 1);
+
+    if (cdvd->mg_datatype == 1) {
+        int bit_ofs;
+
+        if (cdvd->mg_maxsize != cdvd->mg_size ||
+            cdvd->mg_size < 0x20 ||
+            cdvd->mg_size != cdvd_get_u16_le(cdvd->mg_buffer, 0x14)) {
+            cdvd->s_fifo[0] = 0x80;
+            return;
+        }
+
+        bit_ofs = mg_BIToffset(cdvd->mg_buffer);
+
+        if (bit_ofs < 0x20 || (size_t)bit_ofs > sizeof(cdvd->mg_buffer)) {
+            cdvd->s_fifo[0] = 0x80;
+            return;
+        }
+
+        size_t kbit_ofs = (size_t)bit_ofs - 0x20;
+        size_t kcon_ofs = (size_t)bit_ofs - 0x10;
+
+        memcpy(cdvd->mg_kbit, &cdvd->mg_buffer[kbit_ofs], 16);
+        memcpy(cdvd->mg_kcon, &cdvd->mg_buffer[kcon_ofs], 16);
+
+        if ((cdvd->mg_buffer[bit_ofs + 5] || cdvd->mg_buffer[bit_ofs + 6] || cdvd->mg_buffer[bit_ofs + 7]) ||
+            ((uint16_t)cdvd->mg_buffer[bit_ofs + 4] * 16u + (uint16_t)bit_ofs + 8u + 16u
+                != cdvd_get_u16_le(cdvd->mg_buffer, 0x14))) {
+            cdvd->s_fifo[0] = 0x80;
+            return;
+        }
+    }
 
     cdvd->s_fifo[0] = 0;
 }
-static inline void cdvd_s_mg_write_data(struct ps2_cdvd* cdvd) {
-    cdvd_init_s_fifo(cdvd, 1);
 
-    cdvd->s_fifo[0] = 0;
-
-    printf("mg: Write KELF data params=");
-
-    for (int i = 0; i < cdvd->s_param_index; i++)
-        printf("%02x ", cdvd->s_params[i]);
-
-    printf("\n");
-}
 static inline void cdvd_s_mechacon_auth_8f(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Auth 8f\n");
+    cdvd_s_mechacon_auth_88(cdvd);
+}
+
+
+static inline void cdvd_s_mg_write_data(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Write Data\n");
     cdvd_init_s_fifo(cdvd, 1);
 
+    if ((size_t)cdvd->mg_size + (size_t)cdvd->s_param_index > (size_t)cdvd->mg_maxsize) {
+        cdvd->s_fifo[0] = 0x80;
+        return;
+    }
+
+    if ((size_t)cdvd->mg_size + (size_t)cdvd->s_param_index > sizeof(cdvd->mg_buffer)) {
+        cdvd->s_fifo[0] = 0x80;
+        return;
+    }
+
+    memcpy(&cdvd->mg_buffer[cdvd->mg_size], cdvd->s_params, cdvd->s_param_index);
+    cdvd->mg_size = (uint16_t)(cdvd->mg_size + cdvd->s_param_index);
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_mg_read_data(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Read Data\n");
+
+    uint16_t count = cdvd->mg_size;
+    if (count > 16)
+        count = 16;
+
+    cdvd_init_s_fifo(cdvd, count);
+
+    memcpy(cdvd->s_fifo, cdvd->mg_buffer, count);
+
+    cdvd->mg_size = (uint16_t)(cdvd->mg_size - count);
+    memmove(cdvd->mg_buffer,
+        cdvd->mg_buffer + count,
+        cdvd->mg_size);
+}
+
 static inline void cdvd_s_mg_write_hdr_start(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Write HDR Start\n");
     cdvd_init_s_fifo(cdvd, 1);
 
-    printf("mg: Write KELF header params=");
-
-    for (int i = 0; i < cdvd->s_param_index; i++)
-        printf("%02x ", cdvd->s_params[i]);
-
-    printf("\n");
+    cdvd->mg_size = 0;
+    cdvd->mg_datatype = 1;
+    cdvd->mg_maxsize = (uint16_t)(cdvd->s_params[1] | ((uint16_t)cdvd->s_params[2] << 8));
 
     cdvd->s_fifo[0] = 0;
 }
+
 static inline void cdvd_s_mg_read_bit_length(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Read Bit Length\n");
     cdvd_init_s_fifo(cdvd, 3);
 
-    for (int i = 0; i < 3; i++)
-        cdvd->s_fifo[i] = 0;
+    int bit_ofs = mg_BIToffset(cdvd->mg_buffer);
+    if (bit_ofs < 0) {
+        cdvd->s_fifo[0] = 0x80;
+        cdvd->s_fifo[1] = 0;
+        cdvd->s_fifo[2] = 0;
+        return;
+    }
+
+    size_t ofs = (size_t)bit_ofs;
+    if (ofs > sizeof(cdvd->mg_buffer) - 5) {
+        cdvd->s_fifo[0] = 0x80;
+        cdvd->s_fifo[1] = 0;
+        cdvd->s_fifo[2] = 0;
+        return;
+    }
+
+    unsigned int blocks = cdvd->mg_buffer[ofs + 4];
+    size_t copy_len = 8 + 16u * (size_t)blocks;
+
+    if (copy_len > sizeof(cdvd->mg_buffer) - ofs) {
+        cdvd->s_fifo[0] = 0x80;
+        cdvd->s_fifo[1] = 0;
+        cdvd->s_fifo[2] = 0;
+        return;
+    }
+
+    memmove(&cdvd->mg_buffer[0], &cdvd->mg_buffer[ofs], copy_len);
+
+    cdvd->mg_maxsize = 0;
+    cdvd->mg_size = (uint16_t)(8 + 16u * cdvd->mg_buffer[4]);
+
+    cdvd->s_fifo[0] = (cdvd->mg_datatype == 1) ? 0 : 0x80;
+    cdvd->s_fifo[1] = (cdvd->mg_size >> 0) & 0xFF;
+    cdvd->s_fifo[2] = (cdvd->mg_size >> 8) & 0xFF;
+}
+
+static inline void cdvd_s_mg_write_datain_length(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Write Datain Length\n");
+    cdvd_init_s_fifo(cdvd, 1);
+    cdvd->mg_size = 0;
+    cdvd->mg_datatype = 0;
+    cdvd->mg_maxsize = (uint16_t)(cdvd->s_params[0] | ((uint16_t)cdvd->s_params[1] << 8));
+    cdvd->s_fifo[0] = 0;
+}
+
+static inline void cdvd_s_mg_write_dataout_length(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Write Dataout Length\n");
+    cdvd_init_s_fifo(cdvd, 1);
+
+    uint16_t want = (uint16_t)(cdvd->s_params[0] | ((uint16_t)cdvd->s_params[1] << 8));
+    if (want == cdvd->mg_size && cdvd->mg_datatype == 0) {
+        cdvd->mg_maxsize = 0;
+        cdvd->s_fifo[0] = 0;
+    }
+    else {
+        cdvd->s_fifo[0] = 0x80;
+    }
+}
+
+static inline void cdvd_s_mg_read_kbit(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Read KBit\n");
+    cdvd_init_s_fifo(cdvd, 9);
+    cdvd->s_fifo[0] = 0;
+    memcpy(&cdvd->s_fifo[1], cdvd->mg_kbit, 8);
+}
+
+static inline void cdvd_s_mg_read_kbit2(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Read KBit2\n");
+    cdvd_init_s_fifo(cdvd, 9);
+    cdvd->s_fifo[0] = 0;
+    memcpy(&cdvd->s_fifo[1], cdvd->mg_kbit + 8, 8);
+}
+
+static inline void cdvd_s_mg_read_kcon(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Read KCon\n");
+    cdvd_init_s_fifo(cdvd, 9);
+    cdvd->s_fifo[0] = 0;
+    memcpy(&cdvd->s_fifo[1], cdvd->mg_kcon, 8);
+}
+
+static inline void cdvd_s_mg_read_kcon2(struct ps2_cdvd* cdvd) {
+    fprintf(stderr, "MG: Read KCon2\n");
+    cdvd_init_s_fifo(cdvd, 9);
+    cdvd->s_fifo[0] = 0;
+    memcpy(&cdvd->s_fifo[1], cdvd->mg_kcon + 8, 8);
 }
 static inline void cdvd_s_get_region_params(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 15);
@@ -571,10 +759,16 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x87: printf("cdvd: mechacon_auth_87\n"); cdvd_s_mechacon_auth_87(cdvd); break;
         case 0x88: printf("cdvd: mechacon_auth_88\n"); cdvd_s_mechacon_auth_88(cdvd); break;
         case 0x8d: printf("cdvd: mg_write_data\n"); cdvd_s_mg_write_data(cdvd); break;
+        case 0x8E: printf("cdvd: mg_readdata\n"); cdvd_s_mg_read_data(cdvd); break;
         case 0x8f: printf("cdvd: mechacon_auth_8f\n"); cdvd_s_mechacon_auth_8f(cdvd); break;
         case 0x90: printf("cdvd: mg_write_hdr_start\n"); cdvd_s_mg_write_hdr_start(cdvd); break;
         case 0x91: printf("cdvd: mg_read_bit_length\n"); cdvd_s_mg_read_bit_length(cdvd); break;
-
+        case 0x92: printf("cdvd: mg_write_datain_length\n"); cdvd_s_mg_write_datain_length(cdvd); break;
+        case 0x93: printf("cdvd: mg_write_dataout_length\n"); cdvd_s_mg_write_dataout_length(cdvd); break;
+        case 0x94: printf("cdvd: mg_read_kbit\n"); cdvd_s_mg_read_kbit(cdvd); break;
+        case 0x95: printf("cdvd: mg_read_kbit2\n"); cdvd_s_mg_read_kbit2(cdvd); break;
+        case 0x96: printf("cdvd: mg_read_kcon\n"); cdvd_s_mg_read_kcon(cdvd); break;
+        case 0x97: printf("cdvd: mg_read_kcon2\n"); cdvd_s_mg_read_kcon2(cdvd); break;
         default: {
             fprintf(stderr, "cdvd: Unknown S command %02xh\n", cmd);
 
