@@ -95,6 +95,12 @@ enum {
 };
 
 struct ps2_cdvd {
+    uint8_t  mg_buffer[0x1000];
+    uint16_t mg_size;
+    uint16_t mg_maxsize;
+    uint8_t  mg_datatype;
+    uint8_t  mg_kbit[16];
+    uint8_t  mg_kcon[16];
     uint8_t n_cmd;
     uint8_t n_stat;
     uint8_t error;
