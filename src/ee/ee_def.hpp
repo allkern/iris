@@ -424,7 +424,11 @@ enum : int {
     EE_I_SWC1,
     EE_I_SQC2,
     EE_I_SD,
-    EE_I_INVALID
+    
+    // Pseudo instructions
+    EE_I_INVALID,
+    EE_I_LI,
+    EE_I_MAX
 };
 
 struct ee_instruction {
@@ -457,6 +461,7 @@ struct ee_block {
     uint32_t start_pc = 0;
     uint32_t end_pc = 0;
     ee_compiled_block func;
+    uint64_t hits;
 };
 
 struct ee_page {
@@ -469,6 +474,14 @@ struct ee_page {
 
 #define EE_VIRT_SIZE 0x100000000ull
 #define EE_MIN_PAGESIZE 0x1000
+
+struct ee_cache_page {
+    ee_block* blocks;
+    uint32_t min_code_addr;
+    uint32_t max_code_addr;
+    bool valid;
+    bool dirty;
+};
 
 struct ee_state {
     EE_ALIGNED16 uint128_t r[32];
@@ -526,8 +539,7 @@ struct ee_state {
 
     uint32_t block_pc;
 
-    std::vector <ee_block*> block_cache;
-    std::vector <int> block_cache_dirty;
+    std::vector <ee_cache_page> block_cache;
     
     // Single-entry block cache for fast lookup (avoid hash computation)
     // Exploits temporal locality since we execute the same block repeatedly
@@ -540,6 +552,9 @@ struct ee_state {
     asmjit::FileLogger* logger;
     asmjit::ujit::BackendCompiler* bc;
     asmjit::ujit::UniCompiler* uc;
+    asmjit::ujit::Gp ee_ptr;
+    asmjit::ujit::Gp reg_cache[32];
+    bool reg_is_cached[32] = { false };
 
     uint64_t total_cycles;
 

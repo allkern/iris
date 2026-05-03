@@ -10,7 +10,7 @@ set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Reso
 
 # Statically link SDL3 for Linux targets
 set(SDL_STATIC ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+set(ASMJIT_STATIC ON)
 
 find_package(Git QUIET)
 
@@ -56,6 +56,7 @@ target_compile_options(iris PUBLIC "-fno-exceptions" "-Wno-c++11-narrowing")
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
 
+add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
 add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
@@ -142,7 +143,7 @@ target_sources(iris PRIVATE
     src/dev/mtap.c
     src/dev/ps1_mcd.c
     src/dev/ps1_mcd.c
-    src/ee/ee_cached.cpp
+    src/ee/ee_jit.cpp
     src/ee/bus.c
     src/ee/dmac.c
     src/ee/ee_dis.c
@@ -224,6 +225,7 @@ target_sources(iris PRIVATE
 )
 
 target_include_directories(iris PRIVATE
+    deps/asmjit
     deps/imgui
     deps/imgui/backends
     deps/implot
@@ -244,6 +246,7 @@ target_link_libraries(iris PUBLIC
     SDL3::SDL3-static
     parallel-gs
     chdr-static
+    asmjit::asmjit
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
