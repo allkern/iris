@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <asmjit/ujit.h>
 
 #include "shared/ram.h"
 
@@ -532,6 +533,13 @@ struct ee_state {
     // Exploits temporal locality since we execute the same block repeatedly
     uint32_t last_block_lookup_pc;
     struct ee_block* last_block_ptr;
+
+    // ASMJIT stuff
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    asmjit::FileLogger* logger;
+    asmjit::ujit::BackendCompiler* bc;
+    asmjit::ujit::UniCompiler* uc;
 
     uint64_t total_cycles;
 
