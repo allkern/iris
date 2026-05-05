@@ -64,7 +64,13 @@ static inline void ee_d_addas(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d,
 static inline void ee_d_addi(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "addi", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
 static inline void ee_d_addiu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "addiu", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
 static inline void ee_d_adds(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d, $f%d", "add.s", EE_D_RD, EE_D_RS, EE_D_RT); }
-static inline void ee_d_addu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "addu", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
+static inline void ee_d_addu(uint32_t opcode) {
+    if (EE_D_RS == 0 || EE_D_RT == 0) {
+        ptr += sprintf(ptr, "%-8s $%s, $%s", "move", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS == 0 ? EE_D_RT : EE_D_RS]);
+    } else {
+        ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "addu", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]);
+    }
+}
 static inline void ee_d_and(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "and", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_andi(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "andi", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
 static inline void ee_d_bc0f(uint32_t opcode) { ptr += sprintf(ptr, "%-8s 0x%x", "bc0f", s->pc + 4 + EE_D_SI16); }
@@ -111,7 +117,13 @@ static inline void ee_d_cvtw(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, 
 static inline void ee_d_dadd(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "dadd", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_daddi(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "daddi", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
 static inline void ee_d_daddiu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "daddiu", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
-static inline void ee_d_daddu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "daddu", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
+static inline void ee_d_daddu(uint32_t opcode) { 
+    if (EE_D_RS == 0 || EE_D_RT == 0) {
+        ptr += sprintf(ptr, "%-8s $%s, $%s", "move", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS == 0 ? EE_D_RT : EE_D_RS]);
+    } else {
+        ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "daddu", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]);
+    }
+}
 static inline void ee_d_di(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "di"); }
 static inline void ee_d_div(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "div", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_div1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "div1", ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
@@ -450,6 +462,7 @@ static inline void ee_d_vwaitq(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "v
 static inline void ee_d_xor(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "xor", ee_cc_r[EE_D_RD], ee_cc_r[EE_D_RS], ee_cc_r[EE_D_RT]); }
 static inline void ee_d_xori(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, %d", "xori", ee_cc_r[EE_D_RT], ee_cc_r[EE_D_RS], EE_D_I16); }
 static inline void ee_d_invalid(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "<invalid>"); }
+static inline void ee_d_nop(uint32_t opcode) { ptr += sprintf(ptr, "%-8s", "nop"); }
 
 char *ee_disassemble(char *buf, uint32_t opcode, struct ee_dis_state *dis_state) {
     s = dis_state;
@@ -461,6 +474,12 @@ char *ee_disassemble(char *buf, uint32_t opcode, struct ee_dis_state *dis_state)
 
     if (dis_state) if (dis_state->print_opcode)
         ptr += sprintf(ptr, "%08x ", opcode);
+
+    if (opcode == 0) {
+        ee_d_nop(opcode);
+
+        return buf;
+    }
 
     switch (opcode & 0xFC000000) {
         case 0x00000000: { // special

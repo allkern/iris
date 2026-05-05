@@ -10,6 +10,7 @@ extern "C" {
 struct ee_dis_state {
     int print_address;
     int print_opcode;
+    int pseudo_instructions;
     uint32_t pc;
 };
 
