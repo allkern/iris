@@ -363,7 +363,8 @@ struct recent {
 
 struct instance {
     SDL_Window* window = nullptr;
-    SDL_AudioStream* stream = nullptr;
+    SDL_AudioStream* streams[2] = { nullptr };
+    SDL_AudioDeviceID audio_device;
 
     // Vulkan state
     std::vector <VkExtensionProperties> instance_extensions;
