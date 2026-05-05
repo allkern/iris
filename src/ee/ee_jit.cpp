@@ -63,7 +63,6 @@
         case 13: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
         case 14: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
         case 15: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        default: __builtin_unreachable(); \
     } }
 #define VU_UPPER_TEMPLATE(ins) { \
     ps2_vu_decode_upper(ee->vu0, i.opcode); \
@@ -84,7 +83,6 @@
         case 13: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
         case 14: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
         case 15: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        default: __builtin_unreachable(); \
     } }
 
 static inline int fast_abs32(int a) {
@@ -3156,6 +3154,20 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
             return;
         } break;
 
+        // RFU060
+        case 0x3c: {
+            if (ee->r[5].u32[0] == 0xffffffff) {
+                ee->r[5].u32[0] = (ee->ram_size + 1) - ee->r[6].s32[0];
+            }
+        } break;
+
+        // GetMemorySize
+        case 0x7f: {
+            ee->r[2].u32[0] = ee->ram_size + 1;
+
+            return;
+        } break;
+
         // FlushCache
         case 0x64: {
             // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
@@ -3490,8 +3502,9 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
 
     ee->logger = new asmjit::FileLogger(stdout);
 
-    for (int i = 0; i < 32; i++)
-        ee->reg_is_cached[i] = false;
+    for (int i = 0; i < 32; i++) {
+        ee->reg_cache[i].valid = false;
+    }
 }
 
 void ee_reset(struct ee_state* ee) {
@@ -4194,18 +4207,18 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
 
 #define EE(m) ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, m))
 
-static inline asmjit::ujit::Gp ee_get_reg(struct ee_state* ee, asmjit::ujit::UniCompiler* uc, int i, bool sync = true, bool b64 = true) {
+static inline ee_cached_reg& ee_get_reg(struct ee_state* ee, asmjit::ujit::UniCompiler* uc, int i, bool sync = true, bool b64 = true) {
     using namespace asmjit;
 
-    if (!ee->reg_is_cached[i]) {
-        ee->reg_cache[i] = b64 ? uc->new_gp64() : uc->new_gp32();
-        ee->reg_is_cached[i] = true;
+    if (!ee->reg_cache[i].valid) {
+        ee->reg_cache[i].reg = b64 ? uc->new_gp64() : uc->new_gp32();
+        ee->reg_cache[i].valid = true;
 
         if (sync) {
             if (b64) {
-                uc->load_u64(ee->reg_cache[i], EE(r[i].u64[0]));
+                uc->load_u64(ee->reg_cache[i].reg, EE(r[i].u64[0]));
             } else {
-                uc->load_u32(ee->reg_cache[i], EE(r[i].u32[0]));
+                uc->load_u32(ee->reg_cache[i].reg, EE(r[i].u32[0]));
             }
         }
     }
@@ -4217,14 +4230,13 @@ static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniComp
     using namespace asmjit;
 
     for (int i = 0; i < 32; i++) {
-        if (ee->reg_is_cached[i]) {
-            uc->store_u64(EE(r[i].u64[0]), ee->reg_cache[i]);
+        if (ee->reg_cache[i].valid) {
+            uc->store_u64(EE(r[i].u64[0]), ee->reg_cache[i].reg);
         }
 
-        ee->reg_is_cached[i] = false;
+        ee->reg_cache[i].valid = false;
     }
 }
-
 
 void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     using namespace asmjit;
@@ -4247,65 +4259,93 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
     for (const ee_instruction& i : block->instructions) {
         switch (i.id) {
+            case EE_I_ADDI:
             case EE_I_ADDIU: {
                 if (!i.rt) continue;
 
                 bool sync = i.rt == i.rs;
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
 
                 if (!i.rs) {
-                    uc.mov(rt, Imm((int64_t)(int16_t)i.i16));
+                    uc.mov(rt.reg, Imm((int64_t)(int16_t)i.i16));
                 } else {
-                    ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
 
-                    uc.add(rt, rs, Imm((int32_t)(int16_t)i.i16));
-                    bc.movsxd(rt, rt);
+                    uc.add(rt.reg, rs.reg, Imm((int32_t)(int16_t)i.i16));
+                    bc.movsxd(rt.reg, rt.reg);
                 }
             } break;
 
             case EE_I_MFC0: {
                 if (!i.rt) continue;
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt, false);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, false);
 
-                uc.load_u32(rt, EE(cop0_r[i.rd]));
-                bc.movsxd(rt, rt);
+                uc.load_u32(rt.reg, EE(cop0_r[i.rd]));
+                bc.movsxd(rt.reg, rt.reg);
             } break;
 
             case EE_I_MTC0: {
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
 
-                uc.store_u32(EE(cop0_r[i.rd]), rt);
+                uc.store_u32(EE(cop0_r[i.rd]), rt.reg);
             } break;
 
+            case EE_I_SUB:
             case EE_I_SUBU: {
                 if (!i.rd) continue;
 
                 bool sync = i.rs == i.rd || i.rt == i.rd;
 
-                ujit::Gp rd = ee_get_reg(ee, &uc, i.rd, sync);
-                ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
 
-                uc.sub(rd, rs, rt);
-                bc.movsxd(rd, rd);
+                uc.sub(rd.reg, rs.reg, rt.reg);
+                bc.movsxd(rd.reg, rd.reg);
             } break;
+
+            // case EE_I_AND: {
+            //     if (!i.rd) continue;
+
+            //     code.set_logger(ee->logger);
+
+            //     bool sync = i.rs == i.rd || i.rt == i.rd;
+
+            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+
+            //     uc.and_(rd.reg, rs.reg, rt.reg);
+            // } break;
+
+            // case EE_I_OR: {
+            //     if (!i.rd) continue;
+
+            //     bool sync = i.rs == i.rd || i.rt == i.rd;
+
+            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+
+            //     uc.or_(rd.reg, rs.reg, rt.reg);
+            // } break;
 
             case EE_I_SLTU: {
                 if (!i.rd) continue;
 
                 bool sync = i.rs == i.rd || i.rt == i.rd;
 
-                ujit::Gp rd = ee_get_reg(ee, &uc, i.rd, sync);
-                ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
                 ujit::Gp tmp = uc.new_gp64();
 
                 uc.mov(tmp, Imm(0));
-                bc.cmp(rs, rt);
+                bc.cmp(rs.reg, rt.reg);
                 bc.setb(tmp);
-                uc.mov(rd, tmp);
+                uc.mov(rd.reg, tmp);
             } break;
 
             case EE_I_SLTI: {
@@ -4313,14 +4353,14 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 bool sync = i.rs == i.rt;
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt, sync);
-                ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
                 ujit::Gp tmp = uc.new_gp64();
 
                 uc.mov(tmp, Imm(0));
-                bc.cmp(rs, Imm((int64_t)(int16_t)i.i16));
+                bc.cmp(rs.reg, Imm((int64_t)(int16_t)i.i16));
                 bc.setl(tmp);
-                uc.mov(rt, tmp);
+                uc.mov(rt.reg, tmp);
             } break;
 
             case EE_I_SYNC: {
@@ -4330,12 +4370,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             case EE_I_BNE: {
                 if (i.rt == i.rs) continue;
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt);
-                ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
 
                 Label L0 = uc.new_label();
 
-                bc.cmp(rt, rs);
+                bc.cmp(rt.reg, rs.reg);
                 bc.je(L0);
 
                 ujit::Gp tmp = uc.new_gp32();
@@ -4358,12 +4398,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     continue;
                 }
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt);
-                ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
 
                 Label L0 = uc.new_label();
 
-                bc.cmp(rt, rs);
+                bc.cmp(rt.reg, rs.reg);
                 bc.jne(L0);
 
                 ujit::Gp tmp = uc.new_gp32();
@@ -4376,16 +4416,16 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_JR: {
-                ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
 
-                uc.store_u32(EE(next_pc), rs);
+                uc.store_u32(EE(next_pc), rs.reg);
             } break;
 
             case EE_I_JAL: {
-                ujit::Gp ra = ee_get_reg(ee, &uc, 31, false);
+                ee_cached_reg& ra = ee_get_reg(ee, &uc, 31, false);
 
                 // uc.mov(ra, Imm(0));
-                uc.load_u32(ra, EE(next_pc));
+                uc.load_u32(ra.reg, EE(next_pc));
 
                 ujit::Gp tmp = uc.new_gp32();
 
@@ -4393,41 +4433,43 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 uc.store_u32(EE(next_pc), tmp);
             } break;
 
-            // case EE_I_JALR: {
-            //     ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
+            case EE_I_JALR: {
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
 
-            //     if (!i.rd) {
-            //         uc.store_u32(EE(next_pc), rs);
-            //     } else {
-            //         ujit::Gp rd = ee_get_reg(ee, &uc, i.rd, false);
-            //         ujit::Gp tmp = uc.new_gp32();
+                if (!i.rd) {
+                    uc.store_u32(EE(next_pc), rs.reg);
+                } else {
+                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, false);
+                    ujit::Gp tmp = uc.new_gp64();
 
-            //         uc.load_u32(tmp, EE(next_pc));
-            //         uc.store_u32(EE(next_pc), rs);
-            //         uc.mov(rd, Imm(0));
-            //         uc.mov(rd, tmp);
-            //     }
-            // } break;
+                    uc.load_u32(tmp, EE(next_pc));
+                    uc.store_u32(EE(next_pc), rs.reg);
+                    uc.mov(rd.reg, tmp);
+                }
+            } break;
 
             case EE_I_SLL: {
                 if (!i.rd) continue;
 
                 bool sync = i.rt == i.rd;
 
-                ujit::Gp rd = ee_get_reg(ee, &uc, i.rd, sync);
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
 
-                uc.shl(rd, rt, Imm(i.sa));
-                bc.movsxd(rd, rd);
+                uc.shl(rd.reg, rt.reg, Imm(i.sa));
+                bc.movsxd(rd.reg, rd.reg);
             } break;
 
             case EE_I_LUI: {
                 if (!i.rt) continue;
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt, false);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, false);
 
-                uc.mov(rt, Imm((int64_t)(int32_t)(i.i16 << 16)));
-                bc.movsxd(rt, rt);
+                uc.mov(rt.reg, Imm((int64_t)(int32_t)(i.i16 << 16)));
+
+                if (i.i16 & 0x8000) {
+                    bc.movsxd(rt.reg, rt.reg);
+                }
             } break;
 
             case EE_I_ORI: {
@@ -4435,24 +4477,184 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 bool sync = i.rs == i.rt;
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
 
                 if (!i.rs) {
-                    uc.mov(rt, Imm(i.i16));
+                    uc.mov(rt.reg, Imm(i.i16));
                 } else {
-                    ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
 
-                    uc.or_(rt, rs, Imm(i.i16));
+                    uc.or_(rt.reg, rs.reg, Imm(i.i16));
                 }
+            } break;
+
+            case EE_I_LW: {
+                if (!i.rt) {
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                    ujit::Gp tmp = uc.new_gp64();
+                    uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+                    uc.add(tmp, tmp, rs.reg);
+                    uc.and_(tmp, tmp, Imm(0xffffffff));
+
+                    InvokeNode* invoke_node;
+
+                    bc.invoke(
+                        Out(invoke_node),
+                        (uintptr_t)bus_read32,
+                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                    );
+
+                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(1, tmp);
+
+                    continue;
+                }
+
+                bool sync = i.rt == i.rs;
+
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ujit::Gp tmp = uc.new_gp64();
+
+                uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+                uc.add(tmp, tmp, rs.reg);
+                uc.and_(tmp, tmp, Imm(0xffffffff));
+
+                InvokeNode* invoke_node;
+
+                bc.invoke(
+                    Out(invoke_node),
+                    (uintptr_t)bus_read32,
+                    FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                );
+
+                invoke_node->set_arg(0, ee->ee_ptr);
+                invoke_node->set_arg(1, tmp);
+                invoke_node->set_ret(0, rt.reg);
+
+                bc.movsxd(rt.reg, rt.reg);
+            } break;
+
+            case EE_I_SW: {
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ujit::Gp tmp1 = uc.new_gp64();
+                ujit::Gp tmp2 = uc.new_gp64();
+
+                uc.mov(tmp1, Imm((int32_t)(int16_t)i.i16));
+                uc.add(tmp1, tmp1, rs.reg);
+                uc.and_(tmp2, rt.reg, Imm(0xffffffff));
+
+                InvokeNode* invoke_node;
+
+                bc.invoke(
+                    Out(invoke_node),
+                    (uintptr_t)bus_write32,
+                    FuncSignature::build<void, ee_state*, uint32_t, uint64_t>()
+                );
+
+                invoke_node->set_arg(0, ee->ee_ptr);
+                invoke_node->set_arg(1, tmp1);
+                invoke_node->set_arg(2, tmp2);
+            } break;
+
+            case EE_I_LD: {
+                if (!i.rt) {
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                    ujit::Gp tmp = uc.new_gp64();
+
+                    uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+                    uc.add(tmp, tmp, rs.reg);
+
+                    InvokeNode* invoke_node;
+
+                    bc.invoke(
+                        Out(invoke_node),
+                        (uintptr_t)bus_read64,
+                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                    );
+
+                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(1, tmp);
+
+                    continue;
+                }
+
+                bool sync = i.rt == i.rs;
+
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ujit::Gp tmp = uc.new_gp64();
+
+                uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+                uc.add(tmp, tmp, rs.reg);
+
+                InvokeNode* invoke_node;
+
+                bc.invoke(
+                    Out(invoke_node),
+                    (uintptr_t)bus_read64,
+                    FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                );
+
+                invoke_node->set_arg(0, ee->ee_ptr);
+                invoke_node->set_arg(1, tmp);
+                invoke_node->set_ret(0, rt.reg);
+            } break;
+
+            case EE_I_SD: {
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ujit::Gp tmp1 = uc.new_gp64();
+                ujit::Gp tmp2 = uc.new_gp64();
+
+                uc.mov(tmp1, Imm((int32_t)(int16_t)i.i16));
+                uc.add(tmp1, tmp1, rs.reg);
+
+                InvokeNode* invoke_node;
+
+                bc.invoke(
+                    Out(invoke_node),
+                    (uintptr_t)bus_write64,
+                    FuncSignature::build<void, ee_state*, uint32_t, uint64_t>()
+                );
+
+                invoke_node->set_arg(0, ee->ee_ptr);
+                invoke_node->set_arg(1, tmp1);
+                invoke_node->set_arg(2, rt.reg);
             } break;
 
             case EE_I_LI: {
                 if (!i.rt) continue;
 
-                ujit::Gp rt = ee_get_reg(ee, &uc, i.rt, false);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, false);
 
-                uc.mov(rt, Imm((int64_t)(int32_t)i.i16));
-                bc.movsxd(rt, rt);
+                uc.mov(rt.reg, Imm((int64_t)(int32_t)i.i16));
+
+                if (i.i16 & 0x80000000) {
+                    bc.movsxd(rt.reg, rt.reg);
+                }
+            } break;
+
+            case EE_I_ADDU: {
+                if (!i.rd) continue;
+
+                bool sync = i.rs == i.rd || i.rt == i.rd;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+
+                if (!i.rs || !i.rt) {
+                    ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs ? i.rs : i.rt);
+
+                    uc.mov(rd.reg, src.reg);
+                } else {
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+
+                    uc.add(rd.reg, rs.reg, rt.reg);
+                }
+
+                bc.movsxd(rd.reg, rd.reg);
             } break;
 
             case EE_I_DADDU: {
@@ -4460,17 +4662,17 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 bool sync = i.rs == i.rd || i.rt == i.rd;
 
-                ujit::Gp rd = ee_get_reg(ee, &uc, i.rd, sync);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
 
                 if (!i.rs || !i.rt) {
-                    ujit::Gp src = ee_get_reg(ee, &uc, i.rs ? i.rs : i.rt);
+                    ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs ? i.rs : i.rt);
 
-                    uc.mov(rd, src);
+                    uc.mov(rd.reg, src.reg);
                 } else {
-                    ujit::Gp rs = ee_get_reg(ee, &uc, i.rs);
-                    ujit::Gp rt = ee_get_reg(ee, &uc, i.rt);
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
 
-                    uc.add(rd, rs, rt);
+                    uc.add(rd.reg, rs.reg, rt.reg);
                 }
             } break;
 
@@ -4529,16 +4731,30 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
     Error err = uc.finalize();
 
-    // if (err != Error::kOk) {
-    //     printf("ee: Failed to finalize JIT compilation %d\n", err);
+    if (err != Error::kOk) {
+        printf("ee: Failed to finalize JIT compilation %d\n", err);
 
-    //     exit(1);
-    // }
+        exit(1);
+    }
 
     Error err1 = ee->rt.add(&block->func, &code);
 
-    // if (err1 != Error::kOk) {
-    //     printf("ee: Failed to add JIT code to runtime %d\n", err1);
+    if (err1 != Error::kOk) {
+        printf("ee: Failed to add JIT code to runtime %d\n", err1);
+
+        exit(1);
+    }
+
+    // if (code.logger()) {
+    //     char buf[128];
+
+    //     ee_dis_state ds;
+    //     ds.print_opcode = true;
+    //     ds.print_address = true;
+
+    //     for (const auto& i : block->instructions) {
+    //         puts(ee_disassemble(buf, i.opcode, &ds));
+    //     }
 
     //     exit(1);
     // }
@@ -4581,6 +4797,7 @@ static inline int _ee_run_block(struct ee_state* ee, int max_cycles) {
 
     block->func(ee);
     // for (const auto& i : block->instructions) {
+    //     counters[i.id]++;
     //     i.func(ee, i);
 
     //     ee->r[0] = { 0 };

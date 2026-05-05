@@ -472,6 +472,13 @@ struct ee_page {
     int global;
 };
 
+struct ee_cached_reg {
+    asmjit::ujit::Gp reg;
+    bool valid = false;
+    bool constant = false;
+    uint64_t value = 0;
+};
+
 #define EE_VIRT_SIZE 0x100000000ull
 #define EE_MIN_PAGESIZE 0x1000
 
@@ -540,7 +547,7 @@ struct ee_state {
     uint32_t block_pc;
 
     std::vector <ee_cache_page> block_cache;
-    
+
     // Single-entry block cache for fast lookup (avoid hash computation)
     // Exploits temporal locality since we execute the same block repeatedly
     uint32_t last_block_lookup_pc;
@@ -553,8 +560,7 @@ struct ee_state {
     asmjit::ujit::BackendCompiler* bc;
     asmjit::ujit::UniCompiler* uc;
     asmjit::ujit::Gp ee_ptr;
-    asmjit::ujit::Gp reg_cache[32];
-    bool reg_is_cached[32] = { false };
+    ee_cached_reg reg_cache[32];
 
     uint64_t total_cycles;
 
