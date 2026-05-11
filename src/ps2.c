@@ -321,8 +321,16 @@ void ps2_reset(struct ps2_state* ps2) {
 // }
 
 void ps2_cycle(struct ps2_state* ps2) {
-    while (ps2->ee_cycles < 16*64) {
-        uint32_t cycles = ee_run_block(ps2->ee, 128);
+    struct sched_event* event = sched_next_event(ps2->sched);
+
+    int64_t max_block_cycles = event->cycles < 16*64 ? event->cycles : 16*64;
+
+    if (max_block_cycles < 16*16) {
+        max_block_cycles = 16*16;
+    }
+
+    while (ps2->ee_cycles < max_block_cycles) {
+        uint32_t cycles = ee_run_block(ps2->ee, 256);
 
         sched_tick(ps2->sched, ps2->timescale * cycles);
 
