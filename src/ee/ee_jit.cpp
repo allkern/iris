@@ -164,10 +164,10 @@ static inline uint32_t unpack_5551_8888(uint32_t v) {
     i.i16 = opcode & 0xffff;
     i.i26 = opcode & 0x3ffffff;
 */
-#define EE_D_RS (i.rs)
-#define EE_D_FS (i.rd)
-#define EE_D_RT (i.rt)
-#define EE_D_RD (i.rd)
+#define EE_D_RS (i.rs.r)
+#define EE_D_FS (i.rd.r)
+#define EE_D_RT (i.rt.r)
+#define EE_D_RD (i.rd.r)
 #define EE_D_FD (i.sa)
 #define EE_D_SA (i.sa)
 #define EE_D_I15 (i.i15)
@@ -3564,9 +3564,9 @@ ee_instruction ee_decode(uint32_t opcode) {
     ee_instruction i;
 
     i.opcode = opcode;
-    i.rs = (opcode >> 21) & 0x1f;
-    i.rt = (opcode >> 16) & 0x1f;
-    i.rd = (opcode >> 11) & 0x1f;
+    i.rs.r = (opcode >> 21) & 0x1f;
+    i.rt.r = (opcode >> 16) & 0x1f;
+    i.rd.r = (opcode >> 11) & 0x1f;
     i.sa = (opcode >> 6) & 0x1f;
     i.i15 = (opcode >> 6) & 0x7fff;
     i.i16 = opcode & 0xffff;
@@ -4074,12 +4074,167 @@ void ee_optimize_block(struct ee_block* block) {
     if (block->instructions.size() < 2)
         return;
 
+    struct reg_opt_info {
+        bool constant = false;
+        uint64_t value = 0;
+    } regs[32];
+
+    regs[0].constant = true;
+    regs[0].value = 0;
+
+    // for (auto& i : block->instructions) {
+    //     switch (i.id) {
+    //         case EE_I_LUI: {
+    //             // LUI always generates a constant, eliminate the instruction
+    //             // and mark the register as constant
+    //             i.id = EE_I_NOP;
+
+    //             regs[i.rt.r].constant = true;
+    //             regs[i.rt.r].value = (int64_t)(int32_t)(i.i16 << 16);
+    //         } break;
+
+    //         case EE_I_ADDI:
+    //         case EE_I_ADDIU: {
+    //             // RS is constant: fold into constant
+    //             if (regs[i.rs.r].constant) {
+    //                 i.id = EE_I_NOP;
+
+    //                 regs[i.rt.r].constant = true;
+    //                 regs[i.rt.r].value = (int64_t)(int32_t)(regs[i.rs.r].value + i.i16);
+
+    //             // No constants: not much we can do
+    //             } else {
+    //                 regs[i.rt.r].constant = false;
+    //             }
+    //         } break;
+
+    //         case EE_I_DADDI:
+    //         case EE_I_DADDIU: {
+    //             // RS is constant: fold into constant
+    //             if (regs[i.rs.r].constant) {
+    //                 i.id = EE_I_NOP;
+
+    //                 regs[i.rt.r].constant = true;
+    //                 regs[i.rt.r].value = (int64_t)(int32_t)(regs[i.rs.r].value + i.i16);
+
+    //             // No constants: not much we can do
+    //             } else {
+    //                 regs[i.rt.r].constant = false;
+    //             }
+    //         } break;
+
+    //         case EE_I_ADD:
+    //         case EE_I_ADDU: {
+    //             // Both constants: fold into constant
+    //             if (regs[i.rs.r].constant && regs[i.rt.r].constant) {
+    //                 i.id = EE_I_NOP;
+
+    //                 regs[i.rd.r].constant = true;
+    //                 regs[i.rd.r].value = (int64_t)(int32_t)(regs[i.rs.r].value + regs[i.rt.r].value);
+
+    //             // One constant: emit as ADDIL with the constant
+    //             } else if (regs[i.rs.r].constant != regs[i.rt.r].constant) {
+    //                 i.id = EE_I_ADDIU;
+
+    //                 if (regs[i.rs.r].constant) {
+    //                     i.rs.constant = true;
+    //                     i.rs.value = regs[i.rs.r].value;
+    //                 } else {
+    //                     i.rt.constant = true;
+    //                     i.rt.value = regs[i.rt.r].value;
+    //                 }
+
+    //                 regs[i.rd.r].constant = false;
+
+    //             // No constants: not much we can do
+    //             } else {
+    //                 regs[i.rd.r].constant = false;
+    //             }
+    //         } break;
+
+    //         case EE_I_DADD:
+    //         case EE_I_DADDU: {
+    //             // Both constants: fold into constant
+    //             if (regs[i.rs.r].constant && regs[i.rt.r].constant) {
+    //                 i.id = EE_I_NOP;
+
+    //                 regs[i.rd.r].constant = true;
+    //                 regs[i.rd.r].value = (int64_t)(int32_t)(regs[i.rs.r].value + regs[i.rt.r].value);
+
+    //             // One constant: emit as ADDIL with the constant
+    //             } else if (regs[i.rs.r].constant != regs[i.rt.r].constant) {
+    //                 i.id = EE_I_ADDIU;
+
+    //                 if (regs[i.rs.r].constant) {
+    //                     i.rs.constant = true;
+    //                     i.rs.value = regs[i.rs.r].value;
+    //                 } else {
+    //                     i.rt.constant = true;
+    //                     i.rt.value = regs[i.rt.r].value;
+    //                 }
+
+    //                 regs[i.rd.r].constant = false;
+
+    //             // No constants: not much we can do
+    //             } else {
+    //                 regs[i.rd.r].constant = false;
+    //             }
+    //         }
+
+    //         case EE_I_SUB:
+    //         case EE_I_SUBU: {
+    //             // Both constants: fold into constant
+    //             if (regs[i.rs.r].constant && regs[i.rt.r].constant) {
+    //                 i.id = EE_I_NOP;
+
+    //                 regs[i.rd.r].constant = true;
+    //                 regs[i.rd.r].value = (int64_t)(int32_t)(regs[i.rs.r].value - regs[i.rt.r].value);
+
+    //             // One constant: emit as ADDIL with the constant
+    //             } else if (regs[i.rs.r].constant != regs[i.rt.r].constant) {
+    //                 i.id = EE_I_ADDIU;
+
+    //                 if (regs[i.rs.r].constant) {
+    //                     i.rs.constant = true;
+    //                     i.rs.value = regs[i.rs.r].value;
+    //                 } else {
+    //                     i.rt.constant = true;
+    //                     i.rt.value = regs[i.rt.r].value;
+    //                 }
+
+    //                 regs[i.rd.r].constant = false;
+
+    //             // No constants: not much we can do
+    //             } else {
+    //                 regs[i.rd.r].constant = false;
+    //             }
+    //         }
+
+    //         case EE_I_DSUB:
+    //         case EE_I_DSUBU: {
+
+    //         } break;
+
+    //         case EE_I_ORI: {
+    //             // RS is constant: fold into constant
+    //             if (regs[i.rs.r].constant) {
+    //                 i.id = EE_I_NOP;
+
+    //                 regs[i.rt.r].constant = true;
+    //                 regs[i.rt.r].value = regs[i.rs.r].value | i.i16;
+    //             } else {
+    //                 regs[i.rt.r].constant = false;
+    //             }
+    //         } break;
+    //     }
+    // }
+
     for (int i = 0; i < block->instructions.size() - 1; i++) {
         auto& a = block->instructions[i];
         auto& b = block->instructions[i+1];
  
         // Fuse LUI/ORI into LI
-        if (a.func == ee_i_lui && b.func == ee_i_ori && a.rt == b.rt && b.rs == b.rt) {
+        if (a.id == EE_I_LUI && b.id == EE_I_ORI && a.rt.r == b.rt.r && b.rs.r == b.rt.r) {
             a.id =  EE_I_LI;
             a.func = ee_i_li;
             a.i16 = (a.i16 << 16) | b.i16;
@@ -4261,16 +4416,16 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
         switch (i.id) {
             case EE_I_ADDI:
             case EE_I_ADDIU: {
-                if (!i.rt) continue;
+                if (!i.rt.r) continue;
 
-                bool sync = i.rt == i.rs;
+                bool sync = i.rt.r == i.rs.r;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
 
-                if (!i.rs) {
+                if (!i.rs.r) {
                     uc.mov(rt.reg, Imm((int64_t)(int16_t)i.i16));
                 } else {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
                     uc.add(rt.reg, rs.reg, Imm((int32_t)(int16_t)i.i16));
                     bc.movsxd(rt.reg, rt.reg);
@@ -4278,29 +4433,29 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_MFC0: {
-                if (!i.rt) continue;
+                if (!i.rt.r) continue;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, false);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
 
-                uc.load_u32(rt.reg, EE(cop0_r[i.rd]));
+                uc.load_u32(rt.reg, EE(cop0_r[i.rd.r]));
                 bc.movsxd(rt.reg, rt.reg);
             } break;
 
             case EE_I_MTC0: {
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
-                uc.store_u32(EE(cop0_r[i.rd]), rt.reg);
+                uc.store_u32(EE(cop0_r[i.rd.r]), rt.reg);
             } break;
 
             case EE_I_SUB:
             case EE_I_SUBU: {
-                if (!i.rd) continue;
+                if (!i.rd.r) continue;
 
-                bool sync = i.rs == i.rd || i.rt == i.rd;
+                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
                 uc.sub(rd.reg, rs.reg, rt.reg);
                 bc.movsxd(rd.reg, rd.reg);
@@ -4311,35 +4466,35 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
             //     code.set_logger(ee->logger);
 
-            //     bool sync = i.rs == i.rd || i.rt == i.rd;
+            //     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
-            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
-            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
             //     uc.and_(rd.reg, rs.reg, rt.reg);
             // } break;
 
             // case EE_I_OR: {
-            //     if (!i.rd) continue;
+            //     if (!i.rd.r) continue;
 
-            //     bool sync = i.rs == i.rd || i.rt == i.rd;
+            //     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
-            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
-            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
             //     uc.or_(rd.reg, rs.reg, rt.reg);
             // } break;
 
             case EE_I_SLTU: {
-                if (!i.rd) continue;
+                if (!i.rd.r) continue;
 
-                bool sync = i.rs == i.rd || i.rt == i.rd;
+                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
                 ujit::Gp tmp = uc.new_gp64();
 
                 uc.mov(tmp, Imm(0));
@@ -4349,12 +4504,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_SLTI: {
-                if (!i.rt) continue;
+                if (!i.rt.r) continue;
 
-                bool sync = i.rs == i.rt;
+                bool sync = i.rs.r == i.rt.r;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ujit::Gp tmp = uc.new_gp64();
 
                 uc.mov(tmp, Imm(0));
@@ -4368,10 +4523,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_BNE: {
-                if (i.rt == i.rs) continue;
+                if (i.rt.r == i.rs.r) continue;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
                 Label L0 = uc.new_label();
 
@@ -4388,7 +4543,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_BEQ: {
-                if (i.rt == i.rs) {
+                if (i.rt.r == i.rs.r) {
                     ujit::Gp tmp = uc.new_gp32();
 
                     uc.load_u32(tmp, EE(pc));
@@ -4398,8 +4553,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     continue;
                 }
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
                 Label L0 = uc.new_label();
 
@@ -4416,7 +4571,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_JR: {
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
                 uc.store_u32(EE(next_pc), rs.reg);
             } break;
@@ -4434,12 +4589,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_JALR: {
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
-                if (!i.rd) {
+                if (!i.rd.r) {
                     uc.store_u32(EE(next_pc), rs.reg);
                 } else {
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, false);
+                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, false);
                     ujit::Gp tmp = uc.new_gp64();
 
                     uc.load_u32(tmp, EE(next_pc));
@@ -4449,21 +4604,21 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_SLL: {
-                if (!i.rd) continue;
+                if (!i.rd.r) continue;
 
-                bool sync = i.rt == i.rd;
+                bool sync = i.rt.r == i.rd.r;
 
-                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
                 uc.shl(rd.reg, rt.reg, Imm(i.sa));
                 bc.movsxd(rd.reg, rd.reg);
             } break;
 
             case EE_I_LUI: {
-                if (!i.rt) continue;
+                if (!i.rt.r) continue;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, false);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
 
                 uc.mov(rt.reg, Imm((int64_t)(int32_t)(i.i16 << 16)));
 
@@ -4473,24 +4628,24 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_ORI: {
-                if (!i.rt) continue;
+                if (!i.rt.r) continue;
 
-                bool sync = i.rs == i.rt;
+                bool sync = i.rs.r == i.rt.r;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
 
-                if (!i.rs) {
+                if (!i.rs.r) {
                     uc.mov(rt.reg, Imm(i.i16));
                 } else {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
                     uc.or_(rt.reg, rs.reg, Imm(i.i16));
                 }
             } break;
 
             case EE_I_LW: {
-                if (!i.rt) {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                if (!i.rt.r) {
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                     ujit::Gp tmp = uc.new_gp64();
                     uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
                     uc.add(tmp, tmp, rs.reg);
@@ -4510,10 +4665,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     continue;
                 }
 
-                bool sync = i.rt == i.rs;
+                bool sync = i.rt.r == i.rs.r;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ujit::Gp tmp = uc.new_gp64();
 
                 uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
@@ -4536,8 +4691,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_SW: {
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ujit::Gp tmp1 = uc.new_gp64();
                 ujit::Gp tmp2 = uc.new_gp64();
 
@@ -4559,8 +4714,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_LD: {
-                if (!i.rt) {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                if (!i.rt.r) {
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                     ujit::Gp tmp = uc.new_gp64();
 
                     uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
@@ -4580,10 +4735,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     continue;
                 }
 
-                bool sync = i.rt == i.rs;
+                bool sync = i.rt.r == i.rs.r;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, sync);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ujit::Gp tmp = uc.new_gp64();
 
                 uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
@@ -4603,8 +4758,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_SD: {
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ujit::Gp tmp1 = uc.new_gp64();
                 ujit::Gp tmp2 = uc.new_gp64();
 
@@ -4625,9 +4780,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_LI: {
-                if (!i.rt) continue;
+                if (!i.rt.r) continue;
 
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt, false);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
 
                 uc.mov(rt.reg, Imm((int64_t)(int32_t)i.i16));
 
@@ -4637,19 +4792,19 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_ADDU: {
-                if (!i.rd) continue;
+                if (!i.rd.r) continue;
 
-                bool sync = i.rs == i.rd || i.rt == i.rd;
+                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
 
-                if (!i.rs || !i.rt) {
-                    ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs ? i.rs : i.rt);
+                if (!i.rs.r || !i.rt.r) {
+                    ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs.r ? i.rs.r : i.rt.r);
 
                     uc.mov(rd.reg, src.reg);
                 } else {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
                     uc.add(rd.reg, rs.reg, rt.reg);
                 }
@@ -4658,19 +4813,19 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_DADDU: {
-                if (!i.rd) continue;
+                if (!i.rd.r) continue;
 
-                bool sync = i.rs == i.rd || i.rt == i.rd;
+                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd, sync);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
 
-                if (!i.rs || !i.rt) {
-                    ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs ? i.rs : i.rt);
+                if (!i.rs.r || !i.rt.r) {
+                    ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs.r ? i.rs.r : i.rt.r);
 
                     uc.mov(rd.reg, src.reg);
                 } else {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt);
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
                     uc.add(rd.reg, rs.reg, rt.reg);
                 }

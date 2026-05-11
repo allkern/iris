@@ -428,14 +428,21 @@ enum : int {
     // Pseudo instructions
     EE_I_INVALID,
     EE_I_LI,
+    EE_I_NOP,
+    EE_I_LWFIX,
+    EE_I_SWFIX,
     EE_I_MAX
 };
 
 struct ee_instruction {
     uint32_t opcode;
-    int32_t rs;
-    int32_t rt;
-    int32_t rd;
+
+    struct {
+        int32_t r;
+        bool constant;
+        uint64_t value;
+    } rs, rt, rd;
+
     int32_t sa;
     int32_t i15;
     int32_t i16;

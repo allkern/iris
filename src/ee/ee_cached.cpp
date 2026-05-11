@@ -166,10 +166,10 @@ static inline uint32_t unpack_5551_8888(uint32_t v) {
     i.i16 = opcode & 0xffff;
     i.i26 = opcode & 0x3ffffff;
 */
-#define EE_D_RS (i.rs)
-#define EE_D_FS (i.rd)
-#define EE_D_RT (i.rt)
-#define EE_D_RD (i.rd)
+#define EE_D_RS (i.rs.r)
+#define EE_D_FS (i.rd.r)
+#define EE_D_RT (i.rt.r)
+#define EE_D_RD (i.rd.r)
 #define EE_D_FD (i.sa)
 #define EE_D_SA (i.sa)
 #define EE_D_I15 (i.i15)
@@ -508,8 +508,8 @@ static inline bool ee_is_executable_region(uint32_t addr) {
 #define INVALIDATE_CACHE_PAGE(addr) { \
     if (ee_is_executable_region(addr)) { \
         uint32_t page = (addr) / EE_MIN_PAGESIZE; \
-        if (ee->block_cache[page]) { \
-            ee->block_cache_dirty[page] = true; \
+        if (ee->block_cache[page].valid) { \
+            ee->block_cache[page].dirty = true; \
         } \
     } \
 }
@@ -3476,8 +3476,6 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
 
     ee->block_cache.clear();
     ee->block_cache.resize(EE_CACHE_PAGECOUNT);
-    ee->block_cache_dirty.clear();
-    ee->block_cache_dirty.resize(EE_CACHE_PAGECOUNT);
 }
 
 void ee_reset(struct ee_state* ee) {
@@ -3509,8 +3507,6 @@ void ee_reset(struct ee_state* ee) {
 
     ee->block_cache.clear();
     ee->block_cache.resize(EE_CACHE_PAGECOUNT);
-    ee->block_cache_dirty.clear();
-    ee->block_cache_dirty.resize(EE_CACHE_PAGECOUNT);
 
     // Clear block lookup cache
     ee->last_block_lookup_pc = ~0u;
@@ -3538,9 +3534,9 @@ ee_instruction ee_decode(uint32_t opcode) {
     ee_instruction i;
 
     i.opcode = opcode;
-    i.rs = (opcode >> 21) & 0x1f;
-    i.rt = (opcode >> 16) & 0x1f;
-    i.rd = (opcode >> 11) & 0x1f;
+    i.rs.r = (opcode >> 21) & 0x1f;
+    i.rt.r = (opcode >> 16) & 0x1f;
+    i.rd.r = (opcode >> 11) & 0x1f;
     i.sa = (opcode >> 6) & 0x1f;
     i.i15 = (opcode >> 6) & 0x7fff;
     i.i16 = opcode & 0xffff;
@@ -4053,7 +4049,7 @@ void ee_optimize_block(struct ee_block* block) {
         auto& b = block->instructions[i+1];
  
         // Fuse LUI/ORI into LI
-        if (a.func == ee_i_lui && b.func == ee_i_ori && a.rt == b.rt && b.rs == b.rt) {
+        if (a.func == ee_i_lui && b.func == ee_i_ori && a.rt.r == b.rt.r && b.rs.r == b.rt.r) {
             a.func = ee_i_li;
             a.i16 = (a.i16 << 16) | b.i16;
 
@@ -4067,25 +4063,20 @@ void ee_optimize_block(struct ee_block* block) {
 static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycles) {
     uint32_t phys;
 
-    if (ee_translate_virt(ee, ee->pc, &phys) == -1) {
-        ee_exception_level1(ee, CAUSE_EXC1_TLBL);
-
-        ee->badvaddr = ee->pc;
-        ee->context &= ~0x7ffff0;
-        ee->context |= (ee->pc >> 9) & 0x7ffff0;
-
-        return ee_cache_block(ee, max_cycles);
-    }
+    ee_translate_virt(ee, ee->pc, &phys);
 
     uint32_t page = phys / EE_MIN_PAGESIZE;
     uint32_t offset = (phys & (EE_MIN_PAGESIZE - 1)) >> 2;
 
-    if (!ee->block_cache[page]) {
-        ee->block_cache[page] = new struct ee_block[EE_MIN_PAGESIZE >> 2];
-        ee->block_cache_dirty[page] = false;
+    if (!ee->block_cache[page].valid) {
+        ee->block_cache[page].blocks = new struct ee_block[EE_MIN_PAGESIZE >> 2];
+        ee->block_cache[page].valid = true;
+        ee->block_cache[page].dirty = false;
+        ee->block_cache[page].min_code_addr = 0;
+        ee->block_cache[page].max_code_addr = 0;
     }
 
-    struct ee_block& block = ee->block_cache[page][offset];
+    struct ee_block& block = ee->block_cache[page].blocks[offset];
 
 #ifdef _EE_DISABLE_CACHE
     block.instructions.clear();
@@ -4137,35 +4128,28 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
 
     uint32_t phys;
 
-    if (ee_translate_virt(ee, ee->pc, &phys) == -1) {
-        ee_exception_level1(ee, CAUSE_EXC1_TLBL);
-
-        ee->badvaddr = ee->pc;
-        ee->context &= ~0x7ffff0;
-        ee->context |= (ee->pc >> 9) & 0x7ffff0;
-
-        return nullptr;
-    }
+    ee_translate_virt(ee, ee->pc, &phys);
 
     uint32_t page = phys / EE_MIN_PAGESIZE;
 
-    if (!ee->block_cache[page]) {
+    if (!ee->block_cache[page].valid) {
         return nullptr;
     }
 
-    if (ee->block_cache_dirty[page]) {
+    if (ee->block_cache[page].dirty) {
         // Invalidate entire page if it's dirty (code was modified)
-        delete[] ee->block_cache[page];
+        delete[] ee->block_cache[page].blocks;
 
-        ee->block_cache[page] = nullptr;
-        ee->block_cache_dirty[page] = false;
+        ee->block_cache[page].blocks = nullptr;
+        ee->block_cache[page].valid = false;
+        ee->block_cache[page].dirty = false;
 
         return nullptr;
     }
 
     uint32_t offset = (phys & (EE_MIN_PAGESIZE - 1)) >> 2;
 
-    struct ee_block& block = ee->block_cache[page][offset];
+    struct ee_block& block = ee->block_cache[page].blocks[offset];
 
     if (!block.cycles) {
         return nullptr;
@@ -4178,13 +4162,19 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
     return &block;
 }
 
-static inline bool ee_is_irq_pending(struct ee_state* ee) {
+static inline int ee_is_irq_pending(struct ee_state* ee) {
     int irq_enabled = (ee->status & EE_SR_IE) && (ee->status & EE_SR_EIE) &&
         (!(ee->status & EE_SR_EXL)) && (!(ee->status & EE_SR_ERL));
     int int0_pending = (ee->status & EE_SR_IM2) && (ee->cause & EE_CAUSE_IP2);
     int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
 
-    return irq_enabled && (int0_pending || int1_pending);
+    if (!irq_enabled)
+        return 0;
+
+    if (int0_pending || int1_pending)
+        return int1_pending ? 2 : 1;
+
+    return 0;
 }
 
 static inline int _ee_run_block(struct ee_state* ee, int max_cycles) {
@@ -4225,12 +4215,19 @@ static inline int _ee_run_block(struct ee_state* ee, int max_cycles) {
 }
 
 int ee_run_block(struct ee_state* ee, int max_cycles) {
-    if (ee_is_irq_pending(ee)) {
+    // Only execute one extra block if the IRQ comes from the INTC
+    int irq = ee_is_irq_pending(ee);
+
+    if (irq == 1) {
         int cycles = _ee_run_block(ee, 4);
 
         ee_exception_level1(ee, CAUSE_EXC1_INT);
 
         return cycles;
+    } else if (irq == 2) {
+        ee_exception_level1(ee, CAUSE_EXC1_INT);
+
+        return 0;
     }
 
     if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
@@ -4275,14 +4272,8 @@ int ee_step(struct ee_state* ee) {
 }
 
 void ee_flush_cache(struct ee_state* ee) {
-    for (auto& page : ee->block_cache) {
-        delete[] page;
-
-        page = nullptr;
-    }
-
     for (int i = 0; i < EE_CACHE_PAGECOUNT; i++) {
-        ee->block_cache_dirty[i] = false;
+        ee->block_cache[i].dirty = false;
     }
 
     ee->last_block_lookup_pc = ~0u;
