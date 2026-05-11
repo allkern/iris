@@ -238,6 +238,8 @@ static inline void vu_set_vf_w(struct vu_state* vu, int r, float v) {
 }
 
 static inline void vu_set_vi(struct vu_state* vu, int r, uint16_t v) {
+    r &= 0xf;
+
     if (r) vu->vi[r] = v;
 }
 
@@ -3464,7 +3466,7 @@ vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
         return vu->last_block_ptr;
     }
 
-    vu_block* block = &vu->block_cache[tpc];
+    vu_block* block = &vu->block_cache[tpc & vu->micro_mem_size];
 
     if (!block->cycles) {
         return nullptr;
@@ -3480,7 +3482,7 @@ vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
 static int c = 0;
 
 vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
-    vu_block* block = &vu->block_cache[tpc];
+    vu_block* block = &vu->block_cache[tpc & vu->micro_mem_size];
 
     vu->block_cache_size++;
 
