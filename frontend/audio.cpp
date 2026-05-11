@@ -18,7 +18,9 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
     if (iris->pause || !additional_amount)
         return;
 
-    // printf("audio: iop cycles elapsed since last sync: %llu\n", iris->ps2->iop->total_cycles - prev_iop_cycles);
+    uint64_t elapsed = iris->ps2->iop->total_cycles - prev_iop_cycles;
+
+    // printf("audio: elapsed=%llu samples=%lld remainder=%lld required=%d\n", elapsed, elapsed / 768, elapsed % 768, additional_amount);
 
     prev_iop_cycles = iris->ps2->iop->total_cycles;
 
@@ -44,7 +46,7 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
             iris->audio_buf[i].s16[1] = iris->mute_adma ? 0 : s.s16[1] * iris->volume;
         }
 
-        spu2->c[c].adma_buffer_size = 0;
+        spu2->c[c].adma_buffer_size -= iris->audio_buf.size();
 
         break;
     }
@@ -136,7 +138,7 @@ bool mute(iris::instance* iris) {
 void unmute(iris::instance* iris) {
     iris->mute = iris->prev_mute;
 
-    if (iris->mute) {
+    if (!iris->mute) {
         SDL_ResumeAudioStreamDevice(iris->streams[0]);
         SDL_ResumeAudioStreamDevice(iris->streams[1]);
     }
