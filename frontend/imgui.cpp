@@ -29,7 +29,7 @@ constexpr unsigned char g_symbols_data[] = {
 constexpr unsigned int g_symbols_size = sizeof(g_symbols_data);
 
 constexpr unsigned char g_firacode_data[] = {
-#embed "../res/FiraCode-Regular.ttf"
+#embed "../res/JetBrainsMono.ttf"
 };
 constexpr unsigned int g_firacode_size = sizeof(g_firacode_data);
 
