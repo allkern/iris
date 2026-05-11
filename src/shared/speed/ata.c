@@ -6,6 +6,8 @@
 #include "shared/ata/isif.h"
 #include "shared/ata/raw.h"
 
+#define printf(fmt, ...)(0)
+
 struct ps2_ata* ps2_ata_create(void) {
     return malloc(sizeof(struct ps2_ata));
 }
