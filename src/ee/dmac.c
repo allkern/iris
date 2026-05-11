@@ -534,32 +534,33 @@ void dmac_handle_vif1_read_transfer(struct ps2_dmac* dmac) {
 
     fprintf(stdout, "dmac: Handling VIF1 read transfer with QWC=%d MADR=%08x\n", dmac->channels[DMAC_VIF1].qwc, dmac->channels[DMAC_VIF1].madr);
 
-    if ((dmac->gif->gs->trxdir & 3) != 1) {
-        dmac->channels[DMAC_VIF1].chcr &= ~0x100;
-        // dmac->channels[DMAC_VIF1].madr = 0;
-        // dmac->channels[DMAC_VIF1].qwc = 0;
+    uint32_t qwc = dmac->channels[DMAC_VIF1].qwc;
 
+    dmac->channels[DMAC_VIF1].chcr &= ~0x100;
+    dmac->channels[DMAC_VIF1].madr += dmac->channels[DMAC_VIF1].qwc * 16;
+    dmac->channels[DMAC_VIF1].qwc = 0;
+
+    if (qwc >= 0x4000 && qwc < 0xe000)
         return;
-    }
 
     // Trash GS readback implementation, whatever...
-    uint128_t* buf = (uint128_t*)malloc(dmac->channels[DMAC_VIF1].qwc * 16);
+    // uint128_t* buf = (uint128_t*)malloc(qwc * 16);
 
-    dmac->gif->readback(dmac->gif, buf, dmac->channels[DMAC_VIF1].qwc * 16);
+    // dmac->gif->readback(dmac->gif, buf, qwc * 16);
 
-    for (int i = 0; i < dmac->channels[DMAC_VIF1].qwc; i++) {
-        uint128_t q = { 0 };
+    // for (int i = 0; i < qwc; i++) {
+    //     uint128_t q = { 0 };
 
-        dmac_write_qword(dmac, dmac->channels[DMAC_VIF1].madr, 0, q);
+    //     dmac_write_qword(dmac, dmac->channels[DMAC_VIF1].madr, 0, q);
 
-        dmac->channels[DMAC_VIF1].madr += 16;
-    }
+    //     dmac->channels[DMAC_VIF1].madr += 16;
+    // }
 
     struct sched_event event;
 
     event.name = "vif1_read_transfer_end";
     event.callback = dmac_send_vif1_read_irq;
-    event.cycles = dmac->channels[DMAC_VIF1].qwc * 2;
+    event.cycles = qwc * 2;
     event.udata = dmac;
 
     sched_schedule(dmac->sched, event);
