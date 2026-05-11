@@ -97,25 +97,36 @@ void render_notification(iris::instance* iris, iris::notification* notif) {
     float width = notif->width;
     float height = notif->height;
 
-    GetForegroundDrawList()->AddRectFilled(
-        ImVec2(x, y),
-        ImVec2(x + width, y + height),
+    ImDrawList* draw_list = GetForegroundDrawList(GetMainViewport());
+
+    ImVec2 pos = ImVec2(x, y);
+
+    if (iris->imgui_enable_viewports) {
+        pos = ImGui::GetMainViewport()->Pos;
+
+        pos.x += x;
+        pos.y += y;
+    }
+
+    draw_list->AddRectFilled(
+        pos,
+        ImVec2(pos.x + width, pos.y + height),
         bg_col, 10.0, ImDrawFlags_RoundCornersAll
     );
 
-    GetForegroundDrawList()->AddText(
-        ImVec2(x + 10, y + (height / 2) - (notif->text_height / 2)), icon_col, ICON_MS_INFO
+    draw_list->AddText(
+        ImVec2(pos.x + 10, pos.y + (height / 2) - (notif->text_height / 2)), icon_col, ICON_MS_INFO
     );
 
-    GetForegroundDrawList()->AddText(
-        ImVec2(x + 35, y + (height / 2) - (notif->text_height / 2)), text_col, notif->text.c_str()
+    draw_list->AddText(
+        ImVec2(pos.x + 35, pos.y + (height / 2) - (notif->text_height / 2)), text_col, notif->text.c_str()
     );
 
     int progress_width = width * (1.0 - ((float)notif->frames_remaining / (float)notif->frames));
 
-    GetForegroundDrawList()->AddRectFilled(
-        ImVec2(x, y + height - 2),
-        ImVec2(x + progress_width, y + height),
+    draw_list->AddRectFilled(
+        ImVec2(pos.x, pos.y + height - 2),
+        ImVec2(pos.x + progress_width, pos.y + height),
         bar_col, 10.0, ImDrawFlags_RoundCornersBottom
     );
 }

@@ -333,8 +333,17 @@ void update_window(iris::instance* iris) {
         //     GetColorU32(GetStyleColorVec4(ImGuiCol_WindowBg)), 8.0f
         // );
 
+        ImVec2 pos = ImVec2(width - ts.x - offset.x, menubar_offset + offset.y);
+
+        if (iris->imgui_enable_viewports) {
+            ImVec2 window_pos = GetMainViewport()->Pos;
+
+            pos.x = window_pos.x + pos.x;
+            pos.y = window_pos.y + pos.y;
+        }
+
         GetBackgroundDrawList(GetMainViewport())->AddText(
-            ImVec2(width - ts.x - offset.x, menubar_offset + offset.y),
+            pos,
             GetColorU32(GetStyleColorVec4(ImGuiCol_Text)),
             ICON_MS_PAUSE
         );
@@ -523,6 +532,12 @@ SDL_AppResult update(iris::instance* iris) {
             return SDL_APP_CONTINUE;
         }
     }
+
+    // printf("ee_stats: cache: hits=%d misses=%d idle skips=%d\n", iris->ps2->ee->cache_hits, iris->ps2->ee->cache_misses, iris->ps2->ee->idle_skips);
+
+    iris->ps2->ee->cache_hits = 0;
+    iris->ps2->ee->cache_misses = 0;
+    iris->ps2->ee->idle_skips = 0;
 
     // printf("ee: %ld cycles, iop: %ld cycles\n", iris->ps2->ee->total_cycles - ee_count, iris->ps2->iop->total_cycles - iop_count);
 
