@@ -44,12 +44,12 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
     opts.super_sampled_textures = true;
     opts.dynamic_super_sampling = true;
 
-    if (!ctx->interface.init(&ctx->granite_device, opts)) {
+    if (!ctx->iface.init(&ctx->granite_device, opts)) {
         return false;
     }
 
-    ctx->interface.reset_context_state();
-    ctx->interface.set_signal_interface(ctx->signal_handler);
+    ctx->iface.reset_context_state();
+    ctx->iface.set_signal_interface(ctx->signal_handler);
 
     ctx->config = *(hardware_config*)info.config;
 
@@ -59,11 +59,11 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
     hacks.disable_mipmaps = ctx->config.disable_mipmaps;
     hacks.unsynced_readbacks = ctx->config.unsynced_readbacks;
 
-    ctx->interface.set_hacks(hacks);
+    ctx->iface.set_hacks(hacks);
 
     if (ctx->config.super_sampling == 0) {
-        ctx->interface.set_super_sampling_rate((SuperSampling)0, false, false);
-    } else {
+        ctx->iface.set_super_sampling_rate((SuperSampling)0, false, false);
+    } else if (!ctx->config.enable_analog_video) {
         SuperSampling super_sampling;
 
         switch (ctx->config.super_sampling) {
@@ -74,7 +74,17 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
             default: super_sampling = (SuperSampling)0; break;
         }
 
-        ctx->interface.set_super_sampling_rate(super_sampling, true, true);
+        ctx->iface.set_super_sampling_rate(super_sampling, true, true);
+    }
+
+    if (ctx->config.enable_analog_video) {
+        AnalogVideoFilter::Options analog_video_filter_opts;
+
+        analog_video_filter_opts.cable = static_cast<ParallelGS::AnalogVideoFilter::Cable>(ctx->config.analog_cable);
+        analog_video_filter_opts.system = static_cast<ParallelGS::AnalogVideoFilter::System>(ctx->config.analog_system);
+
+        ctx->analog_video_filter.init(ctx->granite_device, analog_video_filter_opts);
+        ctx->crt_filter.init(ctx->granite_device);
     }
 
     return true;
@@ -83,15 +93,15 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
 void hardware_reset(void* udata) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
-    // ctx->interface.flush();
-    ctx->interface.reset_context_state();
+    // ctx->iface.flush();
+    ctx->iface.reset_context_state();
 
     // Clear VRAM
-    void* ptr = ctx->interface.map_vram_write(0, 0x400000);
+    void* ptr = ctx->iface.map_vram_write(0, 0x400000);
 
     memset(ptr, 0, 0x400000);
 
-    ctx->interface.end_vram_write(0, 0x400000);
+    ctx->iface.end_vram_write(0, 0x400000);
 }
 
 void hardware_destroy(void* udata) {
@@ -120,7 +130,7 @@ renderer_image hardware_get_frame(void* udata) {
         return image;
     }
 
-    auto& priv = ctx->interface.get_priv_register_state();
+    auto& priv = ctx->iface.get_priv_register_state();
 
     *((uint64_t*)&priv.pmode) = state.pmode;
     *((uint64_t*)&priv.smode1) = state.smode1;
@@ -142,7 +152,7 @@ renderer_image hardware_get_frame(void* udata) {
     *((uint64_t*)&priv.busdir) = state.busdir;
     *((uint64_t*)&priv.siglblid) = state.siglblid;
 
-    ctx->interface.flush();
+    ctx->iface.flush();
 
     VSyncInfo info = {};
 
@@ -164,9 +174,9 @@ renderer_image hardware_get_frame(void* udata) {
     info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
     info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     info.dst_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    info.adapt_to_internal_horizontal_resolution = false;
+    info.adapt_to_internal_horizontal_resolution = true;
 
-    ScanoutResult scanout = ctx->interface.vsync(info);
+    ScanoutResult scanout = ctx->iface.vsync(info);
 
     Image* granite_image = scanout.image.get();
 
@@ -178,19 +188,41 @@ renderer_image hardware_get_frame(void* udata) {
     image.format = granite_image->get_format();
     image.view = granite_image->get_view().get_view().view;
 
+    if (ctx->config.enable_analog_video) {
+        auto cmd = ctx->granite_device.request_command_buffer();
+
+        AnalogVideoFilter::FilterOptions filter_options = {};
+        filter_options.dst_stage = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT;
+        filter_options.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
+        filter_options.dst_layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
+        filter_options.phase = scanout.interlaced ? scanout.interlace_phase : 0;
+
+        filter_options.line_comb = ctx->config.line_comb;
+        filter_options.skip_notch = ctx->config.skip_notch;
+
+        filter_options.input_sampling_rate_mhz = 13.5f * float(scanout.image->get_width()) / 640.0f;
+
+        ctx->analog_video_filter.run_filter(*cmd, granite_image->get_view(), filter_options);
+
+        image.view = ctx->analog_video_filter.get_output().get_view().view;
+
+        ctx->granite_device.submit(cmd);
+        ctx->granite_device.flush_frame();
+    }
+
     return image;
 }
 
 extern "C" void hardware_transfer(void* udata, int path, const void* data, size_t size) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
-    ctx->interface.gif_transfer(path, data, size);
+    ctx->iface.gif_transfer(path, data, size);
 }
 
 void hardware_readback(void* udata, void* data, size_t size) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
-    ctx->interface.read_transfer_fifo((void*)data, size / 16);
+    ctx->iface.read_transfer_fifo((void*)data, size / 16);
 }
 
 void hardware_set_config(void* udata, void* config) {
@@ -204,11 +236,11 @@ void hardware_set_config(void* udata, void* config) {
     hacks.disable_mipmaps = ctx->config.disable_mipmaps;
     hacks.unsynced_readbacks = ctx->config.unsynced_readbacks;
 
-    ctx->interface.set_hacks(hacks);
+    ctx->iface.set_hacks(hacks);
 
     if (ctx->config.super_sampling == 0) {
-        ctx->interface.set_super_sampling_rate((SuperSampling)0, false, false);
-    } else {
+        ctx->iface.set_super_sampling_rate((SuperSampling)0, false, false);
+    } else if (!ctx->config.enable_analog_video) {
         SuperSampling super_sampling;
 
         switch (ctx->config.super_sampling) {
@@ -219,6 +251,16 @@ void hardware_set_config(void* udata, void* config) {
             default: super_sampling = (SuperSampling)0; break;
         }
 
-        ctx->interface.set_super_sampling_rate(super_sampling, true, true);
+        ctx->iface.set_super_sampling_rate(super_sampling, true, true);
+    }
+
+    if (ctx->config.enable_analog_video) {
+        AnalogVideoFilter::Options analog_video_filter_opts;
+
+        analog_video_filter_opts.cable = static_cast<ParallelGS::AnalogVideoFilter::Cable>(ctx->config.analog_cable);
+        analog_video_filter_opts.system = static_cast<ParallelGS::AnalogVideoFilter::System>(ctx->config.analog_system);
+
+        ctx->analog_video_filter.init(ctx->granite_device, analog_video_filter_opts);
+        ctx->crt_filter.init(ctx->granite_device);
     }
 }

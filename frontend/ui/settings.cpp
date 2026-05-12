@@ -338,6 +338,95 @@ void show_hardware_renderer_settings(iris::instance* iris) {
     }
     PopStyleVar();
 
+    SeparatorText("Analog Video");
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    if (Checkbox(" Enable", &iris->hardware_backend_config.enable_analog_video)) {
+        render::refresh(iris);
+    }
+    PopStyleVar();
+
+    Text("Video standard");
+
+    static const char* video_standard_names[] = {
+        "NTSC",
+        "PAL"
+    };
+
+    if (BeginCombo("##videostandard", video_standard_names[iris->hardware_backend_config.analog_system])) {
+        for (int i = 0; i < IM_ARRAYSIZE(video_standard_names); i++) {
+            if (Selectable(video_standard_names[i], iris->hardware_backend_config.analog_system == i)) {
+                iris->hardware_backend_config.analog_system = i;
+                render::refresh(iris);
+            }
+        }
+        EndCombo();
+    }
+
+    Text("Cable type");
+
+    static const char* cable_type_names[] = {
+        "Composite",
+        "S-Video",
+        "Component"
+    };
+
+    if (BeginCombo("##cabletype", cable_type_names[iris->hardware_backend_config.analog_cable])) {
+        for (int i = 0; i < IM_ARRAYSIZE(cable_type_names); i++) {
+            if (Selectable(cable_type_names[i], iris->hardware_backend_config.analog_cable == i)) {
+                iris->hardware_backend_config.analog_cable = i;
+                render::refresh(iris);
+            }
+        }
+        EndCombo();
+    }
+
+    Text("Decode filter");
+
+    static const char* decode_filter_names[] = {
+        "Notch",
+        "3-line Comb",
+        "3-line Comb + Notch"
+    };
+
+    int decode_filter_index = 0;
+
+    if (iris->hardware_backend_config.line_comb) {
+        decode_filter_index = 1;
+
+        if (!iris->hardware_backend_config.skip_notch) {
+            decode_filter_index = 2;
+        }
+    } else {
+        decode_filter_index = 0;
+    }
+
+    if (BeginCombo("##decodefilter", decode_filter_names[decode_filter_index])) {
+        for (int i = 0; i < IM_ARRAYSIZE(decode_filter_names); i++) {
+            if (Selectable(decode_filter_names[i], decode_filter_index == i)) {
+                switch (i) {
+                    case 0: {
+                        iris->hardware_backend_config.line_comb = false;
+                        iris->hardware_backend_config.skip_notch = false;
+                    } break;
+
+                    case 1: {
+                        iris->hardware_backend_config.line_comb = true;
+                        iris->hardware_backend_config.skip_notch = true;
+                    } break;
+
+                    case 2: {
+                        iris->hardware_backend_config.line_comb = true;
+                        iris->hardware_backend_config.skip_notch = false;
+                    } break;
+                }
+
+                render::refresh(iris);
+            }
+        }
+
+        EndCombo();
+    }
+
     SeparatorText("Advanced");
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);

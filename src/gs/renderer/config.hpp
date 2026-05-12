@@ -9,4 +9,11 @@ struct hardware_config {
     bool unsynced_readbacks = false;
     bool backbuffer_promotion = false;
     bool allow_blend_demote = false;
+
+    // Analog video
+    bool enable_analog_video = false;
+    int analog_cable = 0;
+    int analog_system = 0;
+    bool line_comb = false;
+    bool skip_notch = false;
 };

@@ -245,6 +245,7 @@ target_link_libraries(iris PUBLIC
     tomlplusplus::tomlplusplus
     SDL3::SDL3-static
     parallel-gs
+    analog-video
     chdr-static
     asmjit::asmjit
 )

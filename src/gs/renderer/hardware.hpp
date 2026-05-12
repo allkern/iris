@@ -9,6 +9,7 @@
 
 #include "Granite/vulkan/device.hpp"
 #include "Granite/vulkan/context.hpp"
+#include "analog/analog_video.hpp"
 #include "gs_renderer.hpp"
 #include "gs_interface.hpp"
 
@@ -97,11 +98,13 @@ public:
 struct hardware_state {
     Vulkan::Context granite_ctx;
     Vulkan::Device granite_device;
-    GSInterface interface;
+    GSInterface iface;
     ExternallyManagedDevice* device;
     ExternallyManagedInstance* instance;
     RendererSignalHandler* signal_handler;
     hardware_config config;
+    AnalogVideoFilter analog_video_filter;
+    CRTFilter crt_filter;
 
     struct ps2_gs* gs;
     struct ps2_gif* gif;

@@ -206,6 +206,11 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->hardware_backend_config.unsynced_readbacks = hardware["unsynced_readbacks"].value_or(false);
     iris->hardware_backend_config.backbuffer_promotion = hardware["backbuffer_promotion"].value_or(false);
     iris->hardware_backend_config.allow_blend_demote = hardware["allow_blend_demote"].value_or(false);
+    iris->hardware_backend_config.enable_analog_video = hardware["enable_analog_video"].value_or(false);
+    iris->hardware_backend_config.analog_cable = hardware["analog_cable"].value_or(0);
+    iris->hardware_backend_config.analog_system = hardware["analog_system"].value_or(0);
+    iris->hardware_backend_config.line_comb = hardware["line_comb"].value_or(false);
+    iris->hardware_backend_config.skip_notch = hardware["skip_notch"].value_or(false);
 
     auto vulkan = tbl["vulkan"];
     iris->vulkan_physical_device = vulkan["physical_device"].value_or(-1);
@@ -485,7 +490,12 @@ void close(iris::instance* iris) {
             { "disable_mipmaps", iris->hardware_backend_config.disable_mipmaps },
             { "unsynced_readbacks", iris->hardware_backend_config.unsynced_readbacks },
             { "backbuffer_promotion", iris->hardware_backend_config.backbuffer_promotion },
-            { "allow_blend_demote", iris->hardware_backend_config.allow_blend_demote }
+            { "allow_blend_demote", iris->hardware_backend_config.allow_blend_demote },
+            { "enable_analog_video", iris->hardware_backend_config.enable_analog_video },
+            { "analog_cable", iris->hardware_backend_config.analog_cable },
+            { "analog_system", iris->hardware_backend_config.analog_system },
+            { "line_comb", iris->hardware_backend_config.line_comb },
+            { "skip_notch", iris->hardware_backend_config.skip_notch }
         } },
         { "vulkan", toml::table {
             { "physical_device", iris->vulkan_physical_device },
