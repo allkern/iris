@@ -4371,9 +4371,9 @@ static inline ee_cached_reg& ee_get_reg(struct ee_state* ee, asmjit::ujit::UniCo
 
         if (sync) {
             if (b64) {
-                uc->load_u64(ee->reg_cache[i].reg, EE(r[i].u64[0]));
+                uc->load_u64(ee->reg_cache[i].reg, ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)));
             } else {
-                uc->load_u32(ee->reg_cache[i].reg, EE(r[i].u32[0]));
+                uc->load_u32(ee->reg_cache[i].reg, ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)));
             }
         }
     }
@@ -4386,7 +4386,7 @@ static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniComp
 
     for (int i = 0; i < 32; i++) {
         if (ee->reg_cache[i].valid) {
-            uc->store_u64(EE(r[i].u64[0]), ee->reg_cache[i].reg);
+            uc->store_u64(ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)), ee->reg_cache[i].reg);
         }
 
         ee->reg_cache[i].valid = false;
