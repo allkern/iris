@@ -371,7 +371,7 @@ void ps2_step_ee(struct ps2_state* ps2) {
     ps2->ee_cycles++; 
 
     if (ps2->ee_cycles == 8) {
-        // iop_cycle(ps2->iop);
+        iop_cycle(ps2->iop);
         ps2_iop_timers_tick(ps2->iop_timers);
 
         ps2->ee_cycles = 0;
@@ -385,7 +385,7 @@ void ps2_step_iop(struct ps2_state* ps2) {
     }
 
     sched_tick(ps2->sched, 8);
-    // iop_cycle(ps2->iop);
+    iop_cycle(ps2->iop);
     ps2_iop_timers_tick(ps2->iop_timers);
 
     ps2_ipu_run(ps2->ipu);

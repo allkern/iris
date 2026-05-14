@@ -244,30 +244,34 @@ static inline void iop_exception(struct iop_state* iop, uint32_t cause) {
     iop->next_pc = iop->pc + 4;
 }
 
-// void iop_cycle(struct iop_state* iop) {
-//     iop->saved_pc = iop->pc;
-//     iop->delay_slot = iop->branch;
-//     iop->branch = 0;
-//     iop->branch_taken = 0;
+iop_instruction iop_decode(uint32_t opcode);
 
-//     iop->opcode = iop_bus_read32(iop, iop->pc);
+void iop_cycle(struct iop_state* iop) {
+    iop->saved_pc = iop->pc;
+    iop->delay_slot = iop->branch;
+    iop->branch = 0;
+    iop->branch_taken = 0;
 
-//     iop->pc = iop->next_pc;
-//     iop->next_pc += 4;
+    iop->opcode = iop_bus_read32(iop, iop->pc);
 
-//     if (iop_check_irq(iop)) {
-//         iop_exception(iop, CAUSE_INT);
+    iop->pc = iop->next_pc;
+    iop->next_pc += 4;
 
-//         return;
-//     }
+    if (iop_check_irq(iop)) {
+        iop_exception(iop, CAUSE_INT);
 
-//     iop_execute(iop);
+        return;
+    }
 
-//     iop->last_cycles += 1;
-//     iop->total_cycles += 1;
+    iop_instruction i = iop_decode(iop->opcode);
 
-//     iop->r[0] = 0;
-// }
+    i.func(iop, i);
+
+    iop->last_cycles += 1;
+    iop->total_cycles += 1;
+
+    iop->r[0] = 0;
+}
 
 void iop_reset(struct iop_state* iop) {
     iop_flush_cache(iop);
