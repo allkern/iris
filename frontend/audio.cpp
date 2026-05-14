@@ -46,7 +46,7 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
             iris->audio_buf[i].s16[1] = iris->mute_adma ? 0 : s.s16[1] * iris->volume;
         }
 
-        spu2->c[c].adma_buffer_size -= iris->audio_buf.size();
+        spu2->c[c].adma_buffer_size = 0;
 
         break;
     }

@@ -438,6 +438,28 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     ps2_speed_load_hdd(iris->ps2->speed, iris->hdd_path.c_str());
     ps2_speed_set_mac_address(iris->ps2->speed, iris->mac_address);
 
+    for (int i = 1; i < argc; i++) {
+        std::string a(argv[i]);
+
+        if (a == "--autoboot-disc") {
+            std::string path = argv[i+1];
+
+            if (ps2_cdvd_open(iris->ps2->cdvd, path.c_str(), 0))
+                return false;
+
+            char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
+
+            if (!boot_file)
+                return false;
+
+            ps2_set_system(iris->ps2, iris->system);
+            ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+            ps2_boot_file(iris->ps2, boot_file);
+
+            iris->pause = false;
+        }
+    }
+
     return true;
 }
 

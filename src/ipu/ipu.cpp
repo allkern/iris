@@ -1265,7 +1265,10 @@ uint64_t ImageProcessingUnit::read_top()
     if (max_bits > 32)
         max_bits = 32;
     uint32_t next_data;
-    in_FIFO.get_bits(next_data, max_bits);
+    if (max_bits > 0)
+        in_FIFO.get_bits(next_data, max_bits);
+    else
+        next_data = 0;
     reg |= next_data << (32 - max_bits);
 
     /** Note on max_bits

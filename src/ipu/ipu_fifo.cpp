@@ -4,7 +4,8 @@
 
 bool IPU_FIFO::get_bits(uint32_t &data, int bits)
 {
-    int bits_available = (f.size() * 128) - bit_pointer;
+    const int fifo_bits = static_cast<int>(f.size()) * 128;
+    const int bits_available = fifo_bits - bit_pointer;
 
     if (bits_available < bits || bits_available == 0)
     {
@@ -14,25 +15,29 @@ bool IPU_FIFO::get_bits(uint32_t &data, int bits)
 
     if (bit_cache_dirty)
     {
-        uint8_t temp[32];
-        *(uint128_t*)&temp[0] = f[0];
-        if (f.size() > 1)
-            *(uint128_t*)&temp[16] = f[1];
+        const int index = (bit_pointer & ~0x1F) / 8;
+        const int fifo_words = static_cast<int>(f.size());
+        uint64_t cache = 0;
 
-        uint8_t blorp[8];
-        int index = (bit_pointer & ~0x1F) / 8;
-
-        //MPEG is big-endian...
-        for (int i = 0; i < 8; i++)
+        // MPEG bitstreams are big-endian. Build the cache byte-by-byte so we
+        // do not depend on temporary stack buffers or aliasing tricks here.
+        for (int i = 0; i < 8; ++i)
         {
-            int fifo_index = index + i;
-            blorp[7 - i] = temp[fifo_index];
+            const int fifo_index = index + i;
+            const int word_index = fifo_index >> 4;
+            const int byte_index = fifo_index & 0xF;
+            uint8_t byte = 0;
+
+            if (word_index < fifo_words)
+                byte = f[word_index].u8[byte_index];
+
+            cache = (cache << 8) | byte;
         }
         bit_cache_dirty = false;
-        cached_bits = *(uint64_t*)&blorp[0];
+        cached_bits = cache;
     }
-    int shift = 64 - (bit_pointer % 32) - bits;
-    uint64_t mask = ~0x0ULL >> (64 - bits);
+    const int shift = 64 - (bit_pointer % 32) - bits;
+    const uint64_t mask = ~0x0ULL >> (64 - bits);
     data = (cached_bits >> shift) & mask;
 
     return true;
@@ -45,15 +50,16 @@ bool IPU_FIFO::advance_stream(uint8_t amount)
     
     //printf("Advance stream: %d + %d = %d\n", bit_pointer - amount, amount, bit_pointer);
 
-    if ((bit_pointer + amount) > (f.size() * 128))
+    const int fifo_bits = static_cast<int>(f.size()) * 128;
+    if ((bit_pointer + amount) > fifo_bits)
     {
         return false;
     }
 
-    uint32_t old_words = bit_pointer / 32;
-    uint32_t new_words = (bit_pointer + amount) / 32;
-    bit_cache_dirty |= (old_words != new_words);
+    const uint32_t old_words = bit_pointer / 32;
     bit_pointer += amount;
+    const uint32_t new_words = bit_pointer / 32;
+    bit_cache_dirty |= (old_words != new_words);
 
     while (bit_pointer >= 128)
     {
