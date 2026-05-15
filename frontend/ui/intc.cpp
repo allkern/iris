@@ -26,6 +26,19 @@ const char* ee_irq_sources[] = {
     "VU0 Watchdog"
 };
 
+const char* ee_dmac_irq_sources[] = {
+    "VIF0",
+    "VIF1",
+    "GIF",
+    "IPU_FROM",
+    "IPU_TO",
+    "SIF0",
+    "SIF1",
+    "SIF2",
+    "SPR_FROM",
+    "SPR_TO"
+};
+
 const char* iop_irq_sources[] = {
     "Vblank In",
     "GPU",
@@ -101,6 +114,52 @@ void show_ee_intc_interrupts(iris::instance* iris) {
     }
 }
 
+void show_ee_dmac_interrupts(iris::instance* iris) {
+    using namespace ImGui;
+
+    struct ps2_dmac* dmac = iris->ps2->ee_dma;
+
+    if (BeginTable("##eedmac", 3, ImGuiTableFlags_RowBg)) {
+        PushFont(iris->font_small_code);
+        TableSetupColumn("Source");
+        TableSetupColumn("Status");
+        TableSetupColumn("Mask");
+        TableHeadersRow();
+        PopFont();
+
+        for (int i = 0; i < 10; i++) {
+            TableNextRow();
+
+            TableSetColumnIndex(0);
+
+            Text("%s", ee_dmac_irq_sources[i]);
+
+            TableSetColumnIndex(1);
+
+            int status = dmac->stat & (1 << i);
+            int mask = dmac->stat & (1 << (i + 16));
+
+            char label[16];
+
+            sprintf(label, "%s##ds%x", status ? ICON_MS_CHECK : "", i);
+
+            if (Selectable(label)) {
+                dmac->stat ^= 1 << i;
+            }
+
+            TableSetColumnIndex(2);
+
+            sprintf(label, "%s##dm%x", mask ? ICON_MS_CHECK : "", i);
+
+            if (Selectable(label)) {
+                dmac->stat ^= 1 << (i + 16);
+            }
+        }
+
+        EndTable();
+    }
+}
+
 void show_ee_interrupts(iris::instance* iris) {
     using namespace ImGui;
 
@@ -124,7 +183,17 @@ void show_ee_interrupts(iris::instance* iris) {
         }
 
         if (BeginChild("##eeintcchild")) {
-            show_ee_intc_interrupts(iris);
+            if (TreeNode("INTC")) {
+                show_ee_intc_interrupts(iris);
+
+                TreePop();
+            }
+
+            if (TreeNode("DMAC")) {
+                show_ee_dmac_interrupts(iris);
+
+                TreePop();
+            }
         } EndChild();
     } End();
 }
