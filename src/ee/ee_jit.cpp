@@ -3602,9 +3602,9 @@ ee_instruction ee_decode(uint32_t opcode) {
                 case 0x00000019: i.cycles = EE_CYC_MULT; i.id = EE_I_MULTU; i.func = ee_i_multu; return i;
                 case 0x0000001A: i.cycles = EE_CYC_DIV; i.id = EE_I_DIV; i.func = ee_i_div; return i;
                 case 0x0000001B: i.cycles = EE_CYC_DIV; i.id = EE_I_DIVU; i.func = ee_i_divu; return i;
-                case 0x00000020: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.id = EE_I_ADD; i.func = ee_i_add; return i;
+                case 0x00000020: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADD; i.func = ee_i_add; return i;
                 case 0x00000021: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADDU; i.func = ee_i_addu; return i;
-                case 0x00000022: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.id = EE_I_SUB; i.func = ee_i_sub; return i;
+                case 0x00000022: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SUB; i.func = ee_i_sub; return i;
                 case 0x00000023: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SUBU; i.func = ee_i_subu; return i;
                 case 0x00000024: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_AND; i.func = ee_i_and; return i;
                 case 0x00000025: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_OR; i.func = ee_i_or; return i;
@@ -3614,9 +3614,9 @@ ee_instruction ee_decode(uint32_t opcode) {
                 case 0x00000029: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MTSA; i.func = ee_i_mtsa; return i;
                 case 0x0000002A: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLT; i.func = ee_i_slt; return i;
                 case 0x0000002B: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLTU; i.func = ee_i_sltu; return i;
-                case 0x0000002C: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.id = EE_I_DADD; i.func = ee_i_dadd; return i;
+                case 0x0000002C: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DADD; i.func = ee_i_dadd; return i;
                 case 0x0000002D: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DADDU; i.func = ee_i_daddu; return i;
-                case 0x0000002E: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.id = EE_I_DSUB; i.func = ee_i_dsub; return i;
+                case 0x0000002E: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSUB; i.func = ee_i_dsub; return i;
                 case 0x0000002F: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSUBU; i.func = ee_i_dsubu; return i;
                 case 0x00000030: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TGE; i.func = ee_i_tge; return i;
                 case 0x00000031: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TGEU; i.func = ee_i_tgeu; return i;
@@ -3658,7 +3658,7 @@ ee_instruction ee_decode(uint32_t opcode) {
         case 0x14000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BNE; i.func = ee_i_bne; return i;
         case 0x18000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BLEZ; i.func = ee_i_blez; return i;
         case 0x1C000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BGTZ; i.func = ee_i_bgtz; return i;
-        case 0x20000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.id = EE_I_ADDI; i.func = ee_i_addi; return i;
+        case 0x20000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADDI; i.func = ee_i_addi; return i;
         case 0x24000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADDIU; i.func = ee_i_addiu; return i;
         case 0x28000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLTI; i.func = ee_i_slti; return i;
         case 0x2C000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLTIU; i.func = ee_i_sltiu; return i;
@@ -3669,7 +3669,7 @@ ee_instruction ee_decode(uint32_t opcode) {
         case 0x40000000 >> 26: { // cop0
             switch ((opcode & 0x03E00000) >> 21) {
                 case 0x00000000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MFC0; i.func = ee_i_mfc0; return i;
-                case 0x00800000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MTC0; i.func = ee_i_mtc0; return i;
+                case 0x00800000 >> 21: i.branch = 2; i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MTC0; i.func = ee_i_mtc0; return i;
                 case 0x01000000 >> 21: {
                     switch ((opcode & 0x001F0000) >> 16) {
                         case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BC0F; i.func = ee_i_bc0f; return i;
@@ -3685,8 +3685,8 @@ ee_instruction ee_decode(uint32_t opcode) {
                         case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_TLBWR; i.func = ee_i_tlbwr; return i;
                         case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_TLBP; i.func = ee_i_tlbp; return i;
                         case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_ERET; i.func = ee_i_eret; return i;
-                        case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_EI; i.func = ee_i_ei; return i;
-                        case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_DI; i.func = ee_i_di; return i;
+                        case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_EI; i.func = ee_i_ei; return i;
+                        case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_DI; i.func = ee_i_di; return i;
                     }
                 } break;
             }
