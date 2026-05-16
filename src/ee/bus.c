@@ -39,7 +39,7 @@ void ee_bus_init_fastmem(struct ee_bus* bus, int ee_ram_size, int iop_ram_size) 
     // IOP RAM
     for (int i = 0; i < (iop_ram_size / 0x2000); i++) {
         bus->fastmem_r_table[i+0xe000] = bus->iop_ram->buf + (i * 0x2000);
-        bus->fastmem_w_table[i+0xe000] = bus->iop_ram->buf + (i * 0x2000);
+        // bus->fastmem_w_table[i+0xe000] = bus->iop_ram->buf + (i * 0x2000);
     }
 }
 
@@ -130,6 +130,10 @@ void ee_bus_init_vu1(struct ee_bus* bus, struct vu_state* vu) {
 void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), void* udata) {
     bus->kputchar = kputchar;
     bus->kputchar_udata = udata;
+}
+
+void ee_bus_init_iop(struct ee_bus* bus, struct iop_state* iop) {
+    bus->iop = iop;
 }
 
 void ee_bus_destroy(struct ee_bus* bus) {
@@ -411,6 +415,14 @@ void ee_bus_write8(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE(8, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_WRITE(8, 0x14000000, 0x1400FFFF, speed, speed);
 
+    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+        ps2_ram_write8(bus->iop_ram, addr - 0x1C000000, data & 0xFF);
+
+        iop_invalidate_block(bus->iop, addr - 0x1C000000);
+
+        return;
+    }
+
     if (addr == 0x1000f180) { bus->kputchar(bus->kputchar_udata, data & 0xff); return; }
 
     // printf("bus: Unhandled 8-bit write to physical address 0x%08x (0x%02lx)\n", addr, data);
@@ -440,6 +452,14 @@ void ee_bus_write16(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE(16, 0x10000000, 0x10001FFF, ee_timers, timers);
     MAP_REG_WRITE(16, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_WRITE(16, 0x14000000, 0x1400FFFF, speed, speed);
+
+    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+        ps2_ram_write16(bus->iop_ram, addr - 0x1C000000, data & 0xFFFF);
+
+        iop_invalidate_block(bus->iop, addr - 0x1C000000);
+
+        return;
+    }
 
     switch (addr) {
         case 0x1a000008:
@@ -484,6 +504,14 @@ void ee_bus_write32(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE(32, 0x1F801600, 0x1F8016FF, usb, usb);
     MAP_REG_WRITE(32, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_WRITE(32, 0x14000000, 0x1400FFFF, speed, speed);
+
+    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+        ps2_ram_write32(bus->iop_ram, addr - 0x1C000000, data & 0xFFFFFFFF);
+
+        iop_invalidate_block(bus->iop, addr - 0x1C000000);
+
+        return;
+    }
 
     switch (addr) {
         case 0x1000f430: {
@@ -543,6 +571,14 @@ void ee_bus_write64(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE(64, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_WRITE(64, 0x1000F000, 0x1000F01F, intc, intc);
 
+    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+        ps2_ram_write64(bus->iop_ram, addr - 0x1C000000, data & 0xFF);
+
+        iop_invalidate_block(bus->iop, addr - 0x1C000000);
+
+        return;
+    }
+
     printf("bus: Unhandled 64-bit write to physical address 0x%08x (0x%08lx%08lx)\n", addr, data >> 32, data & 0xffffffff);
 }
 
@@ -568,6 +604,14 @@ void ee_bus_write128(void* udata, uint32_t addr, uint128_t data) {
     MAP_REG_WRITE(128, 0x10005000, 0x10005FFF, vif, vif1);
     MAP_MEM_WRITE(128, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE(128, 0x11008000, 0x1100FFFF, vu, vu1);
+
+    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+        ps2_ram_write128(bus->iop_ram, addr - 0x1C000000, data);
+
+        iop_invalidate_block(bus->iop, addr - 0x1C000000);
+
+        return;
+    }
 
     // printf("bus: Unhandled 128-bit write to physical address 0x%08x (0x%08x%08x%08x%08x)\n", addr, data.u32[3], data.u32[2], data.u32[1], data.u32[0]);
 }

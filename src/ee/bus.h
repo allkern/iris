@@ -52,6 +52,9 @@ struct ee_bus {
     void* fastmem_r_table[0x10000];
     void* fastmem_w_table[0x10000];
 
+    // So we can invalidate IOP blocks on EE -> IOP RAM writes
+    struct iop_state* iop;
+
     uint32_t mch_ricm;
     uint32_t mch_drd;
     uint32_t rdram_sdevid;
@@ -81,6 +84,7 @@ void ee_bus_init_dev9(struct ee_bus* bus, struct ps2_dev9* dev9);
 void ee_bus_init_speed(struct ee_bus* bus, struct ps2_speed* speed);
 void ee_bus_init_vu0(struct ee_bus* bus, struct vu_state* vu);
 void ee_bus_init_vu1(struct ee_bus* bus, struct vu_state* vu);
+void ee_bus_init_iop(struct ee_bus* bus, struct iop_state* iop);
 void ee_bus_init_kputchar(struct ee_bus* bus, void (*kputchar)(void*, char), void* udata);
 void ee_bus_init_fastmem(struct ee_bus* bus, int ee_ram_size, int iop_ram_size);
 

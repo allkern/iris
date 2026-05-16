@@ -152,6 +152,7 @@ void ps2_init(struct ps2_state* ps2) {
     ee_bus_init_dev9(ps2->ee_bus, ps2->dev9);
     ee_bus_init_speed(ps2->ee_bus, ps2->speed);
     ee_bus_init_ram(ps2->ee_bus, ps2->ee_ram);
+    ee_bus_init_iop(ps2->ee_bus, ps2->iop);
 
     ps2_iop_dma_set_dev9_mode(ps2->iop_dma, IOP_DMA_DEV9_ATA);
 

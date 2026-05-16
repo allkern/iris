@@ -1334,3 +1334,13 @@ void iop_flush_cache(struct iop_state* iop) {
     iop->executing_cache_page = 0xffffffff;
     iop->deferred_invalidate_page = 0xffffffff;
 }
+
+void iop_invalidate_block(struct iop_state* iop, uint32_t addr) {
+    addr = iop_translate_addr(addr);
+
+    uint32_t page = addr / _IOP_CACHE_PAGESIZE;
+
+    if (iop->block_cache[page] && iop_is_executable_region(addr)) {
+        iop->block_cache_dirty[page] = 1;
+    }
+}

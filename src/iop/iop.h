@@ -130,6 +130,7 @@ void iop_reset(struct iop_state* iop);
 void iop_set_irq_pending(struct iop_state* iop, int value);
 int iop_run_block(struct iop_state* iop, int max_cycles);
 void iop_flush_cache(struct iop_state* iop);
+void iop_invalidate_block(struct iop_state* iop, uint32_t addr);
 
 // External bus access functions
 uint32_t iop_read8(struct iop_state* iop, uint32_t addr);
