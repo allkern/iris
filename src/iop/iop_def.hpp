@@ -137,6 +137,7 @@ struct iop_state {
     uint32_t cop0_r[16] = { 0 };
 
     uint32_t module_list_addr = 0;
+    uint32_t thread_list_addr = 0;
     
     /* cache module list */
     int module_count = 0;
