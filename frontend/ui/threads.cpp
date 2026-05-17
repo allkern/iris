@@ -42,14 +42,15 @@ void show_ee_thread_list(iris::instance* iris) {
 
     struct ee_state* ee = iris->ps2->ee;
 
-    ImGuiTableFlags table_flags = ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollY;
+    ImGuiTableFlags table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollY;
 
-    if (BeginTable("##threadlist", 5, table_flags)) {
+    if (BeginTable("##threadlist_ee", 6, table_flags)) {
         TableSetupScrollFreeze(0, 1);
         TableSetupColumn("ID");
         TableSetupColumn("Priority");
         TableSetupColumn("Entry");
         TableSetupColumn("PC");
+        TableSetupColumn("Argv");
         TableSetupColumn("Status");
         PushFont(iris->font_small_code);
         TableHeadersRow();
@@ -67,23 +68,25 @@ void show_ee_thread_list(iris::instance* iris) {
             Text("%d", thr->current_priority);
             TableSetColumnIndex(2);
 
-            const char* symbol = get_entry_symbol(iris, thr->func);
+            const char* symbol = get_entry_symbol(iris, thr->entry_point);
 
             if (symbol) {
-                Text("%s", symbol);
+                Text("%s (0x%08x)", symbol, thr->entry_point);
             } else {
-                Text("0x%08X", thr->func);
+                Text("0x%08X", thr->entry_point);
+            }
+
+            TableSetColumnIndex(3);
+            if (thr->status == THS_RUN) {
+                Text("0x%08x", ee->pc);
+            } else {
+                Text("0x%08x", thr->resume_addr);
             }
 
             uint32_t argv = *(uint32_t*)&iris->ps2->ee_ram->buf[(thr->argv + 4) & 0x1fffffff];
-
-            // if (thr->argc) {
-            //     printf("argv=%08x *argv=%08x\n", thr->argv, argv);
-            // }
-
-            TableSetColumnIndex(3);
-            Text("%s", thr->argc ? (char*)&iris->ps2->ee_ram->buf[argv & 0x1fffffff] : "NULL");
             TableSetColumnIndex(4);
+            Text("%s", thr->argc ? (char*)&iris->ps2->ee_ram->buf[argv & 0x1fffffff] : "NULL");
+            TableSetColumnIndex(5);
             Text("%s", get_status_string(thr->status));
 
             thr++;
