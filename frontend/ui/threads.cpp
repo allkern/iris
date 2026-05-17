@@ -6,6 +6,7 @@
 
 #include "iris.hpp"
 #include "ee/ee_def.hpp"
+#include "iop/iop_def.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
@@ -114,6 +115,79 @@ void show_ee_threads(iris::instance* iris) {
         }
 
         show_ee_thread_list(iris);
+    } End();
+}
+
+
+void show_iop_thread_list(iris::instance* iris) {
+    using namespace ImGui;
+
+    struct iop_state* iop = iris->ps2->iop;
+
+    ImGuiTableFlags table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollY;
+
+    if (BeginTable("##threadlist_iop", 5, table_flags)) {
+        TableSetupScrollFreeze(0, 1);
+        TableSetupColumn("ID");
+        TableSetupColumn("Priority");
+        TableSetupColumn("Entry");
+        TableSetupColumn("PC");
+        TableSetupColumn("Status");
+        PushFont(iris->font_small_code);
+        TableHeadersRow();
+        PopFont();
+
+        uint32_t addr = iop_read32(iop, iop->thread_list_addr);
+
+        while (addr) {
+			struct iop_thread* thr = (struct iop_thread*)&iris->ps2->iop_ram->buf[addr & 0x1fffffff];
+			struct iop_thread_ctx* ctx = (struct iop_thread_ctx*)&iris->ps2->iop_ram->buf[thr->reg_storage & 0x1fffffff];
+
+            TableNextRow();
+            TableSetColumnIndex(0);
+            Text("%d", thr->id);
+
+            TableSetColumnIndex(1);
+            Text("%d", thr->priority);
+
+            TableSetColumnIndex(2);
+			Text("0x%08X", thr->entry_point);
+
+            TableSetColumnIndex(3);
+            if (thr->status == THS_RUN) {
+                Text("0x%08x", iop->pc);
+            } else {
+                Text("0x%08x", ctx->pc);
+            }
+
+            TableSetColumnIndex(4);
+            Text("%s", get_status_string(thr->status));
+
+			addr = thr->next_thread;
+        }
+
+        EndTable();
+    }
+}
+
+void show_iop_threads(iris::instance* iris) {
+    using namespace ImGui;
+    
+    if (imgui::BeginEx("IOP Threads", &iris->show_iop_threads)) {
+        if (!iris->ps2->iop->thread_list_addr) {
+            ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
+            ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);
+            ImVec4 col = GetStyle().Colors[ImGuiCol_Text];
+
+            SetCursorPos(pos);
+            TextDisabled(ICON_MS_WARNING " Thread list hasn't been initialized yet");
+
+            End();
+
+            return;
+        }
+
+        show_iop_thread_list(iris);
     } End();
 }
 

@@ -160,6 +160,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->show_status_bar = debugger["show_status_bar"].value_or(true);
     iris->show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
     iris->show_ee_threads = debugger["show_ee_threads"].value_or(false);
+    iris->show_iop_threads = debugger["show_iop_threads"].value_or(false);
     iris->show_timers = debugger["show_timers"].value_or(false);
     iris->show_sysmem_logs = debugger["show_sysmem_logs"].value_or(false);
     iris->show_overlay = debugger["show_overlay"].value_or(false);
@@ -544,6 +545,7 @@ void close(iris::instance* iris) {
             { "show_pad_debugger", iris->show_pad_debugger },
             { "show_breakpoints", iris->show_breakpoints },
             { "show_ee_threads", iris->show_ee_threads },
+            { "show_iop_threads", iris->show_iop_threads },
             { "show_timers", iris->show_timers },
             { "show_sysmem_logs", iris->show_sysmem_logs },
             { "show_imgui_demo", iris->show_imgui_demo },
