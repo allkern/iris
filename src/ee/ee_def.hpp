@@ -611,6 +611,10 @@ struct ee_state {
 #define THS_WAITSUSPEND 0x0C // THS_WAIT | THS_SUSPEND
 #define THS_DORMANT 0x10
 
+#define TSW_EE_NONE 0x0
+#define TSW_EE_SLEEP 0x1
+#define TSW_EE_SEMA 0x2
+
 struct ee_thread_ctx {
     uint32_t sa;
     uint32_t fcsr;

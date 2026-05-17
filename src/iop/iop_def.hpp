@@ -144,6 +144,15 @@ struct iop_state {
     struct iop_module* module_list = nullptr;
 };
 
+#define TSW_IOP_NONE 0x0
+#define TSW_IOP_SLEEP 0x1
+#define TSW_IOP_DELAY 0x2
+#define TSW_IOP_SEMA 0x3
+#define TSW_IOP_EVENTFLAG 0x4
+#define TSW_IOP_MBX 0x5
+#define TSW_IOP_VPL 0x6
+#define TSW_IOP_FPL 0x7
+
 struct iop_thread_ctx {
     uint32_t unk;
     uint32_t at;
