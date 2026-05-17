@@ -30,6 +30,7 @@ extern "C" {
 #include "s14x/syscon.h"
 #include "s14x/sram.h"
 #include "s14x/link.h"
+#include "s2x6/acata.h"
 
 #define FASTMEM_BLKSIZE 0x2000
 #define FASTMEM_TBLSIZE (0x20000000 / FASTMEM_BLKSIZE)
@@ -58,6 +59,7 @@ struct iop_bus {
     struct s14x_syscon* s14x_syscon;
     struct s14x_sram* s14x_sram;
     struct s14x_link* s14x_link;
+    struct s2x6_acata* s2x6_acata;
 
     void* fastmem_r_table[0x10000];
     void* fastmem_w_table[0x10000];
@@ -87,6 +89,7 @@ void iop_bus_init_s14x_nand(struct iop_bus* bus, struct s14x_nand* nand);
 void iop_bus_init_s14x_syscon(struct iop_bus* bus, struct s14x_syscon* syscon);
 void iop_bus_init_s14x_sram(struct iop_bus* bus, struct s14x_sram* sram);
 void iop_bus_init_s14x_link(struct iop_bus* bus, struct s14x_link* link);
+void iop_bus_init_s2x6_acata(struct iop_bus* bus, struct s2x6_acata* acata);
 
 void iop_bus_init_fastmem(struct iop_bus* bus, int ram_size);
 

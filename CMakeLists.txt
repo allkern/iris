@@ -211,6 +211,7 @@ target_sources(iris PRIVATE
     src/s14x/link.c
     src/s14x/ioboard.c
     src/s14x/aiboard.c
+    src/s2x6/acata.c
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp

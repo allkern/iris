@@ -42,6 +42,9 @@ extern "C" {
 #include "s14x/ioboard.h"
 #include "s14x/aiboard.h"
 
+// Namco System 246/256
+#include "s2x6/acata.h"
+
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
 #include "dev/guncon.h"
@@ -124,6 +127,9 @@ struct ps2_state {
     struct s14x_link* s14x_link;
     struct s14x_ioboard* s14x_ioboard;
     struct s14x_aiboard* s14x_aiboard;
+
+    // Namco System 246/256
+    struct s2x6_acata* s2x6_acata;
 
     struct sched_state* sched;
 

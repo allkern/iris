@@ -124,6 +124,10 @@ void iop_bus_init_s14x_link(struct iop_bus* bus, struct s14x_link* link) {
     bus->s14x_link = link;
 }
 
+void iop_bus_init_s2x6_acata(struct iop_bus* bus, struct s2x6_acata* acata) {
+    bus->s2x6_acata = acata;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }
@@ -140,16 +144,16 @@ void iop_bus_destroy(struct iop_bus* bus) {
 #define MAP_REG_WRITE(b, l, u, d, n) \
     if ((addr >= l) && (addr <= u)) { ps2_ ## d ## _write ## b (bus->n, addr, data); return; }
 
-#define MAP_REG_READ_S14X(b, l, u, d, n) \
+#define MAP_REG_READ_CHK(b, l, u, d, n) \
     if (bus->n && (addr >= l) && (addr <= u)) return d ## _read (bus->n, addr - l);
 
-#define MAP_REG_WRITE_S14X(b, l, u, d, n) \
+#define MAP_REG_WRITE_CHK(b, l, u, d, n) \
     if (bus->n && (addr >= l) && (addr <= u)) { d ## _write (bus->n, addr - l, data); return; }
 
-#define MAP_MEM_READ_S14X(b, l, u, d, n) \
+#define MAP_MEM_READ_CHK(b, l, u, d, n) \
     if (bus->n && (addr >= l) && (addr <= u)) return d ## _read ## b (bus->n, addr - l);
 
-#define MAP_MEM_WRITE_S14X(b, l, u, d, n) \
+#define MAP_MEM_WRITE_CHK(b, l, u, d, n) \
     if (bus->n && (addr >= l) && (addr <= u)) { d ## _write ## b (bus->n, addr - l, data); return; }
 
 uint32_t iop_bus_read8(void* udata, uint32_t addr) {
@@ -170,10 +174,10 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
     MAP_REG_READ(8, 0x1F801460, 0x1F80147F, dev9, dev9);
 
     // System 147/148 mappings
-    MAP_REG_READ_S14X(8, 0x10000000, 0x1000000F, s14x_syscon, s14x_syscon);
-    MAP_REG_READ_S14X(8, 0x10800000, 0x108000FF, s14x_link, s14x_link);
-    MAP_MEM_READ_S14X(8, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
-    MAP_REG_READ_S14X(8, 0x14000000, 0x1400000F, s14x_nand, s14x_nand);
+    MAP_REG_READ_CHK(8, 0x10000000, 0x1000000F, s14x_syscon, s14x_syscon);
+    MAP_REG_READ_CHK(8, 0x10800000, 0x108000FF, s14x_link, s14x_link);
+    MAP_MEM_READ_CHK(8, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+    MAP_REG_READ_CHK(8, 0x14000000, 0x1400000F, s14x_nand, s14x_nand);
 
     // System 147/148 syscon overlays retail SPEED
     MAP_REG_READ(8, 0x10000000, 0x1000FFFF, speed, speed);
@@ -215,7 +219,10 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_REG_READ(16, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
-    MAP_MEM_READ_S14X(16, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+    MAP_MEM_READ_CHK(16, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+
+    // System 246/256 mappings
+    MAP_MEM_READ_CHK(16, 0x16000000, 0x1616FFFF, s2x6_acata, s2x6_acata);
 
     // PSX DESR
     if (addr == 0x1000480c) return 0xffff;
@@ -270,7 +277,7 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
-    MAP_MEM_READ_S14X(32, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+    MAP_MEM_READ_CHK(32, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
 
     if (addr == 0x1f801450) return 0;
     if (addr == 0x1f801414) return 1;
@@ -311,10 +318,10 @@ void iop_bus_write8(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(8, 0x1F801460, 0x1F80147F, dev9, dev9);
 
     // System 147/148 mappings
-    MAP_REG_WRITE_S14X(8, 0x10000000, 0x1000000F, s14x_syscon, s14x_syscon);
-    MAP_REG_WRITE_S14X(8, 0x10800000, 0x108000FF, s14x_link, s14x_link);
-    MAP_MEM_WRITE_S14X(8, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
-    MAP_REG_WRITE_S14X(8, 0x14000000, 0x1400000F, s14x_nand, s14x_nand);
+    MAP_REG_WRITE_CHK(8, 0x10000000, 0x1000000F, s14x_syscon, s14x_syscon);
+    MAP_REG_WRITE_CHK(8, 0x10800000, 0x108000FF, s14x_link, s14x_link);
+    MAP_MEM_WRITE_CHK(8, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+    MAP_REG_WRITE_CHK(8, 0x14000000, 0x1400000F, s14x_nand, s14x_nand);
 
     // System 147/148 syscon overlays retail SPEED
     MAP_REG_WRITE(8, 0x10000000, 0x1000FFFF, speed, speed);
@@ -348,7 +355,10 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(16, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
-    MAP_MEM_WRITE_S14X(16, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+    MAP_MEM_WRITE_CHK(16, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+
+    // System 246/256 mappings
+    MAP_MEM_WRITE_CHK(16, 0x16000000, 0x1616FFFF, s2x6_acata, s2x6_acata);
 
     // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
 }
@@ -386,7 +396,7 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
-    MAP_MEM_WRITE_S14X(32, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
+    MAP_MEM_WRITE_CHK(32, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
 
     // printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);
 }

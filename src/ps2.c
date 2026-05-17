@@ -451,12 +451,14 @@ void ps2_destroy(struct ps2_state* ps2) {
     ps2_sif_destroy(ps2->sif);
 
     // Destroy optional hardware
-    if (ps2->s14x_nand) s14x_nand_destroy(ps2->s14x_nand);
-    if (ps2->s14x_syscon) s14x_syscon_destroy(ps2->s14x_syscon);
-    if (ps2->s14x_sram) s14x_sram_destroy(ps2->s14x_sram);
-    if (ps2->s14x_link) s14x_link_destroy(ps2->s14x_link);
-    if (ps2->s14x_ioboard) s14x_ioboard_destroy(ps2->s14x_ioboard);
-    if (ps2->s14x_aiboard) s14x_aiboard_destroy(ps2->s14x_aiboard);
+    if (ps2->s14x_nand) { s14x_nand_destroy(ps2->s14x_nand); ps2->s14x_nand = NULL; }
+    if (ps2->s14x_syscon) { s14x_syscon_destroy(ps2->s14x_syscon); ps2->s14x_syscon = NULL; }
+    if (ps2->s14x_sram) { s14x_sram_destroy(ps2->s14x_sram); ps2->s14x_sram = NULL; }
+    if (ps2->s14x_link) { s14x_link_destroy(ps2->s14x_link); ps2->s14x_link = NULL; }
+    if (ps2->s14x_ioboard) { s14x_ioboard_destroy(ps2->s14x_ioboard); ps2->s14x_ioboard = NULL; }
+    if (ps2->s14x_aiboard) { s14x_aiboard_destroy(ps2->s14x_aiboard); ps2->s14x_aiboard = NULL; }
+
+    if (ps2->s2x6_acata) { s2x6_acata_destroy(ps2->s2x6_acata); ps2->s2x6_acata = NULL; }
 
     free(ps2);
 }
@@ -474,6 +476,8 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
     if (ps2->s14x_link) { s14x_link_destroy(ps2->s14x_link); ps2->s14x_link = NULL; }
     if (ps2->s14x_ioboard) { s14x_ioboard_destroy(ps2->s14x_ioboard); ps2->s14x_ioboard = NULL; }
     if (ps2->s14x_aiboard) { s14x_aiboard_destroy(ps2->s14x_aiboard); ps2->s14x_aiboard = NULL; }
+
+    if (ps2->s2x6_acata) { s2x6_acata_destroy(ps2->s2x6_acata); ps2->s2x6_acata = NULL; }
 
     switch (system) {
         case PS2_SYSTEM_AUTO: {
@@ -564,6 +568,12 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             ee_ram_size = RAM_SIZE_32MB;
             iop_ram_size = RAM_SIZE_2MB;
             mechacon_model = CDVD_MECHACON_DRAGON;
+
+            ps2->s2x6_acata = s2x6_acata_create();
+
+            s2x6_acata_init(ps2->s2x6_acata, ps2->iop_intc, ps2->sched);
+
+            iop_bus_init_s2x6_acata(ps2->iop_bus, ps2->s2x6_acata);
         } break;
 
         case PS2_SYSTEM_NAMCO_S256: {
