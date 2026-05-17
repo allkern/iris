@@ -94,7 +94,7 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
     ps2_ram_init(ps2->iop_ram, RAM_SIZE_2MB);
-    ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->speed, ps2->sched, ps2->iop_bus);
+    ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->speed, ps2->s2x6_acata, ps2->sched, ps2->iop_bus);
     ps2_ram_init(ps2->iop_spr, RAM_SIZE_1KB);
     ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
     ps2_iop_timers_init(ps2->iop_timers, ps2->iop_intc, ps2->sched);
@@ -275,7 +275,7 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_vif_init(ps2->vif1, 1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->ee_dma, ps2->sched, ps2->ee_bus);
     ps2_intc_init(ps2->ee_intc, ps2->ee, ps2->sched);
     ps2_ee_timers_init(ps2->ee_timers, ps2->ee_intc, ps2->sched);
-    ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->speed, ps2->sched, ps2->iop_bus);
+    ps2_iop_dma_init(ps2->iop_dma, ps2->iop_intc, ps2->sif, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->speed, ps2->s2x6_acata, ps2->sched, ps2->iop_bus);
     ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
     ps2_iop_timers_init(ps2->iop_timers, ps2->iop_intc, ps2->sched);
     ps2_spu2_init(ps2->spu2, ps2->iop_dma, ps2->iop_intc, ps2->sched);
@@ -459,6 +459,7 @@ void ps2_destroy(struct ps2_state* ps2) {
     if (ps2->s14x_aiboard) { s14x_aiboard_destroy(ps2->s14x_aiboard); ps2->s14x_aiboard = NULL; }
 
     if (ps2->s2x6_acata) { s2x6_acata_destroy(ps2->s2x6_acata); ps2->s2x6_acata = NULL; }
+    if (ps2->s2x6_acjv) { s2x6_acjv_destroy(ps2->s2x6_acjv); ps2->s2x6_acjv = NULL; }
 
     free(ps2);
 }
@@ -478,6 +479,7 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
     if (ps2->s14x_aiboard) { s14x_aiboard_destroy(ps2->s14x_aiboard); ps2->s14x_aiboard = NULL; }
 
     if (ps2->s2x6_acata) { s2x6_acata_destroy(ps2->s2x6_acata); ps2->s2x6_acata = NULL; }
+    if (ps2->s2x6_acjv) { s2x6_acjv_destroy(ps2->s2x6_acjv); ps2->s2x6_acjv = NULL; }
 
     switch (system) {
         case PS2_SYSTEM_AUTO: {
@@ -564,25 +566,27 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             ps2_iop_dma_set_dev9_mode(ps2->iop_dma, IOP_DMA_DEV9_NAND);
         } break;
 
-        case PS2_SYSTEM_NAMCO_S246: {
-            ee_ram_size = RAM_SIZE_32MB;
-            iop_ram_size = RAM_SIZE_2MB;
+        case PS2_SYSTEM_NAMCO_S246:
+        case PS2_SYSTEM_NAMCO_S256: {
+            ee_ram_size = system == PS2_SYSTEM_NAMCO_S246 ? RAM_SIZE_32MB : RAM_SIZE_64MB;
+            iop_ram_size = system == PS2_SYSTEM_NAMCO_S246 ? RAM_SIZE_2MB : RAM_SIZE_4MB;
             mechacon_model = CDVD_MECHACON_DRAGON;
 
             ps2->s2x6_acata = s2x6_acata_create();
+            ps2->s2x6_acjv = s2x6_acjv_create();
 
             s2x6_acata_init(ps2->s2x6_acata, ps2->iop_intc, ps2->sched);
+            s2x6_acjv_init(ps2->s2x6_acjv);
 
             iop_bus_init_s2x6_acata(ps2->iop_bus, ps2->s2x6_acata);
-        } break;
+            iop_bus_init_s2x6_acjv(ps2->iop_bus, ps2->s2x6_acjv);
 
-        case PS2_SYSTEM_NAMCO_S256: {
-            ee_ram_size = RAM_SIZE_64MB;
-            iop_ram_size = RAM_SIZE_4MB;
-            mechacon_model = CDVD_MECHACON_DRAGON;
+            ps2_iop_dma_set_dev9_mode(ps2->iop_dma, IOP_DMA_DEV9_ACATA);
         } break;
 
         default: {
+            printf("ps2: Unknown system %d\n", system);
+
             ee_ram_size = RAM_SIZE_32MB;
             iop_ram_size = RAM_SIZE_2MB;
             mechacon_model = CDVD_MECHACON_DRAGON;

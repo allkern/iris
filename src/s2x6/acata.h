@@ -26,8 +26,20 @@ extern "C" {
 #define ACATA_R_STATUS_ALT          0x16160000  // [R] A duplicate of the Status Register which does not affect interrupts.
 #define ACATA_R_CONTROL     ACATA_R_STATUS_ALT  // [W] Used to reset the bus or enable/disable interrupts.
 
+struct atapi_packet {
+    uint8_t cmd;
+    uint32_t lba;
+    uint16_t len;
+};
+
+struct atapi_dvd {
+    FILE* file;
+    uint64_t num_sectors;
+};
+
 struct s2x6_acata {
     struct ata_hdd hdd;
+    struct atapi_dvd dvd;
 
     uint16_t data;
     uint16_t error;
@@ -50,6 +62,8 @@ struct s2x6_acata {
 
     uint8_t identify[ATA_SECTOR_SIZE];
 
+    int atapi_response;
+
     struct ps2_iop_intc* intc;
     struct sched_state* sched;
 };
@@ -58,6 +72,8 @@ struct s2x6_acata* s2x6_acata_create(void);
 void s2x6_acata_init(struct s2x6_acata* acata, struct ps2_iop_intc* intc, struct sched_state* sched);
 int s2x6_acata_load(struct s2x6_acata* acata, const char* path);
 void s2x6_acata_destroy(struct s2x6_acata* acata);
+uint16_t acata_read(struct s2x6_acata* acata, uint32_t addr);
+void acata_write(struct s2x6_acata* acata, uint32_t addr, uint64_t data);
 uint64_t s2x6_acata_read16(struct s2x6_acata* acata, uint32_t addr);
 void s2x6_acata_write16(struct s2x6_acata* acata, uint32_t addr, uint64_t data);
 

@@ -30,6 +30,12 @@ static const uint16_t ATA_R_IDENTIFY_PACKET_DEVICE[256] = {
     0x0000,//Word 88 — Ultra DMA
 };
 
+void acata_reset_busy_event(void* udata, int overshoot) {
+    struct s2x6_acata* acata = (struct s2x6_acata*)udata;
+
+    acata->status &= ~ATA_STAT_BUSY;
+}
+
 void s2x6_acata_init(struct s2x6_acata* acata, struct ps2_iop_intc* intc, struct sched_state* sched) {
     memset(acata, 0, sizeof(struct s2x6_acata));
 
@@ -41,7 +47,11 @@ void s2x6_acata_init(struct s2x6_acata* acata, struct ps2_iop_intc* intc, struct
 
     acata->status = ATA_STAT_READY | ATA_STAT_SEEK;
 
-    s2x6_acata_load(acata, "X:\\Games\\PS2\\1.31_LITE_INSTALLED.raw");
+    acata->dvd.file = fopen("NM00007 SC21 DVD0D (DVD-ROM).iso", "rb");
+
+    fseek(acata->dvd.file, 0, SEEK_END);
+    acata->dvd.num_sectors = ftell(acata->dvd.file) / ATAPI_DVD_SECTOR_SIZE;
+    fseek(acata->dvd.file, 0, SEEK_SET);
 }
 
 const char* acata_get_register_name(uint32_t addr, int rw) {
@@ -211,6 +221,63 @@ void acata_init_response(struct s2x6_acata* acata, int size) {
     acata->buf_index = 0;
     acata->buf_size = size;
     acata->buf = malloc(size);
+
+    memset(acata->buf, 0, acata->buf_size);
+}
+
+void atapi_packet_response_event(void* udata, int cycles) {
+    struct s2x6_acata* acata = (struct s2x6_acata*)udata;
+
+    // printf("acata: ATAPI packet response event\n");
+
+    ps2_iop_intc_irq(acata->intc, IOP_INTC_DEV9);
+}
+
+struct atapi_packet atapi_process_packet(struct s2x6_acata* acata) {
+    struct atapi_packet packet;
+
+    packet.cmd = acata->buf[0];
+    packet.lba = (acata->buf[2] << 24) | (acata->buf[3] << 16) | (acata->buf[4] << 8) | acata->buf[5];
+    packet.len = (acata->buf[7] << 8) | acata->buf[8];
+
+    return packet;
+}
+
+void atapi_read_dvd(struct atapi_dvd* dvd, uint64_t lba, uint64_t count, uint8_t* buf) {
+    fseek(dvd->file, lba * ATAPI_DVD_SECTOR_SIZE, SEEK_SET);
+    fread(buf, 1, count * ATAPI_DVD_SECTOR_SIZE, dvd->file);
+}
+
+void atapi_handle_command(struct s2x6_acata* acata, struct atapi_packet* packet) {
+    // printf("acata: Handling ATAPI packet command %02x\n", packet->cmd);
+
+    switch (packet->cmd) {
+        // TEST UNIT READY
+        case 0x00: {
+            printf("acata: ATAPI TEST UNIT READY\n");
+        } break;
+
+        // READ
+        case 0x28: {
+            printf("acata: ATAPI READ (LBA %d COUNT %d)\n", packet->lba, packet->len);
+
+            if (packet->len == 0) {
+                printf("acata: ATAPI READ with length 0, treating as 65536\n");
+
+                exit(1);
+            }
+
+            acata->atapi_response = 1;
+
+            acata_init_response(acata, packet->len * ATAPI_DVD_SECTOR_SIZE);
+
+            atapi_read_dvd(&acata->dvd, packet->lba, packet->len, acata->buf);
+        } break;
+
+        default: {
+            printf("acata: Unhandled ATAPI packet command %02x\n", packet->cmd);
+        } break;
+    }
 }
 
 void acata_handle_data_overflow(struct s2x6_acata* acata) {
@@ -220,6 +287,7 @@ void acata_handle_data_overflow(struct s2x6_acata* acata) {
         case ATA_C_IDENTIFY_PACKET_DEVICE:
         case ATA_C_IDENTIFY_DEVICE: {
             acata->status &= ~ATA_STAT_DRQ;
+            printf("acata: DRQ cleared\n");
         } break;
 
         case ATA_C_WRITE_DMA: {
@@ -229,6 +297,7 @@ void acata_handle_data_overflow(struct s2x6_acata* acata) {
 
             if (acata->pending_sectors == 0) {
                 acata->status &= ~ATA_STAT_DRQ;
+                printf("acata: DRQ cleared\n");
             } else {
                 acata->buf_index = 0;
                 acata->buf_size = 512;
@@ -239,6 +308,7 @@ void acata_handle_data_overflow(struct s2x6_acata* acata) {
         case ATA_C_READ_SECTOR: {
             if (acata->pending_sectors == 0) {
                 acata->status &= ~ATA_STAT_DRQ;
+                printf("acata: DRQ cleared\n");
 
                 return;
             }
@@ -251,8 +321,36 @@ void acata_handle_data_overflow(struct s2x6_acata* acata) {
             acata->pending_sectors--;
         } break;
 
+        case ATA_C_PACKET: {
+            acata->status &= ~ATA_STAT_DRQ;
+            acata->status |= ATA_STAT_READY;
+            printf("acata: DRQ cleared\n");
+
+            if (acata->atapi_response) {
+                acata->atapi_response = 0;
+
+                return;
+            }
+
+            struct atapi_packet packet = atapi_process_packet(acata);
+
+            // printf("acata: ATAPI packet command %02x lba %08x len %08x\n", packet.cmd, packet.lba, packet.len);
+
+            atapi_handle_command(acata, &packet);
+
+            struct sched_event event;
+
+            event.callback = atapi_packet_response_event;
+            event.cycles = 1000;
+            event.name = "ATAPI packet response";
+            event.udata = acata;
+
+            sched_schedule(acata->sched, event);
+        } break;
+
         case ATA_C_SCE_SECURITY_CONTROL: {
             acata->status &= ~ATA_STAT_DRQ;
+            printf("acata: DRQ cleared\n");
         } break;
     }
 }
@@ -336,6 +434,16 @@ void acata_handle_command(struct s2x6_acata* acata, uint16_t cmd) {
 
         case ATA_C_SET_FEATURES: {
             printf("acata: SET FEATURES subcommand %d\n", acata->feature);
+
+            return;
+        } break;
+
+        case ATA_C_PACKET: {
+            printf("acata: PACKET\n");
+
+            acata->status |= ATA_STAT_DRQ;
+            acata->buf_size = 12;
+            acata->buf_index = 0;
         } break;
 
         case ATA_C_IDENTIFY_PACKET_DEVICE: {
@@ -364,6 +472,17 @@ void acata_handle_command(struct s2x6_acata* acata, uint16_t cmd) {
             exit(1);
         } break;
     }
+
+    acata->status |= ATA_STAT_BUSY;
+
+    struct sched_event event;
+
+    event.callback = acata_reset_busy_event;
+    event.udata = acata;
+    event.name = "acata reset busy";
+    event.cycles = 1000;
+
+    sched_schedule(acata->sched, event);
 }
 
 uint16_t acata_handle_data_read(struct s2x6_acata* acata) {
@@ -376,6 +495,8 @@ uint16_t acata_handle_data_read(struct s2x6_acata* acata) {
     // printf("acata: Data read %04x (index %d lba %08lx)\n", value, acata->buf_index, acata->pending_lba);
 
     acata->buf_index += 2;
+
+    // printf("acata: Data read %04x (index %d lba %08lx)\n", value, acata->buf_index, acata->pending_lba);
 
     if (acata->buf_index >= acata->buf_size) {
         acata_handle_data_overflow(acata);
@@ -435,19 +556,11 @@ uint16_t acata_read(struct s2x6_acata* acata, uint32_t addr) {
     return 0;
 }
 
-void acata_reset_bsy_event(void* udata, int overshoot) {
-    struct s2x6_acata* acata = (struct s2x6_acata*)udata;
-
-    acata->status &= ~ATA_STAT_BUSY;
-
-    ps2_iop_intc_irq(acata->intc, IOP_INTC_DEV9);
-}
-
 void acata_write(struct s2x6_acata* acata, uint32_t addr, uint64_t data) {
     // if (!acata->hdd.udata)
     //     return;
 
-    printf("acata: Write %s %08lx (drive %d)\n", acata_get_register_name(addr, 1), data, acata_get_drive(acata));
+    // printf("acata: Write %s %08lx (drive %d)\n", acata_get_register_name(addr, 1), data, acata_get_drive(acata));
 
     if (acata_get_drive(acata) && (addr != 6 && addr != 22))
         return;
@@ -462,18 +575,8 @@ void acata_write(struct s2x6_acata* acata, uint32_t addr, uint64_t data) {
         case 6: acata->select = data; return;
         case 7: {
             acata->command = data;
-            acata->status |= ATA_STAT_BUSY;
 
             acata_handle_command(acata, acata->command);
-
-            struct sched_event event;
-
-            event.callback = acata_reset_bsy_event;
-            event.udata = acata;
-            event.name = "acata reset bsy";
-            event.cycles = 1000;
-
-            sched_schedule(acata->sched, event);
 
             return;
         } break;

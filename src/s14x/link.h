@@ -256,8 +256,8 @@ struct s14x_link {
 
 struct s14x_link* s14x_link_create(void);
 void s14x_link_init(struct s14x_link* link, struct ps2_iop_intc* intc, struct sched_state* sched);
-uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr);
-void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data);
+uint64_t s14x_link_read8(struct s14x_link* link, uint32_t addr);
+void s14x_link_write8(struct s14x_link* link, uint32_t addr, uint64_t data);
 void s14x_link_register_node(struct s14x_link* link, int node, link_packet_handler handler, void* udata);
 void s14x_link_send_packet(struct s14x_link* link, struct link_packet packet);
 void s14x_link_destroy(struct s14x_link* link);

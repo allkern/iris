@@ -16,6 +16,7 @@ extern "C" {
 #include "scheduler.h"
 #include "sio2.h"
 #include "spu2.h"
+#include "s2x6/acata.h"
 
 #include "bus_decl.h"
 
@@ -40,6 +41,9 @@ extern "C" {
 
 // System 147/148 NAND chip
 #define IOP_DMA_DEV9_NAND 1
+
+// System 246/256 ACATA
+#define IOP_DMA_DEV9_ACATA 2
 
 struct iop_dma_channel {
     uint32_t madr;
@@ -79,11 +83,12 @@ struct ps2_iop_dma {
     struct ps2_sio2* sio2;
     struct ps2_spu2* spu2;
     struct ps2_speed* speed;
+    struct s2x6_acata* s2x6_acata;
     struct sched_state* sched;
 };
 
 struct ps2_iop_dma* ps2_iop_dma_create(void);
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu, struct ps2_speed* speed, struct sched_state* sched, struct iop_bus* bus);
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu2, struct ps2_speed* speed, struct s2x6_acata* s2x6_acata, struct sched_state* sched, struct iop_bus* bus);
 void ps2_iop_dma_set_dev9_mode(struct ps2_iop_dma* dma, int mode);
 void ps2_iop_dma_destroy(struct ps2_iop_dma* dma);
 uint64_t ps2_iop_dma_read16(struct ps2_iop_dma* dma, uint32_t addr);

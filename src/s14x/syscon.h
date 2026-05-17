@@ -43,8 +43,8 @@ struct s14x_syscon {
 
 struct s14x_syscon* s14x_syscon_create(void);
 void s14x_syscon_init(struct s14x_syscon* syscon);
-uint64_t s14x_syscon_read(struct s14x_syscon* syscon, uint32_t addr);
-void s14x_syscon_write(struct s14x_syscon* syscon, uint32_t addr, uint64_t data);
+uint64_t s14x_syscon_read8(struct s14x_syscon* syscon, uint32_t addr);
+void s14x_syscon_write8(struct s14x_syscon* syscon, uint32_t addr, uint64_t data);
 void s14x_syscon_destroy(struct s14x_syscon* syscon);
 
 #ifdef __cplusplus

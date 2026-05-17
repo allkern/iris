@@ -60,7 +60,7 @@ struct ps2_iop_dma* ps2_iop_dma_create(void) {
     return malloc(sizeof(struct ps2_iop_dma));
 }
 
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu2, struct ps2_speed* speed, struct sched_state* sched, struct iop_bus* bus) {
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu2, struct ps2_speed* speed, struct s2x6_acata* s2x6_acata, struct sched_state* sched, struct iop_bus* bus) {
     memset(dma, 0, sizeof(struct ps2_iop_dma));
 
     dma->intc = intc;
@@ -72,7 +72,7 @@ void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct
     dma->sio2 = sio2;
     dma->spu2 = spu2;
     dma->speed = speed;
-
+    dma->s2x6_acata = s2x6_acata;
     dma->dmacinten = 0x01;
 }
 
@@ -439,20 +439,63 @@ void iop_dma_handle_dev9_nand_transfer(struct ps2_iop_dma* dma) {
     dma->channels[IOP_DMA_DEV9].chcr &= ~0x1000000;
 }
 
+void iop_dma_handle_dev9_acata_transfer(struct ps2_iop_dma* dma) {
+    int dir = dma->channels[IOP_DMA_DEV9].chcr & 1;
+
+    fprintf(stdout, "iop: dev9 acata madr=%08x bcr=%08x chcr=%08x tadr=%08x size=%ld (%08x) dir=%d\n",
+        dma->channels[IOP_DMA_DEV9].madr,
+        dma->channels[IOP_DMA_DEV9].bcr,
+        dma->channels[IOP_DMA_DEV9].chcr,
+        dma->channels[IOP_DMA_DEV9].tadr,
+        dma->channels[IOP_DMA_DEV9].transfer_size,
+        dma->channels[IOP_DMA_DEV9].transfer_size,
+        dir
+    );
+
+    if (dir) {
+        while (dma->channels[IOP_DMA_DEV9].transfer_size) {
+            uint16_t d = iop_bus_read16(dma->bus, dma->channels[IOP_DMA_DEV9].madr);
+
+            // ATA DATA register
+            acata_write(dma->s2x6_acata, 0, d);
+
+            dma->channels[IOP_DMA_DEV9].madr += 2;
+            dma->channels[IOP_DMA_DEV9].transfer_size -= 2;
+        }
+    } else {
+        while (dma->channels[IOP_DMA_DEV9].transfer_size) {
+            // ATA DATA register
+            uint32_t d = acata_read(dma->s2x6_acata, 0);
+    
+            iop_bus_write16(dma->bus, dma->channels[IOP_DMA_DEV9].madr, d);
+
+            dma->channels[IOP_DMA_DEV9].madr += 2;
+            dma->channels[IOP_DMA_DEV9].transfer_size -= 2;
+        }
+    }
+
+    iop_dma_set_dicr_flag(dma, IOP_DMA_DEV9);
+    iop_dma_check_irq(dma);
+
+    dma->channels[IOP_DMA_DEV9].chcr &= ~0x1000000;
+}
+
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     // Note: DEV9 DMA serves different purposes based on the system.
 
     // On retail hardware, DEV9 DMA is used to transfer data in and out
-    // of the HDD. On the Namco System 147/148 arcade hardware, DEV9 DMA
+    // of the HDD. On Namco System 147/148 arcade hardware, DEV9 DMA
     // is used to transfer data to and from the Samsung NAND flash
-    // storage chip.
+    // storage chip. On Namco System 246/256 arcade hardware, DEV9 DMA is
+    // used to transfer data to and from the ACATA device, which is
+    // either an ATA HDD or ATAPI DVD drive.
 
-    // We'll have to account for this once we implement HDD support, for
-    // now we're defaulting to the System 147/148 behavior, since it
-    // won't be used by any retail games anyways unless the HDD is present.
+    printf("iop: DEV9 transfer mode %d\n", dma->dev9_mode);
 
     if (dma->dev9_mode == IOP_DMA_DEV9_ATA) {
         iop_dma_handle_dev9_ata_transfer(dma);
+    } else if (dma->dev9_mode == IOP_DMA_DEV9_ACATA) {
+        iop_dma_handle_dev9_acata_transfer(dma);
     } else {
         iop_dma_handle_dev9_nand_transfer(dma);
     }

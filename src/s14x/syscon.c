@@ -14,7 +14,9 @@ void s14x_syscon_init(struct s14x_syscon* syscon) {
     syscon->battery_level = 0x0; // 0 - OK, non-zero - NG
 }
 
-uint64_t s14x_syscon_read(struct s14x_syscon* syscon, uint32_t addr) {
+uint64_t s14x_syscon_read8(struct s14x_syscon* syscon, uint32_t addr) {
+    addr -= 0x10000000;
+
     switch (addr) {
         case S14X_SYSCON_REG_LED: return syscon->led;
         case S14X_SYSCON_REG_SECURITY_UNLOCK: return syscon->security_unlock;
@@ -56,7 +58,9 @@ uint64_t s14x_syscon_read(struct s14x_syscon* syscon, uint32_t addr) {
     return 0;
 }
 
-void s14x_syscon_write(struct s14x_syscon* syscon, uint32_t addr, uint64_t data) {
+void s14x_syscon_write8(struct s14x_syscon* syscon, uint32_t addr, uint64_t data) {
+    addr -= 0x10000000;
+
     switch (addr) {
         case S14X_SYSCON_REG_LED: syscon->led = data; return;
         case S14X_SYSCON_REG_SECURITY_UNLOCK: syscon->security_unlock = data; return;

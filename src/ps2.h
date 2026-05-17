@@ -44,6 +44,7 @@ extern "C" {
 
 // Namco System 246/256
 #include "s2x6/acata.h"
+#include "s2x6/acjv.h"
 
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.h"
@@ -130,6 +131,7 @@ struct ps2_state {
 
     // Namco System 246/256
     struct s2x6_acata* s2x6_acata;
+    struct s2x6_acjv* s2x6_acjv;
 
     struct sched_state* sched;
 

@@ -38,6 +38,8 @@ extern "C" {
 #define ATA_NUM_HEADS 16
 #define ATA_SECTORS_PER_TRACK 63
 
+#define ATAPI_DVD_SECTOR_SIZE 2048
+
 #define ATA_STAT_ERR   0x01
 #define ATA_STAT_INDEX 0x02
 #define ATA_STAT_CORR  0x04

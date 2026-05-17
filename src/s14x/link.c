@@ -88,7 +88,9 @@ void link_send_irq(struct s14x_link* link, uint16_t irq) {
     ps2_iop_intc_irq(link->intc, IOP_INTC_DEV9);
 }
 
-uint64_t s14x_link_read(struct s14x_link* link, uint32_t addr) {
+uint64_t s14x_link_read8(struct s14x_link* link, uint32_t addr) {
+    addr -= 0x10800000;
+
     uint32_t r = 0;
 
     switch (addr) {
@@ -218,7 +220,9 @@ void link_recv_reply(void* udata, int overshoot) {
     ps2_iop_intc_irq(link->intc, IOP_INTC_DEV9);
 }
 
-void s14x_link_write(struct s14x_link* link, uint32_t addr, uint64_t data) {
+void s14x_link_write8(struct s14x_link* link, uint32_t addr, uint64_t data) {
+    addr -= 0x10800000;
+
     if (addr != S14X_LINK_WATCHDOG_FLAG) {
         printf(stdout, "s14x_link: Write %s (%08x) %08x\n", g_reg_names[addr], addr, data);
     }

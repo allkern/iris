@@ -5,7 +5,7 @@
 #include "bus.h"
 #include "bus_decl.h"
 
-#define printf(fmt, ...)(0)
+// #define printf(fmt, ...)(0)
 
 struct iop_bus* iop_bus_create(void) {
     return malloc(sizeof(struct iop_bus));
@@ -128,6 +128,10 @@ void iop_bus_init_s2x6_acata(struct iop_bus* bus, struct s2x6_acata* acata) {
     bus->s2x6_acata = acata;
 }
 
+void iop_bus_init_s2x6_acjv(struct iop_bus* bus, struct s2x6_acjv* acjv) {
+    bus->s2x6_acjv = acjv;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }
@@ -145,10 +149,10 @@ void iop_bus_destroy(struct iop_bus* bus) {
     if ((addr >= l) && (addr <= u)) { ps2_ ## d ## _write ## b (bus->n, addr, data); return; }
 
 #define MAP_REG_READ_CHK(b, l, u, d, n) \
-    if (bus->n && (addr >= l) && (addr <= u)) return d ## _read (bus->n, addr - l);
+    if (bus->n && (addr >= l) && (addr <= u)) return d ## _read ## b (bus->n, addr);
 
 #define MAP_REG_WRITE_CHK(b, l, u, d, n) \
-    if (bus->n && (addr >= l) && (addr <= u)) { d ## _write (bus->n, addr - l, data); return; }
+    if (bus->n && (addr >= l) && (addr <= u)) { d ## _write ## b (bus->n, addr, data); return; }
 
 #define MAP_MEM_READ_CHK(b, l, u, d, n) \
     if (bus->n && (addr >= l) && (addr <= u)) return d ## _read ## b (bus->n, addr - l);
@@ -222,7 +226,8 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
     MAP_MEM_READ_CHK(16, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
 
     // System 246/256 mappings
-    MAP_MEM_READ_CHK(16, 0x16000000, 0x1616FFFF, s2x6_acata, s2x6_acata);
+    MAP_REG_READ_CHK(16, 0x12400000, 0x12407FFF, s2x6_acjv, s2x6_acjv);
+    MAP_REG_READ_CHK(16, 0x16000000, 0x1616FFFF, s2x6_acata, s2x6_acata);
 
     // PSX DESR
     if (addr == 0x1000480c) return 0xffff;
@@ -277,6 +282,7 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
+    MAP_MEM_READ_CHK(32, 0x12400000, 0x12407FFF, s2x6_acjv, s2x6_acjv);
     MAP_MEM_READ_CHK(32, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
 
     if (addr == 0x1f801450) return 0;
@@ -358,7 +364,8 @@ void iop_bus_write16(void* udata, uint32_t addr, uint32_t data) {
     MAP_MEM_WRITE_CHK(16, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
 
     // System 246/256 mappings
-    MAP_MEM_WRITE_CHK(16, 0x16000000, 0x1616FFFF, s2x6_acata, s2x6_acata);
+    MAP_REG_WRITE_CHK(16, 0x12400000, 0x12407FFF, s2x6_acjv, s2x6_acjv);
+    MAP_REG_WRITE_CHK(16, 0x16000000, 0x1616FFFF, s2x6_acata, s2x6_acata);
 
     // printf("iop_bus: Unhandled 16-bit write to physical address 0x%08x (0x%04x)\n", addr, data);
 }
@@ -396,6 +403,7 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
+    MAP_MEM_WRITE_CHK(32, 0x12400000, 0x12407FFF, s2x6_acjv, s2x6_acjv);
     MAP_MEM_WRITE_CHK(32, 0x10C00000, 0x10C07FFF, s14x_sram, s14x_sram);
 
     // printf("iop_bus: Unhandled 32-bit write to physical address 0x%08x (0x%08x)\n", addr, data);

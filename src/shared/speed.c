@@ -55,6 +55,9 @@ uint64_t ps2_speed_read8(struct ps2_speed* speed, uint32_t addr) {
 uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
     addr &= 0xffff;
 
+    if (addr == 0x205c) return 0x0000;
+    if (addr == 0x205e) return 0x8000;
+
     if (addr >= 0x4800 && addr < 0x4820) {
         return ps2_flash_read16(speed->flash, addr);
     }
@@ -143,7 +146,7 @@ void ps2_speed_write16(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
         case 0x002a: speed->intr_mask = data; return;
     }
 
-    printf("speed: write16 %08x %04x <-------------------------------------------\n", addr, (uint16_t)data); // exit(1);
+    // printf("speed: write16 %08x %04x <-------------------------------------------\n", addr, (uint16_t)data); // exit(1);
 
     // printf("speed: write16 %08x %08x\n", addr, data); // exit(1);
 }

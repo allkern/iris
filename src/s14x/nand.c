@@ -67,7 +67,9 @@ void nand_handle_cmd_read(struct s14x_nand* nand) {
     fread(nand->buf, 1, S14X_NAND_PAGE_SIZE_ECC, nand->file);
 }
 
-uint64_t s14x_nand_read(struct s14x_nand* nand, uint32_t addr) {
+uint64_t s14x_nand_read8(struct s14x_nand* nand, uint32_t addr) {
+    addr -= 0x14000000;
+
     switch (addr) {
         case S14X_NAND_REG_OUTBYTE: {
             int index = nand->index++ % nand->size;
@@ -83,7 +85,9 @@ uint64_t s14x_nand_read(struct s14x_nand* nand, uint32_t addr) {
     return 0;
 }
 
-void s14x_nand_write(struct s14x_nand* nand, uint32_t addr, uint64_t data) {
+void s14x_nand_write8(struct s14x_nand* nand, uint32_t addr, uint64_t data) {
+    addr -= 0x14000000;
+
     switch (addr) {
         case S14X_NAND_REG_CMD: {
             nand->cmd = data;
