@@ -21,7 +21,7 @@ bool iop_is_executable_region(uint32_t addr) {
 void iop_invalidate_cache_page(struct iop_state* iop, uint32_t addr) {
     uint32_t page = addr / _IOP_CACHE_PAGESIZE;
 
-    if (iop->block_cache[page] && iop_is_executable_region(addr)) {
+    if (iop_is_executable_region(addr) && iop->block_cache[page]) {
         iop->block_cache_dirty[page] = 1;
     }
 }
@@ -36,17 +36,15 @@ const uint32_t iop_bus_region_mask_table[] = {
 };
 
 static inline uint32_t iop_translate_addr(uint32_t addr) {
-    return addr & 0x1fffffff;
-
-    //KSEG0
+    // KSEG0
     if (addr >= 0x80000000 && addr < 0xA0000000)
         return addr - 0x80000000;
 
-    //KSEG1
+    // KSEG1
     if (addr >= 0xA0000000 && addr < 0xC0000000)
         return addr - 0xA0000000;
 
-    //KUSEG, KSEG2
+    // KUSEG, KSEG2
     return addr;
 }
 
