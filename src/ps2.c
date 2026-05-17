@@ -82,8 +82,6 @@ void ps2_init(struct ps2_state* ps2) {
     iop_bus_data.udata = ps2->iop_bus;
 
     iop_init(ps2->iop, iop_bus_data);
-    ps2->iop_bus->invalidate_cache = (void (*)(void*, uint32_t))iop_invalidate_cache_page;
-    ps2->iop_bus->invalidate_cache_udata = ps2->iop;
 
     // Initialize devices
     ps2_dmac_init(ps2->ee_dma, ps2->sif, ps2->iop_dma, ee_get_spr(ps2->ee), ps2->gif, ps2->ipu, ps2->vif0, ps2->vif1, ps2->ee, ps2->sched, ps2->ee_bus);
@@ -201,8 +199,10 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
         while (ps2->iop_cycles > 0) {
             int cycles = iop_run_block(ps2->iop, 16);
 
-            for (int i = 0; i < cycles; i++)
-                ps2_iop_timers_tick(ps2->iop_timers);
+            ps2_iop_timers_tick_cycles(ps2->iop_timers, cycles / 2);
+
+            // for (int i = 0; i < cycles; i++)
+            //     ps2_iop_timers_tick(ps2->iop_timers);
 
             ps2->iop_cycles -= cycles;
             ps2->ee_cycles -= cycles * 8;
