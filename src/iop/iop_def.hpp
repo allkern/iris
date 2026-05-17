@@ -137,8 +137,93 @@ struct iop_state {
     uint32_t cop0_r[16] = { 0 };
 
     uint32_t module_list_addr = 0;
+    uint32_t thread_list_addr = 0;
     
     /* cache module list */
     int module_count = 0;
     struct iop_module* module_list = nullptr;
+};
+
+#define TSW_IOP_NONE 0x0
+#define TSW_IOP_SLEEP 0x1
+#define TSW_IOP_DELAY 0x2
+#define TSW_IOP_SEMA 0x3
+#define TSW_IOP_EVENTFLAG 0x4
+#define TSW_IOP_MBX 0x5
+#define TSW_IOP_VPL 0x6
+#define TSW_IOP_FPL 0x7
+
+struct iop_thread_ctx {
+    uint32_t unk;
+    uint32_t at;
+    uint32_t v0;
+    uint32_t v1;
+    uint32_t a0;
+    uint32_t a1;
+    uint32_t a2;
+    uint32_t a3;
+    uint32_t t0;
+    uint32_t t1;
+    uint32_t t2;
+    uint32_t t3;
+    uint32_t t4;
+    uint32_t t5;
+    uint32_t t6;
+    uint32_t t7;
+    uint32_t s0;
+    uint32_t s1;
+    uint32_t s2;
+    uint32_t s3;
+    uint32_t s4;
+    uint32_t s5;
+    uint32_t s6;
+    uint32_t s7;
+    uint32_t t8;
+    uint32_t t9;
+    uint32_t unk68;
+    uint32_t unk6c;
+    uint32_t gp;
+    uint32_t sp;
+    uint32_t fp;
+    uint32_t ra;
+    uint32_t hi;
+    uint32_t lo;
+    uint32_t sr;
+    uint32_t pc;
+    uint32_t I_CTRL;
+    uint32_t unk2;
+};
+
+struct iop_thread {
+    /* Links for priority list */
+    uint32_t next;
+    uint32_t prev;
+
+    uint16_t tag;
+    uint16_t id;
+    uint8_t status;
+    uint16_t priority;
+    uint32_t reg_storage; // iop_thread_ctx*
+    int unk14;
+    int unk18;
+    uint16_t wait_type;
+    uint16_t wakeup_count;
+    uint32_t wait_id; // ptr to wait object
+    uint32_t next_thread; // iop_thread*
+    uint32_t event_bits;
+    uint16_t event_mode;
+    uint16_t init_prio;
+    uint32_t run_clocks_hi;
+    uint32_t run_clocks_lo;
+    uint32_t entry_point;
+    uint32_t stack_memory;
+    uint32_t stack_size;
+    uint32_t gp_reg;
+    uint32_t attr;
+    uint32_t option;
+    uint32_t wait_return;
+    uint32_t reason_counter;
+    uint32_t irq_preempt_count;
+    uint32_t thread_preempt_count;
+    uint32_t release_count;
 };

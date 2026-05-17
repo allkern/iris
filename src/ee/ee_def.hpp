@@ -611,25 +611,40 @@ struct ee_state {
 #define THS_WAITSUSPEND 0x0C // THS_WAIT | THS_SUSPEND
 #define THS_DORMANT 0x10
 
+#define TSW_EE_NONE 0x0
+#define TSW_EE_SLEEP 0x1
+#define TSW_EE_SEMA 0x2
+
+struct ee_thread_ctx {
+    uint32_t sa;
+    uint32_t fcsr;
+    uint32_t float_thing;
+    uint32_t unk;
+    // gpr excluding $zero
+    // k0/k1 contains hi, hi1, lo, lo1
+    uint128_t gpr[31];
+    float fpr[32];
+};
+
 struct ee_thread {
     uint32_t prev; // TCB*
     uint32_t next; // TCB*
     int status;
-    uint32_t func; // void*
-    uint32_t current_stack; // void*
+    uint32_t resume_addr; // void*
+    uint32_t register_storage; // ee_thread_ctx*
     uint32_t gp_reg; // void*
-    short current_priority;
     short init_priority;
-    int wait_type; //0=not waiting, 1=sleeping, 2=waiting on semaphore
+    short current_priority;
+    int wait_type; // 0=not waiting, 1=sleeping, 2=waiting on semaphore
     int sema_id;
     int wakeup_count;
     int attr;
     int option;
-    uint32_t func_; // void* ??? 
+    uint32_t entry_point; // void* ???
     int argc;
     uint32_t argv; // char**
-    uint32_t initial_stack; // void*
+    uint32_t stack_memory; // void*
     int stack_size;
-    uint32_t root; // int* function to return to when exiting thread? 
+    uint32_t root; // int* function to return to when exiting thread?
     uint32_t heap_base; // void*
 };

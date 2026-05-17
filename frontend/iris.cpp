@@ -302,7 +302,8 @@ void update_window(iris::instance* iris) {
     if (iris->show_settings) show_settings(iris);
     if (iris->show_pad_debugger) show_pad_debugger(iris);
     if (iris->show_symbols) show_symbols(iris);
-    if (iris->show_threads) show_threads(iris);
+    if (iris->show_ee_threads) show_ee_threads(iris);
+    if (iris->show_iop_threads) show_iop_threads(iris);
     if (iris->show_timers) show_timers(iris);
     if (iris->show_sysmem_logs) show_sysmem_logs(iris);
     if (iris->show_memory_card_tool) show_memory_card_tool(iris);
@@ -780,7 +781,8 @@ void destroy(iris::instance* iris) {
         iris->show_memory_search = false;
         iris->show_vu_disassembler = false;
         iris->show_breakpoints = false;
-        iris->show_threads = false;
+        iris->show_ee_threads = false;
+        iris->show_iop_threads = false;
         iris->show_timers = false;
         iris->show_sysmem_logs = false;
         iris->show_imgui_demo = false;

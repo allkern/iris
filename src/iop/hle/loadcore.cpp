@@ -34,6 +34,25 @@ static unsigned get_module_list(struct iop_state* iop)
     return lc_struct + 0x10;
 }
 
+static unsigned get_thread_list(struct iop_state* iop)
+{
+    unsigned module_version = iop_read32(iop, iop->r[4] + 8);
+
+    /* Read address of ordinal 3 */
+    unsigned func = iop_read32(iop, iop->r[4] + 0x20);
+
+    /* Read lui+ori of address to the thread manager global */
+    unsigned th_struct = iop_read32(iop, func) << 16;
+    th_struct |= iop_read32(iop, func + 4) & 0xffff;
+
+    unsigned th_list = th_struct + 0x42c;
+    if (module_version > 0x101) {
+        th_list = th_struct + 0x430;
+    }
+
+    return th_list;
+}
+
 static void iop_strncpy(struct iop_state* iop, char* dest, unsigned src, int n)
 {
     char c;
@@ -96,11 +115,18 @@ void refresh_module_list(struct iop_state* iop)
 
 int loadcore_reg_lib_ent(struct iop_state* iop)
 {
-    unsigned list = get_module_list(iop);
-
-    iop->module_list_addr = list;
-
+    unsigned module_list = get_module_list(iop);
+    iop->module_list_addr = module_list;
     refresh_module_list(iop);
+
+    char name[8] = {};
+
+    iop_strncpy(iop, name, iop->r[4] + 0xc, sizeof(name));
+    if (strncmp(name, "thbase", 6) == 0) {
+        unsigned thread_list = get_thread_list(iop);
+        iop->thread_list_addr = thread_list;
+		printf("iop: found thread list at %x\n", thread_list);
+    }
 
     return 0;
 }
