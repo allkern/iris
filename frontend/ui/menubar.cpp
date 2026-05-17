@@ -507,7 +507,7 @@ void show_main_menubar(iris::instance* iris) {
                 if (MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->show_symbols));
                 EndDisabled();
 
-                if (MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->show_threads));
+                if (MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->show_ee_threads));
 
                 // ImGui::EndMenu();
             // }
@@ -575,7 +575,7 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_vu_disassembler = false;
                 iris->show_status_bar = false;
                 iris->show_breakpoints = false;
-                iris->show_threads = false;
+                iris->show_ee_threads = false;
                 iris->show_sysmem_logs = false;
                 iris->show_imgui_demo = false;
                 iris->show_overlay = false;

@@ -508,7 +508,7 @@ struct instance {
     bool show_settings = false;
     bool show_pad_debugger = false;
     bool show_symbols = false;
-    bool show_threads = false;
+    bool show_ee_threads = false;
     bool show_memory_card_tool = false;
     bool show_hdd_tool = false;
     bool show_imgui_demo = false;
@@ -828,7 +828,7 @@ void show_about_window(iris::instance* iris);
 void show_settings(iris::instance* iris);
 void show_pad_debugger(iris::instance* iris);
 void show_symbols(iris::instance* iris);
-void show_threads(iris::instance* iris);
+void show_ee_threads(iris::instance* iris);
 void show_overlay(iris::instance* iris);
 void show_memory_card_tool(iris::instance* iris);
 void show_hdd_tool(iris::instance* iris);

@@ -37,7 +37,7 @@ static const char* get_entry_symbol(iris::instance* iris, uint32_t addr) {
     return nullptr;
 }
 
-void show_thread_list(iris::instance* iris) {
+void show_ee_thread_list(iris::instance* iris) {
     using namespace ImGui;
 
     struct ee_state* ee = iris->ps2->ee;
@@ -93,10 +93,10 @@ void show_thread_list(iris::instance* iris) {
     }
 }
 
-void show_threads(iris::instance* iris) {
+void show_ee_threads(iris::instance* iris) {
     using namespace ImGui;
     
-    if (imgui::BeginEx("Threads", &iris->show_threads)) {
+    if (imgui::BeginEx("EE Threads", &iris->show_ee_threads)) {
         if (!iris->ps2->ee->thread_list_base) {
             ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
             ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);
@@ -110,7 +110,7 @@ void show_threads(iris::instance* iris) {
             return;
         }
 
-        show_thread_list(iris);
+        show_ee_thread_list(iris);
     } End();
 }
 
