@@ -32,10 +32,6 @@ url parse_url(std::string uri) {
 
     size_t scheme_end = uri.find("://");
 
-    if (scheme_end == std::string::npos) {
-        throw std::invalid_argument("Invalid URL: Missing scheme");
-    }
-
     result.scheme = uri.substr(0, scheme_end);
     size_t host_start = scheme_end + 3;
 
