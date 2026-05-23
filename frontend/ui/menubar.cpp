@@ -78,7 +78,7 @@ void show_main_menubar(iris::instance* iris) {
                     std::string path = f.result().at(0);
 
                     if (path.size()) {
-                        if (open_file(iris, path)) {
+                        if (emu::open_file(iris, path)) {
                             push_info(iris, "Failed to open file: " + path);
                         } else {
                             add_recent(iris, path, RECENT_TYPE_PS2);
@@ -91,7 +91,7 @@ void show_main_menubar(iris::instance* iris) {
                 for (const auto& recent : iris->recents) {
                     if (MenuItem(recent.path.c_str())) {
                         if (recent.type == RECENT_TYPE_PS2) {
-                            if (open_file(iris, recent.path)) {
+                            if (emu::open_file(iris, recent.path)) {
                                 push_info(iris, "Failed to open file: " + recent.path);
                             } else {
                                 add_recent(iris, recent.path, recent.type);
@@ -268,6 +268,11 @@ void show_main_menubar(iris::instance* iris) {
                 iris->loaded = "";
 
                 ps2_cdvd_close(iris->ps2->cdvd);
+            }
+
+            if (MenuItem(ICON_MS_CLOSE " Close")) {
+                iris->pause = true;
+                iris->show_gamelist = true;
             }
 
             ImGui::EndMenu();
@@ -582,7 +587,11 @@ void show_main_menubar(iris::instance* iris) {
                 iris->show_imgui_demo = false;
                 iris->show_overlay = false;
             }
-            
+
+            if (MenuItem("Gamelist")) {
+                iris->show_gamelist = true;
+            }
+
             ImGui::EndMenu();
         }
         if (BeginMenu("Help")) {

@@ -11,6 +11,9 @@ set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Reso
 # Statically link SDL3 for Linux targets
 set(SDL_STATIC ON)
 set(ASMJIT_STATIC ON)
+set(BUILD_CURL_EXE OFF CACHE BOOL "Build curl executable" OFF)
+set(HTTP_ONLY ON CACHE BOOL "Build curl with HTTP only" OFF)
+set(CURL_STATICLIB ON CACHE BOOL "Build curl as a static library" ON)
 
 find_package(Git QUIET)
 
@@ -55,6 +58,20 @@ target_compile_options(iris PUBLIC "-fno-exceptions" "-Wno-c++11-narrowing")
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
 set(PARALLEL_GS_STANDALONE ON CACHE BOOL "" FORCE)
+set(CURL_BROTLI OFF CACHE BOOL "" FORCE)
+set(USE_NGHTTP2 OFF CACHE BOOL "" FORCE)
+set(CURL_ZLIB OFF CACHE BOOL "" FORCE)
+set(CURL_ZSTD OFF CACHE BOOL "" FORCE)
+set(CURL_USE_LIBPSL OFF CACHE BOOL "" FORCE)
+set(CURL_LTO ON)
+set(CURL_ENABLE_SSL ON)
+set(BUILD_STATIC_LIBS ON)
+
+if (WIN32)
+    set(CURL_USE_SCHANNEL ON)
+else()
+    set(CURL_USE_OPENSSL ON)
+endif()
 
 add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
@@ -62,6 +79,8 @@ add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
 add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
+add_subdirectory(deps/curl EXCLUDE_FROM_ALL)
+add_subdirectory(deps/miniz EXCLUDE_FROM_ALL)
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS -mssse3 -msse4.1)
@@ -94,6 +113,7 @@ add_definitions("-D_IRIS_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
 target_sources(iris PRIVATE
     main.cpp
     frontend/audio.cpp
+    frontend/gamelist.cpp
     frontend/handlers.cpp
     frontend/vulkan.cpp
     frontend/imgui.cpp
@@ -103,6 +123,7 @@ target_sources(iris PRIVATE
     frontend/input.cpp
     frontend/iris.cpp
     frontend/elf.cpp
+    frontend/net.cpp
     frontend/notifications.cpp
     frontend/settings.cpp
     frontend/ui/about.cpp
@@ -110,6 +131,7 @@ target_sources(iris PRIVATE
     frontend/ui/breakpoints.cpp
     frontend/ui/control.cpp
     frontend/ui/dma.cpp
+    frontend/ui/gamelist.cpp
     frontend/ui/gs.cpp
     frontend/ui/hdd_tool.cpp
     frontend/ui/intc.cpp
@@ -228,6 +250,8 @@ target_sources(iris PRIVATE
 
 target_include_directories(iris PRIVATE
     deps/asmjit
+    deps/curl/include
+    deps/miniz
     deps/imgui
     deps/imgui/backends
     deps/implot
@@ -250,6 +274,8 @@ target_link_libraries(iris PUBLIC
     analog-video
     chdr-static
     asmjit::asmjit
+    libcurl
+    miniz
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")

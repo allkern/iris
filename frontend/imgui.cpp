@@ -868,23 +868,11 @@ bool init(iris::instance* iris) {
         return false;
     }
 
-    auto load_texture = [iris](const stbi_uc* data, size_t size) -> texture {
-        int x, y, c;
-
-        stbi_uc* buf = stbi_load_from_memory(data, size, &x, &y, &c, 4);
-
-        auto tex = vulkan::upload_texture(iris, buf, x, y, c);
-
-        stbi_image_free(buf);
-
-        return tex;
-    };
-
-    iris->ps1_memory_card_icon = load_texture(g_ps1_memory_card_icon_data, g_ps1_memory_card_icon_size);
-    iris->ps2_memory_card_icon = load_texture(g_ps2_memory_card_icon_data, g_ps2_memory_card_icon_size);
-    iris->pocketstation_icon = load_texture(g_pocketstation_icon_data, g_pocketstation_icon_size);
-    iris->dualshock2_icon = load_texture(g_dualshock2_icon_data, g_dualshock2_icon_size);
-    iris->iris_icon = load_texture(g_iris_icon_data, g_iris_icon_size);
+    iris->ps1_memory_card_icon = vulkan::load_texture_from_memory(iris, g_ps1_memory_card_icon_data, g_ps1_memory_card_icon_size);
+    iris->ps2_memory_card_icon = vulkan::load_texture_from_memory(iris, g_ps2_memory_card_icon_data, g_ps2_memory_card_icon_size);
+    iris->pocketstation_icon = vulkan::load_texture_from_memory(iris, g_pocketstation_icon_data, g_pocketstation_icon_size);
+    iris->dualshock2_icon = vulkan::load_texture_from_memory(iris, g_dualshock2_icon_data, g_dualshock2_icon_size);
+    iris->iris_icon = vulkan::load_texture_from_memory(iris, g_iris_icon_data, g_iris_icon_size);
 
     return true;
 }
@@ -972,7 +960,7 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
         return false;
     }
 
-    if (iris->instance) {
+    if (iris->instance && (iris->headless || !iris->show_gamelist)) {
         render::render_frame(iris, fd->CommandBuffer, fd->Framebuffer);
     }
 
@@ -1059,6 +1047,62 @@ bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags) {
     }
 
     return ImGui::Begin(name, p_open, flags);
+}
+
+void start_dim(iris::instance* iris, float alpha, size_t ms) {
+    if (iris->dim_active) {
+        return;
+    }
+
+    iris->dim_target_alpha = alpha;
+    iris->dim_current_alpha = 0.0f;
+    iris->dim_ms = ms;
+    iris->dim_start = SDL_GetTicks();
+    iris->dim_active = true;
+    iris->dim_end = false;
+}
+
+void end_dim(iris::instance* iris) {
+    iris->dim_current_alpha = 1.0f;
+    iris->dim_active = true;
+    iris->dim_end = true;
+    iris->dim_start = SDL_GetTicks();
+}
+
+void render_dim(iris::instance* iris) {
+    using namespace ImGui;
+
+    ImDrawList* draw_list = GetForegroundDrawList(GetMainViewport());
+
+    size_t ticks = SDL_GetTicks();
+    size_t diff = ticks - iris->dim_start;
+    
+    iris->dim_current_alpha = (float)diff / (float)iris->dim_ms;
+
+    if (iris->dim_end) {
+        iris->dim_current_alpha = 1.0f - iris->dim_current_alpha;
+
+        if (iris->dim_current_alpha <= 0.0f) {
+            iris->dim_active = false;
+            iris->dim_end = false;
+            iris->dim_current_alpha = 0.0f;
+
+            return;
+        }
+    } else {
+        if (iris->dim_current_alpha >= 1.0f) {
+            iris->dim_current_alpha = 1.0f;
+        }
+    }
+
+    ImVec2 pos = GetMainViewport()->Pos;
+    ImVec2 size = GetMainViewport()->Size;
+
+    draw_list->AddRectFilled(
+        pos,
+        ImVec2(pos.x + size.x, pos.y + size.y),
+        ImColor(0.0f, 0.0f, 0.0f, iris->dim_target_alpha * iris->dim_current_alpha)
+    );
 }
 
 }

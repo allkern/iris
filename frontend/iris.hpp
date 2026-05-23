@@ -517,6 +517,7 @@ struct instance {
     bool show_overlay = false;
     bool show_memory_search = false;
     bool show_timers = false;
+    bool show_gamelist = true;
 
     // Special windows
     bool show_bios_setting_window = false;
@@ -557,6 +558,7 @@ struct instance {
     bool flip_y = false;
     uint64_t double_click_interval = 500;
     uint64_t double_click_counter = 0;
+    std::unordered_map <std::string, texture> covers = {};
 
     std::deque <recent> recents;
 
@@ -564,6 +566,8 @@ struct instance {
     std::string settings_path = "";
     std::string mappings_path = "";
 
+    bool headless = false;
+    bool snap_on_exit = false;
     int frames = 0;
     float fps = 0.0f;
     unsigned int ticks = 0;
@@ -607,10 +611,16 @@ struct instance {
 
     // input_device* device[2];
 
-    float drop_file_alpha = 0.0f;
-    float drop_file_alpha_delta = 0.0f;
-    float drop_file_alpha_target = 0.0f;
+    float dim_target_alpha = 0.0f;
+    float dim_current_alpha = 0.0f;
+    size_t dim_start = 0;
+    size_t dim_ms = 0;
+    bool dim_end = false;
+    bool dim_active = false;
+
     bool drop_file_active = false;
+    bool loading_file_active = false;
+    std::string loading_target = "";
 
     // Debug
     std::vector <elf_symbol> symbols;
@@ -738,6 +748,9 @@ namespace imgui {
     bool render_frame(iris::instance* iris, ImDrawData* draw_data);
     void cleanup(iris::instance* iris);
     void set_vsync(iris::instance* iris, bool vsync);
+    void start_dim(iris::instance* iris, float alpha, size_t ms);
+    void end_dim(iris::instance* iris);
+    void render_dim(iris::instance* iris);
 
     // Wrapper for ImGui::Begin that sets a default size
     bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);
@@ -750,6 +763,8 @@ namespace vulkan {
     void free_texture(iris::instance* iris, texture& tex);
     void* read_image(iris::instance* iris, VkImage image, VkFormat format, int width, int height);
     void wait_idle(iris::instance* iris);
+    texture load_texture_from_memory(iris::instance* iris, const void* data, size_t size);
+    texture load_texture_from_file(iris::instance* iris, std::string path);
 }
 
 namespace platform {
@@ -766,6 +781,7 @@ namespace elf {
 namespace emu {
     bool init(iris::instance* iris);
     void destroy(iris::instance* iris);
+    int open_file(iris::instance* iris, std::string path);
     bool load_arcade(iris::instance* iris, std::string path);
     int attach_memory_card(iris::instance* iris, int slot, const char* path);
     void detach_memory_card(iris::instance* iris, int slot);
@@ -796,6 +812,11 @@ namespace input {
     bool save_screenshot(iris::instance* iris, std::string path = "");
     void handle_keydown_event(iris::instance* iris, SDL_Event* event);
     void handle_keyup_event(iris::instance* iris, SDL_Event* event);
+}
+
+namespace gamelist {
+    bool init(iris::instance* iris);
+    void destroy(iris::instance* iris);
 }
 
 iris::instance* create();
@@ -837,7 +858,7 @@ void show_hdd_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
 void show_memory_search(iris::instance* iris);
 void show_timers(iris::instance* iris);
-// void show_gamelist(iris::instance* iris);
+void show_gamelist(iris::instance* iris);
 
 void handle_keydown_event(iris::instance* iris, SDL_Event* event);
 void handle_keyup_event(iris::instance* iris, SDL_Event* event);

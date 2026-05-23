@@ -1,9 +1,13 @@
 #include "iris.hpp"
 #include "arcade.hpp"
 
+#include "miniz.h"
+
 #include <filesystem>
 #include <algorithm>
 #include <optional>
+#include <cctype>
+#include <thread>
 
 namespace iris::emu {
 
@@ -32,6 +36,151 @@ const char* get_extension(const char* path) {
         return nullptr;
 
     return dot + 1;
+}
+
+void handle_load_end(iris::instance* iris, int result) {
+    iris->loading_file_active = false;
+    iris->loading_target = "";
+
+    iris->show_gamelist = false;
+
+    imgui::end_dim(iris);
+}
+
+int open_archive(iris::instance* iris, std::string path) {
+    mz_zip_archive zip;
+
+    mz_zip_zero_struct(&zip);
+
+    if (!mz_zip_reader_init_file(&zip, path.c_str(), 0)) {
+        printf("emu: Couldn't open archive \"%s\"\n", path.c_str());
+
+        return 1;
+    }
+
+    // Decompress everything into pref_path/tmp/
+    std::filesystem::path tmp_path = std::filesystem::path(iris->pref_path) / "tmp";
+
+    std::error_code ec;
+    std::filesystem::create_directories(tmp_path, ec);
+
+    mz_uint count = mz_zip_reader_get_num_files(&zip);
+
+    for (mz_uint i = 0; i < count; i++) {
+        mz_zip_archive_file_stat stat;
+
+        if (!mz_zip_reader_file_stat(&zip, i, &stat))
+            continue;
+
+        std::filesystem::path dst = tmp_path / stat.m_filename;
+
+        if (mz_zip_reader_is_file_a_directory(&zip, i)) {
+            std::filesystem::create_directories(dst, ec);
+
+            continue;
+        }
+
+        // Make sure the parent directory exists before extracting
+        std::filesystem::create_directories(dst.parent_path(), ec);
+
+        if (!mz_zip_reader_extract_to_file(&zip, i, dst.string().c_str(), 0)) {
+            printf("emu: Failed to extract \"%s\" from archive\n", stat.m_filename);
+        }
+    }
+
+    mz_zip_reader_end(&zip);
+
+    return 0;
+}
+
+int open_file_thread(iris::instance* iris, std::string file) {
+    std::filesystem::path path(file);
+    std::string ext = path.extension().string();
+
+    for (char& c : ext)
+        c = tolower(c);
+
+    if (ext == ".zip") {
+        int res = open_archive(iris, file);
+
+        handle_load_end(iris, res);
+
+        return res;
+    }
+
+    // Load disc image
+    if (ext == ".iso" || ext == ".bin" || ext == ".cue" ||
+        ext == ".chd" || ext == ".cso" || ext == ".zso") {
+        if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str(), 0)) {
+            handle_load_end(iris, 1);
+
+            return 1;
+        }
+
+        char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
+
+        if (!boot_file) {
+            handle_load_end(iris, 2);
+
+            return 2;
+        }
+
+        elf::load_symbols_from_disc(iris);
+
+        renderer_reset(iris->renderer);
+
+        ps2_set_system(iris->ps2, iris->system);
+        emu::load_rom_files(iris);
+        ps2_boot_file(iris->ps2, boot_file);
+
+        iris->loaded = file;
+
+        if (iris->autostart) {
+            iris->pause = false;
+        }
+
+        handle_load_end(iris, 0);
+    
+        return 0;
+    }
+
+    elf::load_symbols_from_file(iris, file);
+
+    // Note: We need the trailing whitespaces here because of IOMAN HLE
+    // Load executable
+    file = "host:  " + file;
+
+    renderer_reset(iris->renderer);
+
+    ps2_set_system(iris->ps2, iris->system);
+    emu::load_rom_files(iris);
+    ps2_boot_file(iris->ps2, file.c_str());
+
+    iris->loaded = file;
+
+    if (iris->autostart) {
+        iris->pause = false;
+    }
+
+    handle_load_end(iris, 0);
+
+    return 0;
+}
+
+int open_file(iris::instance* iris, std::string file) {
+    std::filesystem::path path(file);
+
+    iris->loading_target = path.filename().string();
+    iris->loading_file_active = true;
+    iris->pause = true;
+
+    imgui::start_dim(iris, 0.35f, 100);
+
+    std::thread t(open_file_thread, iris, file);
+
+    t.detach();
+
+    return 0;
 }
 
 template <typename T> std::optional<T> query_arcade_value(std::string arcade_name, std::string key) {
@@ -235,13 +384,13 @@ int get_system_count(iris::instance* iris) {
     return sizeof(g_system_names) / sizeof(const char*);
 }
 
-std::string& tolower(std::string& str) {
+std::string& strtolower(std::string& str) {
     std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c){ return std::tolower(c); });
 
     return str;
 }
 
-std::string& toupper(std::string& str) {
+std::string& strtoupper(std::string& str) {
     std::transform(str.begin(), str.end(), str.begin(), [](unsigned char c){ return std::toupper(c); });
 
     return str;
@@ -251,8 +400,8 @@ std::filesystem::path get_rom_path(std::filesystem::path filename, std::string e
     std::filesystem::path path_lc = filename;
     std::filesystem::path path_uc = filename;
 
-    path_lc += "." + tolower(ext);
-    path_uc += "." + toupper(ext);
+    path_lc += "." + strtolower(ext);
+    path_uc += "." + strtoupper(ext);
 
     if (std::filesystem::exists(path_lc)) {
         return path_lc;

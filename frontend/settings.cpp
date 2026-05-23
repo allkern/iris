@@ -336,6 +336,10 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
             iris->mcd1_path = argv[i+1];
 
             ++i;
+        } else if (a == "-H" || a == "--headless") {
+            iris->headless = true;
+        } else if (a == "-S" || a == "--snap-on-exit") {
+            iris->snap_on_exit = true;
         } else {
             iris->disc_path = argv[i];
         }

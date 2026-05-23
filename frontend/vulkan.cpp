@@ -3,6 +3,8 @@
 #include "config.hpp"
 #include "iris.hpp"
 
+#include "stb_image.h"
+
 #include <SDL3/SDL_vulkan.h>
 
 #include <volk.h>
@@ -1339,6 +1341,30 @@ void wait_idle(iris::instance* iris) {
     } else if (iris->queue) {
         vkQueueWaitIdle(iris->queue);
     }
+}
+
+texture load_texture_from_memory(iris::instance* iris, const void* data, size_t size) {
+    int x, y, c;
+
+    stbi_uc* buf = stbi_load_from_memory((const stbi_uc*)data, size, &x, &y, &c, 4);
+
+    auto tex = vulkan::upload_texture(iris, buf, x, y, c);
+
+    stbi_image_free(buf);
+
+    return tex;
+}
+
+texture load_texture_from_file(iris::instance* iris, std::string path) {
+    int x, y, c;
+
+    stbi_uc* buf = stbi_load(path.c_str(), &x, &y, &c, 4);
+
+    auto tex = vulkan::upload_texture(iris, buf, x, y, c);
+
+    stbi_image_free(buf);
+
+    return tex;
 }
 
 }
