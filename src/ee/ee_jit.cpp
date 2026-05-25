@@ -4518,6 +4518,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 uc.mov(rt.reg, tmp);
             } break;
 
+            case EE_I_CACHE:
             case EE_I_SYNC: {
                 continue;
             } break;

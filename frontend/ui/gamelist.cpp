@@ -315,6 +315,7 @@ void draw_table(iris::instance* iris) {
             float cursor_pos_y = GetCursorPosY();
 
             if (Selectable(std::string("##" + std::to_string(i)).c_str(), false, ImGuiSelectableFlags_SpanAllColumns, ImVec2(0, height))) {
+                add_recent(iris, entry.path, 0);
                 emu::open_file(iris, entry.path);
             }
 
