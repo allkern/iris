@@ -122,15 +122,20 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
     if (vif->state == VIF_IDLE) {
         vif->cmd = (data >> 24) & 0xff;
 
+        int mark = vif->cmd == VIF_CMD_MARK;
+
         if (vif->cmd & 0x80) {
             ps2_intc_irq(vif->intc, vif->id ? EE_INTC_VIF1 : EE_INTC_VIF0);
 
             // fprintf(stderr, "vif%d: Requested IRQ command=%02x\n", vif->id, vif->cmd);
 
-            vif->stat |= 0x00000c00;
-            // vif->stat ^= 0x0f000000;
-            vif->code = data;
-            vif->dreq = 0;
+            // Note: MARK commands trigger the IRQ but don't stall the VIF.
+            if (!mark) {
+                vif->stat |= 0x00000c00;
+                // vif->stat ^= 0x0f000000;
+                vif->code = data;
+                vif->dreq = 0;
+            }
         }
 
         switch ((data >> 24) & 0x7f) {
@@ -177,6 +182,7 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 // printf("vif%d: MARK(%04x)\n", vif->id, data & 0xffff);
 
                 vif->mark = data & 0xffff;
+                vif->stat |= 0x40;
             } break;
             case VIF_CMD_FLUSHE: {
                 // printf("vif%d: FLUSHE\n", vif->id);
@@ -880,7 +886,7 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
         } break;
 
         case 0x10003820: vif->err = data; break;
-        case 0x10003830: vif->mark = data; break;
+        case 0x10003830: vif->stat &= ~0x40; break;
 
         // VIF1 registers
         case 0x10003c00: vif->stat &= 0x800000; vif->stat |= data & 0x800000; break;
@@ -901,7 +907,7 @@ void ps2_vif_write32(struct ps2_vif* vif, uint32_t addr, uint64_t data) {
         } break;
 
         case 0x10003c20: vif->err = data; break;
-        case 0x10003c30: vif->mark = data; break;
+        case 0x10003c30: vif->stat &= ~0x40; break;
         case 0x10003c80: /* Unknown */ break;
 
         // VIF FIFOs
