@@ -169,6 +169,8 @@ int ee_step(struct ee_state* ee);
 void ee_set_fmv_skip(struct ee_state* ee, int v);
 void ee_reset_intc_reads(struct ee_state* ee);
 void ee_reset_csr_reads(struct ee_state* ee);
+void ee_invalidate_block(struct ee_state* ee, uint32_t addr);
+void ee_invalidate_range(struct ee_state* ee, uint32_t addr, uint32_t size);
 void ee_flush_cache(struct ee_state* ee);
 void ee_set_ram_size(struct ee_state* ee, int ram_size);
 void ee_set_osd_config(struct ee_state* ee, struct ee_osd_config config);

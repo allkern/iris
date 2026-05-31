@@ -29,6 +29,8 @@ static inline void dmac_write_qword(struct ps2_dmac* dmac, uint32_t addr, int me
     int spr = mem || (addr & 0x80000000);
 
     if (!spr) {
+        ee_invalidate_block(dmac->ee, addr & 0xfffffff0);
+
         ee_bus_write128(dmac->bus, addr & 0xfffffff0, value);
 
         return;

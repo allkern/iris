@@ -4266,6 +4266,7 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
 
 #ifdef _EE_DISABLE_CACHE
     block.instructions.clear();
+    block.func = nullptr;
 #endif
 
     if (ee->pc < ee->block_cache[page].min_code_addr) {
@@ -5069,4 +5070,20 @@ void ee_set_osd_config(struct ee_state* ee, struct ee_osd_config config) {
 
 struct ee_osd_config ee_get_osd_config(struct ee_state* ee) {
     return ee->osd_config;
+}
+
+void ee_invalidate_block(struct ee_state* ee, uint32_t addr) {
+    uint32_t page = addr / EE_MIN_PAGESIZE;
+
+    if (ee->block_cache[page].valid && !ee->block_cache[page].dirty) {
+        printf("ee: Invalidating block at address 0x%08x\n", addr);
+    }
+
+    ee->block_cache[page].dirty = true;
+}
+
+void ee_invalidate_range(struct ee_state* ee, uint32_t addr, uint32_t size) {
+    for (uint32_t i = 0; i < size; i += EE_MIN_PAGESIZE) {
+        ee_invalidate_block(ee, addr + i);
+    }
 }
