@@ -645,6 +645,13 @@ int dmac_transfer_vif1_word(struct ps2_dmac* dmac) {
 
     return 1;
 }
+
+void dmac_send_vif1_irq(void* udata, int overshoot) {
+    struct ps2_dmac* dmac = (struct ps2_dmac*)udata;
+
+    dmac_end_transfer(dmac, DMAC_VIF1);
+}
+
 void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     if ((dmac->channels[DMAC_VIF1].chcr & 0x100) == 0)
         return;
@@ -666,6 +673,20 @@ void dmac_handle_vif1_transfer(struct ps2_dmac* dmac) {
     if (mfifo_drain == 2) {
         return;
     }
+
+    // Note: MGS3 will not boot unless VIF1 DMA IRQs are delayed by a few cycles for some reason.
+    //       My guess is that the game expects some VIF command within the transfer to stall and thus
+    //       delay the transfer, but I haven't been able to confirm this.
+    //       In order to debug: Checkout commit d58ca88
+
+    // struct sched_event event;
+
+    // event.name = "vif1_transfer_end";
+    // event.cycles = 4096;
+    // event.udata = dmac;
+    // event.callback = dmac_send_vif1_irq;
+
+    // sched_schedule(dmac->sched, event);
 
     int tte = (dmac->channels[DMAC_VIF1].chcr >> 6) & 1;
     int mode = (dmac->channels[DMAC_VIF1].chcr >> 2) & 3;
