@@ -251,8 +251,8 @@ static inline void cdvd_s_read_nvram(struct ps2_cdvd* cdvd) {
 
     cdvd_init_s_fifo(cdvd, 2);
 
-    cdvd->s_fifo[0] = cdvd->nvram[(addr << 1) + 0];
-    cdvd->s_fifo[1] = cdvd->nvram[(addr << 1) + 1];
+    cdvd->s_fifo[0] = cdvd->nvram[((addr << 1) + 0) & 0x3ff];
+    cdvd->s_fifo[1] = cdvd->nvram[((addr << 1) + 1) & 0x3ff];
 }
 static inline void cdvd_s_write_nvram(struct ps2_cdvd* cdvd) {
     fprintf(stderr, "cdvd: write_nvram\n");
@@ -1284,6 +1284,11 @@ static inline void cdvd_n_read_key(struct ps2_cdvd* cdvd) {
     cdvd_send_irq(cdvd);
 }
 
+static inline void cdvd_n_chg_spdl_ctrl(struct ps2_cdvd* cdvd) {
+    cdvd_set_ready(cdvd);
+    cdvd_send_irq(cdvd);
+}
+
 static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
     cdvd->n_cmd = cmd;
 
@@ -1303,6 +1308,7 @@ static inline void cdvd_handle_n_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x08: cdvd_n_read_dvd(cdvd); break;
         case 0x09: cdvd_n_get_toc(cdvd); break;
         case 0x0c: cdvd_n_read_key(cdvd); break;
+        case 0x0f: cdvd_n_chg_spdl_ctrl(cdvd); break;
         default: {
             fprintf(stderr, "cdvd: Unhandled N command %02x\n", cdvd->n_cmd);
 
