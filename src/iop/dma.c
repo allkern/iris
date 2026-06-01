@@ -60,7 +60,7 @@ struct ps2_iop_dma* ps2_iop_dma_create(void) {
     return malloc(sizeof(struct ps2_iop_dma));
 }
 
-void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu2, struct ps2_speed* speed, struct s2x6_acata* s2x6_acata, struct sched_state* sched, struct iop_bus* bus) {
+void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct ps2_sif* sif, struct ps2_cdvd* cdvd, struct ps2_dmac* ee_dma, struct ps2_sio2* sio2, struct ps2_spu2* spu2, struct ps2_speed* speed, struct s2x6_acata* s2x6_acata, struct sched_state* sched, struct iop_state* iop, struct iop_bus* bus) {
     memset(dma, 0, sizeof(struct ps2_iop_dma));
 
     dma->intc = intc;
@@ -74,6 +74,7 @@ void ps2_iop_dma_init(struct ps2_iop_dma* dma, struct ps2_iop_intc* intc, struct
     dma->speed = speed;
     dma->s2x6_acata = s2x6_acata;
     dma->dmacinten = 0x01;
+    dma->iop = iop;
 }
 
 void ps2_iop_dma_destroy(struct ps2_iop_dma* dma) {
@@ -164,6 +165,7 @@ void iop_dma_handle_cdvd_transfer(struct ps2_iop_dma* dma) {
     int i = 0;
 
     while (dma->channels[IOP_DMA_CDVD].transfer_size && dma->cdvd->buf_size) {
+        iop_invalidate_cache_page(dma->iop, dma->channels[IOP_DMA_CDVD].madr);
         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_CDVD].madr++, dma->cdvd->buf[i++]);
 
         dma->cdvd->buf_size--;
@@ -410,7 +412,8 @@ void iop_dma_handle_dev9_ata_transfer(struct ps2_iop_dma* dma) {
         while (dma->channels[IOP_DMA_DEV9].transfer_size) {
             // ATA DATA register
             uint32_t d = ata_read(dma->speed->ata, 0x40);
-    
+
+            iop_invalidate_cache_page(dma->iop, dma->channels[IOP_DMA_DEV9].madr);
             iop_bus_write16(dma->bus, dma->channels[IOP_DMA_DEV9].madr, d);
 
             dma->channels[IOP_DMA_DEV9].madr += 2;
@@ -428,6 +431,7 @@ void iop_dma_handle_dev9_nand_transfer(struct ps2_iop_dma* dma) {
     while (dma->channels[IOP_DMA_DEV9].transfer_size) {
         uint32_t d = iop_bus_read8(dma->bus, 0x14000008);
 
+        iop_invalidate_cache_page(dma->iop, dma->channels[IOP_DMA_DEV9].madr);
         iop_bus_write8(dma->bus, dma->channels[IOP_DMA_DEV9].madr++, d);
 
         dma->channels[IOP_DMA_DEV9].transfer_size--;
@@ -467,6 +471,7 @@ void iop_dma_handle_dev9_acata_transfer(struct ps2_iop_dma* dma) {
             // ATA DATA register
             uint32_t d = acata_read(dma->s2x6_acata, 0);
     
+            iop_invalidate_cache_page(dma->iop, dma->channels[IOP_DMA_DEV9].madr);
             iop_bus_write16(dma->bus, dma->channels[IOP_DMA_DEV9].madr, d);
 
             dma->channels[IOP_DMA_DEV9].madr += 2;
@@ -489,8 +494,6 @@ void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     // storage chip. On Namco System 246/256 arcade hardware, DEV9 DMA is
     // used to transfer data to and from the ACATA device, which is
     // either an ATA HDD or ATAPI DVD drive.
-
-    printf("iop: DEV9 transfer mode %d\n", dma->dev9_mode);
 
     if (dma->dev9_mode == IOP_DMA_DEV9_ATA) {
         iop_dma_handle_dev9_ata_transfer(dma);
@@ -594,6 +597,7 @@ void iop_dma_handle_sif1_transfer(struct ps2_iop_dma* dma) {
             uint128_t q = ps2_sif1_read(dma->sif);
 
             for (int i = 0; i < 4; i++) {
+                iop_invalidate_cache_page(dma->iop, addr);
                 iop_bus_write32(dma->bus, addr, q.u32[i]);
 
                 addr += madr_increment;
@@ -680,6 +684,7 @@ void iop_dma_handle_sio2_out_transfer(struct ps2_iop_dma* dma) {
             for (int j = 0; j < 4; j++) {
                 uint8_t b = iop_bus_read8(dma->bus, 0x1F808264);
 
+                iop_invalidate_cache_page(dma->iop, dma->channels[IOP_DMA_SIO2_OUT].madr);
                 iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, b);    
             } 
 
@@ -739,6 +744,7 @@ void iop_dma_end_sio2_out_transfer(struct ps2_iop_dma* dma) {
             for (int j = 0; j < 4; j++) {
                 uint8_t b = iop_bus_read8(dma->bus, 0x1F808264);
 
+                iop_invalidate_cache_page(dma->iop, dma->channels[IOP_DMA_SIO2_OUT].madr);
                 iop_bus_write8(dma->bus, dma->channels[IOP_DMA_SIO2_OUT].madr++, b);    
             } 
 
