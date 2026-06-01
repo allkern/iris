@@ -335,27 +335,29 @@ void update_window(iris::instance* iris) {
     if (iris->show_bios_setting_window) show_bios_setting_window(iris);
     if (iris->show_overlay) show_overlay(iris);
 
-    if (iris->show_gamelist && !iris->headless) {
-        ImVec2 pos = GetMainViewport()->Pos;
-        ImVec2 size = GetMainViewport()->Size;
+    iris->show_gamelist = false;
 
-        pos.y += iris->menubar_height;
+    // if (iris->show_gamelist && !iris->headless) {
+    //     ImVec2 pos = GetMainViewport()->Pos;
+    //     ImVec2 size = GetMainViewport()->Size;
 
-        SetNextWindowPos(pos, ImGuiCond_Always);
-        SetNextWindowSize(ImVec2((float)width, (float)height - iris->menubar_height), ImGuiCond_Always);
-        SetNextWindowViewport(GetMainViewport()->ID);
+    //     pos.y += iris->menubar_height;
 
-        ImGuiWindowFlags flags =
-            ImGuiWindowFlags_NoDecoration |
-            ImGuiWindowFlags_NoMove |
-            ImGuiWindowFlags_NoResize |
-            ImGuiWindowFlags_NoSavedSettings |
-            ImGuiWindowFlags_NoDocking;
+    //     SetNextWindowPos(pos, ImGuiCond_Always);
+    //     SetNextWindowSize(ImVec2((float)width, (float)height - iris->menubar_height), ImGuiCond_Always);
+    //     SetNextWindowViewport(GetMainViewport()->ID);
 
-        if (Begin("##GameLibrary", nullptr, flags)) {
-            show_gamelist(iris);
-        } End();
-    }
+    //     ImGuiWindowFlags flags =
+    //         ImGuiWindowFlags_NoDecoration |
+    //         ImGuiWindowFlags_NoMove |
+    //         ImGuiWindowFlags_NoResize |
+    //         ImGuiWindowFlags_NoSavedSettings |
+    //         ImGuiWindowFlags_NoDocking;
+
+    //     if (Begin("##GameLibrary", nullptr, flags)) {
+    //         show_gamelist(iris);
+    //     } End();
+    // }
 
     // Display little pause icon in the top right corner
     if (iris->pause) {
