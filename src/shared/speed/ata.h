@@ -353,10 +353,11 @@ struct ps2_ata {
     uint8_t sce_security_data[512];
 
     struct ps2_speed* speed;
+    struct sched_state* sched;
 };
 
 struct ps2_ata* ps2_ata_create(void);
-void ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed);
+void ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed, struct sched_state* sched);
 int ps2_ata_load(struct ps2_ata* ata, const char* path);
 void ps2_ata_destroy(struct ps2_ata* ata);
 uint64_t ps2_ata_read16(struct ps2_ata* ata, uint32_t addr);

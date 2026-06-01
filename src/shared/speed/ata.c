@@ -57,10 +57,11 @@ void ata_init_security_data(struct ps2_ata* ata) {
     ata->sce_security_data[0x4f] = 0x01;
 }
 
-void ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed) {
+void ps2_ata_init(struct ps2_ata* ata, struct ps2_speed* speed, struct sched_state* sched) {
     memset(ata, 0, sizeof(struct ps2_ata));
 
     ata->speed = speed;
+    ata->sched = sched;
 
     // Note: See atad ata_device_probe
     ata->nsector = 1;
@@ -432,6 +433,14 @@ uint16_t ata_read(struct ps2_ata* ata, uint32_t addr) {
     return 0;
 }
 
+void ata_reset_busy_event(void* udata, int overshoot) {
+    struct ps2_ata* ata = (struct ps2_ata*)udata;
+
+    ata->status &= ~ATA_STAT_BUSY;
+
+    ps2_speed_send_irq(ata->speed, SPD_INTR_ATA0);
+}
+
 void ata_write(struct ps2_ata* ata, uint32_t addr, uint64_t data) {
     if (!ata->hdd.udata)
         return;
@@ -452,9 +461,18 @@ void ata_write(struct ps2_ata* ata, uint32_t addr, uint64_t data) {
         case 0x4e: {
             ata->command = data;
 
-            ata_handle_command(ata, ata->command);
+            ata->status |= ATA_STAT_BUSY;
 
-            ps2_speed_send_irq(ata->speed, SPD_INTR_ATA0);
+            struct sched_event event;
+
+            event.callback = ata_reset_busy_event;
+            event.udata = ata;
+            event.name = "ata reset busy";
+            event.cycles = 1000;
+
+            sched_schedule(ata->sched, event);
+
+            ata_handle_command(ata, ata->command);
 
             return;
         } break;

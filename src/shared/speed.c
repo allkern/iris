@@ -19,7 +19,7 @@ void ps2_speed_init(struct ps2_speed* speed, struct ps2_iop_intc* iop_intc, stru
     speed->dvrp = ps2_dvrp_create();
 
     ps2_flash_init(speed->flash);
-    ps2_ata_init(speed->ata, speed);
+    ps2_ata_init(speed->ata, speed, sched);
     ps2_eeprom_init(speed->eeprom);
     ps2_dvrp_init(speed->dvrp, speed);
 
