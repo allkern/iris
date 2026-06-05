@@ -3261,19 +3261,19 @@ static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
 
     ee_write_pagetable(ee, entry);
 
-    printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
-        ee->index,
-        entry->vpn2,
-        entry->pfn0,
-        entry->v0,
-        entry->d0,
-        entry->pfn1,
-        entry->v1,
-        entry->d1,
-        entry->mask,
-        entry->s,
-        entry->g
-    );
+    // printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
+    //     ee->index,
+    //     entry->vpn2,
+    //     entry->pfn0,
+    //     entry->v0,
+    //     entry->d0,
+    //     entry->pfn1,
+    //     entry->v1,
+    //     entry->d1,
+    //     entry->mask,
+    //     entry->s,
+    //     entry->g
+    // );
 }
 static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
     int index = (ee->count % (48 - ee->wired)) + ee->wired;
@@ -3296,19 +3296,19 @@ static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
 
     ee_write_pagetable(ee, entry);
 
-    printf("ee: tlbwr Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
-        index,
-        entry->vpn2,
-        entry->pfn0,
-        entry->v0,
-        entry->d0,
-        entry->pfn1,
-        entry->v1,
-        entry->d1,
-        entry->mask,
-        entry->s,
-        entry->g
-    );
+    // printf("ee: tlbwr Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
+    //     index,
+    //     entry->vpn2,
+    //     entry->pfn0,
+    //     entry->v0,
+    //     entry->d0,
+    //     entry->pfn1,
+    //     entry->v1,
+    //     entry->d1,
+    //     entry->mask,
+    //     entry->s,
+    //     entry->g
+    // );
 }
 static inline void ee_i_tlt(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlt unimplemented\n"); exit(1); }
 static inline void ee_i_tlti(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlti unimplemented\n"); exit(1); }
