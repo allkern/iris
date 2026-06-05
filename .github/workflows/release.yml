@@ -79,7 +79,7 @@ jobs:
       run: |
         zip -rj ${{ steps.generate-name-appimage.outputs.artifact }}.zip appimage
     - name: Upload normal binary to release
-      uses: softprops/action-gh-release@vv2.6.1
+      uses: softprops/action-gh-release@v2.6.1
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
