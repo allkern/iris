@@ -1448,7 +1448,7 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                 c->chcr &= (data & 0x100) | 0xfffffeff;
             }
         } return;
-        case 0x10: if ((c->chcr & 0x100) == 0) {
+        case 0x10: {
             c->madr = data;
 
             // Clear MADR's MSB on SPR channels
@@ -1456,11 +1456,17 @@ void ps2_dmac_write32(struct ps2_dmac* dmac, uint32_t addr, uint64_t data) {
                 c->madr &= 0x7fffffff;
             }
         } return;
+
+        // Note: This right here is pretty much a hack. Crash Tag Team Racing requires
+        //       TADR to be writable during VIF1 transfers.
+        //       BUT, Atelier Iris requires QWC to NOT be writable during IPU transfers,
+        //       otherwise it will increase QWC mid-transfer, which causes the IPU to
+        //       starve of data, ultimately causing the transfer to never end.
         case 0x20: if ((c->chcr & 0x100) == 0) c->qwc = data & 0xffff; return;
-        case 0x30: if ((c->chcr & 0x100) == 0) c->tadr = data; return;
-        case 0x40: if ((c->chcr & 0x100) == 0) c->asr0 = data; return;
-        case 0x50: if ((c->chcr & 0x100) == 0) c->asr1 = data; return;
-        case 0x80: if ((c->chcr & 0x100) == 0) c->sadr = data & 0x3ff0; return;
+        case 0x30: c->tadr = data; return;
+        case 0x40: c->asr0 = data; return;
+        case 0x50: c->asr1 = data; return;
+        case 0x80: c->sadr = data & 0x3ff0; return;
     }
 
     // printf("dmac: Unknown channel register %02x\n", addr & 0xff);
