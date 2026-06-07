@@ -288,6 +288,7 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     if (addr == 0x1f801450) return 0;
     if (addr == 0x1f801414) return 1;
     if (addr == 0x1f801560) return 0;
+    if (addr == 0x1f801014) return 0;
 
     if ((addr & 0xff000000) == 0x1e000000) return 0;
     if (addr == 0xfffe0130) return 0xffffffff;
