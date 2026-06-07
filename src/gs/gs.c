@@ -172,6 +172,9 @@ void ps2_gs_reset(struct ps2_gs* gs) {
     gs->csr |= 2;
     gs->imr = 0x00007f00;
 
+    // Note: Dokapon Kingdom relies on this, don't ask me why
+    gs->stall_sigid = 0xffffffff;
+
     // Schedule Vblank event
     struct sched_event vblank_event;
     vblank_event.callback = gs_handle_vblank_in;
