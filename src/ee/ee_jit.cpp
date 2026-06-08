@@ -4281,6 +4281,8 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
     block.cycles = 0;
     block.instructions.reserve(max_cycles);
 
+    bool delay_slot = false;
+
     while (max_cycles) {
         ee->opcode = bus_read32(ee, block.end_pc);
 
@@ -4292,9 +4294,17 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
             i.branch = 0;
         }
 
+        if (i.branch == 1 && delay_slot) {
+            fprintf(stderr, "ee: Branch in delay slot at PC=%08x (Unhandled edge case)\n", block.end_pc);
+
+            exit(1);
+        }
+
         block.cycles++; // += i.cycles;
 
         if (i.branch == 1 || i.branch == 3) {
+            delay_slot = true;
+
             max_cycles = 2;
         } else if (i.branch != 0) {
             max_cycles = 1;
@@ -4579,6 +4589,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_JAL: {
+                // if (ee->fmv_skip) {
+                //     if (ee_skip_fmv(ee, addr)) return;
+                // }
+
                 ee_cached_reg& ra = ee_get_reg(ee, &uc, 31, false);
 
                 // uc.mov(ra, Imm(0));
@@ -4587,7 +4601,35 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ujit::Gp tmp = uc.new_gp32();
 
                 uc.mov(tmp, Imm((i.i26 << 2) | (block->end_pc & 0xF0000000)));
+
+                Label L0 = uc.new_label();
+                Label L1 = uc.new_label();
+
+                ujit::Gp skip_fmv = uc.new_gp32();
+
+                uc.load_u32(skip_fmv, EE(fmv_skip));
+                bc.cmp(skip_fmv, Imm(0));
+                bc.je(L0);
+
+                InvokeNode* invoke_node;
+
+                bc.invoke(
+                    Out(invoke_node),
+                    (uintptr_t)ee_skip_fmv,
+                    FuncSignature::build<int, ee_state*, uint32_t>()
+                );
+
+                invoke_node->set_arg(0, ee->ee_ptr);
+                invoke_node->set_arg(1, tmp);
+                invoke_node->set_ret(0, skip_fmv);
+
+                bc.cmp(skip_fmv, Imm(0));
+                bc.jne(L1);
+
+                uc.bind(L0);
                 uc.store_u32(EE(next_pc), tmp);
+
+                uc.bind(L1);
             } break;
 
             case EE_I_JALR: {
