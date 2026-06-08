@@ -9,6 +9,7 @@ struct hardware_config {
     bool unsynced_readbacks = false;
     bool backbuffer_promotion = false;
     bool allow_blend_demote = false;
+    bool invert_fields = false;
 
     // Analog video
     bool enable_analog_video = false;

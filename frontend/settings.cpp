@@ -212,6 +212,7 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->hardware_backend_config.analog_system = hardware["analog_system"].value_or(0);
     iris->hardware_backend_config.line_comb = hardware["line_comb"].value_or(false);
     iris->hardware_backend_config.skip_notch = hardware["skip_notch"].value_or(false);
+    iris->hardware_backend_config.invert_fields = hardware["invert_fields"].value_or(false);
 
     auto vulkan = tbl["vulkan"];
     iris->vulkan_physical_device = vulkan["physical_device"].value_or(-1);
@@ -522,7 +523,8 @@ void close(iris::instance* iris) {
             { "analog_cable", iris->hardware_backend_config.analog_cable },
             { "analog_system", iris->hardware_backend_config.analog_system },
             { "line_comb", iris->hardware_backend_config.line_comb },
-            { "skip_notch", iris->hardware_backend_config.skip_notch }
+            { "skip_notch", iris->hardware_backend_config.skip_notch },
+            { "invert_fields", iris->hardware_backend_config.invert_fields }
         } },
         { "vulkan", toml::table {
             { "physical_device", iris->vulkan_physical_device },

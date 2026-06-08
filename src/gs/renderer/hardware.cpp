@@ -158,6 +158,10 @@ renderer_image hardware_get_frame(void* udata) {
 
     info.phase = ctx->gs->csr & (1 << 13) ? 0 : 1;
 
+    if (ctx->config.invert_fields) {
+        info.phase ^= 1;
+    }
+
     if (ctx->config.super_sampling) {
         info.raw_circuit_scanout = true;
         info.high_resolution_scanout = true;

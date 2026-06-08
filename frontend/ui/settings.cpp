@@ -449,6 +449,10 @@ void show_hardware_renderer_settings(iris::instance* iris) {
     if (Checkbox(" Allow Blend Demote", &iris->hardware_backend_config.allow_blend_demote)) {
         render::refresh(iris);
     }
+
+    if (Checkbox(" Invert Fields", &iris->hardware_backend_config.invert_fields)) {
+        render::refresh(iris);
+    }
     PopStyleVar();
 }
 
