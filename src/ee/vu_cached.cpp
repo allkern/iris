@@ -3650,6 +3650,9 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
 }
 
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
+    if (vu->disable)
+        return;
+
     vu->tpc = addr;
     vu->next_tpc = addr + 1;
     vu->i_bit = 0;
@@ -3755,6 +3758,8 @@ uint32_t ps2_vu_read_vi(struct vu_state* vu, int index) {
 }
 
 void ps2_vu_reset(struct vu_state* vu) {
+    vu->disable = false;
+
     for (int i = 0; i < 16; i++)
         vu->vi[i] = 0;
 

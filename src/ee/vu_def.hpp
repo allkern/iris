@@ -100,6 +100,8 @@ struct vu_state {
         };
     };
 
+    bool disable;
+
     struct ps2_gif* gif;
     struct ps2_vif* vif;
     struct vu_state* vu1;
