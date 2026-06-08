@@ -2,6 +2,7 @@
 #include <string>
 
 #include "iris.hpp"
+#include "ee/vu_def.hpp"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
@@ -529,6 +530,11 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
         case SDLK_F1: {
             printf("ps2: Sending poweroff signal\n");
             ps2_cdvd_power_off(iris->ps2->cdvd);
+        } break;
+
+        case SDLK_F2: {
+            iris->ps2->vu0->disable = !iris->ps2->vu0->disable;
+            iris->ps2->vu1->disable = !iris->ps2->vu1->disable;
         } break;
     }
 
