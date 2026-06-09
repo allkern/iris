@@ -99,20 +99,29 @@ struct iop_instruction {
 
 struct iop_block {
     std::vector <iop_instruction> instructions;
+    uint32_t cycles = 0;
     uint32_t start_pc = 0;
     uint32_t end_pc = 0;
-
-    union {
-        uint32_t cycles = 0;
-        uint32_t valid;
-    };
 };
+
+struct iop_cache_page {
+    iop_block* blocks;
+    uint32_t min_code_addr;
+    uint32_t max_code_addr;
+    bool valid;
+    bool dirty;
+};
+
+#ifndef _IOP_CACHE_PAGESIZE
+#define _IOP_CACHE_PAGESIZE 512
+#endif
+
+#define IOP_CACHE_PAGECOUNT (0x20000000u / _IOP_CACHE_PAGESIZE)
 
 struct iop_state {
     struct iop_bus_s bus = { nullptr };
 
-    std::vector <iop_block*> block_cache;
-    std::vector <int> block_cache_dirty;
+    iop_cache_page block_cache[IOP_CACHE_PAGECOUNT] = { nullptr };
 
     iop_block* last_cached_block = nullptr;
     uint32_t last_cached_block_pc = 0;

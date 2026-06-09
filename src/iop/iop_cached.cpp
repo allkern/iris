@@ -7,23 +7,26 @@
 
 #include "iop_export.h"
 
-#ifndef _IOP_CACHE_PAGESIZE
-#define _IOP_CACHE_PAGESIZE 512
-#endif
-
-#define IOP_CACHE_PAGECOUNT (0x20000000u / _IOP_CACHE_PAGESIZE)
-
 bool iop_is_executable_region(uint32_t addr) {
     // RAM and BIOS
     return (addr < 0x2000000) || ((addr >= 0x1fc00000) && (addr < 0x20000000));
 }
 
 void iop_invalidate_cache_page(struct iop_state* iop, uint32_t addr) {
+    if (!iop_is_executable_region(addr))
+        return;
+
     uint32_t page = addr / _IOP_CACHE_PAGESIZE;
 
-    if (iop_is_executable_region(addr) && iop->block_cache[page]) {
-        iop->block_cache_dirty[page] = 1;
-    }
+    if (iop->block_cache[page].dirty || !iop->block_cache[page].valid)
+        return;
+
+    if (addr < iop->block_cache[page].min_code_addr || addr >= iop->block_cache[page].max_code_addr)
+        return;
+
+    // printf("iop: Invalidating page at addr=%08x page=%u\n", addr, page);
+
+    iop->block_cache[page].dirty = true;
 }
 
 #define IOP_INVALIDATE_PAGE(addr) { \
@@ -182,9 +185,6 @@ void iop_init(struct iop_state* iop, struct iop_bus_s bus) {
 
     iop->cop0_r[COP0_SR] = 0x10900000;
     iop->cop0_r[COP0_PRID] = 0x0000001f;
-
-    iop->block_cache.resize(IOP_CACHE_PAGECOUNT);
-    iop->block_cache_dirty.resize(IOP_CACHE_PAGECOUNT);
 }
 
 void iop_init_kputchar(struct iop_state* iop, void (*kputchar)(void*, char), void* udata) {
@@ -374,8 +374,8 @@ static inline void iop_i_j(struct iop_state* iop, iop_instruction& ins) {
     DO_PENDING_LOAD;
 
     // If we get a 1 that means the call has been HLE'd
-    if (iop_test_module_hooks(iop))
-        return;
+    // if (iop_test_module_hooks(iop))
+    //     return;
 
     iop->next_pc = (iop->next_pc & 0xf0000000) | (IMM26 << 2);
 }
@@ -1175,28 +1175,27 @@ iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
     uint32_t addr = iop_translate_addr(pc);
     uint32_t page = addr / _IOP_CACHE_PAGESIZE;
 
-    if (!iop->block_cache[page]) {
+    if (!iop->block_cache[page].valid) {
         return nullptr;
     }
 
-    if (iop->block_cache_dirty[page]) {
-        delete[] iop->block_cache[page];
+    if (iop->block_cache[page].dirty) {
+        delete[] iop->block_cache[page].blocks;
 
-        iop->block_cache[page] = nullptr;
-        iop->block_cache_dirty[page] = 0;
-
-        if (iop->last_cached_block && ((iop->last_cached_block_pc / _IOP_CACHE_PAGESIZE) == page)) {
-            iop->last_cached_block = nullptr;
-        }
+        iop->block_cache[page].blocks = nullptr;
+        iop->block_cache[page].dirty = false;
+        iop->block_cache[page].valid = false;
+        iop->block_cache[page].min_code_addr = 0;
+        iop->block_cache[page].max_code_addr = 0;
 
         return nullptr;
     }
 
     uint32_t offset = (addr & (_IOP_CACHE_PAGESIZE - 1)) >> 2;
 
-    iop_block* block = &iop->block_cache[page][offset];
+    iop_block* block = &iop->block_cache[page].blocks[offset];
 
-    if (!block->valid) {
+    if (!block->cycles) {
         return nullptr;
     }
 
@@ -1212,12 +1211,19 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
     uint32_t page = translated / _IOP_CACHE_PAGESIZE;
     uint32_t offset = (translated & (_IOP_CACHE_PAGESIZE - 1)) >> 2;
 
-    if (!iop->block_cache[page]) {
-        iop->block_cache[page] = new iop_block[_IOP_CACHE_PAGESIZE >> 2];
-        iop->block_cache_dirty[page] = 0;
+    if (!iop->block_cache[page].valid) {
+        iop->block_cache[page].blocks = new iop_block[_IOP_CACHE_PAGESIZE >> 2];
+        iop->block_cache[page].dirty = false;
+        iop->block_cache[page].valid = true;
+        iop->block_cache[page].min_code_addr = addr;
+        iop->block_cache[page].max_code_addr = addr;
     }
 
-    struct iop_block& block = iop->block_cache[page][offset];
+    struct iop_block& block = iop->block_cache[page].blocks[offset];
+
+    if (addr < iop->block_cache[page].min_code_addr) {
+        iop->block_cache[page].min_code_addr = addr;
+    }
 
     iop_instruction i;
 
@@ -1254,6 +1260,10 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
         max_cycles--;
 
         block.end_pc += 4;
+    }
+
+    if (iop->block_cache[page].max_code_addr < block.end_pc) {
+        iop->block_cache[page].max_code_addr = block.end_pc;
     }
 
     return &block;
@@ -1318,13 +1328,8 @@ int iop_run_block(struct iop_state* iop, int max_cycles) {
 }
 
 void iop_flush_cache(struct iop_state* iop) {
-    for (iop_block*& block : iop->block_cache) {
-        if (!block) {
-            continue;
-        }
-
-        delete[] block;
-        block = nullptr;
+    for (iop_cache_page& page : iop->block_cache) {
+        page.dirty = true;
     }
 
     iop->last_cached_block = nullptr;
@@ -1338,7 +1343,7 @@ void iop_invalidate_block(struct iop_state* iop, uint32_t addr) {
 
     uint32_t page = addr / _IOP_CACHE_PAGESIZE;
 
-    if (iop->block_cache[page] && iop_is_executable_region(addr)) {
-        iop->block_cache_dirty[page] = 1;
+    if (iop_is_executable_region(addr) && iop->block_cache[page].valid) {
+        iop->block_cache[page].dirty = true;
     }
 }
