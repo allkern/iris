@@ -603,6 +603,15 @@ void show_main_menubar(iris::instance* iris) {
                 SDL_OpenURL("https://github.com/allkern/iris/issues/new");
             }
 
+            bool disc_loaded = iris->ps2 && iris->ps2->cdvd && iris->ps2->cdvd->disc;
+
+            BeginDisabled(!disc_loaded);
+            if (MenuItem(ICON_MS_FACT_CHECK " Report compatibility")) {
+                iris->show_compat_report = true;
+                iris->pause = true;
+            }
+            EndDisabled();
+
             ImGui::EndMenu();
         }
 

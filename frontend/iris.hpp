@@ -522,6 +522,7 @@ struct instance {
     // Special windows
     bool show_bios_setting_window = false;
     bool show_about_window = false;
+    bool show_compat_report = false;
 
     bool fullscreen = false;
     int aspect_mode = RENDER_ASPECT_AUTO;
@@ -847,6 +848,7 @@ void show_vu_disassembler(iris::instance* iris);
 void show_status_bar(iris::instance* iris);
 void show_breakpoints(iris::instance* iris);
 void show_about_window(iris::instance* iris);
+void show_compat_report(iris::instance* iris);
 void show_settings(iris::instance* iris);
 void show_pad_debugger(iris::instance* iris);
 void show_symbols(iris::instance* iris);

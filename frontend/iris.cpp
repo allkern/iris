@@ -321,6 +321,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_status_bar && !iris->fullscreen) show_status_bar(iris);
     if (iris->show_breakpoints) show_breakpoints(iris);
     if (iris->show_about_window) show_about_window(iris);
+    if (iris->show_compat_report) show_compat_report(iris);
     if (iris->show_settings) show_settings(iris);
     if (iris->show_pad_debugger) show_pad_debugger(iris);
     if (iris->show_symbols) show_symbols(iris);

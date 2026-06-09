@@ -29,8 +29,20 @@ if (GIT_FOUND)
         # Fallback if git describe fails (e.g., no tags in the history)
         set(GIT_VERSION_STRING "unknown-version")
     endif()
+
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        OUTPUT_VARIABLE GIT_COMMIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET
+    )
+    if(NOT GIT_COMMIT_HASH)
+        set(GIT_COMMIT_HASH "unknown-commit")
+    endif()
 else()
     set(GIT_VERSION_STRING "git-not-found")
+    set(GIT_COMMIT_HASH "git-not-found")
 endif()
 
 message(STATUS "Project Version: ${GIT_VERSION_STRING}")
@@ -107,6 +119,7 @@ set_property(TARGET iris PROPERTY C_STANDARD 23)
 set_property(TARGET iris PROPERTY CXX_STANDARD 23)
 
 add_definitions("-D_IRIS_VERSION=${GIT_VERSION_STRING}")
+add_definitions("-D_IRIS_COMMIT=${GIT_COMMIT_HASH}")
 add_definitions("-D_IRIS_OSVERSION=${CMAKE_SYSTEM_NAME}-${CMAKE_SYSTEM_VERSION}")
 add_definitions("-D_IRIS_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
 
@@ -129,6 +142,7 @@ target_sources(iris PRIVATE
     frontend/ui/about.cpp
     frontend/ui/bios_setting.cpp
     frontend/ui/breakpoints.cpp
+    frontend/ui/compat_report.cpp
     frontend/ui/control.cpp
     frontend/ui/dma.cpp
     frontend/ui/gamelist.cpp
