@@ -383,7 +383,7 @@ uint128_t ee_bus_read128(void* udata, uint32_t addr) {
     MAP_MEM_READ(128, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(128, 0x1E400000, 0x1E7FFFFF, bios, rom2);
 
-    fprintf(stderr, "bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); // exit(1);
+    // fprintf(stderr, "bus: Unhandled 128-bit read from physical address 0x%08x\n", addr); // exit(1);
 
     // *(int*)0 = 0;
 

@@ -346,6 +346,31 @@ static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
     return vu->vu_mem[addr & 0x3ff];
 }
 
+// Note: This function handles the branch in delay slot edge case.
+//       Let B1 be a branch instruction, and B2 is a branch instruction in the
+//       delay slot of B1. slot of B1. There are 4 cases to consider:
+//       - Case 0: Neither B1 nor B2 are taken. Trivial, just execute sequentially.
+//       - Case 1: B1 is taken, B2 is not taken. B1 is executed, then B2 and its delay slot are skipped
+//       - Case 2: B1 is not taken, B2 is taken. B1 is a NOP, B2 is executed with its delay slot
+//       - Case 3: Both branches are executed: This is the hard case, let TGT1 be the target of B1, and TGT2
+//         be the target of B2:
+//         B1 is executed, TPC is set to TGT1. The instruction at TGT1 is executed, then B2 kicks in
+//         and TPC is set to TGT1+TGT2!
+//
+//       As far as I know, VU branches in delay slots are fairly common. Crazy Taxi and 18 Wheeler
+//       depend on case 1/2, otherwise you get flickering geometry and the VU might eventually hang.
+static inline void vu_branch(struct vu_state* vu, uint32_t target) {
+    if (!vu->branch_taken) {
+        vu->branch_taken = true;
+    } else {
+        printf("vu%d: Branch in delay slot case 3 at TPC=%04x! (refer to Iris source)\n", vu->id, vu->tpc);
+
+        exit(1);
+    }
+
+    vu->next_tpc = target;
+}
+
 static inline void vu_write_branch_pipeline(struct vu_state* vu, int dst) {
     if (!dst)
         return;
@@ -2149,13 +2174,13 @@ void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins) {
 
 // Lower pipeline
 void vu_i_b(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->next_tpc = vu->tpc + VU_LD_IMM11;
+    vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 void vu_i_bal(struct vu_state* vu, const struct vu_instruction* ins) {
     // Instruction next to the delay slot
     VU_IT = vu->tpc + 1;
 
-    vu->next_tpc = vu->tpc + VU_LD_IMM11;
+    vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
@@ -2351,35 +2376,45 @@ void vu_i_ibeq(struct vu_state* vu, const struct vu_instruction* ins) {
     uint16_t s = vu_get_branch_register(vu, VU_LD_S);
 
     if (t == s) {
-        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+        vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    } else {
+        vu->block_exit = vu->branch_taken;
     }
 }
 void vu_i_ibgez(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
     if (s >= 0) {
-        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+        vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    } else {
+        vu->block_exit = vu->branch_taken;
     }
 }
 void vu_i_ibgtz(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
     if (s > 0) {
-        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+        vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    } else {
+        vu->block_exit = vu->branch_taken;
     }
 }
 void vu_i_iblez(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
     if (s <= 0) {
-        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+        vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    } else {
+        vu->block_exit = vu->branch_taken;
     }
 }
 void vu_i_ibltz(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
     if (s < 0) {
-        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+        vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    } else {
+        vu->block_exit = vu->branch_taken;
     }
 }
 void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
@@ -2389,7 +2424,9 @@ void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
     // printf("ibne vi%02u (%04x), vi%02u (%04x), 0x%08x\n", VU_LD_T, t, VU_LD_S, s, vu->tpc + VU_LD_IMM11);
 
     if (t != s) {
-        vu->next_tpc = vu->tpc + VU_LD_IMM11;
+        vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    } else {
+        vu->block_exit = vu->branch_taken;
     }
 }
 template <uint32_t di>
@@ -2469,10 +2506,10 @@ void vu_i_jalr(struct vu_state* vu, const struct vu_instruction* ins) {
 
     VU_IT = vu->tpc + 1;
 
-    vu->next_tpc = s;
+    vu_branch(vu, s);
 }
 void vu_i_jr(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->next_tpc = VU_IS;
+    vu_branch(vu, VU_IS);
 }
 template <uint32_t di>
 void vu_i_lq(struct vu_state* vu, const struct vu_instruction* ins) {
@@ -3492,6 +3529,8 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
 
     // printf("vu: caching block at %04x\n", tpc);
 
+    bool delay_slot = false;
+
     for (int i = 0; i < max_cycles; i++) {
         vu_block_entry entry = { 0 };
 
@@ -3524,6 +3563,16 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
         if (entry.branch || entry.e_bit) {
             i = max_cycles - 2;
         }
+
+        // if (entry.branch) {
+        //     // if (delay_slot) {
+        //     //     printf("vu%d: warning: branch in delay slot at %04x\n", vu->id, (tpc - 1) & 0x7ff);
+        //     // }
+
+        //     delay_slot = true;
+        // } else {
+        //     delay_slot = false;
+        // }
 
         block->cycles++;
 
@@ -3635,6 +3684,9 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
 
     // printf("vu: Input TPC %04x\n", vu->tpc);
 
+    vu->branch_taken = false;
+    vu->block_exit = false;
+
     for (const vu_block_entry& entry : block->entries) {
         vu->tpc = vu->next_tpc;
         vu->next_tpc = vu->tpc + 1;
@@ -3642,6 +3694,9 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
         vu->next_tpc &= 0x7ff;
 
         e_bit |= vu_execute_block_entry(vu, entry);
+
+        if (vu->block_exit)
+            break;
     }
 
     // printf("vu: Output TPC %04x\n", vu->tpc);
@@ -3853,7 +3908,7 @@ void vu_clear_block_cache(struct vu_state* vu) {
 }
 
 void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
-    if (!size || vu->block_cache.empty()) {
+    if (!size || vu->block_cache_size == 0) {
         return;
     }
 

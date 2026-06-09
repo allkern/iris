@@ -52,6 +52,9 @@ struct vu_state {
     int vi_backup_reg;
     int vi_backup_value;
 
+    bool branch_taken;
+    bool block_exit;
+
     uint64_t micro_mem[0x800];
     uint128_t vu_mem[0x400];
 
