@@ -536,14 +536,24 @@ void dmac_handle_vif1_read_transfer(struct ps2_dmac* dmac) {
 
     fprintf(stdout, "dmac: Handling VIF1 read transfer with QWC=%d MADR=%08x\n", dmac->channels[DMAC_VIF1].qwc, dmac->channels[DMAC_VIF1].madr);
 
-    uint32_t qwc = dmac->channels[DMAC_VIF1].qwc;
+    // uint32_t qwc = dmac->channels[DMAC_VIF1].qwc;
 
-    dmac->channels[DMAC_VIF1].chcr &= ~0x100;
-    dmac->channels[DMAC_VIF1].madr += dmac->channels[DMAC_VIF1].qwc * 16;
-    dmac->channels[DMAC_VIF1].qwc = 0;
+    // dmac->channels[DMAC_VIF1].chcr &= ~0x100;
+    // dmac->channels[DMAC_VIF1].madr += dmac->channels[DMAC_VIF1].qwc * 16;
+    // dmac->channels[DMAC_VIF1].qwc = 0;
 
-    if (qwc >= 0x4000 && qwc < 0xe000)
+    // Note: Huge Gran Turismo 4 hack, it sends a VIF1 read transfer and crashes if an interrupt is sent!
+    //       Works for Gran Turismo 4, Armored Core 2/3 and Ibara.
+    if (dmac->channels[DMAC_VIF1].qwc == 32773) {
+        dmac->channels[DMAC_VIF1].chcr &= ~0x100;
+        dmac->channels[DMAC_VIF1].madr += dmac->channels[DMAC_VIF1].qwc * 16;
+        dmac->channels[DMAC_VIF1].qwc = 0;
+
         return;
+    }
+
+    // if (qwc >= 0x4000 && qwc < 0xe000)
+    //     return;
 
     // Trash GS readback implementation, whatever...
     // uint128_t* buf = (uint128_t*)malloc(qwc * 16);
@@ -562,10 +572,12 @@ void dmac_handle_vif1_read_transfer(struct ps2_dmac* dmac) {
 
     event.name = "vif1_read_transfer_end";
     event.callback = dmac_send_vif1_read_irq;
-    event.cycles = qwc * 2;
+    event.cycles = dmac->channels[DMAC_VIF1].qwc * 2;
     event.udata = dmac;
 
     sched_schedule(dmac->sched, event);
+
+    dmac_end_transfer(dmac, DMAC_VIF1);
 }
 
 int dmac_transfer_vif1_word(struct ps2_dmac* dmac) {
