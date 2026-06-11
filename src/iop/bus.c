@@ -296,7 +296,7 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     // Bloody Roar 4 Wrong IOP CDVD DMA
     // if ((addr & 0xff000000) == 0x0c000000) { *(uint8_t*)0 = 0; }
 
-    printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 32-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }

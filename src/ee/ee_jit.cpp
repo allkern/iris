@@ -4472,6 +4472,17 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 bc.movsxd(rd.reg, rd.reg);
             } break;
 
+            case EE_I_ANDI: {
+                if (!i.rt.r) continue;
+
+                bool sync = i.rt.r == i.rs.r;
+
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+
+                uc.and_(rt.reg, rs.reg, Imm(i.i16));
+            } break;
+
             // case EE_I_AND: {
             //     if (!i.rd) continue;
 
@@ -4526,6 +4537,27 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 uc.mov(tmp, Imm(0));
                 bc.cmp(rs.reg, Imm((int64_t)(int16_t)i.i16));
                 bc.setl(tmp);
+                uc.mov(rt.reg, tmp);
+            } break;
+
+            case EE_I_SLTIU: {
+                if (!i.rt.r) continue;
+
+                bool sync = i.rs.r == i.rt.r;
+
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                ujit::Gp tmp = uc.new_gp64();
+
+                if (i.rs.r == 0) {
+                    uc.mov(rt.reg, Imm(0ull < ((int64_t)(int16_t)i.i16)));
+
+                    continue;
+                }
+
+                uc.mov(tmp, Imm(0));
+                bc.cmp(rs.reg, Imm((int64_t)(int16_t)i.i16));
+                bc.setb(tmp);
                 uc.mov(rt.reg, tmp);
             } break;
 
@@ -4589,10 +4621,6 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             } break;
 
             case EE_I_JAL: {
-                // if (ee->fmv_skip) {
-                //     if (ee_skip_fmv(ee, addr)) return;
-                // }
-
                 ee_cached_reg& ra = ee_get_reg(ee, &uc, 31, false);
 
                 // uc.mov(ra, Imm(0));
@@ -4687,7 +4715,19 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 }
             } break;
 
-            case EE_I_LW: {
+            case EE_I_LB:
+            case EE_I_LH:
+            case EE_I_LW:
+            case EE_I_LD: {
+                uintptr_t func;
+
+                switch (i.id) {
+                    case EE_I_LB: func = (uintptr_t)bus_read8; break;
+                    case EE_I_LH: func = (uintptr_t)bus_read16; break;
+                    case EE_I_LW: func = (uintptr_t)bus_read32; break;
+                    case EE_I_LD: func = (uintptr_t)bus_read64; break;
+                }
+
                 if (!i.rt.r) {
                     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                     ujit::Gp tmp = uc.new_gp64();
@@ -4699,7 +4739,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bc.invoke(
                         Out(invoke_node),
-                        (uintptr_t)bus_read32,
+                        func,
                         FuncSignature::build<uint64_t, ee_state*, uint32_t>()
                     );
 
@@ -4723,7 +4763,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 bc.invoke(
                     Out(invoke_node),
-                    (uintptr_t)bus_read32,
+                    func,
                     FuncSignature::build<uint64_t, ee_state*, uint32_t>()
                 );
 
@@ -4731,82 +4771,40 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 invoke_node->set_arg(1, tmp);
                 invoke_node->set_ret(0, rt.reg);
 
-                bc.movsxd(rt.reg, rt.reg);
-            } break;
 
-            case EE_I_SW: {
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                ujit::Gp tmp1 = uc.new_gp64();
-                ujit::Gp tmp2 = uc.new_gp64();
+                if (i.id != EE_I_LD) {
+                    switch (i.id) {
+                        case EE_I_LB: {
+                            bc.cbw(rt.reg);
+                        } // Fallthrough
 
-                uc.mov(tmp1, Imm((int32_t)(int16_t)i.i16));
-                uc.add(tmp1, tmp1, rs.reg);
-                uc.and_(tmp2, rt.reg, Imm(0xffffffff));
+                        case EE_I_LH: {
+                            bc.cwde(rt.reg);
+                        } break;
+                    }
 
-                InvokeNode* invoke_node;
-
-                bc.invoke(
-                    Out(invoke_node),
-                    (uintptr_t)bus_write32,
-                    FuncSignature::build<void, ee_state*, uint32_t, uint64_t>()
-                );
-
-                invoke_node->set_arg(0, ee->ee_ptr);
-                invoke_node->set_arg(1, tmp1);
-                invoke_node->set_arg(2, tmp2);
-            } break;
-
-            case EE_I_LD: {
-                if (!i.rt.r) {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ujit::Gp tmp = uc.new_gp64();
-
-                    uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
-                    uc.add(tmp, tmp, rs.reg);
-
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
-                        (uintptr_t)bus_read64,
-                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
-                    );
-
-                    invoke_node->set_arg(0, ee->ee_ptr);
-                    invoke_node->set_arg(1, tmp);
-
-                    continue;
+                    bc.movsxd(rt.reg, rt.reg);
                 }
-
-                bool sync = i.rt.r == i.rs.r;
-
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
-                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                ujit::Gp tmp = uc.new_gp64();
-
-                uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
-                uc.add(tmp, tmp, rs.reg);
-
-                InvokeNode* invoke_node;
-
-                bc.invoke(
-                    Out(invoke_node),
-                    (uintptr_t)bus_read64,
-                    FuncSignature::build<uint64_t, ee_state*, uint32_t>()
-                );
-
-                invoke_node->set_arg(0, ee->ee_ptr);
-                invoke_node->set_arg(1, tmp);
-                invoke_node->set_ret(0, rt.reg);
             } break;
 
+            case EE_I_SB:
+            case EE_I_SH:
+            case EE_I_SW:
             case EE_I_SD: {
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
                 ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ujit::Gp tmp1 = uc.new_gp64();
                 ujit::Gp tmp2 = uc.new_gp64();
 
+                uintptr_t func;
+
+                switch (i.id) {
+                    case EE_I_SB: func = (uintptr_t)bus_write8; break;
+                    case EE_I_SH: func = (uintptr_t)bus_write16; break;
+                    case EE_I_SW: func = (uintptr_t)bus_write32; break;
+                    case EE_I_SD: func = (uintptr_t)bus_write64; break;
+                }
+
                 uc.mov(tmp1, Imm((int32_t)(int16_t)i.i16));
                 uc.add(tmp1, tmp1, rs.reg);
 
@@ -4814,7 +4812,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 bc.invoke(
                     Out(invoke_node),
-                    (uintptr_t)bus_write64,
+                    func,
                     FuncSignature::build<void, ee_state*, uint32_t, uint64_t>()
                 );
 
