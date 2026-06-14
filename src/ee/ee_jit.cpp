@@ -7,12 +7,12 @@
 #include <math.h>
 #include <fenv.h>
 
-#ifdef _EE_USE_INTRINSICS
+// #ifdef _EE_USE_INTRINSICS
 #include <immintrin.h>
 #include <tmmintrin.h>
 #include <emmintrin.h>
 #include <smmintrin.h>
-#endif
+// #endif
 
 #include "ee.h"
 #include "vu.h"
@@ -568,12 +568,18 @@ static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
     return ee->bus.read128(ee->bus.udata, phys);
 }
 
+static inline __m128i bus_read128_sse(struct ee_state* ee, uint32_t addr) {
+    uint128_t result = bus_read128(ee, addr);
+
+    return _mm_load_si128((__m128i*)&result);
+}
+
 BUS_WRITE_FUNC(8)
 BUS_WRITE_FUNC(16)
 BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
-static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
+void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
     if ((addr & 0xf0000000) == 0x70000000) {
         ps2_ram_write128(ee->spr, addr & 0x3ff0, data);
 
@@ -4404,6 +4410,13 @@ static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniComp
     }
 }
 
+void print_reg_dt(struct ee_state* ee, uint64_t v, int d, int t) {
+    uint128_t rd = ee->r[d];
+    uint128_t rt = ee->r[t];
+
+    fprintf(stderr, "wrong -> %08x %08x from R%d: %08x %08x R%d: %08x %08x\n", v >> 32, v & 0xffffffff, d, rd.u32[1], rd.u32[0], t, rt.u32[1], rt.u32[0]);
+}
+
 void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     using namespace asmjit;
 
@@ -4422,6 +4435,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     ujit::Gp exception = uc.new_gp32();
 
     func->set_arg(0, ee->ee_ptr);
+
+    asmjit::Label block_exit = uc.new_label();
 
     for (const ee_instruction& i : block->instructions) {
         switch (i.id) {
@@ -4472,7 +4487,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 bc.movsxd(rd.reg, rd.reg);
             } break;
 
-            case EE_I_ANDI: {
+            case EE_I_ANDI:
+            case EE_I_XORI: {
                 if (!i.rt.r) continue;
 
                 bool sync = i.rt.r == i.rs.r;
@@ -4480,34 +4496,65 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
                 ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
-                uc.and_(rt.reg, rs.reg, Imm(i.i16));
+                switch (i.id) {
+                    case EE_I_ANDI: uc.and_(rt.reg, rs.reg, Imm(i.i16)); break;
+                    case EE_I_XORI: uc.xor_(rt.reg, rs.reg, Imm(i.i16)); break;
+                }
             } break;
 
-            // case EE_I_AND: {
-            //     if (!i.rd) continue;
+            case EE_I_ORI: {
+                if (!i.rt.r) continue;
 
-            //     code.set_logger(ee->logger);
+                bool sync = i.rs.r == i.rt.r;
 
-            //     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
 
-            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                if (!i.rs.r) {
+                    uc.mov(rt.reg, Imm(i.i16));
+                } else {
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
-            //     uc.and_(rd.reg, rs.reg, rt.reg);
-            // } break;
+                    uc.or_(rt.reg, rs.reg, Imm(i.i16));
+                }
+            } break;
 
-            // case EE_I_OR: {
-            //     if (!i.rd.r) continue;
+            case EE_I_AND:
+            case EE_I_OR:
+            case EE_I_XOR: {
+                if (!i.rd.r) continue;
 
-            //     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
+                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-            //     ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
-            //     uc.or_(rd.reg, rs.reg, rt.reg);
-            // } break;
+                ujit::Gp tmp = uc.new_gp64();
+
+                switch (i.id) {
+                    case EE_I_AND: uc.and_(tmp, rs.reg, rt.reg); break;
+                    case EE_I_OR: uc.or_(tmp, rs.reg, rt.reg); break;
+                    case EE_I_XOR: uc.xor_(tmp, rs.reg, rt.reg); break;
+                }
+
+                uc.mov(rd.reg, tmp);
+            } break;
+
+            case EE_I_SLT: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ujit::Gp tmp = uc.new_gp64();
+
+                uc.mov(tmp, Imm(0));
+                bc.cmp(rs.reg, rt.reg);
+                bc.setl(tmp);
+                uc.mov(rd.reg, tmp);
+            } break;
 
             case EE_I_SLTU: {
                 if (!i.rd.r) continue;
@@ -4614,6 +4661,37 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 uc.bind(L0);
             } break;
 
+            // case EE_I_BEQL: {
+            //     code.set_logger(ee->logger);
+
+            //     if (i.rt.r == i.rs.r) {
+            //         ujit::Gp tmp = uc.new_gp32();
+
+            //         uc.load_u32(tmp, EE(pc));
+            //         uc.add(tmp, tmp, Imm(EE_D_SI16));
+            //         uc.store_u32(EE(next_pc), tmp);
+
+            //         continue;
+            //     }
+
+            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+
+            //     Label L0 = uc.new_label();
+
+            //     bc.cmp(rt.reg, rs.reg);
+            //     bc.je(L0);
+            //     bc.jmp(block_exit);
+
+            //     uc.bind(L0);
+
+            //     ujit::Gp tmp = uc.new_gp32();
+
+            //     uc.load_u32(tmp, EE(pc));
+            //     uc.add(tmp, tmp, Imm(EE_D_SI16));
+            //     uc.store_u32(EE(next_pc), tmp);
+            // } break;
+
             case EE_I_JR: {
                 ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
@@ -4687,6 +4765,134 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 bc.movsxd(rd.reg, rd.reg);
             } break;
 
+            case EE_I_SRL: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rt.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+
+                ujit::Gp tmp = uc.new_gp64();
+
+                uc.and_(tmp, rt.reg, Imm(0xFFFFFFFF));
+                uc.shr(rd.reg, tmp, Imm(i.sa));
+            } break;
+
+            case EE_I_SRA: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rt.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+
+                ujit::Gp tmp1 = rd.reg.r32();
+                ujit::Gp tmp2 = rt.reg.r32();
+
+                uc.sar(tmp1, tmp2, Imm(i.sa));
+                bc.movsxd(rd.reg, tmp1);
+            } break;
+
+            case EE_I_SLLV: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+
+                ujit::Gp tmp = uc.new_gp64();
+
+                uc.and_(tmp, rs.reg, Imm(0x1F));
+                uc.shl(rd.reg, rt.reg, tmp);
+                bc.movsxd(rd.reg, rd.reg);
+            } break;
+
+            case EE_I_SRLV: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+
+                ujit::Gp tmp = uc.new_gp32();
+                ujit::Gp rd32 = rd.reg.r32();
+                ujit::Gp rt32 = rt.reg.r32();
+                ujit::Gp rs32 = rs.reg.r32();
+
+                uc.and_(tmp, rs32, Imm(0x1F));
+                uc.shr(rd32, rt32, tmp);
+                bc.movsxd(rd.reg, rd32);
+            } break;
+
+            case EE_I_SRAV: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+
+                ujit::Gp tmp = uc.new_gp32();
+                ujit::Gp rd32 = rd.reg.r32();
+                ujit::Gp rt32 = rt.reg.r32();
+                ujit::Gp rs32 = rs.reg.r32();
+
+                uc.and_(tmp, rs32, Imm(0x1F));
+                uc.sar(rd32, rt32, tmp);
+                bc.movsxd(rd.reg, rd32);
+            } break;
+
+            case EE_I_DSLL:
+            case EE_I_DSRL:
+            case EE_I_DSRA:
+            case EE_I_DSLL32:
+            case EE_I_DSRL32:
+            case EE_I_DSRA32: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rt.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+
+                switch (i.id) {
+                    case EE_I_DSLL: uc.shl(rd.reg, rt.reg, Imm(i.sa)); break;
+                    case EE_I_DSRL: uc.shr(rd.reg, rt.reg, Imm(i.sa)); break;
+                    case EE_I_DSRA: uc.sar(rd.reg, rt.reg, Imm(i.sa)); break;
+                    case EE_I_DSLL32: uc.shl(rd.reg, rt.reg, Imm(i.sa + 32)); break;
+                    case EE_I_DSRL32: uc.shr(rd.reg, rt.reg, Imm(i.sa + 32)); break;
+                    case EE_I_DSRA32: uc.sar(rd.reg, rt.reg, Imm(i.sa + 32)); break;
+                }
+            } break;
+
+            case EE_I_DSLLV:
+            case EE_I_DSRLV:
+            case EE_I_DSRAV: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+
+                ujit::Gp tmp = uc.new_gp64();
+
+                uc.and_(tmp, rs.reg, Imm(0x3F));
+
+                switch (i.id) {
+                    case EE_I_DSLLV: uc.shl(rd.reg, rt.reg, tmp); break;
+                    case EE_I_DSRLV: uc.shr(rd.reg, rt.reg, tmp); break;
+                    case EE_I_DSRAV: uc.sar(rd.reg, rt.reg, tmp); break;
+                }
+            } break;
+
             case EE_I_LUI: {
                 if (!i.rt.r) continue;
 
@@ -4696,22 +4902,6 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 if (i.i16 & 0x8000) {
                     bc.movsxd(rt.reg, rt.reg);
-                }
-            } break;
-
-            case EE_I_ORI: {
-                if (!i.rt.r) continue;
-
-                bool sync = i.rs.r == i.rt.r;
-
-                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
-
-                if (!i.rs.r) {
-                    uc.mov(rt.reg, Imm(i.i16));
-                } else {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-
-                    uc.or_(rt.reg, rs.reg, Imm(i.i16));
                 }
             } break;
 
@@ -4787,6 +4977,130 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 }
             } break;
 
+            case EE_I_LBU:
+            case EE_I_LHU:
+            case EE_I_LWU: {
+                uintptr_t func;
+
+                switch (i.id) {
+                    case EE_I_LBU: func = (uintptr_t)bus_read8; break;
+                    case EE_I_LHU: func = (uintptr_t)bus_read16; break;
+                    case EE_I_LWU: func = (uintptr_t)bus_read32; break;
+                }
+
+                if (!i.rt.r) {
+                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    ujit::Gp tmp = uc.new_gp64();
+                    uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+                    uc.add(tmp, tmp, rs.reg);
+                    uc.and_(tmp, tmp, Imm(0xffffffff));
+
+                    InvokeNode* invoke_node;
+
+                    bc.invoke(
+                        Out(invoke_node),
+                        func,
+                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                    );
+
+                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(1, tmp);
+
+                    continue;
+                }
+
+                bool sync = i.rt.r == i.rs.r;
+
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                ujit::Gp tmp = uc.new_gp64();
+
+                uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+                uc.add(tmp, tmp, rs.reg);
+                uc.and_(tmp, tmp, Imm(0xffffffff));
+
+                InvokeNode* invoke_node;
+
+                bc.invoke(
+                    Out(invoke_node),
+                    func,
+                    FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                );
+
+                invoke_node->set_arg(0, ee->ee_ptr);
+                invoke_node->set_arg(1, tmp);
+                invoke_node->set_ret(0, rt.reg);
+            } break;
+
+            // case EE_I_LQ: {
+            //     // code.set_logger(ee->logger);
+
+            //     if (!i.rt.r) {
+            //         ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+            //         ujit::Gp tmp = uc.new_gp64();
+            //         uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+            //         uc.add(tmp, tmp, rs.reg);
+            //         uc.and_(tmp, tmp, Imm(0xffffffff));
+
+            //         InvokeNode* invoke_node;
+
+            //         FuncSignature sig = FuncSignature(
+            //             asmjit::CallConvId::kCDecl,
+            //             FuncSignature::kNoVarArgs,
+            //             asmjit::TypeId::_kVec128Start,
+            //             asmjit::TypeId::kUIntPtr,
+            //             asmjit::TypeId::kUInt32
+            //         );
+
+            //         bc.invoke(
+            //             Out(invoke_node),
+            //             bus_read128_sse,
+            //             sig
+            //         );
+
+            //         invoke_node->set_arg(0, ee->ee_ptr);
+            //         invoke_node->set_arg(1, tmp);
+
+            //         continue;
+            //     }
+
+            //     bool sync = i.rt.r == i.rs.r;
+
+            //     ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+            //     ujit::Gp tmp = uc.new_gp64();
+            //     ujit::Vec ret = uc.new_vec128();
+
+            //     uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
+            //     uc.add(tmp, tmp, rs.reg);
+            //     uc.and_(tmp, tmp, Imm(0xffffffff));
+
+            //     InvokeNode* invoke_node;
+
+            //     FuncSignature sig = FuncSignature(
+            //         asmjit::CallConvId::kCDecl,
+            //         FuncSignature::kNoVarArgs,
+            //         asmjit::TypeId::_kVec128Start,
+            //         asmjit::TypeId::kUIntPtr,
+            //         asmjit::TypeId::kUInt32
+            //     );
+                
+            //     bc.invoke(
+            //         Out(invoke_node),
+            //         bus_read128_sse,
+            //         sig
+            //     );
+
+            //     invoke_node->set_arg(0, ee->ee_ptr);
+            //     invoke_node->set_arg(1, tmp);
+            //     invoke_node->set_ret(0, ret);
+
+            //     uc.v_storeu128(EE(r[i.rt.r]), ret);
+
+            //     // Mark as dirty since we bypassed the cache
+            //     ee->reg_cache[i.rt.r].valid = false;
+            // } break;
+
             case EE_I_SB:
             case EE_I_SH:
             case EE_I_SW:
@@ -4819,6 +5133,119 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 invoke_node->set_arg(0, ee->ee_ptr);
                 invoke_node->set_arg(1, tmp1);
                 invoke_node->set_arg(2, rt.reg);
+            } break;
+
+            // case EE_I_SQ: {
+            //     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+            //     ujit::Gp tmp1 = uc.new_gp64();
+            //     ujit::Gp ptr = uc.new_gp_ptr();
+
+            //     uc.mov(tmp1, Imm((int32_t)(int16_t)i.i16));
+            //     uc.add(tmp1, tmp1, rs.reg);
+            //     uc.lea(ptr, EE(r[i.rt.r]));
+
+            //     InvokeNode* invoke_node;
+
+            //     bc.invoke(
+            //         Out(invoke_node),
+            //         bus_write128,
+            //         FuncSignature::build<void, ee_state*, uint32_t, uint128_t*>()
+            //     );
+
+            //     invoke_node->set_arg(0, ee->ee_ptr);
+            //     invoke_node->set_arg(1, tmp1);
+            //     invoke_node->set_arg(2, ptr);
+            // } break;
+
+            case EE_I_PADDB:
+            case EE_I_PADDH:
+            case EE_I_PADDW:
+            case EE_I_PSUBB:
+            case EE_I_PSUBH:
+            case EE_I_PSUBW:
+            case EE_I_PADDUB:
+            case EE_I_PADDUH:
+            case EE_I_PSUBUB:
+            case EE_I_PSUBUH:
+            case EE_I_PADDSB:
+            case EE_I_PADDSH:
+            case EE_I_PSUBSB:
+            case EE_I_PSUBSH: {
+                if (!i.rd.r) continue;
+
+                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
+
+                ujit::Vec vrs = uc.new_vec128();
+                ujit::Vec vrt = uc.new_vec128();
+                ujit::Vec vrd = uc.new_vec128();
+                // ujit::Vec tmp = uc.new_vec128();
+
+                uc.v_loadu128(vrs, EE(r[i.rs.r]));
+                uc.v_loadu128(vrt, EE(r[i.rt.r]));
+
+                switch (i.id) {
+                    case EE_I_PADDB: uc.v_add_u8(vrd, vrs, vrt); break;
+                    case EE_I_PADDH: uc.v_add_u16(vrd, vrs, vrt); break;
+                    case EE_I_PADDW: uc.v_add_u32(vrd, vrs, vrt); break;
+                    case EE_I_PSUBB: uc.v_sub_u8(vrd, vrs, vrt); break;
+                    case EE_I_PSUBH: uc.v_sub_u16(vrd, vrs, vrt); break;
+                    case EE_I_PSUBW: uc.v_sub_u32(vrd, vrs, vrt); break;
+                    case EE_I_PADDUB: uc.v_adds_u8(vrd, vrs, vrt); break;
+                    case EE_I_PADDUH: uc.v_adds_u16(vrd, vrs, vrt); break;
+                    case EE_I_PSUBUB: uc.v_subs_u8(vrd, vrs, vrt); break;
+                    case EE_I_PSUBUH: uc.v_subs_u16(vrd, vrs, vrt); break;
+                    case EE_I_PADDSB: uc.v_adds_i8(vrd, vrs, vrt); break;
+                    case EE_I_PADDSH: uc.v_adds_i16(vrd, vrs, vrt); break;
+                    case EE_I_PSUBSB: uc.v_subs_i8(vrd, vrs, vrt); break;
+                    case EE_I_PSUBSH: uc.v_subs_i16(vrd, vrs, vrt); break;
+                }
+
+                uc.v_storeu128(EE(r[i.rd.r]), vrd);
+
+                // Mark as dirty since we bypassed the cache
+                ee->reg_cache[i.rd.r].valid = false;
+            } break;
+
+            case EE_I_PSLLH:
+            case EE_I_PSLLW:
+            case EE_I_PSRLH:
+            case EE_I_PSRLW:
+            case EE_I_PSRAH:
+            case EE_I_PSRAW: {
+                if (!i.rd.r) continue;
+
+                ujit::Vec vrt = uc.new_vec128();
+                ujit::Vec vrd = uc.new_vec128();
+
+                uc.v_loadu128(vrt, EE(r[i.rt.r]));
+
+                switch (i.id) {
+                    case EE_I_PSLLH: uc.v_slli_u16(vrd, vrt, i.sa & 0xf); break;
+                    case EE_I_PSLLW: uc.v_slli_u32(vrd, vrt, i.sa); break;
+                    case EE_I_PSRLH: uc.v_srli_u16(vrd, vrt, i.sa & 0xf); break;
+                    case EE_I_PSRLW: uc.v_srli_u32(vrd, vrt, i.sa); break;
+                    case EE_I_PSRAH: uc.v_srai_i16(vrd, vrt, i.sa & 0xf); break;
+                    case EE_I_PSRAW: uc.v_srai_i32(vrd, vrt, i.sa); break;
+                }
+
+                uc.v_storeu128(EE(r[i.rd.r]), vrd);
+
+                // Mark as dirty since we bypassed the cache
+                ee->reg_cache[i.rd.r].valid = false;
+            } break;
+
+            case EE_I_MOVZ:
+            case EE_I_MOVN: {
+                if (!i.rd.r) continue;
+
+                ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r);
+                ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+
+                ujit::CondCode cond_code = i.id == EE_I_MOVZ ? ujit::CondCode::kZero : ujit::CondCode::kNotZero;
+                ujit::UniCondition cond(ujit::UniOpCond::kTest, cond_code, rt.reg, rt.reg);
+
+                uc.cmov(rd.reg, rs.reg, cond);
             } break;
 
             case EE_I_LI: {
@@ -4922,6 +5349,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
         }
     }
 
+    uc.bind(block_exit);
+
     ee_flush_reg_cache(ee, &uc);
 
     uc.end_func();
@@ -4942,19 +5371,19 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
         exit(1);
     }
 
-    // if (code.logger()) {
-    //     char buf[128];
+    if (code.logger()) {
+        char buf[128];
 
-    //     ee_dis_state ds;
-    //     ds.print_opcode = true;
-    //     ds.print_address = true;
+        ee_dis_state ds;
+        ds.print_opcode = true;
+        ds.print_address = true;
 
-    //     for (const auto& i : block->instructions) {
-    //         puts(ee_disassemble(buf, i.opcode, &ds));
-    //     }
+        for (const auto& i : block->instructions) {
+            puts(ee_disassemble(buf, i.opcode, &ds));
+        }
 
-    //     exit(1);
-    // }
+        exit(1);
+    }
 }
 
 static inline bool ee_is_irq_pending(struct ee_state* ee) {

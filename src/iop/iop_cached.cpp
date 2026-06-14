@@ -21,8 +21,10 @@ void iop_invalidate_cache_page(struct iop_state* iop, uint32_t addr) {
     if (iop->block_cache[page].dirty || !iop->block_cache[page].valid)
         return;
 
-    if (addr < iop->block_cache[page].min_code_addr || addr >= iop->block_cache[page].max_code_addr)
-        return;
+    // Note: We should eventually reintroduce this to avoid unnecessary invalidations,
+    //       but for now it's safer to just invalidate on every write to ensure correctness.
+    // if (addr < iop->block_cache[page].min_code_addr || addr >= iop->block_cache[page].max_code_addr)
+    //     return;
 
     // printf("iop: Invalidating page at addr=%08x page=%u\n", addr, page);
 
