@@ -4410,13 +4410,6 @@ static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniComp
     }
 }
 
-void print_reg_dt(struct ee_state* ee, uint64_t v, int d, int t) {
-    uint128_t rd = ee->r[d];
-    uint128_t rt = ee->r[t];
-
-    fprintf(stderr, "wrong -> %08x %08x from R%d: %08x %08x R%d: %08x %08x\n", v >> 32, v & 0xffffffff, d, rd.u32[1], rd.u32[0], t, rt.u32[1], rt.u32[0]);
-}
-
 void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     using namespace asmjit;
 
@@ -5173,15 +5166,23 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             case EE_I_PSUBSH: {
                 if (!i.rd.r) continue;
 
-                bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
-
                 ujit::Vec vrs = uc.new_vec128();
                 ujit::Vec vrt = uc.new_vec128();
                 ujit::Vec vrd = uc.new_vec128();
-                // ujit::Vec tmp = uc.new_vec128();
 
-                uc.v_loadu128(vrs, EE(r[i.rs.r]));
-                uc.v_loadu128(vrt, EE(r[i.rt.r]));
+                if (ee->reg_cache[i.rs.r].valid) {
+                    bc.movq(vrs, ee->reg_cache[i.rs.r].reg);
+                    bc.movhps(vrs, EE(r[i.rs.r].u64[1]));
+                } else {
+                    uc.v_loadu128(vrs, EE(r[i.rs.r]));
+                }
+
+                if (ee->reg_cache[i.rt.r].valid) {
+                    bc.movq(vrt, ee->reg_cache[i.rt.r].reg);
+                    bc.movhps(vrt, EE(r[i.rt.r].u64[1]));
+                } else {
+                    uc.v_loadu128(vrt, EE(r[i.rt.r]));
+                }
 
                 switch (i.id) {
                     case EE_I_PADDB: uc.v_add_u8(vrd, vrs, vrt); break;
@@ -5217,7 +5218,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ujit::Vec vrt = uc.new_vec128();
                 ujit::Vec vrd = uc.new_vec128();
 
-                uc.v_loadu128(vrt, EE(r[i.rt.r]));
+                if (ee->reg_cache[i.rt.r].valid) {
+                    bc.movq(vrt, ee->reg_cache[i.rt.r].reg);
+                    bc.movhps(vrt, EE(r[i.rt.r].u64[1]));
+                } else {
+                    uc.v_loadu128(vrt, EE(r[i.rt.r]));
+                }
 
                 switch (i.id) {
                     case EE_I_PSLLH: uc.v_slli_u16(vrd, vrt, i.sa & 0xf); break;
