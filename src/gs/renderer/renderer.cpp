@@ -7,10 +7,8 @@ renderer_state* renderer_create(void) {
     return new renderer_state;
 }
 
-bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
-    renderer->info = info;
-
-    switch (info.backend) {
+void renderer_init_callbacks(renderer_state* renderer, int backend) {
+    switch (backend) {
         case RENDERER_BACKEND_NULL: {
             renderer->create = null_create;
             renderer->init = null_init;
@@ -45,6 +43,12 @@ bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
             renderer->readback = hardware_readback;
         } break;
     }
+}
+
+bool renderer_init(renderer_state* renderer, const renderer_create_info& info) {
+    renderer->info = info;
+
+    renderer_init_callbacks(renderer, info.backend);
 
     renderer->udata = renderer->create();
 
@@ -64,6 +68,10 @@ bool renderer_switch(renderer_state* renderer, int backend, void* config) {
     info.config = config;
 
     return renderer_init(renderer, info);
+}
+
+void renderer_hotswap(renderer_state* renderer, int backend) {
+    renderer_init_callbacks(renderer, backend);
 }
 
 void renderer_destroy(renderer_state* renderer) {

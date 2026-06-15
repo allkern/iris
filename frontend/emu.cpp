@@ -44,6 +44,8 @@ void handle_load_end(iris::instance* iris, int result) {
 
     iris->show_gamelist = false;
 
+    renderer_hotswap(iris->renderer, iris->renderer_backend);
+
     imgui::end_dim(iris);
 }
 
@@ -173,6 +175,8 @@ int open_file(iris::instance* iris, std::string file) {
     iris->loading_target = path.filename().string();
     iris->loading_file_active = true;
     iris->pause = true;
+
+    renderer_hotswap(iris->renderer, RENDERER_BACKEND_NULL);
 
     imgui::start_dim(iris, 0.35f, 100);
 

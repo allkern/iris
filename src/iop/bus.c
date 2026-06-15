@@ -248,7 +248,7 @@ uint32_t iop_bus_read16(void* udata, uint32_t addr) {
 
     if (addr == 0x1241c000) return 0xffff;
 
-    printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 16-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }

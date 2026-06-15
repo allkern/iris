@@ -95,6 +95,7 @@ struct renderer_state {
 renderer_state* renderer_create(void);
 bool renderer_init(renderer_state* renderer, const renderer_create_info& info);
 bool renderer_switch(renderer_state* renderer, int backend, void* config);
+void renderer_hotswap(renderer_state* renderer, int backend);
 void renderer_reset(renderer_state* renderer);
 void renderer_destroy(renderer_state* renderer);
 void renderer_set_config(renderer_state* renderer, void* config);
