@@ -9,7 +9,9 @@
 #include "../bus.h"
 #include "../iop_export.h"
 
-#define IOMAN_MAX_OPEN_FILES 128
+#define IOMAN_MAX_OPEN_FILES 512
+#define IOMAN_HLE_FD_START 0xa0000
+#define IOMAN_HLE_FD_END (IOMAN_HLE_FD_START + IOMAN_MAX_OPEN_FILES)
 
 /** Format mask */
 #define FIO_SO_IFMT  0x0038
@@ -243,17 +245,17 @@ extern "C" int ioman_open(struct iop_state* iop, int iomanx) {
     int slot = ioman_allocate_file(file);
 
     // Return file handle
-    iop_return(iop, 0x100 + slot);
+    iop_return(iop, IOMAN_HLE_FD_START + slot);
 
     return 1;
 }
 extern "C" int ioman_close(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
-    if (!(fd >= 0x100 && fd < 0x140))
+    if (!(fd >= IOMAN_HLE_FD_START && fd < IOMAN_HLE_FD_END))
         return 0;
 
-    fd -= 0x100;
+    fd -= IOMAN_HLE_FD_START;
 
     if (state.files[fd])
         fclose(state.files[fd]);
@@ -267,10 +269,10 @@ extern "C" int ioman_close(struct iop_state* iop, int iomanx) {
 extern "C" int ioman_read(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
-    if (!(fd >= 0x100 && fd < 0x140))
+    if (!(fd >= IOMAN_HLE_FD_START && fd < IOMAN_HLE_FD_END))
         return 0;
 
-    fd -= 0x100;
+    fd -= IOMAN_HLE_FD_START;
 
     if (!state.files[fd])
         return 0;
@@ -301,8 +303,8 @@ extern "C" int ioman_write(struct iop_state* iop, int iomanx) {
 
     // printf("%s: write fd=%d\n", iomanx ? "iomanx" : "ioman", fd);
 
-    if (fd >= 0x100 && fd < 0x140) {
-        fd -= 0x100;
+    if (fd >= IOMAN_HLE_FD_START && fd < IOMAN_HLE_FD_END) {
+        fd -= IOMAN_HLE_FD_START;
 
         if (!state.files[fd])
             return 0;
@@ -349,10 +351,10 @@ extern "C" int ioman_write(struct iop_state* iop, int iomanx) {
 extern "C" int ioman_lseek(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
-    if (!(fd >= 0x100 && fd < 0x140))
+    if (!(fd >= IOMAN_HLE_FD_START && fd < IOMAN_HLE_FD_END))
         return 0;
 
-    fd -= 0x100;
+    fd -= IOMAN_HLE_FD_START;
 
     if (!state.files[fd])
         return 0;
@@ -405,19 +407,19 @@ extern "C" int ioman_dopen(struct iop_state* iop, int iomanx) {
     if (slot == -1)
         return 0;
 
-    // printf("%s: Opened directory \'%s\' (fd=%x)\n", iomanx ? "iomanx" : "ioman", absolute.string().c_str(), 0x140 + slot);
+    // printf("%s: Opened directory \'%s\' (fd=%x)\n", iomanx ? "iomanx" : "ioman", absolute.string().c_str(), IOMAN_HLE_FD_END + slot);
 
-    iop_return(iop, 0x140 + slot);
+    iop_return(iop, IOMAN_HLE_FD_END + slot);
 
     return 1;
 }
 extern "C" int ioman_dclose(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
 
-    if (!(fd >= 0x140 && fd < 0x180))
+    if (!(fd >= IOMAN_HLE_FD_END && fd < 0x180))
         return 0;
 
-    fd -= 0x140;
+    fd -= IOMAN_HLE_FD_END;
 
     if (state.directories[fd].path)
         delete state.directories[fd].path;
@@ -433,10 +435,10 @@ extern "C" int ioman_dread(struct iop_state* iop, int iomanx) {
     uint32_t fd = iop->r[4];
     uint32_t ptr = iop->r[5];
 
-    if (!(fd >= 0x140 && fd < 0x180))
+    if (!(fd >= IOMAN_HLE_FD_END && fd < 0x180))
         return 0;
 
-    fd -= 0x140;
+    fd -= IOMAN_HLE_FD_END;
 
     if (!state.directories[fd].path)
         return 0;
@@ -481,23 +483,20 @@ extern "C" int ioman_dread(struct iop_state* iop, int iomanx) {
 
     dir->index++;
 
-    iop_return(iop, fd + 0x140);
+    iop_return(iop, fd + IOMAN_HLE_FD_END);
 
     return 1;
 }
 extern "C" int ioman_getstat(struct iop_state* iop, int iomanx) {
-    char buf[256];
+    std::string path = ioman_read_string(iop, iop->r[4]);
 
-    for (int i = 0; i < 256; i++) {
-        uint8_t d = iop_read8(iop, iop->r[4] + i);
+    int device = ioman_get_device(path);
 
-        buf[i] = d;
+    // Only hook host files
+    if (device != IOMAN_DEV_HOST && device != IOMAN_DEV_MASS)
+        return 0;
 
-        if (!d)
-            break;
-    }
-
-    // fprintf(stderr, "%s: getstat(%s)\n", iomanx ? "iomanx" : "ioman", buf);
+    // fprintf(stderr, "%s: getstat(%s)\n", iomanx ? "iomanx" : "ioman", path.c_str());
 
     iop_return(iop, 0);
 

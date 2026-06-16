@@ -376,8 +376,8 @@ static inline void iop_i_j(struct iop_state* iop, iop_instruction& ins) {
     DO_PENDING_LOAD;
 
     // If we get a 1 that means the call has been HLE'd
-    // if (iop_test_module_hooks(iop))
-    //     return;
+    if (iop_test_module_hooks(iop))
+        return;
 
     iop->next_pc = (iop->next_pc & 0xf0000000) | (IMM26 << 2);
 }
