@@ -242,9 +242,10 @@ static inline void cdvd_s_read_rtc(struct ps2_cdvd* cdvd) {
     cdvd->s_fifo[7] = itob_table[tm.tm_year - 100];
 }
 static inline void cdvd_s_write_rtc(struct ps2_cdvd* cdvd) {
-    fprintf(stderr, "cdvd: write_rtc\n");
+    // fprintf(stderr, "cdvd: write_rtc\n");
+    cdvd_init_s_fifo(cdvd, 1);
 
-    exit(1);
+    cdvd->s_fifo[0] = 0;
 }
 static inline void cdvd_s_read_nvram(struct ps2_cdvd* cdvd) {
     uint16_t addr = *(uint16_t*)&cdvd->s_params[0];
@@ -703,6 +704,11 @@ static inline void cdvd_s_notice_game_start(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_psx_unk_remote_2c(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 static inline void cdvd_s_set_medium_removal(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 2);
 
@@ -747,6 +753,9 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x22: printf("cdvd: read_wakeup_time\n"); cdvd_s_read_wakeup_time(cdvd); break;
         case 0x24: printf("cdvd: rc_bypass_ctrl\n"); cdvd_s_rc_bypass_ctrl(cdvd); break;
         case 0x29: printf("cdvd: notice_game_start\n"); cdvd_s_notice_game_start(cdvd); break;
+
+        // No idea what this is, used by PSX DESR
+        case 0x2c: printf("cdvd: psx_unk_remote_2c\n"); cdvd_s_psx_unk_remote_2c(cdvd); break;
         case 0x31: printf("cdvd: set_medium_removal\n"); cdvd_s_set_medium_removal(cdvd); break;
         case 0x32: printf("cdvd: get_medium_removal\n"); cdvd_s_get_medium_removal(cdvd); break;
         case 0x36: printf("cdvd: get_region_params\n"); cdvd_s_get_region_params(cdvd); break;
