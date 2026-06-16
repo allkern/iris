@@ -55,7 +55,7 @@ void ps2_dev9_write8(struct ps2_dev9* dev9, uint32_t addr, uint64_t data) {
 }
 
 void ps2_dev9_write16(struct ps2_dev9* dev9, uint32_t addr, uint64_t data) {
-    printf("dev9: Unknown 16-bit write at address %08x (%04lx)\n", addr, data);
+    // printf("dev9: Unknown 16-bit write at address %08x (%04lx)\n", addr, data);
 
     return;
 }

@@ -47,7 +47,7 @@ void dvrp_send_intr_cmd_comp(void* udata, int overshoot) {
 }
 
 void dvrp_handle_command(struct ps2_dvrp* dvrp, uint16_t cmd) {
-    printf("dvrp: Handle command %04x params=%d\n", cmd, dvrp->param_index);
+    // printf("dvrp: Handle command %04x params=%d\n", cmd, dvrp->param_index);
 
     dvrp->cmd = cmd;
     dvrp->param_index = 0;
