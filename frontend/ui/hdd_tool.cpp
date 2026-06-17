@@ -1,3 +1,6 @@
+#include <filesystem>
+#include <iostream>
+#include <fstream>
 #include <vector>
 #include <string>
 #include <cctype>
@@ -22,20 +25,15 @@ const char* image_format_names[] = {
     "ISIF"
 };
 
+#define MIN_HDD_SIZE 0xa00000000ull
+#define HDD_SIZE_INCREMENT 0x500000000ull 
+
 void create_raw_image(const char* path, uint64_t size) {
-    FILE* file = fopen(path, "wb");
+    // Ensure file is created
+    std::ofstream(path, std::ios::binary);
 
-    void* buf = malloc(0x100000);
-
-    memset(buf, 0, 0x100000);
-
-    for (uint64_t written = 0; written < size; written += 0x100000) {
-        fwrite(buf, 1, 0x100000, file);
-    }
-
-    free(buf);
-
-    fclose(file);
+    // Make it big
+    std::filesystem::resize_file(path, size);
 }
 
 std::string get_file_size_string(int format, uint64_t size) {
@@ -80,11 +78,11 @@ void show_hdd_tool(iris::instance* iris) {
 
                 Text("Size (GiB)");
 
-                std::string size_hint = std::to_string((0xa00000000 + (0x500000000 * size_add)) / 0x40000000ull);
+                std::string size_hint = std::to_string((MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 0x40000000ull);
 
                 if (BeginCombo("##sizepreset", size_hint.c_str(), 0)) {
                     for (int i = 0; i < 4; i++) {
-                        std::string str = std::to_string((0xa00000000 + (0x500000000 * i)) / 0x40000000ull);
+                        std::string str = std::to_string((MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * i)) / 0x40000000ull);
 
                         if (Selectable(str.c_str())) {
                             size_add = i;
@@ -100,7 +98,7 @@ void show_hdd_tool(iris::instance* iris) {
                     TableSetColumnIndex(0);
                     TextDisabled("Estimated size");
                     TableSetColumnIndex(1);
-                    Text("%s", get_file_size_string(image_format, 0xa00000000 + (0x500000000 * size_add)).c_str());
+                    Text("%s", get_file_size_string(image_format, MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)).c_str());
 
                     EndTable();
                 }
@@ -128,9 +126,9 @@ void show_hdd_tool(iris::instance* iris) {
 
                     if (f.result().size()) {
                         if (image_format == IMAGE_FMT_RAW) {
-                            create_raw_image(f.result().c_str(), 0xa00000000 + (0x500000000 * size_add));
+                            create_raw_image(f.result().c_str(), MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add));
                         } else {
-                            uint64_t block_count = (0xa00000000 + (0x500000000 * size_add)) / 512;
+                            uint64_t block_count = (MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 512;
 
                             isif_create_image(f.result().c_str(), block_count, 512, 1, 0, nullptr, 0);
                         }
