@@ -101,7 +101,7 @@ void ps2_init(struct ps2_state* ps2) {
     ps2_cdvd_init(ps2->cdvd, ps2->iop_dma, ps2->iop_intc, ps2->sched);
     ps2_sio2_init(ps2->sio2, ps2->iop_dma, ps2->iop_intc, ps2->sched);
     ps2_spu2_init(ps2->spu2, ps2->iop_dma, ps2->iop_intc, ps2->sched);
-    ps2_usb_init(ps2->usb);
+    ps2_usb_init(ps2->usb, ps2->iop_intc, ps2->iop_bus, ps2->sched);
     ps2_fw_init(ps2->fw, ps2->iop_intc);
     ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_dev9_init(ps2->dev9, DEV9_TYPE_EXPBAY);
@@ -279,7 +279,7 @@ void ps2_reset(struct ps2_state* ps2) {
     ps2_iop_intc_init(ps2->iop_intc, ps2->iop);
     ps2_iop_timers_init(ps2->iop_timers, ps2->iop_intc, ps2->sched);
     ps2_spu2_init(ps2->spu2, ps2->iop_dma, ps2->iop_intc, ps2->sched);
-    ps2_usb_init(ps2->usb);
+    ps2_usb_init(ps2->usb, ps2->iop_intc, ps2->iop_bus, ps2->sched);
     ps2_fw_init(ps2->fw, ps2->iop_intc);
     ps2_sbus_init(ps2->sbus, ps2->ee_intc, ps2->iop_intc, ps2->sched);
     ps2_cdvd_reset(ps2->cdvd);

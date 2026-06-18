@@ -641,6 +641,14 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
         ImGui_ImplSDL3_ProcessEvent(event);
     }
 
+    if ((event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP) &&
+        iris->ps2 && iris->ps2->usb &&
+        !ImGui::GetIO().WantCaptureKeyboard) {
+        if (event->key.scancode <= 0xE7) {
+            ps2_usb_kbd_key(iris->ps2->usb, (uint8_t)event->key.scancode, event->type == SDL_EVENT_KEY_DOWN);
+        }
+    }
+
     switch (event->type) {
         case SDL_EVENT_QUIT: {
             return SDL_APP_SUCCESS;
