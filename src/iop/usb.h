@@ -46,6 +46,7 @@ extern "C" {
 enum {
     USB_DEVICE_NONE = 0,
     USB_DEVICE_KEYBOARD,
+    USB_DEVICE_MOUSE,
     USB_DEVICE_TYPE_COUNT
 };
 
@@ -106,6 +107,11 @@ void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type);
 
 // Frontend input hook: forwards a key event to any connected keyboard.
 void ps2_usb_kbd_key(struct ps2_usb* usb, uint8_t usage, int pressed);
+
+// Frontend input hooks: forward relative motion / button events to any
+// connected mouse. button is 0 = left, 1 = right, 2 = middle.
+void ps2_usb_mouse_move(struct ps2_usb* usb, int dx, int dy, int dz);
+void ps2_usb_mouse_button(struct ps2_usb* usb, int button, int pressed);
 
 #ifdef __cplusplus
 }

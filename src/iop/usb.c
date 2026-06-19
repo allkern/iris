@@ -4,11 +4,8 @@
 
 #include "usb.h"
 #include "usb/kbd.h"
+#include "usb/mouse.h"
 
-// Logging level:
-//   0 = off
-//   1 = config/enumeration/port events (low frequency)
-//   2 = everything, including per-frame periodic walks and interrupt NAK polls
 #define USB_DEBUG 0
 
 #if USB_DEBUG >= 1
@@ -430,6 +427,7 @@ static const struct {
 } usb_device_types[USB_DEVICE_TYPE_COUNT] = {
     [USB_DEVICE_NONE]     = { "None", NULL },
     [USB_DEVICE_KEYBOARD] = { "Keyboard", usb_kbd_create },
+    [USB_DEVICE_MOUSE]    = { "Mouse", usb_mouse_create },
 };
 
 const char* ps2_usb_device_type_name(int type) {
@@ -694,5 +692,19 @@ void ps2_usb_kbd_key(struct ps2_usb* usb, uint8_t usage, int pressed) {
     for (int i = 0; i < OHCI_NUM_PORTS; i++) {
         if (usb->device_type[i] == USB_DEVICE_KEYBOARD)
             usb_kbd_key(&usb->device[i], usage, pressed);
+    }
+}
+
+void ps2_usb_mouse_move(struct ps2_usb* usb, int dx, int dy, int dz) {
+    for (int i = 0; i < OHCI_NUM_PORTS; i++) {
+        if (usb->device_type[i] == USB_DEVICE_MOUSE)
+            usb_mouse_move(&usb->device[i], dx, dy, dz);
+    }
+}
+
+void ps2_usb_mouse_button(struct ps2_usb* usb, int button, int pressed) {
+    for (int i = 0; i < OHCI_NUM_PORTS; i++) {
+        if (usb->device_type[i] == USB_DEVICE_MOUSE)
+            usb_mouse_button(&usb->device[i], button, pressed);
     }
 }

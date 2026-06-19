@@ -171,6 +171,14 @@ void update_window(iris::instance* iris) {
     ImGui_ImplSDL3_NewFrame();
     ImGui::NewFrame();
 
+    bool usb_mouse_owns_pointer =
+        (iris->usb_devices[0] == USB_DEVICE_MOUSE || iris->usb_devices[1] == USB_DEVICE_MOUSE) &&
+        SDL_GetMouseFocus() == iris->window && !iris->pause &&
+        !GetIO().WantCaptureMouse;
+
+    if (usb_mouse_owns_pointer)
+        SetMouseCursor(ImGuiMouseCursor_None);
+
     if (!iris->fullscreen) {
         show_main_menubar(iris);
     }
@@ -646,6 +654,32 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
         !ImGui::GetIO().WantCaptureKeyboard) {
         if (event->key.scancode <= 0xE7) {
             ps2_usb_kbd_key(iris->ps2->usb, (uint8_t)event->key.scancode, event->type == SDL_EVENT_KEY_DOWN);
+        }
+    }
+
+    if (iris->ps2 && iris->ps2->usb && !ImGui::GetIO().WantCaptureMouse) {
+        switch (event->type) {
+            case SDL_EVENT_MOUSE_MOTION: {
+                ps2_usb_mouse_move(iris->ps2->usb, (int)event->motion.xrel, (int)event->motion.yrel, 0);
+            } break;
+
+            case SDL_EVENT_MOUSE_WHEEL: {
+                ps2_usb_mouse_move(iris->ps2->usb, 0, 0, (int)event->wheel.y);
+            } break;
+
+            case SDL_EVENT_MOUSE_BUTTON_DOWN:
+            case SDL_EVENT_MOUSE_BUTTON_UP: {
+                int button = -1;
+
+                switch (event->button.button) {
+                    case SDL_BUTTON_LEFT:   button = 0; break;
+                    case SDL_BUTTON_RIGHT:  button = 1; break;
+                    case SDL_BUTTON_MIDDLE: button = 2; break;
+                }
+
+                if (button >= 0)
+                    ps2_usb_mouse_button(iris->ps2->usb, button, event->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+            } break;
         }
     }
 
