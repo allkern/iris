@@ -101,10 +101,15 @@ int sched_tick(struct sched_state* sched, int cycles) {
         sched->events[i].cycles -= sched->offset;
     }
 
+    // The shift loop above already normalized every surviving event to its true
+    // remaining cycles, so offset has done its job. Clear it before running the
+    // callback: a callback that reschedules (e.g. a self-renewing periodic event)
+    // re-enters sched_schedule, and if offset were still non-zero its sync pass
+    // would subtract it a second time, pulling all other pending events early.
+    sched->offset = 0;
+
     // Provide callback with overshot cycles
     event.callback(event.udata, event.cycles);
-
-    sched->offset = 0;
 
     return 1;
 }
