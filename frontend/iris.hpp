@@ -590,6 +590,7 @@ struct instance {
     std::unordered_map <SDL_JoystickID, SDL_Gamepad*> gamepads;
     std::vector <mapping> input_maps = {};
     int input_map[2] = { -1, -1 };
+    int usb_devices[2] = { USB_DEVICE_NONE, USB_DEVICE_NONE };
     input_event last_input_event = {};
     bool last_input_event_read = true;
     float last_input_event_value = 0.0f;

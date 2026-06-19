@@ -160,6 +160,7 @@ const char* settings_buttons[] = {
     " " ICON_MS_BRUSH "  Shaders",
     " " ICON_MS_STADIA_CONTROLLER "  Input",
     " " ICON_MS_SD_CARD "  Memory cards",
+    " " ICON_MS_USB "  USB",
     " " ICON_MS_MORE_HORIZ "  Misc.",
     nullptr
 };
@@ -1012,6 +1013,51 @@ void show_input_settings(iris::instance* iris) {
     }
 }
 
+void show_usb_port(iris::instance* iris, int port) {
+    using namespace ImGui;
+
+    int current = iris->usb_devices[port];
+    const char* current_name = ps2_usb_device_type_name(current);
+
+    Text("Device");
+
+    SetNextItemWidth(GetContentRegionAvail().x);
+
+    if (BeginCombo("##usbdevice", current_name ? current_name : "None")) {
+        for (int i = 0; i < USB_DEVICE_TYPE_COUNT; i++) {
+            const char* name = ps2_usb_device_type_name(i);
+
+            if (Selectable(name, i == current)) {
+                iris->usb_devices[port] = i;
+
+                ps2_usb_set_port_device(iris->ps2->usb, port, i);
+            }
+        }
+
+        EndCombo();
+    }
+}
+
+void show_usb_settings(iris::instance* iris) {
+    using namespace ImGui;
+
+    if (BeginTabBar("##usbtabs")) {
+        if (BeginTabItem("Port 1")) {
+            show_usb_port(iris, 0);
+
+            EndTabItem();
+        }
+
+        if (BeginTabItem("Port 2")) {
+            show_usb_port(iris, 1);
+
+            EndTabItem();
+        }
+
+        EndTabBar();
+    }
+}
+
 void show_paths_settings(iris::instance* iris) {
     using namespace ImGui;
 
@@ -1780,7 +1826,8 @@ void show_settings(iris::instance* iris) {
                 case 3: show_shader_settings(iris); break;
                 case 4: show_input_settings(iris); break;
                 case 5: show_memory_card_settings(iris); break;
-                case 6: show_misc_settings(iris); break;
+                case 6: show_usb_settings(iris); break;
+                case 7: show_misc_settings(iris); break;
             }
         } EndChild();
 

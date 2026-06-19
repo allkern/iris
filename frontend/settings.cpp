@@ -171,6 +171,10 @@ bool parse_toml_settings(iris::instance* iris) {
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
     iris->timescale = debugger["timescale"].value_or(2);
 
+    auto usb = tbl["usb"];
+    iris->usb_devices[0] = usb["port1_device"].value_or(USB_DEVICE_NONE);
+    iris->usb_devices[1] = usb["port2_device"].value_or(USB_DEVICE_NONE);
+
     auto system = tbl["system"];
     iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
     iris->autostart = system["autostart"].value_or(true);
@@ -444,6 +448,9 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     ps2_speed_load_hdd(iris->ps2->speed, iris->hdd_path.c_str());
     ps2_speed_set_mac_address(iris->ps2->speed, iris->mac_address);
 
+    for (int i = 0; i < 2; i++)
+        ps2_usb_set_port_device(iris->ps2->usb, i, iris->usb_devices[i]);
+
     for (int i = 1; i < argc; i++) {
         std::string a(argv[i]);
 
@@ -496,6 +503,10 @@ void close(iris::instance* iris) {
             { "slot2_device", iris->input_devices[1] ? iris->input_devices[1]->get_type() : 0 },
             { "slot1_mapping", iris->input_map[0] },
             { "slot2_mapping", iris->input_map[1] }
+        } },
+        { "usb", toml::table {
+            { "port1_device", iris->usb_devices[0] },
+            { "port2_device", iris->usb_devices[1] }
         } },
         { "screenshots", toml::table {
             { "format", iris->screenshot_format },

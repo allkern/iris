@@ -228,6 +228,8 @@ target_sources(iris PRIVATE
     src/iop/spu2.c
     src/iop/timers.c
     src/iop/usb.c
+    src/iop/usb/device.c
+    src/iop/usb/kbd.c
     src/iop/disc/bin.c
     src/iop/disc/cue.c
     src/iop/disc/chd.c

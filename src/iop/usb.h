@@ -11,6 +11,8 @@ extern "C" {
 #include "scheduler.h"
 #include "bus_decl.h"
 
+#include "usb/device.h"
+
 #define OHCI_BASE 0x1f801600
 
 // The PS2 OHCI root hub exposes 2 downstream ports
@@ -40,35 +42,11 @@ extern "C" {
 #define USB_HC_RHSTATUS         0x50
 #define USB_HC_RHPORTSTATUS     0x54
 
-// Virtual USB device attached to a root hub port. We currently only model a
-// single HID boot-protocol keyboard, but the structure is kept generic enough
-// to grow more device types later.
-struct usb_device {
-    int connected;
-
-    // Assigned bus address (0 until SET_ADDRESS completes)
-    uint8_t address;
-    uint8_t pending_address;
-    uint8_t configuration;
-
-    // HID state
-    uint8_t protocol; // 0 = boot, 1 = report
-    uint8_t idle;
-    uint8_t led_state;
-
-    // Current 8-byte boot keyboard report: modifiers, reserved, 6 keycodes
-    uint8_t report[8];
-
-    // Set whenever the report changes so the interrupt IN endpoint knows it has
-    // something new to deliver (otherwise it NAKs).
-    int report_dirty;
-
-    // In-flight control transfer state (endpoint 0)
-    uint8_t ctrl_buf[256];
-    int ctrl_len;     // bytes available/expected in the data stage
-    int ctrl_offset;  // bytes already transferred in the data stage
-    int ctrl_dir_in;  // data stage direction (1 = device->host)
-    int ctrl_set_address; // SET_ADDRESS deferred until status stage
+// Device types selectable on a root hub port
+enum {
+    USB_DEVICE_NONE = 0,
+    USB_DEVICE_KEYBOARD,
+    USB_DEVICE_TYPE_COUNT
 };
 
 struct ps2_usb {
@@ -99,6 +77,10 @@ struct ps2_usb {
 
     struct usb_device device[OHCI_NUM_PORTS];
 
+    // Selected device type per port, preserved across resets
+    int device_type[OHCI_NUM_PORTS];
+    int configured;
+
     int frame_scheduled;
 
     struct ps2_iop_intc* intc;
@@ -112,10 +94,17 @@ void ps2_usb_destroy(struct ps2_usb* usb);
 uint64_t ps2_usb_read32(struct ps2_usb* usb, uint32_t addr);
 void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data);
 
-// Frontend input hook: set/clear a single HID usage key on the emulated
-// keyboard. usage is a USB HID Usage ID from the Keyboard/Keypad page (0x07),
-// which matches SDL3 scancodes directly. Modifier keys (0xE0-0xE7) update the
-// report's modifier byte; everything else updates the 6-key rollover array.
+// Human-readable name for a USB_DEVICE_* type, or NULL if out of range.
+const char* ps2_usb_device_type_name(int type);
+
+// Currently connected device type on a root hub port.
+int ps2_usb_get_port_device(struct ps2_usb* usb, int port);
+
+// Connect (or replace) the device on a root hub port. USB_DEVICE_NONE detaches.
+// The selection persists across resets and triggers re-enumeration.
+void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type);
+
+// Frontend input hook: forwards a key event to any connected keyboard.
 void ps2_usb_kbd_key(struct ps2_usb* usb, uint8_t usage, int pressed);
 
 #ifdef __cplusplus

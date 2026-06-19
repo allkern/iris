@@ -3,10 +3,11 @@
 #include <stdio.h>
 
 #include "usb.h"
+#include "usb/kbd.h"
 
 // Logging level:
 //   0 = off
-//   1 = config/enumeration/port/key/report events (low frequency)
+//   1 = config/enumeration/port events (low frequency)
 //   2 = everything, including per-frame periodic walks and interrupt NAK polls
 #define USB_DEBUG 0
 
@@ -85,128 +86,12 @@
 #define OHCI_CC_STALL          0x4
 #define OHCI_CC_DEVICENOTRESP  0x5
 
-// Internal USB packet identifiers (match the OHCI TD direction encoding)
-#define USB_PID_SETUP 0
-#define USB_PID_OUT   1
-#define USB_PID_IN    2
-
-// Device transfer return codes (>= 0 means that many bytes were transferred)
-#define USB_ACK_NAK   -1
-#define USB_ACK_STALL -2
-#define USB_ACK_NODEV -3
-
 // A USB frame is 1 ms. The scheduler is clocked at the EE clock (294.912 MHz).
 #define OHCI_FRAME_CYCLES 294912
 
 // HCCA layout offsets
 #define HCCA_FRAMENUMBER 0x80
 #define HCCA_DONEHEAD    0x84
-
-#define KBD_REPORT_DESC_LEN 63
-
-static const uint8_t kbd_report_desc[KBD_REPORT_DESC_LEN] = {
-    0x05, 0x01,       // Usage Page (Generic Desktop)
-    0x09, 0x06,       // Usage (Keyboard)
-    0xA1, 0x01,       // Collection (Application)
-    0x05, 0x07,       //   Usage Page (Keyboard/Keypad)
-    0x19, 0xE0,       //   Usage Minimum (224, Left Control)
-    0x29, 0xE7,       //   Usage Maximum (231, Right GUI)
-    0x15, 0x00,       //   Logical Minimum (0)
-    0x25, 0x01,       //   Logical Maximum (1)
-    0x75, 0x01,       //   Report Size (1)
-    0x95, 0x08,       //   Report Count (8)
-    0x81, 0x02,       //   Input (Data, Variable, Absolute)  ; modifier byte
-    0x95, 0x01,       //   Report Count (1)
-    0x75, 0x08,       //   Report Size (8)
-    0x81, 0x01,       //   Input (Constant)                  ; reserved byte
-    0x95, 0x05,       //   Report Count (5)
-    0x75, 0x01,       //   Report Size (1)
-    0x05, 0x08,       //   Usage Page (LEDs)
-    0x19, 0x01,       //   Usage Minimum (1)
-    0x29, 0x05,       //   Usage Maximum (5)
-    0x91, 0x02,       //   Output (Data, Variable, Absolute) ; LED report
-    0x95, 0x01,       //   Report Count (1)
-    0x75, 0x03,       //   Report Size (3)
-    0x91, 0x01,       //   Output (Constant)                 ; LED padding
-    0x95, 0x06,       //   Report Count (6)
-    0x75, 0x08,       //   Report Size (8)
-    0x15, 0x00,       //   Logical Minimum (0)
-    0x25, 0x65,       //   Logical Maximum (101)
-    0x05, 0x07,       //   Usage Page (Keyboard/Keypad)
-    0x19, 0x00,       //   Usage Minimum (0)
-    0x29, 0x65,       //   Usage Maximum (101)
-    0x81, 0x00,       //   Input (Data, Array)               ; 6 key codes
-    0xC0              // End Collection
-};
-
-static const uint8_t kbd_device_desc[18] = {
-    18, 0x01,         // bLength, bDescriptorType (DEVICE)
-    0x10, 0x01,       // bcdUSB 1.10
-    0x00,             // bDeviceClass
-    0x00,             // bDeviceSubClass
-    0x00,             // bDeviceProtocol
-    0x08,             // bMaxPacketSize0
-    0x6D, 0x04,       // idVendor  (0x046D)
-    0x12, 0xC3,       // idProduct (0xC312)
-    0x00, 0x01,       // bcdDevice 1.00
-    0x01,             // iManufacturer
-    0x02,             // iProduct
-    0x00,             // iSerialNumber
-    0x01              // bNumConfigurations
-};
-
-// HID class descriptor (also embedded inside the configuration descriptor)
-static const uint8_t kbd_hid_desc[9] = {
-    9, 0x21,          // bLength, bDescriptorType (HID)
-    0x10, 0x01,       // bcdHID 1.10
-    0x00,             // bCountryCode
-    0x01,             // bNumDescriptors
-    0x22,             // bDescriptorType (Report)
-    KBD_REPORT_DESC_LEN & 0xff, (KBD_REPORT_DESC_LEN >> 8) & 0xff
-};
-
-static const uint8_t kbd_config_desc[34] = {
-    // Configuration descriptor
-    9, 0x02,
-    34, 0x00,         // wTotalLength
-    0x01,             // bNumInterfaces
-    0x01,             // bConfigurationValue
-    0x00,             // iConfiguration
-    0xA0,             // bmAttributes (bus powered, remote wakeup)
-    50,               // bMaxPower (100 mA)
-    // Interface descriptor
-    9, 0x04,
-    0x00,             // bInterfaceNumber
-    0x00,             // bAlternateSetting
-    0x01,             // bNumEndpoints
-    0x03,             // bInterfaceClass (HID)
-    0x01,             // bInterfaceSubClass (Boot)
-    0x01,             // bInterfaceProtocol (Keyboard)
-    0x00,             // iInterface
-    // HID descriptor
-    9, 0x21,
-    0x10, 0x01,       // bcdHID 1.10
-    0x00,             // bCountryCode
-    0x01,             // bNumDescriptors
-    0x22,             // bDescriptorType (Report)
-    KBD_REPORT_DESC_LEN & 0xff, (KBD_REPORT_DESC_LEN >> 8) & 0xff,
-    // Endpoint descriptor (interrupt IN, endpoint 1)
-    7, 0x05,
-    0x81,             // bEndpointAddress (IN, EP1)
-    0x03,             // bmAttributes (Interrupt)
-    0x08, 0x00,       // wMaxPacketSize
-    0x0A              // bInterval (10 ms)
-};
-
-static const uint8_t kbd_string0[4] = { 4, 0x03, 0x09, 0x04 }; // LangID English (US)
-static const uint8_t kbd_string1[10] = {
-    10, 0x03, 'i', 0, 'r', 0, 'i', 0, 's', 0
-};
-static const uint8_t kbd_string2[28] = {
-    28, 0x03,
-    'i', 0, 'r', 0, 'i', 0, 's', 0, ' ', 0,
-    'K', 0, 'e', 0, 'y', 0, 'b', 0, 'o', 0, 'a', 0, 'r', 0, 'd', 0
-};
 
 static inline uint32_t ohci_read_dword(struct ps2_usb* usb, uint32_t addr) {
     return iop_bus_read32(usb->bus, addr);
@@ -224,210 +109,6 @@ static void ohci_read_buf(struct ps2_usb* usb, uint32_t addr, uint8_t* buf, int 
 static void ohci_write_buf(struct ps2_usb* usb, uint32_t addr, const uint8_t* buf, int len) {
     for (int i = 0; i < len; i++)
         iop_bus_write8(usb->bus, addr + i, buf[i]);
-}
-
-static int usb_kbd_get_descriptor(struct usb_device* dev, uint16_t value, uint16_t length) {
-    int type = value >> 8;
-    int index = value & 0xff;
-    const uint8_t* src = NULL;
-    int len = 0;
-
-    switch (type) {
-        case 0x01: src = kbd_device_desc; len = sizeof(kbd_device_desc); break;
-        case 0x02: src = kbd_config_desc; len = sizeof(kbd_config_desc); break;
-        case 0x21: src = kbd_hid_desc;    len = sizeof(kbd_hid_desc);    break;
-        case 0x22: src = kbd_report_desc; len = sizeof(kbd_report_desc); break;
-        case 0x03:
-            switch (index) {
-                case 0: src = kbd_string0; len = sizeof(kbd_string0); break;
-                case 1: src = kbd_string1; len = sizeof(kbd_string1); break;
-                case 2: src = kbd_string2; len = sizeof(kbd_string2); break;
-                default:
-                    usb_log("GET_DESCRIPTOR: unknown string index %d\n", index);
-                    return 0;
-            }
-            break;
-        default:
-            usb_log("GET_DESCRIPTOR: unknown type %02x index %d\n", type, index);
-            return 0;
-    }
-
-    usb_log("GET_DESCRIPTOR type=%02x index=%d -> %d bytes (host asked %d)\n",
-        type, index, len, length);
-
-    (void)length;
-
-    if (len > (int)sizeof(dev->ctrl_buf))
-        len = sizeof(dev->ctrl_buf);
-
-    memcpy(dev->ctrl_buf, src, len);
-
-    return len;
-}
-
-static void usb_kbd_complete_status(struct usb_device* dev) {
-    if (dev->ctrl_set_address) {
-        dev->address = dev->pending_address;
-        dev->ctrl_set_address = 0;
-
-        usb_log("device address set to %d\n", dev->address);
-    }
-}
-
-static int usb_kbd_control(struct usb_device* dev, int pid, uint8_t* buf, int len) {
-    if (pid == USB_PID_SETUP) {
-        if (len < 8)
-            return USB_ACK_STALL;
-
-        uint8_t  bmRequestType = buf[0];
-        uint8_t  bRequest      = buf[1];
-        uint16_t wValue        = buf[2] | (buf[3] << 8);
-        uint16_t wIndex        = buf[4] | (buf[5] << 8);
-        uint16_t wLength       = buf[6] | (buf[7] << 8);
-
-        usb_log("SETUP bmRequestType=%02x bRequest=%02x wValue=%04x wIndex=%04x wLength=%d\n",
-            bmRequestType, bRequest, wValue, wIndex, wLength);
-
-        dev->ctrl_offset = 0;
-        dev->ctrl_len = 0;
-        dev->ctrl_dir_in = (bmRequestType & 0x80) != 0;
-        dev->ctrl_set_address = 0;
-
-        int type = (bmRequestType >> 5) & 3; // 0 = standard, 1 = class
-
-        if (type == 0) {
-            switch (bRequest) {
-                case 0x00: // GET_STATUS
-                    dev->ctrl_buf[0] = 0;
-                    dev->ctrl_buf[1] = 0;
-                    dev->ctrl_len = 2;
-                    break;
-                case 0x01: // CLEAR_FEATURE
-                case 0x03: // SET_FEATURE
-                    break;
-                case 0x05: // SET_ADDRESS
-                    dev->pending_address = wValue & 0x7f;
-                    dev->ctrl_set_address = 1;
-                    break;
-                case 0x06: // GET_DESCRIPTOR
-                    dev->ctrl_len = usb_kbd_get_descriptor(dev, wValue, wLength);
-                    break;
-                case 0x08: // GET_CONFIGURATION
-                    dev->ctrl_buf[0] = dev->configuration;
-                    dev->ctrl_len = 1;
-                    break;
-                case 0x09: // SET_CONFIGURATION
-                    dev->configuration = wValue & 0xff;
-                    break;
-                case 0x0a: // GET_INTERFACE
-                    dev->ctrl_buf[0] = 0;
-                    dev->ctrl_len = 1;
-                    break;
-                case 0x0b: // SET_INTERFACE
-                    break;
-                default:
-                    usb_log("STALL: unsupported standard request %02x\n", bRequest);
-                    return USB_ACK_STALL;
-            }
-        } else if (type == 1) {
-            // HID class requests
-            switch (bRequest) {
-                case 0x01: // GET_REPORT
-                    memcpy(dev->ctrl_buf, dev->report, 8);
-                    dev->ctrl_len = 8;
-                    break;
-                case 0x02: // GET_IDLE
-                    dev->ctrl_buf[0] = dev->idle;
-                    dev->ctrl_len = 1;
-                    break;
-                case 0x03: // GET_PROTOCOL
-                    dev->ctrl_buf[0] = dev->protocol;
-                    dev->ctrl_len = 1;
-                    break;
-                case 0x09: // SET_REPORT (OUT data: LED state)
-                    dev->ctrl_len = wLength;
-                    break;
-                case 0x0a: // SET_IDLE
-                    dev->idle = (wValue >> 8) & 0xff;
-                    break;
-                case 0x0b: // SET_PROTOCOL
-                    dev->protocol = wValue & 0xff;
-                    break;
-                default:
-                    usb_log("STALL: unsupported class request %02x\n", bRequest);
-                    return USB_ACK_STALL;
-            }
-        } else {
-            usb_log("STALL: unsupported request type %d (bmRequestType=%02x)\n", type, bmRequestType);
-            return USB_ACK_STALL;
-        }
-
-        // For IN data, never return more than the host asked for
-        if (dev->ctrl_dir_in && dev->ctrl_len > wLength)
-            dev->ctrl_len = wLength;
-
-        return 8;
-    }
-
-    if (pid == USB_PID_IN) {
-        if (dev->ctrl_dir_in && dev->ctrl_offset < dev->ctrl_len) {
-            int n = dev->ctrl_len - dev->ctrl_offset;
-            if (n > len) n = len;
-            memcpy(buf, dev->ctrl_buf + dev->ctrl_offset, n);
-            dev->ctrl_offset += n;
-            return n;
-        }
-
-        // Zero-length IN == status stage of an OUT/no-data control transfer
-        usb_kbd_complete_status(dev);
-        return 0;
-    }
-
-    if (pid == USB_PID_OUT) {
-        if (!dev->ctrl_dir_in && dev->ctrl_offset < dev->ctrl_len) {
-            // Data stage of a control write (e.g. SET_REPORT LED state)
-            if (len > 0)
-                dev->led_state = buf[0];
-            dev->ctrl_offset += len;
-            return len;
-        }
-
-        // Zero-length OUT == status stage of an IN control transfer
-        usb_kbd_complete_status(dev);
-        return 0;
-    }
-
-    return USB_ACK_STALL;
-}
-
-static int usb_kbd_interrupt_in(struct usb_device* dev, uint8_t* buf, int len) {
-    // Boot keyboards only report on state change, NAK otherwise
-    if (!dev->report_dirty) {
-        usb_logv("EP1 IN poll: NAK (no new report)\n");
-        return USB_ACK_NAK;
-    }
-
-    int n = 8;
-    if (n > len) n = len;
-
-    memcpy(buf, dev->report, n);
-    dev->report_dirty = 0;
-
-    usb_log("EP1 IN: delivering report %02x %02x %02x %02x %02x %02x %02x %02x (n=%d)\n",
-        dev->report[0], dev->report[1], dev->report[2], dev->report[3],
-        dev->report[4], dev->report[5], dev->report[6], dev->report[7], n);
-
-    return n;
-}
-
-static int usb_device_transfer(struct usb_device* dev, int pid, int ep, uint8_t* buf, int len) {
-    if (ep == 0)
-        return usb_kbd_control(dev, pid, buf, len);
-
-    if (ep == 1 && pid == USB_PID_IN)
-        return usb_kbd_interrupt_in(dev, buf, len);
-
-    return USB_ACK_STALL;
 }
 
 static void ohci_update_irq(struct ps2_usb* usb) {
@@ -722,10 +403,7 @@ static void ohci_port_write(struct ps2_usb* usb, int port, uint32_t data) {
 
     if ((data & OHCI_PORT_PRS) && (*ps & OHCI_PORT_CCS)) {
         // SetPortReset: a port reset returns the device to the default address
-        usb->device[port].address = 0;
-        usb->device[port].configuration = 0;
-        usb->device[port].pending_address = 0;
-        usb->device[port].ctrl_set_address = 0;
+        usb_device_reset(&usb->device[port]);
 
         *ps &= ~OHCI_PORT_PRS;
         *ps |= OHCI_PORT_PES | OHCI_PORT_PRSC;
@@ -746,27 +424,70 @@ static void ohci_port_write(struct ps2_usb* usb, int port, uint32_t data) {
                      OHCI_PORT_OCIC | OHCI_PORT_PRSC));
 }
 
-static void ohci_attach(struct ps2_usb* usb, int port) {
+static const struct {
+    const char* name;
+    void (*create)(struct usb_device* dev);
+} usb_device_types[USB_DEVICE_TYPE_COUNT] = {
+    [USB_DEVICE_NONE]     = { "None", NULL },
+    [USB_DEVICE_KEYBOARD] = { "Keyboard", usb_kbd_create },
+};
+
+const char* ps2_usb_device_type_name(int type) {
+    if (type < 0 || type >= USB_DEVICE_TYPE_COUNT)
+        return NULL;
+
+    return usb_device_types[type].name;
+}
+
+int ps2_usb_get_port_device(struct ps2_usb* usb, int port) {
+    if (port < 0 || port >= OHCI_NUM_PORTS)
+        return USB_DEVICE_NONE;
+
+    return usb->device_type[port];
+}
+
+void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type) {
+    if (port < 0 || port >= OHCI_NUM_PORTS)
+        return;
+
+    if (type < 0 || type >= USB_DEVICE_TYPE_COUNT)
+        return;
+
     struct usb_device* dev = &usb->device[port];
 
-    memset(dev, 0, sizeof(*dev));
-    dev->connected = 1;
-    dev->protocol = 1; // HID devices default to report protocol
+    // Tear down whatever is currently connected
+    usb_device_free(dev);
 
-    // Full-speed device present and powered; flag the connect status change
-    usb->hc_rh_port_status[port] = OHCI_PORT_CCS | OHCI_PORT_PPS | OHCI_PORT_CSC;
+    usb->device_type[port] = type;
+
+    if (usb_device_types[type].create) {
+        usb_device_types[type].create(dev);
+
+        // Device present and powered; flag the connect status change
+        usb->hc_rh_port_status[port] = OHCI_PORT_CCS | OHCI_PORT_PPS | OHCI_PORT_CSC;
+    } else {
+        // Port emptied; clear connect status and flag the change
+        usb->hc_rh_port_status[port] = OHCI_PORT_PPS | OHCI_PORT_CSC;
+    }
 
     ohci_set_interrupt(usb, OHCI_INTR_RHSC);
 
-    usb_log("keyboard attached to root hub port %d (status=%08x)\n",
-        port, usb->hc_rh_port_status[port]);
+    usb_log("port %d device set to %s (status=%08x)\n",
+        port, usb_device_types[type].name, usb->hc_rh_port_status[port]);
 }
 
 struct ps2_usb* ps2_usb_create(void) {
-    return malloc(sizeof(struct ps2_usb));
+    return calloc(1, sizeof(struct ps2_usb));
 }
 
 void ps2_usb_init(struct ps2_usb* usb, struct ps2_iop_intc* intc, struct iop_bus* bus, struct sched_state* sched) {
+    // The port device selection survives a reset
+    int configured = usb->configured;
+    int device_type[OHCI_NUM_PORTS];
+
+    for (int i = 0; i < OHCI_NUM_PORTS; i++)
+        device_type[i] = usb->device_type[i];
+
     memset(usb, 0, sizeof(struct ps2_usb));
 
     usb->intc = intc;
@@ -782,13 +503,26 @@ void ps2_usb_init(struct ps2_usb* usb, struct ps2_iop_intc* intc, struct iop_bus
     usb->hc_rh_descriptor_b = 0;
     usb->hc_rh_status = 0;
 
-    // Attach a keyboard to the first root hub port
-    ohci_attach(usb, 0);
+    if (!configured) {
+        // Default configuration: a keyboard on the first port
+        device_type[0] = USB_DEVICE_KEYBOARD;
+
+        for (int i = 1; i < OHCI_NUM_PORTS; i++)
+            device_type[i] = USB_DEVICE_NONE;
+    }
+
+    usb->configured = 1;
+
+    for (int i = 0; i < OHCI_NUM_PORTS; i++)
+        ps2_usb_set_port_device(usb, i, device_type[i]);
 
     ohci_schedule_frame(usb);
 }
 
 void ps2_usb_destroy(struct ps2_usb* usb) {
+    for (int i = 0; i < OHCI_NUM_PORTS; i++)
+        usb_device_free(&usb->device[i]);
+
     free(usb);
 }
 
@@ -957,72 +691,8 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
 }
 
 void ps2_usb_kbd_key(struct ps2_usb* usb, uint8_t usage, int pressed) {
-    struct usb_device* dev = &usb->device[0];
-
-    usb_log("kbd_key usage=%02x pressed=%d (connected=%d address=%d config=%d)\n",
-        usage, pressed, dev->connected, dev->address, dev->configuration);
-
-    if (!dev->connected)
-        return;
-
-    uint8_t* report = dev->report;
-
-    // Modifier keys (Left Ctrl .. Right GUI) live in the modifier bitmap
-    if (usage >= 0xE0 && usage <= 0xE7) {
-        uint8_t bit = 1 << (usage - 0xE0);
-        uint8_t old = report[0];
-
-        if (pressed)
-            report[0] |= bit;
-        else
-            report[0] &= ~bit;
-
-        if (report[0] != old)
-            dev->report_dirty = 1;
-
-        return;
-    }
-
-    if (usage == 0)
-        return;
-
-    if (pressed) {
-        // Ignore if already held
-        for (int i = 2; i < 8; i++)
-            if (report[i] == usage)
-                return;
-
-        // Insert into the first free rollover slot
-        for (int i = 2; i < 8; i++) {
-            if (report[i] == 0) {
-                report[i] = usage;
-                dev->report_dirty = 1;
-                return;
-            }
-        }
-    } else {
-        int found = 0;
-
-        for (int i = 2; i < 8; i++) {
-            if (report[i] == usage) {
-                report[i] = 0;
-                found = 1;
-            }
-        }
-
-        if (found) {
-            // Compact the array so held keys stay contiguous
-            uint8_t keys[6];
-            int n = 0;
-
-            for (int i = 2; i < 8; i++)
-                if (report[i])
-                    keys[n++] = report[i];
-
-            for (int i = 0; i < 6; i++)
-                report[i + 2] = (i < n) ? keys[i] : 0;
-
-            dev->report_dirty = 1;
-        }
+    for (int i = 0; i < OHCI_NUM_PORTS; i++) {
+        if (usb->device_type[i] == USB_DEVICE_KEYBOARD)
+            usb_kbd_key(&usb->device[i], usage, pressed);
     }
 }
