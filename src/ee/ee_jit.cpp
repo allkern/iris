@@ -493,6 +493,22 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
 #define EE_CACHE_PAGECOUNT (0x20000000 / EE_MIN_PAGESIZE)
 
+void ee_purge_cache(struct ee_state* ee) {
+    for (int i = 0; i < EE_CACHE_PAGECOUNT; i++) {
+        ee->block_cache[i].dirty = true;
+        ee->block_cache[i].valid = false;
+
+        if (ee->block_cache[i].blocks) {
+            delete[] ee->block_cache[i].blocks;
+
+            ee->block_cache[i].blocks = nullptr;
+        }
+    }
+
+    ee->last_block_lookup_pc = ~0u;
+    ee->last_block_ptr = nullptr;
+}
+
 static inline bool ee_is_executable_region(uint32_t addr) {
     // EE should only ever execute from RAM (and its mirrors), and the BIOS
     return addr < 0x8000000 || (addr >= 0x1fc00000 && addr < 0x20000000);
@@ -3174,6 +3190,15 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
             return;
         } break;
 
+        // LoadPS2
+        // LoadExecPS2
+        case 0x06:
+        case 0x07: {
+            // Note: This prevents keeping stale cache blocks
+            //       stored in memory when switching games/software.
+            // ee_purge_cache(ee);
+        } break;
+
         // FlushCache
         case 0x64: {
             // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
@@ -4316,6 +4341,13 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
             max_cycles = 1;
         }
 
+        // Arbitrarily big number for MMI instructions, perf benefits from
+        // long MMI sequences, keeping guest SIMD regs in host SIMD regs
+        // longer is good
+        // if (i.cycles == EE_CYC_MMI_DEFAULT && !delay_slot) {
+        //     max_cycles = 16;
+        // }
+
         max_cycles--;
 
         block.end_pc += 4;
@@ -4410,6 +4442,35 @@ static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniComp
     }
 }
 
+static inline void ee_sext32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& dst, const asmjit::ujit::Gp& src) {
+#if defined(ASMJIT_UJIT_AARCH64)
+    uc.cc->sxtw(dst.r64(), src.r32());
+#else
+    uc.cc->movsxd(dst.r64(), src.r32());
+#endif
+}
+
+static inline void ee_sext32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& reg) {
+    ee_sext32(uc, reg, reg);
+}
+
+static inline void ee_sextn(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& reg, uint32_t bits) {
+    uint32_t shift = 64u - bits;
+
+    uc.shl(reg.r64(), reg.r64(), asmjit::Imm(shift));
+    uc.sar(reg.r64(), reg.r64(), asmjit::Imm(shift));
+}
+
+static inline void ee_load_reg_vec128(struct ee_state* ee, asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Vec& dst, int idx) {
+    using namespace asmjit;
+
+    uc.v_loadu128(dst, EE(r[idx]));
+
+    if (ee->reg_cache[idx].valid) {
+        uc.s_insert_u64(dst, ee->reg_cache[idx].reg, 0);
+    }
+}
+
 void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     using namespace asmjit;
 
@@ -4447,7 +4508,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
 
                     uc.add(rt.reg, rs.reg, Imm((int32_t)(int16_t)i.i16));
-                    bc.movsxd(rt.reg, rt.reg);
+
+                    ee_sext32(uc, rt.reg);
                 }
             } break;
 
@@ -4457,7 +4519,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
 
                 uc.load_u32(rt.reg, EE(cop0_r[i.rd.r]));
-                bc.movsxd(rt.reg, rt.reg);
+
+                ee_sext32(uc, rt.reg);
             } break;
 
             case EE_I_MTC0: {
@@ -4477,7 +4540,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
                 uc.sub(rd.reg, rs.reg, rt.reg);
-                bc.movsxd(rd.reg, rd.reg);
+
+                ee_sext32(uc, rd.reg);
             } break;
 
             case EE_I_ANDI:
@@ -4541,12 +4605,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
                 ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                ujit::Gp tmp = uc.new_gp64();
 
-                uc.mov(tmp, Imm(0));
-                bc.cmp(rs.reg, rt.reg);
-                bc.setl(tmp);
-                uc.mov(rd.reg, tmp);
+                uc.select(rd.reg, Imm(1), Imm(0), ujit::scmp_lt(rs.reg, rt.reg));
             } break;
 
             case EE_I_SLTU: {
@@ -4557,12 +4617,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
                 ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                ujit::Gp tmp = uc.new_gp64();
 
-                uc.mov(tmp, Imm(0));
-                bc.cmp(rs.reg, rt.reg);
-                bc.setb(tmp);
-                uc.mov(rd.reg, tmp);
+                uc.select(rd.reg, Imm(1), Imm(0), ujit::ucmp_lt(rs.reg, rt.reg));
             } break;
 
             case EE_I_SLTI: {
@@ -4572,12 +4628,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
                 ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                ujit::Gp tmp = uc.new_gp64();
 
-                uc.mov(tmp, Imm(0));
-                bc.cmp(rs.reg, Imm((int64_t)(int16_t)i.i16));
-                bc.setl(tmp);
-                uc.mov(rt.reg, tmp);
+                uc.select(rt.reg, Imm(1), Imm(0), ujit::scmp_lt(rs.reg, Imm((int64_t)(int16_t)i.i16)));
             } break;
 
             case EE_I_SLTIU: {
@@ -4587,7 +4639,6 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
                 ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                ujit::Gp tmp = uc.new_gp64();
 
                 if (i.rs.r == 0) {
                     uc.mov(rt.reg, Imm(0ull < ((int64_t)(int16_t)i.i16)));
@@ -4595,10 +4646,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     continue;
                 }
 
-                uc.mov(tmp, Imm(0));
-                bc.cmp(rs.reg, Imm((int64_t)(int16_t)i.i16));
-                bc.setb(tmp);
-                uc.mov(rt.reg, tmp);
+                uc.select(rt.reg, Imm(1), Imm(0), ujit::ucmp_lt(rs.reg, Imm((int64_t)(int16_t)i.i16)));
             } break;
 
             case EE_I_CACHE:
@@ -4614,8 +4662,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 Label L0 = uc.new_label();
 
-                bc.cmp(rt.reg, rs.reg);
-                bc.je(L0);
+                uc.j(L0, ujit::cmp_eq(rt.reg, rs.reg));
 
                 ujit::Gp tmp = uc.new_gp32();
 
@@ -4642,8 +4689,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 Label L0 = uc.new_label();
 
-                bc.cmp(rt.reg, rs.reg);
-                bc.jne(L0);
+                uc.j(L0, ujit::cmp_ne(rt.reg, rs.reg));
 
                 ujit::Gp tmp = uc.new_gp32();
 
@@ -4694,7 +4740,6 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             case EE_I_JAL: {
                 ee_cached_reg& ra = ee_get_reg(ee, &uc, 31, false);
 
-                // uc.mov(ra, Imm(0));
                 uc.load_u32(ra.reg, EE(next_pc));
 
                 ujit::Gp tmp = uc.new_gp32();
@@ -4707,8 +4752,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ujit::Gp skip_fmv = uc.new_gp32();
 
                 uc.load_u32(skip_fmv, EE(fmv_skip));
-                bc.cmp(skip_fmv, Imm(0));
-                bc.je(L0);
+                uc.j(L0, ujit::test_z(skip_fmv));
 
                 InvokeNode* invoke_node;
 
@@ -4722,8 +4766,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 invoke_node->set_arg(1, tmp);
                 invoke_node->set_ret(0, skip_fmv);
 
-                bc.cmp(skip_fmv, Imm(0));
-                bc.jne(L1);
+                uc.j(L1, ujit::test_nz(skip_fmv));
 
                 uc.bind(L0);
                 uc.store_u32(EE(next_pc), tmp);
@@ -4755,7 +4798,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
 
                 uc.shl(rd.reg, rt.reg, Imm(i.sa));
-                bc.movsxd(rd.reg, rd.reg);
+
+                ee_sext32(uc, rd.reg);
             } break;
 
             case EE_I_SRL: {
@@ -4784,7 +4828,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ujit::Gp tmp2 = rt.reg.r32();
 
                 uc.sar(tmp1, tmp2, Imm(i.sa));
-                bc.movsxd(rd.reg, tmp1);
+
+                ee_sext32(uc, rd.reg, tmp1);
             } break;
 
             case EE_I_SLLV: {
@@ -4800,7 +4845,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 uc.and_(tmp, rs.reg, Imm(0x1F));
                 uc.shl(rd.reg, rt.reg, tmp);
-                bc.movsxd(rd.reg, rd.reg);
+
+                ee_sext32(uc, rd.reg);
             } break;
 
             case EE_I_SRLV: {
@@ -4819,7 +4865,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 uc.and_(tmp, rs32, Imm(0x1F));
                 uc.shr(rd32, rt32, tmp);
-                bc.movsxd(rd.reg, rd32);
+
+                ee_sext32(uc, rd.reg, rd32);
             } break;
 
             case EE_I_SRAV: {
@@ -4838,7 +4885,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 uc.and_(tmp, rs32, Imm(0x1F));
                 uc.sar(rd32, rt32, tmp);
-                bc.movsxd(rd.reg, rd32);
+
+                ee_sext32(uc, rd.reg, rd32);
             } break;
 
             case EE_I_DSLL:
@@ -4894,7 +4942,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 uc.mov(rt.reg, Imm((int64_t)(int32_t)(i.i16 << 16)));
 
                 if (i.i16 & 0x8000) {
-                    bc.movsxd(rt.reg, rt.reg);
+                    ee_sext32(uc, rt.reg);
                 }
             } break;
 
@@ -4954,19 +5002,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 invoke_node->set_arg(1, tmp);
                 invoke_node->set_ret(0, rt.reg);
 
-
                 if (i.id != EE_I_LD) {
                     switch (i.id) {
-                        case EE_I_LB: {
-                            bc.cbw(rt.reg);
-                        } // Fallthrough
-
-                        case EE_I_LH: {
-                            bc.cwde(rt.reg);
-                        } break;
+                        case EE_I_LB: ee_sextn(uc, rt.reg, 8); break;
+                        case EE_I_LH: ee_sextn(uc, rt.reg, 16); break;
+                        case EE_I_LW: ee_sext32(uc, rt.reg); break;
                     }
-
-                    bc.movsxd(rt.reg, rt.reg);
                 }
             } break;
 
@@ -5170,19 +5211,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ujit::Vec vrt = uc.new_vec128();
                 ujit::Vec vrd = uc.new_vec128();
 
-                if (ee->reg_cache[i.rs.r].valid) {
-                    bc.movq(vrs, ee->reg_cache[i.rs.r].reg);
-                    bc.movhps(vrs, EE(r[i.rs.r].u64[1]));
-                } else {
-                    uc.v_loadu128(vrs, EE(r[i.rs.r]));
-                }
-
-                if (ee->reg_cache[i.rt.r].valid) {
-                    bc.movq(vrt, ee->reg_cache[i.rt.r].reg);
-                    bc.movhps(vrt, EE(r[i.rt.r].u64[1]));
-                } else {
-                    uc.v_loadu128(vrt, EE(r[i.rt.r]));
-                }
+                ee_load_reg_vec128(ee, uc, vrs, i.rs.r);
+                ee_load_reg_vec128(ee, uc, vrt, i.rt.r);
 
                 switch (i.id) {
                     case EE_I_PADDB: uc.v_add_u8(vrd, vrs, vrt); break;
@@ -5218,12 +5248,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 ujit::Vec vrt = uc.new_vec128();
                 ujit::Vec vrd = uc.new_vec128();
 
-                if (ee->reg_cache[i.rt.r].valid) {
-                    bc.movq(vrt, ee->reg_cache[i.rt.r].reg);
-                    bc.movhps(vrt, EE(r[i.rt.r].u64[1]));
-                } else {
-                    uc.v_loadu128(vrt, EE(r[i.rt.r]));
-                }
+                ee_load_reg_vec128(ee, uc, vrt, i.rt.r);
 
                 switch (i.id) {
                     case EE_I_PSLLH: uc.v_slli_u16(vrd, vrt, i.sa & 0xf); break;
@@ -5262,7 +5287,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 uc.mov(rt.reg, Imm((int64_t)(int32_t)i.i16));
 
                 if (i.i16 & 0x80000000) {
-                    bc.movsxd(rt.reg, rt.reg);
+                    ee_sext32(uc, rt.reg);
                 }
             } break;
 
@@ -5284,7 +5309,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.add(rd.reg, rs.reg, rt.reg);
                 }
 
-                bc.movsxd(rd.reg, rd.reg);
+                ee_sext32(uc, rd.reg);
             } break;
 
             case EE_I_DADDU: {
@@ -5340,13 +5365,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                 Label L0 = uc.new_label();
 
-#if defined(ASMJIT_UJIT_AARCH64)
-                bc.cmp(rs, rt);
-                bc.beq(rs);
-#elif defined(ASMJIT_UJIT_X86)
-                bc.cmp(exception, Imm(0));
-                bc.je(L0);
-#endif
+                uc.j(L0, ujit::test_z(exception));
                 uc.mov(exception, Imm(0));
                 uc.store_u32(exception_ptr, exception);
                 uc.ret();
