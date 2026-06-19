@@ -7,12 +7,12 @@
 #include <math.h>
 #include <fenv.h>
 
-// #ifdef _EE_USE_INTRINSICS
+#ifdef _EE_USE_INTRINSICS
 #include <immintrin.h>
 #include <tmmintrin.h>
 #include <emmintrin.h>
 #include <smmintrin.h>
-// #endif
+#endif
 
 #include "ee.h"
 #include "vu.h"
@@ -584,11 +584,11 @@ static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
     return ee->bus.read128(ee->bus.udata, phys);
 }
 
-static inline __m128i bus_read128_sse(struct ee_state* ee, uint32_t addr) {
-    uint128_t result = bus_read128(ee, addr);
+// static inline __m128i bus_read128_sse(struct ee_state* ee, uint32_t addr) {
+//     uint128_t result = bus_read128(ee, addr);
 
-    return _mm_load_si128((__m128i*)&result);
-}
+//     return _mm_load_si128((__m128i*)&result);
+// }
 
 BUS_WRITE_FUNC(8)
 BUS_WRITE_FUNC(16)
