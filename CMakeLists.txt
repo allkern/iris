@@ -75,6 +75,12 @@ set(USE_NGHTTP2 OFF CACHE BOOL "" FORCE)
 set(CURL_ZLIB OFF CACHE BOOL "" FORCE)
 set(CURL_ZSTD OFF CACHE BOOL "" FORCE)
 set(CURL_USE_LIBPSL OFF CACHE BOOL "" FORCE)
+# These optional deps default to ON and get auto-linked whenever curl finds them
+# on the system. On the macOS runner they resolve to single-arch Homebrew dylibs
+# (libssh2, libidn2), which cannot link into the universal build, so disable them.
+set(CURL_USE_LIBSSH2 OFF CACHE BOOL "" FORCE)
+set(CURL_USE_LIBSSH OFF CACHE BOOL "" FORCE)
+set(USE_LIBIDN2 OFF CACHE BOOL "" FORCE)
 set(CURL_LTO ON)
 set(CURL_ENABLE_SSL ON)
 set(BUILD_STATIC_LIBS ON)
