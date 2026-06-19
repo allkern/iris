@@ -24,6 +24,13 @@ jobs:
         libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
         libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libfuse2t64
 
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install mbedTLS codegen deps
+      run: pip install -r deps/mbedtls/scripts/basic.requirements.txt
+
     - name: Build and pack Iris
       run: |
         git fetch --all --tags

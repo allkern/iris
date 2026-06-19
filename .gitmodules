@@ -42,3 +42,7 @@
 [submodule "deps/miniz"]
 	path = deps/miniz
 	url = https://github.com/richgel999/miniz
+[submodule "deps/mbedtls"]
+	path = deps/mbedtls
+	url = https://github.com/Mbed-TLS/mbedtls
+	branch = mbedtls-3.6
