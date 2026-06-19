@@ -704,6 +704,11 @@ static inline void cdvd_s_notice_game_start(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 0;
 }
+static inline void cdvd_s_psx_unk_remote_2b(struct ps2_cdvd* cdvd) {
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
 static inline void cdvd_s_psx_unk_remote_2c(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
 
@@ -755,6 +760,7 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
         case 0x29: printf("cdvd: notice_game_start\n"); cdvd_s_notice_game_start(cdvd); break;
 
         // No idea what this is, used by PSX DESR
+        case 0x2b: printf("cdvd: psx_unk_remote_2b\n"); cdvd_s_psx_unk_remote_2b(cdvd); break;
         case 0x2c: printf("cdvd: psx_unk_remote_2c\n"); cdvd_s_psx_unk_remote_2c(cdvd); break;
         case 0x31: printf("cdvd: set_medium_removal\n"); cdvd_s_set_medium_removal(cdvd); break;
         case 0x32: printf("cdvd: get_medium_removal\n"); cdvd_s_get_medium_removal(cdvd); break;
