@@ -485,6 +485,40 @@ void iop_dma_handle_dev9_acata_transfer(struct ps2_iop_dma* dma) {
     dma->channels[IOP_DMA_DEV9].chcr &= ~0x1000000;
 }
 
+void iop_dma_handle_dev9_smap_transfer(struct ps2_iop_dma* dma) {
+    int dir = dma->channels[IOP_DMA_DEV9].chcr & 1;
+
+    if (dir) {
+        // Memory -> SMAP TX FIFO. The frame is discarded (no host backend).
+        while (dma->channels[IOP_DMA_DEV9].transfer_size) {
+            uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_DEV9].madr);
+
+            ps2_smap_fifo_write(dma->speed->smap, d);
+
+            dma->channels[IOP_DMA_DEV9].madr += 4;
+            dma->channels[IOP_DMA_DEV9].transfer_size -= 4;
+        }
+    } else {
+        // SMAP RX FIFO -> memory. Nothing is ever queued, so this drains zeroes.
+        while (dma->channels[IOP_DMA_DEV9].transfer_size) {
+            uint32_t d = ps2_smap_fifo_read(dma->speed->smap);
+
+            iop_invalidate_cache_page(dma->iop, dma->channels[IOP_DMA_DEV9].madr);
+            iop_bus_write32(dma->bus, dma->channels[IOP_DMA_DEV9].madr, d);
+
+            dma->channels[IOP_DMA_DEV9].madr += 4;
+            dma->channels[IOP_DMA_DEV9].transfer_size -= 4;
+        }
+    }
+
+    ps2_smap_dma_complete(dma->speed->smap);
+
+    iop_dma_set_dicr_flag(dma, IOP_DMA_DEV9);
+    iop_dma_check_irq(dma);
+
+    dma->channels[IOP_DMA_DEV9].chcr &= ~0x1000000;
+}
+
 void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     // Note: DEV9 DMA serves different purposes based on the system.
 
@@ -494,6 +528,14 @@ void iop_dma_handle_dev9_transfer(struct ps2_iop_dma* dma) {
     // storage chip. On Namco System 246/256 arcade hardware, DEV9 DMA is
     // used to transfer data to and from the ACATA device, which is
     // either an ATA HDD or ATAPI DVD drive.
+    // SMAP shares the DEV9 channel with ATA. the active FIFO DMAEN bit
+    // marks the transfer as belonging to the Ethernet block.
+
+    if (ps2_smap_dma_pending(dma->speed->smap)) {
+        iop_dma_handle_dev9_smap_transfer(dma);
+
+        return;
+    }
 
     if (dma->dev9_mode == IOP_DMA_DEV9_ATA) {
         iop_dma_handle_dev9_ata_transfer(dma);

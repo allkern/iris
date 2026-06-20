@@ -17,11 +17,13 @@ void ps2_speed_init(struct ps2_speed* speed, struct ps2_iop_intc* iop_intc, stru
     speed->ata = ps2_ata_create();
     speed->eeprom = ps2_eeprom_create();
     speed->dvrp = ps2_dvrp_create();
+    speed->smap = ps2_smap_create();
 
     ps2_flash_init(speed->flash);
     ps2_ata_init(speed->ata, speed, sched);
     ps2_eeprom_init(speed->eeprom);
     ps2_dvrp_init(speed->dvrp, speed);
+    ps2_smap_init(speed->smap, speed);
 
     // 0009 - TS
     // 0010 - ES1?
@@ -35,12 +37,17 @@ void ps2_speed_destroy(struct ps2_speed* speed) {
     ps2_ata_destroy(speed->ata);
     ps2_eeprom_destroy(speed->eeprom);
     ps2_dvrp_destroy(speed->dvrp);
+    ps2_smap_destroy(speed->smap);
 
     free(speed);
 }
 
 uint64_t ps2_speed_read8(struct ps2_speed* speed, uint32_t addr) {
     addr &= 0xffff;
+
+    if (addr >= 0x0100 && addr < 0x4000) {
+        return ps2_smap_read8(speed->smap, addr);
+    }
 
     // printf("speed: read8 %08x %08x\n", addr);
 
@@ -55,9 +62,6 @@ uint64_t ps2_speed_read8(struct ps2_speed* speed, uint32_t addr) {
 uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
     addr &= 0xffff;
 
-    if (addr == 0x205c) return 0x0000;
-    if (addr == 0x205e) return 0x8000;
-
     if (addr >= 0x4800 && addr < 0x4820) {
         return ps2_flash_read16(speed->flash, addr);
     }
@@ -68,6 +72,10 @@ uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
 
     if (addr >= 0x4200 && addr < 0x4240) {
         return ps2_dvrp_read(speed->dvrp, addr);
+    }
+
+    if (addr >= 0x0100 && addr < 0x4000) {
+        return ps2_smap_read16(speed->smap, addr);
     }
 
     switch (addr) {
@@ -90,6 +98,10 @@ uint64_t ps2_speed_read16(struct ps2_speed* speed, uint32_t addr) {
 uint64_t ps2_speed_read32(struct ps2_speed* speed, uint32_t addr) {
     addr &= 0xffff;
 
+    if (addr >= 0x0100 && addr < 0x4000) {
+        return ps2_smap_read32(speed->smap, addr);
+    }
+
     if (addr >= 0x4800 && addr < 0x4820) {
         return ps2_flash_read32(speed->flash, addr);
     }
@@ -105,6 +117,12 @@ uint64_t ps2_speed_read32(struct ps2_speed* speed, uint32_t addr) {
 void ps2_speed_write8(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
     addr &= 0xffff;
 
+    if (addr >= 0x0100 && addr < 0x4000) {
+        ps2_smap_write8(speed->smap, addr, data);
+
+        return;
+    }
+
     // printf("speed: write8 %08x %08x\n", addr, data);
 
     switch (addr) {
@@ -116,6 +134,12 @@ void ps2_speed_write8(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
 }
 void ps2_speed_write16(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
     addr &= 0xffff;
+
+    if (addr >= 0x0100 && addr < 0x4000) {
+        ps2_smap_write16(speed->smap, addr, data);
+
+        return;
+    }
 
     if (addr >= 0x4800 && addr < 0x4820) {
         ps2_flash_write16(speed->flash, addr, data);
@@ -152,6 +176,12 @@ void ps2_speed_write16(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
 }
 void ps2_speed_write32(struct ps2_speed* speed, uint32_t addr, uint64_t data) {
     addr &= 0xffff;
+
+    if (addr >= 0x0100 && addr < 0x4000) {
+        ps2_smap_write32(speed->smap, addr, data);
+
+        return;
+    }
 
     if (addr >= 0x4800 && addr < 0x4820) {
         ps2_flash_write32(speed->flash, addr, data);
@@ -221,5 +251,15 @@ void ps2_speed_set_dvrp_enabled(struct ps2_speed* speed, int enabled) {
         speed->rev3 |= SPD_CAPS_DVR;
     } else {
         speed->rev3 &= ~SPD_CAPS_DVR;
+    }
+}
+
+void ps2_speed_set_smap_enabled(struct ps2_speed* speed, int enabled) {
+    printf("speed: set smap enabled %d\n", enabled);
+
+    if (enabled) {
+        speed->rev3 |= SPD_CAPS_SMAP;
+    } else {
+        speed->rev3 &= ~SPD_CAPS_SMAP;
     }
 }

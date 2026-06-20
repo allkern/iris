@@ -264,6 +264,7 @@ target_sources(iris PRIVATE
     src/shared/speed/dvrp.c
     src/shared/speed/eeprom.c
     src/shared/speed/flash.c
+    src/shared/speed/smap.c
     src/shared/ata/raw.c
     src/shared/ata/isif.c
     src/s14x/nand.c
