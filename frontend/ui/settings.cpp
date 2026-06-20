@@ -1036,6 +1036,42 @@ void show_usb_port(iris::instance* iris, int port) {
 
         EndCombo();
     }
+
+    if (iris->usb_devices[port] == USB_DEVICE_MSD) {
+        const std::string& path = iris->usb_msd_paths[port];
+
+        Text("Disk image");
+        TextWrapped("%s", path.size() ? path.c_str() : "No image (drive empty)");
+
+        if (Button(ICON_MS_FOLDER " Browse##msdimage")) {
+            audio::mute(iris);
+
+            auto f = pfd::open_file("Select USB drive image", "", {
+                "Disk images (*.img; *.bin; *.iso; *.raw)", "*.img *.bin *.iso *.raw",
+                "All Files (*.*)", "*"
+            });
+
+            while (!f.ready());
+
+            audio::unmute(iris);
+
+            if (f.result().size()) {
+                iris->usb_msd_paths[port] = f.result().at(0);
+
+                ps2_usb_msd_set_image(iris->ps2->usb, port, iris->usb_msd_paths[port].c_str());
+            }
+        } SameLine();
+
+        BeginDisabled(path.empty());
+
+        if (Button(ICON_MS_CLEAR " Eject##msdimage")) {
+            iris->usb_msd_paths[port] = "";
+
+            ps2_usb_msd_set_image(iris->ps2->usb, port, nullptr);
+        }
+
+        EndDisabled();
+    }
 }
 
 void show_usb_settings(iris::instance* iris) {

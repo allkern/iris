@@ -47,8 +47,11 @@ enum {
     USB_DEVICE_NONE = 0,
     USB_DEVICE_KEYBOARD,
     USB_DEVICE_MOUSE,
+    USB_DEVICE_MSD,
     USB_DEVICE_TYPE_COUNT
 };
+
+#define USB_MSD_PATH_MAX 512
 
 struct ps2_usb {
     // OHCI operational registers
@@ -80,6 +83,7 @@ struct ps2_usb {
 
     // Selected device type per port, preserved across resets
     int device_type[OHCI_NUM_PORTS];
+    char msd_path[OHCI_NUM_PORTS][USB_MSD_PATH_MAX];
     int configured;
 
     int frame_scheduled;
@@ -104,6 +108,10 @@ int ps2_usb_get_port_device(struct ps2_usb* usb, int port);
 // Connect (or replace) the device on a root hub port. USB_DEVICE_NONE detaches.
 // The selection persists across resets and triggers re-enumeration.
 void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type);
+
+// Back a Mass Storage device on a port with a raw disk image (NULL/"" ejects).
+// The path persists across resets; applied when the port holds an MSD.
+void ps2_usb_msd_set_image(struct ps2_usb* usb, int port, const char* path);
 
 // Frontend input hook: forwards a key event to any connected keyboard.
 void ps2_usb_kbd_key(struct ps2_usb* usb, uint8_t usage, int pressed);

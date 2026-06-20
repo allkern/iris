@@ -591,6 +591,7 @@ struct instance {
     std::vector <mapping> input_maps = {};
     int input_map[2] = { -1, -1 };
     int usb_devices[2] = { USB_DEVICE_NONE, USB_DEVICE_NONE };
+    std::string usb_msd_paths[2] = { "", "" };
     input_event last_input_event = {};
     bool last_input_event_read = true;
     float last_input_event_value = 0.0f;

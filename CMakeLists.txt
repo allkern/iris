@@ -230,6 +230,8 @@ target_sources(iris PRIVATE
     src/iop/usb.c
     src/iop/usb/device.c
     src/iop/usb/kbd.c
+    src/iop/usb/mouse.c
+    src/iop/usb/msd.c
     src/iop/disc/bin.c
     src/iop/disc/cue.c
     src/iop/disc/chd.c

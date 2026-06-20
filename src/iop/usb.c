@@ -5,6 +5,7 @@
 #include "usb.h"
 #include "usb/kbd.h"
 #include "usb/mouse.h"
+#include "usb/msd.h"
 
 #define USB_DEBUG 0
 
@@ -185,7 +186,9 @@ static int ohci_service_td(struct ps2_usb* usb, uint32_t ed_addr, uint32_t* ed) 
     if (buf_len < 0)
         buf_len = 0;
 
-    uint8_t temp[4096];
+    // A single OHCI TD can describe up to two 4 KB pages (8 KB); bulk MSD
+    // transfers use the full size, so the staging buffer must match.
+    uint8_t temp[8192];
     if (buf_len > (int)sizeof(temp))
         buf_len = sizeof(temp);
 
@@ -428,6 +431,7 @@ static const struct {
     [USB_DEVICE_NONE]     = { "None", NULL },
     [USB_DEVICE_KEYBOARD] = { "Keyboard", usb_kbd_create },
     [USB_DEVICE_MOUSE]    = { "Mouse", usb_mouse_create },
+    [USB_DEVICE_MSD]      = { "Mass Storage", usb_msd_create },
 };
 
 const char* ps2_usb_device_type_name(int type) {
@@ -461,6 +465,9 @@ void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type) {
     if (usb_device_types[type].create) {
         usb_device_types[type].create(dev);
 
+        if (type == USB_DEVICE_MSD && usb->msd_path[port][0])
+            usb_msd_set_image(dev, usb->msd_path[port]);
+
         // Device present and powered; flag the connect status change
         usb->hc_rh_port_status[port] = OHCI_PORT_CCS | OHCI_PORT_PPS | OHCI_PORT_CSC;
     } else {
@@ -474,17 +481,35 @@ void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type) {
         port, usb_device_types[type].name, usb->hc_rh_port_status[port]);
 }
 
+void ps2_usb_msd_set_image(struct ps2_usb* usb, int port, const char* path) {
+    if (port < 0 || port >= OHCI_NUM_PORTS)
+        return;
+
+    if (path) {
+        strncpy(usb->msd_path[port], path, USB_MSD_PATH_MAX - 1);
+        usb->msd_path[port][USB_MSD_PATH_MAX - 1] = '\0';
+    } else {
+        usb->msd_path[port][0] = '\0';
+    }
+
+    if (usb->device_type[port] == USB_DEVICE_MSD)
+        usb_msd_set_image(&usb->device[port], usb->msd_path[port]);
+}
+
 struct ps2_usb* ps2_usb_create(void) {
     return calloc(1, sizeof(struct ps2_usb));
 }
 
 void ps2_usb_init(struct ps2_usb* usb, struct ps2_iop_intc* intc, struct iop_bus* bus, struct sched_state* sched) {
-    // The port device selection survives a reset
+    // The port device selection (and MSD image paths) survive a reset
     int configured = usb->configured;
     int device_type[OHCI_NUM_PORTS];
+    char msd_path[OHCI_NUM_PORTS][USB_MSD_PATH_MAX];
 
     for (int i = 0; i < OHCI_NUM_PORTS; i++)
         device_type[i] = usb->device_type[i];
+
+    memcpy(msd_path, usb->msd_path, sizeof(msd_path));
 
     memset(usb, 0, sizeof(struct ps2_usb));
 
@@ -510,6 +535,8 @@ void ps2_usb_init(struct ps2_usb* usb, struct ps2_iop_intc* intc, struct iop_bus
     }
 
     usb->configured = 1;
+
+    memcpy(usb->msd_path, msd_path, sizeof(usb->msd_path));
 
     for (int i = 0; i < OHCI_NUM_PORTS; i++)
         ps2_usb_set_port_device(usb, i, device_type[i]);
