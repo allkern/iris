@@ -330,6 +330,8 @@ void ps2_cycle(struct ps2_state* ps2) {
         max_block_cycles = 16*16;
     }
 
+    ps2_ipu_run(ps2->ipu);
+
     while (ps2->ee_cycles < max_block_cycles) {
         ps2->ee_cycles += ee_run_block(ps2->ee, 256);
     }
