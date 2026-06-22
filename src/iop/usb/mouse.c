@@ -4,20 +4,6 @@
 
 #include "mouse.h"
 
-#define MOUSE_DEBUG 0
-
-#if MOUSE_DEBUG >= 1
-#define mouse_log(...) printf("usb-mouse: " __VA_ARGS__)
-#else
-#define mouse_log(...) do {} while (0)
-#endif
-
-#if MOUSE_DEBUG >= 2
-#define mouse_logv(...) printf("usb-mouse: " __VA_ARGS__)
-#else
-#define mouse_logv(...) do {} while (0)
-#endif
-
 #define MOUSE_REPORT_DESC_LEN 52
 #define MOUSE_REPORT_LEN 4
 
@@ -162,7 +148,7 @@ static int usb_mouse_get_descriptor(struct usb_mouse* mouse, uint16_t value, uin
                 case 2: src = mouse_string2; len = sizeof(mouse_string2); break;
 
                 default: {
-                    mouse_log("GET_DESCRIPTOR: unknown string index %d\n", index);
+                    printf("GET_DESCRIPTOR: unknown string index %d\n", index);
 
                     return 0;
                 }
@@ -170,14 +156,14 @@ static int usb_mouse_get_descriptor(struct usb_mouse* mouse, uint16_t value, uin
         } break;
 
         default: {
-            mouse_log("GET_DESCRIPTOR: unknown type %02x index %d\n", type, index);
+            printf("GET_DESCRIPTOR: unknown type %02x index %d\n", type, index);
 
             return 0;
         }
     }
 
-    mouse_log("GET_DESCRIPTOR type=%02x index=%d -> %d bytes (host asked %d)\n",
-        type, index, len, length);
+    // printf("GET_DESCRIPTOR type=%02x index=%d -> %d bytes (host asked %d)\n",
+    //     type, index, len, length);
 
     (void)length;
 
@@ -194,7 +180,7 @@ static void usb_mouse_complete_status(struct usb_device* dev, struct usb_mouse* 
         dev->address = dev->pending_address;
         mouse->ctrl_set_address = 0;
 
-        mouse_log("device address set to %d\n", dev->address);
+        // printf("device addr %d\n", dev->address);
     }
 }
 
@@ -211,8 +197,8 @@ static int usb_mouse_control(struct usb_device* dev, int pid, uint8_t* buf, int 
         uint16_t wIndex        = buf[4] | (buf[5] << 8);
         uint16_t wLength       = buf[6] | (buf[7] << 8);
 
-        mouse_log("SETUP bmRequestType=%02x bRequest=%02x wValue=%04x wIndex=%04x wLength=%d\n",
-            bmRequestType, bRequest, wValue, wIndex, wLength);
+        // printf("SETUP bmRequestType=%02x bRequest=%02x wValue=%04x wIndex=%04x wLength=%d\n",
+        //     bmRequestType, bRequest, wValue, wIndex, wLength);
 
         mouse->ctrl_offset = 0;
         mouse->ctrl_len = 0;
@@ -260,7 +246,7 @@ static int usb_mouse_control(struct usb_device* dev, int pid, uint8_t* buf, int 
                 } break;
 
                 default: {
-                    mouse_log("STALL: unsupported standard request %02x\n", bRequest);
+                    printf("STALL: unsupported standard request %02x\n", bRequest);
 
                     return USB_ACK_STALL;
                 }
@@ -299,13 +285,13 @@ static int usb_mouse_control(struct usb_device* dev, int pid, uint8_t* buf, int 
                 } break;
 
                 default: {
-                    mouse_log("STALL: unsupported class request %02x\n", bRequest);
+                    printf("STALL: unsupported class request %02x\n", bRequest);
 
                     return USB_ACK_STALL;
                 }
             }
         } else {
-            mouse_log("STALL: unsupported request type %d (bmRequestType=%02x)\n", type, bmRequestType);
+            printf("STALL: unsupported request type %d (bmRequestType=%02x)\n", type, bmRequestType);
 
             return USB_ACK_STALL;
         }
@@ -353,8 +339,6 @@ static int usb_mouse_control(struct usb_device* dev, int pid, uint8_t* buf, int 
 
 static int usb_mouse_interrupt_in(struct usb_mouse* mouse, uint8_t* buf, int len) {
     if (!mouse->dirty) {
-        mouse_logv("EP1 IN poll: NAK (no new report)\n");
-
         return USB_ACK_NAK;
     }
 
@@ -387,8 +371,8 @@ static int usb_mouse_interrupt_in(struct usb_mouse* mouse, uint8_t* buf, int len
 
     memcpy(buf, report, n);
 
-    mouse_log("EP1 IN: delivering report %02x %02x %02x %02x (n=%d)\n",
-        report[0], report[1], report[2], report[3], n);
+    // printf("EP1 IN: delivering report %02x %02x %02x %02x (n=%d)\n",
+    //     report[0], report[1], report[2], report[3], n);
 
     return n;
 }

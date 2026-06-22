@@ -19,6 +19,15 @@ static inline uint32_t smap_swap16(uint32_t v) {
     return (v >> 16) | (v << 16);
 }
 
+/* When SMAP_BD_SWAP is set, buffer descriptor fields are byte-swapped on
+   access. The dev9 init self-test uses this; the runtime driver clears it. */
+static inline uint16_t smap_bd_swap(struct ps2_smap* smap, uint16_t v) {
+    if (smap->bd_mode & SMAP_BD_SWAP)
+        return (uint16_t)((v << 8) | (v >> 8));
+
+    return v;
+}
+
 // PHY (National DP83846A "DsPHYTER"), commands sent through STA_CTRL
 static uint16_t smap_phy_read(struct ps2_smap* smap, int reg) {
     switch (reg) {
@@ -58,8 +67,25 @@ static void smap_tx_irq_event(void* udata, int overshoot) {
 }
 
 static void smap_transmit(struct ps2_smap* smap) {
+    int loopback = (smap->phy[SMAP_DsPHYTER_BMCR] & SMAP_PHY_BMCR_LPBK) != 0;
+
     while (smap->tx_bd[smap->tx_bd_index % SMAP_BD_MAX_ENTRY].ctrl & SMAP_BD_TX_READY) {
         struct smap_bd* bd = &smap->tx_bd[smap->tx_bd_index % SMAP_BD_MAX_ENTRY];
+
+        int len = bd->len;
+
+        if (len > 0 && len <= SMAP_TX_BUFSIZE) {
+            uint8_t frame[SMAP_TX_BUFSIZE];
+
+            for (int i = 0; i < len; i++)
+                frame[i] = smap->tx_buffer[(bd->ptr + i) & (SMAP_TX_BUFSIZE - 1)];
+
+            if (loopback) {
+                ps2_smap_receive(smap, frame, len);
+            } else if (smap->tx_fn) {
+                smap->tx_fn(smap->tx_udata, frame, len);
+            }
+        }
 
         bd->ctrl &= ~SMAP_BD_TX_READY;
 
@@ -227,6 +253,7 @@ static void smap_reg_write(struct ps2_smap* smap, uint32_t off, uint32_t data) {
             if (data & SMAP_TXFIFO_RESET) {
                 smap->tx_wr_ptr = 0;
                 smap->tx_frame_cnt = 0;
+                smap->tx_bd_index = 0;
             }
         } return;
 
@@ -239,7 +266,9 @@ static void smap_reg_write(struct ps2_smap* smap, uint32_t off, uint32_t data) {
 
             if (data & SMAP_RXFIFO_RESET) {
                 smap->rx_rd_ptr = 0;
+                smap->rx_wr_ptr = 0;
                 smap->rx_frame_cnt = 0;
+                smap->rx_bd_index = 0;
             }
         } return;
 
@@ -297,7 +326,9 @@ uint64_t ps2_smap_read16(struct ps2_smap* smap, uint32_t addr) {
         if (!bd)
             return 0;
 
-        return *(uint16_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) % sizeof(struct smap_bd)));
+        uint16_t v = *(uint16_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) % sizeof(struct smap_bd)));
+
+        return smap_bd_swap(smap, v);
     }
 
     return smap_reg_read(smap, off);
@@ -316,7 +347,13 @@ uint64_t ps2_smap_read32(struct ps2_smap* smap, uint32_t addr) {
         if (!bd)
             return 0;
 
-        return *(uint32_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) & 4u));
+        uint32_t v = *(uint32_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) & 4u));
+
+        if (smap->bd_mode & SMAP_BD_SWAP)
+            v = (uint32_t)smap_bd_swap(smap, v & 0xffff) |
+                ((uint32_t)smap_bd_swap(smap, v >> 16) << 16);
+
+        return v;
     }
 
     if (off == SMAP_R_RXFIFO_DATA || off == SMAP_R_FIFO_DATA)
@@ -335,14 +372,17 @@ void ps2_smap_write16(struct ps2_smap* smap, uint32_t addr, uint64_t data) {
     if (off >= SMAP_EMAC3_REGBASE && off < SMAP_BD_REGBASE) {
         uint32_t eoff = off - SMAP_EMAC3_REGBASE;
         uint32_t reg = eoff & ~3u;
-        uint32_t v = smap_emac3_read(smap, reg);
 
-        if (eoff & 2)
-            v = (v & 0xffff0000u) | (uint16_t)data;
-        else
-            v = (v & 0x0000ffffu) | ((uint32_t)(uint16_t)data << 16);
+        // EMAC3 registers are written as a high half (reg) then a low half
+        // (reg+2). Stage the high half and only commit -- and fire any side
+        // effect (PHY op, GNP, reset) -- once the full value is assembled.
+        if (eoff & 2) {
+            uint32_t v = ((uint32_t)smap->emac3_wstage[reg >> 2] << 16) | (uint16_t)data;
 
-        smap_emac3_write(smap, reg, v);
+            smap_emac3_write(smap, reg, v);
+        } else {
+            smap->emac3_wstage[reg >> 2] = (uint16_t)data;
+        }
 
         return;
     }
@@ -351,7 +391,8 @@ void ps2_smap_write16(struct ps2_smap* smap, uint32_t addr, uint64_t data) {
         struct smap_bd* bd = smap_bd_ptr(smap, off);
 
         if (bd)
-            *(uint16_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) % sizeof(struct smap_bd))) = (uint16_t)data;
+            *(uint16_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) % sizeof(struct smap_bd))) =
+                smap_bd_swap(smap, (uint16_t)data);
 
         return;
     }
@@ -371,8 +412,15 @@ void ps2_smap_write32(struct ps2_smap* smap, uint32_t addr, uint64_t data) {
     if (off >= SMAP_BD_REGBASE) {
         struct smap_bd* bd = smap_bd_ptr(smap, off);
 
-        if (bd)
-            *(uint32_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) & 4u)) = (uint32_t)data;
+        if (bd) {
+            uint32_t v = (uint32_t)data;
+
+            if (smap->bd_mode & SMAP_BD_SWAP)
+                v = (uint32_t)smap_bd_swap(smap, v & 0xffff) |
+                    ((uint32_t)smap_bd_swap(smap, v >> 16) << 16);
+
+            *(uint32_t*)((uint8_t*)bd + ((off - SMAP_BD_REGBASE) & 4u)) = v;
+        }
 
         return;
     }
@@ -391,20 +439,66 @@ int ps2_smap_dma_pending(struct ps2_smap* smap) {
 }
 
 void ps2_smap_fifo_write(struct ps2_smap* smap, uint32_t data) {
-    (void)data;
+    uint16_t p = smap->tx_wr_ptr;
 
-    smap->tx_wr_ptr = (smap->tx_wr_ptr + 4) & (SMAP_TX_BUFSIZE - 1);
+    smap->tx_buffer[(p + 0) & (SMAP_TX_BUFSIZE - 1)] = data & 0xff;
+    smap->tx_buffer[(p + 1) & (SMAP_TX_BUFSIZE - 1)] = (data >> 8) & 0xff;
+    smap->tx_buffer[(p + 2) & (SMAP_TX_BUFSIZE - 1)] = (data >> 16) & 0xff;
+    smap->tx_buffer[(p + 3) & (SMAP_TX_BUFSIZE - 1)] = (data >> 24) & 0xff;
+
+    smap->tx_wr_ptr = (p + 4) & (SMAP_TX_BUFSIZE - 1);
 }
 
 uint32_t ps2_smap_fifo_read(struct ps2_smap* smap) {
-    smap->rx_rd_ptr = (smap->rx_rd_ptr + 4) & (SMAP_RX_BUFSIZE - 1);
+    uint16_t p = smap->rx_rd_ptr;
 
-    return 0;
+    uint32_t data =
+        ((uint32_t)smap->rx_buffer[(p + 0) & (SMAP_RX_BUFSIZE - 1)]) |
+        ((uint32_t)smap->rx_buffer[(p + 1) & (SMAP_RX_BUFSIZE - 1)] << 8) |
+        ((uint32_t)smap->rx_buffer[(p + 2) & (SMAP_RX_BUFSIZE - 1)] << 16) |
+        ((uint32_t)smap->rx_buffer[(p + 3) & (SMAP_RX_BUFSIZE - 1)] << 24);
+
+    smap->rx_rd_ptr = (p + 4) & (SMAP_RX_BUFSIZE - 1);
+
+    return data;
 }
 
 void ps2_smap_dma_complete(struct ps2_smap* smap) {
     smap->txfifo_ctrl &= ~SMAP_TXFIFO_DMAEN;
     smap->rxfifo_ctrl &= ~SMAP_RXFIFO_DMAEN;
+}
+
+void ps2_smap_set_backend(struct ps2_smap* smap, ps2_smap_tx_fn fn, void* udata) {
+    smap->tx_fn = fn;
+    smap->tx_udata = udata;
+}
+
+int ps2_smap_receive(struct ps2_smap* smap, const uint8_t* buf, int len) {
+    if (len <= 0 || len > 1518)
+        return 0;
+
+    struct smap_bd* bd = &smap->rx_bd[smap->rx_bd_index % SMAP_BD_MAX_ENTRY];
+
+    if (!(bd->ctrl & SMAP_BD_RX_EMPTY))
+        return 0;
+
+    uint16_t ptr = smap->rx_wr_ptr;
+
+    for (int i = 0; i < len; i++)
+        smap->rx_buffer[(ptr + i) & (SMAP_RX_BUFSIZE - 1)] = buf[i];
+
+    smap->rx_wr_ptr = (ptr + ((len + 3) & ~3)) & (SMAP_RX_BUFSIZE - 1);
+
+    bd->len = len;
+    bd->ptr = ptr;
+    bd->ctrl = 0;
+
+    smap->rx_frame_cnt++;
+    smap->rx_bd_index++;
+
+    ps2_speed_send_irq(smap->speed, SMAP_INTR_RXEND);
+
+    return 1;
 }
 
 void ps2_smap_destroy(struct ps2_smap* smap) {

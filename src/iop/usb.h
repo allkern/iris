@@ -18,7 +18,6 @@ extern "C" {
 // The PS2 OHCI root hub exposes 2 downstream ports
 #define OHCI_NUM_PORTS 2
 
-// OHCI operational registers (offsets from OHCI_BASE)
 #define USB_HC_REVISION         0x00
 #define USB_HC_CONTROL          0x04
 #define USB_HC_COMMANDSTATUS    0x08
@@ -42,7 +41,6 @@ extern "C" {
 #define USB_HC_RHSTATUS         0x50
 #define USB_HC_RHPORTSTATUS     0x54
 
-// Device types selectable on a root hub port
 enum {
     USB_DEVICE_NONE = 0,
     USB_DEVICE_KEYBOARD,
@@ -76,12 +74,10 @@ struct ps2_usb {
     uint32_t hc_rh_status;
     uint32_t hc_rh_port_status[OHCI_NUM_PORTS];
 
-    // Pending TD writeback queue head (physical address, 0 = empty)
     uint32_t done_queue;
 
     struct usb_device device[OHCI_NUM_PORTS];
 
-    // Selected device type per port, preserved across resets
     int device_type[OHCI_NUM_PORTS];
     char msd_path[OHCI_NUM_PORTS][USB_MSD_PATH_MAX];
     int configured;
@@ -98,26 +94,11 @@ void ps2_usb_init(struct ps2_usb* usb, struct ps2_iop_intc* intc, struct iop_bus
 void ps2_usb_destroy(struct ps2_usb* usb);
 uint64_t ps2_usb_read32(struct ps2_usb* usb, uint32_t addr);
 void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data);
-
-// Human-readable name for a USB_DEVICE_* type, or NULL if out of range.
 const char* ps2_usb_device_type_name(int type);
-
-// Currently connected device type on a root hub port.
 int ps2_usb_get_port_device(struct ps2_usb* usb, int port);
-
-// Connect (or replace) the device on a root hub port. USB_DEVICE_NONE detaches.
-// The selection persists across resets and triggers re-enumeration.
 void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type);
-
-// Back a Mass Storage device on a port with a raw disk image (NULL/"" ejects).
-// The path persists across resets; applied when the port holds an MSD.
 void ps2_usb_msd_set_image(struct ps2_usb* usb, int port, const char* path);
-
-// Frontend input hook: forwards a key event to any connected keyboard.
 void ps2_usb_kbd_key(struct ps2_usb* usb, uint8_t usage, int pressed);
-
-// Frontend input hooks: forward relative motion / button events to any
-// connected mouse. button is 0 = left, 1 = right, 2 = middle.
 void ps2_usb_mouse_move(struct ps2_usb* usb, int dx, int dy, int dz);
 void ps2_usb_mouse_button(struct ps2_usb* usb, int button, int pressed);
 

@@ -46,3 +46,6 @@
 	path = deps/mbedtls
 	url = https://github.com/Mbed-TLS/mbedtls
 	branch = mbedtls-3.6
+[submodule "deps/libslirp"]
+	path = deps/libslirp
+	url = https://gitlab.freedesktop.org/slirp/libslirp.git

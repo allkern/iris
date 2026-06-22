@@ -115,6 +115,38 @@ endif()
 add_subdirectory(deps/curl EXCLUDE_FROM_ALL)
 add_subdirectory(deps/miniz EXCLUDE_FROM_ALL)
 
+set(SLIRP_MAJOR_VERSION 4)
+set(SLIRP_MINOR_VERSION 9)
+set(SLIRP_MICRO_VERSION 3)
+set(SLIRP_VERSION_STRING "\"4.9.3\"")
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/libslirp/src/libslirp-version.h.in
+    ${CMAKE_CURRENT_BINARY_DIR}/slirp-generated/libslirp-version.h
+    @ONLY
+)
+
+file(GLOB SLIRP_SOURCES CONFIGURE_DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/deps/libslirp/src/*.c)
+
+add_library(slirp STATIC
+    ${SLIRP_SOURCES}
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/glib-shim/glib-shim.c
+)
+
+set_property(TARGET slirp PROPERTY C_STANDARD 11)
+
+target_compile_definitions(slirp PUBLIC LIBSLIRP_STATIC)
+
+target_include_directories(slirp PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/libslirp/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps/glib-shim
+    ${CMAKE_CURRENT_BINARY_DIR}/slirp-generated
+)
+
+if (WIN32)
+    target_compile_definitions(slirp PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_link_libraries(slirp PUBLIC ws2_32 iphlpapi)
+endif()
+
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
     target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS -mssse3 -msse4.1)
 endif()
@@ -158,6 +190,7 @@ target_sources(iris PRIVATE
     frontend/iris.cpp
     frontend/elf.cpp
     frontend/net.cpp
+    frontend/slirp.cpp
     frontend/notifications.cpp
     frontend/settings.cpp
     frontend/ui/about.cpp
@@ -316,6 +349,7 @@ target_link_libraries(iris PUBLIC
     asmjit::asmjit
     libcurl
     miniz
+    slirp
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")

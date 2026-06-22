@@ -446,9 +446,14 @@ struct smap_bd {
 #define SMAP_PHY_10BTSCR_JABBER_DIS      (1 << 0)
 #define SMAP_DsPHYTER_CDCTRL             0x1B
 
+typedef void (*ps2_smap_tx_fn)(void* udata, const uint8_t* buf, int len);
+
 struct ps2_smap {
     struct smap_bd tx_bd[SMAP_BD_MAX_ENTRY];
     struct smap_bd rx_bd[SMAP_BD_MAX_ENTRY];
+
+    uint8_t tx_buffer[SMAP_TX_BUFSIZE];
+    uint8_t rx_buffer[SMAP_RX_BUFSIZE];
 
     uint32_t txfifo_ctrl;
     uint32_t rxfifo_ctrl;
@@ -485,6 +490,7 @@ struct ps2_smap {
     uint16_t bd_mode;
     uint16_t tx_wr_ptr;
     uint16_t rx_rd_ptr;
+    uint16_t rx_wr_ptr;
     uint16_t tx_size;
     uint16_t rx_size;
     uint8_t tx_frame_cnt;
@@ -493,6 +499,11 @@ struct ps2_smap {
     uint32_t rx_bd_index;
 
     uint16_t phy[32];
+
+    uint16_t emac3_wstage[32];
+
+    ps2_smap_tx_fn tx_fn;
+    void* tx_udata;
 
     struct ps2_speed* speed;
 };
@@ -506,12 +517,12 @@ void ps2_smap_write8(struct ps2_smap* smap, uint32_t addr, uint64_t data);
 void ps2_smap_write16(struct ps2_smap* smap, uint32_t addr, uint64_t data);
 void ps2_smap_write32(struct ps2_smap* smap, uint32_t addr, uint64_t data);
 void ps2_smap_destroy(struct ps2_smap* smap);
-
-/* FIFO data path, shared by PIO accesses and the DEV9 SMAP DMA mode. */
 int ps2_smap_dma_pending(struct ps2_smap* smap);
 void ps2_smap_fifo_write(struct ps2_smap* smap, uint32_t data);
 uint32_t ps2_smap_fifo_read(struct ps2_smap* smap);
 void ps2_smap_dma_complete(struct ps2_smap* smap);
+void ps2_smap_set_backend(struct ps2_smap* smap, ps2_smap_tx_fn fn, void* udata);
+int ps2_smap_receive(struct ps2_smap* smap, const uint8_t* buf, int len);
 
 #ifdef __cplusplus
 }

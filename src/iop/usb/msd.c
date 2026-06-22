@@ -4,18 +4,15 @@
 
 #include "msd.h"
 
-#define MSD_DEBUG 0
-
-#if MSD_DEBUG >= 1
-#define msd_log(...) printf("usb-msd: " __VA_ARGS__)
+#ifdef _MSC_VER
+#define fseek64 _fseeki64
+#define ftell64 _ftelli64
+#elif defined(_WIN32)
+#define fseek64 fseeko64
+#define ftell64 ftello64
 #else
-#define msd_log(...) do {} while (0)
-#endif
-
-#if MSD_DEBUG >= 2
-#define msd_logv(...) printf("usb-msd: " __VA_ARGS__)
-#else
-#define msd_logv(...) do {} while (0)
+#define fseek64 fseek64
+#define ftell64 ftell64
 #endif
 
 #define MSD_BLOCK_SIZE 512
@@ -179,7 +176,7 @@ static int msd_get_descriptor(struct usb_msd* msd, uint16_t value, uint16_t leng
                 case 3: src = msd_string3; len = sizeof(msd_string3); break;
 
                 default: {
-                    msd_log("GET_DESCRIPTOR: unknown string index %d\n", index);
+                    printf("GET_DESCRIPTOR: unknown string index %d\n", index);
 
                     return 0;
                 }
@@ -187,7 +184,7 @@ static int msd_get_descriptor(struct usb_msd* msd, uint16_t value, uint16_t leng
         } break;
 
         default: {
-            msd_log("GET_DESCRIPTOR: unknown type %02x index %d\n", type, index);
+            printf("GET_DESCRIPTOR: unknown type %02x index %d\n", type, index);
 
             return 0;
         }
@@ -208,7 +205,7 @@ static void usb_msd_complete_status(struct usb_device* dev, struct usb_msd* msd)
         dev->address = dev->pending_address;
         msd->ctrl_set_address = 0;
 
-        msd_log("device address set to %d\n", dev->address);
+        // printf("device address set to %d\n", dev->address);
     }
 }
 
@@ -225,8 +222,8 @@ static int usb_msd_control(struct usb_device* dev, int pid, uint8_t* buf, int le
         uint16_t wIndex        = buf[4] | (buf[5] << 8);
         uint16_t wLength       = buf[6] | (buf[7] << 8);
 
-        msd_log("SETUP bmRequestType=%02x bRequest=%02x wValue=%04x wIndex=%04x wLength=%d\n",
-            bmRequestType, bRequest, wValue, wIndex, wLength);
+        // printf("SETUP bmRequestType=%02x bRequest=%02x wValue=%04x wIndex=%04x wLength=%d\n",
+        //     bmRequestType, bRequest, wValue, wIndex, wLength);
 
         msd->ctrl_offset = 0;
         msd->ctrl_len = 0;
@@ -274,7 +271,7 @@ static int usb_msd_control(struct usb_device* dev, int pid, uint8_t* buf, int le
                 } break;
 
                 default: {
-                    msd_log("STALL: unsupported standard request %02x\n", bRequest);
+                    printf("STALL: unsupported standard request %02x\n", bRequest);
 
                     return USB_ACK_STALL;
                 }
@@ -292,13 +289,13 @@ static int usb_msd_control(struct usb_device* dev, int pid, uint8_t* buf, int le
                 } break;
 
                 default: {
-                    msd_log("STALL: unsupported class request %02x\n", bRequest);
+                    printf("STALL: unsupported class request %02x\n", bRequest);
 
                     return USB_ACK_STALL;
                 }
             }
         } else {
-            msd_log("STALL: unsupported request type %d (bmRequestType=%02x)\n", type, bmRequestType);
+            printf("STALL: unsupported request type %d (bmRequestType=%02x)\n", type, bmRequestType);
 
             return USB_ACK_STALL;
         }
@@ -362,39 +359,50 @@ static void msd_scsi(struct usb_msd* msd, const uint8_t* cdb) {
 
         case 0x03: { // REQUEST SENSE
             uint8_t* d = msd->data_buf;
+
             memset(d, 0, 18);
+
             d[0]  = 0x70; // current error, fixed format
             d[2]  = msd->sense_key;
             d[7]  = 10;   // additional sense length
             d[12] = msd->sense_asc;
             d[13] = msd->sense_ascq;
+
             msd->data_src = MSD_SRC_BUF;
             msd->data_remaining = msd->dcbw_len < 18 ? msd->dcbw_len : 18;
+
             msd_set_sense(msd, 0, 0, 0);
         } break;
 
         case 0x12: { // INQUIRY
             uint8_t* d = msd->data_buf;
+
             memset(d, 0, 36);
+
             d[0] = 0x00; // direct access block device
             d[1] = 0x80; // removable
             d[2] = 0x02; // SPC-2
             d[3] = 0x02; // response data format
             d[4] = 31;   // additional length
+
             memcpy(d + 8,  "iris    ", 8);
             memcpy(d + 16, "USB Drive       ", 16);
             memcpy(d + 32, "1.00", 4);
+
             msd->data_src = MSD_SRC_BUF;
             msd->data_remaining = msd->dcbw_len < 36 ? msd->dcbw_len : 36;
         } break;
 
         case 0x1a: { // MODE SENSE(6)
             uint8_t* d = msd->data_buf;
+
             memset(d, 0, 4);
+
             d[0] = 3; // mode data length
             d[1] = 0; // medium type
             d[2] = msd->write_protect ? 0x80 : 0x00; // device-specific (WP)
             d[3] = 0; // block descriptor length
+
             msd->data_src = MSD_SRC_BUF;
             msd->data_remaining = msd->dcbw_len < 4 ? msd->dcbw_len : 4;
         } break;
@@ -411,10 +419,13 @@ static void msd_scsi(struct usb_msd* msd, const uint8_t* cdb) {
                 msd_set_sense(msd, 0x02, 0x3a, 0x00);
                 break;
             }
+
             uint8_t* d = msd->data_buf;
             uint32_t last = msd->block_count ? msd->block_count - 1 : 0;
+
             wr32be(d, last);
             wr32be(d + 4, MSD_BLOCK_SIZE);
+
             msd->data_src = MSD_SRC_BUF;
             msd->data_remaining = msd->dcbw_len < 8 ? msd->dcbw_len : 8;
         } break;
@@ -428,6 +439,7 @@ static void msd_scsi(struct usb_msd* msd, const uint8_t* cdb) {
                 msd_set_sense(msd, 0x02, 0x3a, 0x00);
                 break;
             }
+
             if ((uint64_t)lba + blocks > msd->block_count) {
                 msd->csw_status = 1;
                 msd_set_sense(msd, 0x05, 0x21, 0x00); // LBA out of range
@@ -435,6 +447,7 @@ static void msd_scsi(struct usb_msd* msd, const uint8_t* cdb) {
             }
 
             uint32_t bytes = blocks * MSD_BLOCK_SIZE;
+
             msd->file_offset = (uint64_t)lba * MSD_BLOCK_SIZE;
             msd->data_src = MSD_SRC_FILE;
             msd->data_remaining = msd->dcbw_len < bytes ? msd->dcbw_len : bytes;
@@ -449,11 +462,13 @@ static void msd_scsi(struct usb_msd* msd, const uint8_t* cdb) {
                 msd_set_sense(msd, 0x02, 0x3a, 0x00);
                 break;
             }
+
             if (msd->write_protect) {
                 msd->csw_status = 1;
                 msd_set_sense(msd, 0x07, 0x27, 0x00); // data protect, write protected
                 break;
             }
+
             if ((uint64_t)lba + blocks > msd->block_count) {
                 msd->csw_status = 1;
                 msd_set_sense(msd, 0x05, 0x21, 0x00);
@@ -467,7 +482,7 @@ static void msd_scsi(struct usb_msd* msd, const uint8_t* cdb) {
         } break;
 
         default: {
-            msd_log("unsupported SCSI op %02x\n", op);
+            printf("unsupported SCSI op %02x\n", op);
             msd->csw_status = 1;
             msd_set_sense(msd, 0x05, 0x20, 0x00); // illegal request, invalid command
         } break;
@@ -479,7 +494,7 @@ static int usb_msd_bulk_out(struct usb_device* dev, uint8_t* buf, int len) {
 
     if (msd->phase == MSD_PHASE_CBW) {
         if (len < CBW_SIZE || rd32le(buf) != CBW_SIGNATURE) {
-            msd_log("invalid CBW (len=%d)\n", len);
+            printf("invalid CBW (len=%d)\n", len);
 
             return USB_ACK_STALL;
         }
@@ -488,14 +503,14 @@ static int usb_msd_bulk_out(struct usb_device* dev, uint8_t* buf, int len) {
         msd->dcbw_len = rd32le(buf + 8);
 
         int dir_in = (buf[12] & 0x80) != 0;
+
         const uint8_t* cdb = buf + 15;
 
-        msd_logv("CBW tag=%08x len=%u dir=%s cmd=%02x\n",
-            msd->tag, msd->dcbw_len, dir_in ? "in" : "out", cdb[0]);
+        // printf("CBW tag=%08x len=%u dir=%s cmd=%02x\n",
+        //     msd->tag, msd->dcbw_len, dir_in ? "in" : "out", cdb[0]);
 
         msd_scsi(msd, cdb);
 
-        // A failed command still has to satisfy the data phase the host queued
         if (msd->csw_status != 0 && msd->dcbw_len > 0) {
             msd->data_src = MSD_SRC_ZERO;
             msd->data_remaining = msd->dcbw_len;
@@ -503,10 +518,11 @@ static int usb_msd_bulk_out(struct usb_device* dev, uint8_t* buf, int len) {
 
         msd->csw_residue = msd->dcbw_len - msd->data_remaining;
 
-        if (msd->data_remaining == 0)
+        if (msd->data_remaining == 0) {
             msd->phase = MSD_PHASE_CSW;
-        else
+        } else {
             msd->phase = dir_in ? MSD_PHASE_DATA_IN : MSD_PHASE_DATA_OUT;
+        }
 
         return CBW_SIZE;
     }
@@ -515,8 +531,9 @@ static int usb_msd_bulk_out(struct usb_device* dev, uint8_t* buf, int len) {
         uint32_t n = (uint32_t)len < msd->data_remaining ? (uint32_t)len : msd->data_remaining;
 
         if (msd->data_src == MSD_SRC_FILE && msd->image) {
-            fseek(msd->image, (long)msd->file_offset, SEEK_SET);
+            fseek64(msd->image, (long)msd->file_offset, SEEK_SET);
             fwrite(buf, 1, n, msd->image);
+
             msd->file_offset += n;
         }
 
@@ -543,12 +560,16 @@ static int usb_msd_bulk_in(struct usb_device* dev, uint8_t* buf, int len) {
 
         if (msd->data_src == MSD_SRC_BUF) {
             memcpy(buf, msd->data_buf + msd->data_off, n);
+
             msd->data_off += n;
         } else if (msd->data_src == MSD_SRC_FILE && msd->image) {
-            fseek(msd->image, (long)msd->file_offset, SEEK_SET);
+            fseek64(msd->image, (long)msd->file_offset, SEEK_SET);
+
             size_t rd = fread(buf, 1, n, msd->image);
+
             if (rd < n)
                 memset(buf + rd, 0, n - rd);
+
             msd->file_offset += n;
         } else {
             memset(buf, 0, n);
@@ -568,9 +589,11 @@ static int usb_msd_bulk_in(struct usb_device* dev, uint8_t* buf, int len) {
         wr32le(csw, CSW_SIGNATURE);
         wr32le(csw + 4, msd->tag);
         wr32le(csw + 8, msd->csw_residue);
+
         csw[12] = msd->csw_status;
 
         int n = len < CSW_SIZE ? len : CSW_SIZE;
+
         memcpy(buf, csw, n);
 
         msd->phase = MSD_PHASE_CBW;
@@ -660,13 +683,14 @@ int usb_msd_set_image(struct usb_device* dev, const char* path) {
     }
 
     if (!f) {
-        msd_log("could not open image '%s'\n", path);
+        printf("could not open image '%s'\n", path);
 
         return 1;
     }
 
-    fseek(f, 0, SEEK_END);
-    long size = ftell(f);
+    fseek64(f, 0, SEEK_END);
+
+    long size = ftell64(f);
 
     if (size < 0)
         size = 0;
@@ -674,7 +698,7 @@ int usb_msd_set_image(struct usb_device* dev, const char* path) {
     msd->image = f;
     msd->block_count = (uint32_t)(size / MSD_BLOCK_SIZE);
 
-    msd_log("image '%s' opened: %u blocks%s\n",
+    printf("image '%s' opened: %u blocks%s\n",
         path, msd->block_count, msd->write_protect ? " (read-only)" : "");
 
     return 0;

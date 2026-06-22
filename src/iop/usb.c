@@ -7,20 +7,6 @@
 #include "usb/mouse.h"
 #include "usb/msd.h"
 
-#define USB_DEBUG 0
-
-#if USB_DEBUG >= 1
-#define usb_log(...) printf("usb: " __VA_ARGS__)
-#else
-#define usb_log(...) do {} while (0)
-#endif
-
-#if USB_DEBUG >= 2
-#define usb_logv(...) printf("usb: " __VA_ARGS__)
-#else
-#define usb_logv(...) do {} while (0)
-#endif
-
 // HcInterruptStatus/HcInterruptEnable/HcInterruptDisable
 #define OHCI_INTR_SO   0x00000001 // Scheduling overrun
 #define OHCI_INTR_WDH  0x00000002 // Writeback done head
@@ -84,7 +70,7 @@
 #define OHCI_CC_STALL          0x4
 #define OHCI_CC_DEVICENOTRESP  0x5
 
-// A USB frame is 1 ms. The scheduler is clocked at the EE clock (294.912 MHz).
+// A USB frame is 1 ms. The scheduler is clocked at the EE clock
 #define OHCI_FRAME_CYCLES 294912
 
 // HCCA layout offsets
@@ -130,9 +116,8 @@ static void ohci_update_rhsc(struct ps2_usb* usb) {
 
     for (int i = 0; i < OHCI_NUM_PORTS; i++) {
         if (usb->hc_rh_port_status[i] & change_mask) {
-            usb_log("root hub change pending on port %d (status=%08x), asserting RHSC\n",
-                i, usb->hc_rh_port_status[i]);
             ohci_set_interrupt(usb, OHCI_INTR_RHSC);
+
             return;
         }
     }
@@ -149,9 +134,6 @@ static struct usb_device* ohci_find_device(struct ps2_usb* usb, int addr) {
     return NULL;
 }
 
-// Process the TD at the head of the given ED. The caller's local `ed` copy is
-// updated in place (and written back to RAM) so it can keep looping.
-// Returns 1 if a TD was retired (or the ED halted), 0 if the device NAKed.
 static int ohci_service_td(struct ps2_usb* usb, uint32_t ed_addr, uint32_t* ed) {
     uint32_t head = ed[2] & 0xfffffff0;
     uint32_t tail = ed[1] & 0xfffffff0;
@@ -165,16 +147,20 @@ static int ohci_service_td(struct ps2_usb* usb, uint32_t ed_addr, uint32_t* ed) 
     for (int i = 0; i < 4; i++)
         td[i] = ohci_read_dword(usb, td_addr + i * 4);
 
-    int fa  = ed[0] & 0x7f;
-    int en  = (ed[0] >> 7) & 0xf;
+    int fa = ed[0] & 0x7f;
+    int en = (ed[0] >> 7) & 0xf;
     int dir = (ed[0] >> 11) & 3;
 
     int dp = (td[0] >> OHCI_TD_DP_SHIFT) & OHCI_TD_DP_MASK;
     int pid;
 
-    if (dir == 1) pid = USB_PID_OUT;
-    else if (dir == 2) pid = USB_PID_IN;
-    else pid = dp; // direction taken from TD (0 = SETUP, 1 = OUT, 2 = IN)
+    if (dir == 1) {
+        pid = USB_PID_OUT;
+    } else if (dir == 2) {
+        pid = USB_PID_IN;
+    } else {
+        pid = dp;
+    }
 
     uint32_t cbp = td[1];
     uint32_t be  = td[3];
@@ -186,9 +172,8 @@ static int ohci_service_td(struct ps2_usb* usb, uint32_t ed_addr, uint32_t* ed) 
     if (buf_len < 0)
         buf_len = 0;
 
-    // A single OHCI TD can describe up to two 4 KB pages (8 KB); bulk MSD
-    // transfers use the full size, so the staging buffer must match.
     uint8_t temp[8192];
+
     if (buf_len > (int)sizeof(temp))
         buf_len = sizeof(temp);
 
@@ -197,7 +182,7 @@ static int ohci_service_td(struct ps2_usb* usb, uint32_t ed_addr, uint32_t* ed) 
     int result;
 
     if (!dev) {
-        usb_log("TD %08x: no device at address %d (ep=%d pid=%d)\n", td_addr, fa, en, pid);
+        // printf("TD %08x: no device at address %d (ep=%d pid=%d)\n", td_addr, fa, en, pid);
         result = USB_ACK_NODEV;
     } else if (pid == USB_PID_IN) {
         result = usb_device_transfer(dev, pid, en, temp, buf_len);
@@ -208,7 +193,6 @@ static int ohci_service_td(struct ps2_usb* usb, uint32_t ed_addr, uint32_t* ed) 
         result = usb_device_transfer(dev, pid, en, temp, buf_len);
     }
 
-    // NAK: leave the TD untouched, the HC retries it on a later frame
     if (result == USB_ACK_NAK)
         return 0;
 
@@ -222,36 +206,32 @@ static int ohci_service_td(struct ps2_usb* usb, uint32_t ed_addr, uint32_t* ed) 
     } else {
         actual = result;
 
-        if (pid == USB_PID_IN && actual > 0)
+        if (pid == USB_PID_IN && actual > 0) {
             ohci_write_buf(usb, cbp, temp, actual);
+        }
     }
 
-    usb_log("TD %08x ed_fa=%d ep=%d pid=%d len=%d -> cc=%d actual=%d\n",
-        td_addr, fa, en, pid, buf_len, cc, actual);
-
-    // Update the transfer descriptor: current buffer pointer + condition code
     if (cc == OHCI_CC_NOERROR) {
-        if (actual >= buf_len)
-            td[1] = 0;          // whole buffer consumed
-        else
+        if (actual >= buf_len) {
+            td[1] = 0;
+        } else {
             td[1] = cbp + actual;
+        }
     }
 
     td[0] = (td[0] & 0x0fffffff) | ((uint32_t)cc << OHCI_TD_CC_SHIFT);
-
-    // Link the retired TD into the writeback (done) queue. The done queue reuses
-    // the TD's NextTD field as its link.
     td[2] = usb->done_queue;
+
     usb->done_queue = td_addr;
 
     for (int i = 0; i < 4; i++)
         ohci_write_dword(usb, td_addr + i * 4, td[i]);
 
-    // Advance the endpoint, or halt it on error
-    if (cc == OHCI_CC_NOERROR)
+    if (cc == OHCI_CC_NOERROR) {
         ed[2] = next_td | (ed[2] & OHCI_ED_C);
-    else
+    } else {
         ed[2] |= OHCI_ED_H;
+    }
 
     ohci_write_dword(usb, ed_addr + 8, ed[2]);
 
@@ -269,7 +249,6 @@ static void ohci_service_ed_list(struct ps2_usb* usb, uint32_t ed_addr) {
 
         uint32_t next_ed = ed[3] & 0xfffffff0;
 
-        // Skip flagged, halted or isochronous endpoints
         if (!(ed[0] & OHCI_ED_K) && !(ed[2] & OHCI_ED_H) && !(ed[0] & OHCI_ED_F)) {
             int td_guard = 0;
 
@@ -315,7 +294,6 @@ static void ohci_frame(void* udata, int overshoot) {
             intr_ed = ohci_read_dword(usb, usb->hc_hcca + ((usb->hc_fm_number & 0x1f) * 4));
 
         if (intr_ed) {
-            usb_logv("frame %u: periodic ED list head %08x\n", usb->hc_fm_number, intr_ed);
             ohci_service_ed_list(usb, intr_ed);
         }
     }
@@ -346,8 +324,8 @@ static void ohci_frame(void* udata, int overshoot) {
         usb->hc_done_head = usb->done_queue;
         usb->done_queue = 0;
 
-        usb_log("writeback done head %08x, raising WDH (intr_enable=%08x)\n",
-            done & ~0xf, usb->hc_interrupt_enable);
+        // printf("writeback done head %08x, raising WDH (intr_enable=%08x)\n",
+        //     done & ~0xf, usb->hc_interrupt_enable);
 
         ohci_set_interrupt(usb, OHCI_INTR_WDH);
     }
@@ -365,8 +343,6 @@ static void ohci_schedule_frame(struct ps2_usb* usb) {
 }
 
 static void ohci_soft_reset(struct ps2_usb* usb) {
-    // Software reset (HcCommandStatus.HCR). Operational registers return to
-    // their defaults, but the root hub/device connection state is preserved.
     usb->hc_control = OHCI_USB_SUSPEND;
     usb->hc_command_status = 0;
     usb->hc_interrupt_status = 0;
@@ -380,14 +356,12 @@ static void ohci_soft_reset(struct ps2_usb* usb) {
     usb->hc_done_head = 0;
     usb->hc_fm_remaining = 0;
     usb->done_queue = 0;
-
-    usb_log("host controller software reset\n");
 }
 
 static void ohci_port_write(struct ps2_usb* usb, int port, uint32_t data) {
     uint32_t* ps = &usb->hc_rh_port_status[port];
 
-    usb_log("write RhPortStatus[%d] = %08x (status was %08x)\n", port, data, *ps);
+    // printf("write RhPortStatus[%d] = %08x (status was %08x)\n", port, data, *ps);
 
     if (data & OHCI_PORT_CCS)  // ClearPortEnable
         *ps &= ~OHCI_PORT_PES;
@@ -410,7 +384,7 @@ static void ohci_port_write(struct ps2_usb* usb, int port, uint32_t data) {
 
         ohci_set_interrupt(usb, OHCI_INTR_RHSC);
 
-        usb_log("port %d reset\n", port);
+        // printf("port %d reset\n", port);
     }
 
     if (data & OHCI_PORT_PPS)  // SetPortPower
@@ -420,8 +394,7 @@ static void ohci_port_write(struct ps2_usb* usb, int port, uint32_t data) {
         *ps &= ~OHCI_PORT_PPS;
 
     // Write-1-to-clear change bits
-    *ps &= ~(data & (OHCI_PORT_CSC | OHCI_PORT_PESC | OHCI_PORT_PSSC |
-                     OHCI_PORT_OCIC | OHCI_PORT_PRSC));
+    *ps &= ~(data & (OHCI_PORT_CSC | OHCI_PORT_PESC | OHCI_PORT_PSSC | OHCI_PORT_OCIC | OHCI_PORT_PRSC));
 }
 
 static const struct {
@@ -457,7 +430,6 @@ void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type) {
 
     struct usb_device* dev = &usb->device[port];
 
-    // Tear down whatever is currently connected
     usb_device_free(dev);
 
     usb->device_type[port] = type;
@@ -468,17 +440,14 @@ void ps2_usb_set_port_device(struct ps2_usb* usb, int port, int type) {
         if (type == USB_DEVICE_MSD && usb->msd_path[port][0])
             usb_msd_set_image(dev, usb->msd_path[port]);
 
-        // Device present and powered; flag the connect status change
         usb->hc_rh_port_status[port] = OHCI_PORT_CCS | OHCI_PORT_PPS | OHCI_PORT_CSC;
     } else {
-        // Port emptied; clear connect status and flag the change
         usb->hc_rh_port_status[port] = OHCI_PORT_PPS | OHCI_PORT_CSC;
     }
 
     ohci_set_interrupt(usb, OHCI_INTR_RHSC);
 
-    usb_log("port %d device set to %s (status=%08x)\n",
-        port, usb_device_types[type].name, usb->hc_rh_port_status[port]);
+    // printf("port %d device set to %s (status=%08x)\n", port, usb_device_types[type].name, usb->hc_rh_port_status[port]);
 }
 
 void ps2_usb_msd_set_image(struct ps2_usb* usb, int port, const char* path) {
@@ -501,7 +470,6 @@ struct ps2_usb* ps2_usb_create(void) {
 }
 
 void ps2_usb_init(struct ps2_usb* usb, struct ps2_iop_intc* intc, struct iop_bus* bus, struct sched_state* sched) {
-    // The port device selection (and MSD image paths) survive a reset
     int configured = usb->configured;
     int device_type[OHCI_NUM_PORTS];
     char msd_path[OHCI_NUM_PORTS][USB_MSD_PATH_MAX];
@@ -521,17 +489,16 @@ void ps2_usb_init(struct ps2_usb* usb, struct ps2_iop_intc* intc, struct iop_bus
     usb->hc_fm_interval = 0x2edf;
     usb->hc_ls_threshold = 0x628;
 
-    // NDP = OHCI_NUM_PORTS, NPS (no power switching, ports always on), POTPGT = 1
     usb->hc_rh_descriptor_a = (1u << 24) | (1u << 9) | OHCI_NUM_PORTS;
     usb->hc_rh_descriptor_b = 0;
     usb->hc_rh_status = 0;
 
     if (!configured) {
-        // Default configuration: a keyboard on the first port
         device_type[0] = USB_DEVICE_KEYBOARD;
 
-        for (int i = 1; i < OHCI_NUM_PORTS; i++)
+        for (int i = 1; i < OHCI_NUM_PORTS; i++) {
             device_type[i] = USB_DEVICE_NONE;
+        }
     }
 
     usb->configured = 1;
@@ -581,12 +548,12 @@ uint64_t ps2_usb_read32(struct ps2_usb* usb, uint32_t addr) {
     if (addr >= USB_HC_RHPORTSTATUS && addr < USB_HC_RHPORTSTATUS + OHCI_NUM_PORTS * 4) {
         int port = (addr - USB_HC_RHPORTSTATUS) >> 2;
 
-        usb_log("read RhPortStatus[%d] = %08x\n", port, usb->hc_rh_port_status[port]);
+        // printf("read RhPortStatus[%d] = %08x\n", port, usb->hc_rh_port_status[port]);
 
         return usb->hc_rh_port_status[port];
     }
 
-    usb_log("unhandled read at %02x\n", addr);
+    // printf("unhandled read at %02x\n", addr);
 
     return 0;
 }
@@ -597,8 +564,7 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
     uint32_t v = (uint32_t)data;
 
     switch (addr) {
-        case USB_HC_REVISION:
-            return;
+        case USB_HC_REVISION: return;
         case USB_HC_CONTROL: {
             uint32_t old_state = usb->hc_control & OHCI_CTL_HCFS;
             usb->hc_control = v;
@@ -606,19 +572,17 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
 
             if (new_state != old_state) {
                 const char* names[] = { "RESET", "RESUME", "OPERATIONAL", "SUSPEND" };
-                usb_log("HcControl=%08x state->%s (PLE=%d CLE=%d BLE=%d IE=%d)\n",
+                printf("HcControl=%08x state->%s (PLE=%d CLE=%d BLE=%d IE=%d)\n",
                     v, names[new_state >> 6],
                     !!(v & OHCI_CTL_PLE), !!(v & OHCI_CTL_CLE),
                     !!(v & OHCI_CTL_BLE), !!(v & OHCI_CTL_IE));
 
-                // A device may already be attached when the driver starts the
-                // controller; let it know via the root hub status change interrupt.
                 if (new_state == OHCI_USB_OPERATIONAL)
                     ohci_update_rhsc(usb);
             }
             return;
         }
-        case USB_HC_COMMANDSTATUS:
+        case USB_HC_COMMANDSTATUS: {
             if (v & OHCI_STATUS_HCR)
                 ohci_soft_reset(usb);
 
@@ -626,69 +590,62 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
 
             if (v & OHCI_STATUS_OCR)
                 ohci_set_interrupt(usb, OHCI_INTR_OC);
-
-            usb_logv("HcCommandStatus write %08x\n", v);
-            return;
-        case USB_HC_INTERRUPTSTATUS:
+        } return;
+        case USB_HC_INTERRUPTSTATUS: {
             usb->hc_interrupt_status &= ~v; // write 1 to clear
             ohci_update_irq(usb);
-            usb_logv("clear interrupt status %08x -> %08x\n", v, usb->hc_interrupt_status);
-            return;
-        case USB_HC_INTERRUPTENABLE:
+        } return;
+        case USB_HC_INTERRUPTENABLE: {
             usb->hc_interrupt_enable |= v;
             ohci_update_irq(usb);
-            usb_log("HcInterruptEnable |= %08x -> %08x\n", v, usb->hc_interrupt_enable);
-            return;
-        case USB_HC_INTERRUPTDISABLE:
+        } return;
+        case USB_HC_INTERRUPTDISABLE: {
             usb->hc_interrupt_enable &= ~v;
             ohci_update_irq(usb);
-            usb_log("HcInterruptDisable %08x -> enable %08x\n", v, usb->hc_interrupt_enable);
-            return;
-        case USB_HC_HCCA:
+        } return;
+        case USB_HC_HCCA: {
             usb->hc_hcca = v & 0xffffff00;
-            usb_log("HcHCCA = %08x\n", usb->hc_hcca);
-            return;
-        case USB_HC_PERIODCURRENTED:
+        } return;
+        case USB_HC_PERIODCURRENTED: {
             usb->hc_period_current_ed = v & 0xfffffff0;
-            return;
-        case USB_HC_CONTROLHEADED:
+        } return;
+        case USB_HC_CONTROLHEADED: {
             usb->hc_control_head_ed = v & 0xfffffff0;
-            usb_log("HcControlHeadED = %08x\n", usb->hc_control_head_ed);
-            return;
-        case USB_HC_CONTROLCURRENTED:
+        } return;
+        case USB_HC_CONTROLCURRENTED: {
             usb->hc_control_current_ed = v & 0xfffffff0;
-            return;
-        case USB_HC_BULKHEADED:
+        } return;
+        case USB_HC_BULKHEADED: {
             usb->hc_bulk_head_ed = v & 0xfffffff0;
-            usb_log("HcBulkHeadED = %08x\n", usb->hc_bulk_head_ed);
-            return;
-        case USB_HC_BULKCURRENTED:
+        } return;
+            
+        case USB_HC_BULKCURRENTED: {
             usb->hc_bulk_current_ed = v & 0xfffffff0;
-            return;
-        case USB_HC_DONEHEAD:
+        } return;
+            
+        case USB_HC_DONEHEAD: {
             usb->hc_done_head = v;
-            return;
-        case USB_HC_FMINTERVAL:
+        } return;
+            
+        case USB_HC_FMINTERVAL: {
             usb->hc_fm_interval = v;
-            return;
-        case USB_HC_FMREMAINING:
-            return;
-        case USB_HC_FMNUMBER:
-            return;
-        case USB_HC_PERIODICSTART:
+        } return;
+        case USB_HC_FMREMAINING: return;
+        case USB_HC_FMNUMBER: return;
+        case USB_HC_PERIODICSTART: {
             usb->hc_periodic_start = v;
-            return;
-        case USB_HC_LSTHRESHOLD:
+        } return;
+        case USB_HC_LSTHRESHOLD: {
             usb->hc_ls_threshold = v;
-            return;
-        case USB_HC_RHDESCRIPTORA:
-            // Keep the number of downstream ports fixed
+        } return;
+        case USB_HC_RHDESCRIPTORA: {
             usb->hc_rh_descriptor_a = (v & 0xffffff00) | OHCI_NUM_PORTS;
-            return;
-        case USB_HC_RHDESCRIPTORB:
+            // Keep the number of downstream ports fixed
+        } return;
+        case USB_HC_RHDESCRIPTORB: {
             usb->hc_rh_descriptor_b = v;
-            return;
-        case USB_HC_RHSTATUS:
+        } return;
+        case USB_HC_RHSTATUS: {
             if (v & 0x00010000) { // SetGlobalPower
                 for (int i = 0; i < OHCI_NUM_PORTS; i++)
                     usb->hc_rh_port_status[i] |= OHCI_PORT_PPS;
@@ -701,7 +658,7 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
                 usb->hc_rh_status |= 0x00008000;
             if (v & 0x80000000) // ClearRemoteWakeupEnable
                 usb->hc_rh_status &= ~0x00008000;
-            return;
+        } return;
     }
 
     if (addr >= USB_HC_RHPORTSTATUS && addr < USB_HC_RHPORTSTATUS + OHCI_NUM_PORTS * 4) {
@@ -712,26 +669,29 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
         return;
     }
 
-    usb_log("unhandled write %08x at %02x\n", v, addr);
+    // printf("unhandled write %08x at %02x\n", v, addr);
 }
 
 void ps2_usb_kbd_key(struct ps2_usb* usb, uint8_t usage, int pressed) {
     for (int i = 0; i < OHCI_NUM_PORTS; i++) {
-        if (usb->device_type[i] == USB_DEVICE_KEYBOARD)
+        if (usb->device_type[i] == USB_DEVICE_KEYBOARD) {
             usb_kbd_key(&usb->device[i], usage, pressed);
+        }
     }
 }
 
 void ps2_usb_mouse_move(struct ps2_usb* usb, int dx, int dy, int dz) {
     for (int i = 0; i < OHCI_NUM_PORTS; i++) {
-        if (usb->device_type[i] == USB_DEVICE_MOUSE)
+        if (usb->device_type[i] == USB_DEVICE_MOUSE) {
             usb_mouse_move(&usb->device[i], dx, dy, dz);
+        }
     }
 }
 
 void ps2_usb_mouse_button(struct ps2_usb* usb, int button, int pressed) {
     for (int i = 0; i < OHCI_NUM_PORTS; i++) {
-        if (usb->device_type[i] == USB_DEVICE_MOUSE)
+        if (usb->device_type[i] == USB_DEVICE_MOUSE) {
             usb_mouse_button(&usb->device[i], button, pressed);
+        }
     }
 }

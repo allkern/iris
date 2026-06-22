@@ -4,20 +4,6 @@
 
 #include "kbd.h"
 
-#define KBD_DEBUG 0
-
-#if KBD_DEBUG >= 1
-#define kbd_log(...) printf("usb-kbd: " __VA_ARGS__)
-#else
-#define kbd_log(...) do {} while (0)
-#endif
-
-#if KBD_DEBUG >= 2
-#define kbd_logv(...) printf("usb-kbd: " __VA_ARGS__)
-#else
-#define kbd_logv(...) do {} while (0)
-#endif
-
 #define KBD_REPORT_DESC_LEN 63
 
 struct usb_kbd {
@@ -160,7 +146,7 @@ static int usb_kbd_get_descriptor(struct usb_kbd* kbd, uint16_t value, uint16_t 
                 case 2: src = kbd_string2; len = sizeof(kbd_string2); break;
 
                 default: {
-                    kbd_log("GET_DESCRIPTOR: unknown string index %d\n", index);
+                    printf("GET_DESCRIPTOR: unknown string index %d\n", index);
 
                     return 0;
                 }
@@ -168,14 +154,14 @@ static int usb_kbd_get_descriptor(struct usb_kbd* kbd, uint16_t value, uint16_t 
         } break;
 
         default: {
-            kbd_log("GET_DESCRIPTOR: unknown type %02x index %d\n", type, index);
+            printf("GET_DESCRIPTOR: unknown type %02x index %d\n", type, index);
 
             return 0;
         }
     }
 
-    kbd_log("GET_DESCRIPTOR type=%02x index=%d -> %d bytes (host asked %d)\n",
-        type, index, len, length);
+    // printf("GET_DESCRIPTOR type=%02x index=%d -> %d bytes (host asked %d)\n",
+    //     type, index, len, length);
 
     (void)length;
 
@@ -192,7 +178,7 @@ static void usb_kbd_complete_status(struct usb_device* dev, struct usb_kbd* kbd)
         dev->address = dev->pending_address;
         kbd->ctrl_set_address = 0;
 
-        kbd_log("device address set to %d\n", dev->address);
+        // printf("keyboard addr %d\n", dev->address);
     }
 }
 
@@ -209,8 +195,8 @@ static int usb_kbd_control(struct usb_device* dev, int pid, uint8_t* buf, int le
         uint16_t wIndex        = buf[4] | (buf[5] << 8);
         uint16_t wLength       = buf[6] | (buf[7] << 8);
 
-        kbd_log("SETUP bmRequestType=%02x bRequest=%02x wValue=%04x wIndex=%04x wLength=%d\n",
-            bmRequestType, bRequest, wValue, wIndex, wLength);
+        // printf("SETUP bmRequestType=%02x bRequest=%02x wValue=%04x wIndex=%04x wLength=%d\n",
+        //     bmRequestType, bRequest, wValue, wIndex, wLength);
 
         kbd->ctrl_offset = 0;
         kbd->ctrl_len = 0;
@@ -262,7 +248,7 @@ static int usb_kbd_control(struct usb_device* dev, int pid, uint8_t* buf, int le
                 } break;
 
                 default: {
-                    kbd_log("STALL: unsupported standard request %02x\n", bRequest);
+                    printf("STALL: unsupported standard request %02x\n", bRequest);
 
                     return USB_ACK_STALL;
                 }
@@ -298,13 +284,13 @@ static int usb_kbd_control(struct usb_device* dev, int pid, uint8_t* buf, int le
                 } break;
 
                 default: {
-                    kbd_log("STALL: unsupported class request %02x\n", bRequest);
+                    printf("STALL: unsupported class request %02x\n", bRequest);
 
                     return USB_ACK_STALL;
                 }
             }
         } else {
-            kbd_log("STALL: unsupported request type %d (bmRequestType=%02x)\n", type, bmRequestType);
+            printf("STALL: unsupported request type %d (bmRequestType=%02x)\n", type, bmRequestType);
 
             return USB_ACK_STALL;
         }
@@ -356,8 +342,6 @@ static int usb_kbd_control(struct usb_device* dev, int pid, uint8_t* buf, int le
 
 static int usb_kbd_interrupt_in(struct usb_kbd* kbd, uint8_t* buf, int len) {
     if (!kbd->report_dirty) {
-        kbd_logv("EP1 IN poll: NAK (no new report)\n");
-
         return USB_ACK_NAK;
     }
 
@@ -369,9 +353,9 @@ static int usb_kbd_interrupt_in(struct usb_kbd* kbd, uint8_t* buf, int len) {
 
     kbd->report_dirty = 0;
 
-    kbd_log("EP1 IN: delivering report %02x %02x %02x %02x %02x %02x %02x %02x (n=%d)\n",
-        kbd->report[0], kbd->report[1], kbd->report[2], kbd->report[3],
-        kbd->report[4], kbd->report[5], kbd->report[6], kbd->report[7], n);
+    // printf("EP1 IN: delivering report %02x %02x %02x %02x %02x %02x %02x %02x (n=%d)\n",
+    //     kbd->report[0], kbd->report[1], kbd->report[2], kbd->report[3],
+    //     kbd->report[4], kbd->report[5], kbd->report[6], kbd->report[7], n);
 
     return n;
 }
@@ -428,8 +412,8 @@ void usb_kbd_key(struct usb_device* dev, uint8_t usage, int pressed) {
 
     uint8_t* report = kbd->report;
 
-    kbd_log("kbd_key usage=%02x pressed=%d (connected=%d address=%d config=%d)\n",
-        usage, pressed, dev->connected, dev->address, dev->configuration);
+    // printf("kbd_key usage=%02x pressed=%d (connected=%d address=%d config=%d)\n",
+    //     usage, pressed, dev->connected, dev->address, dev->configuration);
 
     if (usage >= 0xE0 && usage <= 0xE7) {
         uint8_t bit = 1 << (usage - 0xE0);

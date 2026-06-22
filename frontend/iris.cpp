@@ -14,6 +14,7 @@
 #include "ee/vu_def.hpp"
 #include "iop/iop_def.hpp"
 #include "net.hpp"
+#include "slirp.hpp"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
@@ -577,6 +578,9 @@ SDL_AppResult update(iris::instance* iris) {
 
         return SDL_APP_CONTINUE;
     }
+
+    if (iris->ps2 && iris->ps2->speed)
+        iris::slirp::pump(iris->ps2->speed->smap);
 
     // Execute until VBlank
     while (!ps2_gs_is_vblank(iris->ps2->gs)) {
