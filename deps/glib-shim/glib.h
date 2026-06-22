@@ -14,6 +14,7 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdarg.h>
+#include <signal.h>
 
 #ifdef __cplusplus
 extern "C" {
