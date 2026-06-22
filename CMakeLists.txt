@@ -313,6 +313,7 @@ target_sources(iris PRIVATE
     deps/imgui/imgui_draw.cpp
     deps/imgui/imgui_tables.cpp
     deps/imgui/imgui_widgets.cpp
+    deps/imgui/misc/cpp/imgui_stdlib.cpp
     deps/imgui/backends/imgui_impl_sdl3.cpp
     deps/imgui/backends/imgui_impl_vulkan.cpp
     deps/implot/implot_demo.cpp

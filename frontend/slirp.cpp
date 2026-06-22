@@ -61,6 +61,27 @@ int64_t now_ns() {
     return std::chrono::duration_cast<std::chrono::nanoseconds>(t).count();
 }
 
+static bool parse_ipv4(const std::string& s, uint32_t* out) {
+    unsigned int a, b, c, d;
+    char extra;
+
+    if (sscanf(s.c_str(), "%u.%u.%u.%u%c", &a, &b, &c, &d, &extra) != 4)
+        return false;
+
+    if (a > 255 || b > 255 || c > 255 || d > 255)
+        return false;
+
+    *out = (a << 24) | (b << 16) | (c << 8) | d;
+
+    return true;
+}
+
+bool valid_ipv4(const std::string& s) {
+    uint32_t tmp;
+
+    return parse_ipv4(s, &tmp);
+}
+
 slirp_ssize_t cb_send_packet(const void* buf, size_t len, void* opaque) {
     (void)opaque;
 
@@ -231,9 +252,15 @@ void smap_tx(void* udata, const uint8_t* buf, int len) {
     slirp_input(g->slirp, buf, len);
 }
 
-bool start(struct ps2_smap* smap) {
+bool start(struct ps2_smap* smap, const config& cfg) {
     if (getenv("IRIS_NO_NET")) {
         printf("slirp: disabled via IRIS_NO_NET\n");
+
+        return false;
+    }
+
+    if (!cfg.enabled) {
+        printf("slirp: networking disabled\n");
 
         return false;
     }
@@ -249,17 +276,25 @@ bool start(struct ps2_smap* smap) {
     g = new state();
     g->smap = smap;
 
-    SlirpConfig cfg;
+    uint32_t network, netmask, gateway, dhcp, nameserver;
 
-    memset(&cfg, 0, sizeof(cfg));
+    if (!parse_ipv4(cfg.network,    &network))    network    = 0x0a000200; // 10.0.2.0
+    if (!parse_ipv4(cfg.netmask,    &netmask))    netmask    = 0xffffff00; // 255.255.255.0
+    if (!parse_ipv4(cfg.gateway,    &gateway))    gateway    = 0x0a000202; // 10.0.2.2
+    if (!parse_ipv4(cfg.dhcp_start, &dhcp))       dhcp       = 0x0a00020f; // 10.0.2.15
+    if (!parse_ipv4(cfg.nameserver, &nameserver)) nameserver = 0x0a000203; // 10.0.2.3
 
-    cfg.version = 4;
-    cfg.in_enabled = true;
-    cfg.vnetwork.s_addr = htonl(0x0a000200);    // 10.0.2.0
-    cfg.vnetmask.s_addr = htonl(0xffffff00);    // 255.255.255.0
-    cfg.vhost.s_addr = htonl(0x0a000202);       // 10.0.2.2 (gateway)
-    cfg.vdhcp_start.s_addr = htonl(0x0a00020f); // 10.0.2.15
-    cfg.vnameserver.s_addr = htonl(0x0a000203); // 10.0.2.3
+    SlirpConfig scfg;
+
+    memset(&scfg, 0, sizeof(scfg));
+
+    scfg.version = 4;
+    scfg.in_enabled = true;
+    scfg.vnetwork.s_addr = htonl(network);
+    scfg.vnetmask.s_addr = htonl(netmask);
+    scfg.vhost.s_addr = htonl(gateway);
+    scfg.vdhcp_start.s_addr = htonl(dhcp);
+    scfg.vnameserver.s_addr = htonl(nameserver);
 
     memset(&g->cb, 0, sizeof(g->cb));
 
@@ -275,7 +310,7 @@ bool start(struct ps2_smap* smap) {
     g->cb.register_poll_socket = cb_register_poll_socket;
     g->cb.unregister_poll_socket = cb_unregister_poll_socket;
 
-    g->slirp = slirp_new(&cfg, &g->cb, g);
+    g->slirp = slirp_new(&scfg, &g->cb, g);
 
     if (!g->slirp) {
         delete g;
@@ -321,6 +356,15 @@ void stop() {
 #ifdef _WIN32
     WSACleanup();
 #endif
+}
+
+void restart(struct ps2_smap* smap, const config& cfg) {
+    stop();
+    start(smap, cfg);
+}
+
+bool running() {
+    return g != nullptr;
 }
 
 void pump(struct ps2_smap* smap) {

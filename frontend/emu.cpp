@@ -23,8 +23,6 @@ bool init(iris::instance* iris) {
 
     iris->ds[0] = ds_attach(iris->ps2->sio2, 0);
 
-    iris::slirp::start(iris->ps2->speed->smap);
-
     return true;
 }
 

@@ -404,7 +404,7 @@ static const struct {
     [USB_DEVICE_NONE]     = { "None", NULL },
     [USB_DEVICE_KEYBOARD] = { "Keyboard", usb_kbd_create },
     [USB_DEVICE_MOUSE]    = { "Mouse", usb_mouse_create },
-    [USB_DEVICE_MSD]      = { "Mass Storage", usb_msd_create },
+    [USB_DEVICE_MSD]      = { "Thumb drive", usb_msd_create },
 };
 
 const char* ps2_usb_device_type_name(int type) {
@@ -571,11 +571,11 @@ void ps2_usb_write32(struct ps2_usb* usb, uint32_t addr, uint64_t data) {
             uint32_t new_state = v & OHCI_CTL_HCFS;
 
             if (new_state != old_state) {
-                const char* names[] = { "RESET", "RESUME", "OPERATIONAL", "SUSPEND" };
-                printf("HcControl=%08x state->%s (PLE=%d CLE=%d BLE=%d IE=%d)\n",
-                    v, names[new_state >> 6],
-                    !!(v & OHCI_CTL_PLE), !!(v & OHCI_CTL_CLE),
-                    !!(v & OHCI_CTL_BLE), !!(v & OHCI_CTL_IE));
+                // const char* names[] = { "RESET", "RESUME", "OPERATIONAL", "SUSPEND" };
+                // printf("HcControl=%08x state->%s (PLE=%d CLE=%d BLE=%d IE=%d)\n",
+                //     v, names[new_state >> 6],
+                //     !!(v & OHCI_CTL_PLE), !!(v & OHCI_CTL_CLE),
+                //     !!(v & OHCI_CTL_BLE), !!(v & OHCI_CTL_IE));
 
                 if (new_state == OHCI_USB_OPERATIONAL)
                     ohci_update_rhsc(usb);

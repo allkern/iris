@@ -331,14 +331,12 @@ void ps2_cycle(struct ps2_state* ps2) {
     }
 
     while (ps2->ee_cycles < max_block_cycles) {
-        uint32_t cycles = ee_run_block(ps2->ee, 256);
-
-        sched_tick(ps2->sched, ps2->timescale * cycles);
-
-        ps2_ipu_run(ps2->ipu);
-
-        ps2->ee_cycles += cycles;
+        ps2->ee_cycles += ee_run_block(ps2->ee, 256);
     }
+
+    sched_tick(ps2->sched, ps2->timescale * ps2->ee_cycles);
+
+    ps2_ipu_run(ps2->ipu);
 
     // The timer runs at BUSCLK speed, that is 1 BUSCLK cycle every 2 EE instructions
     ps2_ee_timers_tick_cycles(ps2->ee_timers, ps2->ee_cycles);
@@ -346,6 +344,8 @@ void ps2_cycle(struct ps2_state* ps2) {
     ps2->iop_cycles += ps2->ee_cycles / 8;
 
     // printf("ee: cycles=%d iop cycles=%d\n", ps2->ee_cycles, ps2->iop_cycles);
+
+    int cycles_run = 0;
 
     while (ps2->iop_cycles > 0) {
         int cycles = iop_run_block(ps2->iop, 16);
@@ -501,6 +501,8 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             ee_ram_size = RAM_SIZE_32MB;
             iop_ram_size = RAM_SIZE_2MB;
             mechacon_model = CDVD_MECHACON_DRAGON;
+
+            ps2_speed_set_smap_enabled(ps2->speed, 1);
         } break;
 
         case PS2_SYSTEM_DESR: {
@@ -509,6 +511,7 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             mechacon_model = CDVD_MECHACON_DRAGON;
 
             ps2_speed_set_dvrp_enabled(ps2->speed, 1);
+            ps2_speed_set_smap_enabled(ps2->speed, 1);
         } break;
 
         case PS2_SYSTEM_TEST:

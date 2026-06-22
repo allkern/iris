@@ -197,6 +197,14 @@ bool parse_toml_settings(iris::instance* iris) {
         iris->mac_address[5] = 0x5E;
     }
 
+    auto network = tbl["network"];
+    iris->slirp_config.enabled    = network["enabled"].value_or(true);
+    iris->slirp_config.network    = network["network"].value_or("10.0.2.0");
+    iris->slirp_config.netmask    = network["netmask"].value_or("255.255.255.0");
+    iris->slirp_config.gateway    = network["gateway"].value_or("10.0.2.2");
+    iris->slirp_config.dhcp_start = network["dhcp_start"].value_or("10.0.2.15");
+    iris->slirp_config.nameserver = network["nameserver"].value_or("10.0.2.3");
+
     auto screenshots = tbl["screenshots"];
     iris->screenshot_format = screenshots["format"].value_or(IRIS_SCREENSHOT_FORMAT_PNG);
     iris->screenshot_jpg_quality_mode = screenshots["jpg_quality_mode"].value_or(IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM);
@@ -450,6 +458,8 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     ps2_speed_load_hdd(iris->ps2->speed, iris->hdd_path.c_str());
     ps2_speed_set_mac_address(iris->ps2->speed, iris->mac_address);
 
+    iris::slirp::start(iris->ps2->speed->smap, iris->slirp_config);
+
     for (int i = 0; i < 2; i++) {
         if (iris->usb_msd_paths[i].size())
             ps2_usb_msd_set_image(iris->ps2->usb, i, iris->usb_msd_paths[i].c_str());
@@ -503,6 +513,14 @@ void close(iris::instance* iris) {
                 iris->mac_address[5]
             } },
             { "autostart", iris->autostart }
+        } },
+        { "network", toml::table {
+            { "enabled", iris->slirp_config.enabled },
+            { "network", iris->slirp_config.network },
+            { "netmask", iris->slirp_config.netmask },
+            { "gateway", iris->slirp_config.gateway },
+            { "dhcp_start", iris->slirp_config.dhcp_start },
+            { "nameserver", iris->slirp_config.nameserver }
         } },
         { "input", toml::table {
             { "slot1_device", iris->input_devices[0] ? iris->input_devices[0]->get_type() : 0 },

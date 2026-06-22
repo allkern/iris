@@ -2,9 +2,12 @@
 #include <vector>
 #include <string>
 #include <cctype>
+#include <cstring>
+#include <random>
 
 #include "iris.hpp"
 
+#include "misc/cpp/imgui_stdlib.h"
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 
@@ -185,6 +188,52 @@ const char* mechacon_model_names[] = {
     "Dragon"
 };
 
+static int mac_address_callback(ImGuiInputTextCallbackData* data) {
+    char hex[13];
+    int hexlen = 0;
+    int hex_before_cursor = 0;
+
+    for (int i = 0; i < data->BufTextLen && hexlen < 12; i++) {
+        if (!isxdigit((unsigned char)data->Buf[i]))
+            continue;
+
+        if (i < data->CursorPos)
+            hex_before_cursor++;
+
+        hex[hexlen++] = (char)toupper((unsigned char)data->Buf[i]);
+    }
+
+    hex[hexlen] = '\0';
+
+    char formatted[18];
+    int len = 0;
+    int cursor = 0;
+
+    for (int i = 0; i < hexlen; i++) {
+        if (i && (i % 2) == 0)
+            formatted[len++] = ':';
+
+        if (i == hex_before_cursor)
+            cursor = len;
+
+        formatted[len++] = hex[i];
+    }
+
+    formatted[len] = '\0';
+
+    if (hex_before_cursor >= hexlen)
+        cursor = len;
+
+    if (strcmp(formatted, data->Buf) != 0) {
+        data->DeleteChars(0, data->BufTextLen);
+        data->InsertChars(0, formatted);
+        data->CursorPos = cursor;
+        data->SelectionStart = data->SelectionEnd = cursor;
+    }
+
+    return 0;
+}
+
 void show_system_settings(iris::instance* iris) {
     using namespace ImGui;
 
@@ -253,42 +302,153 @@ void show_system_settings(iris::instance* iris) {
         EndCombo();
     }
 
-    if (BeginTable("##effective-clock", 2, ImGuiTableFlags_SizingFixedSame)) {
+    auto print_freq = [iris](const char* label, double freq) {
         TableNextRow();
 
         TableSetColumnIndex(0);
-        TextDisabled("Effective frequency");
+        TextDisabled(label);
         TableSetColumnIndex(1);
 
-        double freq = 294.9121 / (double)iris->timescale;
+        double f = freq / (double)iris->timescale;
 
-        Text("%.3f MHz", freq);
+        if (f <= 1.0) {
+            Text("%.3f KHz", f * 1000.0);
+        } else if (f >= 1000.0) {
+            Text("%.3f GHz", f / 1000.0);
+        } else {
+            Text("%.3f MHz", f);
+        }
+    };
+
+    if (BeginTable("##effective-clock", 2, ImGuiTableFlags_SizingFixedSame)) {
+        print_freq("EE clock", 294.9121); // in MHz
+        print_freq("IOP clock", 36.8641);
 
         EndTable();
     }
 
     SeparatorText("Network");
 
-    // To-do: Improve MAC address input by using a single text input
-    //        that fills in the colons automatically
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
-    Text("MAC Address");
+    if (Checkbox("Enable networking", &iris->slirp_config.enabled))
+        iris::slirp::restart(iris->ps2->speed->smap, iris->slirp_config);
 
-    PushFont(iris->font_code);
+    PopStyleVar();
 
-    float w = CalcTextSize("FFFFFFFFFFFF").x;
+    SameLine();
+    TextDisabled("%s", iris::slirp::running() ? "(running)" : "(stopped)");
 
-    SetNextItemWidth(w * 2.0);
+    BeginDisabled(!iris->slirp_config.enabled);
 
-    if (InputScalarN("##macaddress", ImGuiDataType_U8, iris->mac_address, 6, nullptr, nullptr, "%02X", ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_CharsUppercase)) {
-        ps2_set_mac_address(iris->ps2, iris->mac_address);
+    Spacing();
+
+    bool valid = true;
+
+    auto ip_input = [&](const char* label, const char* id, std::string& value) {
+        TableNextRow();
+
+        bool ok = iris::slirp::valid_ipv4(value);
+
+        valid = valid && ok;
+
+        TableSetColumnIndex(0);
+        AlignTextToFramePadding();
+        Text("%s", label);
+
+        PushFont(iris->font_code);
+        SetNextItemWidth((CalcTextSize("000.000.000.000").x + GetStyle().FramePadding.x) * 2.0f);
+
+        if (!ok) {
+            PushStyleColor(ImGuiCol_Text, IM_COL32(230, 90, 90, 255));
+        }
+
+        TableSetColumnIndex(1);
+        InputTextWithHint(id, "0.0.0.0", &value, ImGuiInputTextFlags_CharsDecimal);
+
+        if (!ok) {
+            PopStyleColor();
+        }
+
+        PopFont();
+    };
+
+    if (BeginTable("##network-table", 2, ImGuiTableFlags_SizingFixedFit)) {
+        TableNextRow();
+        TableSetColumnIndex(0);
+        AlignTextToFramePadding();
+        Text("MAC Address");
+
+        static char mac_address[18];
+        static bool mac_editing = false;
+
+        if (!mac_editing) {
+            snprintf(mac_address, sizeof(mac_address), "%02X:%02X:%02X:%02X:%02X:%02X",
+                     iris->mac_address[0], iris->mac_address[1], iris->mac_address[2],
+                     iris->mac_address[3], iris->mac_address[4], iris->mac_address[5]);
+        }
+
+        TableSetColumnIndex(1);
+
+        PushFont(iris->font_code);
+        SetNextItemWidth((CalcTextSize("000.000.000.000").x + GetStyle().FramePadding.x) * 2.0f);
+
+        if (InputTextWithHint("##macaddress", "00:00:00:00:00:00", mac_address, IM_ARRAYSIZE(mac_address), ImGuiInputTextFlags_CallbackEdit, mac_address_callback)) {
+            sscanf(mac_address, "%02hhX:%02hhX:%02hhX:%02hhX:%02hhX:%02hhX",
+                   &iris->mac_address[0], &iris->mac_address[1], &iris->mac_address[2],
+                   &iris->mac_address[3], &iris->mac_address[4], &iris->mac_address[5]);
+
+            ps2_set_mac_address(iris->ps2, iris->mac_address);
+        }
+
+        mac_editing = IsItemActive();
+
+        PopFont();
+
+        SameLine();
+
+        if (Button(ICON_MS_REFRESH "##macaddress")) {
+            static std::mt19937 rng(std::random_device{}() ^ (unsigned)(GetTime() * 1e6));
+
+            std::uniform_int_distribution<int> byte(0, 255);
+
+            for (int i = 0; i < 6; i++)
+                iris->mac_address[i] = (uint8_t)byte(rng);
+
+            // Locally administered, unicast
+            iris->mac_address[0] = (iris->mac_address[0] & 0xFC) | 0x02;
+
+            ps2_set_mac_address(iris->ps2, iris->mac_address);
+        }
+
+        ip_input("Network",    "##network", iris->slirp_config.network);
+        ip_input("Netmask",    "##netmask", iris->slirp_config.netmask);
+        ip_input("Gateway",    "##gateway", iris->slirp_config.gateway);
+        ip_input("DHCP start", "##dhcp_start", iris->slirp_config.dhcp_start);
+        ip_input("DNS server", "##nameserver", iris->slirp_config.nameserver);
+
+        EndTable();
+    }
+
+    BeginDisabled(!valid);
+
+    if (Button("Apply##slirp")) {
+        iris::slirp::restart(iris->ps2->speed->smap, iris->slirp_config);
     } SameLine();
 
-    PopFont();
+    EndDisabled();
 
-    if (Button(ICON_MS_REFRESH "##macaddress")) {
-        ps2_set_mac_address(iris->ps2, iris->mac_address);
+    if (Button("Restore defaults##slirp")) {
+        iris->slirp_config.network    = "10.0.2.0";
+        iris->slirp_config.netmask    = "255.255.255.0";
+        iris->slirp_config.gateway    = "10.0.2.2";
+        iris->slirp_config.dhcp_start = "10.0.2.15";
+        iris->slirp_config.nameserver = "10.0.2.3";
+
+        iris::slirp::restart(iris->ps2->speed->smap, iris->slirp_config);
     }
+    
+    EndDisabled();
 
     SeparatorText("Misc.");
 
@@ -1021,7 +1181,7 @@ void show_usb_port(iris::instance* iris, int port) {
 
     Text("Device");
 
-    SetNextItemWidth(GetContentRegionAvail().x);
+    SetNextItemWidth(300.0);
 
     if (BeginCombo("##usbdevice", current_name ? current_name : "None")) {
         for (int i = 0; i < USB_DEVICE_TYPE_COUNT; i++) {
@@ -1038,12 +1198,29 @@ void show_usb_port(iris::instance* iris, int port) {
     }
 
     if (iris->usb_devices[port] == USB_DEVICE_MSD) {
-        const std::string& path = iris->usb_msd_paths[port];
+        static char msd_buf[2][512];
 
-        Text("Disk image");
-        TextWrapped("%s", path.size() ? path.c_str() : "No image (drive empty)");
+        std::string& path = iris->usb_msd_paths[port];
 
-        if (Button(ICON_MS_FOLDER " Browse##msdimage")) {
+        Separator();
+        Text("Image");
+
+        const char* hint = path.size() ? path.c_str() : "No image (drive empty)";
+
+        SetNextItemWidth(300);
+
+        if (InputTextWithHint("##msdimage", hint, msd_buf[port], 512, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_EscapeClearsAll)) {
+            if (msd_buf[port][0]) {
+                path = msd_buf[port];
+                msd_buf[port][0] = '\0';
+
+                ps2_usb_msd_set_image(iris->ps2->usb, port, path.c_str());
+            }
+        }
+
+        SameLine();
+
+        if (Button(ICON_MS_FOLDER "##msdimage")) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Select USB drive image", "", {
@@ -1056,16 +1233,18 @@ void show_usb_port(iris::instance* iris, int port) {
             audio::unmute(iris);
 
             if (f.result().size()) {
-                iris->usb_msd_paths[port] = f.result().at(0);
+                path = f.result().at(0);
 
-                ps2_usb_msd_set_image(iris->ps2->usb, port, iris->usb_msd_paths[port].c_str());
+                ps2_usb_msd_set_image(iris->ps2->usb, port, path.c_str());
             }
-        } SameLine();
+        }
+
+        SameLine();
 
         BeginDisabled(path.empty());
 
-        if (Button(ICON_MS_CLEAR " Eject##msdimage")) {
-            iris->usb_msd_paths[port] = "";
+        if (Button(ICON_MS_CLEAR "##msdimage")) {
+            path = "";
 
             ps2_usb_msd_set_image(iris->ps2->usb, port, nullptr);
         }

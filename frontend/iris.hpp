@@ -20,6 +20,7 @@
 
 #include "ps2.h"
 #include "config.hpp"
+#include "slirp.hpp"
 
 namespace iris {
 
@@ -475,6 +476,8 @@ struct instance {
     bool auto_paths = true;
 
     uint8_t mac_address[6] = { 0 };
+
+    slirp::config slirp_config;
 
     bool core0_mute[24] = { false };
     bool core1_mute[24] = { false };
