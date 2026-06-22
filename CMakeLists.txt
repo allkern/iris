@@ -145,6 +145,8 @@ target_include_directories(slirp PUBLIC
 if (WIN32)
     target_compile_definitions(slirp PRIVATE _CRT_SECURE_NO_WARNINGS)
     target_link_libraries(slirp PUBLIC ws2_32 iphlpapi)
+elseif (APPLE)
+    target_link_libraries(slirp PUBLIC resolv)
 endif()
 
 if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
