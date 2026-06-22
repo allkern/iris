@@ -11,8 +11,8 @@
 #define fseek64 fseeko64
 #define ftell64 ftello64
 #else
-#define fseek64 fseek64
-#define ftell64 ftell64
+#define fseek64 fseek
+#define ftell64 ftell
 #endif
 
 #define MSD_BLOCK_SIZE 512
