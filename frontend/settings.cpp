@@ -7,6 +7,8 @@
 #define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
 
+#include <filesystem>
+
 namespace iris::settings {
 
 void print_version() {
@@ -40,6 +42,7 @@ void print_help() {
         "      --slot2              Specify a path to a memory card file to\n"
         "                             be inserted on slot 2\n"
         "      --snap               Specify a directory for storing screenshots\n"
+        "      --reset-settings     Reset the settings file to its defaults\n"
         "  -h, --help               Display this help and exit\n"
         "  -v, --version            Output version information and exit\n"
     );
@@ -88,20 +91,24 @@ bool parse_mappings_file(iris::instance* iris) {
     return true;
 }
 
-bool parse_toml_settings(iris::instance* iris) {
+bool parse_toml_settings(iris::instance* iris, bool reset) {
     iris->settings_path = iris->pref_path + "settings.toml";
 
-    toml::parse_result result = toml::parse_file(iris->settings_path);
+    toml::table tbl;
 
-    if (!result) {
-        std::string desc(result.error().description());
+    if (!reset) {
+        toml::parse_result result = toml::parse_file(iris->settings_path);
 
-        printf("iris: Couldn't parse settings file: %s\n", desc.c_str());
+        if (!result) {
+            std::string desc(result.error().description());
 
-        return false;
+            printf("iris: Couldn't parse settings file: %s\n", desc.c_str());
+
+            return false;
+        }
+
+        tbl = std::move(result).table();
     }
-
-    toml::table& tbl = result.table();
 
     auto paths = tbl["paths"];
     iris->bios_path = paths["bios_path"].value_or("");
@@ -305,6 +312,27 @@ bool check_for_quick_exit(int argc, const char* argv[]) {
             print_version();
 
             return true;
+        } else if (a == "--reset-settings") {
+            iris::instance* tmp = iris::create();
+
+            if (std::filesystem::exists("portable") || std::filesystem::exists("portable.txt")) {
+                tmp->pref_path = "./";
+            } else {
+                char* pref = SDL_GetPrefPath("Allkern", "Iris");
+
+                tmp->pref_path = pref ? std::string(pref) : "./";
+
+                if (pref)
+                    SDL_free(pref);
+            }
+
+            // Load defaults (ignoring the existing file) and write them back out.
+            parse_toml_settings(tmp, true);
+            close(tmp);
+
+            printf("iris: Settings reset\n");
+
+            return true;
         }
     }
 
@@ -436,7 +464,7 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
 }
 
 bool init(iris::instance* iris, int argc, const char* argv[]) {
-    int r = parse_toml_settings(iris);
+    parse_toml_settings(iris, false);
 
     parse_cli_settings(iris, argc, argv);
 
