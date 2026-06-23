@@ -858,6 +858,9 @@ int get_menubar_height(iris::instance* iris) {
 }
 
 void destroy(iris::instance* iris) {
+    if (!iris)
+        return;
+
     if (iris->snap_on_exit) {
         input::save_screenshot(iris);
     }
