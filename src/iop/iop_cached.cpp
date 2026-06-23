@@ -21,12 +21,17 @@ void iop_invalidate_cache_page(struct iop_state* iop, uint32_t addr) {
     if (iop->block_cache[page].dirty || !iop->block_cache[page].valid)
         return;
 
-    // Note: We should eventually reintroduce this to avoid unnecessary invalidations,
-    //       but for now it's safer to just invalidate on every write to ensure correctness.
-    // if (addr < iop->block_cache[page].min_code_addr || addr >= iop->block_cache[page].max_code_addr)
-    //     return;
+    // Note: Skip writes that land outside the code actually cached in this page.
+    //       addr is physical here (translated by the caller), so min/max_code_addr
+    //       must be tracked in physical space too (see iop_cache_block).
+    // 
+    // Note: We might eventually have to clamp blocks to page boundaries, otherwise
+    //       a block that crosses a page boundary might not be invalidated by a write to
+    //       the adjacent page. This applies to the EE as well.
+    if (addr < iop->block_cache[page].min_code_addr || addr >= (iop->block_cache[page].max_code_addr + 4))
+        return;
 
-    // printf("iop: Invalidating page at addr=%08x page=%u\n", addr, page);
+    // printf("iop: Invalidating page at addr=%08x page=%u (%08x) min=%08x max=%08x\n", addr, page, (addr / _IOP_CACHE_PAGESIZE) * _IOP_CACHE_PAGESIZE, iop->block_cache[page].min_code_addr, iop->block_cache[page].max_code_addr);
 
     iop->block_cache[page].dirty = true;
 }
@@ -1174,6 +1179,10 @@ iop_instruction iop_decode(uint32_t opcode) {
 }
 
 iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
+    if (iop->last_cached_block_pc == pc) {
+        return iop->last_cached_block;
+    }
+
     uint32_t addr = iop_translate_addr(pc);
     uint32_t page = addr / _IOP_CACHE_PAGESIZE;
 
@@ -1187,7 +1196,7 @@ iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
         iop->block_cache[page].blocks = nullptr;
         iop->block_cache[page].dirty = false;
         iop->block_cache[page].valid = false;
-        iop->block_cache[page].min_code_addr = 0;
+        iop->block_cache[page].min_code_addr = 0xffffffff;
         iop->block_cache[page].max_code_addr = 0;
 
         return nullptr;
@@ -1217,14 +1226,14 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
         iop->block_cache[page].blocks = new iop_block[_IOP_CACHE_PAGESIZE >> 2];
         iop->block_cache[page].dirty = false;
         iop->block_cache[page].valid = true;
-        iop->block_cache[page].min_code_addr = addr;
-        iop->block_cache[page].max_code_addr = addr;
+        iop->block_cache[page].min_code_addr = translated;
+        iop->block_cache[page].max_code_addr = translated;
     }
 
     struct iop_block& block = iop->block_cache[page].blocks[offset];
 
-    if (addr < iop->block_cache[page].min_code_addr) {
-        iop->block_cache[page].min_code_addr = addr;
+    if (translated < iop->block_cache[page].min_code_addr) {
+        iop->block_cache[page].min_code_addr = translated;
     }
 
     iop_instruction i;
@@ -1264,9 +1273,13 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
         block.end_pc += 4;
     }
 
-    if (iop->block_cache[page].max_code_addr < block.end_pc) {
-        iop->block_cache[page].max_code_addr = block.end_pc;
+    uint32_t translated_end = translated + (block.end_pc - addr);
+
+    if (iop->block_cache[page].max_code_addr < translated_end) {
+        iop->block_cache[page].max_code_addr = translated_end;
     }
+
+    // printf("iop: Caching block at pc=%08x page=%u min=%08x max=%08x max_cycles=%d\n", addr, page, iop->block_cache[page].min_code_addr, iop->block_cache[page].max_code_addr, max_cycles);
 
     return &block;
 }
