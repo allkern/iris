@@ -544,7 +544,7 @@ struct instance {
     int vulkan_physical_device = -1;
     int vulkan_selected_device_index = 0;
     bool vulkan_enable_validation_layers = false;
-    bool imgui_enable_viewports = false;
+    bool imgui_enable_viewports = true;
     int codeview_color_scheme = 0;
     ImColor codeview_color_text = IM_COL32(131, 148, 150, 255);
     ImColor codeview_color_comment = IM_COL32(88, 110, 117, 255);
