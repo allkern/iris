@@ -1,6 +1,7 @@
 #pragma once
 
 #include <vector>
+#include <asmjit/ujit.h>
 
 #include "iop.h"
 
@@ -88,6 +89,9 @@ struct iop_instruction {
     uint32_t imm16 = 0;
     int32_t imm16s = 0;
     uint32_t imm26 = 0;
+    int dst = 0;
+    int src1 = 0;
+    int src2 = 0;
 
     // 0 - no branch
     // 1 - normal branch
@@ -97,11 +101,14 @@ struct iop_instruction {
     void (*func)(struct iop_state*, iop_instruction&) = nullptr;
 };
 
+typedef void (*iop_compiled_block)(struct iop_state*);
+
 struct iop_block {
     std::vector <iop_instruction> instructions;
     uint32_t cycles = 0;
     uint32_t start_pc = 0;
     uint32_t end_pc = 0;
+    iop_compiled_block func = nullptr;
 };
 
 struct iop_cache_page {
@@ -118,7 +125,26 @@ struct iop_cache_page {
 
 #define IOP_CACHE_PAGECOUNT (0x20000000u / _IOP_CACHE_PAGESIZE)
 
+struct iop_cached_reg {
+    asmjit::ujit::Gp reg;
+    bool valid = false;
+    bool dirty = false;
+    bool constant = false;
+    uint32_t value = 0;
+};
+
 struct iop_state {
+    uint32_t r[32] = { 0 };
+    uint32_t hi = 0, lo = 0;
+    uint32_t opcode = 0;
+    uint32_t pc = 0, next_pc = 0, saved_pc = 0;
+    uint32_t load_d = 0, load_v = 0;
+    uint32_t last_cycles = 0;
+    uint64_t total_cycles = 0;
+    uint32_t biu_config = 0;
+    int branch = 0, delay_slot = 0, branch_taken = 0;
+    uint32_t cop0_r[16] = { 0 };
+
     struct iop_bus_s bus = { nullptr };
 
     iop_cache_page block_cache[IOP_CACHE_PAGECOUNT] = { nullptr };
@@ -127,23 +153,23 @@ struct iop_state {
     uint32_t last_cached_block_pc = 0;
     uint32_t executing_cache_page = 0xffffffff;
     uint32_t deferred_invalidate_page = 0xffffffff;
-    
-    uint32_t r[32] = { 0 };
-    uint32_t opcode = 0;
-    uint32_t pc = 0, next_pc = 0, saved_pc = 0;
-    uint32_t hi = 0, lo = 0;
-    uint32_t load_d = 0, load_v = 0;
-    uint32_t last_cycles = 0;
-    uint64_t total_cycles = 0;
-    uint32_t biu_config = 0;
-    int branch = 0, delay_slot = 0, branch_taken = 0;
 
     void (*kputchar)(void*, char) = nullptr;
     void* kputchar_udata = nullptr;
     void (*sm_putchar)(void*, char) = nullptr;
     void* sm_putchar_udata = nullptr;
-    
-    uint32_t cop0_r[16] = { 0 };
+
+    // ASMJIT stuff
+    asmjit::JitRuntime rt;
+    asmjit::CodeHolder code;
+    asmjit::FileLogger* logger;
+    asmjit::ujit::BackendCompiler* bc;
+    asmjit::ujit::UniCompiler* uc;
+    asmjit::ujit::Gp iop_ptr;
+    iop_cached_reg reg_cache[32];
+    bool load_pending = false;
+    bool load_pending_reg_known = false;
+    int load_pending_reg = 0;
 
     uint32_t module_list_addr = 0;
     uint32_t thread_list_addr = 0;

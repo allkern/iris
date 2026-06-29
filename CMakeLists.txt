@@ -255,7 +255,7 @@ target_sources(iris PRIVATE
     src/iop/dma.c
     src/iop/fw.c
     src/iop/intc.c
-    src/iop/iop_cached.cpp
+    src/iop/iop_jit.cpp
     src/iop/iop_export.cpp
     src/iop/iop_dis.c
     src/iop/rpc.c

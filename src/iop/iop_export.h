@@ -50,7 +50,13 @@ extern "C" {
 
 #define LOADCORE_REG_LIB_ENT 6
 
+uint32_t irx_import_table_addr(struct iop_state* iop, int entry);
+int iop_get_module(struct iop_state* iop, int itable);
+int iop_delegate_ioman(struct iop_state* iop, int slot, int iomanx);
+int iop_delegate_loadcore(struct iop_state* iop, int slot);
+int iop_delegate_sysmem(struct iop_state* iop, int slot);
 int iop_test_module_hooks(struct iop_state* iop);
+int iop_get_module_for_address(struct iop_state* iop, uint32_t addr, uint32_t* slot);
 void iop_return(struct iop_state* iop, int ret);
 
 #ifdef __cplusplus

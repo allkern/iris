@@ -350,7 +350,7 @@ void ps2_cycle(struct ps2_state* ps2) {
     int cycles_run = 0;
 
     while (ps2->iop_cycles > 0) {
-        int cycles = iop_run_block(ps2->iop, 16);
+        int cycles = iop_run_block(ps2->iop, 64);
 
         ps2_iop_timers_tick_cycles(ps2->iop_timers, cycles / 2);
 

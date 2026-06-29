@@ -1,7 +1,7 @@
 #include "iop_export.h"
 #include "iop_def.hpp"
 
-static inline uint32_t irx_import_table_addr(struct iop_state* iop, int entry) {
+uint32_t irx_import_table_addr(struct iop_state* iop, int entry) {
     uint32_t i = entry - 0x18;
 
     while ((entry - i) < 0x2000) {
@@ -14,7 +14,7 @@ static inline uint32_t irx_import_table_addr(struct iop_state* iop, int entry) {
     return 0;
 }
 
-static inline int iop_get_module(struct iop_state* iop, int itable) {
+int iop_get_module(struct iop_state* iop, int itable) {
     char buf[9];
 
     for (int i = 0; i < 8; i++)
@@ -28,7 +28,7 @@ static inline int iop_get_module(struct iop_state* iop, int itable) {
     return MODULE_UNKNOWN;
 }
 
-static inline int iop_delegate_ioman(struct iop_state* iop, int slot, int iomanx) {
+int iop_delegate_ioman(struct iop_state* iop, int slot, int iomanx) {
     switch (slot & 0xffff) {
         case IOMAN_OPEN: return ioman_open(iop, iomanx);
         case IOMAN_CLOSE: return ioman_close(iop, iomanx);
@@ -63,7 +63,7 @@ static inline int iop_delegate_ioman(struct iop_state* iop, int slot, int iomanx
     return 0;
 }
 
-static inline int iop_delegate_loadcore(struct iop_state* iop, int slot) {
+int iop_delegate_loadcore(struct iop_state* iop, int slot) {
     switch (slot & 0xffff) {
         case LOADCORE_REG_LIB_ENT: return loadcore_reg_lib_ent(iop);
     }
@@ -71,7 +71,7 @@ static inline int iop_delegate_loadcore(struct iop_state* iop, int slot) {
     return 0;
 }
 
-static inline int iop_delegate_sysmem(struct iop_state* iop, int slot) {
+int iop_delegate_sysmem(struct iop_state* iop, int slot) {
     switch (slot & 0xffff) {
         // SYSMEM kprintf
         case 14: return sysmem_kprintf(iop);
@@ -104,6 +104,25 @@ int iop_test_module_hooks(struct iop_state* iop) {
     }
 
     return 0;
+}
+
+int iop_get_module_for_address(struct iop_state* iop, uint32_t addr, uint32_t* slot) {
+    *slot = iop_read32(iop, addr);
+
+    if ((*slot >> 16) != 0x2400)
+        return 0;
+
+    uint32_t itable = irx_import_table_addr(iop, addr);
+
+    if (!itable)
+        return 0;
+
+    int module = iop_get_module(iop, itable);
+
+    if (!module)
+        return 0;
+
+    return module;
 }
 
 void iop_return(struct iop_state* iop, int ret) {
