@@ -8,6 +8,14 @@
 FILE* output = NULL;
 uint32_t chunk_size = 0;
 
+enum {
+    ADSR_ATTACK,
+    ADSR_DECAY,
+    ADSR_SUSTAIN,
+    ADSR_RELEASE,
+    ADSR_END
+};
+
 static const int16_t g_spu_gauss_table[] = {
     -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001,
     -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001, -0x001,
@@ -233,7 +241,7 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
         cr->endx &= ~(1u << idx);
 
         // if (c == 1 && idx == 0)
-        //     printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
+            // printf("spu2: CORE%d Voice %d playing, ssa=%08x lsax=%08x nax=%08x voll=%04x volr=%04x\n", c, i+h*16, v->ssa, v->lsax, v->nax, v->voll, v->volr);
 
         adsr_load_attack(spu2, cr, v);
         spu2_decode_adpcm_block(spu2, v);
@@ -341,7 +349,7 @@ void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
 uint16_t spu2_get_voice_envx(struct ps2_spu2* spu2, int c, int v) {
     uint16_t envx = spu2->c[c].v[v].envx;
 
-    if (!spu2->c[c].v[v].playing) {
+    if (spu2->c[c].v[v].adsr_phase == ADSR_END || !spu2->c[c].v[v].playing) {
         return 0;
     }
 
@@ -831,14 +839,6 @@ void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v) {
 #define CLAMP(v, l, h) (((v) <= (l)) ? (l) : (((v) >= (h)) ? (h) : (v)))
 #define MAX(a, b) ((a) > (b) ? (a) : (b))
 
-enum {
-    ADSR_ATTACK,
-    ADSR_DECAY,
-    ADSR_SUSTAIN,
-    ADSR_RELEASE,
-    ADSR_END
-};
-
 void adsr_calculate_values(struct ps2_spu2* spu2, struct spu2_voice* v) {
     CYCLES = 1 << MAX(0, SHIFT - 11);
     LEVEL_STEP = STEP << MAX(0, 11 - SHIFT);
@@ -909,13 +909,17 @@ void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_v
 }
 
 void spu2_handle_adsr(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v) {
-    if (CYCLES) {
+    if (CYCLES > 1) {
         CYCLES -= 1;
 
         return;
     }
 
     int level = v->envx;
+
+    // if (level && c == &spu2->c[0]) {
+    //     printf("spu2: voice %d level=%04x phase=%d\n", v - c->v, level, PHASE);
+    // }
 
     level += LEVEL_STEP;
 
@@ -980,6 +984,13 @@ void spu2_handle_adsr(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_vo
 #undef CLAMP
 #undef MAX
 
+static inline int16_t spu2_clamp16(int64_t v) {
+    if (v > INT16_MAX) return INT16_MAX;
+    if (v < INT16_MIN) return INT16_MIN;
+
+    return (int16_t)v;
+}
+
 struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) {
     // if (!spu2->c[cr].v[vc].playing)
     //     return silence;
@@ -1041,6 +1052,7 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
     out += (g1 * v->s[2]) >> 15;
     out += (g2 * v->s[1]) >> 15;
     out += (g3 * v->s[0]) >> 15;
+    out = spu2_clamp16(out);
 
     // Output voice 1 and 3 to the capture buffers
     if (vc == 1) {
