@@ -181,6 +181,8 @@ struct iop_state* iop_create(void) {
 }
 
 void iop_destroy(struct iop_state* iop) {
+    arena_destroy(iop->block_arena);
+
     iop_flush_cache(iop);
 
     delete iop;
@@ -197,6 +199,14 @@ void iop_init(struct iop_state* iop, struct iop_bus_s bus) {
     iop->cop0_r[COP0_PRID] = 0x0000001f;
 
     iop->logger = new asmjit::FileLogger(stdout);
+
+    iop->instruction_buf.resize(512);
+    iop->instruction_buf_index = 0;
+
+    iop->block_arena = arena_create();
+    
+    // 32 MB arena
+    arena_init(iop->block_arena, 1024 * 1024 * 32);
 }
 
 void iop_init_kputchar(struct iop_state* iop, void (*kputchar)(void*, char), void* udata) {
@@ -756,10 +766,10 @@ iop_instruction iop_decode(uint32_t opcode) {
                 case 0x00000011: i.src1 = i.rs; i.id = IOP_I_MTHI; i.func = iop_i_mthi; return i;
                 case 0x00000012: i.dst = i.rd; i.id = IOP_I_MFLO; i.func = iop_i_mflo; return i;
                 case 0x00000013: i.src1 = i.rs; i.id = IOP_I_MTLO; i.func = iop_i_mtlo; return i;
-                case 0x00000018: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_MULT; i.func = iop_i_mult; return i; // <----------------
-                case 0x00000019: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_MULTU; i.func = iop_i_multu; return i; // <----------------
-                case 0x0000001a: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_DIV; i.func = iop_i_div; return i; // <----------------
-                case 0x0000001b: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_DIVU; i.func = iop_i_divu; return i; // <----------------
+                case 0x00000018: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_MULT; i.func = iop_i_mult; return i;
+                case 0x00000019: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_MULTU; i.func = iop_i_multu; return i;
+                case 0x0000001a: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_DIV; i.func = iop_i_div; return i;
+                case 0x0000001b: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_DIVU; i.func = iop_i_divu; return i;
                 case 0x00000020: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_ADD; i.func = iop_i_add; return i;
                 case 0x00000021: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_ADDU; i.func = iop_i_addu; return i;
                 case 0x00000022: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SUB; i.func = iop_i_sub; return i;
@@ -768,8 +778,8 @@ iop_instruction iop_decode(uint32_t opcode) {
                 case 0x00000025: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_OR; i.func = iop_i_or; return i;
                 case 0x00000026: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_XOR; i.func = iop_i_xor; return i;
                 case 0x00000027: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_NOR; i.func = iop_i_nor; return i;
-                case 0x0000002a: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SLT; i.func = iop_i_slt; return i; // <----------------
-                case 0x0000002b: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SLTU; i.func = iop_i_sltu; return i; // <----------------
+                case 0x0000002a: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SLT; i.func = iop_i_slt; return i;
+                case 0x0000002b: i.dst = i.rd; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SLTU; i.func = iop_i_sltu; return i;
             } break;
         } break;
         case 0x04000000 >> 26: {
@@ -817,16 +827,16 @@ iop_instruction iop_decode(uint32_t opcode) {
         case 0x48000000 >> 26: i.id = IOP_I_INVALID; i.func = iop_i_invalid; return i;
         case 0x80000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.id = IOP_I_LB; i.func = iop_i_lb; return i;
         case 0x84000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.id = IOP_I_LH; i.func = iop_i_lh; return i;
-        case 0x88000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_LWL; i.func = iop_i_lwl; return i; // <----------------
+        case 0x88000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_LWL; i.func = iop_i_lwl; return i;
         case 0x8c000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.id = IOP_I_LW; i.func = iop_i_lw; return i;
         case 0x90000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.id = IOP_I_LBU; i.func = iop_i_lbu; return i;
         case 0x94000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.id = IOP_I_LHU; i.func = iop_i_lhu; return i;
-        case 0x98000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_LWR; i.func = iop_i_lwr; return i; // <----------------
-        case 0xa0000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SB; i.func = iop_i_sb; return i; // <----------------
-        case 0xa4000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SH; i.func = iop_i_sh; return i; // <----------------
-        case 0xa8000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SWL; i.func = iop_i_swl; return i; // <----------------
-        case 0xac000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SW; i.func = iop_i_sw; return i; // <----------------
-        case 0xb8000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SWR; i.func = iop_i_swr; return i; // <----------------
+        case 0x98000000 >> 26: i.dst = i.rt; i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_LWR; i.func = iop_i_lwr; return i;
+        case 0xa0000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SB; i.func = iop_i_sb; return i;
+        case 0xa4000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SH; i.func = iop_i_sh; return i;
+        case 0xa8000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SWL; i.func = iop_i_swl; return i;
+        case 0xac000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SW; i.func = iop_i_sw; return i;
+        case 0xb8000000 >> 26: i.src1 = i.rs; i.src2 = i.rt; i.id = IOP_I_SWR; i.func = iop_i_swr; return i;
     }
 
     i.func = iop_i_invalid;
@@ -1072,10 +1082,12 @@ void iop_compile_block(struct iop_state* iop, iop_block* block) {
 
     int index = 0;
 
-    for (const iop_instruction& ins : block->instructions) {
+    for (int i = 0; i < iop->instruction_buf_index; i++) {
+        const iop_instruction& ins = iop->instruction_buf[i];
+
         bool first = index == 0;
-        bool last = index == (block->instructions.size() - 1);
-        
+        bool last = index == (iop->instruction_buf_index - 1);
+
         switch (ins.id) {
             case IOP_I_LB:
             case IOP_I_LBU:
@@ -1138,6 +1150,285 @@ void iop_compile_block(struct iop_state* iop, iop_block* block) {
                 if (ins.id == IOP_I_LB || ins.id == IOP_I_LH) {
                     iop_sextn(uc, t.reg, ins.id == IOP_I_LB ? 8 : 16);
                 }
+            } break;
+
+            case IOP_I_LWL:
+            case IOP_I_LWR: {
+                const bool is_lwl = ins.id == IOP_I_LWL;
+
+                // Copy by value so the constant flags survive the store-reg
+                // allocation below (which may reallocate when S aliases T).
+                iop_cached_reg s = iop_alloc_load_reg(iop, &uc, S);
+                iop_cached_reg t = iop_alloc_load_reg(iop, &uc, T);
+
+                // LWL/LWR read the aligned word and splice it into the current
+                // RT value (RT is both source and destination). The bus read
+                // stays a call; the byte merge is emitted inline. This matches
+                // the interpreter's no-load-delay behaviour: RT updates now.
+                if (s.constant) {
+                    // The address (and thus the byte shift) is known at compile
+                    // time, so the mask and shifts all fold to immediates.
+                    const uint32_t addr = s.value + ins.imm16s;
+                    const uint32_t aligned = addr & 0xfffffffc;
+                    const uint32_t shift = (addr & 0x3) << 3;
+                    const uint32_t mask = is_lwl ? (0x00ffffffu >> shift)
+                                                 : (0xffffff00u << (24 - shift));
+
+                    // RT == $zero: read for side effects and discard the merge.
+                    if (!T) {
+                        InvokeNode* call;
+
+                        bc.invoke(
+                            Out(call),
+                            (uintptr_t)iop_bus_read32,
+                            FuncSignature::build<void, iop_state*, uint32_t>()
+                        );
+
+                        call->set_arg(0, iop->iop_ptr);
+                        call->set_arg(1, Imm(aligned));
+
+                        break;
+                    }
+
+                    ujit::Gp load = uc.new_gp32();
+
+                    jit_function_call(&uc, iop_bus_read32, load, iop->iop_ptr, Imm(aligned));
+
+                    // loaded_part = LWL ? load << (24 - shift) : load >> shift
+                    if (is_lwl) {
+                        if (uint32_t c = 24 - shift) uc.shl(load, load, Imm(c));
+                    } else {
+                        if (shift) uc.shr(load, load, Imm(shift));
+                    }
+
+                    iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, T);
+
+                    if (t.constant) {
+                        uc.or_(d.reg, load, Imm(t.value & mask));
+                    } else {
+                        ujit::Gp masked = uc.new_gp32();
+
+                        uc.and_(masked, t.reg, Imm(mask));
+                        uc.or_(d.reg, load, masked);
+                    }
+
+                    break;
+                }
+
+                // General case: the byte shift depends on the runtime address.
+                ujit::Gp addr = uc.new_gp32();
+
+                uc.add(addr, s.reg, Imm(ins.imm16s));
+
+                ujit::Gp aligned = uc.new_gp32();
+
+                uc.and_(aligned, addr, Imm(0xfffffffc));
+
+                // shift = (addr & 3) << 3 ; inv = 24 - shift
+                ujit::Gp shift = uc.new_gp32();
+
+                uc.and_(shift, addr, Imm(0x3));
+                uc.shl(shift, shift, Imm(3));
+
+                ujit::Gp inv = uc.new_gp32();
+
+                uc.mov(inv, Imm(24));
+                uc.sub(inv, inv, shift);
+
+                // RT == $zero: read for side effects and discard the merge.
+                if (!T) {
+                    InvokeNode* call;
+
+                    bc.invoke(
+                        Out(call),
+                        (uintptr_t)iop_bus_read32,
+                        FuncSignature::build<void, iop_state*, uint32_t>()
+                    );
+
+                    call->set_arg(0, iop->iop_ptr);
+                    call->set_arg(1, aligned);
+
+                    break;
+                }
+
+                // Capture the old RT value before allocating the destination
+                // (which may reuse t's register).
+                ujit::Gp rt = iop_value_to_gp32(uc, t);
+
+                ujit::Gp load = uc.new_gp32();
+
+                jit_function_call(&uc, iop_bus_read32, load, iop->iop_ptr, aligned);
+
+                ujit::Gp mask = uc.new_gp32();
+
+                if (is_lwl) {
+                    // mask = 0x00ffffff >> shift ; load <<= (24 - shift)
+                    uc.mov(mask, Imm(0x00ffffff));
+                    uc.shr(mask, mask, shift);
+                    uc.shl(load, load, inv);
+                } else {
+                    // mask = 0xffffff00 << (24 - shift) ; load >>= shift
+                    uc.mov(mask, Imm(0xffffff00));
+                    uc.shl(mask, mask, inv);
+                    uc.shr(load, load, shift);
+                }
+
+                iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, T);
+
+                ujit::Gp masked = uc.new_gp32();
+
+                uc.and_(masked, rt, mask);
+                uc.or_(d.reg, load, masked);
+            } break;
+
+            case IOP_I_SB:
+            case IOP_I_SH:
+            case IOP_I_SW: {
+                void (*func)(struct iop_state*, uint32_t, uint32_t) = nullptr;
+
+                switch (ins.id) {
+                    case IOP_I_SB: func = iop_bus_write8; break;
+                    case IOP_I_SH: func = iop_bus_write16; break;
+                    case IOP_I_SW: func = iop_bus_write32; break;
+                }
+
+                iop_cached_reg& s = iop_alloc_load_reg(iop, &uc, S);
+                iop_cached_reg& t = iop_alloc_load_reg(iop, &uc, T);
+
+                uint32_t mask = 0xffffffff;
+
+                switch (ins.id) {
+                    case IOP_I_SB: mask = 0xff; break;
+                    case IOP_I_SH: mask = 0xffff; break;
+                }
+
+                asmjit::Label skip = uc.new_label();
+                ujit::Gp sr = uc.new_gp32();
+
+                uc.load_u32(sr, IOP(cop0_r[COP0_SR]));
+                uc.and_(sr, sr, Imm(SR_ISC));
+                uc.j(skip, ujit::test_nz(sr));
+
+                if (s.constant && t.constant) {
+                    uint32_t addr = s.value + ins.imm16s;
+
+                    jit_function_call(&uc, func, iop->iop_ptr, Imm(addr), Imm(t.value & mask));
+                } else if (s.constant) {
+                    jit_function_call(&uc, func, iop->iop_ptr, Imm(s.value + ins.imm16s), t.reg);
+                } else if (t.constant) {
+                    ujit::Gp addr = uc.new_gp32();
+
+                    uc.add(addr, s.reg, Imm(ins.imm16s));
+
+                    jit_function_call(&uc, func, iop->iop_ptr, addr, Imm(t.value & mask));
+                } else {
+                    ujit::Gp addr = uc.new_gp32();
+
+                    uc.add(addr, s.reg, Imm(ins.imm16s));
+
+                    jit_function_call(&uc, func, iop->iop_ptr, addr, t.reg);
+                }
+
+                uc.bind(skip);
+            } break;
+
+            case IOP_I_SWL:
+            case IOP_I_SWR: {
+                const bool is_swl = ins.id == IOP_I_SWL;
+
+                iop_cached_reg s = iop_alloc_load_reg(iop, &uc, S);
+                iop_cached_reg t = iop_alloc_load_reg(iop, &uc, T);
+
+                // SWL/SWR are read-modify-write: read the aligned word, splice
+                // in the shifted RT bytes, write it back. The bus accesses stay
+                // calls (they route through the bus + SMC invalidation); the
+                // byte splicing is emitted inline. No SR_ISC guard here: SWL/SWR
+                // are never emitted by the cache-flush routines that run with the
+                // cache isolated, so the check would only ever cost cycles.
+                if (s.constant) {
+                    // The address (and thus the byte shift) is known at compile
+                    // time, so the masks and shifts all fold to immediates.
+                    const uint32_t addr = s.value + ins.imm16s;
+                    const uint32_t aligned = addr & 0xfffffffc;
+                    const uint32_t shift = (addr & 0x3) << 3;
+                    const uint32_t mask = is_swl ? (0xffffff00u << shift)
+                                                 : (0x00ffffffu >> (24 - shift));
+
+                    ujit::Gp load = uc.new_gp32();
+
+                    jit_function_call(&uc, iop_bus_read32, load, iop->iop_ptr, Imm(aligned));
+
+                    ujit::Gp value = uc.new_gp32();
+
+                    uc.and_(value, load, Imm(mask));
+
+                    if (t.constant) {
+                        const uint32_t part = is_swl ? (t.value >> (24 - shift))
+                                                     : (t.value << shift);
+
+                        uc.or_(value, value, Imm(part));
+                    } else {
+                        ujit::Gp part = uc.new_gp32();
+
+                        if (is_swl) {
+                            uc.shr(part, t.reg, Imm(24 - shift));
+                        } else {
+                            uc.shl(part, t.reg, Imm(shift));
+                        }
+
+                        uc.or_(value, value, part);
+                    }
+
+                    jit_function_call(&uc, iop_bus_write32, iop->iop_ptr, Imm(aligned), value);
+
+                    break;
+                }
+
+                // General case: the byte shift depends on the runtime address,
+                // so the masks and merges use variable shifts.
+                ujit::Gp addr = uc.new_gp32();
+
+                uc.add(addr, s.reg, Imm(ins.imm16s));
+
+                ujit::Gp aligned = uc.new_gp32();
+
+                uc.and_(aligned, addr, Imm(0xfffffffc));
+
+                // shift = (addr & 3) << 3 ; inv = 24 - shift
+                ujit::Gp shift = uc.new_gp32();
+
+                uc.and_(shift, addr, Imm(0x3));
+                uc.shl(shift, shift, Imm(3));
+
+                ujit::Gp inv = uc.new_gp32();
+
+                uc.mov(inv, Imm(24));
+                uc.sub(inv, inv, shift);
+
+                ujit::Gp load = uc.new_gp32();
+
+                jit_function_call(&uc, iop_bus_read32, load, iop->iop_ptr, aligned);
+
+                ujit::Gp t_reg = iop_value_to_gp32(uc, t);
+                ujit::Gp mask = uc.new_gp32();
+                ujit::Gp value = uc.new_gp32();
+
+                if (is_swl) {
+                    // mask = 0xffffff00 << shift ; value = t >> (24 - shift)
+                    uc.mov(mask, Imm(0xffffff00));
+                    uc.shl(mask, mask, shift);
+                    uc.shr(value, t_reg, inv);
+                } else {
+                    // mask = 0x00ffffff >> (24 - shift) ; value = t << shift
+                    uc.mov(mask, Imm(0x00ffffff));
+                    uc.shr(mask, mask, inv);
+                    uc.shl(value, t_reg, shift);
+                }
+
+                uc.and_(load, load, mask);
+                uc.or_(value, value, load);
+
+                jit_function_call(&uc, iop_bus_write32, iop->iop_ptr, aligned, value);
             } break;
 
             case IOP_I_LUI: {
@@ -1257,47 +1548,49 @@ void iop_compile_block(struct iop_state* iop, iop_block* block) {
                 }
             } break;
 
-            // case IOP_I_SLT:
-            // case IOP_I_SLTU: {
-            //     if (!D) break;
+            case IOP_I_SLT:
+            case IOP_I_SLTU: {
+                if (!D) break;
 
-            //     iop_cached_reg& s = iop_alloc_load_reg(iop, &uc, S);
-            //     iop_cached_reg& t = iop_alloc_load_reg(iop, &uc, T);
+                iop_cached_reg& s = iop_alloc_load_reg(iop, &uc, S);
+                iop_cached_reg& t = iop_alloc_load_reg(iop, &uc, T);
 
-            //     if (s.constant && t.constant) {
-            //         uint32_t result = 0;
+                if (s.constant && t.constant) {
+                    uint32_t result = 0;
 
-            //         switch (ins.id) {
-            //             case IOP_I_SLT: result = (int32_t)s.value < (int32_t)t.value; break;
-            //             case IOP_I_SLTU: result = s.value < t.value; break;
-            //         }
+                    switch (ins.id) {
+                        case IOP_I_SLT: result = (int32_t)s.value < (int32_t)t.value; break;
+                        case IOP_I_SLTU: result = s.value < t.value; break;
+                    }
 
-            //         iop_alloc_const_reg(iop, &uc, D, result);
-            //     } else if (s.constant) {
-            //         iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, D);
+                    iop_alloc_const_reg(iop, &uc, D, result);
+                } else if (s.constant) {
+                    iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, D);
 
-            //         uc.mov(d.reg, Imm(s.value));
+                    ujit::Gp tmp = uc.new_gp32();
 
-            //         switch (ins.id) {
-            //             case IOP_I_SLT: uc.select(d.reg, Imm(1), Imm(0), ujit::scmp_lt(d.reg, t.reg)); break;
-            //             case IOP_I_SLTU: uc.select(d.reg, Imm(1), Imm(0), ujit::ucmp_lt(d.reg, t.reg)); break;
-            //         }
-            //     } else if (t.constant) {
-            //         iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, D);
+                    uc.mov(tmp, Imm(s.value));
 
-            //         switch (ins.id) {
-            //             case IOP_I_SLT: uc.select(d.reg, Imm(1), Imm(0), ujit::scmp_lt(s.reg, Imm(t.value))); break;
-            //             case IOP_I_SLTU: uc.select(d.reg, Imm(1), Imm(0), ujit::ucmp_lt(s.reg, Imm(t.value))); break;
-            //         }
-            //     } else {
-            //         iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, D);
+                    switch (ins.id) {
+                        case IOP_I_SLT: uc.select(d.reg, Imm(1), Imm(0), ujit::scmp_lt(tmp, t.reg)); break;
+                        case IOP_I_SLTU: uc.select(d.reg, Imm(1), Imm(0), ujit::ucmp_lt(tmp, t.reg)); break;
+                    }
+                } else if (t.constant) {
+                    iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, D);
 
-            //         switch (ins.id) {
-            //             case IOP_I_SLT: uc.select(d.reg, Imm(1), Imm(0), ujit::scmp_lt(s.reg, t.reg)); break;
-            //             case IOP_I_SLTU: uc.select(d.reg, Imm(1), Imm(0), ujit::ucmp_lt(s.reg, t.reg)); break;
-            //         }
-            //     }
-            // } break;
+                    switch (ins.id) {
+                        case IOP_I_SLT: uc.select(d.reg, Imm(1), Imm(0), ujit::scmp_lt(s.reg, Imm(t.value))); break;
+                        case IOP_I_SLTU: uc.select(d.reg, Imm(1), Imm(0), ujit::ucmp_lt(s.reg, Imm(t.value))); break;
+                    }
+                } else {
+                    iop_cached_reg& d = iop_alloc_store_reg(iop, &uc, D);
+
+                    switch (ins.id) {
+                        case IOP_I_SLT: uc.select(d.reg, Imm(1), Imm(0), ujit::scmp_lt(s.reg, t.reg)); break;
+                        case IOP_I_SLTU: uc.select(d.reg, Imm(1), Imm(0), ujit::ucmp_lt(s.reg, t.reg)); break;
+                    }
+                }
+            } break;
 
             case IOP_I_SLTI:
             case IOP_I_SLTIU: {
@@ -1837,99 +2130,99 @@ void iop_compile_block(struct iop_state* iop, iop_block* block) {
                 }
             } break;
 
-            // case IOP_I_DIV:
-            // case IOP_I_DIVU: {
-            //     iop_cached_reg& s = iop_alloc_load_reg(iop, &uc, S);
-            //     iop_cached_reg& t = iop_alloc_load_reg(iop, &uc, T);
+            case IOP_I_DIV:
+            case IOP_I_DIVU: {
+                iop_cached_reg& s = iop_alloc_load_reg(iop, &uc, S);
+                iop_cached_reg& t = iop_alloc_load_reg(iop, &uc, T);
 
-            //     if (s.constant && t.constant) {
-            //         uint32_t lo, hi;
+                if (s.constant && t.constant) {
+                    uint32_t lo, hi;
 
-            //         if (ins.id == IOP_I_DIV) {
-            //             int32_t sv = (int32_t)s.value;
-            //             int32_t tv = (int32_t)t.value;
+                    if (ins.id == IOP_I_DIV) {
+                        int32_t sv = (int32_t)s.value;
+                        int32_t tv = (int32_t)t.value;
 
-            //             if (!tv) {
-            //                 hi = (uint32_t)sv;
-            //                 lo = (sv >= 0) ? 0xffffffff : 1;
-            //             } else if (((uint32_t)sv == 0x80000000) && (tv == -1)) {
-            //                 hi = 0;
-            //                 lo = 0x80000000;
-            //             } else {
-            //                 hi = (uint32_t)(sv % tv);
-            //                 lo = (uint32_t)(sv / tv);
-            //             }
-            //         } else {
-            //             if (!t.value) {
-            //                 hi = s.value;
-            //                 lo = 0xffffffff;
-            //             } else {
-            //                 hi = s.value % t.value;
-            //                 lo = s.value / t.value;
-            //             }
-            //         }
+                        if (!tv) {
+                            hi = (uint32_t)sv;
+                            lo = (sv >= 0) ? 0xffffffff : 1;
+                        } else if (((uint32_t)sv == 0x80000000) && (tv == -1)) {
+                            hi = 0;
+                            lo = 0x80000000;
+                        } else {
+                            hi = (uint32_t)(sv % tv);
+                            lo = (uint32_t)(sv / tv);
+                        }
+                    } else {
+                        if (!t.value) {
+                            hi = s.value;
+                            lo = 0xffffffff;
+                        } else {
+                            hi = s.value % t.value;
+                            lo = s.value / t.value;
+                        }
+                    }
 
-            //         ujit::Gp tmp = uc.new_gp32();
+                    ujit::Gp tmp = uc.new_gp32();
 
-            //         uc.mov(tmp, Imm(lo));
-            //         uc.store_u32(IOP(lo), tmp);
-            //         uc.mov(tmp, Imm(hi));
-            //         uc.store_u32(IOP(hi), tmp);
-            //     } else {
-            //         ujit::Gp sr = iop_value_to_gp32(uc, s);
-            //         ujit::Gp tr = iop_value_to_gp32(uc, t);
+                    uc.mov(tmp, Imm(lo));
+                    uc.store_u32(IOP(lo), tmp);
+                    uc.mov(tmp, Imm(hi));
+                    uc.store_u32(IOP(hi), tmp);
+                } else {
+                    ujit::Gp sr = iop_value_to_gp32(uc, s);
+                    ujit::Gp tr = iop_value_to_gp32(uc, t);
 
-            //         ujit::Gp lo = uc.new_gp32();
-            //         ujit::Gp hi = uc.new_gp32();
+                    ujit::Gp lo = uc.new_gp32();
+                    ujit::Gp hi = uc.new_gp32();
 
-            //         if (ins.id == IOP_I_DIVU) {
-            //             ujit::Gp td = uc.new_gp32();
-            //             uc.select(td, Imm(1), tr, ujit::cmp_eq(tr, Imm(0)));
+                    if (ins.id == IOP_I_DIVU) {
+                        ujit::Gp td = uc.new_gp32();
+                        uc.select(td, Imm(1), tr, ujit::cmp_eq(tr, Imm(0)));
 
-            //             ujit::Gp q = uc.new_gp32();
-            //             ujit::Gp r = uc.new_gp32();
-            //             uc.udiv(q, sr, td);
-            //             uc.umod(r, sr, td);
+                        ujit::Gp q = uc.new_gp32();
+                        ujit::Gp r = uc.new_gp32();
+                        uc.udiv(q, sr, td);
+                        uc.umod(r, sr, td);
 
-            //             uc.select(lo, Imm(0xffffffff), q, ujit::cmp_eq(tr, Imm(0)));
-            //             uc.select(hi, sr, r, ujit::cmp_eq(tr, Imm(0)));
-            //         } else {
-            //             ujit::Gp us = uc.new_gp32();
-            //             ujit::Gp ut = uc.new_gp32();
-            //             uc.abs(us, sr);
-            //             uc.abs(ut, tr);
+                        uc.select(lo, Imm(0xffffffff), q, ujit::cmp_eq(tr, Imm(0)));
+                        uc.select(hi, sr, r, ujit::cmp_eq(tr, Imm(0)));
+                    } else {
+                        ujit::Gp us = uc.new_gp32();
+                        ujit::Gp ut = uc.new_gp32();
+                        uc.abs(us, sr);
+                        uc.abs(ut, tr);
 
-            //             ujit::Gp td = uc.new_gp32();
-            //             uc.select(td, Imm(1), ut, ujit::cmp_eq(tr, Imm(0)));
+                        ujit::Gp td = uc.new_gp32();
+                        uc.select(td, Imm(1), ut, ujit::cmp_eq(tr, Imm(0)));
 
-            //             ujit::Gp uq = uc.new_gp32();
-            //             ujit::Gp ur = uc.new_gp32();
-            //             uc.udiv(uq, us, td);
-            //             uc.umod(ur, us, td);
+                        ujit::Gp uq = uc.new_gp32();
+                        ujit::Gp ur = uc.new_gp32();
+                        uc.udiv(uq, us, td);
+                        uc.umod(ur, us, td);
 
-            //             ujit::Gp sxt = uc.new_gp32();
-            //             ujit::Gp nq = uc.new_gp32();
-            //             ujit::Gp nr = uc.new_gp32();
-            //             uc.xor_(sxt, sr, tr);
-            //             uc.neg(nq, uq);
-            //             uc.neg(nr, ur);
+                        ujit::Gp sxt = uc.new_gp32();
+                        ujit::Gp nq = uc.new_gp32();
+                        ujit::Gp nr = uc.new_gp32();
+                        uc.xor_(sxt, sr, tr);
+                        uc.neg(nq, uq);
+                        uc.neg(nr, ur);
 
-            //             ujit::Gp q = uc.new_gp32();
-            //             ujit::Gp r = uc.new_gp32();
-            //             uc.select(q, nq, uq, ujit::scmp_lt(sxt, Imm(0)));
-            //             uc.select(r, nr, ur, ujit::scmp_lt(sr, Imm(0)));
+                        ujit::Gp q = uc.new_gp32();
+                        ujit::Gp r = uc.new_gp32();
+                        uc.select(q, nq, uq, ujit::scmp_lt(sxt, Imm(0)));
+                        uc.select(r, nr, ur, ujit::scmp_lt(sr, Imm(0)));
 
-            //             ujit::Gp lo_zero = uc.new_gp32();
-            //             uc.select(lo_zero, Imm(1), Imm(0xffffffff), ujit::scmp_lt(sr, Imm(0)));
+                        ujit::Gp lo_zero = uc.new_gp32();
+                        uc.select(lo_zero, Imm(1), Imm(0xffffffff), ujit::scmp_lt(sr, Imm(0)));
 
-            //             uc.select(lo, lo_zero, q, ujit::cmp_eq(tr, Imm(0)));
-            //             uc.select(hi, sr, r, ujit::cmp_eq(tr, Imm(0)));
-            //         }
+                        uc.select(lo, lo_zero, q, ujit::cmp_eq(tr, Imm(0)));
+                        uc.select(hi, sr, r, ujit::cmp_eq(tr, Imm(0)));
+                    }
 
-            //         uc.store_u32(IOP(lo), lo);
-            //         uc.store_u32(IOP(hi), hi);
-            //     }
-            // } break;
+                    uc.store_u32(IOP(lo), lo);
+                    uc.store_u32(IOP(hi), hi);
+                }
+            } break;
 
             default: {
                 iop_flush_reg_cache(iop, &uc);
@@ -1951,51 +2244,51 @@ void iop_compile_block(struct iop_state* iop, iop_block* block) {
 
     Error err = uc.finalize();
 
-    if (err != Error::kOk) {
-        char buf[512];
+    // if (err != Error::kOk) {
+    //     char buf[512];
 
-        struct iop_dis_state dis;
+    //     struct iop_dis_state dis;
 
-        dis.hex_memory_offset = 1;
-        dis.print_address = 1;
-        dis.print_opcode = 1;
+    //     dis.hex_memory_offset = 1;
+    //     dis.print_address = 1;
+    //     dis.print_opcode = 1;
 
-        dis.addr = block->start_pc;
+    //     dis.addr = block->start_pc;
 
-        for (const iop_instruction& ins : block->instructions) {
-            printf("%s\n", iop_disassemble(buf, ins.opcode, &dis));
-            dis.addr += 4;
-        }
+    //     for (const iop_instruction& ins : block->instructions) {
+    //         printf("%s\n", iop_disassemble(buf, ins.opcode, &dis));
+    //         dis.addr += 4;
+    //     }
 
-        printf("ee: Failed to finalize JIT compilation %d\n", err);
+    //     printf("ee: Failed to finalize JIT compilation %d\n", err);
 
-        exit(1);
-    }
+    //     exit(1);
+    // }
 
     Error err1 = iop->rt.add(&block->func, &code);
 
-    if (err1 != Error::kOk) {
-        printf("ee: Failed to add JIT code to runtime %d\n", err1);
+    // if (err1 != Error::kOk) {
+    //     printf("ee: Failed to add JIT code to runtime %d\n", err1);
 
-        exit(1);
-    }
+    //     exit(1);
+    // }
 
-    if (code.logger()) {
-        char buf[512];
+    // if (code.logger()) {
+    //     char buf[512];
 
-        struct iop_dis_state dis;
+    //     struct iop_dis_state dis;
 
-        dis.hex_memory_offset = 1;
-        dis.print_address = 1;
-        dis.print_opcode = 1;
+    //     dis.hex_memory_offset = 1;
+    //     dis.print_address = 1;
+    //     dis.print_opcode = 1;
 
-        dis.addr = block->start_pc;
+    //     dis.addr = block->start_pc;
 
-        for (const iop_instruction& ins : block->instructions) {
-            printf("%s\n", iop_disassemble(buf, ins.opcode, &dis));
-            dis.addr += 4;
-        }
-    }
+    //     for (const iop_instruction& ins : block->instructions) {
+    //         printf("%s\n", iop_disassemble(buf, ins.opcode, &dis));
+    //         dis.addr += 4;
+    //     }
+    // }
 }
 
 iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
@@ -2011,8 +2304,6 @@ iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
     }
 
     if (iop->block_cache[page].dirty) {
-        delete[] iop->block_cache[page].blocks;
-
         iop->block_cache[page].blocks = nullptr;
         iop->block_cache[page].dirty = false;
         iop->block_cache[page].valid = false;
@@ -2043,7 +2334,17 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
     uint32_t offset = (translated & (_IOP_CACHE_PAGESIZE - 1)) >> 2;
 
     if (!iop->block_cache[page].valid) {
-        iop->block_cache[page].blocks = new iop_block[_IOP_CACHE_PAGESIZE >> 2];
+        const void* blk = arena_alloc(iop->block_arena, sizeof(iop_block) * (_IOP_CACHE_PAGESIZE / 4));
+
+        if (!blk) {
+            for (int i = 0; i < IOP_CACHE_PAGECOUNT; i++) {
+                iop->block_cache[i].valid = false;
+            }
+
+            blk = arena_alloc(iop->block_arena, sizeof(iop_block) * (_IOP_CACHE_PAGESIZE / 4));
+        }
+
+        iop->block_cache[page].blocks = (iop_block*)blk;
         iop->block_cache[page].dirty = false;
         iop->block_cache[page].valid = true;
         iop->block_cache[page].min_code_addr = translated;
@@ -2062,7 +2363,8 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
     block.end_pc = addr;
 
     block.cycles = 0;
-    block.instructions.reserve(max_cycles);
+
+    iop->instruction_buf_index = 0;
 
     // fprintf(stderr, "Caching block at %08x\n", block_pc);
 
@@ -2071,7 +2373,7 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
 
         i = iop_decode(opcode);
 
-        block.instructions.push_back(i);
+        iop->instruction_buf[iop->instruction_buf_index++] = i;
 
         block.cycles += 1;
 
@@ -2112,12 +2414,6 @@ int iop_execute_block(struct iop_state* iop, iop_block* block) {
 
     block->func(iop);
 
-    // for (iop_instruction& ins : block->instructions) {
-    //     ins.func(iop, ins);
-
-    //     iop->r[0] = 0;
-    // }
-
     iop->total_cycles += block->cycles;
     iop->pc = iop->next_pc;
 
@@ -2130,16 +2426,19 @@ int iop_run_block(struct iop_state* iop, int max_cycles) {
     }
 
     // printf("iop: Running block at pc=%08x max_cycles=%d\n", iop->pc, max_cycles);
+    int cycles = 0;
 
-    iop_block* block = iop_find_block(iop, iop->pc);
+    while (cycles < max_cycles) {
+        iop_block* block = iop_find_block(iop, iop->pc);
 
-    if (!block) {
-        block = iop_cache_block(iop, iop->pc, max_cycles);
+        if (!block) {
+            block = iop_cache_block(iop, iop->pc, max_cycles);
 
-        iop_compile_block(iop, block);
+            iop_compile_block(iop, block);
+        }
+
+        cycles += iop_execute_block(iop, block);
     }
-
-    int executed = iop_execute_block(iop, block);
 
     // if (iop->deferred_invalidate_page != 0xffffffff) {
     //     uint32_t page = iop->deferred_invalidate_page;
@@ -2156,7 +2455,7 @@ int iop_run_block(struct iop_state* iop, int max_cycles) {
     //     iop->deferred_invalidate_page = 0xffffffff;
     // }
 
-    return executed;
+    return cycles;
 }
 
 void iop_flush_cache(struct iop_state* iop) {

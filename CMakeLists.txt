@@ -221,6 +221,7 @@ target_sources(iris PRIVATE
     frontend/ui/threads.cpp
     frontend/ui/timers.cpp
     frontend/ui/vu_disassembly.cpp
+    src/arena.c
     src/ps2.c
     src/ps2_elf.c
     src/ps2_iso9660.c

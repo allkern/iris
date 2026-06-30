@@ -4,6 +4,7 @@
 #include <asmjit/ujit.h>
 
 #include "iop.h"
+#include "arena.h"
 
 enum {
     IOP_I_INVALID,
@@ -104,11 +105,10 @@ struct iop_instruction {
 typedef void (*iop_compiled_block)(struct iop_state*);
 
 struct iop_block {
-    std::vector <iop_instruction> instructions;
+    iop_compiled_block func = nullptr;
     uint32_t cycles = 0;
     uint32_t start_pc = 0;
     uint32_t end_pc = 0;
-    iop_compiled_block func = nullptr;
 };
 
 struct iop_cache_page {
@@ -173,6 +173,10 @@ struct iop_state {
 
     uint32_t module_list_addr = 0;
     uint32_t thread_list_addr = 0;
+
+    std::vector <iop_instruction> instruction_buf;
+    uint32_t instruction_buf_index = 0;
+    struct arena_state* block_arena = nullptr;
     
     /* cache module list */
     int module_count = 0;
