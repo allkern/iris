@@ -7,6 +7,13 @@
 
 namespace iris::audio {
 
+static inline int16_t clamp_s16(float v) {
+    if (v > 32767.0f) return 32767;
+    if (v < -32768.0f) return -32768;
+
+    return (int16_t)v;
+}
+
 static uint64_t prev_iop_cycles = 0;
 
 void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
@@ -42,8 +49,8 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
         for (int i = 0; i < spu2->c[c].adma_buffer_size; i++) {
             struct spu2_sample s = spu2->c[c].adma_buffer[i];
 
-            iris->audio_buf[i].s16[0] = iris->mute_adma ? 0 : s.s16[0] * iris->volume;
-            iris->audio_buf[i].s16[1] = iris->mute_adma ? 0 : s.s16[1] * iris->volume;
+            iris->audio_buf[i].s16[0] = iris->mute_adma ? 0 : clamp_s16(s.s16[0] * iris->volume);
+            iris->audio_buf[i].s16[1] = iris->mute_adma ? 0 : clamp_s16(s.s16[1] * iris->volume);
         }
 
         spu2->c[c].adma_buffer_size = 0;
@@ -78,8 +85,8 @@ void update_spu2(void* userdata, SDL_AudioStream* stream, int additional_amount,
     for (int i = 0; i < additional_amount; i++) {
         struct spu2_sample s = ps2_spu2_get_sample(spu2, !iris->mute_adma);
 
-        samples[i].s16[0] = iris->mute ? 0.0f : s.s16[0] * iris->volume;
-        samples[i].s16[1] = iris->mute ? 0.0f : s.s16[1] * iris->volume;
+        samples[i].s16[0] = iris->mute ? 0 : clamp_s16(s.s16[0] * iris->volume);
+        samples[i].s16[1] = iris->mute ? 0 : clamp_s16(s.s16[1] * iris->volume);
     }
 
     SDL_PutAudioStreamData(stream, (void*)samples.data(), samples.size() * sizeof(spu2_sample));

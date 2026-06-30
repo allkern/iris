@@ -1136,18 +1136,19 @@ struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
 struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
     struct spu2_sample s = silence;
 
-    s.u16[0] = 0;
-    s.u16[1] = 0;
+    int32_t l = 0;
+    int32_t r = 0;
 
     for (int i = 0; i < 24; i++) {
         struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
         struct spu2_sample c1 = spu2_get_voice_sample(spu2, 1, i);
 
-        s.s16[0] += c0.s16[0];
-        s.s16[1] += c0.s16[1];
-        s.s16[0] += c1.s16[0];
-        s.s16[1] += c1.s16[1];
+        l += c0.s16[0] + c1.s16[0];
+        r += c0.s16[1] + c1.s16[1];
     }
+
+    s.s16[0] = spu2_clamp16(l);
+    s.s16[1] = spu2_clamp16(r);
 
     return s;
 }
