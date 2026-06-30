@@ -83,7 +83,14 @@ void update_spu2(void* userdata, SDL_AudioStream* stream, int additional_amount,
     samples.resize(additional_amount);
 
     for (int i = 0; i < additional_amount; i++) {
-        struct spu2_sample s = ps2_spu2_get_sample(spu2, !iris->mute_adma);
+        struct spu2_sample s;
+
+#if SPU2_SYNC
+        if (!ps2_spu2_pop_sample(spu2, &s))
+            s.u32 = 0;
+#else
+        s = ps2_spu2_get_sample(spu2, !iris->mute_adma);
+#endif
 
         samples[i].s16[0] = iris->mute ? 0 : clamp_s16(s.s16[0] * iris->volume);
         samples[i].s16[1] = iris->mute ? 0 : clamp_s16(s.s16[1] * iris->volume);

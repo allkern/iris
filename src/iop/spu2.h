@@ -13,6 +13,17 @@ extern "C" {
 
 #define SPU2_RAM_SIZE 0x100000 // 2 MB
 
+// SPU2 generation mode:
+//   1 = synchronous - the voice mix is produced on the emulation thread, one
+//       sample per 768 IOP cycles, into the ring buffer below which the audio
+//       thread drains. Accurate envelope/IRQ timing, but underruns (crackles)
+//       whenever the emulator can't sustain full speed.
+//   0 = asynchronous - the audio thread generates the mix on demand. Cheaper
+//       and gap-free under load, at the cost of envelope-timing accuracy.
+#define SPU2_SYNC 0
+
+#define SPU2_OUT_BUFFER_SIZE 4096
+
 /* Memory ranges:
     1f900000-1f90017f CORE0 Voice settings
     1f900180-1f9001b1 CORE0 Common settings
@@ -71,6 +82,18 @@ struct spu2_sample {
     };
 };
 
+struct spu2_volume {
+    uint16_t reg;       // Raw register value (for read-back)
+    int16_t current;    // Current applied volume (signed 16-bit)
+    int sweep;          // 1 = sweep/slide mode, 0 = fixed volume
+    int exponential;
+    int decrease;
+    int negative;       // Sweep phase (0 = positive, 1 = negative)
+    int shift;
+    int step;
+    int cycles;
+};
+
 struct spu2_voice {
     uint16_t voll;
     uint16_t volr;
@@ -95,6 +118,9 @@ struct spu2_voice {
     int prev_sample_index;
     int loop_addr_specified;
     int16_t s[4];
+
+    struct spu2_volume vol_l;
+    struct spu2_volume vol_r;
 
     // Envelope
     int adsr_cycles_left;
@@ -165,6 +191,10 @@ struct spu2_core {
     uint16_t bvolr;
     uint16_t mvolxl;
     uint16_t mvolxr;
+
+    struct spu2_volume mvol_l;
+    struct spu2_volume mvol_r;
+
     uint16_t iir_alpha;
     uint16_t acc_coef_a;
     uint16_t acc_coef_b;
@@ -212,6 +242,11 @@ struct ps2_spu2 {
     struct ps2_iop_dma* dma;
     struct ps2_iop_intc* intc;
     struct sched_state* sched;
+
+    int sample_cycles;
+    struct spu2_sample out_buffer[SPU2_OUT_BUFFER_SIZE];
+    volatile uint32_t out_write;
+    volatile uint32_t out_read;
 };
 
 struct ps2_spu2* ps2_spu2_create(void);
@@ -220,6 +255,8 @@ uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr);
 void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data);
 void ps2_spu2_destroy(struct ps2_spu2* spu2);
 struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu, int adma_enable);
+void ps2_spu2_tick(struct ps2_spu2* spu2, int cycles);
+int ps2_spu2_pop_sample(struct ps2_spu2* spu2, struct spu2_sample* out);
 struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v);
 struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c);
 void spu2_start_adma(struct ps2_spu2* spu2, int c);

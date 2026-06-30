@@ -56,10 +56,13 @@ static inline void iop_timer_refresh_clock(struct iop_timer* t, int i) {
     uint8_t step = 2;
 
     if ((i == 1) && t->use_ext) {
-        period = 91;
+        period = 1172;
         step = 1;
     } else if ((i == 4) && t->t4_prescaler) {
         period = 129;
+        step = 1;
+    } else if ((i == 2) && t->t2_prescaler) {
+        period = 4;
         step = 1;
     }
 
@@ -360,21 +363,6 @@ void iop_timer_handle_mode_write(struct ps2_iop_timers* timers, int t, uint64_t 
         // ps2_iop_intc_irq(timers->intc, timer_get_irq_mask(t));
     }
 
-    // printf("iop: Timer %d mode write %08x -> %08x gate_en=%d gate_mode=%d irq_reset=%d cmp_irq=%d ovf_irq=%d rep_irq=%d levl=%d use_ext=%d irq_en=%d t4_prescaler=%d\n",
-    //     t, timers->timer[t].mode,
-    //     data,
-    //     timers->timer[t].gate_en,
-    //     timers->timer[t].gate_mode,
-    //     timers->timer[t].irq_reset,
-    //     timers->timer[t].cmp_irq,
-    //     timers->timer[t].ovf_irq,
-    //     timers->timer[t].rep_irq,
-    //     timers->timer[t].levl,
-    //     timers->timer[t].use_ext,
-    //     timers->timer[t].irq_en,
-    //     timers->timer[t].t4_prescaler
-    // );
-
     timer->last_sync_cycle = timers->current_cycle;
 
     iop_timer_update_event(timer, t);
@@ -394,11 +382,6 @@ void iop_timer_handle_target_write(struct ps2_iop_timers* timers, int t, uint64_
 
     iop_timer_update_event(timer, t);
     iop_timers_recompute_next_check(timers);
-
-    if (t != 5)
-        return;
-
-    // printf("iop: Timer %d target write %08x levl=%d mode=%08x counter=%08x\n", t, data, timer->levl, timer->mode, timer->counter);
 }
 
 void ps2_iop_timers_write32(struct ps2_iop_timers* timers, uint32_t addr, uint64_t data) {

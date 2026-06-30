@@ -186,6 +186,7 @@ void spu2_check_irq(struct ps2_spu2* spu2, uint32_t addr) {
 void spu2_decode_adpcm_block(struct ps2_spu2* spu2, struct spu2_voice* v);
 void adsr_load_attack(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v);
 void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_voice* v, int i);
+void spu2_volume_decode(struct spu2_volume* vol, uint16_t reg);
 
 void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
     // printf("spu2: core%d kon%c %04x\n", c, h ? 'h' : 'l', data);
@@ -553,8 +554,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         int voice = (addr >> 4) & 0x1f;
 
         switch (addr & 0xf) {
-            case 0x0: spu2->c[core].v[voice].voll = data; return;
-            case 0x2: spu2->c[core].v[voice].volr = data; return;
+            case 0x0: spu2->c[core].v[voice].voll = data; spu2_volume_decode(&spu2->c[core].v[voice].vol_l, data); return;
+            case 0x2: spu2->c[core].v[voice].volr = data; spu2_volume_decode(&spu2->c[core].v[voice].vol_r, data); return;
             case 0x4: spu2->c[core].v[voice].pitch = data; return;
             case 0x6: spu2->c[core].v[voice].adsr1 = data; return;
             case 0x8: spu2->c[core].v[voice].adsr2 = data; return;
@@ -674,8 +675,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
 
     // Misc.
     switch (addr & 0x7ff) {
-        case 0x760: spu2->c[0].mvoll = data; return;
-        case 0x762: spu2->c[0].mvolr = data; return;
+        case 0x760: spu2->c[0].mvoll = data; spu2_volume_decode(&spu2->c[0].mvol_l, data); return;
+        case 0x762: spu2->c[0].mvolr = data; spu2_volume_decode(&spu2->c[0].mvol_r, data); return;
         case 0x764: spu2->c[0].evoll = data; return;
         case 0x766: spu2->c[0].evolr = data; return;
         case 0x768: spu2->c[0].avoll = data; return;
@@ -694,8 +695,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         case 0x782: spu2->c[0].fb_x = data; return;
         case 0x784: spu2->c[0].in_coef_l = data; return;
         case 0x786: spu2->c[0].in_coef_r = data; return;
-        case 0x788: spu2->c[1].mvoll = data; return;
-        case 0x78a: spu2->c[1].mvolr = data; return;
+        case 0x788: spu2->c[1].mvoll = data; spu2_volume_decode(&spu2->c[1].mvol_l, data); return;
+        case 0x78a: spu2->c[1].mvolr = data; spu2_volume_decode(&spu2->c[1].mvol_r, data); return;
         case 0x78c: spu2->c[1].evoll = data; return;
         case 0x78e: spu2->c[1].evolr = data; return;
         case 0x790: spu2->c[1].avoll = data; return;
@@ -991,6 +992,70 @@ static inline int16_t spu2_clamp16(int64_t v) {
     return (int16_t)v;
 }
 
+static inline int32_t spu2_imax(int32_t a, int32_t b) {
+    return a > b ? a : b;
+}
+
+static inline int32_t spu2_iclamp(int32_t v, int32_t lo, int32_t hi) {
+    return (v < lo) ? lo : ((v > hi) ? hi : v);
+}
+
+void spu2_volume_decode(struct spu2_volume* vol, uint16_t reg) {
+    int changed = reg != vol->reg;
+
+    vol->reg = reg;
+
+    if (!(reg & 0x8000)) {
+        vol->sweep = 0;
+        vol->current = (int16_t)(reg << 1);
+
+        return;
+    }
+
+    vol->sweep = 1;
+    vol->exponential = (reg >> 14) & 1;
+    vol->decrease = (reg >> 13) & 1;
+    vol->negative = (reg >> 12) & 1;
+    vol->shift = (reg >> 2) & 0x1f;
+    vol->step = vol->decrease ? (-8 + (reg & 3)) : (7 - (reg & 3));
+
+    if (changed)
+        vol->cycles = 0;
+}
+
+int16_t spu2_volume_step(struct spu2_volume* vol) {
+    if (!vol->sweep)
+        return vol->current;
+
+    if (vol->cycles > 1) {
+        vol->cycles -= 1;
+
+        return vol->current;
+    }
+
+    int32_t level = vol->current;
+    int32_t mag = vol->negative ? -level : level;
+    int32_t step = vol->step << spu2_imax(0, 11 - vol->shift);
+    int32_t cycles = 1 << spu2_imax(0, vol->shift - 11);
+
+    if (vol->exponential && !vol->decrease && mag > 0x6000)
+        cycles *= 4;
+
+    if (vol->exponential && vol->decrease)
+        step = (step * mag) >> 15;
+
+    if (vol->negative) {
+        level = spu2_iclamp(level - step, -0x8000, 0);
+    } else {
+        level = spu2_iclamp(level + step, 0, 0x7fff);
+    }
+
+    vol->current = (int16_t)level;
+    vol->cycles = cycles;
+
+    return vol->current;
+}
+
 struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) {
     // if (!spu2->c[cr].v[vc].playing)
     //     return silence;
@@ -1075,8 +1140,14 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         spu2_check_irq(spu2, addr);
     }
 
-    s.s16[0] = (out * (int16_t)(v->voll << 1)) >> 15;
-    s.s16[1] = (out * (int16_t)(v->volr << 1)) >> 15;
+    int16_t vl = spu2_volume_step(&v->vol_l);
+    int16_t vr = spu2_volume_step(&v->vol_r);
+
+    v->volxl = vl;
+    v->volxr = vr;
+
+    s.s16[0] = (out * vl) >> 15;
+    s.s16[1] = (out * vr) >> 15;
     s.s16[0] = ((int32_t)s.s16[0] * v->envx) >> 15;
     s.s16[1] = ((int32_t)s.s16[1] * v->envx) >> 15;
 
@@ -1139,18 +1210,62 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
     int32_t l = 0;
     int32_t r = 0;
 
-    for (int i = 0; i < 24; i++) {
-        struct spu2_sample c0 = spu2_get_voice_sample(spu2, 0, i);
-        struct spu2_sample c1 = spu2_get_voice_sample(spu2, 1, i);
+    for (int c = 0; c < 2; c++) {
+        int32_t cl = 0;
+        int32_t cr = 0;
 
-        l += c0.s16[0] + c1.s16[0];
-        r += c0.s16[1] + c1.s16[1];
+        for (int i = 0; i < 24; i++) {
+            struct spu2_sample v = spu2_get_voice_sample(spu2, c, i);
+
+            cl += v.s16[0];
+            cr += v.s16[1];
+        }
+
+        int16_t ml = spu2_volume_step(&spu2->c[c].mvol_l);
+        int16_t mr = spu2_volume_step(&spu2->c[c].mvol_r);
+
+        spu2->c[c].mvolxl = ml;
+        spu2->c[c].mvolxr = mr;
+
+        l += ((int64_t)cl * ml) >> 15;
+        r += ((int64_t)cr * mr) >> 15;
     }
 
     s.s16[0] = spu2_clamp16(l);
     s.s16[1] = spu2_clamp16(r);
 
     return s;
+}
+
+void ps2_spu2_tick(struct ps2_spu2* spu2, int cycles) {
+    spu2->sample_cycles += cycles;
+
+    while (spu2->sample_cycles >= 768) {
+        spu2->sample_cycles -= 768;
+
+        struct spu2_sample s = ps2_spu2_get_sample(spu2, 0);
+
+        // SPSC ring: producer (emulation thread) only writes out_write.
+        // Drop the sample if the consumer has fallen a whole buffer behind.
+        uint32_t w = spu2->out_write;
+
+        if ((w - spu2->out_read) < SPU2_OUT_BUFFER_SIZE) {
+            spu2->out_buffer[w & (SPU2_OUT_BUFFER_SIZE - 1)] = s;
+            spu2->out_write = w + 1;
+        }
+    }
+}
+
+int ps2_spu2_pop_sample(struct ps2_spu2* spu2, struct spu2_sample* out) {
+    uint32_t r = spu2->out_read;
+
+    if (r == spu2->out_write)
+        return 0;
+
+    *out = spu2->out_buffer[r & (SPU2_OUT_BUFFER_SIZE - 1)];
+    spu2->out_read = r + 1;
+
+    return 1;
 }
 
 struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v) {

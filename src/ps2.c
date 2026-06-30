@@ -354,6 +354,10 @@ void ps2_cycle(struct ps2_state* ps2) {
 
         ps2_iop_timers_tick_cycles(ps2->iop_timers, cycles / 2);
 
+#if SPU2_SYNC
+        ps2_spu2_tick(ps2->spu2, ps2->timescale * cycles);
+#endif
+
         // for (int i = 0; i < cycles; i++)
         //     ps2_iop_timers_tick(ps2->iop_timers);
 
