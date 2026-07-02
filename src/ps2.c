@@ -345,10 +345,6 @@ void ps2_cycle(struct ps2_state* ps2) {
 
     ps2->iop_cycles += ps2->ee_cycles / 8;
 
-    // printf("ee: cycles=%d iop cycles=%d\n", ps2->ee_cycles, ps2->iop_cycles);
-
-    int cycles_run = 0;
-
     while (ps2->iop_cycles > 0) {
         int cycles = iop_run_block(ps2->iop, 64);
 
@@ -356,16 +352,13 @@ void ps2_cycle(struct ps2_state* ps2) {
 
 #if SPU2_SYNC
         ps2_spu2_tick(ps2->spu2, ps2->timescale * cycles);
+#else
+        ps2->spu2->emu_cycle += (uint64_t)ps2->timescale * cycles;
 #endif
-
-        // for (int i = 0; i < cycles; i++)
-        //     ps2_iop_timers_tick(ps2->iop_timers);
 
         ps2->iop_cycles -= cycles;
         ps2->ee_cycles -= cycles * 8;
     }
-
-    // printf("iop: cycles=%d\n", ps2->iop_cycles);
 }
 
 void ps2_step_ee(struct ps2_state* ps2) {

@@ -5,6 +5,10 @@
 
 #include "spu2.h"
 
+#if !SPU2_SYNC
+static void spu2_env_catchup(struct ps2_spu2* spu2, int c, int vi);
+#endif
+
 FILE* output = NULL;
 uint32_t chunk_size = 0;
 
@@ -142,8 +146,25 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
     // CORE0/1 DMA status (ready)
     spu2->c[0].stat = 0x80;
     spu2->c[1].stat = 0x80;
-    spu2->c[0].endx = 0x00ffffff;
-    spu2->c[1].endx = 0x00ffffff;
+
+    // ENDX resets to all ones (confirmed on PS2 hardware).
+    spu2->c[0].endx = 0xffffff;
+    spu2->c[1].endx = 0xffffff;
+
+    spu2->c[0].mmix = 0xff0;
+	spu2->c[0].vmixl = 0xffffff;
+	spu2->c[0].vmixr = 0xffffff;
+	spu2->c[0].vmixel = 0xffffff;
+	spu2->c[0].vmixer = 0xffffff;
+	spu2->c[0].esa = 0xefff8;
+	spu2->c[0].eea = 0xeffff;
+    spu2->c[1].mmix = 0xffc;
+	spu2->c[1].vmixl = 0xffffff;
+	spu2->c[1].vmixr = 0xffffff;
+	spu2->c[1].vmixel = 0xffffff;
+	spu2->c[1].vmixer = 0xffffff;
+	spu2->c[1].esa = 0xffff8;
+	spu2->c[1].eea = 0xfffff;
 
     spu2->c[0].adma_buffer_max_size = 48000 * 4;
     spu2->c[1].adma_buffer_max_size = 48000 * 4;
@@ -190,6 +211,13 @@ void spu2_volume_decode(struct spu2_volume* vol, uint16_t reg);
 
 void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
     // printf("spu2: core%d kon%c %04x\n", c, h ? 'h' : 'l', data);
+
+    // Note: GT3 relies on KON readbacks
+    if (h) {
+        spu2->c[c].kon = (spu2->c[c].kon & 0x0000ffff) | ((uint32_t)(data & 0xffff) << 16);
+    } else {
+        spu2->c[c].kon = (spu2->c[c].kon & 0xffff0000) | (uint32_t)(data & 0xffff);
+    }
 
     for (int i = 0; i < 16; i++) {
         if (!(data & (1 << i)))
@@ -238,6 +266,7 @@ void spu2_write_kon(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
 
         v->nax = v->ssa;
         v->adsr_sustain_level = ((v->adsr1 & 0xf) + 1) * 0x800;
+        v->env_cycle = spu2->emu_cycle;
 
         cr->endx &= ~(1u << idx);
 
@@ -278,6 +307,10 @@ void spu2_write_koff(struct ps2_spu2* spu2, int c, int h, uint64_t data) {
             break;
 
         // spu2->c[c].v[i+h*16].playing = 0;
+
+#if !SPU2_SYNC
+        spu2_env_catchup(spu2, c, v);
+#endif
 
         // printf("spu2: core %d voice %d koff\n", c, v);
         if (!spu2->c[c].v[v].playing)
@@ -348,13 +381,20 @@ void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
 }
 
 uint16_t spu2_get_voice_envx(struct ps2_spu2* spu2, int c, int v) {
+#if !SPU2_SYNC
+    spu2_env_catchup(spu2, c, v);
+#endif
+
     uint16_t envx = spu2->c[c].v[v].envx;
+    uint16_t ret;
 
     if (spu2->c[c].v[v].adsr_phase == ADSR_END || !spu2->c[c].v[v].playing) {
-        return 0;
+        ret = 0;
+    } else {
+        ret = !envx ? 0x7fff : envx;
     }
 
-    return !envx ? 0x7fff : envx;
+    return ret;
 }
 
 uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
@@ -480,8 +520,8 @@ uint64_t ps2_spu2_read16(struct ps2_spu2* spu2, uint32_t addr) {
             case 0x33A: return spu2->c[core].mix_dest_b1 & 0xffff;
             case 0x33C: return spu2->c[core].eea >> 16;
             case 0x33E: return spu2->c[core].eea & 0xffff;
-            case 0x340: return spu2->c[core].endx >> 16;
-            case 0x342: return spu2->c[core].endx & 0xffff;
+            case 0x340: return spu2->c[core].endx & 0xffff;
+            case 0x342: return spu2->c[core].endx >> 16;
             case 0x344: return spu2->c[core].stat;
             case 0x346: return spu2->c[core].ends;
         }
@@ -666,8 +706,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
             case 0x33A: SPU2_WRITEL(core, mix_dest_b1); return;
             case 0x33C: SPU2_WRITEH(core, eea); /* To-do: Reverb spu2->c[core].eaddr = 0; */ return;
             case 0x33E: SPU2_WRITEL(core, eea); /* To-do: Reverb spu2->c[core].eaddr = 0; */ return;
-            case 0x340: SPU2_WRITEH(core, endx); return;
-            case 0x342: SPU2_WRITEL(core, endx); return;
+            case 0x340: data = 0; SPU2_WRITEL(core, endx); return;
+            case 0x342: data = 0; SPU2_WRITEH(core, endx); return;
             case 0x344: spu2->c[core].stat = data; return;
             case 0x346: spu2->c[core].ends = data; return;
         }
@@ -677,8 +717,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
     switch (addr & 0x7ff) {
         case 0x760: spu2->c[0].mvoll = data; spu2_volume_decode(&spu2->c[0].mvol_l, data); return;
         case 0x762: spu2->c[0].mvolr = data; spu2_volume_decode(&spu2->c[0].mvol_r, data); return;
-        case 0x764: spu2->c[0].evoll = data; return;
-        case 0x766: spu2->c[0].evolr = data; return;
+        case 0x764: spu2->c[0].evoll = data; spu2_volume_decode(&spu2->c[0].evol_l, data); return;
+        case 0x766: spu2->c[0].evolr = data; spu2_volume_decode(&spu2->c[0].evol_r, data); return;
         case 0x768: spu2->c[0].avoll = data; return;
         case 0x76A: spu2->c[0].avolr = data; return;
         case 0x76C: spu2->c[0].bvoll = data; return;
@@ -697,8 +737,8 @@ void ps2_spu2_write16(struct ps2_spu2* spu2, uint32_t addr, uint64_t data) {
         case 0x786: spu2->c[0].in_coef_r = data; return;
         case 0x788: spu2->c[1].mvoll = data; spu2_volume_decode(&spu2->c[1].mvol_l, data); return;
         case 0x78a: spu2->c[1].mvolr = data; spu2_volume_decode(&spu2->c[1].mvol_r, data); return;
-        case 0x78c: spu2->c[1].evoll = data; return;
-        case 0x78e: spu2->c[1].evolr = data; return;
+        case 0x78c: spu2->c[1].evoll = data; spu2_volume_decode(&spu2->c[1].evol_l, data); return;
+        case 0x78e: spu2->c[1].evolr = data; spu2_volume_decode(&spu2->c[1].evol_r, data); return;
         case 0x790: spu2->c[1].avoll = data; return;
         case 0x792: spu2->c[1].avolr = data; return;
         case 0x794: spu2->c[1].bvoll = data; return;
@@ -904,8 +944,6 @@ void adsr_load_release(struct ps2_spu2* spu2, struct spu2_core* c, struct spu2_v
     v->adsr_shift = v->adsr2 & 0x1f;
     v->adsr_step  = -8;
 
-    c->endx |= 1u << i;
-
     adsr_calculate_values(spu2, v);
 }
 
@@ -1056,17 +1094,50 @@ int16_t spu2_volume_step(struct spu2_volume* vol) {
     return vol->current;
 }
 
-struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) {
-    // if (!spu2->c[cr].v[vc].playing)
-    //     return silence;
+#if !SPU2_SYNC
+static void spu2_env_catchup(struct ps2_spu2* spu2, int c, int vi) {
+    struct spu2_core* cr = &spu2->c[c];
+    struct spu2_voice* v = &cr->v[vi];
 
+    if (!v->playing)
+        return;
+
+    int64_t behind = (int64_t)(spu2->emu_cycle - v->env_cycle);
+
+    if (behind < 768)
+        return;
+
+    int samples = (int)(behind / 768);
+
+    // Cap the fast-forward: past an attack's worth the envelope has settled, so
+    // there's nothing to gain from looping thousands of steps on a stalled voice.
+    int capped = samples > 8192 ? 8192 : samples;
+
+    for (int i = 0; i < capped; i++)
+        spu2_handle_adsr(spu2, cr, v);
+
+    v->env_cycle += (uint64_t)samples * 768;
+}
+#endif
+
+struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) {
     struct spu2_core* c = &spu2->c[cr];
     struct spu2_voice* v = &c->v[vc];
     struct spu2_sample s;
 
+    if (!v->playing) {
+        s.u32 = 0;
+
+        return s;
+    }
+
     int sample_index = v->counter >> 12;
 
     spu2_handle_adsr(spu2, c, v);
+
+#if !SPU2_SYNC
+    v->env_cycle += 768;
+#endif
 
     if (sample_index > 27) {
         sample_index -= 28;
@@ -1083,6 +1154,8 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
         spu2_check_irq(spu2, v->nax);
 
         if (v->loop_end) {
+            c->endx |= 1u << vc;
+
             if (!v->loop) {
                 v->envx = 0;
 
@@ -1204,35 +1277,163 @@ struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c) {
     return spu2_get_adma_sample(spu2, c);
 }
 
+// Fixed-point multiply with the SPU2's 15-bit volume/coefficient scale.
+#define SPU2_RMUL(x, y) (((int32_t)(x) * (int32_t)(y)) >> 15)
+
+// Read/write the reverb work area as signed 16-bit samples.
+static inline int32_t spu2_rev_r(struct ps2_spu2* spu2, uint32_t addr) {
+    return (int16_t)spu2->ram[addr & 0xfffff];
+}
+
+static inline void spu2_rev_w(struct ps2_spu2* spu2, uint32_t addr, int32_t v) {
+    addr &= 0xfffff;
+
+    spu2->ram[addr] = (uint16_t)spu2_clamp16(v);
+
+    spu2_check_irq(spu2, addr);
+}
+
+static int16_t spu2_reverb_channel(struct ps2_spu2* spu2, int core, int R, int32_t in_sample) {
+    struct spu2_core* c = &spu2->c[core];
+
+    uint32_t start = c->esa & 0x3fffff;
+    uint32_t end = (c->eea & 0x3fffff) | 0xffff;
+    uint32_t size = (end - start) + 1;
+    uint32_t pos = spu2->reverb_cycles >> 1;
+
+#define SPU2_REVB_IDX(off) ((((pos + (uint32_t)(int32_t)(off)) % size) + start) & 0xfffff)
+
+    // Same-side reflection
+    uint32_t same_src = SPU2_REVB_IDX(R ? c->iir_src_a1  : c->iir_src_a0);
+    uint32_t same_dst = SPU2_REVB_IDX(R ? c->iir_dest_a1 : c->iir_dest_a0);
+    uint32_t same_prv = SPU2_REVB_IDX((R ? c->iir_dest_a1 : c->iir_dest_a0) - 1);
+
+    // Different-side reflection
+    uint32_t diff_src = SPU2_REVB_IDX(R ? c->iir_src_b1  : c->iir_src_b0);
+    uint32_t diff_dst = SPU2_REVB_IDX(R ? c->iir_dest_b1 : c->iir_dest_b0);
+    uint32_t diff_prv = SPU2_REVB_IDX((R ? c->iir_dest_b1 : c->iir_dest_b0) - 1);
+
+    // Early echo comb filter taps
+    uint32_t comb1 = SPU2_REVB_IDX(R ? c->acc_src_a1 : c->acc_src_a0);
+    uint32_t comb2 = SPU2_REVB_IDX(R ? c->acc_src_b1 : c->acc_src_b0);
+    uint32_t comb3 = SPU2_REVB_IDX(R ? c->acc_src_c1 : c->acc_src_c0);
+    uint32_t comb4 = SPU2_REVB_IDX(R ? c->acc_src_d1 : c->acc_src_d0);
+
+    // All-pass filters (their source is the destination delayed by APFn size)
+    uint32_t apf1_src = SPU2_REVB_IDX((R ? c->mix_dest_a1 : c->mix_dest_a0) - c->fb_src_a);
+    uint32_t apf1_dst = SPU2_REVB_IDX(R ? c->mix_dest_a1 : c->mix_dest_a0);
+    uint32_t apf2_src = SPU2_REVB_IDX((R ? c->mix_dest_b1 : c->mix_dest_b0) - c->fb_src_b);
+    uint32_t apf2_dst = SPU2_REVB_IDX(R ? c->mix_dest_b1 : c->mix_dest_b0);
+
+#undef SPU2_REVB_IDX
+
+    int16_t iir_vol = (int16_t)c->iir_alpha;
+    int16_t wall_vol = (int16_t)c->iir_coef;
+    int16_t apf1_vol = (int16_t)c->fb_alpha;
+    int16_t apf2_vol = (int16_t)c->fb_x;
+    int16_t in_coef = (int16_t)(R ? c->in_coef_r : c->in_coef_l);
+
+    int32_t in = SPU2_RMUL(in_coef, in_sample);
+
+    int32_t same = SPU2_RMUL(iir_vol, in + SPU2_RMUL(wall_vol, spu2_rev_r(spu2, same_src)) - spu2_rev_r(spu2, same_prv)) + spu2_rev_r(spu2, same_prv);
+    int32_t diff = SPU2_RMUL(iir_vol, in + SPU2_RMUL(wall_vol, spu2_rev_r(spu2, diff_src)) - spu2_rev_r(spu2, diff_prv)) + spu2_rev_r(spu2, diff_prv);
+
+    int32_t out = SPU2_RMUL((int16_t)c->acc_coef_a, spu2_rev_r(spu2, comb1))
+                + SPU2_RMUL((int16_t)c->acc_coef_b, spu2_rev_r(spu2, comb2))
+                + SPU2_RMUL((int16_t)c->acc_coef_c, spu2_rev_r(spu2, comb3))
+                + SPU2_RMUL((int16_t)c->acc_coef_d, spu2_rev_r(spu2, comb4));
+
+    int32_t apf1 = out - SPU2_RMUL(apf1_vol, spu2_rev_r(spu2, apf1_src));
+    out = spu2_rev_r(spu2, apf1_src) + SPU2_RMUL(apf1_vol, apf1);
+    int32_t apf2 = out - SPU2_RMUL(apf2_vol, spu2_rev_r(spu2, apf2_src));
+    out = spu2_rev_r(spu2, apf2_src) + SPU2_RMUL(apf2_vol, apf2);
+
+    if (c->attr & (1 << 7)) {
+        spu2_rev_w(spu2, same_dst, same);
+        spu2_rev_w(spu2, diff_dst, diff);
+        spu2_rev_w(spu2, apf1_dst, apf1);
+        spu2_rev_w(spu2, apf2_dst, apf2);
+    }
+
+    return (int16_t)spu2_clamp16(out);
+}
+
+#define SPU2_MMIX_SINL  (1 << 3)
+#define SPU2_MMIX_SINR  (1 << 2)
+#define SPU2_MMIX_SINEL (1 << 1)
+#define SPU2_MMIX_SINER (1 << 0)
+
 struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
     struct spu2_sample s = silence;
 
-    int32_t l = 0;
-    int32_t r = 0;
+    int R = spu2->reverb_cycles & 1;
+
+    // Core chaining
+    int32_t core_l[2] = { 0, 0 };
+    int32_t core_r[2] = { 0, 0 };
 
     for (int c = 0; c < 2; c++) {
-        int32_t cl = 0;
-        int32_t cr = 0;
+        struct spu2_core* cc = &spu2->c[c];
+
+        // Voices split into the direct output and the reverb send per VMIX.
+        int32_t direct_l = 0, direct_r = 0;
+        int32_t effect_l = 0, effect_r = 0;
 
         for (int i = 0; i < 24; i++) {
             struct spu2_sample v = spu2_get_voice_sample(spu2, c, i);
 
-            cl += v.s16[0];
-            cr += v.s16[1];
+            if ((cc->vmixl  >> i) & 1) direct_l += v.s16[0];
+            if ((cc->vmixr  >> i) & 1) direct_r += v.s16[1];
+            if ((cc->vmixel >> i) & 1) effect_l += v.s16[0];
+            if ((cc->vmixer >> i) & 1) effect_r += v.s16[1];
         }
 
-        int16_t ml = spu2_volume_step(&spu2->c[c].mvol_l);
-        int16_t mr = spu2_volume_step(&spu2->c[c].mvol_r);
+        if (c == 1) {
+            int32_t ext_l = SPU2_RMUL(core_l[0], (int16_t)cc->avoll);
+            int32_t ext_r = SPU2_RMUL(core_r[0], (int16_t)cc->avolr);
 
-        spu2->c[c].mvolxl = ml;
-        spu2->c[c].mvolxr = mr;
+            if (cc->mmix & SPU2_MMIX_SINL)  direct_l += ext_l;
+            if (cc->mmix & SPU2_MMIX_SINR)  direct_r += ext_r;
+            if (cc->mmix & SPU2_MMIX_SINEL) effect_l += ext_l;
+            if (cc->mmix & SPU2_MMIX_SINER) effect_r += ext_r;
+        }
 
-        l += ((int64_t)cl * ml) >> 15;
-        r += ((int64_t)cr * mr) >> 15;
+        uint32_t rev_start = cc->esa & 0x3fffff;
+        uint32_t rev_end = (cc->eea & 0x3fffff) | 0xffff;
+
+        if ((cc->attr & (1 << 7)) && rev_start < rev_end) {
+            int16_t o = spu2_reverb_channel(spu2, c, R, spu2_clamp16(R ? effect_r : effect_l));
+
+            if (R)
+                cc->reverb_out_r = o;
+            else
+                cc->reverb_out_l = o;
+        } else {
+            cc->reverb_out_l = 0;
+            cc->reverb_out_r = 0;
+        }
+
+        int16_t el = spu2_volume_step(&cc->evol_l);
+        int16_t er = spu2_volume_step(&cc->evol_r);
+
+        int16_t ml = spu2_volume_step(&cc->mvol_l);
+        int16_t mr = spu2_volume_step(&cc->mvol_r);
+
+        cc->mvolxl = ml;
+        cc->mvolxr = mr;
+
+        // Core output = master volume * (direct output + reverb return at EVOL).
+        int32_t td_l = direct_l + SPU2_RMUL(cc->reverb_out_l, el);
+        int32_t td_r = direct_r + SPU2_RMUL(cc->reverb_out_r, er);
+
+        core_l[c] = ((int64_t)td_l * ml) >> 15;
+        core_r[c] = ((int64_t)td_r * mr) >> 15;
     }
 
-    s.s16[0] = spu2_clamp16(l);
-    s.s16[1] = spu2_clamp16(r);
+    spu2->reverb_cycles++;
+
+    s.s16[0] = spu2_clamp16(core_l[1]);
+    s.s16[1] = spu2_clamp16(core_r[1]);
 
     return s;
 }

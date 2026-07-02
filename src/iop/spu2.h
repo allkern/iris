@@ -133,6 +133,8 @@ struct spu2_voice {
     int adsr_step;
     int adsr_pending_step;
     int adsr_sustain_level;
+
+    uint64_t env_cycle;
 };
 
 struct spu2_core {
@@ -194,6 +196,11 @@ struct spu2_core {
 
     struct spu2_volume mvol_l;
     struct spu2_volume mvol_r;
+    struct spu2_volume evol_l;
+    struct spu2_volume evol_r;
+
+    int16_t reverb_out_l;
+    int16_t reverb_out_r;
 
     uint16_t iir_alpha;
     uint16_t acc_coef_a;
@@ -244,6 +251,10 @@ struct ps2_spu2 {
     struct sched_state* sched;
 
     int sample_cycles;
+
+    uint64_t emu_cycle;
+    uint32_t reverb_cycles;
+
     struct spu2_sample out_buffer[SPU2_OUT_BUFFER_SIZE];
     volatile uint32_t out_write;
     volatile uint32_t out_read;
