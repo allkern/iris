@@ -191,8 +191,6 @@ void spu2_irq(struct ps2_spu2* spu2, int c) {
 
     spu2->spdif_irq |= 4 << c;
 
-    // printf("spu2: IRQ fired\n");
-
     ps2_iop_intc_irq(spu2->intc, IOP_INTC_SPU2);
 }
 
@@ -337,6 +335,16 @@ void spu2_write_data(struct ps2_spu2* spu2, int c, uint64_t data) {
     spu2->ram[spu2->c[c].tsa++] = data;
 
     spu2->c[c].tsa &= 0xfffff;
+}
+
+uint16_t spu2_read_data(struct ps2_spu2* spu2, int c) {
+    spu2_check_irq(spu2, spu2->c[c].tsa);
+
+    uint16_t d = spu2->ram[spu2->c[c].tsa & 0xfffff];
+
+    spu2->c[c].tsa = (spu2->c[c].tsa + 1) & 0xfffff;
+
+    return d;
 }
 
 void spu2_core0_reset_handler(void* udata, int overshoot) {
@@ -1192,6 +1200,10 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
     out += (g3 * v->s[0]) >> 15;
     out = spu2_clamp16(out);
 
+    if (c->non & (1u << vc)) {
+        out = (int16_t)c->noise_level;
+    }
+
     // Output voice 1 and 3 to the capture buffers
     if (vc == 1) {
         uint16_t addr = c->cb_out1_addr + (cr ? 0xc00 : 0x400);
@@ -1375,15 +1387,19 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
     for (int c = 0; c < 2; c++) {
         struct spu2_core* cc = &spu2->c[c];
 
-        // Voices split into the direct output and the reverb send per VMIX.
+        // Advance LFSR
+        int parity = ((cc->noise_level >> 15) ^ (cc->noise_level >> 12) ^
+                      (cc->noise_level >> 11) ^ (cc->noise_level >> 10) ^ 1) & 1;
+        cc->noise_level = (uint16_t)((cc->noise_level << 1) | parity);
+
         int32_t direct_l = 0, direct_r = 0;
         int32_t effect_l = 0, effect_r = 0;
 
         for (int i = 0; i < 24; i++) {
             struct spu2_sample v = spu2_get_voice_sample(spu2, c, i);
 
-            if ((cc->vmixl  >> i) & 1) direct_l += v.s16[0];
-            if ((cc->vmixr  >> i) & 1) direct_r += v.s16[1];
+            if ((cc->vmixl >> i) & 1) direct_l += v.s16[0];
+            if ((cc->vmixr >> i) & 1) direct_r += v.s16[1];
             if ((cc->vmixel >> i) & 1) effect_l += v.s16[0];
             if ((cc->vmixer >> i) & 1) effect_r += v.s16[1];
         }
@@ -1398,16 +1414,33 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
             if (cc->mmix & SPU2_MMIX_SINER) effect_r += ext_r;
         }
 
+        // MEMOUT
+        uint16_t idx = cc->cb_memout_addr;
+        uint32_t mbase = c ? 0x1800 : 0x1000;
+
+        spu2->ram[mbase + 0x000 + idx] = spu2_clamp16(direct_l); spu2_check_irq(spu2, mbase + 0x000 + idx);
+        spu2->ram[mbase + 0x200 + idx] = spu2_clamp16(direct_r); spu2_check_irq(spu2, mbase + 0x200 + idx);
+        spu2->ram[mbase + 0x400 + idx] = spu2_clamp16(effect_l); spu2_check_irq(spu2, mbase + 0x400 + idx);
+        spu2->ram[mbase + 0x600 + idx] = spu2_clamp16(effect_r); spu2_check_irq(spu2, mbase + 0x600 + idx);
+
+        if (c == 1) {
+            spu2->ram[0x800 + idx] = spu2_clamp16(core_l[0]); spu2_check_irq(spu2, 0x800 + idx);
+            spu2->ram[0xA00 + idx] = spu2_clamp16(core_r[0]); spu2_check_irq(spu2, 0xA00 + idx);
+        }
+
+        cc->cb_memout_addr = (idx + 1) & 0x1ff;
+
         uint32_t rev_start = cc->esa & 0x3fffff;
         uint32_t rev_end = (cc->eea & 0x3fffff) | 0xffff;
 
         if ((cc->attr & (1 << 7)) && rev_start < rev_end) {
             int16_t o = spu2_reverb_channel(spu2, c, R, spu2_clamp16(R ? effect_r : effect_l));
 
-            if (R)
+            if (R) {
                 cc->reverb_out_r = o;
-            else
+            } else {
                 cc->reverb_out_l = o;
+            }
         } else {
             cc->reverb_out_l = 0;
             cc->reverb_out_r = 0;
@@ -1422,7 +1455,6 @@ struct spu2_sample ps2_spu2_get_sample(struct ps2_spu2* spu2, int adma_enable) {
         cc->mvolxl = ml;
         cc->mvolxr = mr;
 
-        // Core output = master volume * (direct output + reverb return at EVOL).
         int32_t td_l = direct_l + SPU2_RMUL(cc->reverb_out_l, el);
         int32_t td_r = direct_r + SPU2_RMUL(cc->reverb_out_r, er);
 
@@ -1446,8 +1478,6 @@ void ps2_spu2_tick(struct ps2_spu2* spu2, int cycles) {
 
         struct spu2_sample s = ps2_spu2_get_sample(spu2, 0);
 
-        // SPSC ring: producer (emulation thread) only writes out_write.
-        // Drop the sample if the consumer has fallen a whole buffer behind.
         uint32_t w = spu2->out_write;
 
         if ((w - spu2->out_read) < SPU2_OUT_BUFFER_SIZE) {
@@ -1475,6 +1505,18 @@ struct spu2_sample ps2_spu2_get_voice_sample(struct ps2_spu2* spu2, int c, int v
 
 int spu2_is_adma_active(struct ps2_spu2* spu2, int c) {
     return spu2->c[c].memin_write_addr >= 0x400;
+}
+
+// Note: In this mode core 0 streams its ADMA input at double rate.
+//       Grand Theft Auto: Vice City relies on this to boot.
+//
+// SPDIF_OUT_BYPASS = 0x100, SPDIF_MODE_BYPASS_BITSTREAM = 0x2, and bit 2 of
+// SPDIF_OUT (0x4) selects HIFI PCM streaming which takes priority.
+int spu2_adma_is_bitstream(struct ps2_spu2* spu2) {
+    if (spu2->spdif_out & 0x4)
+        return 0;
+
+    return ((spu2->spdif_out & 0x100) != 0) && ((spu2->spdif_mode & 2) != 0);
 }
 
 void spu2_start_adma(struct ps2_spu2* spu2, int c) {

@@ -143,6 +143,7 @@ struct spu2_core {
     int words_written;
     uint32_t pmon;
     uint32_t non;
+    uint16_t noise_level;
     uint32_t vmixl;
     uint32_t vmixel;
     uint32_t vmixr;
@@ -226,6 +227,7 @@ struct spu2_core {
     // Capture buffers
     uint16_t cb_out1_addr;
     uint16_t cb_out3_addr;
+    uint16_t cb_memout_addr;
 
     struct spu2_sample* adma_buffer;
     uint32_t adma_buffer_max_size;
@@ -273,6 +275,8 @@ struct spu2_sample ps2_spu2_get_adma_sample(struct ps2_spu2* spu2, int c);
 void spu2_start_adma(struct ps2_spu2* spu2, int c);
 int spu2_adma_write(struct ps2_spu2* spu2, int c, uint16_t* buf, uint32_t size);
 int spu2_is_adma_active(struct ps2_spu2* spu2, int c);
+int spu2_adma_is_bitstream(struct ps2_spu2* spu2);
+uint16_t spu2_read_data(struct ps2_spu2* spu2, int c);
 
 #ifdef __cplusplus
 }
