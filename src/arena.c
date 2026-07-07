@@ -21,6 +21,10 @@ int arena_init(struct arena_state* arena, size_t size) {
     return 1;
 }
 
+void arena_reset(struct arena_state* arena) {
+    arena->offset = 0;
+}
+
 void* arena_alloc(struct arena_state* arena, size_t size) {
     if (arena->offset + size > arena->size) {
         arena->offset = 0;

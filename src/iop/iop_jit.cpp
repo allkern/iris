@@ -294,7 +294,15 @@ void iop_cycle(struct iop_state* iop) {
 }
 
 void iop_reset(struct iop_state* iop) {
-    iop_flush_cache(iop);
+    for (iop_cache_page& page : iop->block_cache) {
+        page.blocks = nullptr;
+        page.valid = false;
+        page.dirty = false;
+    }
+
+    if (iop->block_arena) arena_reset(iop->block_arena);
+
+    iop->rt.reset(asmjit::ResetPolicy::kHard);
 
     for (int i = 0; i < 32; i++)
         iop->r[i] = 0;
@@ -2334,15 +2342,21 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
     uint32_t offset = (translated & (_IOP_CACHE_PAGESIZE - 1)) >> 2;
 
     if (!iop->block_cache[page].valid) {
-        const void* blk = arena_alloc(iop->block_arena, sizeof(iop_block) * (_IOP_CACHE_PAGESIZE / 4));
+        void* blk = arena_alloc(iop->block_arena, sizeof(iop_block) * (_IOP_CACHE_PAGESIZE / 4));
 
         if (!blk) {
             for (int i = 0; i < IOP_CACHE_PAGECOUNT; i++) {
                 iop->block_cache[i].valid = false;
+                iop->block_cache[i].blocks = nullptr;
             }
+
+            iop->last_cached_block = nullptr;
+            iop->last_cached_block_pc = 0;
 
             blk = arena_alloc(iop->block_arena, sizeof(iop_block) * (_IOP_CACHE_PAGESIZE / 4));
         }
+
+        memset(blk, 0, sizeof(iop_block) * (_IOP_CACHE_PAGESIZE / 4));
 
         iop->block_cache[page].blocks = (iop_block*)blk;
         iop->block_cache[page].dirty = false;

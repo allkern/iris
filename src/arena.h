@@ -16,6 +16,7 @@ struct arena_state {
 
 struct arena_state* arena_create();
 int arena_init(struct arena_state* arena, size_t size);
+void arena_reset(struct arena_state* arena);
 void* arena_alloc(struct arena_state* arena, size_t size);
 void arena_destroy(struct arena_state* arena);
 
