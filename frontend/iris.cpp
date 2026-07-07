@@ -562,14 +562,21 @@ SDL_AppResult update(iris::instance* iris) {
         iris->double_click_counter--;
     }
 
+    if (iris->loading_file_active &&
+        iris->load_ready.exchange(false, std::memory_order_acquire)) {
+        iris::emu::finalize_load(iris);
+    }
+
     // int iop_count = iris->ps2->iop->total_cycles;
     // int ee_count = iris->ps2->ee->total_cycles;
 
     if (iris->pause) {
+        iris::emu::start_pending_load(iris);
+
         iris->step_out = false;
         iris->step_over = false;
 
-        if (iris->step) {
+        if (iris->step && !iris->loading_file_active) {
             ps2_step_ee(iris->ps2);
 
             iris->step = false;

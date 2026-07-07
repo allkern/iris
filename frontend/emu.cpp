@@ -41,15 +41,33 @@ const char* get_extension(const char* path) {
     return dot + 1;
 }
 
-void handle_load_end(iris::instance* iris, int result) {
-    iris->loading_file_active = false;
-    iris->loading_target = "";
+static void finish_load(iris::instance* iris, int result, std::string name = "") {
+    iris->load_result = result;
+    iris->load_pending_name = std::move(name);
+    iris->load_ready.store(true, std::memory_order_release);
+}
 
-    iris->show_gamelist = false;
+void finalize_load(iris::instance* iris) {
+    vulkan::wait_idle(iris);
 
     renderer_hotswap(iris->renderer, iris->renderer_backend);
 
+    iris->loading_file_active = false;
+    iris->loading_target = "";
+    iris->show_gamelist = false;
+
     imgui::end_dim(iris);
+
+    if (iris->load_result == 0) {
+        renderer_reset(iris->renderer);
+
+        iris->image = {};
+
+        iris->loaded = iris->load_pending_name;
+
+        if (iris->autostart)
+            iris->pause = false;
+    }
 }
 
 int open_archive(iris::instance* iris, std::string path) {
@@ -108,7 +126,7 @@ int open_file_thread(iris::instance* iris, std::string file) {
     if (ext == ".zip") {
         int res = open_archive(iris, file);
 
-        handle_load_end(iris, res);
+        finish_load(iris, res);
 
         return res;
     }
@@ -117,7 +135,7 @@ int open_file_thread(iris::instance* iris, std::string file) {
     if (ext == ".iso" || ext == ".bin" || ext == ".cue" ||
         ext == ".chd" || ext == ".cso" || ext == ".zso") {
         if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str(), 0)) {
-            handle_load_end(iris, 1);
+            finish_load(iris, 1);
 
             return 1;
         }
@@ -125,27 +143,19 @@ int open_file_thread(iris::instance* iris, std::string file) {
         char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
 
         if (!boot_file) {
-            handle_load_end(iris, 2);
+            finish_load(iris, 2);
 
             return 2;
         }
 
         elf::load_symbols_from_disc(iris);
 
-        renderer_reset(iris->renderer);
-
         ps2_set_system(iris->ps2, iris->system);
         emu::load_rom_files(iris);
         ps2_boot_file(iris->ps2, boot_file);
 
-        iris->loaded = file;
+        finish_load(iris, 0, file);
 
-        if (iris->autostart) {
-            iris->pause = false;
-        }
-
-        handle_load_end(iris, 0);
-    
         return 0;
     }
 
@@ -155,19 +165,11 @@ int open_file_thread(iris::instance* iris, std::string file) {
     // Load executable
     file = "host:  " + file;
 
-    renderer_reset(iris->renderer);
-
     ps2_set_system(iris->ps2, iris->system);
     emu::load_rom_files(iris);
     ps2_boot_file(iris->ps2, file.c_str());
 
-    iris->loaded = file;
-
-    if (iris->autostart) {
-        iris->pause = false;
-    }
-
-    handle_load_end(iris, 0);
+    finish_load(iris, 0, file);
 
     return 0;
 }
@@ -177,17 +179,28 @@ int open_file(iris::instance* iris, std::string file) {
 
     iris->loading_target = path.filename().string();
     iris->loading_file_active = true;
+    iris->load_ready = false;
     iris->pause = true;
 
     renderer_hotswap(iris->renderer, RENDERER_BACKEND_NULL);
 
     imgui::start_dim(iris, 0.35f, 100);
 
-    std::thread t(open_file_thread, iris, file);
-
-    t.detach();
+    iris->load_pending_file = file;
+    iris->load_start_pending = true;
 
     return 0;
+}
+
+void start_pending_load(iris::instance* iris) {
+    if (!iris->load_start_pending)
+        return;
+
+    iris->load_start_pending = false;
+
+    std::thread t(open_file_thread, iris, iris->load_pending_file);
+
+    t.detach();
 }
 
 template <typename T> std::optional<T> query_arcade_value(std::string arcade_name, std::string key) {

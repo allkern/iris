@@ -7,6 +7,7 @@
 #include <chrono>
 #include <array>
 #include <deque>
+#include <atomic>
 
 #include "gs/renderer/renderer.hpp"
 #include "gs/renderer/config.hpp"
@@ -631,6 +632,13 @@ struct instance {
     bool loading_file_active = false;
     std::string loading_target = "";
 
+    std::atomic <bool> load_ready = false;
+    int load_result = 0;
+    std::string load_pending_name = "";
+
+    bool load_start_pending = false;
+    std::string load_pending_file = "";
+
     // Debug
     std::vector <elf_symbol> symbols;
     std::vector <uint8_t> strtab;
@@ -800,6 +808,8 @@ namespace emu {
     bool init(iris::instance* iris);
     void destroy(iris::instance* iris);
     int open_file(iris::instance* iris, std::string path);
+    void start_pending_load(iris::instance* iris);
+    void finalize_load(iris::instance* iris);
     bool load_arcade(iris::instance* iris, std::string path);
     int attach_memory_card(iris::instance* iris, int slot, const char* path);
     void detach_memory_card(iris::instance* iris, int slot);

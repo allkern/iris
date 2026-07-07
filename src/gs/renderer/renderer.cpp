@@ -75,6 +75,12 @@ bool renderer_switch(renderer_state* renderer, int backend, void* config) {
 
 void renderer_hotswap(renderer_state* renderer, int backend) {
     renderer_init_callbacks(renderer, backend);
+
+    // Re-point the GIF backend at the newly-selected callbacks. Without this the
+    // core keeps feeding the previous backend (e.g. hardware) even after a swap
+    // to NULL, so GIF transfers would still reach parallel-gs during loading.
+    if (renderer->info.gif)
+        ps2_gif_set_backend(renderer->info.gif, renderer->udata, renderer->transfer, renderer->readback);
 }
 
 void renderer_destroy(renderer_state* renderer) {
