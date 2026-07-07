@@ -2,6 +2,7 @@
 
 struct hardware_config {
     int super_sampling = 0;
+    bool super_sampled_quads = false;
     bool force_progressive = false;
     bool overscan = false;
     bool crtc_offsets = false;

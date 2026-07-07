@@ -221,6 +221,7 @@ bool parse_toml_settings(iris::instance* iris, bool reset) {
 
     auto hardware = tbl["hardware"];
     iris->hardware_backend_config.super_sampling = hardware["super_sampling"].value_or(0);
+    iris->hardware_backend_config.super_sampled_quads = hardware["super_sampled_quads"].value_or(false);
     iris->hardware_backend_config.force_progressive = hardware["force_progressive"].value_or(false);
     iris->hardware_backend_config.overscan = hardware["overscan"].value_or(false);
     iris->hardware_backend_config.crtc_offsets = hardware["crtc_offsets"].value_or(false);
@@ -577,6 +578,7 @@ void close(iris::instance* iris) {
         // etc.
         { "hardware", toml::table {
             { "super_sampling", iris->hardware_backend_config.super_sampling },
+            { "super_sampled_quads", iris->hardware_backend_config.super_sampled_quads },
             { "force_progressive", iris->hardware_backend_config.force_progressive },
             { "overscan", iris->hardware_backend_config.overscan },
             { "crtc_offsets", iris->hardware_backend_config.crtc_offsets },

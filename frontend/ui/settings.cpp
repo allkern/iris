@@ -488,6 +488,20 @@ void show_hardware_renderer_settings(iris::instance* iris) {
     }
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    BeginDisabled(iris->hardware_backend_config.super_sampling == 0);
+
+    if (Checkbox(" Smooth UI/sprites", &iris->hardware_backend_config.super_sampled_quads)) {
+        render::refresh(iris);
+    }
+
+    // if (IsItemHovered()) {
+    //     SetTooltip("Super-sample textured 2D sprites instead of snapping them to the native\n"
+    //                "pixel grid, so upscaled UI is smoothed rather than point-scaled.\n"
+    //                "May cause minor texture-atlas bleeding in some games.");
+    // }
+
+    EndDisabled();
+
     // BeginDisabled(iris->hardware_backend_config.super_sampling != 0);
     if (Checkbox(" Force progressive scan", &iris->hardware_backend_config.force_progressive)) {
         render::refresh(iris);

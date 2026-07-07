@@ -42,6 +42,7 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
     opts.super_sampling = (SuperSampling)ctx->config.super_sampling;
     opts.ordered_super_sampling = true;
     opts.super_sampled_textures = true;
+    opts.super_sampled_quads = ctx->config.super_sampled_quads;
     opts.dynamic_super_sampling = true;
 
     if (!ctx->iface.init(&ctx->granite_device, opts)) {
@@ -74,7 +75,7 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
             default: super_sampling = (SuperSampling)0; break;
         }
 
-        ctx->iface.set_super_sampling_rate(super_sampling, true, true);
+        ctx->iface.set_super_sampling_rate(super_sampling, true, true, ctx->config.super_sampled_quads);
     }
 
     if (ctx->config.enable_analog_video) {
@@ -268,7 +269,7 @@ void hardware_set_config(void* udata, void* config) {
             default: super_sampling = (SuperSampling)0; break;
         }
 
-        ctx->iface.set_super_sampling_rate(super_sampling, true, true);
+        ctx->iface.set_super_sampling_rate(super_sampling, true, true, ctx->config.super_sampled_quads);
     }
 
     if (ctx->config.enable_analog_video) {
