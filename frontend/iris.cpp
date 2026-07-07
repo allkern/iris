@@ -341,6 +341,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_memory_card_tool) show_memory_card_tool(iris);
     if (iris->show_memory_search) show_memory_search(iris);
     if (iris->show_hdd_tool) show_hdd_tool(iris);
+    if (iris->show_gs_dump_tool) show_gs_dump_tool(iris);
     if (iris->show_imgui_demo) ShowDemoWindow(&iris->show_imgui_demo);
     if (iris->show_bios_setting_window) show_bios_setting_window(iris);
     if (iris->show_overlay) show_overlay(iris);
@@ -592,6 +593,9 @@ SDL_AppResult update(iris::instance* iris) {
             return SDL_APP_CONTINUE;
         }
     }
+
+    // Record a GS dump frame boundary
+    iris::render::gs_dump_tick(iris);
 
     // Draw frame
     iris::update_window(iris);

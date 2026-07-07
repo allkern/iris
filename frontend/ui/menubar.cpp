@@ -490,6 +490,12 @@ void show_main_menubar(iris::instance* iris) {
                 }
             }
 
+            if (MenuItem(ICON_MS_MOVIE " Dump GS frames...")) {
+                iris->gsdump_prev_pause = iris->pause;
+                iris->pause = true;
+                iris->show_gs_dump_tool = true;
+            }
+
             if (MenuItem(ICON_MS_SD_CARD " Memory Card tool")) {
                 iris->show_memory_card_tool = true;
             }

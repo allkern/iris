@@ -89,6 +89,7 @@ struct renderer_state {
     renderer_image (*get_frame)(void* udata);
     void (*transfer)(void* udata, int path, const void* data, size_t size);
     void (*readback)(void* udata, void* data, size_t size);
+    void (*read_vram)(void* udata, void* dst, size_t size);
     void (*set_config)(void* udata, void* config);
 };
 
@@ -101,3 +102,4 @@ void renderer_destroy(renderer_state* renderer);
 void renderer_set_config(renderer_state* renderer, void* config);
 
 renderer_image renderer_get_frame(renderer_state* renderer);
+void renderer_read_vram(renderer_state* renderer, void* dst, size_t size);

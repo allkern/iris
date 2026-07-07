@@ -203,6 +203,7 @@ target_sources(iris PRIVATE
     frontend/ui/dma.cpp
     frontend/ui/gamelist.cpp
     frontend/ui/gs.cpp
+    frontend/ui/gs_dump.cpp
     frontend/ui/hdd_tool.cpp
     frontend/ui/intc.cpp
     frontend/ui/logs.cpp
@@ -247,6 +248,7 @@ target_sources(iris PRIVATE
     src/ee/vu_cached.cpp
     src/ee/vu_dis.c
     src/gs/gs.c
+    src/gs/gs_dump.c
     src/gs/renderer/null.cpp
     src/gs/renderer/renderer.cpp
     src/gs/renderer/hardware.cpp

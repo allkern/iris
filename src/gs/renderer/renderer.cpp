@@ -18,6 +18,7 @@ void renderer_init_callbacks(renderer_state* renderer, int backend) {
             renderer->set_config = null_set_config;
             renderer->transfer = null_transfer;
             renderer->readback = null_readback;
+            renderer->read_vram = null_read_vram;
         } break;
 
         case RENDERER_BACKEND_SOFTWARE: {
@@ -30,6 +31,7 @@ void renderer_init_callbacks(renderer_state* renderer, int backend) {
             renderer->set_config = null_set_config;
             renderer->transfer = null_transfer;
             renderer->readback = null_readback;
+            renderer->read_vram = null_read_vram;
         } break;
 
         case RENDERER_BACKEND_HARDWARE: {
@@ -41,6 +43,7 @@ void renderer_init_callbacks(renderer_state* renderer, int backend) {
             renderer->set_config = hardware_set_config;
             renderer->transfer = hardware_transfer;
             renderer->readback = hardware_readback;
+            renderer->read_vram = hardware_read_vram;
         } break;
     }
 }
@@ -86,6 +89,10 @@ void renderer_reset(renderer_state* renderer) {
 
 renderer_image renderer_get_frame(renderer_state* renderer) {
     return renderer->get_frame(renderer->udata);
+}
+
+void renderer_read_vram(renderer_state* renderer, void* dst, size_t size) {
+    renderer->read_vram(renderer->udata, dst, size);
 }
 
 void renderer_set_config(renderer_state* renderer, void* config) {

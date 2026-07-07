@@ -22,6 +22,8 @@
 #include "config.hpp"
 #include "slirp.hpp"
 
+struct gs_dump;
+
 namespace iris {
 
 #define RENDER_ASPECT_NATIVE 0
@@ -515,6 +517,7 @@ struct instance {
     bool show_iop_threads = false;
     bool show_memory_card_tool = false;
     bool show_hdd_tool = false;
+    bool show_gs_dump_tool = false;
     bool show_imgui_demo = false;
     bool show_vu_disassembler = false;
     bool show_overlay = false;
@@ -637,6 +640,15 @@ struct instance {
     float avg_fps;
     float avg_frames;
     int screenshot_counter = 0;
+
+    // GS dump stuff
+    struct gs_dump* gsdump = nullptr;
+    bool gsdump_armed = false;
+    int gsdump_delay_remaining = 0;
+    int gsdump_frames_remaining = 0;
+    std::string gsdump_path = "";
+    std::string gsdump_serial = "";
+    bool gsdump_prev_pause = false;
 
     // Renderer configs
     hardware_config hardware_backend_config;
@@ -804,6 +816,8 @@ namespace render {
     bool save_screenshot(iris::instance* iris, std::string path);
     void switch_backend(iris::instance* iris, int backend);
     void refresh(iris::instance* iris);
+    void gs_dump_start(iris::instance* iris, std::string path, int frames, int delay, std::string serial);
+    void gs_dump_tick(iris::instance* iris);
 }
 
 namespace input {
@@ -862,6 +876,7 @@ void show_iop_threads(iris::instance* iris);
 void show_overlay(iris::instance* iris);
 void show_memory_card_tool(iris::instance* iris);
 void show_hdd_tool(iris::instance* iris);
+void show_gs_dump_tool(iris::instance* iris);
 void show_bios_setting_window(iris::instance* iris);
 void show_memory_search(iris::instance* iris);
 void show_timers(iris::instance* iris);

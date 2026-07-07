@@ -1,0 +1,143 @@
+#include <string>
+#include <cstring>
+#include <algorithm>
+
+#include "iris.hpp"
+
+#include "gs/gs_dump.h"
+
+#include "res/IconsMaterialSymbols.h"
+#include "portable-file-dialogs.h"
+
+namespace iris {
+
+static std::string gsdump_detect_serial(iris::instance* iris) {
+    if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc)
+        return "";
+
+    char buf[128];
+
+    if (!disc_get_serial(iris->ps2->cdvd->disc, buf))
+        return "";
+
+    std::string serial = buf;
+
+    std::replace(serial.begin(), serial.end(), '_', '-');
+    serial.erase(std::remove(serial.begin(), serial.end(), '.'), serial.end());
+
+    return serial;
+}
+
+void show_gs_dump_tool(iris::instance* iris) {
+    using namespace ImGui;
+
+    static char filename[1024] = "";
+    static int frames = 1;
+    static int delay = 0;
+    static std::string serial;
+
+    if (imgui::BeginEx("Capture GS dump", &iris->show_gs_dump_tool, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (IsWindowAppearing()) {
+            serial = gsdump_detect_serial(iris);
+            frames = 1;
+            delay = 0;
+
+            std::string def = (serial.empty() ? std::string("dump") : serial) + ".gs";
+            strncpy(filename, def.c_str(), sizeof(filename) - 1);
+            filename[sizeof(filename) - 1] = '\0';
+        }
+
+        bool capturing = iris->gsdump_armed ||
+            (iris->gsdump && gs_dump_is_active(iris->gsdump));
+
+        if (iris->renderer_backend != RENDERER_BACKEND_HARDWARE) {
+            TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f),
+                ICON_MS_WARNING " GS dumps require the hardware (Vulkan) renderer.");
+            Spacing();
+        }
+
+        TextDisabled("Serial");
+        if (serial.empty()) {
+            TextDisabled("No serial detected");
+        } else {
+            Text("%s", serial.c_str());
+        }
+
+        Spacing();
+
+        TextDisabled("Output file");
+        SetNextItemWidth(360.0f);
+        InputText("##gsdump_file", filename, sizeof(filename));
+        SameLine();
+        if (Button(ICON_MS_FOLDER_OPEN "##gsdump_browse")) {
+            audio::mute(iris);
+
+            auto f = pfd::save_file("Save GS dump", filename, {
+                "GS dump (*.gs)", "*.gs",
+                "All Files (*.*)", "*"
+            });
+
+            while (!f.ready());
+
+            audio::unmute(iris);
+
+            if (f.result().size()) {
+                strncpy(filename, f.result().c_str(), sizeof(filename) - 1);
+                filename[sizeof(filename) - 1] = '\0';
+            }
+        }
+
+        Spacing();
+
+        SetNextItemWidth(140.0f);
+        if (InputInt("Frames to capture", &frames)) {
+            if (frames < 1) frames = 1;
+        }
+
+        SetNextItemWidth(140.0f);
+        if (InputInt("Frames to wait first", &delay)) {
+            if (delay < 0) delay = 0;
+        }
+
+        Spacing();
+        Separator();
+        Spacing();
+
+        if (capturing) {
+            if (iris->gsdump_armed) {
+                Text(ICON_MS_HOURGLASS_TOP " Waiting %d frame(s) before capture...",
+                    iris->gsdump_delay_remaining);
+            } else {
+                Text(ICON_MS_FIBER_MANUAL_RECORD " Capturing... %d frame(s) left",
+                    iris->gsdump_frames_remaining);
+            }
+
+            if (Button(ICON_MS_CLOSE " Close")) {
+                iris->show_gs_dump_tool = false;
+            }
+        } else {
+            BeginDisabled(filename[0] == '\0' ||
+                iris->renderer_backend != RENDERER_BACKEND_HARDWARE);
+
+            if (Button(ICON_MS_MOVIE " Start capture")) {
+                iris->pause = false;
+
+                render::gs_dump_start(iris, filename, frames, delay, serial);
+
+                iris->show_gs_dump_tool = false;
+            }
+
+            EndDisabled();
+
+            SameLine();
+
+            if (Button(ICON_MS_CLOSE " Cancel")) {
+                iris->pause = iris->gsdump_prev_pause;
+
+                iris->show_gs_dump_tool = false;
+            }
+        }
+    } End();
+}
+
+}

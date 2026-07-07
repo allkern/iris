@@ -1,6 +1,9 @@
 #include <cmath>
+#include <vector>
 
 #include "iris.hpp"
+
+#include "gs/gs_dump.h"
 
 #define RENDER_MAX_SHADER_PASSES 16
 
@@ -714,6 +717,8 @@ void switch_backend(iris::instance* iris, int backend) {
     if (iris->renderer_backend == backend)
         return;
 
+    vulkan::wait_idle(iris);
+
     renderer_destroy(iris->renderer);
 
     iris->renderer = renderer_create();
@@ -739,6 +744,65 @@ void switch_backend(iris::instance* iris, int backend) {
         fprintf(stderr, "render: Failed to initialize renderer backend\n");
     } else {
         iris->renderer_backend = backend;
+    }
+}
+
+static void gsdump_tap(void* udata, int path, const void* data, size_t size) {
+    gs_dump_transfer((struct gs_dump*)udata, path, data, size);
+}
+
+void gs_dump_start(iris::instance* iris, std::string path, int frames, int delay, std::string serial) {
+    if (!iris->gsdump)
+        iris->gsdump = gs_dump_create();
+
+    iris->gsdump_path = path;
+    iris->gsdump_serial = serial;
+    iris->gsdump_delay_remaining = delay < 0 ? 0 : delay;
+    iris->gsdump_frames_remaining = frames < 1 ? 1 : frames;
+    iris->gsdump_armed = true;
+}
+
+void gs_dump_tick(iris::instance* iris) {
+    if (!iris->gsdump)
+        return;
+
+    if (iris->gsdump_armed) {
+        if (iris->gsdump_delay_remaining > 0) {
+            iris->gsdump_delay_remaining--;
+
+            return;
+        }
+
+        iris->gsdump_armed = false;
+
+        std::vector<uint8_t> vram(0x400000);
+
+        renderer_read_vram(iris->renderer, vram.data(), vram.size());
+
+        ps2_gif_set_dump_tap(iris->ps2->gif, iris->gsdump, gsdump_tap);
+
+        const char* serial = iris->gsdump_serial.empty() ? nullptr : iris->gsdump_serial.c_str();
+
+        if (!gs_dump_begin(iris->gsdump, iris->gsdump_path.c_str(),
+                iris->ps2->gs, iris->ps2->gif,
+                vram.data(), (uint32_t)vram.size(), serial, 0)) {
+            ps2_gif_set_dump_tap(iris->ps2->gif, nullptr, nullptr);
+            iris->gsdump_frames_remaining = 0;
+
+            fprintf(stderr, "render: Failed to open GS dump '%s'\n", iris->gsdump_path.c_str());
+        }
+
+        return;
+    }
+
+    if (gs_dump_is_active(iris->gsdump)) {
+        gs_dump_vsync(iris->gsdump, iris->ps2->gs);
+
+        if (--iris->gsdump_frames_remaining <= 0) {
+            gs_dump_end(iris->gsdump);
+
+            ps2_gif_set_dump_tap(iris->ps2->gif, nullptr, nullptr);
+        }
     }
 }
 
@@ -799,6 +863,12 @@ void destroy(iris::instance* iris) {
     shaders::clear(iris);
 
     if (iris->renderer) renderer_destroy(iris->renderer);
+
+    if (iris->gsdump) {
+        gs_dump_destroy(iris->gsdump);
+
+        iris->gsdump = nullptr;
+    }
 }
 
 }

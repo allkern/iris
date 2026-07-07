@@ -182,6 +182,8 @@ renderer_image hardware_get_frame(void* udata) {
 
     ScanoutResult scanout = ctx->iface.vsync(info);
 
+    ctx->current_scanout = scanout.image;
+
     Image* granite_image = scanout.image.get();
 
     renderer_image image;
@@ -227,6 +229,17 @@ void hardware_readback(void* udata, void* data, size_t size) {
     hardware_state* ctx = static_cast<hardware_state*>(udata);
 
     ctx->iface.read_transfer_fifo((void*)data, size / 16);
+}
+
+extern "C" void hardware_read_vram(void* udata, void* dst, size_t size) {
+    hardware_state* ctx = static_cast<hardware_state*>(udata);
+
+    // Flush pending GS work so local memory reflects everything submitted so far
+    ctx->iface.flush();
+
+    const void* src = ctx->iface.map_vram_read(0, size);
+
+    memcpy(dst, src, size);
 }
 
 void hardware_set_config(void* udata, void* config) {

@@ -366,6 +366,9 @@ void ps2_gif_fifo_write(struct ps2_gif* gif, uint128_t data, int path) {
             if (gif->transfer)
                 gif->transfer(gif->udata, path, queue->buf, queue->size * sizeof(uint32_t));
 
+            if (gif->dump_transfer)
+                gif->dump_transfer(gif->dump_udata, path, queue->buf, queue->size * sizeof(uint32_t));
+
             queue_clear(queue);
         }
     }
@@ -375,6 +378,11 @@ void ps2_gif_set_backend(struct ps2_gif* gif, void* udata, void (*transfer)(void
     gif->udata = udata;
     gif->transfer = transfer;
     gif->readback = readback;
+}
+
+void ps2_gif_set_dump_tap(struct ps2_gif* gif, void* udata, void (*tap)(void*, int, const void*, size_t)) {
+    gif->dump_udata = udata;
+    gif->dump_transfer = tap;
 }
 
 void ps2_gif_set_path3_mask(struct ps2_gif* gif, int mask) {
