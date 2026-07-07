@@ -30,8 +30,7 @@ void ps2_vif_destroy(struct ps2_vif* vif) {
     free(vif);
 }
 
-static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
-    // Process mask
+static inline void vif_emit_vu_mem(struct ps2_vif* vif, uint128_t data, int is_fill) {
     if (vif->unpack_mask) {
         int cycle = (vif->unpack_cycle > 3) ? 3 : vif->unpack_cycle;
         int m[4], shift = (cycle & 3) * 8;
@@ -46,8 +45,9 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
         //       the unpacked data itself.
         for (int i = 0; i < 4; i++) {
             if (m[i] == 0) {
-                // Normal mode, m==0 -> write value as is
-                if (vif->mode == 0) {
+                if (is_fill) {
+                    data.u32[i] = vif->r[i];
+                } else if (vif->mode == 0) {
                     continue;
                 } else if (vif->mode == 1) {
                     // Addition decompression
@@ -69,6 +69,9 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
                 data.u32[i] = vu_get_vu_mem_ptr(vif->vu, vif->addr)->u32[i];
             }
         }
+    } else if (is_fill) {
+        for (int i = 0; i < 4; i++)
+            data.u32[i] = vif->r[i];
     } else {
         // Do mode processing only
         for (int i = 0; i < 4; i++) {
@@ -87,23 +90,46 @@ static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
         }
     }
 
-    if (vif->unpack_cl == vif->unpack_wl) {
-        // Write data normally
-        *vu_get_vu_mem_ptr(vif->vu, vif->addr++) = data;
-    } else if (vif->unpack_cl > vif->unpack_wl) {
-        // Write data until unpack_wl is reached, then skip unpack_skip
-        *vu_get_vu_mem_ptr(vif->vu, vif->addr++) = data;
-    } else {
-        fprintf(stderr, "vif%d: Unpack error: unpack_cl (%d) < unpack_wl (%d)\n", vif->id, vif->unpack_cl, vif->unpack_wl);
-        exit(1);
-    }
+    *vu_get_vu_mem_ptr(vif->vu, vif->addr++) = data;
+}
+
+static inline void vif_write_vu_mem(struct ps2_vif* vif, uint128_t data) {
+    vif_emit_vu_mem(vif, data, 0);
 
     vif->unpack_cycle++;
+    vif->unpack_wcount--;
 
-    if (vif->unpack_cycle == vif->unpack_wl) {
-        vif->addr += vif->unpack_skip;
-        vif->unpack_cycle = 0;
+    if (vif->unpack_cl >= vif->unpack_wl) {
+        if (vif->unpack_cycle == (int)vif->unpack_wl) {
+            vif->addr += vif->unpack_skip;
+            vif->unpack_cycle = 0;
+        }
+    } else {
+        if (vif->unpack_cycle == (int)vif->unpack_cl) {
+            while (vif->unpack_cycle < (int)vif->unpack_wl && vif->unpack_wcount > 0) {
+                vif_emit_vu_mem(vif, (uint128_t){ 0 }, 1);
+
+                vif->unpack_cycle++;
+                vif->unpack_wcount--;
+            }
+
+            vif->unpack_cycle = 0;
+        }
     }
+}
+
+static inline void vif_unpack_flush_fills(struct ps2_vif* vif) {
+    while (vif->unpack_wcount > 0) {
+        vif_emit_vu_mem(vif, (uint128_t){ 0 }, 1);
+
+        vif->unpack_cycle++;
+        vif->unpack_wcount--;
+
+        if (vif->unpack_cycle == (int)vif->unpack_wl)
+            vif->unpack_cycle = 0;
+    }
+
+    vif->state = VIF_IDLE;
 }
 
 void vif0_send_irq(void* udata, int overshoot) {
@@ -328,37 +354,50 @@ static inline void vif_handle_fifo_write(struct ps2_vif* vif, uint32_t data) {
                 int vn = (data >> 26) & 3;
                 int flg = (data >> 15) & 1;
                 int addr = data & 0x3ff;
-                int filling = vif->unpack_cl < vif->unpack_wl;
 
                 if (!vif->unpack_num) vif->unpack_num = 256;
                 if (flg) addr += vif->tops;
 
+                int num = vif->unpack_num;
+                int cl = vif->unpack_cl;
+                int wl = vif->unpack_wl;
+                int filling = cl < wl;
+
+                vif->unpack_wcount = num;
+
+                int read_num = num;
+
                 if (filling) {
-                    // fprintf(stderr, "vif%d: Filling mode unimplemented\n", vif->id);
+                    int rem = num % wl;
 
-                    return;
-                    // exit(1);
+                    read_num = cl * (num / wl) + (rem > cl ? cl : rem);
+                    vif->unpack_skip = 0;
+                } else {
+                    vif->unpack_skip = cl - wl;
                 }
-
-                // To-do: Handle for filling
-                vif->unpack_skip = vif->unpack_cl - vif->unpack_wl;
-                vif->unpack_wl_count = 0;
 
                 uint32_t pack_size = 16;
 
                 if ((vl == 3 && vn == 3) == 0)
                     pack_size = (32 >> vl) * (vn + 1);
 
-                vif->pending_words = pack_size * vif->unpack_num;
+                vif->pending_words = pack_size * read_num;
                 vif->pending_words = (vif->pending_words + 0x1F) & ~0x1F;
                 vif->pending_words /= 32;
 
+                vif->unpack_num = read_num;
+
                 vif->unpack_shift = 0;
-                vif->state = VIF_RECV_DATA;
                 vif->shift = 0;
                 vif->addr = addr;
 
-                // fprintf(stdout, "vif%d: UNPACK %02x fmt=%02x flg=%d num=%02x addr=%08x tops=%08x usn=%d wr=%d mode=%d\n", vif->id, data >> 24, vif->unpack_fmt, flg, vif->unpack_num, addr, vif->tops, vif->unpack_usn, vif->pending_words, vif->mode);
+                // fprintf(stdout, "vif%d: UNPACK %02x fmt=%02x flg=%d num=%02x read=%d addr=%08x tops=%08x usn=%d wr=%d cl=%d wl=%d mode=%d\n", vif->id, data >> 24, vif->unpack_fmt, flg, num, read_num, addr, vif->tops, vif->unpack_usn, vif->pending_words, cl, wl, vif->mode);
+
+                if (vif->pending_words == 0) {
+                    vif_unpack_flush_fills(vif);
+                } else {
+                    vif->state = VIF_RECV_DATA;
+                }
             } break;
             default: {
                 // fprintf(stderr, "vif%d: Unhandled command %02x\n", vif->id, vif->cmd);
@@ -958,9 +997,9 @@ void ps2_vif_write128(struct ps2_vif* vif, uint32_t addr, uint128_t data) {
         } break;
 
         default: {
-            fprintf(stderr, "vif%d: Unhandled 128-bit write to %08x\n", vif->id, addr);
+            // fprintf(stderr, "vif%d: Unhandled 128-bit write to %08x\n", vif->id, addr);
 
-            exit(1);
+            // exit(1);
         } break;
     }
 }

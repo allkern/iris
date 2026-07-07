@@ -89,7 +89,7 @@ struct ps2_vif {
     uint32_t unpack_cl;
     uint32_t unpack_wl;
     uint32_t unpack_skip;
-    uint32_t unpack_wl_count;
+    int unpack_wcount;
     uint32_t unpack_buf[16];
     uint32_t unpack_shift;
     uint32_t unpack_data;
