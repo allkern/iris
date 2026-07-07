@@ -399,6 +399,10 @@ struct instance {
     VkPhysicalDeviceVulkan11Features vulkan_11_features = {};
     VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
     VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
+    VkPhysicalDeviceSynchronization2Features synchronization2_features = {};
+    VkPhysicalDeviceFaultFeaturesEXT fault_features = {};
+    bool device_fault_supported = false;
+    bool device_fault_dumped = false;
     VkSampler sampler[3] = { VK_NULL_HANDLE };
     bool cubic_supported = false;
     VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
@@ -789,6 +793,7 @@ namespace vulkan {
     void free_texture(iris::instance* iris, texture& tex);
     void* read_image(iris::instance* iris, VkImage image, VkFormat format, int width, int height);
     void wait_idle(iris::instance* iris);
+    void dump_device_fault(iris::instance* iris);
     texture load_texture_from_memory(iris::instance* iris, const void* data, size_t size);
     texture load_texture_from_file(iris::instance* iris, std::string path);
 }

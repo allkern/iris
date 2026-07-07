@@ -925,6 +925,9 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
     } else if (err != VK_SUCCESS) {
         fprintf(stderr, "imgui: Failed to acquire next image\n");
 
+        if (err == VK_ERROR_DEVICE_LOST)
+            vulkan::dump_device_fault(iris);
+
         return false;
     }
 
@@ -934,6 +937,8 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
 
     if (vkWaitForFences(iris->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
         fprintf(stderr, "imgui: Failed to wait for fence\n");
+
+        vulkan::dump_device_fault(iris);
 
         return false;
     }
@@ -1003,7 +1008,9 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
 
         if (vkQueueSubmit(iris->queue, 1, &submit_info, fd->Fence) != VK_SUCCESS) {
             fprintf(stderr, "imgui: Failed to submit queue\n");
-        
+
+            vulkan::dump_device_fault(iris);
+
             return false;
         }
     }
@@ -1028,7 +1035,10 @@ bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
 
         return true;
     } else if (err != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to acquire next image\n");
+        fprintf(stderr, "imgui: Failed to present image\n");
+
+        if (err == VK_ERROR_DEVICE_LOST)
+            vulkan::dump_device_fault(iris);
 
         return false;
     }

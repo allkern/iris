@@ -924,11 +924,16 @@ bool init(iris::instance* iris, bool enable_validation) {
 
     iris->vulkan_11_features.pNext = &iris->vulkan_12_features;
     iris->vulkan_12_features.pNext = &iris->subgroup_size_control_features;
-    iris->subgroup_size_control_features.pNext = VK_NULL_HANDLE;
+    iris->subgroup_size_control_features.pNext = &iris->synchronization2_features;
+    iris->synchronization2_features.pNext = VK_NULL_HANDLE;
 
     iris->vulkan_11_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
     iris->vulkan_12_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     iris->subgroup_size_control_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SUBGROUP_SIZE_CONTROL_FEATURES;
+    iris->synchronization2_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SYNCHRONIZATION_2_FEATURES;
+
+    // Parallel-GS uses synchronization2
+    iris->synchronization2_features.synchronization2 = VK_TRUE;
 
     iris->vulkan_11_features.storageBuffer16BitAccess = VK_TRUE;
     iris->vulkan_11_features.uniformAndStorageBuffer16BitAccess = VK_TRUE;
@@ -945,6 +950,19 @@ bool init(iris::instance* iris, bool enable_validation) {
     
     iris->subgroup_size_control_features.subgroupSizeControl = VK_TRUE;
     iris->subgroup_size_control_features.computeFullSubgroups = VK_TRUE;
+
+    if (is_device_extension_supported(iris, VK_EXT_DEVICE_FAULT_EXTENSION_NAME)) {
+        device_info.enabled_extensions.push_back(VK_EXT_DEVICE_FAULT_EXTENSION_NAME);
+
+        iris->fault_features.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FAULT_FEATURES_EXT;
+        iris->fault_features.deviceFault = VK_TRUE;
+        iris->fault_features.pNext = VK_NULL_HANDLE;
+
+        iris->synchronization2_features.pNext = &iris->fault_features;
+        iris->device_fault_supported = true;
+
+        printf("vulkan: VK_EXT_device_fault enabled (GPU fault reporting available)\n");
+    }
 
     // Chain in all feature structs
     device_info.data = &iris->vulkan_11_features;
@@ -1340,6 +1358,82 @@ void wait_idle(iris::instance* iris) {
         vkDeviceWaitIdle(iris->device);
     } else if (iris->queue) {
         vkQueueWaitIdle(iris->queue);
+    }
+}
+
+// Dump GPU fault info after a VK_ERROR_DEVICE_LOST. Requires VK_EXT_device_fault
+// (enabled in init() when supported). Safe to call on an already-lost device.
+void dump_device_fault(iris::instance* iris) {
+    // Only report once - after a loss every frame hits a device-lost path.
+    if (iris->device_fault_dumped)
+        return;
+
+    iris->device_fault_dumped = true;
+
+    if (!iris->device_fault_supported) {
+        fprintf(stderr, "vulkan: GPU device lost, but VK_EXT_device_fault is not enabled - no fault details available\n");
+
+        return;
+    }
+
+    if (!iris->device)
+        return;
+
+    auto get_fault_info = (PFN_vkGetDeviceFaultInfoEXT)vkGetDeviceProcAddr(iris->device, "vkGetDeviceFaultInfoEXT");
+
+    if (!get_fault_info) {
+        fprintf(stderr, "vulkan: vkGetDeviceFaultInfoEXT not loaded\n");
+
+        return;
+    }
+
+    VkDeviceFaultCountsEXT counts = {};
+    counts.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_COUNTS_EXT;
+
+    VkResult res = get_fault_info(iris->device, &counts, nullptr);
+
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: vkGetDeviceFaultInfoEXT (counts) failed: %d\n", res);
+
+        return;
+    }
+
+    std::vector <VkDeviceFaultAddressInfoEXT> address_infos(counts.addressInfoCount);
+    std::vector <VkDeviceFaultVendorInfoEXT> vendor_infos(counts.vendorInfoCount);
+
+    VkDeviceFaultInfoEXT fault = {};
+    fault.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_INFO_EXT;
+    fault.pAddressInfos = address_infos.data();
+    fault.pVendorInfos = vendor_infos.data();
+
+    res = get_fault_info(iris->device, &counts, &fault);
+
+    if (res != VK_SUCCESS) {
+        fprintf(stderr, "vulkan: vkGetDeviceFaultInfoEXT (data) failed: %d\n", res);
+
+        return;
+    }
+
+    fprintf(stderr, "vulkan: ==== GPU DEVICE FAULT ==== (%u address, %u vendor)\n",
+        counts.addressInfoCount, counts.vendorInfoCount);
+    fprintf(stderr, "vulkan:   %s\n", fault.description);
+
+    for (uint32_t i = 0; i < counts.addressInfoCount; i++) {
+        const VkDeviceFaultAddressInfoEXT& a = address_infos[i];
+
+        fprintf(stderr, "vulkan:   address fault: type=%d reported=0x%llx precision=0x%llx\n",
+            (int)a.addressType,
+            (unsigned long long)a.reportedAddress,
+            (unsigned long long)a.addressPrecision);
+    }
+
+    for (uint32_t i = 0; i < counts.vendorInfoCount; i++) {
+        const VkDeviceFaultVendorInfoEXT& v = vendor_infos[i];
+
+        fprintf(stderr, "vulkan:   vendor fault: \"%s\" code=0x%llx data=0x%llx\n",
+            v.description,
+            (unsigned long long)v.vendorFaultCode,
+            (unsigned long long)v.vendorFaultData);
     }
 }
 
