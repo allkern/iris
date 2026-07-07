@@ -8,8 +8,9 @@
 
 struct vu_block_entry {
     struct vu_instruction upper, lower;
-    int e_bit;
     int i_bit;
+    int e_bit;
+    int m_bit;
     int hazard0;
     int hazard1;
     int hazard2;
@@ -54,6 +55,7 @@ struct vu_state {
 
     bool branch_taken;
     bool block_exit;
+    bool waiting_for_interlock;
 
     uint64_t micro_mem[0x800];
     uint128_t vu_mem[0x400];

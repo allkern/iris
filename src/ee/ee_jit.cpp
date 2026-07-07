@@ -964,6 +964,10 @@ static inline void ee_i_ctc2(struct ee_state* ee, const ee_instruction& i) {
     };
 
     ps2_vu_write_vi(ee->vu0, d, EE_RT32);
+
+    if ((i.opcode & 1) && vu_is_interlocked(ee->vu0)) {
+        vu_execute_program_tpc(ee->vu0);
+    }
 }
 static inline void ee_i_cvts(struct ee_state* ee, const ee_instruction& i) {
     EE_FD = (float)ee->f[EE_D_FS].s32;
@@ -3371,7 +3375,7 @@ static inline void ee_i_vcallmsr(struct ee_state* ee, const ee_instruction& i) {
     vu_execute_program(ee->vu0, ee->vu0->cmsar0);
 }
 static inline void ee_i_vclipw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(clip) }
-static inline void ee_i_vdiv(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(div) }
+static inline void ee_i_vdiv(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(div) ee->vu0->q_delay = 0; }
 static inline void ee_i_vftoi0(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi0) }
 static inline void ee_i_vftoi12(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi12) }
 static inline void ee_i_vftoi15(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi15) }
@@ -3453,11 +3457,11 @@ static inline void ee_i_vopmula(struct ee_state* ee, const ee_instruction& i) { 
 static inline void ee_i_vrget(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(rget) }
 static inline void ee_i_vrinit(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rinit) }
 static inline void ee_i_vrnext(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(rnext) }
-static inline void ee_i_vrsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rsqrt) }
+static inline void ee_i_vrsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rsqrt) ee->vu0->q_delay = 0; }
 static inline void ee_i_vrxor(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rxor) }
 static inline void ee_i_vsqd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(sqd) }
 static inline void ee_i_vsqi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(sqi) }
-static inline void ee_i_vsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(sqrt) }
+static inline void ee_i_vsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(sqrt) ee->vu0->q_delay = 0; }
 static inline void ee_i_vsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(sub) }
 static inline void ee_i_vsuba(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(suba) }
 static inline void ee_i_vsubai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subai) }

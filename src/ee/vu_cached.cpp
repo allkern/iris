@@ -213,6 +213,63 @@ int32_t vu_cvti(float value) {
     return (int32_t)value;
 }
 
+static inline double ps2_to_double(uint32_t bits) {
+    int e = (bits >> 23) & 0xff;
+
+    if (e == 0) {
+        return (bits & 0x80000000) ? -0.0 : 0.0;
+    }
+
+    double m = 1.0 + (double)(bits & 0x7fffff) / 8388608.0;
+    double v = ldexp(m, e - 127);
+
+    return (bits & 0x80000000) ? -v : v;
+}
+
+static inline uint32_t ps2_pack_double(double v) {
+    uint32_t sign = signbit(v) ? 0x80000000u : 0u;
+
+    double a = fabs(v);
+
+    if (a == 0.0) {
+        return sign;
+    }
+
+    int e;
+    double m = frexp(a, &e);
+    int biased = e - 1 + 127;
+
+    if (biased > 255) {
+        return sign | 0x7fffffff;
+    }
+
+    if (biased < 1) {
+        return sign;
+    }
+
+    uint32_t mantissa = (uint32_t)((m * 2.0 - 1.0) * 8388608.0 + 0.5);
+
+    if (mantissa > 0x7fffff) {
+        mantissa = 0;
+        if (++biased > 255) {
+            return sign | 0x7fffffff;
+        }
+    }
+
+    return sign | ((uint32_t)biased << 23) | mantissa;
+}
+
+static inline void vu_set_q_u32(struct vu_state* vu, uint32_t bits, int delay) {
+    if (vu->q_delay == 0)
+        vu->prev_q = vu->q;
+
+    vu->q.u32 = bits;
+    vu->q_delay = delay;
+}
+
+#define VU_STATUS_I 0x0410
+#define VU_STATUS_D 0x0820
+
 static inline void vu_set_vf(struct vu_state* vu, int r, int f, float v) {
     if (r) vu->vf[r].f[f] = v;
 }
@@ -2158,10 +2215,10 @@ void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins) {
 
     vu->clip <<= 6;
 
-    float w = fabsf(vu_vf_w(vu, t));
-    float x = vu_vf_x(vu, s);
-    float y = vu_vf_y(vu, s);
-    float z = vu_vf_z(vu, s);
+    double w = fabs(ps2_to_double(vu->vf[t].u32[3]));
+    double x = ps2_to_double(vu->vf[s].u32[0]);
+    double y = ps2_to_double(vu->vf[s].u32[1]);
+    double z = ps2_to_double(vu->vf[s].u32[2]);
 
     vu->clip |= (x > +w);
     vu->clip |= (x < -w) << 1;
@@ -2188,12 +2245,30 @@ void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins) {
     int tf = VU_LD_TF;
     int sf = VU_LD_SF;
 
-    struct vu_reg32 q;
+    uint32_t nb = vu->vf[s].u32[sf];
+    uint32_t db = vu->vf[t].u32[tf];
+    uint32_t sign = (nb ^ db) & 0x80000000;
 
-    q.f = vu_vf_i(vu, s, sf) / vu_vf_i(vu, t, tf);
-    q.f = vu_cvtf(q.u32);
+    vu->status &= ~0x30u;
 
-    vu_set_q(vu, q.f, 7);
+    double num = ps2_to_double(nb);
+    double den = ps2_to_double(db);
+
+    uint32_t result;
+
+    if (den == 0.0) {
+        if (num == 0.0) {
+            vu->status |= VU_STATUS_I;
+        } else {
+            vu->status |= VU_STATUS_D;
+        }
+
+        result = sign | 0x7fffffff;
+    } else {
+        result = ps2_pack_double(num / den);
+    }
+
+    vu_set_q_u32(vu, result, 7);
 }
 void vu_i_eatan(struct vu_state* vu, const struct vu_instruction* ins) {
     float x = vu_vf_i(vu, VU_LD_S, VU_LD_SF);
@@ -2310,21 +2385,24 @@ void vu_i_esum(struct vu_state* vu, const struct vu_instruction* ins) {
 
     vu->p.f = vu_vf_x(vu, s) + vu_vf_y(vu, s) + vu_vf_z(vu, s) + vu_vf_w(vu, s);
 }
+#define VU_CLIP_DELAY 3
+#define VU_CLIP_FLAGS(vu) ((vu)->clip_pipeline[VU_CLIP_DELAY])
+
 void vu_i_fcand(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->vi[1] = ((vu->clip & 0xffffff) & VU_LD_IMM24) != 0;
+    vu->vi[1] = ((VU_CLIP_FLAGS(vu) & 0xffffff) & VU_LD_IMM24) != 0;
 }
 void vu_i_fceq(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->vi[1] = (vu->clip & 0xffffff) == VU_LD_IMM24;
+    vu->vi[1] = (VU_CLIP_FLAGS(vu) & 0xffffff) == VU_LD_IMM24;
 }
 void vu_i_fcget(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_LD_T;
 
     if (!t) return;
 
-    vu->vi[VU_LD_T] = vu->clip & 0xfff;
+    vu->vi[VU_LD_T] = VU_CLIP_FLAGS(vu) & 0xfff;
 }
 void vu_i_fcor(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->vi[1] = ((vu->clip & 0xffffff) | VU_LD_IMM24) == 0xffffff;
+    vu->vi[1] = ((VU_CLIP_FLAGS(vu) & 0xffffff) | VU_LD_IMM24) == 0xffffff;
 }
 void vu_i_fcset(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->clip = VU_LD_IMM24;
@@ -2587,7 +2665,7 @@ void vu_i_mfp(struct vu_state* vu, const struct vu_instruction* ins) {
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[t].u32[i] = vu->p.f;
+            vu->vf[t].u32[i] = vu->p.u32;
         }
     });
 }
@@ -2679,12 +2757,31 @@ void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins) {
     });
 }
 void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    struct vu_reg32 q;
+    uint32_t nb = vu->vf[VU_LD_S].u32[VU_LD_SF];
+    uint32_t db = vu->vf[VU_LD_T].u32[VU_LD_TF];
 
-    q.f = vu_vf_i(vu, VU_LD_S, VU_LD_SF) / sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
-    q.f = vu_cvtf(q.u32);
+    vu->status &= ~0x30u;
 
-    vu_set_q(vu, q.f, 13);
+    if (db & 0x80000000) {
+        vu->status |= VU_STATUS_I;
+    }
+
+    double num = ps2_to_double(nb);
+    double den = ps2_to_double(db & 0x7fffffff);
+
+    uint32_t result;
+
+    if (den == 0.0) {
+        if (num != 0.0) {
+            vu->status |= VU_STATUS_D;
+        }
+
+        result = (nb & 0x80000000) | 0x7fffffff;
+    } else {
+        result = ps2_pack_double(num / sqrt(den));
+    }
+
+    vu_set_q_u32(vu, result, 13);
 }
 void vu_i_rxor(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[VU_LD_S].u32[VU_LD_SF]) & 0x007FFFFF);
@@ -2739,12 +2836,17 @@ void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vi(vu, t, vu->vi[t] + 1);
 }
 void vu_i_sqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    struct vu_reg32 q;
+    uint32_t tb = vu->vf[VU_LD_T].u32[VU_LD_TF];
 
-    q.f = sqrtf(vu_vf_i(vu, VU_LD_T, VU_LD_TF));
-    q.f = vu_cvtf(q.u32);
+    vu->status &= ~0x30u;
 
-    vu_set_q(vu, q.f, 7);
+    if (tb & 0x80000000) {
+        vu->status |= VU_STATUS_I;
+    }
+
+    double v = ps2_to_double(tb & 0x7fffffff);
+
+    vu_set_q_u32(vu, ps2_pack_double(sqrt(v)), 7);
 }
 void vu_i_waitp(struct vu_state* vu, const struct vu_instruction* ins) {
     // No operation
@@ -3543,6 +3645,7 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
 
         entry.i_bit = (upper & 0x80000000) != 0;
         entry.e_bit = (upper & 0x40000000) != 0;
+        entry.m_bit = (upper & 0x20000000) != 0;
 
         vu_decode_upper(vu, upper & 0x7ffffff);
 
@@ -3688,6 +3791,13 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
     vu->block_exit = false;
 
     for (const vu_block_entry& entry : block->entries) {
+        // Immediately end execution
+        if (entry.m_bit) {
+            vu->waiting_for_interlock = true;
+
+            return true;
+        }
+
         vu->tpc = vu->next_tpc;
         vu->next_tpc = vu->tpc + 1;
         vu->tpc &= 0x7ff;
@@ -3707,6 +3817,9 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
 void vu_execute_program(struct vu_state* vu, uint32_t addr) {
     if (vu->disable)
         return;
+
+    // Clear VU0 interlock
+    vu->waiting_for_interlock = false;
 
     vu->tpc = addr;
     vu->next_tpc = addr + 1;
@@ -3979,6 +4092,10 @@ void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
 
     vu->last_block_lookup_tpc = ~0u;
     vu->last_block_ptr = nullptr;
+}
+
+int vu_is_interlocked(struct vu_state* vu) {
+    return vu->waiting_for_interlock;
 }
 
 // #undef printf

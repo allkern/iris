@@ -547,7 +547,7 @@ static inline char* vu_d_isub(struct vu_dis_state* s, char* p, uint32_t o) {
     p = vu_d_mnemonic_nd(s, p, "isub"); p += sprintf(p, "vi%02u, vi%02u, vi%02u", VU_LD_D, VU_LD_S, VU_LD_T); return p;
 }
 static inline char* vu_d_iaddi(struct vu_dis_state* s, char* p, uint32_t o) {
-    p = vu_d_mnemonic_nd(s, p, "iaddi"); p += sprintf(p, "vi%02u, vi%02u, %d", VU_LD_D, VU_LD_S, VU_LD_IMM5); return p;
+    p = vu_d_mnemonic_nd(s, p, "iaddi"); p += sprintf(p, "vi%02u, vi%02u, %d", VU_LD_T, VU_LD_S, VU_LD_IMM5); return p;
 }
 static inline char* vu_d_iand(struct vu_dis_state* s, char* p, uint32_t o) {
     p = vu_d_mnemonic_nd(s, p, "iand"); p += sprintf(p, "vi%02u, vi%02u, vi%02u", VU_LD_D, VU_LD_S, VU_LD_T); return p;
