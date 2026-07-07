@@ -3196,7 +3196,7 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
         case 0x07: {
             // Note: This prevents keeping stale cache blocks
             //       stored in memory when switching games/software.
-            // ee_purge_cache(ee);
+            ee->pending_purge = true;
         } break;
 
         // FlushCache
@@ -3519,7 +3519,7 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
     ee->fcr = 0x01000001;
     ee->ram_size = ram_size - 1;
 
-    ee->osd_config.screen_type = 0; // 4:3
+    ee->osd_config.screen_type = 1; // 4:3
     ee->osd_config.ps1drv_config = 0; // ???
     ee->osd_config.spdif_mode = 0; // Enabled
     ee->osd_config.timezone_offset = 0;
@@ -3565,12 +3565,9 @@ void ee_reset(struct ee_state* ee) {
     ee->intc_reads = 0;
     ee->csr_reads = 0;
 
-    ee->block_cache.clear();
-    ee->block_cache.resize(EE_CACHE_PAGECOUNT);
+    ee_purge_cache(ee);
 
-    // Clear block lookup cache
-    ee->last_block_lookup_pc = ~0u;
-    ee->last_block_ptr = nullptr;
+    ee->rt.reset(asmjit::ResetPolicy::kHard);
 
     fesetround(FE_TOWARDZERO);
 
@@ -5291,6 +5288,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 }
             } break;
 
+            case EE_I_ADD:
             case EE_I_ADDU: {
                 if (!i.rd.r) continue;
 
@@ -5471,6 +5469,14 @@ static inline int _ee_run_block(struct ee_state* ee, int max_cycles) {
     ee->total_cycles += cycles;
 
     ee->pc = ee->next_pc;
+
+    if (ee->pending_purge) {
+        printf("ee: Purging cache\n");
+
+        ee_purge_cache(ee);
+
+        ee->pending_purge = false;
+    }
 
     return cycles;
 }

@@ -457,7 +457,7 @@ struct ee_instruction {
     int cycles;
     int id;
 
-    void (*func)(struct ee_state*, const ee_instruction&); 
+    void (*func)(struct ee_state*, const ee_instruction&);
 };
 
 typedef void (*ee_compiled_block)(struct ee_state*);
@@ -554,6 +554,7 @@ struct ee_state {
     uint32_t block_pc;
 
     std::vector <ee_cache_page> block_cache;
+    bool pending_purge = false;
 
     // Single-entry block cache for fast lookup (avoid hash computation)
     // Exploits temporal locality since we execute the same block repeatedly
