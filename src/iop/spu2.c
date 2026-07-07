@@ -1107,9 +1107,6 @@ static void spu2_env_catchup(struct ps2_spu2* spu2, int c, int vi) {
     struct spu2_core* cr = &spu2->c[c];
     struct spu2_voice* v = &cr->v[vi];
 
-    if (!v->playing)
-        return;
-
     int64_t behind = (int64_t)(spu2->emu_cycle - v->env_cycle);
 
     if (behind < 768)
@@ -1132,12 +1129,6 @@ struct spu2_sample spu2_get_voice_sample(struct ps2_spu2* spu2, int cr, int vc) 
     struct spu2_core* c = &spu2->c[cr];
     struct spu2_voice* v = &c->v[vc];
     struct spu2_sample s;
-
-    if (!v->playing) {
-        s.u32 = 0;
-
-        return s;
-    }
 
     int sample_index = v->counter >> 12;
 

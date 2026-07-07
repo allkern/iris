@@ -60,6 +60,9 @@ struct iop_dma_channel {
     int eot;
     int extra;
     int32_t transfer_size;
+
+    int adma_remaining;
+    int adma_cpb;
 };
 
 struct ps2_iop_dma {

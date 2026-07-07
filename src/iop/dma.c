@@ -238,21 +238,93 @@ void spu1_dma_irq_event_handler(void* udata, int overshoot) {
     dma->channels[IOP_DMA_SPU1].chcr &= ~0x1000000;
 }
 
-void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
-    // printf("spu2 core0: chcr=%08x madr=%08x bcr=%08x bytes=%d (%08x) adma=%d\n", dma->channels[IOP_DMA_SPU2].chcr, dma->channels[IOP_DMA_SPU2].madr, dma->channels[IOP_DMA_SPU2].bcr,
-    //     (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16) * 4, (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16) * 4, dma->spu2->c[1].admas
-    // );
+#define ADMA_MADR_STEP 0x100
 
+static void spu1_adma_advance_handler(void* udata, int overshoot);
+static void spu2_adma_advance_handler(void* udata, int overshoot);
+
+static void spu_adma_advance(struct ps2_iop_dma* dma, int ch, void (*cb)(void*, int)) {
+    struct iop_dma_channel* c = &dma->channels[ch];
+
+    if (!(c->chcr & 0x1000000)) {
+        c->adma_remaining = 0;
+
+        return;
+    }
+
+    int step = (c->adma_remaining < ADMA_MADR_STEP) ? c->adma_remaining : ADMA_MADR_STEP;
+
+    c->madr += step;
+    c->adma_remaining -= step;
+
+    if (c->adma_remaining <= 0) {
+        iop_dma_set_dicr_flag(dma, ch);
+        iop_dma_check_irq(dma);
+
+        c->chcr &= ~0x1000000;
+
+        return;
+    }
+
+    int next = (c->adma_remaining < ADMA_MADR_STEP) ? c->adma_remaining : ADMA_MADR_STEP;
+
+    struct sched_event event;
+
+    event.callback = cb;
+    event.cycles = (long)next * c->adma_cpb;
+    event.name = "SPU ADMA MADR advance";
+    event.udata = dma;
+
+    sched_schedule(dma->sched, event);
+}
+
+static void spu1_adma_advance_handler(void* udata, int overshoot) {
+    spu_adma_advance((struct ps2_iop_dma*)udata, IOP_DMA_SPU1, spu1_adma_advance_handler);
+}
+
+static void spu2_adma_advance_handler(void* udata, int overshoot) {
+    spu_adma_advance((struct ps2_iop_dma*)udata, IOP_DMA_SPU2, spu2_adma_advance_handler);
+}
+
+static void spu_adma_start_tracking(struct ps2_iop_dma* dma, int ch, uint32_t madr_start, uint32_t size, int cpb, void (*cb)(void*, int)) {
+    struct iop_dma_channel* c = &dma->channels[ch];
+
+    c->madr = madr_start;
+    c->adma_remaining = size;
+    c->adma_cpb = cpb;
+
+    int first = (size < ADMA_MADR_STEP) ? size : ADMA_MADR_STEP;
+
+    struct sched_event event;
+
+    event.callback = cb;
+    event.cycles = (long)first * cpb;
+    event.name = "SPU ADMA MADR advance";
+    event.udata = dma;
+
+    sched_schedule(dma->sched, event);
+}
+
+void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
     // If ADMA is off, then transfer all the data at once and trigger
     // an IRQ event to signal the end of the transfer
     if (!(dma->spu2->c[0].admas & 1)) {
         unsigned int size = (dma->channels[IOP_DMA_SPU1].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU1].bcr >> 16);
 
-        for (int i = 0; i < size; i++) {
-            uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU1].madr);
+        int write = dma->channels[IOP_DMA_SPU1].chcr & 1;
 
-            iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
-            iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
+        for (int i = 0; i < size; i++) {
+            if (write) {
+                uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU1].madr);
+
+                iop_bus_write16(dma->bus, 0x1f9001ac, d & 0xffff);
+                iop_bus_write16(dma->bus, 0x1f9001ac, d >> 16);
+            } else {
+                uint16_t lo = spu2_read_data(dma->spu2, 0);
+                uint16_t hi = spu2_read_data(dma->spu2, 0);
+
+                iop_bus_write32(dma->bus, dma->channels[IOP_DMA_SPU1].madr, lo | ((uint32_t)hi << 16));
+            }
 
             dma->channels[IOP_DMA_SPU1].madr += 4;
         }
@@ -273,6 +345,7 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
         return;
 
     uint32_t size = dma->channels[IOP_DMA_SPU1].transfer_size;
+    uint32_t madr_start = dma->channels[IOP_DMA_SPU1].madr;
     uint16_t* buf = malloc(size);
 
     // printf("dma: CORE0 ADMA transfer size=%d bytes cycles=%d\n", size, size * 192);
@@ -293,14 +366,9 @@ void iop_dma_handle_spu1_transfer(struct ps2_iop_dma* dma) {
 
     free(buf);
 
-    struct sched_event event;
+    int cpb = spu2_adma_is_bitstream(dma->spu2) ? (96 * 8) : (192 * 8);
 
-    event.callback = spu1_dma_irq_event_handler;
-    event.cycles = size * 192 * 8;
-    event.name = "SPU1 ADMA transfer finish event";
-    event.udata = dma;
-
-    sched_schedule(dma->sched, event);
+    spu_adma_start_tracking(dma, IOP_DMA_SPU1, madr_start, size, cpb, spu1_adma_advance_handler);
 }
 void iop_dma_handle_pio_transfer(struct ps2_iop_dma* dma) {
     fprintf(stderr, "iop: PIO channel unimplemented\n"); exit(1);
@@ -334,11 +402,24 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
     if (!(dma->spu2->c[1].admas & 2)) {
         unsigned int size = (dma->channels[IOP_DMA_SPU2].bcr & 0xffff) * (dma->channels[IOP_DMA_SPU2].bcr >> 16);
 
-        for (int i = 0; i < size; i++) {
-            uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU2].madr);
+        // Note: Grand THeft Auto - Vice City depends on a number of things:
+        //       - SPU readback
+        //       - MEMOUT (mix to RAM)
+        //       - Noise generator
+        int write = dma->channels[IOP_DMA_SPU2].chcr & 1;
 
-            iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
-            iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
+        for (int i = 0; i < size; i++) {
+            if (write) {
+                uint32_t d = iop_bus_read32(dma->bus, dma->channels[IOP_DMA_SPU2].madr);
+
+                iop_bus_write16(dma->bus, 0x1f9005ac, d & 0xffff);
+                iop_bus_write16(dma->bus, 0x1f9005ac, d >> 16);
+            } else {
+                uint16_t lo = spu2_read_data(dma->spu2, 1);
+                uint16_t hi = spu2_read_data(dma->spu2, 1);
+
+                iop_bus_write32(dma->bus, dma->channels[IOP_DMA_SPU2].madr, lo | ((uint32_t)hi << 16));
+            }
 
             dma->channels[IOP_DMA_SPU2].madr += 4;
         }
@@ -346,7 +427,7 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
         struct sched_event spu2_dma_irq_event;
 
         spu2_dma_irq_event.callback = spu2_dma_irq_event_handler;
-        spu2_dma_irq_event.cycles = 1000000;
+        spu2_dma_irq_event.cycles = dma->channels[IOP_DMA_SPU2].transfer_size * 768;
         spu2_dma_irq_event.name = "SPU2 DMA IRQ event";
         spu2_dma_irq_event.udata = dma;
 
@@ -356,6 +437,7 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
     }
 
     uint32_t size = dma->channels[IOP_DMA_SPU2].transfer_size;
+    uint32_t madr_start = dma->channels[IOP_DMA_SPU2].madr;
     uint16_t* buf = malloc(size);
 
     // printf("dma: CORE1 ADMA transfer size=%d bytes cycles=%d\n", size, size * 192);
@@ -376,14 +458,9 @@ void iop_dma_handle_spu2_transfer(struct ps2_iop_dma* dma) {
 
     free(buf);
 
-    struct sched_event event;
-
-    event.callback = spu2_dma_irq_event_handler;
-    event.cycles = size * 192 * 8;
-    event.name = "SPU2 ADMA transfer finish event";
-    event.udata = dma;
-
-    sched_schedule(dma->sched, event);
+    // Core 1 has no bitstream-bypass double-rate mode. Track MADR at the normal
+    // 48 kHz rate
+    spu_adma_start_tracking(dma, IOP_DMA_SPU2, madr_start, size, 192 * 8, spu2_adma_advance_handler);
 }
 
 void iop_dma_handle_dev9_ata_transfer(struct ps2_iop_dma* dma) {
