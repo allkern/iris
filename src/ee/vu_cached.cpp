@@ -403,29 +403,41 @@ static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
     return vu->vu_mem[addr & 0x3ff];
 }
 
-// Note: This function handles the branch in delay slot edge case.
-//       Let B1 be a branch instruction, and B2 is a branch instruction in the
-//       delay slot of B1. slot of B1. There are 4 cases to consider:
-//       - Case 0: Neither B1 nor B2 are taken. Trivial, just execute sequentially.
-//       - Case 1: B1 is taken, B2 is not taken. B1 is executed, then B2 and its delay slot are skipped
-//       - Case 2: B1 is not taken, B2 is taken. B1 is a NOP, B2 is executed with its delay slot
-//       - Case 3: Both branches are executed: This is the hard case, let TGT1 be the target of B1, and TGT2
-//         be the target of B2:
-//         B1 is executed, TPC is set to TGT1. The instruction at TGT1 is executed, then B2 kicks in
-//         and TPC is set to TGT1+TGT2!
+// Note: Branches take effect one instruction late, so a branch sitting in the delay
+//       slot of another branch behaves normally, it computes its target from its own
+//       PC. Except that its delay slot is whichever instruction the first branch
+//       causes to be fetched next.
 //
-//       As far as I know, VU branches in delay slots are fairly common. Crazy Taxi and 18 Wheeler
-//       depend on case 1/2, otherwise you get flickering geometry and the VU might eventually hang.
+//       Let B1 be a branch at address a, B2 a branch at a+1 (B1's delay slot), and X
+//       the address B1 resolves to (TGT1 if B1 is taken, a+2 otherwise). Execution is
+//       always:
+//
+//           B1, B2, instruction at X, then TGT2 if B2 is taken, else X+1
+//
+//       which subsumes all four taken/not-taken combinations. A branch at X chains the
+//       same way. Note TGT2 is relative to B2, it is never re-based onto TGT1.
+//
+//       Consequences: BAL/JALR in a delay slot link to X+1 rather than a+2, and JR/JALR
+//       in a delay slot are taken like any other branch.
+//
+//       VU branches in delay slots are fairly common. Crazy Taxi and 18 Wheeler need
+//       this, otherwise you get flickering geometry and the VU might eventually hang.
 static inline void vu_branch(struct vu_state* vu, uint32_t target) {
-    if (!vu->branch_taken) {
-        vu->branch_taken = true;
-    } else {
-        printf("vu%d: Branch in delay slot case 3 at TPC=%04x! (refer to Iris source)\n", vu->id, vu->tpc);
+    target &= 0x7ff;
 
-        exit(1);
+    if (vu->branch_delay) {
+        vu->delay_branch = true;
+        vu->delay_branch_pc = target;
+
+        return;
     }
 
-    vu->next_tpc = target;
+    vu->branch_delay = 2;
+    vu->branch_pc = target;
+}
+
+static inline uint32_t vu_delay_slot_link(struct vu_state* vu) {
+    return ((vu->branch_delay ? vu->branch_pc : vu->tpc) + 1) & 0x7ff;
 }
 
 static inline void vu_write_branch_pipeline(struct vu_state* vu, int dst) {
@@ -2235,7 +2247,7 @@ void vu_i_b(struct vu_state* vu, const struct vu_instruction* ins) {
 }
 void vu_i_bal(struct vu_state* vu, const struct vu_instruction* ins) {
     // Instruction next to the delay slot
-    VU_IT = vu->tpc + 1;
+    VU_IT = vu_delay_slot_link(vu);
 
     vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
@@ -2385,7 +2397,9 @@ void vu_i_esum(struct vu_state* vu, const struct vu_instruction* ins) {
 
     vu->p.f = vu_vf_x(vu, s) + vu_vf_y(vu, s) + vu_vf_z(vu, s) + vu_vf_w(vu, s);
 }
+
 #define VU_CLIP_DELAY 3
+#define VU_VF_LATENCY 4
 #define VU_CLIP_FLAGS(vu) ((vu)->clip_pipeline[VU_CLIP_DELAY])
 
 void vu_i_fcand(struct vu_state* vu, const struct vu_instruction* ins) {
@@ -2453,47 +2467,27 @@ void vu_i_ibeq(struct vu_state* vu, const struct vu_instruction* ins) {
     uint16_t t = vu_get_branch_register(vu, VU_LD_T);
     uint16_t s = vu_get_branch_register(vu, VU_LD_S);
 
-    if (t == s) {
-        vu_branch(vu, vu->tpc + VU_LD_IMM11);
-    } else {
-        vu->block_exit = vu->branch_taken;
-    }
+    if (t == s) vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 void vu_i_ibgez(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
-    if (s >= 0) {
-        vu_branch(vu, vu->tpc + VU_LD_IMM11);
-    } else {
-        vu->block_exit = vu->branch_taken;
-    }
+    if (s >= 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 void vu_i_ibgtz(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
-    if (s > 0) {
-        vu_branch(vu, vu->tpc + VU_LD_IMM11);
-    } else {
-        vu->block_exit = vu->branch_taken;
-    }
+    if (s > 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 void vu_i_iblez(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
-    if (s <= 0) {
-        vu_branch(vu, vu->tpc + VU_LD_IMM11);
-    } else {
-        vu->block_exit = vu->branch_taken;
-    }
+    if (s <= 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 void vu_i_ibltz(struct vu_state* vu, const struct vu_instruction* ins) {
     int16_t s = vu_get_branch_register(vu, VU_LD_S);
 
-    if (s < 0) {
-        vu_branch(vu, vu->tpc + VU_LD_IMM11);
-    } else {
-        vu->block_exit = vu->branch_taken;
-    }
+    if (s < 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
     uint16_t t = vu_get_branch_register(vu, VU_LD_T);
@@ -2501,11 +2495,7 @@ void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
 
     // printf("ibne vi%02u (%04x), vi%02u (%04x), 0x%08x\n", VU_LD_T, t, VU_LD_S, s, vu->tpc + VU_LD_IMM11);
 
-    if (t != s) {
-        vu_branch(vu, vu->tpc + VU_LD_IMM11);
-    } else {
-        vu->block_exit = vu->branch_taken;
-    }
+    if (t != s) vu_branch(vu, vu->tpc + VU_LD_IMM11);
 }
 template <uint32_t di>
 void vu_i_ilw(struct vu_state* vu, const struct vu_instruction* ins) {
@@ -2582,7 +2572,7 @@ void vu_i_iswr(struct vu_state* vu, const struct vu_instruction* ins) {
 void vu_i_jalr(struct vu_state* vu, const struct vu_instruction* ins) {
     uint16_t s = VU_IS;
 
-    VU_IT = vu->tpc + 1;
+    VU_IT = vu_delay_slot_link(vu);
 
     vu_branch(vu, s);
 }
@@ -3709,7 +3699,78 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
     return block;
 }
 
-bool vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
+static inline void vu_shift_flag_pipeline(struct vu_state* vu) {
+    vu->mac_pipeline[3] = vu->mac_pipeline[2];
+    vu->mac_pipeline[2] = vu->mac_pipeline[1];
+    vu->mac_pipeline[1] = vu->mac_pipeline[0];
+    vu->mac_pipeline[0] = vu->mac;
+
+    vu->clip_pipeline[3] = vu->clip_pipeline[2];
+    vu->clip_pipeline[2] = vu->clip_pipeline[1];
+    vu->clip_pipeline[1] = vu->clip_pipeline[0];
+    vu->clip_pipeline[0] = vu->clip;
+}
+
+static inline int vu_vf_write_mask(const struct vu_instruction& ins) {
+    if (ins.func == vu_i_opmsub)
+        return 0x7;
+
+    int mask = 0;
+
+    for (int c = 0; c < 4; c++) {
+        if (ins.dst.field & (0x8 >> c)) {
+            mask |= 1 << c;
+        }
+    }
+
+    return mask;
+}
+
+static inline int vu_interlock_stall(struct vu_state* vu, const vu_block_entry& entry) {
+    if (entry.i_bit || entry.lower.func != vu_i_mtir)
+        return 0;
+
+    int reg = entry.lower.src[0].reg;
+    int comp = entry.lower.src[0].field;
+
+    if (!reg || vu->vf_ready[reg][comp] <= vu->vu_cycle)
+        return 0;
+
+    return (int)(vu->vf_ready[reg][comp] - vu->vu_cycle);
+}
+
+static inline void vu_record_vf_writes(struct vu_state* vu, const vu_block_entry& entry) {
+    if (entry.upper.dst.reg && entry.upper.dst.reg < 32) {
+        int mask = vu_vf_write_mask(entry.upper);
+
+        for (int c = 0; c < 4; c++) {
+            if (mask & (1 << c)) {
+                vu->vf_ready[entry.upper.dst.reg][c] = vu->vu_cycle + VU_VF_LATENCY;
+            }
+        }
+    }
+
+    if (!entry.i_bit && entry.lower.dst.reg && entry.lower.dst.reg < 32) {
+        int mask = vu_vf_write_mask(entry.lower);
+
+        for (int c = 0; c < 4; c++) {
+            if (mask & (1 << c)) {
+                vu->vf_ready[entry.lower.dst.reg][c] = vu->vu_cycle + VU_VF_LATENCY;
+            }
+        }
+    }
+}
+
+void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
+    for (int stall = vu_interlock_stall(vu, entry); stall--; ) {
+        if (vu->q_delay)
+            vu->q_delay--;
+
+        vu_shift_flag_pipeline(vu);
+
+        vu->vu_cycle++;
+    }
+
     if (vu->q_delay)
         vu->q_delay--;
 
@@ -3758,17 +3819,7 @@ bool vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
         }
     }
 
-    // vu_advance_fmac_pipeline(vu);
-
-    vu->mac_pipeline[3] = vu->mac_pipeline[2];
-    vu->mac_pipeline[2] = vu->mac_pipeline[1];
-    vu->mac_pipeline[1] = vu->mac_pipeline[0];
-    vu->mac_pipeline[0] = vu->mac;
-    
-    vu->clip_pipeline[3] = vu->clip_pipeline[2];
-    vu->clip_pipeline[2] = vu->clip_pipeline[1];
-    vu->clip_pipeline[1] = vu->clip_pipeline[0];
-    vu->clip_pipeline[0] = vu->clip;
+    vu_shift_flag_pipeline(vu);
 
     if (vu->vi_backup_cycles) {
         vu->vi_backup_cycles--;
@@ -3779,53 +3830,60 @@ bool vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
         }
     }
 
-    return entry.e_bit;
+    vu_record_vf_writes(vu, entry);
+
+    vu->vu_cycle++;
 }
 
 bool vu_execute_block(struct vu_state* vu, vu_block* block) {
-    bool e_bit = false;
-
     // printf("vu: Input TPC %04x\n", vu->tpc);
 
-    vu->branch_taken = false;
-    vu->block_exit = false;
-
     for (const vu_block_entry& entry : block->entries) {
-        // Immediately end execution
+        // Immediately end execution. TPC still points at this instruction, so the
+        // interlock resume re-runs it with any pending branch intact.
         if (entry.m_bit) {
             vu->waiting_for_interlock = true;
 
             return true;
         }
 
-        vu->tpc = vu->next_tpc;
-        vu->next_tpc = vu->tpc + 1;
-        vu->tpc &= 0x7ff;
-        vu->next_tpc &= 0x7ff;
+        if (entry.e_bit)
+            vu->e_bit = 2;
 
-        e_bit |= vu_execute_block_entry(vu, entry);
+        vu->tpc = (vu->tpc + 1) & 0x7ff;
 
-        if (vu->block_exit)
+        vu_execute_block_entry(vu, entry);
+
+        bool taken = false;
+
+        if (vu->branch_delay && !--vu->branch_delay) {
+            vu->tpc = vu->branch_pc;
+
+            // A branch fired in this branch's delay slot. Its own delay slot is the
+            // instruction we just jumped to, so arm it for exactly one more instruction.
+            if (vu->delay_branch) {
+                vu->branch_delay = 1;
+                vu->branch_pc = vu->delay_branch_pc;
+                vu->delay_branch = false;
+            }
+
+            taken = true;
+        }
+
+        if (vu->e_bit && !--vu->e_bit)
+            return true;
+
+        // The rest of this block is no longer the instruction stream we're executing.
+        if (taken)
             break;
     }
 
     // printf("vu: Output TPC %04x\n", vu->tpc);
 
-    return e_bit;
+    return false;
 }
 
-void vu_execute_program(struct vu_state* vu, uint32_t addr) {
-    if (vu->disable)
-        return;
-
-    // Clear VU0 interlock
-    vu->waiting_for_interlock = false;
-
-    vu->tpc = addr;
-    vu->next_tpc = addr + 1;
-    vu->i_bit = 0;
-    vu->e_bit = 0;
-
+static void vu_run(struct vu_state* vu) {
     while (true) {
         vu_block* block = vu_find_block(vu, vu->tpc);
 
@@ -3840,6 +3898,28 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         if (vu_execute_block(vu, block))
             break;
     }
+}
+
+void vu_execute_program(struct vu_state* vu, uint32_t addr) {
+    if (vu->disable)
+        return;
+
+    // Clear VU0 interlock
+    vu->waiting_for_interlock = false;
+
+    vu->tpc = addr & 0x7ff;
+    vu->i_bit = 0;
+    vu->e_bit = 0;
+    vu->branch_delay = 0;
+    vu->delay_branch = false;
+
+    vu->vu_cycle = 0;
+
+    for (int i = 0; i < 32; i++)
+        for (int c = 0; c < 4; c++)
+            vu->vf_ready[i][c] = 0;
+
+    vu_run(vu);
 }
 
 void ps2_vu_write_vi(struct vu_state* vu, int index, uint32_t value) {
@@ -3956,14 +4036,23 @@ void ps2_vu_reset(struct vu_state* vu) {
     vu->clip_pipeline[2] = 0;
     vu->clip_pipeline[3] = 0;
     vu->tpc = 0;
-    vu->next_tpc = 1;
     vu->i_bit = 0;
     vu->e_bit = 0;
     vu->m_bit = 0;
     vu->d_bit = 0;
     vu->t_bit = 0;
     vu->q_delay = 0;
+    vu->branch_delay = 0;
+    vu->delay_branch = false;
     vu->prev_q.u32 = 0;
+
+    vu->vu_cycle = 0;
+
+    for (int i = 0; i < 32; i++) {
+        for (int c = 0; c < 4; c++) {
+            vu->vf_ready[i][c] = 0;
+        }
+    }
 
     vu->last_block_lookup_tpc = ~0u;
     vu->last_block_ptr = nullptr;
@@ -3984,7 +4073,13 @@ void ps2_vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
 }
 
 void vu_execute_program_tpc(struct vu_state* vu) {
-    vu_execute_program(vu, vu->tpc);
+    if (vu->disable)
+        return;
+
+    // Clear VU0 interlock
+    vu->waiting_for_interlock = false;
+
+    vu_run(vu);
 }
 
 uint128_t* vu_get_vu_mem_ptr(struct vu_state* vu, uint32_t addr) {

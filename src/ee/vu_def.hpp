@@ -53,8 +53,11 @@ struct vu_state {
     int vi_backup_reg;
     int vi_backup_value;
 
-    bool branch_taken;
-    bool block_exit;
+    int branch_delay;
+    uint32_t branch_pc;
+    bool delay_branch;
+    uint32_t delay_branch_pc;
+
     bool waiting_for_interlock;
 
     uint64_t micro_mem[0x800];
@@ -69,11 +72,13 @@ struct vu_state {
     int m_bit;
     int d_bit;
     int t_bit;
-    uint32_t next_tpc;
 
     // MAC flags pipeline
     uint32_t mac_pipeline[4];
     uint32_t clip_pipeline[4];
+
+    uint64_t vu_cycle;
+    uint64_t vf_ready[32][4];
 
     int q_delay;
     struct vu_reg32 prev_q;
