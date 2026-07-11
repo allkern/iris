@@ -347,6 +347,16 @@ uint16_t spu2_read_data(struct ps2_spu2* spu2, int c) {
     return d;
 }
 
+static void spu2_reset_core_voices(struct ps2_spu2* spu2, int c) {
+    for (int v = 0; v < 24; v++) {
+        spu2->c[c].v[v].playing = 0;
+        spu2->c[c].v[v].envx = 0;
+        spu2->c[c].v[v].adsr_phase = ADSR_END;
+    }
+
+    spu2->c[c].endx = 0xffffff;
+}
+
 void spu2_core0_reset_handler(void* udata, int overshoot) {
     struct ps2_spu2* spu2 = (struct ps2_spu2*)udata;
 
@@ -376,6 +386,8 @@ void spu2_write_attr(struct ps2_spu2* spu2, int c, uint64_t data) {
         struct sched_event event;
 
         printf("spu2: Resetting core%d\n", c);
+
+        spu2_reset_core_voices(spu2, c);
 
         event.callback = c ? spu2_core1_reset_handler : spu2_core0_reset_handler;
         event.cycles = 80000;
