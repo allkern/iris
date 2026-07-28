@@ -196,6 +196,11 @@ struct ImageProcessingUnit
 
         unsigned int crcb_map[0x100];
 
+        float csc_r_cr[256];
+        float csc_g_cb[256];
+        float csc_g_cr[256];
+        float csc_b_cb[256];
+
         static uint32_t inverse_scan_zigzag[0x40];
         static uint32_t inverse_scan_alternate[0x40];
 
@@ -241,6 +246,7 @@ struct ImageProcessingUnit
 
         void reset();
         void run();
+        void run_until_stalled();
 
         uint64_t read_command();
         uint32_t read_control();

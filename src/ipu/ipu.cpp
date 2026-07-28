@@ -103,6 +103,15 @@ ImageProcessingUnit::ImageProcessingUnit(struct ps2_intc* intc, struct ps2_dmac*
         }
     }
 
+    for (int i = 0; i < 256; i++) {
+        const float c = (float)i - 128.0f;
+
+        csc_r_cr[i] =  1.402f   * c;
+        csc_g_cb[i] = -0.34414f * c;
+        csc_g_cr[i] = -0.71414f * c;
+        csc_b_cb[i] =  1.772f   * c;
+    }
+
     //I'm assuming the dithering process rounds down so I've rounded the matrix values down
     dither_mtx[0][0] = -4;
     dither_mtx[0][1] = 0;
@@ -248,6 +257,22 @@ void ImageProcessingUnit::run()
         printf("ipu: Output FIFO ready\n");
         // printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
         dmac_handle_ipu_from_transfer(dmac);
+    }
+}
+
+#define IPU_BATCH_STEPS 64
+
+void ImageProcessingUnit::run_until_stalled()
+{
+    for (int i = 0; i < IPU_BATCH_STEPS; i++)
+    {
+        if (!ctrl.busy)
+            break;
+
+        run();
+
+        if (!in_FIFO.f.size())
+            break;
     }
 }
 
@@ -997,12 +1022,14 @@ bool ImageProcessingUnit::process_CSC()
                     csc.state = CSC_STATE::CONVERT;
                 else
                 {
-                    uint32_t value;
-                    if (!in_FIFO.get_bits(value, 8))
-                        return false;
-                    in_FIFO.advance_stream(8);
-                    csc.block[csc.block_index] = value & 0xFF;
-                    csc.block_index++;
+                    do {
+                        uint32_t value;
+                        if (!in_FIFO.get_bits(value, 8))
+                            return false;
+                        in_FIFO.advance_stream(8);
+                        csc.block[csc.block_index] = value & 0xFF;
+                        csc.block_index++;
+                    } while (csc.block_index < RAW_BLOCK_SIZE);
                 }
                 break;
             case CSC_STATE::CONVERT:
@@ -1016,45 +1043,43 @@ bool ImageProcessingUnit::process_CSC()
                 uint16_t alphaTh0 = (TH0 & 0x1FF);
                 uint16_t alphaTh1 = (TH1 & 0x1FF);
 
-                for (int i = 0; i < 16; i++)
+                for (int index = 0; index < 256; index++)
                 {
-                    for (int j = 0; j < 16; j++)
-                    {
-                        int index = j + (i * 16);
-                        float lum = lum_block[index];
-                        float cb = cb_block[crcb_map[index]];
-                        float cr = cr_block[crcb_map[index]];
+                    const unsigned int c = crcb_map[index];
+                    const uint8_t cb = cb_block[c];
+                    const uint8_t cr = cr_block[c];
 
-                        float r = lum + 1.402f * (cr - 128);
-                        float g = lum - 0.34414f * (cb - 128) - 0.71414f * (cr - 128);
-                        float b = lum + 1.772f * (cb - 128);
+                    float lum = lum_block[index];
 
-                        if (r < 0)
-                            r = 0;
-                        if (r > 255)
-                            r = 255;
-                        if (g < 0)
-                            g = 0;
-                        if (g > 255)
-                            g = 255;
-                        if (b < 0)
-                            b = 0;
-                        if (b > 255)
-                            b = 255;
+                    float r = lum + csc_r_cr[cr];
+                    float g = lum + csc_g_cb[cb] + csc_g_cr[cr];
+                    float b = lum + csc_b_cb[cb];
 
-                        uint8_t alpha;
-                        if (r < alphaTh0 && g < alphaTh0 && b < alphaTh0)
-                            alpha = 0;
-                        else if (r < alphaTh1 && g < alphaTh1 && b < alphaTh1)
-                            alpha = 0x40;
-                        else
-                            alpha = 0x80;
+                    if (r < 0)
+                        r = 0;
+                    if (r > 255)
+                        r = 255;
+                    if (g < 0)
+                        g = 0;
+                    if (g > 255)
+                        g = 255;
+                    if (b < 0)
+                        b = 0;
+                    if (b > 255)
+                        b = 255;
 
-                        rgb32[4 * index] = (uint8_t)r;
-                        rgb32[4 * index + 1] = (uint8_t)g;
-                        rgb32[4 * index + 2] = (uint8_t)b;
-                        rgb32[4 * index + 3] = alpha;
-                    }
+                    uint8_t alpha;
+                    if (r < alphaTh0 && g < alphaTh0 && b < alphaTh0)
+                        alpha = 0;
+                    else if (r < alphaTh1 && g < alphaTh1 && b < alphaTh1)
+                        alpha = 0x40;
+                    else
+                        alpha = 0x80;
+
+                    rgb32[4 * index] = (uint8_t)r;
+                    rgb32[4 * index + 1] = (uint8_t)g;
+                    rgb32[4 * index + 2] = (uint8_t)b;
+                    rgb32[4 * index + 3] = alpha;
                 }
 
                 uint128_t quad;
@@ -1093,7 +1118,7 @@ bool ImageProcessingUnit::process_CSC()
                 csc.macroblocks--;
                 csc.state = CSC_STATE::BEGIN;
                 dmac->channels[DMAC_IPU_FROM].dreq = 1;
-                printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
+                // printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
                 dmac_handle_ipu_from_transfer(dmac);
             }
                 break;
@@ -1469,8 +1494,8 @@ extern "C" uint64_t ps2_ipu_read64(struct ps2_ipu* ipu, uint32_t addr) {
 
 extern "C" void ps2_ipu_write64(struct ps2_ipu* ipu, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x10002000: ipu->ipu->write_command(data); return;
-        case 0x10002010: ipu->ipu->write_control(data); return;
+        case 0x10002000: ipu->ipu->write_command(data); ps2_ipu_run(ipu); return;
+        case 0x10002010: ipu->ipu->write_control(data); ps2_ipu_run(ipu); return;
         case 0x10002020: return; // (W) ipu->ipu->write_BP(); return;
         case 0x10002030: return; // (W) ipu->ipu->write_top(); return;
     }
@@ -1481,6 +1506,8 @@ extern "C" void ps2_ipu_write64(struct ps2_ipu* ipu, uint32_t addr, uint64_t dat
 }
 
 extern "C" uint128_t ps2_ipu_read128(struct ps2_ipu* ipu, uint32_t addr) {
+    ps2_ipu_run(ipu);
+
     switch (addr) {
         case 0x10007000: return ipu->ipu->read_FIFO();
         case 0x10007010: break; // (W) ipu->ipu->write_FIFO();
@@ -1494,7 +1521,7 @@ extern "C" uint128_t ps2_ipu_read128(struct ps2_ipu* ipu, uint32_t addr) {
 extern "C" void ps2_ipu_write128(struct ps2_ipu* ipu, uint32_t addr, uint128_t data) {
     switch (addr) {
         case 0x10007000: break; // (R) ipu->ipu->read_FIFO();
-        case 0x10007010: ipu->ipu->write_FIFO(data); return;
+        case 0x10007010: ipu->ipu->write_FIFO(data); ps2_ipu_run(ipu); return;
     }
 
     std::fprintf(stderr, "ipu: Unhandled IPU write address %08x\n", addr);
@@ -1507,7 +1534,15 @@ int ps2_ipu_is_busy(struct ps2_ipu* ipu) {
 }
 
 void ps2_ipu_run(struct ps2_ipu* ipu) {
-    ipu->ipu->run();
+    static bool running = false;
+
+    if (running) return;
+
+    running = true;
+
+    ipu->ipu->run_until_stalled();
+
+    running = false;
 }
 
 extern "C" void ps2_ipu_destroy(struct ps2_ipu* ipu) {

@@ -10,7 +10,33 @@ VLC_Table::VLC_Table(VLC_Entry* table, int table_size, int max_bits, unsigned in
 
 bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry)
 {
+    uint32_t window;
+
+    if (FIFO.get_bits(window, max_bits))
+    {
+        for (int i = 0; i < max_bits; i++)
+        {
+            const int bits = i + 1;
+            const uint32_t key = window >> (max_bits - bits);
+
+            for (int j = index_table[i]; j < table_size; j++)
+            {
+                if (bits != table[j].bits)
+                    break;
+
+                if (key == table[j].key)
+                {
+                    entry = table[j];
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
     uint32_t key;
+
     for (int i = 0; i < max_bits; i++)
     {
         int bits = i + 1;
