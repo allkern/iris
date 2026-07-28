@@ -471,6 +471,34 @@ struct ee_block {
     uint64_t hits;
 };
 
+enum ee_block_term {
+    EE_TERM_FALLTHROUGH,
+    EE_TERM_BRANCH,
+    EE_TERM_LIKELY,
+    EE_TERM_EXCEPT
+};
+
+struct ee_sub_block {
+    uint32_t start_pc;
+    uint32_t end_pc;
+    uint32_t cycles;
+    uint32_t first;
+    uint32_t count;
+    ee_block_term term;
+
+    int32_t branch_idx;
+
+    uint32_t succ_pc[2];
+    bool has_succ[2];
+    int32_t succ[2];
+
+    bool back_edge_target;
+};
+
+#define EE_BLOCK_MAX_INSTRS 256
+#define EE_REGION_MAX_INSTRS 512
+#define EE_REGION_MAX_BLOCKS 16
+
 struct ee_page {
     uint32_t pfn;
     int valid;
@@ -486,6 +514,13 @@ struct ee_cached_reg {
     uint64_t value = 0;
 };
 
+struct ee_cached_vec {
+    asmjit::ujit::Vec vec;
+
+    bool valid = false;
+    bool dirty = false;
+};
+
 #define EE_VIRT_SIZE 0x100000000ull
 #define EE_MIN_PAGESIZE 0x1000
 
@@ -497,8 +532,19 @@ struct ee_cache_page {
     bool dirty;
 };
 
+#define EE_BLOCK_LUT_SIZE 65536
+#define EE_BLOCK_LUT_MASK (EE_BLOCK_LUT_SIZE - 1)
+
+struct ee_block_lut_entry {
+    uint32_t pc;
+    uint32_t gen;
+    ee_block* block;
+};
+
 struct ee_state {
     EE_ALIGNED16 uint128_t r[32];
+    EE_ALIGNED16 uint8_t qfsrv_buf[32];
+
     EE_ALIGNED16 uint128_t hi;
     EE_ALIGNED16 uint128_t lo;
 
@@ -556,10 +602,17 @@ struct ee_state {
     std::vector <ee_cache_page> block_cache;
     bool pending_purge = false;
 
-    // Single-entry block cache for fast lookup (avoid hash computation)
-    // Exploits temporal locality since we execute the same block repeatedly
+    std::vector <ee_sub_block> sub_blocks;
+
+    // JIT stuff
+    int32_t cycles_left;
+    int32_t exit_req;
     uint32_t last_block_lookup_pc;
     struct ee_block* last_block_ptr;
+    ee_block_lut_entry block_lut[EE_BLOCK_LUT_SIZE];
+    uint32_t block_lut_gen;
+
+    void** vfast_r;
 
     // ASMJIT stuff
     asmjit::JitRuntime rt;
@@ -569,6 +622,7 @@ struct ee_state {
     asmjit::ujit::UniCompiler* uc;
     asmjit::ujit::Gp ee_ptr;
     ee_cached_reg reg_cache[32];
+    ee_cached_vec vec_cache[32];
 
     uint64_t total_cycles;
 

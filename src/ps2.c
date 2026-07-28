@@ -179,7 +179,7 @@ void ps2_boot_file(struct ps2_state* ps2, const char* path) {
 
     while (ee_get_pc(ps2->ee) != 0x00082000) {
         while (ps2->ee_cycles < 16*64) {
-            ps2->ee_cycles += ee_run_block(ps2->ee, 64);
+            ps2->ee_cycles += ee_run_block(ps2->ee, 1);
 
             if (ee_get_pc(ps2->ee) == 0x00082000)
                 break;
@@ -230,6 +230,8 @@ int ps2_load_bios(struct ps2_state* ps2, const char* path) {
 
     ee_bus_init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
     iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
+
+    ee_flush_cache(ps2->ee);
 
     if (ps2->system == PS2_SYSTEM_AUTO) {
         ps2->rom0_info = ps2_rom0_search(ps2->bios->buf, ps2->bios->size + 1);
@@ -333,7 +335,7 @@ void ps2_cycle(struct ps2_state* ps2) {
     ps2_ipu_run(ps2->ipu);
 
     while (ps2->ee_cycles < max_block_cycles) {
-        ps2->ee_cycles += ee_run_block(ps2->ee, 256);
+        ps2->ee_cycles += ee_run_block(ps2->ee, (int)(max_block_cycles - ps2->ee_cycles));
     }
 
     sched_tick(ps2->sched, ps2->timescale * ps2->ee_cycles);
@@ -629,6 +631,8 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
 
     ee_bus_init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
     iop_bus_init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
+
+    ee_flush_cache(ps2->ee);
 }
 
 void ps2_set_mac_address(struct ps2_state* ps2, const uint8_t* mac) {
