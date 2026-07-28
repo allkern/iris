@@ -82,6 +82,9 @@ void ps2_gif_init(struct ps2_gif* gif, struct ps2_dmac* dmac, struct vu_state* v
     gif->vu1 = vu1;
     gif->dmac = dmac;
 
+    const char* e = getenv("IRIS_PATH3_MASK");
+    gif->path3_mask_enable = (e && e[0] == '1') ? 1 : 0;
+
     // A queue for each PATH
     for (int i = 0; i < 3; i++) {
         gif->queue[i] = queue_create();
@@ -104,6 +107,11 @@ void ps2_gif_reset(struct ps2_gif* gif) {
     gif->state = 0;
     gif->q = 0;
 
+    gif->mask_m3r = 0;
+    gif->mask_m3p = 0;
+    gif->p3_defer_size = 0;
+    gif->stat &= ~3;
+
     memset(&gif->tag, 0, sizeof(struct gif_tag));
 
     for (int i = 0; i < 3; i++)
@@ -114,7 +122,43 @@ void ps2_gif_destroy(struct ps2_gif* gif) {
     for (int i = 0; i < 3; i++)
         queue_destroy(gif->queue[i]);
 
+    if (gif->p3_defer_buf)
+        free(gif->p3_defer_buf);
+
     free(gif);
+}
+
+static inline int gif_path3_masked(struct ps2_gif* gif) {
+    return gif->path3_mask_enable && (gif->mask_m3r || gif->mask_m3p);
+}
+
+static void gif_defer_path3(struct ps2_gif* gif, const void* buf, size_t size) {
+    if (gif->p3_defer_size + size > gif->p3_defer_cap) {
+        size_t cap = gif->p3_defer_cap ? gif->p3_defer_cap : 0x10000;
+
+        while (gif->p3_defer_size + size > cap)
+            cap *= 2;
+
+        gif->p3_defer_buf = realloc(gif->p3_defer_buf, cap);
+        gif->p3_defer_cap = cap;
+    }
+
+    memcpy(gif->p3_defer_buf + gif->p3_defer_size, buf, size);
+
+    gif->p3_defer_size += size;
+}
+
+static void gif_flush_path3(struct ps2_gif* gif) {
+    if (!gif->p3_defer_size)
+        return;
+
+    if (gif->transfer)
+        gif->transfer(gif->udata, GIF_PATH3, gif->p3_defer_buf, gif->p3_defer_size);
+
+    if (gif->dump_transfer)
+        gif->dump_transfer(gif->dump_udata, GIF_PATH3, gif->p3_defer_buf, gif->p3_defer_size);
+
+    gif->p3_defer_size = 0;
 }
 
 uint64_t ps2_gif_read32(struct ps2_gif* gif, uint32_t addr) {
@@ -148,6 +192,19 @@ void ps2_gif_write32(struct ps2_gif* gif, uint32_t addr, uint64_t data) {
         } return;
         case 0x10003010: {
             gif->mode = data;
+
+            int was = gif_path3_masked(gif);
+
+            gif->mask_m3r = data & 1;
+
+            if (data & 1) {
+                gif->stat |= 1;
+            } else {
+                gif->stat &= ~1;
+            }
+
+            if (was && !gif_path3_masked(gif))
+                gif_flush_path3(gif);
         } return;
     }
 }
@@ -363,11 +420,23 @@ void ps2_gif_fifo_write(struct ps2_gif* gif, uint128_t data, int path) {
         if (!gif->tag.qwc) {
             gif->state = GIF_STATE_RECV_TAG;
 
-            if (gif->transfer)
-                gif->transfer(gif->udata, path, queue->buf, queue->size * sizeof(uint32_t));
+            size_t bytes = queue->size * sizeof(uint32_t);
 
-            if (gif->dump_transfer)
-                gif->dump_transfer(gif->dump_udata, path, queue->buf, queue->size * sizeof(uint32_t));
+            // While PATH3 is masked, hold completed PATH3 packets until the
+            // mask's falling edge so PATH1/PATH2 draws that sample the target
+            // region see the pre-upload contents (double-buffered texture
+            // streaming in OutRun2 SP, SSX On Tour, etc).
+            int deferred = path == GIF_PATH3 && gif_path3_masked(gif);
+
+            if (deferred) {
+                gif_defer_path3(gif, queue->buf, bytes);
+            } else {
+                if (gif->transfer)
+                    gif->transfer(gif->udata, path, queue->buf, bytes);
+
+                if (gif->dump_transfer)
+                    gif->dump_transfer(gif->dump_udata, path, queue->buf, bytes);
+            }
 
             queue_clear(queue);
         }
@@ -386,15 +455,22 @@ void ps2_gif_set_dump_tap(struct ps2_gif* gif, void* udata, void (*tap)(void*, i
 }
 
 void ps2_gif_set_path3_mask(struct ps2_gif* gif, int mask) {
+    int was = gif_path3_masked(gif);
+
+    gif->mask_m3p = mask ? 1 : 0;
+
     if (mask) {
         gif->stat |= 2;
     } else {
         gif->stat &= ~2;
     }
+
+    if (was && !gif_path3_masked(gif))
+        gif_flush_path3(gif);
 }
 
 int ps2_gif_get_path3_mask(struct ps2_gif* gif) {
-    return (gif->stat & 2) != 0;
+    return gif_path3_masked(gif);
 }
 
 #undef printf

@@ -58,6 +58,13 @@ struct ps2_gif {
     int state;
     struct gif_tag tag;
 
+    int mask_m3r;
+    int mask_m3p;
+    int path3_mask_enable;
+    uint8_t* p3_defer_buf;
+    size_t p3_defer_size;
+    size_t p3_defer_cap;
+
     // From ST(Q) to RGBA(Q)
     uint64_t q;
 
