@@ -119,6 +119,15 @@ struct iop_cache_page {
     bool dirty;
 };
 
+#define IOP_BLOCK_LUT_SIZE 65536
+#define IOP_BLOCK_LUT_MASK (IOP_BLOCK_LUT_SIZE - 1)
+
+struct iop_block_lut_entry {
+    uint32_t pc;
+    uint32_t gen;
+    iop_block* block;
+};
+
 #ifndef _IOP_CACHE_PAGESIZE
 #define _IOP_CACHE_PAGESIZE 512
 #endif
@@ -153,6 +162,9 @@ struct iop_state {
     uint32_t last_cached_block_pc = 0;
     uint32_t executing_cache_page = 0xffffffff;
     uint32_t deferred_invalidate_page = 0xffffffff;
+
+    iop_block_lut_entry block_lut[IOP_BLOCK_LUT_SIZE] = {};
+    uint32_t block_lut_gen = 1;
 
     void (*kputchar)(void*, char) = nullptr;
     void* kputchar_udata = nullptr;

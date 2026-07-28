@@ -37,6 +37,7 @@ void iop_invalidate_cache_page(struct iop_state* iop, uint32_t addr) {
     // printf("iop: Invalidating page at addr=%08x page=%u (%08x) min=%08x max=%08x\n", addr, page, (addr / _IOP_CACHE_PAGESIZE) * _IOP_CACHE_PAGESIZE, iop->block_cache[page].min_code_addr, iop->block_cache[page].max_code_addr);
 
     iop->block_cache[page].dirty = true;
+    iop->block_lut_gen++;
 }
 
 #define IOP_INVALIDATE_PAGE(addr) { \
@@ -301,6 +302,8 @@ void iop_reset(struct iop_state* iop) {
     }
 
     if (iop->block_arena) arena_reset(iop->block_arena);
+
+    iop->block_lut_gen++;
 
     iop->rt.reset(asmjit::ResetPolicy::kHard);
 
@@ -2300,8 +2303,10 @@ void iop_compile_block(struct iop_state* iop, iop_block* block) {
 }
 
 iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
-    if (iop->last_cached_block_pc == pc) {
-        return iop->last_cached_block;
+    iop_block_lut_entry& lut = iop->block_lut[(pc >> 2) & IOP_BLOCK_LUT_MASK];
+
+    if (lut.pc == pc && lut.gen == iop->block_lut_gen) {
+        return lut.block;
     }
 
     uint32_t addr = iop_translate_addr(pc);
@@ -2318,6 +2323,8 @@ iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
         iop->block_cache[page].min_code_addr = 0xffffffff;
         iop->block_cache[page].max_code_addr = 0;
 
+        iop->block_lut_gen++;
+
         return nullptr;
     }
 
@@ -2329,8 +2336,9 @@ iop_block* iop_find_block(struct iop_state* iop, uint32_t pc) {
         return nullptr;
     }
 
-    iop->last_cached_block = block;
-    iop->last_cached_block_pc = pc;
+    lut.pc = pc;
+    lut.gen = iop->block_lut_gen;
+    lut.block = block;
 
     return block;
 }
@@ -2352,6 +2360,7 @@ iop_block* iop_cache_block(struct iop_state* iop, uint32_t addr, int max_cycles)
 
             iop->last_cached_block = nullptr;
             iop->last_cached_block_pc = 0;
+            iop->block_lut_gen++;
 
             blk = arena_alloc(iop->block_arena, sizeof(iop_block) * (_IOP_CACHE_PAGESIZE / 4));
         }
@@ -2481,6 +2490,7 @@ void iop_flush_cache(struct iop_state* iop) {
     iop->last_cached_block_pc = 0;
     iop->executing_cache_page = 0xffffffff;
     iop->deferred_invalidate_page = 0xffffffff;
+    iop->block_lut_gen++;
 }
 
 void iop_invalidate_block(struct iop_state* iop, uint32_t addr) {
@@ -2490,5 +2500,6 @@ void iop_invalidate_block(struct iop_state* iop, uint32_t addr) {
 
     if (iop_is_executable_region(addr) && iop->block_cache[page].valid) {
         iop->block_cache[page].dirty = true;
+        iop->block_lut_gen++;
     }
 }
