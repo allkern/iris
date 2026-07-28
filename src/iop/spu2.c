@@ -166,10 +166,10 @@ void ps2_spu2_init(struct ps2_spu2* spu2, struct ps2_iop_dma* dma, struct ps2_io
 	spu2->c[1].esa = 0xffff8;
 	spu2->c[1].eea = 0xfffff;
 
-    spu2->c[0].adma_buffer_max_size = 48000 * 4;
-    spu2->c[1].adma_buffer_max_size = 48000 * 4;
-    spu2->c[0].adma_buffer = (struct spu2_sample*)malloc(spu2->c[0].adma_buffer_max_size * sizeof(struct spu2_sample));
-    spu2->c[1].adma_buffer = (struct spu2_sample*)malloc(spu2->c[1].adma_buffer_max_size * sizeof(struct spu2_sample));
+    spu2->c[0].adma_buffer_max_size = SPU2_ADMA_RING_FRAMES;
+    spu2->c[1].adma_buffer_max_size = SPU2_ADMA_RING_FRAMES;
+    spu2->c[0].adma_buffer = (struct spu2_sample*)malloc(SPU2_ADMA_RING_FRAMES * sizeof(struct spu2_sample));
+    spu2->c[1].adma_buffer = (struct spu2_sample*)malloc(SPU2_ADMA_RING_FRAMES * sizeof(struct spu2_sample));
 
     // output = fopen("adma.wav", "wb");
 
@@ -1533,25 +1533,31 @@ int spu2_adma_write(struct ps2_spu2* spu2, int core, uint16_t* buf, uint32_t siz
 
     // printf("spu2: ADMA write core=%d stereo=%d mono=%d bytes=%d\n", core, size >> 2, size >> 1, size);
 
-    uint32_t samples = size >> 1;
+    uint32_t words = size >> 1;
+    uint32_t cap = c->adma_buffer_max_size;
+    uint32_t mask = cap - 1;
+    uint32_t write = c->adma_write;
+    uint32_t read = 0;
 
-    for (int i = 0; i < samples;) {
-        uint32_t offset = c->adma_buffer_size + (i & 0xff);
+    for (uint32_t i = 0; i < words; i++) {
+        if (c->adma_fill == 0) {
+            read = __atomic_load_n(&c->adma_read, __ATOMIC_ACQUIRE);
 
-        c->adma_buffer[offset].s16[c->adma_channel] = buf[i];
+            if ((cap - (write - read)) < 256)
+                break;
+        }
 
-        ++i;
+        int ch = c->adma_fill >> 8;
 
-        // 256 mono samples per channel, then switch
-        if (((c->adma_buffer_size + i) & 0xff) == 0) {
-            c->adma_channel ^= 1;
+        uint32_t frame = (write + (c->adma_fill & 0xff)) & mask;
 
-            // If both channels are ready, then start writing the
-            // next block
-            if (c->adma_channel == 0) {
-                c->adma_buffer_size += 256;
-                c->adma_buffer_size %= c->adma_buffer_max_size;
-            }
+        c->adma_buffer[frame].s16[ch] = buf[i];
+
+        if (++c->adma_fill == 512) {
+            c->adma_fill = 0;
+            write += 256;
+
+            __atomic_store_n(&c->adma_write, write, __ATOMIC_RELEASE);
         }
     }
 

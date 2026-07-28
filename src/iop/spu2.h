@@ -23,6 +23,7 @@ extern "C" {
 #define SPU2_SYNC 0
 
 #define SPU2_OUT_BUFFER_SIZE 4096
+#define SPU2_ADMA_RING_FRAMES 32768
 
 /* Memory ranges:
     1f900000-1f90017f CORE0 Voice settings
@@ -219,10 +220,6 @@ struct spu2_core {
     uint32_t memin_read_addr;
 
     int adma_playing;
-    int16_t adma_ringbuf[4096];
-    uint32_t adma_ringbuf_write_idx;
-    uint32_t adma_ringbuf_read_idx;
-    int adma_ringbuf_full;
 
     // Capture buffers
     uint16_t cb_out1_addr;
@@ -230,9 +227,11 @@ struct spu2_core {
     uint16_t cb_memout_addr;
 
     struct spu2_sample* adma_buffer;
+
     uint32_t adma_buffer_max_size;
-    uint32_t adma_buffer_size;
-    int adma_channel;
+    uint32_t adma_write;
+    uint32_t adma_read;
+    uint32_t adma_fill;
 };
 
 struct ps2_spu2 {
