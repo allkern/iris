@@ -5,6 +5,11 @@
 #include <fenv.h>
 #include <utility>
 
+#if defined(__SSE2__) || defined(_M_X64) || defined(__x86_64__) || defined(__amd64__)
+#include <immintrin.h>
+#define VU_FMAC_SIMD 1
+#endif
+
 #include "vu.h"
 #include "vu_def.hpp"
 #include "vu_dis.h"
@@ -444,7 +449,7 @@ static inline void vu_write_branch_pipeline(struct vu_state* vu, int dst) {
     if (!dst)
         return;
 
-    //On repeat writes we need to remember the value from before the chain
+    // On repeat writes we need to remember the value from before the chain
     if (vu->vi_backup_cycles && dst == vu->vi_backup_reg) {
         vu->vi_backup_cycles = 2;
 
@@ -553,7 +558,6 @@ void vu_xgkick(struct vu_state* vu) {
 
 template <typename F, std::size_t... Is>
 void seq(F f, std::index_sequence<Is...>) {
-    // Parameter pack expansion
     (f(std::integral_constant<std::size_t, Is>{}), ...);
 }
 
@@ -574,1491 +578,380 @@ void vu_i_abs(struct vu_state* vu, const struct vu_instruction* ins) {
         }
     });
 }
-template <uint32_t di>
-void vu_i_add(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-         if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + vu_vf_i(vu, t, i);
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addi(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + vu->i.f;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + q;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addx(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addy(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_adda(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + vu_vf_i(vu, t, i);
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addai(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + vu->i.f;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addaq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + q;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addax(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_adday(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addaz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_addaw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) + bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_sub(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - vu_vf_i(vu, t, i);
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subi(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - vu->i.f;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - q;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subx(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_suby(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_suba(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - vu_vf_i(vu, t, i);
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subai(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - vu->i.f;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subaq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - q;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subax(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-            
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subay(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-            
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subaz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-            
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_subaw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) - bc;
-            
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mul(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_muli(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * vu->i.f;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * q;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulx(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_muly(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mula(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulai(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * vu->i.f;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulaq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * q;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulax(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulay(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulaz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_mulaw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_madd(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddi(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu->i.f;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * q;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddx(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddy(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
 
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_madda(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddai(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * vu->i.f;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddaq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu->acc.f[i] + vu_vf_i(vu, s, i) * q;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddax(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_x(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_madday(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddaz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_maddaw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) + vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_msub(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_msubi(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
+enum vu_alu_op { VU_OP_ADD, VU_OP_SUB, VU_OP_MUL, VU_OP_MADD, VU_OP_MSUB };
+enum vu_src_kind { VU_SRC_VEC, VU_SRC_BCX, VU_SRC_BCY, VU_SRC_BCZ, VU_SRC_BCW, VU_SRC_I, VU_SRC_Q };
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu->i.f;
-            
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
+#ifdef VU_FMAC_SIMD
 
-    vu_update_status(vu);
+static inline __m128i vu_sel(__m128i mask, __m128i a, __m128i b) {
+    return _mm_or_si128(_mm_and_si128(mask, a), _mm_andnot_si128(mask, b));
 }
-template <uint32_t di>
-void vu_i_msubq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
-    float q = vu_get_q(vu).f;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - (vu_vf_i(vu, s, i) * q);
-
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
 
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_msubx(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
+static inline __m128i vu_cvtf4_i(__m128i v) {
+    const __m128i em = _mm_set1_epi32(0x7f800000);
+    const __m128i sm = _mm_set1_epi32((int)0x80000000);
+    const __m128i maxn = _mm_set1_epi32(0x7f7fffff);
+    const __m128i z = _mm_setzero_si128();
 
-    float bc = vu_vf_x(vu, t);
+    __m128i exp = _mm_and_si128(v, em);
+    __m128i is0 = _mm_cmpeq_epi32(exp, z);
+    __m128i is255 = _mm_cmpeq_epi32(exp, em);
+    __m128i sign = _mm_and_si128(v, sm);
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
-            
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
+    v = vu_sel(is0, sign, v);
+    v = vu_sel(is255, _mm_or_si128(sign, maxn), v);
 
-    vu_update_status(vu);
+    return v;
 }
-template <uint32_t di>
-void vu_i_msuby(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
-            
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
 
-    vu_update_status(vu);
+static inline __m128 vu_load_cvtf(const struct vu_reg128* r) {
+    return _mm_castsi128_ps(vu_cvtf4_i(_mm_loadu_si128((const __m128i*)r)));
 }
-template <uint32_t di>
-void vu_i_msubz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    float bc = vu_vf_z(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
-            
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
 
-    vu_update_status(vu);
-}
 template <uint32_t di>
-void vu_i_msubw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
-            
-            vu_set_vf(vu, d, i, vu_update_flags(vu, result, i));
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
+static constexpr uint32_t vu_nibblemask() {
+    uint32_t nm = 0;
+    for (int i = 0; i < 4; i++) if (di & (VU_D_X >> i)) nm |= 0x1111u << (3 - i);
+    return nm;
 }
-template <uint32_t di>
-void vu_i_msuba(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu_vf_i(vu, t, i);
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
 
-    vu_update_status(vu);
-}
 template <uint32_t di>
-void vu_i_msubai(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * vu->i.f;
+static inline __m128i vu_flags4(struct vu_state* vu, __m128i v) {
+    const __m128i em = _mm_set1_epi32(0x7f800000);
+    const __m128i sm = _mm_set1_epi32((int)0x80000000);
+    const __m128i mtm = _mm_set1_epi32(0x007fffff);
+    const __m128i maxn = _mm_set1_epi32(0x7f7fffff);
+    const __m128i z = _mm_setzero_si128();
+    const __m128i ones = _mm_set1_epi32(-1);
 
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
-
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_msubaq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    float q = vu_get_q(vu).f;
+    __m128i exp = _mm_and_si128(v, em);
+    __m128i mant = _mm_and_si128(v, mtm);
+    __m128i sign = _mm_and_si128(v, sm);
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu->acc.f[i] - vu_vf_i(vu, s, i) * q;
+    __m128i is0 = _mm_cmpeq_epi32(exp, z);
+    __m128i is255 = _mm_cmpeq_epi32(exp, em);
+    __m128i mnz = _mm_xor_si128(_mm_cmpeq_epi32(mant, z), ones);
+    __m128i isuf = _mm_and_si128(is0, mnz);
 
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
+    __m128i r = vu_sel(is0, sign, v);
 
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_msubax(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+    r = vu_sel(is255, _mm_or_si128(sign, maxn), r);
 
-    float bc = vu_vf_x(vu, t);
+    __m128i Z = _mm_srli_epi32(is0, 31);
+    __m128i S = _mm_srli_epi32(v, 31);
+    __m128i U = _mm_srli_epi32(isuf, 31);
+    __m128i O = _mm_srli_epi32(is255, 31);
+    __m128i lanebits = _mm_or_si128(_mm_or_si128(Z, _mm_slli_epi32(S, 4)),
+                                    _mm_or_si128(_mm_slli_epi32(U, 8), _mm_slli_epi32(O, 12)));
+    __m128i sh = _mm_mullo_epi16(lanebits, _mm_set_epi32(1, 2, 4, 8));
+    __m128i h1 = _mm_or_si128(sh, _mm_shuffle_epi32(sh, _MM_SHUFFLE(2, 3, 0, 1)));
+    __m128i h2 = _mm_or_si128(h1, _mm_shuffle_epi32(h1, _MM_SHUFFLE(1, 0, 3, 2)));
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
+    uint32_t newmac = (uint32_t)_mm_cvtsi128_si32(h2) & 0xFFFFu;
 
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
+    vu->mac = (vu->mac & ~0xFFFFu) | (newmac & vu_nibblemask<di>());
 
-    vu_update_status(vu);
+    return r;
 }
-template <uint32_t di>
-void vu_i_msubay(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_y(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
 
-    vu_update_status(vu);
-}
 template <uint32_t di>
-void vu_i_msubaz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+static inline void vu_write_masked(void* dst, __m128i val) {
+    constexpr uint32_t l0 = (di & VU_D_X) ? 0xFFFFFFFFu : 0;
+    constexpr uint32_t l1 = (di & VU_D_Y) ? 0xFFFFFFFFu : 0;
+    constexpr uint32_t l2 = (di & VU_D_Z) ? 0xFFFFFFFFu : 0;
+    constexpr uint32_t l3 = (di & VU_D_W) ? 0xFFFFFFFFu : 0;
 
-    float bc = vu_vf_z(vu, t);
+    if constexpr (l0 && l1 && l2 && l3) {
+        _mm_storeu_si128((__m128i*)dst, val);
+    } else if constexpr (l0 || l1 || l2 || l3) {
+        const __m128i keep = _mm_set_epi32((int)l3, (int)l2, (int)l1, (int)l0);
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
+        __m128i cur = _mm_loadu_si128((__m128i*)dst);
 
-    vu_update_status(vu);
+        _mm_storeu_si128((__m128i*)dst, vu_sel(keep, val, cur));
+    }
 }
-template <uint32_t di>
-void vu_i_msubaw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    float bc = vu_vf_w(vu, t);
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float result = vu_acc_i(vu, i) - vu_vf_i(vu, s, i) * bc;
-
-            vu->acc.f[i] = vu_update_flags(vu, result, i);
-        } else {
-            vu_clear_flags(vu, i);
-        }
-    });
 
-    vu_update_status(vu);
-}
-template <uint32_t di>
-void vu_i_max(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
+template <uint32_t di, vu_alu_op OP, bool TO_ACC, vu_src_kind TK>
+static inline void vu_fmac(struct vu_state* vu, int d, int s, int t) {
+    __m128 sv = vu_load_cvtf(&vu->vf[s]);
+    __m128 tv;
 
+    if constexpr (TK == VU_SRC_VEC) {
+        tv = vu_load_cvtf(&vu->vf[t]);
+    } else if constexpr (TK == VU_SRC_BCX) {
+        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(0, 0, 0, 0));
+    } else if constexpr (TK == VU_SRC_BCY) {
+        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(1, 1, 1, 1));
+    } else if constexpr (TK == VU_SRC_BCZ) {
+        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(2, 2, 2, 2));
+    } else if constexpr (TK == VU_SRC_BCW) {
+        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(3, 3, 3, 3));
+    } else if constexpr (TK == VU_SRC_I) {
+        tv = _mm_set1_ps(vu->i.f);
+    } else {
+        tv = _mm_set1_ps(vu_get_q(vu).f);
+    }
+
+    __m128 r;
+    if constexpr (OP == VU_OP_ADD) {
+        r = _mm_add_ps(sv, tv);
+    } else if constexpr (OP == VU_OP_SUB) {
+        r = _mm_sub_ps(sv, tv);
+    } else if constexpr (OP == VU_OP_MUL) {
+        r = _mm_mul_ps(sv, tv);
+    } else {
+        __m128 acc = vu_load_cvtf(&vu->acc);
+        __m128 p = _mm_mul_ps(sv, tv);
+        r = (OP == VU_OP_MADD) ? _mm_add_ps(acc, p) : _mm_sub_ps(acc, p);
+    }
+
+    __m128i clamped = vu_flags4<di>(vu, _mm_castps_si128(r));
+
+    if constexpr (TO_ACC) {
+        vu_write_masked<di>(&vu->acc, clamped);
+    } else {
+        if (d) vu_write_masked<di>(&vu->vf[d], clamped);
+    }
+
+    vu_update_status(vu);
+}
+
+#else
+
+template <uint32_t di, vu_alu_op OP, bool TO_ACC, vu_src_kind TK>
+static inline void vu_fmac(struct vu_state* vu, int d, int s, int t) {
+    float iq = 0.0f;
+    if constexpr (TK == VU_SRC_I) iq = vu->i.f;
+    else if constexpr (TK == VU_SRC_Q) iq = vu_get_q(vu).f;
+
+    float bc = 0.0f;
+    if constexpr (TK == VU_SRC_BCX) bc = vu_vf_x(vu, t);
+    else if constexpr (TK == VU_SRC_BCY) bc = vu_vf_y(vu, t);
+    else if constexpr (TK == VU_SRC_BCZ) bc = vu_vf_z(vu, t);
+    else if constexpr (TK == VU_SRC_BCW) bc = vu_vf_w(vu, t);
+
+    template_seq<4>([&](auto i) {
+        if constexpr (di & (VU_D_X >> i)) {
+            float sf = vu_vf_i(vu, s, i);
+            float tf;
+            if constexpr (TK == VU_SRC_VEC) tf = vu_vf_i(vu, t, i);
+            else if constexpr (TK == VU_SRC_I || TK == VU_SRC_Q) tf = iq;
+            else tf = bc;
+
+            float r;
+            if constexpr (OP == VU_OP_ADD) r = sf + tf;
+            else if constexpr (OP == VU_OP_SUB) r = sf - tf;
+            else if constexpr (OP == VU_OP_MUL) r = sf * tf;
+            else if constexpr (OP == VU_OP_MADD) r = vu_acc_i(vu, i) + sf * tf;
+            else r = vu_acc_i(vu, i) - sf * tf;
+
+            float out = vu_update_flags(vu, r, i);
+            if constexpr (TO_ACC) vu->acc.f[i] = out;
+            else vu_set_vf(vu, d, i, out);
+        } else {
+            vu_clear_flags(vu, i);
+        }
+    });
+
+    vu_update_status(vu);
+}
+
+#endif
+
+#define VU_FMAC_D(name, OP, TK) \
+    template <uint32_t di> \
+    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
+        vu_fmac<di, OP, false, TK>(vu, VU_UD_D, VU_UD_S, VU_UD_T); \
+    }
+
+#define VU_FMAC_A(name, OP, TK) \
+    template <uint32_t di> \
+    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
+        vu_fmac<di, OP, true, TK>(vu, VU_UD_D, VU_UD_S, VU_UD_T); \
+    }
+
+VU_FMAC_D(vu_i_add,   VU_OP_ADD, VU_SRC_VEC)
+VU_FMAC_D(vu_i_addi,  VU_OP_ADD, VU_SRC_I)
+VU_FMAC_D(vu_i_addq,  VU_OP_ADD, VU_SRC_Q)
+VU_FMAC_D(vu_i_addx,  VU_OP_ADD, VU_SRC_BCX)
+VU_FMAC_D(vu_i_addy,  VU_OP_ADD, VU_SRC_BCY)
+VU_FMAC_D(vu_i_addz,  VU_OP_ADD, VU_SRC_BCZ)
+VU_FMAC_D(vu_i_addw,  VU_OP_ADD, VU_SRC_BCW)
+VU_FMAC_A(vu_i_adda,  VU_OP_ADD, VU_SRC_VEC)
+VU_FMAC_A(vu_i_addai, VU_OP_ADD, VU_SRC_I)
+VU_FMAC_A(vu_i_addaq, VU_OP_ADD, VU_SRC_Q)
+VU_FMAC_A(vu_i_addax, VU_OP_ADD, VU_SRC_BCX)
+VU_FMAC_A(vu_i_adday, VU_OP_ADD, VU_SRC_BCY)
+VU_FMAC_A(vu_i_addaz, VU_OP_ADD, VU_SRC_BCZ)
+VU_FMAC_A(vu_i_addaw, VU_OP_ADD, VU_SRC_BCW)
+
+VU_FMAC_D(vu_i_sub,   VU_OP_SUB, VU_SRC_VEC)
+VU_FMAC_D(vu_i_subi,  VU_OP_SUB, VU_SRC_I)
+VU_FMAC_D(vu_i_subq,  VU_OP_SUB, VU_SRC_Q)
+VU_FMAC_D(vu_i_subx,  VU_OP_SUB, VU_SRC_BCX)
+VU_FMAC_D(vu_i_suby,  VU_OP_SUB, VU_SRC_BCY)
+VU_FMAC_D(vu_i_subz,  VU_OP_SUB, VU_SRC_BCZ)
+VU_FMAC_D(vu_i_subw,  VU_OP_SUB, VU_SRC_BCW)
+VU_FMAC_A(vu_i_suba,  VU_OP_SUB, VU_SRC_VEC)
+VU_FMAC_A(vu_i_subai, VU_OP_SUB, VU_SRC_I)
+VU_FMAC_A(vu_i_subaq, VU_OP_SUB, VU_SRC_Q)
+VU_FMAC_A(vu_i_subax, VU_OP_SUB, VU_SRC_BCX)
+VU_FMAC_A(vu_i_subay, VU_OP_SUB, VU_SRC_BCY)
+VU_FMAC_A(vu_i_subaz, VU_OP_SUB, VU_SRC_BCZ)
+VU_FMAC_A(vu_i_subaw, VU_OP_SUB, VU_SRC_BCW)
+
+VU_FMAC_D(vu_i_mul,   VU_OP_MUL, VU_SRC_VEC)
+VU_FMAC_D(vu_i_muli,  VU_OP_MUL, VU_SRC_I)
+VU_FMAC_D(vu_i_mulq,  VU_OP_MUL, VU_SRC_Q)
+VU_FMAC_D(vu_i_mulx,  VU_OP_MUL, VU_SRC_BCX)
+VU_FMAC_D(vu_i_muly,  VU_OP_MUL, VU_SRC_BCY)
+VU_FMAC_D(vu_i_mulz,  VU_OP_MUL, VU_SRC_BCZ)
+VU_FMAC_D(vu_i_mulw,  VU_OP_MUL, VU_SRC_BCW)
+VU_FMAC_A(vu_i_mula,  VU_OP_MUL, VU_SRC_VEC)
+VU_FMAC_A(vu_i_mulai, VU_OP_MUL, VU_SRC_I)
+VU_FMAC_A(vu_i_mulaq, VU_OP_MUL, VU_SRC_Q)
+VU_FMAC_A(vu_i_mulax, VU_OP_MUL, VU_SRC_BCX)
+VU_FMAC_A(vu_i_mulay, VU_OP_MUL, VU_SRC_BCY)
+VU_FMAC_A(vu_i_mulaz, VU_OP_MUL, VU_SRC_BCZ)
+VU_FMAC_A(vu_i_mulaw, VU_OP_MUL, VU_SRC_BCW)
+
+VU_FMAC_D(vu_i_madd,   VU_OP_MADD, VU_SRC_VEC)
+VU_FMAC_D(vu_i_maddi,  VU_OP_MADD, VU_SRC_I)
+VU_FMAC_D(vu_i_maddq,  VU_OP_MADD, VU_SRC_Q)
+VU_FMAC_D(vu_i_maddx,  VU_OP_MADD, VU_SRC_BCX)
+VU_FMAC_D(vu_i_maddy,  VU_OP_MADD, VU_SRC_BCY)
+VU_FMAC_D(vu_i_maddz,  VU_OP_MADD, VU_SRC_BCZ)
+VU_FMAC_D(vu_i_maddw,  VU_OP_MADD, VU_SRC_BCW)
+VU_FMAC_A(vu_i_madda,  VU_OP_MADD, VU_SRC_VEC)
+VU_FMAC_A(vu_i_maddai, VU_OP_MADD, VU_SRC_I)
+VU_FMAC_A(vu_i_maddaq, VU_OP_MADD, VU_SRC_Q)
+VU_FMAC_A(vu_i_maddax, VU_OP_MADD, VU_SRC_BCX)
+VU_FMAC_A(vu_i_madday, VU_OP_MADD, VU_SRC_BCY)
+VU_FMAC_A(vu_i_maddaz, VU_OP_MADD, VU_SRC_BCZ)
+VU_FMAC_A(vu_i_maddaw, VU_OP_MADD, VU_SRC_BCW)
+
+VU_FMAC_D(vu_i_msub,   VU_OP_MSUB, VU_SRC_VEC)
+VU_FMAC_D(vu_i_msubi,  VU_OP_MSUB, VU_SRC_I)
+VU_FMAC_D(vu_i_msubq,  VU_OP_MSUB, VU_SRC_Q)
+VU_FMAC_D(vu_i_msubx,  VU_OP_MSUB, VU_SRC_BCX)
+VU_FMAC_D(vu_i_msuby,  VU_OP_MSUB, VU_SRC_BCY)
+VU_FMAC_D(vu_i_msubz,  VU_OP_MSUB, VU_SRC_BCZ)
+VU_FMAC_D(vu_i_msubw,  VU_OP_MSUB, VU_SRC_BCW)
+VU_FMAC_A(vu_i_msuba,  VU_OP_MSUB, VU_SRC_VEC)
+VU_FMAC_A(vu_i_msubai, VU_OP_MSUB, VU_SRC_I)
+VU_FMAC_A(vu_i_msubaq, VU_OP_MSUB, VU_SRC_Q)
+VU_FMAC_A(vu_i_msubax, VU_OP_MSUB, VU_SRC_BCX)
+VU_FMAC_A(vu_i_msubay, VU_OP_MSUB, VU_SRC_BCY)
+VU_FMAC_A(vu_i_msubaz, VU_OP_MSUB, VU_SRC_BCZ)
+VU_FMAC_A(vu_i_msubaw, VU_OP_MSUB, VU_SRC_BCW)
+
+#ifdef VU_FMAC_SIMD
+static inline __m128i vu_sm_key(__m128i x) {
+    return _mm_xor_si128(x, _mm_and_si128(_mm_srai_epi32(x, 31), _mm_set1_epi32(0x7fffffff)));
+}
+
+template <uint32_t di, bool IS_MAX, vu_src_kind TK>
+static inline void vu_minmax(struct vu_state* vu, int d, int s, int t) {
+    if (!d) return;
+    __m128i a = _mm_loadu_si128((const __m128i*)&vu->vf[s]);
+    __m128i b;
+
+    if constexpr (TK == VU_SRC_VEC) b = _mm_loadu_si128((const __m128i*)&vu->vf[t]);
+    else if constexpr (TK == VU_SRC_I) b = _mm_set1_epi32(vu->i.s32);
+    else if constexpr (TK == VU_SRC_BCX) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(0, 0, 0, 0));
+    else if constexpr (TK == VU_SRC_BCY) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(1, 1, 1, 1));
+    else if constexpr (TK == VU_SRC_BCZ) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(2, 2, 2, 2));
+    else b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(3, 3, 3, 3));
+
+    __m128i agtb = _mm_cmpgt_epi32(vu_sm_key(a), vu_sm_key(b));
+    __m128i res = IS_MAX ? vu_sel(agtb, a, b) : vu_sel(agtb, b, a);
+
+    vu_write_masked<di>(&vu->vf[d], res);
+}
+#else
+template <uint32_t di, bool IS_MAX, vu_src_kind TK>
+static inline void vu_minmax(struct vu_state* vu, int d, int s, int t) {
     if (!d) return;
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], vu->vf[t].s32[i]);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_maxi(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
+    int32_t bc = 0;
 
-    if (!d) return;
+    if constexpr (TK == VU_SRC_I) bc = vu->i.s32;
+    else if constexpr (TK == VU_SRC_BCX) bc = vu->vf[t].s32[0];
+    else if constexpr (TK == VU_SRC_BCY) bc = vu->vf[t].s32[1];
+    else if constexpr (TK == VU_SRC_BCZ) bc = vu->vf[t].s32[2];
+    else if constexpr (TK == VU_SRC_BCW) bc = vu->vf[t].s32[3];
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], vu->i.s32);
+            int32_t b;
+            if constexpr (TK == VU_SRC_VEC) b = vu->vf[t].s32[i];
+            else b = bc;
+            vu->vf[d].u32[i] = IS_MAX ? vu_max(vu->vf[s].s32[i], b) : vu_min(vu->vf[s].s32[i], b);
         }
     });
 }
-template <uint32_t di>
-void vu_i_maxx(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
+#endif
 
-    if (!d) return;
+#define VU_MINMAX(name, IS_MAX, TK) \
+    template <uint32_t di> \
+    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
+        vu_minmax<di, IS_MAX, TK>(vu, VU_UD_D, VU_UD_S, VU_UD_T); \
+    }
 
-    int32_t bc = vu->vf[t].s32[0];
+VU_MINMAX(vu_i_max,   true,  VU_SRC_VEC)
+VU_MINMAX(vu_i_maxi,  true,  VU_SRC_I)
+VU_MINMAX(vu_i_maxx,  true,  VU_SRC_BCX)
+VU_MINMAX(vu_i_maxy,  true,  VU_SRC_BCY)
+VU_MINMAX(vu_i_maxz,  true,  VU_SRC_BCZ)
+VU_MINMAX(vu_i_maxw,  true,  VU_SRC_BCW)
+VU_MINMAX(vu_i_mini,  false, VU_SRC_VEC)
+VU_MINMAX(vu_i_minii, false, VU_SRC_I)
+VU_MINMAX(vu_i_minix, false, VU_SRC_BCX)
+VU_MINMAX(vu_i_miniy, false, VU_SRC_BCY)
+VU_MINMAX(vu_i_miniz, false, VU_SRC_BCZ)
+VU_MINMAX(vu_i_miniw, false, VU_SRC_BCW)
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_maxy(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    if (!d) return;
-
-    int32_t bc = vu->vf[t].s32[1];
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float fs = vu_vf_i(vu, s, i);
-
-            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_maxz(struct vu_state* vu, const struct vu_instruction* ins) {
+#ifdef VU_FMAC_SIMD
+void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
-    int d = VU_UD_D;
 
-    if (!d) return;
+    __m128 sv = vu_load_cvtf(&vu->vf[s]);
+    __m128 tv = vu_load_cvtf(&vu->vf[t]);
+    __m128 syzx = _mm_shuffle_ps(sv, sv, _MM_SHUFFLE(3, 0, 2, 1));
+    __m128 tzxy = _mm_shuffle_ps(tv, tv, _MM_SHUFFLE(3, 1, 0, 2));
+    __m128 prod = _mm_mul_ps(syzx, tzxy);
 
-    int32_t bc = vu->vf[t].s32[2];
+    __m128i pre = vu_cvtf4_i(_mm_castps_si128(prod));
+    __m128i clamped = vu_flags4<VU_D_X | VU_D_Y | VU_D_Z>(vu, pre);
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float fs = vu_vf_i(vu, s, i);
+    vu_write_masked<VU_D_X | VU_D_Y | VU_D_Z>(&vu->acc, clamped);
 
-            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
-        }
-    });
+    vu_update_status(vu);
 }
-template <uint32_t di>
-void vu_i_maxw(struct vu_state* vu, const struct vu_instruction* ins) {
+
+void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
+    int d = VU_UD_D;
     int s = VU_UD_S;
     int t = VU_UD_T;
-    int d = VU_UD_D;
 
-    if (!d) return;
+    __m128 sv = vu_load_cvtf(&vu->vf[s]);
+    __m128 tv = vu_load_cvtf(&vu->vf[t]);
+    __m128 accv = _mm_loadu_ps((const float*)&vu->acc);
+    __m128 syzx = _mm_shuffle_ps(sv, sv, _MM_SHUFFLE(3, 0, 2, 1));
+    __m128 tzxy = _mm_shuffle_ps(tv, tv, _MM_SHUFFLE(3, 1, 0, 2));
+    __m128 prod = _mm_mul_ps(syzx, tzxy);
+    __m128 r = _mm_sub_ps(accv, prod);
 
-    int32_t bc = vu->vf[t].s32[3];
+    __m128i clamped = vu_flags4<VU_D_X | VU_D_Y | VU_D_Z>(vu, _mm_castps_si128(r));
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float fs = vu_vf_i(vu, s, i);
+    if (d) vu_write_masked<VU_D_X | VU_D_Y | VU_D_Z>(&vu->vf[d], clamped);
 
-            vu->vf[d].u32[i] = vu_max(vu->vf[s].s32[i], bc);
-        }
-    });
+    vu_update_status(vu);
 }
-template <uint32_t di>
-void vu_i_mini(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    if (!d) return;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], vu->vf[t].s32[i]);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_minii(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int d = VU_UD_D;
-
-    if (!d) return;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], vu->i.s32);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_minix(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    if (!d) return;
-
-    int32_t bc = vu->vf[t].s32[0];
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_miniy(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    if (!d) return;
-
-    int32_t bc = vu->vf[t].s32[1];
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_miniz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    if (!d) return;
-
-    int32_t bc = vu->vf[t].s32[2];
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_miniw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-    int d = VU_UD_D;
-
-    if (!d) return;
-
-    int32_t bc = vu->vf[t].s32[3];
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[d].u32[i] = vu_min(vu->vf[s].s32[i], bc);
-        }
-    });
-}
+#else
 void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins) {
     int s = VU_UD_S;
     int t = VU_UD_T;
@@ -2075,26 +968,10 @@ void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->acc.y = vu_update_flags(vu, vu->acc.y, 1);
     vu->acc.z = vu_update_flags(vu, vu->acc.z, 2);
 
-    // printf("s(%d)=%08x %08x %08x t(%d)=%08x %08x %08x acc=%08x %08x %08x prev=%08x %08x %08x\n",
-    //     s,
-    //     vu->vf[s].u32[0],
-    //     vu->vf[s].u32[1],
-    //     vu->vf[s].u32[2],
-    //     t,
-    //     vu->vf[t].u32[0],
-    //     vu->vf[t].u32[1],
-    //     vu->vf[t].u32[2],
-    //     vu->acc.u32[0],
-    //     vu->acc.u32[1],
-    //     vu->acc.u32[2],
-    //     acc.u32[0],
-    //     acc.u32[1],
-    //     acc.u32[2]
-    // );
-
     vu_clear_flags(vu, 3);
     vu_update_status(vu);
 }
+
 void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
     int d = VU_UD_D;
     int s = VU_UD_S;
@@ -2110,117 +987,67 @@ void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
     vu_set_vf_y(vu, d, vu_update_flags(vu, tmp.f[1], 1));
     vu_set_vf_z(vu, d, vu_update_flags(vu, tmp.f[2], 2));
 
-    // printf("s(%d)=%08x %08x %08x t(%d)=%08x %08x %08x d=%08x %08x %08x dp=%08x %08x %08x\n",
-    //     s,
-    //     vu->vf[s].u32[0],
-    //     vu->vf[s].u32[1],
-    //     vu->vf[s].u32[2],
-    //     t,
-    //     vu->vf[t].u32[0],
-    //     vu->vf[t].u32[1],
-    //     vu->vf[t].u32[2],
-    //     vu->vf[d].u32[0],
-    //     vu->vf[d].u32[1],
-    //     vu->vf[d].u32[2],
-    //     dv.u32[0],
-    //     dv.u32[1],
-    //     dv.u32[2]
-    // );
-
     vu_clear_flags(vu, 3);
     vu_update_status(vu);
 }
+#endif
 void vu_i_nop(struct vu_state* vu, const struct vu_instruction* ins) {
     // No operation
 }
-template <uint32_t di>
-void vu_i_ftoi0(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
 
+#ifdef VU_FMAC_SIMD
+template <uint32_t di>
+static inline void vu_ftoi(struct vu_state* vu, int t, int s, float scale) {
+    __m128 f = _mm_mul_ps(vu_load_cvtf(&vu->vf[s]), _mm_set1_ps(scale));
+    __m128i iv = _mm_cvttps_epi32(f);
+    __m128i povf = _mm_castps_si128(_mm_cmpge_ps(f, _mm_set1_ps(2147483648.0f)));
+
+    iv = vu_sel(povf, _mm_set1_epi32(0x7fffffff), iv);
+
+    if (t) vu_write_masked<di>(&vu->vf[t], iv);
+}
+
+template <uint32_t di>
+static inline void vu_itof(struct vu_state* vu, int t, int s, float scale) {
+    __m128 f = _mm_mul_ps(_mm_cvtepi32_ps(_mm_loadu_si128((const __m128i*)&vu->vf[s])), _mm_set1_ps(scale));
+
+    if (t) vu_write_masked<di>(&vu->vf[t], _mm_castps_si128(f));
+}
+#else
+template <uint32_t di>
+static inline void vu_ftoi(struct vu_state* vu, int t, int s, float scale) {
     template_seq<4>([&](auto i) {
         if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i)));
+            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * scale));
         }
     });
 }
-template <uint32_t di>
-void vu_i_ftoi4(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
 
+template <uint32_t di>
+static inline void vu_itof(struct vu_state* vu, int t, int s, float scale) {
     template_seq<4>([&](auto i) {
         if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.0625f)));
+            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * scale));
         }
     });
 }
-template <uint32_t di>
-void vu_i_ftoi12(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+#endif
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000244140625f)));
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_ftoi15(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+#define VU_CONV(name, fn, scale) \
+    template <uint32_t di> \
+    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
+        fn<di>(vu, VU_UD_T, VU_UD_S, scale); \
+    }
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * (1.0f / 0.000030517578125f)));
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_itof0(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+VU_CONV(vu_i_ftoi0,  vu_ftoi, 1.0f)
+VU_CONV(vu_i_ftoi4,  vu_ftoi, (1.0f / 0.0625f))
+VU_CONV(vu_i_ftoi12, vu_ftoi, (1.0f / 0.000244140625f))
+VU_CONV(vu_i_ftoi15, vu_ftoi, (1.0f / 0.000030517578125f))
+VU_CONV(vu_i_itof0,  vu_itof, 1.0f)
+VU_CONV(vu_i_itof4,  vu_itof, 0.0625f)
+VU_CONV(vu_i_itof12, vu_itof, 0.000244140625f)
+VU_CONV(vu_i_itof15, vu_itof, 0.000030517578125f)
 
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vf(vu, t, i, (float)vu->vf[s].s32[i]);
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_itof4(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.0625f));
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_itof12(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000244140625f));
-        }
-    });
-}
-template <uint32_t di>
-void vu_i_itof15(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
-
-    template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * 0.000030517578125f));
-        }
-    });
-}
 void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins) {
     int t = VU_UD_T;
     int s = VU_UD_S;
@@ -3488,18 +2315,18 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
         // Note: The flag check instructions clobber the destination register
         //       "immediately", this means we don't actually need to generate
         //       a dependency.
-        case 0x10: VU_DEC_LD_NONE(vu_i_fceq); return; // VU_DEC_LD_VIDST(1, vu_i_fceq); return;
+        case 0x10: VU_DEC_LD_NONE(vu_i_fceq); return;
         case 0x11: VU_DEC_LD_NONE(vu_i_fcset); return;
-        case 0x12: VU_DEC_LD_NONE(vu_i_fcand); return; // VU_DEC_LD_VIDST(1, vu_i_fcand); return;
-        case 0x13: VU_DEC_LD_NONE(vu_i_fcor); return; // VU_DEC_LD_VIDST(1, vu_i_fcor); return;
-        case 0x14: VU_DEC_LD_NONE(vu_i_fseq); return; // VU_DEC_LD_T_VIDST(vu_i_fseq); return;
+        case 0x12: VU_DEC_LD_NONE(vu_i_fcand); return;
+        case 0x13: VU_DEC_LD_NONE(vu_i_fcor); return;
+        case 0x14: VU_DEC_LD_NONE(vu_i_fseq); return;
         case 0x15: VU_DEC_LD_NONE(vu_i_fsset); return;
-        case 0x16: VU_DEC_LD_NONE(vu_i_fsand); return; // VU_DEC_LD_T_VIDST(vu_i_fsand); return;
-        case 0x17: VU_DEC_LD_NONE(vu_i_fsor); return; // VU_DEC_LD_T_VIDST(vu_i_fsor); return;
-        case 0x18: VU_DEC_LD_S_VISRC(vu_i_fmeq); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmeq); return;
-        case 0x1A: VU_DEC_LD_S_VISRC(vu_i_fmand); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmand); return;
-        case 0x1B: VU_DEC_LD_S_VISRC(vu_i_fmor); return; // VU_DEC_LD_T_VIDST_S_VISRC(vu_i_fmor); return;
-        case 0x1C: VU_DEC_LD_NONE(vu_i_fcget); return; // VU_DEC_LD_T_VIDST(vu_i_fcget); return;
+        case 0x16: VU_DEC_LD_NONE(vu_i_fsand); return;
+        case 0x17: VU_DEC_LD_NONE(vu_i_fsor); return;
+        case 0x18: VU_DEC_LD_S_VISRC(vu_i_fmeq); return;
+        case 0x1A: VU_DEC_LD_S_VISRC(vu_i_fmand); return;
+        case 0x1B: VU_DEC_LD_S_VISRC(vu_i_fmor); return;
+        case 0x1C: VU_DEC_LD_NONE(vu_i_fcget); return;
         case 0x20: vu->lower.branch = 1; VU_DEC_LD_NONE(vu_i_b); return;
         case 0x21: vu->lower.branch = 1; VU_DEC_LD_T_VIDST(vu_i_bal); return;
         case 0x24: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_jr); return;
@@ -3610,6 +2437,8 @@ vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
 
 static int c = 0;
 
+static inline int vu_vf_write_mask(const struct vu_instruction& ins);
+
 vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
     vu_block* block = &vu->block_cache[tpc & vu->micro_mem_size];
 
@@ -3650,7 +2479,18 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
             entry.hazard1 = vu->upper.dst.reg == vu->lower.src[1].reg;
             entry.hazard2 = vu->upper.dst.reg == vu->lower.dst.reg;
             entry.hazard3 = vu->lower.dst.reg == VU_REG_Q;
+
+            entry.lw_reg = (entry.lower.dst.reg && entry.lower.dst.reg < 32) ? entry.lower.dst.reg : 0;
+            entry.lw_mask = entry.lw_reg ? vu_vf_write_mask(entry.lower) : 0;
+            entry.is_mtir = (entry.lower.func == vu_i_mtir) && (entry.lower.src[0].reg != 0);
+            entry.mtir_reg = entry.lower.src[0].reg;
+            entry.mtir_comp = entry.lower.src[0].field;
+            entry.is_waitq = entry.lower.func == vu_i_waitq;
+            entry.lower_is_nop = entry.lower.func == vu_i_nop;
         }
+
+        entry.uw_reg = (entry.upper.dst.reg && entry.upper.dst.reg < 32) ? entry.upper.dst.reg : 0;
+        entry.uw_mask = entry.uw_reg ? vu_vf_write_mask(entry.upper) : 0;
 
         // If this entry is a branch or has the E bit set, we end the block here
         if (entry.branch || entry.e_bit) {
@@ -3727,35 +2567,31 @@ static inline int vu_vf_write_mask(const struct vu_instruction& ins) {
 }
 
 static inline int vu_interlock_stall(struct vu_state* vu, const vu_block_entry& entry) {
-    if (entry.i_bit || entry.lower.func != vu_i_mtir)
+    if (!entry.is_mtir)
         return 0;
 
-    int reg = entry.lower.src[0].reg;
-    int comp = entry.lower.src[0].field;
+    uint64_t ready = vu->vf_ready[entry.mtir_reg][entry.mtir_comp];
 
-    if (!reg || vu->vf_ready[reg][comp] <= vu->vu_cycle)
+    if (ready <= vu->vu_cycle) {
         return 0;
+    }
 
-    return (int)(vu->vf_ready[reg][comp] - vu->vu_cycle);
+    return (int)(ready - vu->vu_cycle);
 }
 
 static inline void vu_record_vf_writes(struct vu_state* vu, const vu_block_entry& entry) {
-    if (entry.upper.dst.reg && entry.upper.dst.reg < 32) {
-        int mask = vu_vf_write_mask(entry.upper);
-
+    if (entry.uw_reg) {
         for (int c = 0; c < 4; c++) {
-            if (mask & (1 << c)) {
-                vu->vf_ready[entry.upper.dst.reg][c] = vu->vu_cycle + VU_VF_LATENCY;
+            if (entry.uw_mask & (1 << c)) {
+                vu->vf_ready[entry.uw_reg][c] = vu->vu_cycle + VU_VF_LATENCY;
             }
         }
     }
 
-    if (!entry.i_bit && entry.lower.dst.reg && entry.lower.dst.reg < 32) {
-        int mask = vu_vf_write_mask(entry.lower);
-
-        for (int c = 0; c < 4; c++) {
-            if (mask & (1 << c)) {
-                vu->vf_ready[entry.lower.dst.reg][c] = vu->vu_cycle + VU_VF_LATENCY;
+    if (entry.lw_reg) {
+        for (int c = 0; c < 4; c++){
+            if (entry.lw_mask & (1 << c)) {
+                vu->vf_ready[entry.lw_reg][c] = vu->vu_cycle + VU_VF_LATENCY;
             }
         }
     }
@@ -3784,12 +2620,11 @@ void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
     } else {
         if (entry.hazard3 && vu->q_delay) vu->q_delay = 0;
 
-        bool waitq = entry.lower.func == vu_i_waitq;
-
         if (!entry.upper.dst.reg) {
             entry.upper.func(vu, &entry.upper);
-            entry.lower.func(vu, &entry.lower);
-        } else if (entry.hazard0 || entry.hazard1 || waitq) {
+
+            if (!entry.lower_is_nop) entry.lower.func(vu, &entry.lower);
+        } else if (entry.hazard0 || entry.hazard1 || entry.is_waitq) {
             // Upper instruction writes to a register that the lower
             // instruction reads from. In this case the lower instruction
             // gets the previous value of the register, executing the lower
@@ -3815,7 +2650,8 @@ void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
             vu->vf[entry.upper.dst.reg] = tmp;
         } else {
             entry.upper.func(vu, &entry.upper);
-            entry.lower.func(vu, &entry.lower);
+
+            if (!entry.lower_is_nop) entry.lower.func(vu, &entry.lower);
         }
     }
 

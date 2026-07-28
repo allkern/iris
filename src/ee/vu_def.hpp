@@ -16,6 +16,13 @@ struct vu_block_entry {
     int hazard2;
     int hazard3;
     int branch;
+
+    uint8_t uw_reg, uw_mask;
+    uint8_t lw_reg, lw_mask;
+    uint8_t is_mtir;
+    uint8_t mtir_reg, mtir_comp;
+    uint8_t is_waitq;
+    uint8_t lower_is_nop;
 };
 
 struct vu_block {
