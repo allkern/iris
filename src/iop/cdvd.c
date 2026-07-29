@@ -10,6 +10,8 @@
 
 #define printf(fmt,...)(0)
 
+static void cdvd_nvram_writeback(struct ps2_cdvd* cdvd);
+
 struct nvram_layout g_spc970_layout = {
     .bios_version = 0x00000000,
     .config0_offset = 0x00000280,
@@ -254,30 +256,46 @@ static inline void cdvd_s_read_nvram(struct ps2_cdvd* cdvd) {
 
     cdvd->s_fifo[0] = cdvd->nvram[((addr << 1) + 0) & 0x3ff];
     cdvd->s_fifo[1] = cdvd->nvram[((addr << 1) + 1) & 0x3ff];
+
+    // fprintf(stderr, "cdvd: read_nvram word=%04x (byte@%04x) -> %02x %02x\n",
+    //     addr, (addr << 1) & 0x3ff, cdvd->s_fifo[0], cdvd->s_fifo[1]);
 }
 static inline void cdvd_s_write_nvram(struct ps2_cdvd* cdvd) {
-    fprintf(stderr, "cdvd: write_nvram\n");
+    uint16_t addr = *(uint16_t*)&cdvd->s_params[0];
 
-    exit(1);
+    cdvd_init_s_fifo(cdvd, 1);
+
+    cdvd->nvram[((addr << 1) + 0) & 0x3ff] = cdvd->s_params[2];
+    cdvd->nvram[((addr << 1) + 1) & 0x3ff] = cdvd->s_params[3];
+
+    // fprintf(stderr, "cdvd: write_nvram word=%04x (byte@%04x) <- %02x %02x\n",
+    //     addr, (addr << 1) & 0x3ff, cdvd->s_params[2], cdvd->s_params[3]);
+
+    cdvd_nvram_writeback(cdvd);
+
+    cdvd->s_fifo[0] = 0;
 }
 static inline void cdvd_s_read_ilink_id(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 9);
 
-    // fprintf(stdout, "cdvd: read_ilink_id\n");
-
-    uint8_t id[9] = {
-        0x00, 0xac, 0xff, 0xff,
-        0xff, 0xff, 0xb9, 0x86,
-        0x00
+    static const uint8_t dummy[8] = {
+        0xac, 0xff, 0xff, 0xff, 0xff, 0xb9, 0x86, 0x00
     };
 
-    for (int i = 0; i < 9; i++) {
-        cdvd->s_fifo[i] = id[i];
-    }
+    cdvd->s_fifo[0] = 0;
 
-    // int offset = cdvd->layout.ilink_id_offset;
+    const uint8_t* id = &cdvd->nvram[cdvd->layout.ilink_id_offset];
 
-    // memcpy(&cdvd->s_fifo[1], &cdvd->nvram[offset], 8);
+    int have = 0;
+
+    for (int i = 0; i < 8; i++)
+        have |= id[i];
+
+    memcpy(&cdvd->s_fifo[1], have ? id : dummy, 8);
+
+    // fprintf(stderr, "cdvd: read_ilink_id -> %02x%02x%02x%02x%02x%02x%02x%02x (nvram=%d)\n",
+    //     cdvd->s_fifo[1], cdvd->s_fifo[2], cdvd->s_fifo[3], cdvd->s_fifo[4],
+    //     cdvd->s_fifo[5], cdvd->s_fifo[6], cdvd->s_fifo[7], cdvd->s_fifo[8], have);
 }
 static inline void cdvd_s_ctrl_audio_digital_out(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
@@ -294,7 +312,15 @@ static inline void cdvd_s_read_model(struct ps2_cdvd* cdvd) {
 
     int offset = cdvd->layout.modelnum_offset + cdvd->s_params[0];
 
+    cdvd->s_fifo[0] = 0; // status: success (was left uninitialized)
     memcpy(&cdvd->s_fifo[1], &cdvd->nvram[offset], 8);
+
+    // fprintf(stderr, "cdvd: read_model[%02x] @%04x -> %02x %02x %02x %02x %02x %02x %02x %02x '%c%c%c%c%c%c%c%c'\n",
+    //     cdvd->s_params[0], offset,
+    //     cdvd->s_fifo[1], cdvd->s_fifo[2], cdvd->s_fifo[3], cdvd->s_fifo[4],
+    //     cdvd->s_fifo[5], cdvd->s_fifo[6], cdvd->s_fifo[7], cdvd->s_fifo[8],
+    //     cdvd->s_fifo[1], cdvd->s_fifo[2], cdvd->s_fifo[3], cdvd->s_fifo[4],
+    //     cdvd->s_fifo[5], cdvd->s_fifo[6], cdvd->s_fifo[7], cdvd->s_fifo[8]);
 }
 static inline void cdvd_s_certify_boot(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
@@ -345,12 +371,44 @@ static inline void cdvd_s_read_config(struct ps2_cdvd* cdvd) {
         default: offset = cdvd->layout.config1_offset; break;
     }
 
-    offset += (cdvd->config_block_index++) * 16;
+    int block = cdvd->config_block_index++;
+    offset += block * 16;
 
     memcpy(cdvd->s_fifo, &cdvd->nvram[offset], 16);
+
+    // fprintf(stderr, "cdvd: read_config cfg%d blk%d @%04x:", cdvd->config_offset, block, offset);
+
+    // for (int i = 0; i < 16; i++)
+    //     fprintf(stderr, " %02x", cdvd->s_fifo[i]);
+
+    // fprintf(stderr, "\n");
 }
 static inline void cdvd_s_write_config(struct ps2_cdvd* cdvd) {
     cdvd_init_s_fifo(cdvd, 1);
+
+    int offset = 0;
+
+    switch (cdvd->config_offset) {
+        case 0: offset = cdvd->layout.config0_offset; break;
+        case 1: offset = cdvd->layout.config1_offset; break;
+        case 2: offset = cdvd->layout.config2_offset; break;
+        default: offset = cdvd->layout.config1_offset; break;
+    }
+
+    int block = cdvd->config_block_index++;
+
+    offset += block * 16;
+
+    memcpy(&cdvd->nvram[offset], cdvd->s_params, 16);
+
+    // fprintf(stderr, "cdvd: write_config cfg%d blk%d @%04x:", cdvd->config_offset, block, offset);
+
+    // for (int i = 0; i < 16; i++)
+    //     fprintf(stderr, " %02x", cdvd->s_params[i]);
+
+    // fprintf(stderr, "\n");
+
+    cdvd_nvram_writeback(cdvd);
 
     cdvd->s_fifo[0] = 0;
 }
@@ -658,20 +716,19 @@ static inline void cdvd_s_get_region_params(struct ps2_cdvd* cdvd) {
 
     int offset = cdvd->layout.regparams_offset;
 
-    cdvd->s_fifo[1] = 1 << 0; // MechaCon encryption zone
+    cdvd->s_fifo[0] = 0; // status: success
+    cdvd->s_fifo[1] = 1 << 3;
     cdvd->s_fifo[2] = 0;
 
     memcpy(&cdvd->s_fifo[3], &cdvd->nvram[offset], 8);
 
-    fprintf(stdout, "cdvd: Region: \'%c\' Language set: %c%c%c%c\n",
-        cdvd->s_fifo[3],
-        cdvd->s_fifo[4],
-        cdvd->s_fifo[5],
-        cdvd->s_fifo[6],
-        cdvd->s_fifo[7]
+    fprintf(stderr, "cdvd: region params @%04x zone=%02x bytes=%02x %02x %02x %02x %02x %02x %02x %02x\n",
+        offset, cdvd->s_fifo[1],
+        cdvd->s_fifo[3], cdvd->s_fifo[4], cdvd->s_fifo[5], cdvd->s_fifo[6],
+        cdvd->s_fifo[7], cdvd->s_fifo[8], cdvd->s_fifo[9], cdvd->s_fifo[10]
     );
 
-    //This is basically what PCSX2 returns on a blank NVM/MEC file
+    // This is basically what PCSX2 returns on a blank NVM/MEC file
     // cdvd->s_fifo[0] = 0;
     // cdvd->s_fifo[1] = 1 << 0x3; //MEC encryption zone
     // cdvd->s_fifo[2] = 0;
@@ -800,8 +857,10 @@ void cdvd_handle_s_command(struct ps2_cdvd* cdvd, uint8_t cmd) {
 }
 
 static inline void cdvd_handle_s_param(struct ps2_cdvd* cdvd, uint8_t param) {
-    if (cdvd->s_param_index == 16) {
+    if (cdvd->s_param_index >= 16) {
         printf("cdvd: S parameter FIFO overflow\n");
+
+        return;
     }
 
     cdvd->s_params[cdvd->s_param_index++] = param;
@@ -1585,5 +1644,28 @@ int ps2_cdvd_load_nvram(struct ps2_cdvd* cdvd, const char* path) {
     fread(cdvd->nvram, 1, 1024, file);
     fclose(file);
 
+    strncpy(cdvd->nvram_path, path, sizeof(cdvd->nvram_path) - 1);
+
+    cdvd->nvram_path[sizeof(cdvd->nvram_path) - 1] = 0;
+
     return 1;
+}
+
+static void cdvd_nvram_writeback(struct ps2_cdvd* cdvd) {
+    if (!cdvd->nvram_path[0])
+        return;
+
+    FILE* file = fopen(cdvd->nvram_path, "r+b");
+
+    if (!file)
+        file = fopen(cdvd->nvram_path, "wb");
+
+    if (!file) {
+        fprintf(stderr, "cdvd: NVRAM writeback failed to open '%s'\n", cdvd->nvram_path);
+
+        return;
+    }
+
+    fwrite(cdvd->nvram, 1, 1024, file);
+    fclose(file);
 }

@@ -141,6 +141,7 @@ struct ps2_cdvd {
     uint8_t read_speed;
 
     uint8_t nvram[1024];
+    char nvram_path[1024];
 
     struct ps2_iop_dma* dma;
     struct ps2_iop_intc* intc;
