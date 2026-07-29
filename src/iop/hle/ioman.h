@@ -4,23 +4,6 @@
 #include "../iop.h"
 #include "../iop_export.h"
 
-#define IOMAN_DEV_UNKNOWN 0
-
-// BIOS ROM
-// DVD ROM
-// CDVD drive
-// Host machine
-// Memory card slot 1
-// Memory card slot 2
-// USB drive
-#define IOMAN_DEV_ROM0      1
-#define IOMAN_DEV_ROM1      2
-#define IOMAN_DEV_CDROM0    3
-#define IOMAN_DEV_HOST      4
-#define IOMAN_DEV_MC0       5
-#define IOMAN_DEV_MC1       6
-#define IOMAN_DEV_MASS      7
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -53,6 +36,11 @@ int ioman_devctl(struct iop_state* iop, int iomanx);
 int ioman_symlink(struct iop_state* iop, int iomanx);
 int ioman_readlink(struct iop_state* iop, int iomanx);
 int ioman_ioctl2(struct iop_state* iop, int iomanx);
+
+void ioman_hle_reset(void);
+void ioman_hle_map_device(const char* device, const char* host_path);
+void ioman_hle_unmap_device(const char* device);
+void ioman_hle_clear_devices(void);
 
 #ifdef __cplusplus
 }

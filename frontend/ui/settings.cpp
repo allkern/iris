@@ -164,6 +164,7 @@ const char* settings_buttons[] = {
     " " ICON_MS_STADIA_CONTROLLER "  Input",
     " " ICON_MS_SD_CARD "  Memory cards",
     " " ICON_MS_USB "  USB",
+    " " ICON_MS_HARD_DRIVE "  Devices",
     " " ICON_MS_MORE_HORIZ "  Misc.",
     nullptr
 };
@@ -2012,6 +2013,148 @@ void show_shader_settings(iris::instance* iris) {
     }
 }
 
+void show_device_settings(iris::instance* iris) {
+    using namespace ImGui;
+
+    bool changed = false;
+
+    SeparatorText("host");
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+
+    if (Checkbox("Use ELF directory as host", &iris->host_from_elf)) {
+        changed = true;
+    }
+
+    PopStyleVar();
+
+    if (IsItemHovered()) {
+        SetTooltip("Point host: at the folder of the loaded ELF, so relative file accesses resolve next to it");
+    }
+
+    BeginDisabled(iris->host_from_elf);
+
+    const char* host_hint = "Working directory";
+
+    if (iris->host_from_elf) {
+        if (iris->host_elf_dir.size()) {
+            host_hint = iris->host_elf_dir.c_str();
+        } else {
+            host_hint = "ELF folder";
+        }
+    }
+
+    SetNextItemWidth(300);
+
+    if (InputTextWithHint("##host-path", host_hint, &iris->host_path))
+        changed = true;
+
+    SameLine();
+
+    if (Button(ICON_MS_FOLDER "##host-pick")) {
+        audio::mute(iris);
+
+        auto f = pfd::select_folder("Select host folder", "", pfd::opt::none);
+
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        std::string result = f.result();
+
+        if (result.size()) {
+            iris->host_path = result;
+
+            changed = true;
+        }
+    }
+
+    EndDisabled();
+
+    Spacing();
+
+    SeparatorText("Additional devices");
+
+    int remove_index = -1;
+
+    if (BeginTable("##device-maps", 3, ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_BordersInnerH)) {
+        TableSetupColumn("Device", ImGuiTableColumnFlags_WidthFixed, 110.0f);
+        TableSetupColumn("Host folder", ImGuiTableColumnFlags_WidthStretch);
+        TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed);
+        TableHeadersRow();
+
+        for (int i = 0; i < (int)iris->device_maps.size(); i++) {
+            PushID(i);
+
+            TableNextRow();
+
+            TableSetColumnIndex(0);
+            SetNextItemWidth(-1);
+            if (InputTextWithHint("##device", "mass0", &iris->device_maps[i].first))
+                changed = true;
+
+            TableSetColumnIndex(1);
+            SetNextItemWidth(-1);
+
+            const char* path_hint;
+
+#ifdef _WIN32
+            path_hint = "C:/foo/usb";
+#else
+            path_hint = "/home/user/foo/usb";
+#endif
+            if (InputTextWithHint("##host", path_hint, &iris->device_maps[i].second))
+                changed = true;
+
+            TableSetColumnIndex(2);
+
+            if (Button(ICON_MS_FOLDER "##pick")) {
+                audio::mute(iris);
+
+                auto f = pfd::select_folder("Select host folder", "", pfd::opt::none);
+
+                while (!f.ready());
+
+                audio::unmute(iris);
+
+                std::string result = f.result();
+
+                if (result.size()) {
+                    iris->device_maps[i].second = result;
+
+                    changed = true;
+                }
+            }
+
+            SameLine();
+
+            if (Button(ICON_MS_DELETE "##del"))
+                remove_index = i;
+
+            PopID();
+        }
+
+        EndTable();
+    }
+
+    if (remove_index >= 0) {
+        iris->device_maps.erase(iris->device_maps.begin() + remove_index);
+
+        changed = true;
+    }
+
+    Spacing();
+
+    if (Button(ICON_MS_ADD " Add mapping")) {
+        iris->device_maps.emplace_back("", "");
+
+        changed = true;
+    }
+
+    if (changed)
+        settings::apply_device_maps(iris);
+}
+
 void show_settings(iris::instance* iris) {
     using namespace ImGui;
 
@@ -2056,7 +2199,8 @@ void show_settings(iris::instance* iris) {
                 case 4: show_input_settings(iris); break;
                 case 5: show_memory_card_settings(iris); break;
                 case 6: show_usb_settings(iris); break;
-                case 7: show_misc_settings(iris); break;
+                case 7: show_device_settings(iris); break;
+                case 8: show_misc_settings(iris); break;
             }
         } EndChild();
 

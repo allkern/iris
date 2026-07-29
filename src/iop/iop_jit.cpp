@@ -295,6 +295,8 @@ void iop_cycle(struct iop_state* iop) {
 }
 
 void iop_reset(struct iop_state* iop) {
+    ioman_hle_reset();
+
     for (iop_cache_page& page : iop->block_cache) {
         page.blocks = nullptr;
         page.valid = false;

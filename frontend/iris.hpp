@@ -482,6 +482,12 @@ struct instance {
     std::string hdd_path = "";
     bool auto_paths = true;
 
+    std::string host_path = "";
+    bool host_from_elf = false;
+    std::string host_elf_dir = "";
+
+    std::vector <std::pair <std::string, std::string>> device_maps;
+
     uint8_t mac_address[6] = { 0 };
 
     slirp::config slirp_config;
@@ -690,6 +696,7 @@ namespace settings {
     bool init(iris::instance* iris, int argc, const char* argv[]);
     bool check_for_quick_exit(int argc, const char* argv[]);
     void close(iris::instance* iris);
+    void apply_device_maps(iris::instance* iris);
 }
 
 namespace shaders {

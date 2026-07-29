@@ -5,6 +5,7 @@
 
 #include "ps2.h"
 #include "rom.h"
+#include "iop/hle/ioman.h"
 
 struct ps2_state* ps2_create(void) {
     return malloc(sizeof(struct ps2_state));
@@ -172,6 +173,18 @@ void ps2_init_tty_handler(struct ps2_state* ps2, int tty, void (*handler)(void*,
             iop_init_sm_putchar(ps2->iop, handler, udata);
             break;
     }
+}
+
+void ps2_iop_map_device(struct ps2_state* ps2, const char* device, const char* host_path) {
+    ioman_hle_map_device(device, host_path);
+}
+
+void ps2_iop_unmap_device(struct ps2_state* ps2, const char* device) {
+    ioman_hle_unmap_device(device);
+}
+
+void ps2_iop_clear_device_maps(struct ps2_state* ps2) {
+    ioman_hle_clear_devices();
 }
 
 void ps2_boot_file(struct ps2_state* ps2, const char* path) {

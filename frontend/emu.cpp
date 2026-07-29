@@ -161,6 +161,11 @@ int open_file_thread(iris::instance* iris, std::string file) {
 
     elf::load_symbols_from_file(iris, file);
 
+    iris->host_elf_dir = std::filesystem::path(file).parent_path().string();
+
+    if (iris->host_from_elf)
+        settings::apply_device_maps(iris);
+
     // Note: We need the trailing whitespaces here because of IOMAN HLE
     // Load executable
     file = "host:  " + file;

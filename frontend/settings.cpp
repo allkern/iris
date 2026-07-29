@@ -123,6 +123,32 @@ bool parse_toml_settings(iris::instance* iris, bool reset) {
     iris->hdd_path = paths["hdd_path"].value_or("");
     iris->auto_paths = paths["auto"].value_or(true);
 
+    auto host = tbl["host"];
+    iris->host_path = host["path"].value_or("");
+    iris->host_from_elf = host["from_elf"].value_or(false);
+
+    iris->device_maps.clear();
+
+    if (auto devices = tbl["devices"].as_table()) {
+        for (auto&& [key, value] : *devices) {
+            std::string device(key.str());
+
+            auto path = value.value<std::string>();
+
+            if (!path)
+                continue;
+
+            if (device == "host") {
+                if (iris->host_path.empty())
+                    iris->host_path = *path;
+
+                continue;
+            }
+
+            iris->device_maps.emplace_back(device, *path);
+        }
+    }
+
     auto window = tbl["window"];
     iris->window_width = window["window_width"].value_or(960);
     iris->window_height = window["window_height"].value_or(720);
@@ -464,6 +490,23 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     }
 }
 
+void apply_device_maps(iris::instance* iris) {
+    ps2_iop_clear_device_maps(iris->ps2);
+
+    const std::string& host = iris->host_from_elf ? iris->host_elf_dir : iris->host_path;
+
+    ps2_iop_map_device(iris->ps2, "host", host.c_str());
+
+    for (const auto& p : iris->device_maps) {
+        const std::string& device = p.first;
+        const std::string& path = p.second;
+
+        if (device.size() && path.size() && device != "host") {
+            ps2_iop_map_device(iris->ps2, device.c_str(), path.c_str());
+        }
+    }
+}
+
 bool init(iris::instance* iris, int argc, const char* argv[]) {
     parse_toml_settings(iris, false);
 
@@ -479,6 +522,8 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 
     // Apply settings loaded from file/CLI
     ps2_set_timescale(iris->ps2, iris->timescale);
+
+    apply_device_maps(iris);
 
     ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
 
@@ -677,6 +722,11 @@ void close(iris::instance* iris) {
             { "hdd_path", iris->hdd_path },
             { "auto", iris->auto_paths }
         } },
+        { "host", toml::table {
+            { "path", iris->host_path },
+            { "from_elf", iris->host_from_elf }
+        } },
+        { "devices", toml::table {} },
         { "recents", toml::table {
             { "array", toml::array() }
         } },
@@ -685,6 +735,17 @@ void close(iris::instance* iris) {
             { "array", toml::array() }
         } },
     };
+
+    toml::table* devices = tbl["devices"].as_table();
+
+    for (const auto& p : iris->device_maps) {
+        const std::string& dev = p.first;
+        const std::string& host = p.second;
+
+        if (dev.size()) {
+            devices->insert_or_assign(dev, host);
+        }
+    }
 
     toml::array* recents = tbl["recents"]["array"].as_array();
 
