@@ -483,6 +483,7 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
 
     ps2_iop_dma_set_dev9_mode(ps2->iop_dma, IOP_DMA_DEV9_ATA);
     ps2_speed_set_dvrp_enabled(ps2->speed, 0);
+    iop_bus_set_usb_disabled(ps2->iop_bus, 0);
 
     // Destroy optional hardware
     if (ps2->s14x_nand) { s14x_nand_destroy(ps2->s14x_nand); ps2->s14x_nand = NULL; }
@@ -576,6 +577,10 @@ void ps2_set_system(struct ps2_state* ps2, int system) {
             iop_bus_init_s14x_syscon(ps2->iop_bus, ps2->s14x_syscon);
             iop_bus_init_s14x_sram(ps2->iop_bus, ps2->s14x_sram);
             iop_bus_init_s14x_link(ps2->iop_bus, ps2->s14x_link);
+
+            // Note: Pac-Man Arcade Party (System 147) drops input if USB is enabled
+            //       for whatever reason.
+            iop_bus_set_usb_disabled(ps2->iop_bus, 1);
 
             s14x_link_register_node(ps2->s14x_link, 2, s14x_ioboard_handle_packet, ps2->s14x_ioboard);
             s14x_link_register_node(ps2->s14x_link, 3, s14x_aiboard_handle_packet, ps2->s14x_aiboard);

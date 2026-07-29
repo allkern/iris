@@ -63,6 +63,8 @@ struct iop_bus {
     struct s2x6_acata* s2x6_acata;
     struct s2x6_acjv* s2x6_acjv;
 
+    int disable_usb;
+
     void* fastmem_r_table[0x10000];
     void* fastmem_w_table[0x10000];
 
@@ -93,6 +95,8 @@ void iop_bus_init_s14x_sram(struct iop_bus* bus, struct s14x_sram* sram);
 void iop_bus_init_s14x_link(struct iop_bus* bus, struct s14x_link* link);
 void iop_bus_init_s2x6_acata(struct iop_bus* bus, struct s2x6_acata* acata);
 void iop_bus_init_s2x6_acjv(struct iop_bus* bus, struct s2x6_acjv* acjv);
+void iop_bus_set_usb_disabled(struct iop_bus* bus, int disabled);
+int iop_bus_is_usb_disabled(struct iop_bus* bus);
 
 void iop_bus_init_fastmem(struct iop_bus* bus, int ram_size);
 

@@ -18,6 +18,8 @@ void iop_bus_init(struct iop_bus* bus, const char* bios_path) {
         bus->fastmem_r_table[i] = NULL;
         bus->fastmem_w_table[i] = NULL;
     }
+
+    bus->disable_usb = 0;
 }
 
 #define RAM_MAX_SIZE 0x1000000
@@ -132,6 +134,14 @@ void iop_bus_init_s2x6_acjv(struct iop_bus* bus, struct s2x6_acjv* acjv) {
     bus->s2x6_acjv = acjv;
 }
 
+void iop_bus_set_usb_disabled(struct iop_bus* bus, int disabled) {
+    bus->disable_usb = disabled;
+}
+
+int iop_bus_is_usb_disabled(struct iop_bus* bus) {
+    return bus->disable_usb;
+}
+
 void iop_bus_destroy(struct iop_bus* bus) {
     free(bus);
 }
@@ -194,7 +204,7 @@ uint32_t iop_bus_read8(void* udata, uint32_t addr) {
         case 0x1f803204: return 0x7c;
     }
 
-    printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
+    // printf("iop_bus: Unhandled 8-bit read from physical address 0x%08x\n", addr);
 
     return 0;
 }
@@ -274,7 +284,12 @@ uint32_t iop_bus_read32(void* udata, uint32_t addr) {
     MAP_REG_READ(32, 0x1F801100, 0x1F80112F, iop_timers, timers);
     MAP_REG_READ(32, 0x1F801480, 0x1F8014AF, iop_timers, timers);
     MAP_REG_READ(32, 0x1F808200, 0x1F808280, sio2, sio2);
-    MAP_REG_READ(32, 0x1F801600, 0x1F8016FF, usb, usb);
+
+    // USB is not present on System 147/148?
+    if (!bus->disable_usb) {
+        MAP_REG_READ(32, 0x1F801600, 0x1F8016FF, usb, usb);
+    }
+
     MAP_REG_READ(32, 0x1F808400, 0x1F80854F, fw, fw);
     MAP_MEM_READ(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
@@ -398,7 +413,12 @@ void iop_bus_write32(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE(32, 0x1F801100, 0x1F80112F, iop_timers, timers);
     MAP_REG_WRITE(32, 0x1F801480, 0x1F8014AF, iop_timers, timers);
     MAP_REG_WRITE(32, 0x1F808200, 0x1F808280, sio2, sio2);
-    MAP_REG_WRITE(32, 0x1F801600, 0x1F8016FF, usb, usb);
+
+    // USB is not present on System 147/148?
+    if (!bus->disable_usb) {
+        MAP_REG_WRITE(32, 0x1F801600, 0x1F8016FF, usb, usb);
+    }
+
     MAP_REG_WRITE(32, 0x1F808400, 0x1F80854F, fw, fw);
     MAP_REG_WRITE(32, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_WRITE(32, 0x10000000, 0x1000FFFF, speed, speed);
