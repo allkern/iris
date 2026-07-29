@@ -163,6 +163,11 @@ if (WIN32)
     target_compile_definitions(granite-volk PUBLIC VK_USE_PLATFORM_WIN32_KHR)
 endif()
 
+if (APPLE)
+    # Work around TIMER_ABSTIME absense on macOS
+    target_compile_definitions(granite-util PRIVATE TIMER_ABSTIME=1)
+endif()
+
 if (LTO_SUPPORTED)
     message(STATUS "IPO/LTO enabled")
     set_property(TARGET iris PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
