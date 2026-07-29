@@ -556,8 +556,6 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
 }
 
 SDL_AppResult update(iris::instance* iris) {
-    auto start = std::chrono::high_resolution_clock::now();
-
     if (iris->double_click_counter) {
         iris->double_click_counter--;
     }
@@ -637,20 +635,27 @@ SDL_AppResult update(iris::instance* iris) {
     switch (iris->present_mode) {
         case IRIS_PRESENT_MODE_30FPS:
         case IRIS_PRESENT_MODE_60FPS: {
+            using namespace std::chrono;
+
             float framerate = iris->present_mode == IRIS_PRESENT_MODE_30FPS ? 30.0f : 60.0f;
 
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+            auto target = nanoseconds((int64_t)(1000000000.0 / framerate));
+            auto now = high_resolution_clock::now();
 
-            auto frame_us = (int64_t)duration.count();
-            auto target_us = (int64_t)((1.0f / framerate) * 1000000);
+            if (iris->frame_deadline.time_since_epoch().count() == 0 || iris->frame_deadline < now - 2 * target)
+                iris->frame_deadline = now;
 
-            if (frame_us < target_us) {
-                auto sleep_start = std::chrono::high_resolution_clock::now();
-                auto sleep_time = std::chrono::microseconds(target_us - frame_us);
+            iris->frame_deadline += target;
 
-                while (std::chrono::high_resolution_clock::now() - sleep_start < sleep_time);
-            }
+            constexpr int64_t SPIN_MARGIN_NS = 1000000; // 1 ms
+
+            int64_t wait_ns = duration_cast<nanoseconds>(iris->frame_deadline - now).count();
+
+            if (wait_ns > SPIN_MARGIN_NS)
+                SDL_DelayNS((Uint64)(wait_ns - SPIN_MARGIN_NS));
+
+            while (high_resolution_clock::now() < iris->frame_deadline)
+                SDL_CPUPauseInstruction();
         } break;
     }
 
@@ -664,15 +669,16 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
         ImGui_ImplSDL3_ProcessEvent(event);
     }
 
-    if ((event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP) &&
-        iris->ps2 && iris->ps2->usb &&
-        !ImGui::GetIO().WantCaptureKeyboard) {
+    const bool window_focused = SDL_GetWindowFlags(iris->window) & SDL_WINDOW_INPUT_FOCUS;
+    const bool key_event = event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP;
+
+    if (key_event && iris->ps2 && iris->ps2->usb && window_focused && !ImGui::GetIO().WantCaptureKeyboard) {
         if (event->key.scancode <= 0xE7) {
             ps2_usb_kbd_key(iris->ps2->usb, (uint8_t)event->key.scancode, event->type == SDL_EVENT_KEY_DOWN);
         }
     }
 
-    if (iris->ps2 && iris->ps2->usb && !ImGui::GetIO().WantCaptureMouse) {
+    if (iris->ps2 && iris->ps2->usb && window_focused && !ImGui::GetIO().WantCaptureMouse) {
         switch (event->type) {
             case SDL_EVENT_MOUSE_MOTION: {
                 ps2_usb_mouse_move(iris->ps2->usb, (int)event->motion.xrel, (int)event->motion.yrel, 0);
@@ -692,8 +698,9 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
                     case SDL_BUTTON_MIDDLE: button = 2; break;
                 }
 
-                if (button >= 0)
+                if (button >= 0) {
                     ps2_usb_mouse_button(iris->ps2->usb, button, event->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+                }
             } break;
         }
     }
@@ -805,8 +812,10 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
                 iris->last_input_event_value = 1.0f;
             }
 
-            if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);
-            if (iris->input_devices[1]) iris->input_devices[1]->handle_event(iris, event);
+            if (window_focused) {
+                if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);
+                if (iris->input_devices[1]) iris->input_devices[1]->handle_event(iris, event);
+            }
         } break;
 
         case SDL_EVENT_KEY_DOWN: {

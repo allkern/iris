@@ -542,8 +542,10 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
     iris->last_input_event_value = 1.0f;
     iris->last_input_event = sdl_event_to_input_event(event);
 
-    if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);
-    if (iris->input_devices[1]) iris->input_devices[1]->handle_event(iris, event);
+    if (SDL_GetWindowFlags(iris->window) & SDL_WINDOW_INPUT_FOCUS) {
+        if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);
+        if (iris->input_devices[1]) iris->input_devices[1]->handle_event(iris, event);
+    }
 }
 
 void handle_keyup_event(iris::instance* iris, SDL_Event* event) {

@@ -616,6 +616,8 @@ struct instance {
     bool limit_fps = true;
     float fps_cap = 60.0f;
 
+    std::chrono::high_resolution_clock::time_point frame_deadline;
+
     std::string loaded = "";
 
     std::vector <std::string> ee_log = { "" };
