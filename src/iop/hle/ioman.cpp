@@ -232,7 +232,11 @@ static FILE* ioman_open_host(const std::filesystem::path& path, int mode) {
 }
 
 static void ioman_fill_time(unsigned char* dst, std::filesystem::file_time_type ft) {
-    std::time_t tt = std::chrono::system_clock::to_time_t(std::chrono::clock_cast<std::chrono::system_clock>(ft));
+    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+        ft - std::filesystem::file_time_type::clock::now() + std::chrono::system_clock::now()
+    );
+
+    std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
 
     std::tm* tm = std::localtime(&tt);
 
