@@ -7483,7 +7483,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     ujit::Vec out = uc.new_vec128();
 
-                    uc.v_loadu128(out, ujit::mem_ptr(base, off, 0, 0));
+                    uc.v_loadu128(out, ujit::mem_ptr(base, off, 0));
 
                     ee_set_vec(ee, uc, i.rd.r, out);
                 } break;
