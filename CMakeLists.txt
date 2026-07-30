@@ -164,8 +164,16 @@ if (WIN32)
 endif()
 
 if (APPLE)
-    # Work around TIMER_ABSTIME absense on macOS
-    target_compile_definitions(granite-util PRIVATE TIMER_ABSTIME=1)
+    # Parallel-GS relies on clock_nanosleep() and TIMER_ABSTIME, which
+    # seem to be absent on macOS? Include a thin shim that provides these
+    include(CheckSymbolExists)
+
+    check_symbol_exists(clock_nanosleep "time.h" HAVE_CLOCK_NANOSLEEP)
+
+    if (NOT HAVE_CLOCK_NANOSLEEP)
+        target_compile_options(granite-util PRIVATE
+            "SHELL:-include ${CMAKE_CURRENT_SOURCE_DIR}/cmake/macos_clock_nanosleep_shim.h")
+    endif()
 endif()
 
 if (LTO_SUPPORTED)
