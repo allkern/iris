@@ -105,6 +105,32 @@ else()
     set(CURL_USE_MBEDTLS ON)
 endif()
 
+include(CheckCXXSourceCompiles)
+
+check_cxx_source_compiles("
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+int main() { return 0; }
+#else
+#error not x86
+#endif
+" IRIS_TARGET_X86)
+
+check_cxx_source_compiles("
+#if defined(__aarch64__) || defined(_M_ARM64)
+int main() { return 0; }
+#else
+#error not arm64
+#endif
+" IRIS_TARGET_ARM64)
+
+message(STATUS "Target arch: reported '${CMAKE_SYSTEM_PROCESSOR}', "
+               "probed x86=${IRIS_TARGET_X86} arm64=${IRIS_TARGET_ARM64}")
+
+if (IRIS_TARGET_ARM64 AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+    message(STATUS "Correcting CMAKE_SYSTEM_PROCESSOR to ARM64")
+    set(CMAKE_SYSTEM_PROCESSOR "ARM64")
+endif()
+
 add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
 add_subdirectory(deps/fmt EXCLUDE_FROM_ALL)
@@ -167,7 +193,7 @@ elseif (APPLE)
     target_link_libraries(slirp PUBLIC resolv)
 endif()
 
-if (NOT APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64)$")
+if (NOT APPLE AND IRIS_TARGET_X86)
     target_compile_definitions(iris PRIVATE _EE_USE_INTRINSICS)
     target_compile_options(iris PRIVATE -mssse3 -msse4.1)
 endif()
