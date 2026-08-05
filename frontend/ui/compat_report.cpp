@@ -40,13 +40,13 @@ static std::string url_encode(const std::string& str) {
 
 // Serial of the currently loaded disc, normalized to the canonical form used by
 // the game database (e.g. "SLUS_201.23" -> "SLUS-20123"). Empty if no disc.
-static std::string get_disc_serial(iris::instance* iris) {
+static std::string get_disc_serial(instance* iris) {
     if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc)
         return "";
 
     char buf[128];
 
-    if (!disc_get_serial(iris->ps2->cdvd->disc, buf))
+    if (!iop::disc::get_serial(iris->ps2->cdvd->disc, buf))
         return "";
 
     std::string serial = buf;
@@ -57,7 +57,7 @@ static std::string get_disc_serial(iris::instance* iris) {
     return serial;
 }
 
-void show_compat_report(iris::instance* iris) {
+void show_compat_report(instance* iris) {
     using namespace ImGui;
 
     static int rating = 3;

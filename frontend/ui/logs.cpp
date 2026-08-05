@@ -12,7 +12,7 @@ bool ee_follow = true;
 bool iop_follow = true;
 bool sysmem_follow = true;
 
-void show_logs(iris::instance* iris, const std::vector <std::string>& logs, bool follow) {
+void show_logs(instance* iris, const std::vector <std::string>& logs, bool follow) {
     using namespace ImGui;
 
     PushFont(iris->font_code);
@@ -46,7 +46,7 @@ void show_logs(iris::instance* iris, const std::vector <std::string>& logs, bool
     PopFont();
 }
 
-void show_ee_logs(iris::instance* iris) {
+void show_ee_logs(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("EE logs", &iris->show_ee_logs)) {
@@ -71,7 +71,7 @@ void show_ee_logs(iris::instance* iris) {
     } End();
 }
 
-void show_iop_logs(iris::instance* iris) {
+void show_iop_logs(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("IOP logs", &iris->show_iop_logs, ImGuiWindowFlags_MenuBar)) {
@@ -108,7 +108,7 @@ void show_iop_logs(iris::instance* iris) {
     } End();
 }
 
-void show_sysmem_logs(iris::instance* iris) {
+void show_sysmem_logs(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("SYSMEM logs", &iris->show_sysmem_logs, ImGuiWindowFlags_MenuBar)) {

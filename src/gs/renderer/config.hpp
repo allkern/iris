@@ -1,6 +1,8 @@
 #pragma once
 
-struct hardware_config {
+namespace iris::gs::renderer {
+
+struct HardwareConfig {
     int super_sampling = 0;
     bool super_sampled_quads = false;
     bool force_progressive = false;
@@ -19,3 +21,5 @@ struct hardware_config {
     bool line_comb = false;
     bool skip_notch = false;
 };
+
+}

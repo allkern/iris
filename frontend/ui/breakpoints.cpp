@@ -16,7 +16,7 @@ const char* cpu_names[] = {
 static breakpoint* selected = nullptr;
 static breakpoint editable;
 
-void show_breakpoints_table(iris::instance* iris) {
+void show_breakpoints_table(instance* iris) {
     using namespace ImGui;
 
     if (BeginTable("##breakpoints", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable)) {
@@ -97,12 +97,12 @@ void show_breakpoints_table(iris::instance* iris) {
     }
 }
 
-uint32_t parse_address(iris::instance* iris, const char* buf, const char** name) {
+uint32_t parse_address(instance* iris, const char* buf, const char** name) {
     if (!buf || !buf[0])
         return 0;
 
     if (isalpha(buf[0]) || buf[0] == '_') {
-        for (iris::elf_symbol& sym : iris->symbols) {
+        for (elf_symbol& sym : iris->symbols) {
             if (strcmp(sym.name, buf) == 0) {
                 *name = sym.name;
 
@@ -118,7 +118,7 @@ uint32_t parse_address(iris::instance* iris, const char* buf, const char** name)
     return 0;
 }
 
-void show_breakpoint_editor(iris::instance* iris) {
+void show_breakpoint_editor(instance* iris) {
     using namespace ImGui;
 
     if (BeginCombo("CPU", cpu_names[editable.cpu], ImGuiComboFlags_HeightSmall)) {
@@ -167,7 +167,7 @@ void show_breakpoint_editor(iris::instance* iris) {
     }
 }
 
-void show_breakpoints(iris::instance* iris) {
+void show_breakpoints(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("Breakpoints", &iris->show_breakpoints, ImGuiWindowFlags_MenuBar)) {

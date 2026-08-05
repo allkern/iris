@@ -49,3 +49,6 @@
 [submodule "deps/libslirp"]
 	path = deps/libslirp
 	url = https://gitlab.freedesktop.org/slirp/libslirp.git
+[submodule "deps/fmt"]
+	path = deps/fmt
+	url = https://github.com/fmtlib/fmt

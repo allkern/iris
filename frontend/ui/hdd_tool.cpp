@@ -8,7 +8,7 @@
 
 #include "iris.hpp"
 
-#include "shared/ata/isif.h"
+#include "shared/ata/isif.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
@@ -63,7 +63,7 @@ std::string get_file_size_string(int format, uint64_t size) {
     return std::string(buf);
 }
 
-void show_hdd_tool(iris::instance* iris) {
+void show_hdd_tool(instance* iris) {
     using namespace ImGui;
 
     static int image_format = IMAGE_FMT_ISIF;
@@ -130,7 +130,7 @@ void show_hdd_tool(iris::instance* iris) {
                         } else {
                             uint64_t block_count = (MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 512;
 
-                            isif_create_image(f.result().c_str(), block_count, 512, 1, 0, nullptr, 0);
+                            ata::isif::create_image(iris->logger, f.result().c_str(), block_count, 512, 1, 0, nullptr, 0);
                         }
                     }
 

@@ -21,7 +21,7 @@ const float opacity = 0.75f;
 
 float max = 0.0;
 
-void update_overlay(iris::instance* iris) {
+void update_overlay(instance* iris) {
     // if (fps_history.size() == MAX_SAMPLES) {
     //     if (fps_history.front() >= max) {
     //         max = 0.0;
@@ -51,7 +51,7 @@ void update_overlay(iris::instance* iris) {
     }
 }
 
-void show_overlay(iris::instance* iris) {
+void show_overlay(instance* iris) {
     using namespace ImGui;
     using namespace ImPlot;
 
@@ -98,7 +98,7 @@ void show_overlay(iris::instance* iris) {
             EndPlot();
         }
 
-        renderer_stats* stats; // = renderer_get_debug_stats(iris->ctx);
+        gs::renderer::Stats* stats; // = renderer_get_debug_stats(iris->ctx);
 
         PushFont(iris->font_black);
         Text("%d fps", (int)std::roundf(1.0 / ImGui::GetIO().DeltaTime));

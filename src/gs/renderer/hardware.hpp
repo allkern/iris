@@ -16,6 +16,8 @@
 using namespace Vulkan;
 using namespace ParallelGS;
 
+namespace iris::gs::renderer::hardware {
+
 class ExternallyManagedDevice : public DeviceFactory {
     VkDevice m_device = nullptr;
     VkDeviceCreateInfo m_create_info;
@@ -76,26 +78,26 @@ public:
 };
 
 class RendererSignalHandler : public SignalInterface {
-    struct ps2_gs* m_gs;
+    gs::Gs* m_gs;
 
 public:
     virtual ~RendererSignalHandler() override = default;
-    RendererSignalHandler(struct ps2_gs* gs) : m_gs(gs) {}
+    RendererSignalHandler(gs::Gs* gs) : m_gs(gs) {}
 
     virtual bool on_signal(uint64_t payload) override {
-        return ps2_gs_write_signal(m_gs, payload);
+        return gs::write_signal(m_gs, payload);
     }
 
     virtual bool on_finish(uint64_t payload) override {
-        return ps2_gs_write_finish(m_gs, payload);
+        return gs::write_finish(m_gs, payload);
     }
 
     virtual bool on_label(uint64_t payload) override {
-        return ps2_gs_write_label(m_gs, payload);
+        return gs::write_label(m_gs, payload);
     }
 };
 
-struct hardware_state {
+struct state {
     Vulkan::Context granite_ctx;
     Vulkan::Device granite_device;
     Vulkan::ImageHandle current_scanout;
@@ -103,23 +105,23 @@ struct hardware_state {
     ExternallyManagedDevice* device;
     ExternallyManagedInstance* instance;
     RendererSignalHandler* signal_handler;
-    hardware_config config;
+    HardwareConfig config;
     AnalogVideoFilter analog_video_filter;
     CRTFilter crt_filter;
 
-    struct ps2_gs* gs;
-    struct ps2_gif* gif;
+    gs::Gs* gs;
+    gif::Gif* gif;
 };
 
-void* hardware_create();
-bool hardware_init(void* udata, const renderer_create_info& info);
-void hardware_reset(void* udata);
-void hardware_destroy(void* udata);
-void hardware_set_config(void* udata, void* config);
-renderer_image hardware_get_frame(void* udata);
+void* create();
+bool init(void* udata, const CreateInfo& info);
+void reset(void* udata);
+void destroy(void* udata);
+void set_config(void* udata, void* config);
+Image get_frame(void* udata);
 
-extern "C" {
-void hardware_transfer(void* udata, int path, const void* data, size_t size);
-void hardware_readback(void* udata, void* data, size_t size);
-void hardware_read_vram(void* udata, void* dst, size_t size);
+void transfer(void* udata, int path, const void* data, size_t size);
+void readback(void* udata, void* data, size_t size);
+void read_vram(void* udata, void* dst, size_t size);
+
 }

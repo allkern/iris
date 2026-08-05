@@ -1,5 +1,7 @@
 #include "mac_i_pic.hpp"
 
+namespace iris::ipu {
+
 VLC_Entry Macroblock_IPic::table[] =
 {
     {0x1, 0x10001, 1},
@@ -14,5 +16,7 @@ unsigned int Macroblock_IPic::index_table[2] =
 
 Macroblock_IPic::Macroblock_IPic() : VLC_Table(table, SIZE, 2, index_table)
 {
+
+}
 
 }

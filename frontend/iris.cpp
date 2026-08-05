@@ -24,7 +24,7 @@
 
 namespace iris {
 
-void add_recent(iris::instance* iris, std::string file, int type) {
+void add_recent(instance* iris, std::string file, int type) {
     auto it = std::find_if(iris->recents.begin(), iris->recents.end(), [file, type](const recent& a) {
         return a.type == type && a.path == file;
     });
@@ -42,7 +42,7 @@ void add_recent(iris::instance* iris, std::string file, int type) {
         iris->recents.pop_back();
 }
 
-void update_title(iris::instance* iris) {
+void update_title(instance* iris) {
     char buf[512];
 
     std::string base = "";
@@ -58,7 +58,7 @@ void update_title(iris::instance* iris) {
     SDL_SetWindowTitle(iris->window, buf);
 }
 
-void update_time(iris::instance* iris) {
+void update_time(instance* iris) {
     int t = SDL_GetTicks() - iris->ticks;
 
     if (t < 500)
@@ -75,7 +75,7 @@ void update_time(iris::instance* iris) {
     iris->frames = 0;
 }
 
-void sleep_limiter(iris::instance* iris) {
+void sleep_limiter(instance* iris) {
     uint32_t ticks = (1.0f / iris->fps_cap) * 1000.0f;
 
     std::this_thread::sleep_for(std::chrono::milliseconds(ticks / 2));
@@ -87,8 +87,8 @@ void sleep_limiter(iris::instance* iris) {
     // }
 }
 
-static inline void do_cycle(iris::instance* iris) {
-    ps2_cycle(iris->ps2);
+static inline void do_cycle(instance* iris) {
+    ps2::cycle(iris->ps2);
 
     if (iris->step_out) {
         // jr $ra
@@ -97,7 +97,7 @@ static inline void do_cycle(iris::instance* iris) {
             iris->pause = true;
 
             // Consume the delay slot
-            ps2_cycle(iris->ps2);
+            ps2::cycle(iris->ps2);
         }
     }
 
@@ -108,8 +108,8 @@ static inline void do_cycle(iris::instance* iris) {
         }
     }
 
-    for (const iris::breakpoint& b : iris->breakpoints) {
-        if (b.cpu == iris::BKPT_CPU_EE) {
+    for (const breakpoint& b : iris->breakpoints) {
+        if (b.cpu == BKPT_CPU_EE) {
             if (iris->ps2->ee->pc == b.addr) {
                 iris->pause = true;
             }
@@ -121,7 +121,7 @@ static inline void do_cycle(iris::instance* iris) {
     }
 }
 
-void update_window(iris::instance* iris) {
+void update_window(instance* iris) {
     using namespace ImGui;
 
     // Limit FPS to 60 only when paused
@@ -173,7 +173,7 @@ void update_window(iris::instance* iris) {
     ImGui::NewFrame();
 
     bool usb_mouse_owns_pointer =
-        (iris->usb_devices[0] == USB_DEVICE_MOUSE || iris->usb_devices[1] == USB_DEVICE_MOUSE) &&
+        (iris->usb_devices[0] == usb::USB_DEVICE_MOUSE || iris->usb_devices[1] == usb::USB_DEVICE_MOUSE) &&
         SDL_GetMouseFocus() == iris->window && !iris->pause &&
         !GetIO().WantCaptureMouse;
 
@@ -345,6 +345,7 @@ void update_window(iris::instance* iris) {
     if (iris->show_imgui_demo) ShowDemoWindow(&iris->show_imgui_demo);
     if (iris->show_bios_setting_window) show_bios_setting_window(iris);
     if (iris->show_overlay) show_overlay(iris);
+    if (iris->fatal_error) show_fatal_error(iris);
 
     iris->show_gamelist = false;
 
@@ -429,18 +430,18 @@ void update_window(iris::instance* iris) {
     iris->frames++;
 }
 
-iris::instance* create() {
-    return new iris::instance();
+instance* create() {
+    return new instance();
 }
 
-bool init(iris::instance* iris, int argc, const char* argv[]) {
+bool init(instance* iris, int argc, const char* argv[]) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD)) {
         fprintf(stderr, "iris: Failed to init SDL \'%s\'\n", SDL_GetError());
 
         return false;
     }
 
-    if (!iris::net::init()) {
+    if (!net::init()) {
         fprintf(stderr, "iris: Failed to initialize net\n");
 
         return false;
@@ -460,13 +461,13 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         SDL_free(pref);
     }
 
-    if (!iris::emu::init(iris)) {
+    if (!emu::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize emulator state\n");
 
         return false;
     }
 
-    if (!iris::settings::init(iris, argc, argv)) {
+    if (!settings::init(iris, argc, argv)) {
         fprintf(stderr, "iris: Failed to initialize settings\n");
 
         return false;
@@ -485,43 +486,43 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         return false;
     }
 
-    if (!iris::vulkan::init(iris, iris->vulkan_enable_validation_layers)) {
+    if (!vulkan::init(iris, iris->vulkan_enable_validation_layers)) {
         fprintf(stderr, "iris: Failed to initialize Vulkan\n");
 
         return false;
     }
 
-    if (!iris::imgui::init(iris)) {
+    if (!imgui::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize ImGui\n");
 
         return false;
     }
 
-    if (!iris::platform::init(iris)) {
+    if (!platform::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize platform\n");
 
         return false;
     }
 
-    if (!iris::audio::init(iris)) {
+    if (!audio::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize audio\n");
 
         return false;
     }
 
-    if (!iris::render::init(iris)) {
+    if (!render::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize render state\n");
 
         return false;
     }
 
-    if (!iris::input::init(iris)) {
+    if (!input::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize input\n");
 
         return false;
     }
 
-    if (!iris::gamelist::init(iris)) {
+    if (!gamelist::init(iris)) {
         fprintf(stderr, "iris: Failed to initialize gamelist\n");
 
         return false;
@@ -555,62 +556,62 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     return true;
 }
 
-SDL_AppResult update(iris::instance* iris) {
+SDL_AppResult update(instance* iris) {
     if (iris->double_click_counter) {
         iris->double_click_counter--;
     }
 
     if (iris->loading_file_active &&
         iris->load_ready.exchange(false, std::memory_order_acquire)) {
-        iris::emu::finalize_load(iris);
+        emu::finalize_load(iris);
     }
 
     // int iop_count = iris->ps2->iop->total_cycles;
     // int ee_count = iris->ps2->ee->total_cycles;
 
     if (iris->pause) {
-        iris::emu::start_pending_load(iris);
+        emu::start_pending_load(iris);
 
         iris->step_out = false;
         iris->step_over = false;
 
         if (iris->step && !iris->loading_file_active) {
-            ps2_step_ee(iris->ps2);
+            ps2::step_ee(iris->ps2);
 
             iris->step = false;
         }
 
-        iris::update_window(iris);
+        update_window(iris);
 
         return SDL_APP_CONTINUE;
     }
 
     if (iris->ps2 && iris->ps2->speed)
-        iris::slirp::pump(iris->ps2->speed->smap);
+        slirp::pump(iris->ps2->speed->smap);
 
     // Execute until VBlank
-    while (!ps2_gs_is_vblank(iris->ps2->gs)) {
+    while (!gs::is_vblank(iris->ps2->gs)) {
         do_cycle(iris);
 
         if (iris->pause) {
-            iris::update_window(iris);
+            update_window(iris);
 
             return SDL_APP_CONTINUE;
         }
     }
 
     // Record a GS dump frame boundary
-    iris::render::gs_dump_tick(iris);
+    render::gs_dump_tick(iris);
 
     // Draw frame
-    iris::update_window(iris);
+    update_window(iris);
 
     // Execute until vblank is over
-    while (ps2_gs_is_vblank(iris->ps2->gs)) {
+    while (gs::is_vblank(iris->ps2->gs)) {
         do_cycle(iris);
 
         if (iris->pause) {
-            iris::update_window(iris);
+            update_window(iris);
 
             return SDL_APP_CONTINUE;
         }
@@ -662,7 +663,7 @@ SDL_AppResult update(iris::instance* iris) {
     return SDL_APP_CONTINUE;
 }
 
-SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
+SDL_AppResult handle_events(instance* iris, SDL_Event* event) {
     bool skip_events = iris->dim_active && (event->window.windowID == SDL_GetWindowID(iris->window));
 
     if (!skip_events) {
@@ -674,18 +675,18 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
 
     if (key_event && iris->ps2 && iris->ps2->usb && window_focused && !ImGui::GetIO().WantCaptureKeyboard) {
         if (event->key.scancode <= 0xE7) {
-            ps2_usb_kbd_key(iris->ps2->usb, (uint8_t)event->key.scancode, event->type == SDL_EVENT_KEY_DOWN);
+            usb::kbd_key(iris->ps2->usb, (uint8_t)event->key.scancode, event->type == SDL_EVENT_KEY_DOWN);
         }
     }
 
     if (iris->ps2 && iris->ps2->usb && window_focused && !ImGui::GetIO().WantCaptureMouse) {
         switch (event->type) {
             case SDL_EVENT_MOUSE_MOTION: {
-                ps2_usb_mouse_move(iris->ps2->usb, (int)event->motion.xrel, (int)event->motion.yrel, 0);
+                usb::mouse_move(iris->ps2->usb, (int)event->motion.xrel, (int)event->motion.yrel, 0);
             } break;
 
             case SDL_EVENT_MOUSE_WHEEL: {
-                ps2_usb_mouse_move(iris->ps2->usb, 0, 0, (int)event->wheel.y);
+                usb::mouse_move(iris->ps2->usb, 0, 0, (int)event->wheel.y);
             } break;
 
             case SDL_EVENT_MOUSE_BUTTON_DOWN:
@@ -699,7 +700,7 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
                 }
 
                 if (button >= 0) {
-                    ps2_usb_mouse_button(iris->ps2->usb, button, event->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
+                    usb::mouse_button(iris->ps2->usb, button, event->type == SDL_EVENT_MOUSE_BUTTON_DOWN);
                 }
             } break;
         }
@@ -740,7 +741,7 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
             if (iris->ds[0] && ((iris->input_devices[0] == nullptr) || (iris->input_devices[0]->get_type() == 0))) {
                 if (iris->input_devices[0]) delete iris->input_devices[0];
 
-                iris->input_devices[0] = new iris::gamepad_device(event->gdevice.which);
+                iris->input_devices[0] = new gamepad_device(event->gdevice.which);
                 iris->input_devices[0]->set_slot(0);
 
                 if (iris->input_map[0] <= 1) {
@@ -751,7 +752,7 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
             } else if (iris->ds[1] && ((iris->input_devices[1] == nullptr) || (iris->input_devices[1]->get_type() == 0))) {
                 if (iris->input_devices[1]) delete iris->input_devices[1];
 
-                iris->input_devices[1] = new iris::gamepad_device(event->gdevice.which);
+                iris->input_devices[1] = new gamepad_device(event->gdevice.which);
                 iris->input_devices[1]->set_slot(1);
 
                 if (iris->input_map[1] <= 1) {
@@ -771,11 +772,11 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
 
             for (int i = 0; i < 2; i++) {
                 if (iris->input_devices[i] && iris->input_devices[i]->get_type() == 1) {
-                    iris::gamepad_device* gp = static_cast<iris::gamepad_device*>(iris->input_devices[i]);
+                    gamepad_device* gp = static_cast<gamepad_device*>(iris->input_devices[i]);
 
                     if (gp->get_id() == event->gdevice.which) {
                         delete iris->input_devices[i];
-                        iris->input_devices[i] = new iris::keyboard_device();
+                        iris->input_devices[i] = new keyboard_device();
 
                         if (iris->input_map[i] <= 1) {
                             iris->input_map[i] = 0;
@@ -869,7 +870,7 @@ SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
-int get_menubar_height(iris::instance* iris) {
+int get_menubar_height(instance* iris) {
     if (iris->show_status_bar) {
         return iris->menubar_height * 2;
     }
@@ -877,7 +878,7 @@ int get_menubar_height(iris::instance* iris) {
     return iris->menubar_height;
 }
 
-void destroy(iris::instance* iris) {
+void destroy(instance* iris) {
     if (!iris)
         return;
 
@@ -920,15 +921,15 @@ void destroy(iris::instance* iris) {
 
     if (iris->window) SDL_HideWindow(iris->window);
 
-    iris::imgui::cleanup(iris);
-    iris::audio::close(iris);
-    iris::settings::close(iris);
-    iris::render::destroy(iris);
-    iris::vulkan::cleanup(iris);
-    iris::platform::destroy(iris);
-    iris::emu::destroy(iris);
-    iris::gamelist::destroy(iris);
-    iris::net::cleanup();
+    imgui::cleanup(iris);
+    audio::close(iris);
+    settings::close(iris);
+    render::destroy(iris);
+    vulkan::cleanup(iris);
+    platform::destroy(iris);
+    emu::destroy(iris);
+    gamelist::destroy(iris);
+    net::cleanup();
 
     if (iris->window) SDL_DestroyWindow(iris->window);
 

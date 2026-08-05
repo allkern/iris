@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <asmjit/ujit.h>
 
-namespace ee_fpu {
+namespace iris::ee {
+
+namespace fpu {
 
 using asmjit::ujit::UniCompiler;
 using asmjit::ujit::Gp;
@@ -364,6 +366,8 @@ static inline void cvtws(UniCompiler& uc, const Gp& out, const Gp& fs) {
     uc.select(ovf, Imm(0x80000000u), Imm(0x7fffffff), test_nz(sign));
     uc.select(res, trunc, ovf, ucmp_le(sexp, Imm(0x4e800000)));
     uc.mov(out, res);
+}
+
 }
 
 }

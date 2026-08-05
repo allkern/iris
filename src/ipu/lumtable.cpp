@@ -1,5 +1,7 @@
 #include "lumtable.hpp"
 
+namespace iris::ipu {
+
 VLC_Entry LumTable::table[] =
 {
     {0x0000, 1, 2},
@@ -31,5 +33,7 @@ unsigned int LumTable::index_table[9] =
 
 LumTable::LumTable() : VLC_Table(table, SIZE, 9, index_table)
 {
+
+}
 
 }

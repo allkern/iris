@@ -1,6 +1,7 @@
-#ifndef MOTIONCODE_HPP
-#define MOTIONCODE_HPP
+#pragma once
 #include "vlc_table.hpp"
+
+namespace iris::ipu {
 
 class MotionCode : public VLC_Table
 {
@@ -13,4 +14,4 @@ class MotionCode : public VLC_Table
         MotionCode();
 };
 
-#endif // MOTIONCODE_HPP
+}

@@ -2,7 +2,9 @@
 
 #include <asmjit/ujit.h>
 
-namespace ee_mmi {
+namespace iris::ee {
+
+namespace mmi {
 
 using asmjit::ujit::UniCompiler;
 using asmjit::ujit::Vec;
@@ -655,6 +657,8 @@ static inline void ppac5(UniCompiler& uc, const Vec& d, const Vec& t) {
     uc.v_or_u32(a, a, b);
     uc.v_or_u32(c, c, e);
     uc.v_or_u32(d, a, c);
+}
+
 }
 
 }

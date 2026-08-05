@@ -14,12 +14,12 @@ namespace iris {
 
 static inline const char* get_status_string(int status) {
     switch (status) {
-        case THS_RUN: return "RUN";
-        case THS_READY: return "READY";
-        case THS_WAIT: return "WAIT";
-        case THS_SUSPEND: return "SUSPEND";
-        case THS_WAITSUSPEND: return "WAIT/SUSPEND";
-        case THS_DORMANT: return "DORMANT";
+        case ee::THS_RUN: return "RUN";
+        case ee::THS_READY: return "READY";
+        case ee::THS_WAIT: return "WAIT";
+        case ee::THS_SUSPEND: return "SUSPEND";
+        case ee::THS_WAITSUSPEND: return "WAIT/SUSPEND";
+        case ee::THS_DORMANT: return "DORMANT";
     }
 
     return "<unknown>";
@@ -27,19 +27,19 @@ static inline const char* get_status_string(int status) {
 
 static inline const char* get_ee_wait_string(int wait) {
     switch (wait) {
-        case TSW_EE_NONE: return "NONE";
-        case TSW_EE_SLEEP: return "SLEEP";
-        case TSW_EE_SEMA: return "SEMA";
+        case ee::TSW_EE_NONE: return "NONE";
+        case ee::TSW_EE_SLEEP: return "SLEEP";
+        case ee::TSW_EE_SEMA: return "SEMA";
     }
 
     return "<unknown>";
 }
 
-static const char* get_entry_symbol(iris::instance* iris, uint32_t addr) {
+static const char* get_entry_symbol(instance* iris, uint32_t addr) {
     // Look up the address in the symbol table
     if (addr == 0x81fc0) return "EE Idle Thread";
 
-    for (const iris::elf_symbol& sym : iris->symbols) {
+    for (const elf_symbol& sym : iris->symbols) {
         if ((sym.addr >= addr) && (sym.addr < (addr + sym.size))) {
             return sym.name;
         }
@@ -48,10 +48,10 @@ static const char* get_entry_symbol(iris::instance* iris, uint32_t addr) {
     return nullptr;
 }
 
-void show_ee_thread_list(iris::instance* iris) {
+void show_ee_thread_list(instance* iris) {
     using namespace ImGui;
 
-    struct ee_state* ee = iris->ps2->ee;
+    ee::Ee* ee = iris->ps2->ee;
 
     ImGuiTableFlags table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollY;
 
@@ -68,7 +68,7 @@ void show_ee_thread_list(iris::instance* iris) {
         TableHeadersRow();
         PopFont();
 
-        struct ee_thread* thr = (struct ee_thread*)&iris->ps2->ee_ram->buf[ee->thread_list_base & 0x1fffffff];
+        ee::Thread* thr = (ee::Thread*)&iris->ps2->ee_ram->buf[ee->thread_list_base & 0x1fffffff];
 
         int id = 0;
 
@@ -89,7 +89,7 @@ void show_ee_thread_list(iris::instance* iris) {
             }
 
             TableSetColumnIndex(3);
-            if (thr->status == THS_RUN) {
+            if (thr->status == ee::THS_RUN) {
                 Text("0x%08x", ee->pc);
             } else {
                 Text("0x%08x", thr->resume_addr);
@@ -110,7 +110,7 @@ void show_ee_thread_list(iris::instance* iris) {
     }
 }
 
-void show_ee_threads(iris::instance* iris) {
+void show_ee_threads(instance* iris) {
     using namespace ImGui;
     
     if (imgui::BeginEx("EE Threads", &iris->show_ee_threads)) {
@@ -146,10 +146,10 @@ static inline const char* get_iop_wait_string(int wait) {
     return "<unknown>";
 }
 
-void show_iop_thread_list(iris::instance* iris) {
+void show_iop_thread_list(instance* iris) {
     using namespace ImGui;
 
-    struct iop_state* iop = iris->ps2->iop;
+    iop::Iop* iop = iris->ps2->iop;
 
     ImGuiTableFlags table_flags = ImGuiTableFlags_Resizable | ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable | ImGuiTableFlags_Hideable | ImGuiTableFlags_ScrollY;
 
@@ -165,11 +165,11 @@ void show_iop_thread_list(iris::instance* iris) {
         TableHeadersRow();
         PopFont();
 
-        uint32_t addr = iop_read32(iop, iop->thread_list_addr);
+        uint32_t addr = iop::read32(iop, iop->thread_list_addr);
 
         while (addr) {
-			struct iop_thread* thr = (struct iop_thread*)&iris->ps2->iop_ram->buf[addr & 0x1fffffff];
-			struct iop_thread_ctx* ctx = (struct iop_thread_ctx*)&iris->ps2->iop_ram->buf[thr->reg_storage & 0x1fffffff];
+			iop::Thread* thr = (iop::Thread*)&iris->ps2->iop_ram->buf[addr & 0x1fffffff];
+			iop::ThreadCtx* ctx = (iop::ThreadCtx*)&iris->ps2->iop_ram->buf[thr->reg_storage & 0x1fffffff];
 
 			if (thr->tag != 0x7f01) {
 				break;
@@ -186,7 +186,7 @@ void show_iop_thread_list(iris::instance* iris) {
 			Text("0x%08X", thr->entry_point);
 
             TableSetColumnIndex(3);
-            if (thr->status == THS_RUN) {
+            if (thr->status == ee::THS_RUN) {
                 Text("0x%08x", iop->pc);
             } else {
                 Text("0x%08x", ctx->pc);
@@ -205,7 +205,7 @@ void show_iop_thread_list(iris::instance* iris) {
     }
 }
 
-void show_iop_threads(iris::instance* iris) {
+void show_iop_threads(instance* iris) {
     using namespace ImGui;
     
     if (imgui::BeginEx("IOP Threads", &iris->show_iop_threads)) {

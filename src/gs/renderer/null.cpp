@@ -4,24 +4,26 @@
 
 #include "null.hpp"
 
-void* null_create() {
+namespace iris::gs::renderer::null {
+
+void* create() {
     return nullptr;
 }
 
-bool null_init(void* udata, const renderer_create_info& info) {
+bool init(void* udata, const CreateInfo& info) {
     return true;
 }
 
-void null_reset(void* udata) {
+void reset(void* udata) {
     // Nothing
 }
 
-void null_destroy(void* udata) {
+void destroy(void* udata) {
     // Nothing
 }
 
-renderer_image null_get_frame(void* udata) {
-    renderer_image image = {};
+Image get_frame(void* udata) {
+    Image image = {};
 
     image.image = VK_NULL_HANDLE;
     image.view = VK_NULL_HANDLE;
@@ -29,21 +31,20 @@ renderer_image null_get_frame(void* udata) {
     return image;
 }
 
-void null_set_config(void* udata, void* config) {
+void set_config(void* udata, void* config) {
     // Nothing
 }
 
-extern "C" {
 
-void null_transfer(void* udata, int path, const void* data, size_t size) {
+void transfer(void* udata, int path, const void* data, size_t size) {
     // Do nothing
 }
 
-void null_readback(void* udata, void* data, size_t size) {
+void readback(void* udata, void* data, size_t size) {
     // Do nothing
 }
 
-void null_read_vram(void* udata, void* dst, size_t size) {
+void read_vram(void* udata, void* dst, size_t size) {
     memset(dst, 0, size);
 }
 

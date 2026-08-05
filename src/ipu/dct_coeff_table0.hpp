@@ -1,6 +1,7 @@
-#ifndef DCT_COEFF_TABLE0_HPP
-#define DCT_COEFF_TABLE0_HPP
+#pragma once
 #include "dct_coeff.hpp"
+
+namespace iris::ipu {
 
 class DCT_Coeff_Table0 : public DCT_Coeff
 {
@@ -19,4 +20,4 @@ class DCT_Coeff_Table0 : public DCT_Coeff
         bool get_runlevel_pair_dc(IPU_FIFO &FIFO, RunLevelPair &pair, bool MPEG1);
 };
 
-#endif // DCT_COEFF_TABLE0_HPP
+}

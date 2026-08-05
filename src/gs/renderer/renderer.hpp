@@ -4,9 +4,13 @@
 
 #include <volk.h>
 
-#include "gs/gs.h"
+#include "gs/gs.hpp"
 
 #include "config.hpp"
+
+namespace iris::gif { struct Gif; }
+
+namespace iris::gs::renderer {
 
 // enum : int {
 //     // Keeps aspect ratio by native resolution
@@ -26,12 +30,12 @@
 // };
 
 enum : int {
-    RENDERER_BACKEND_NULL = 0,
-    RENDERER_BACKEND_SOFTWARE,
-    RENDERER_BACKEND_HARDWARE
+    BACKEND_NULL = 0,
+    BACKEND_SOFTWARE,
+    BACKEND_HARDWARE
 };
 
-struct renderer_stats {
+struct Stats {
     unsigned int primitives = 0;
     unsigned int triangles = 0;
     unsigned int lines = 0;
@@ -53,9 +57,9 @@ struct renderer_stats {
       - render_front_get_frame()
 */
 
-struct renderer_create_info {
-    struct ps2_gif* gif;
-    struct ps2_gs* gs;
+struct CreateInfo {
+    gif::Gif* gif;
+    gs::Gs* gs;
 
     VkInstance instance;
     VkInstanceCreateInfo instance_create_info;
@@ -67,7 +71,7 @@ struct renderer_create_info {
     int backend;
 };
 
-struct renderer_image {
+struct Image {
     VkImage image;
     VkImageView view;
     VkFormat format;
@@ -76,30 +80,32 @@ struct renderer_image {
     unsigned int height;
 };
 
-struct renderer_state {
-    struct ps2_gif* gif = nullptr;
+struct Renderer {
+    gif::Gif* gif = nullptr;
     void* udata = nullptr;
 
-    renderer_create_info info = {};
+    CreateInfo info = {};
 
     void* (*create)();
-    bool (*init)(void* udata, const renderer_create_info& info);
+    bool (*init)(void* udata, const CreateInfo& info);
     void (*reset)(void* udata);
     void (*destroy)(void* udata);
-    renderer_image (*get_frame)(void* udata);
+    Image (*get_frame)(void* udata);
     void (*transfer)(void* udata, int path, const void* data, size_t size);
     void (*readback)(void* udata, void* data, size_t size);
     void (*read_vram)(void* udata, void* dst, size_t size);
     void (*set_config)(void* udata, void* config);
 };
 
-renderer_state* renderer_create(void);
-bool renderer_init(renderer_state* renderer, const renderer_create_info& info);
-bool renderer_switch(renderer_state* renderer, int backend, void* config);
-void renderer_hotswap(renderer_state* renderer, int backend);
-void renderer_reset(renderer_state* renderer);
-void renderer_destroy(renderer_state* renderer);
-void renderer_set_config(renderer_state* renderer, void* config);
+Renderer* create();
+bool init(Renderer* renderer, const CreateInfo& info);
+bool set_backend(Renderer* renderer, int backend, void* config);
+void hotswap(Renderer* renderer, int backend);
+void reset(Renderer* renderer);
+void destroy(Renderer* renderer);
+void set_config(Renderer* renderer, void* config);
 
-renderer_image renderer_get_frame(renderer_state* renderer);
-void renderer_read_vram(renderer_state* renderer, void* dst, size_t size);
+Image get_frame(Renderer* renderer);
+void read_vram(Renderer* renderer, void* dst, size_t size);
+
+}

@@ -2,6 +2,8 @@
 #include <cstdlib>
 #include "dct_coeff.hpp"
 
+namespace iris::ipu {
+
 DCT_Coeff::DCT_Coeff(VLC_Entry* table, int table_size, int max_bits, unsigned int* index_table) :
     VLC_Table(table, table_size, max_bits, index_table)
 {
@@ -19,4 +21,6 @@ bool DCT_Coeff::peek_value(IPU_FIFO &FIFO, int bits, int &bit_count, uint32_t &r
     result &= ~(0xFFFFFFFF << bits);
     bit_count += bits;
     return true;
+}
+
 }

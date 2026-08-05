@@ -116,10 +116,10 @@ template <typename T> bool compare_values(int cmp, T a, T b) {
     return false;
 }
 
-void search_memory(struct ps2_state* ps2, int cpu, int type, int cmp, const char* value_str, bool aligned) {
+void search_memory(ps2::Ps2* ps2, int cpu, int type, int cmp, const char* value_str, bool aligned) {
     search_matches.clear();
 
-    struct ps2_ram* mem = cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
+    ram::Ram* mem = cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
 
     int size = 0;
 
@@ -303,8 +303,8 @@ void filter_results(int type, int cmp, const char* value_str) {
     }
 }
 
-void write_match_value(struct ps2_state* ps2, int cpu, match& m, int type) {
-    struct ps2_ram* mem = cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
+void write_match_value(ps2::Ps2* ps2, int cpu, match& m, int type) {
+    ram::Ram* mem = cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
 
     switch (type) {
         case SEARCH_TYPE_U8:
@@ -363,10 +363,10 @@ void sprintf_match(const value& v, char* buf, size_t size, int type, int hex) {
     }
 }
 
-void show_match_change_dialog(iris::instance* iris, match& m, char* label, int search_type, int search_cpu) {
+void show_match_change_dialog(instance* iris, match& m, char* label, int search_type, int search_cpu) {
     using namespace ImGui;
 
-    struct ps2_state* ps2 = iris->ps2;
+    ps2::Ps2* ps2 = iris->ps2;
 
     static char new_value[32];
 
@@ -436,10 +436,10 @@ void show_match_change_dialog(iris::instance* iris, match& m, char* label, int s
     PopFont();
 }
 
-void show_description_change_dialog(iris::instance* iris, match& m) {
+void show_description_change_dialog(instance* iris, match& m) {
     using namespace ImGui;
 
-    struct ps2_state* ps2 = iris->ps2;
+    ps2::Ps2* ps2 = iris->ps2;
 
     static char new_value[32];
 
@@ -489,7 +489,7 @@ void show_description_change_dialog(iris::instance* iris, match& m) {
 
 int frame = 0;
 
-void show_search_table(iris::instance* iris, struct ps2_state* ps2, int type, int cpu) {
+void show_search_table(instance* iris, ps2::Ps2* ps2, int type, int cpu) {
     using namespace ImGui;
 
     static uint32_t selected_address = 0;
@@ -620,10 +620,10 @@ void show_search_table(iris::instance* iris, struct ps2_state* ps2, int type, in
     }
 }
 
-void show_address_list(iris::instance* iris) {
+void show_address_list(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_state* ps2 = iris->ps2;
+    ps2::Ps2* ps2 = iris->ps2;
     static uint32_t selected_address = 0;
 
     if (BeginTable("Addresses", 6, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_Resizable)) {
@@ -754,10 +754,10 @@ void show_address_list(iris::instance* iris) {
     EndTable();
 }
 
-void show_search_options(iris::instance* iris) {
+void show_search_options(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_state* ps2 = iris->ps2;
+    ps2::Ps2* ps2 = iris->ps2;
 
     SeparatorText("Search options");
 
@@ -822,7 +822,7 @@ void show_search_options(iris::instance* iris) {
     EndDisabled();
 }
 
-void update_search_matches(struct ps2_state* ps2, int cpu) {
+void update_search_matches(ps2::Ps2* ps2, int cpu) {
     if (frame != 4) {
         frame++;
 
@@ -830,13 +830,13 @@ void update_search_matches(struct ps2_state* ps2, int cpu) {
     }
 
     for (match& m : search_matches) {
-        struct ps2_ram* mem = m.cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
+        ram::Ram* mem = m.cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
 
         m.curr_value.u64 = *(uint64_t*)&mem->buf[m.address];
     }
 
     for (match& m : address_list) {
-        struct ps2_ram* mem = m.cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
+        ram::Ram* mem = m.cpu == SEARCH_CPU_EE ? ps2->ee_ram : ps2->iop_ram;
 
         m.curr_value.u64 = *(uint64_t*)&mem->buf[m.address];
     }
@@ -891,10 +891,10 @@ void import_address_list_from_stream(std::istream& stream) {
     }
 }
 
-void show_memory_search(iris::instance* iris) {
+void show_memory_search(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_state* ps2 = iris->ps2;
+    ps2::Ps2* ps2 = iris->ps2;
 
     update_search_matches(ps2, search_cpu);
 

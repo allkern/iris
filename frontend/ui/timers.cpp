@@ -10,14 +10,14 @@
 
 namespace iris {
 
-void show_ee_timers(iris::instance* iris) {
+void show_ee_timers(instance* iris) {
     using namespace ImGui;
 
     for (int i = 0; i < 4; i++) {
         auto& t = iris->ps2->ee_timers->timer[i];
 
         if (TreeNode((std::string("Timer ") + std::to_string(i)).c_str())) {
-            Text("Counter: %04x", t.counter);
+            Text("Counter: %04x", (uint32_t)t.counter);
             Text("Mode: %04x", t.mode);
             Text("Compare: %04x", t.compare);
             Text("Hold: %04x", t.hold);
@@ -27,14 +27,14 @@ void show_ee_timers(iris::instance* iris) {
     }
 }
 
-void show_iop_timers(iris::instance* iris) {
+void show_iop_timers(instance* iris) {
     using namespace ImGui;
 
     for (int i = 0; i < 6; i++) {
         auto& t = iris->ps2->iop_timers->timer[i];
 
         if (TreeNode((std::string("Timer ") + std::to_string(i)).c_str())) {
-            Text("Counter: %04x", t.counter);
+            Text("Counter: %04x", (uint32_t)t.counter);
             Text("Mode: %04x", t.mode);
 
             TreePop();
@@ -42,12 +42,12 @@ void show_iop_timers(iris::instance* iris) {
     }
 }
 
-void show_scheduler(iris::instance* iris) {
+void show_scheduler(instance* iris) {
     using namespace ImGui;
 
 }
 
-void show_timers(iris::instance* iris) {
+void show_timers(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("Timers", &iris->show_timers)) {

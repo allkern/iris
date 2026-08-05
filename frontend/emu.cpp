@@ -12,24 +12,29 @@
 
 namespace iris::emu {
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     // Initialize our emulator state
-    iris->ps2 = ps2_create();
+    iris->logger = logger::create();
 
-    ps2_init(iris->ps2);
-    ps2_init_tty_handler(iris->ps2, PS2_TTY_EE, iris::handle_ee_tty_event, iris);
-    ps2_init_tty_handler(iris->ps2, PS2_TTY_IOP, iris::handle_iop_tty_event, iris);
-    ps2_init_tty_handler(iris->ps2, PS2_TTY_SYSMEM, iris::handle_sysmem_tty_event, iris);
+    logger::register_callback(iris->logger, handle_log_event, iris);
 
-    iris->ds[0] = ds_attach(iris->ps2->sio2, 0);
+    iris->ps2 = ps2::create(iris->logger);
+
+    ps2::init(iris->ps2);
+    ps2::init_tty_handler(iris->ps2, ps2::EE, handle_ee_tty_event, iris);
+    ps2::init_tty_handler(iris->ps2, ps2::IOP, handle_iop_tty_event, iris);
+    ps2::init_tty_handler(iris->ps2, ps2::SYSMEM, handle_sysmem_tty_event, iris);
+
+    iris->ds[0] = dev::ds::attach(iris->logger, iris->ps2->sio2, 0);
 
     return true;
 }
 
-void destroy(iris::instance* iris) {
-    iris::slirp::stop();
+void destroy(instance* iris) {
+    slirp::stop();
 
-    if (iris->ps2) ps2_destroy(iris->ps2);
+    if (iris->ps2) ps2::destroy(iris->ps2);
+    if (iris->logger) logger::destroy(iris->logger);
 }
 
 const char* get_extension(const char* path) {
@@ -41,16 +46,16 @@ const char* get_extension(const char* path) {
     return dot + 1;
 }
 
-static void finish_load(iris::instance* iris, int result, std::string name = "") {
+static void finish_load(instance* iris, int result, std::string name = "") {
     iris->load_result = result;
     iris->load_pending_name = std::move(name);
     iris->load_ready.store(true, std::memory_order_release);
 }
 
-void finalize_load(iris::instance* iris) {
+void finalize_load(instance* iris) {
     vulkan::wait_idle(iris);
 
-    renderer_hotswap(iris->renderer, iris->renderer_backend);
+    gs::renderer::hotswap(iris->renderer, iris->renderer_backend);
 
     iris->loading_file_active = false;
     iris->loading_target = "";
@@ -59,7 +64,7 @@ void finalize_load(iris::instance* iris) {
     imgui::end_dim(iris);
 
     if (iris->load_result == 0) {
-        renderer_reset(iris->renderer);
+        gs::renderer::reset(iris->renderer);
 
         iris->image = {};
 
@@ -70,7 +75,7 @@ void finalize_load(iris::instance* iris) {
     }
 }
 
-int open_archive(iris::instance* iris, std::string path) {
+int open_archive(instance* iris, std::string path) {
     mz_zip_archive zip;
 
     mz_zip_zero_struct(&zip);
@@ -116,7 +121,7 @@ int open_archive(iris::instance* iris, std::string path) {
     return 0;
 }
 
-int open_file_thread(iris::instance* iris, std::string file) {
+int open_file_thread(instance* iris, std::string file) {
     std::filesystem::path path(file);
     std::string ext = path.extension().string();
 
@@ -134,13 +139,13 @@ int open_file_thread(iris::instance* iris, std::string file) {
     // Load disc image
     if (ext == ".iso" || ext == ".bin" || ext == ".cue" ||
         ext == ".chd" || ext == ".cso" || ext == ".zso") {
-        if (ps2_cdvd_open(iris->ps2->cdvd, file.c_str(), 0)) {
+        if (cdvd::open(iris->ps2->cdvd, file.c_str(), 0)) {
             finish_load(iris, 1);
 
             return 1;
         }
 
-        char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
+        char* boot_file = iop::disc::get_boot_path(iris->ps2->cdvd->disc);
 
         if (!boot_file) {
             finish_load(iris, 2);
@@ -150,9 +155,9 @@ int open_file_thread(iris::instance* iris, std::string file) {
 
         elf::load_symbols_from_disc(iris);
 
-        ps2_set_system(iris->ps2, iris->system);
+        ps2::set_system(iris->ps2, iris->system);
         emu::load_rom_files(iris);
-        ps2_boot_file(iris->ps2, boot_file);
+        ps2::boot_file(iris->ps2, boot_file);
 
         finish_load(iris, 0, file);
 
@@ -170,16 +175,16 @@ int open_file_thread(iris::instance* iris, std::string file) {
     // Load executable
     file = "host:  " + file;
 
-    ps2_set_system(iris->ps2, iris->system);
+    ps2::set_system(iris->ps2, iris->system);
     emu::load_rom_files(iris);
-    ps2_boot_file(iris->ps2, file.c_str());
+    ps2::boot_file(iris->ps2, file.c_str());
 
     finish_load(iris, 0, file);
 
     return 0;
 }
 
-int open_file(iris::instance* iris, std::string file) {
+int open_file(instance* iris, std::string file) {
     std::filesystem::path path(file);
 
     iris->loading_target = path.filename().string();
@@ -187,7 +192,7 @@ int open_file(iris::instance* iris, std::string file) {
     iris->load_ready = false;
     iris->pause = true;
 
-    renderer_hotswap(iris->renderer, RENDERER_BACKEND_NULL);
+    gs::renderer::hotswap(iris->renderer, gs::renderer::BACKEND_NULL);
 
     imgui::start_dim(iris, 0.35f, 100);
 
@@ -197,7 +202,7 @@ int open_file(iris::instance* iris, std::string file) {
     return 0;
 }
 
-void start_pending_load(iris::instance* iris) {
+void start_pending_load(instance* iris) {
     if (!iris->load_start_pending)
         return;
 
@@ -238,7 +243,7 @@ template <typename T> std::optional<T> query_arcade_value(std::string arcade_nam
     return {};
 }
 
-bool load_arcade(iris::instance* iris, std::string path) {
+bool load_arcade(instance* iris, std::string path) {
     std::filesystem::path base_path(path);
 
     std::string id = base_path.stem().string();
@@ -248,13 +253,13 @@ bool load_arcade(iris::instance* iris, std::string path) {
         return false;
     }
 
-    printf("emu: Loading arcade game \"%s\"...\n", id.c_str(), name.c_str());
+    printf("emu: Loading arcade game \"%s\" (%s)...\n", name.c_str(), id.c_str());
 
-    int system = query_arcade_value<int>(id, "system").value_or(PS2_SYSTEM_AUTO);
+    int system = query_arcade_value<int>(id, "system").value_or(ps2::AUTO);
 
     switch (system) {
-        case PS2_SYSTEM_NAMCO_S147:
-        case PS2_SYSTEM_NAMCO_S148: {
+        case ps2::NAMCO_SYSTEM_147:
+        case ps2::NAMCO_SYSTEM_148: {
             std::string bios = query_arcade_value<std::string>(id, "bios").value_or("");
             std::string nand = query_arcade_value<std::string>(id, "nand").value_or("");
 
@@ -280,16 +285,16 @@ bool load_arcade(iris::instance* iris, std::string path) {
                 return false;
             }
 
-            ps2_load_bios(iris->ps2, bios_path.string().c_str());
-            ps2_set_system(iris->ps2, system);
-            s14x_nand_load(iris->ps2->s14x_nand, nand_path.string().c_str());
-            s14x_sram_load(iris->ps2->s14x_sram, sram_path.string().c_str());
+            ps2::load_bios(iris->ps2, bios_path.string().c_str());
+            ps2::set_system(iris->ps2, system);
+            s14x::nand::load(iris->ps2->s14x_nand, nand_path.string().c_str());
+            s14x::sram::load(iris->ps2->s14x_sram, sram_path.string().c_str());
 
             if (iris->ps2->s14x_ioboard) {
                 iris->ps2->s14x_ioboard->mode = ioboard_mode;
             }
 
-            ps2_reset(iris->ps2);
+            ps2::reset(iris->ps2);
 
             iris->loaded = name + " (" + id + ")";
 
@@ -323,7 +328,7 @@ bool load_arcade(iris::instance* iris, std::string path) {
     return false;
 }
 
-int attach_memory_card(iris::instance* iris, int slot, const char* path) {
+int attach_memory_card(instance* iris, int slot, const char* path) {
     detach_memory_card(iris, slot);
 
     FILE* file = fopen(path, "rb");
@@ -337,16 +342,16 @@ int attach_memory_card(iris::instance* iris, int slot, const char* path) {
     fclose(file);
 
     if (size < 0x800000) {
-        struct ps1_mcd_state* mcd = ps1_mcd_attach(iris->ps2->sio2, slot+2, path);
+        dev::ps1_mcd::Ps1Mcd* mcd = dev::ps1_mcd::attach(iris->logger, iris->ps2->sio2, slot+2, path);
 
         std::string ext = get_extension(path);
 
         if (ext == "psm" || ext == "pocket") {
-            ps1_mcd_set_type(mcd, 1);
+            dev::ps1_mcd::set_type(mcd, 1);
 
             iris->mcd_slot_type[slot] = 3;
         } else {
-            ps1_mcd_set_type(mcd, 0);
+            dev::ps1_mcd::set_type(mcd, 0);
 
             iris->mcd_slot_type[slot] = 2;
         }
@@ -354,17 +359,17 @@ int attach_memory_card(iris::instance* iris, int slot, const char* path) {
         return 1;
     }
 
-    mcd_attach(iris->ps2->sio2, slot+2, path);
+    dev::mcd::attach(iris->logger, iris->ps2->sio2, slot+2, path);
 
     iris->mcd_slot_type[slot] = 1;
 
     return 1;
 }
 
-void detach_memory_card(iris::instance* iris, int slot) {
+void detach_memory_card(instance* iris, int slot) {
     iris->mcd_slot_type[slot] = 0;
 
-    ps2_sio2_detach_device(iris->ps2->sio2, slot+2);
+    sio2::detach_device(iris->ps2->sio2, slot+2);
 }
 
 const char* g_system_names[] = {
@@ -382,30 +387,30 @@ const char* g_system_names[] = {
     "Namco System 256"
 };
 
-const char* get_system_name(iris::instance* iris, int system) {
+const char* get_system_name(instance* iris, int system) {
     return g_system_names[system];
 }
 
-const char* get_current_system_name(iris::instance* iris) {
+const char* get_current_system_name(instance* iris) {
     switch (iris->system) {
-        case PS2_SYSTEM_AUTO: return get_system_name(iris, iris->ps2->detected_system);
-        case PS2_SYSTEM_RETAIL:
-        case PS2_SYSTEM_RETAIL_DECKARD:
-        case PS2_SYSTEM_DESR:
-        case PS2_SYSTEM_TEST:
-        case PS2_SYSTEM_TOOL:
-        case PS2_SYSTEM_KONAMI_PYTHON:
-        case PS2_SYSTEM_KONAMI_PYTHON2:
-        case PS2_SYSTEM_NAMCO_S147:
-        case PS2_SYSTEM_NAMCO_S148:
-        case PS2_SYSTEM_NAMCO_S246:
-        case PS2_SYSTEM_NAMCO_S256:
+        case ps2::AUTO: return get_system_name(iris, iris->ps2->detected_system);
+        case ps2::RETAIL:
+        case ps2::RETAIL_DRAGON:
+        case ps2::PSX_DESR:
+        case ps2::TEST:
+        case ps2::TOOL:
+        case ps2::KONAMI_PYTHON:
+        case ps2::KONAMI_PYTHON2:
+        case ps2::NAMCO_SYSTEM_147:
+        case ps2::NAMCO_SYSTEM_148:
+        case ps2::NAMCO_SYSTEM_246:
+        case ps2::NAMCO_SYSTEM_256:
             return g_system_names[iris->system];
         default: return "Unknown";
     }
 }
 
-int get_system_count(iris::instance* iris) {
+int get_system_count(instance* iris) {
     return sizeof(g_system_names) / sizeof(const char*);
 }
 
@@ -437,8 +442,8 @@ std::filesystem::path get_rom_path(std::filesystem::path filename, std::string e
     return "";
 }
 
-bool load_rom_files(iris::instance* iris) {
-    ps2_load_bios(iris->ps2, iris->bios_path.c_str());
+bool load_rom_files(instance* iris) {
+    ps2::load_bios(iris->ps2, iris->bios_path.c_str());
 
     if (iris->auto_paths) {
         std::filesystem::path bios_path(iris->bios_path);
@@ -451,30 +456,30 @@ bool load_rom_files(iris::instance* iris) {
         std::filesystem::path nvm_path = get_rom_path(bios_path, "nvm");
 
         if (rom1_path.string().size()) {
-            ps2_load_rom1(iris->ps2, rom1_path.string().c_str());
+            ps2::load_rom1(iris->ps2, rom1_path.string().c_str());
         }
 
         if (rom2_path.string().size()) {
-            ps2_load_rom2(iris->ps2, rom2_path.string().c_str());
+            ps2::load_rom2(iris->ps2, rom2_path.string().c_str());
         }
 
         if (nvm_path.string().size()) {
-            ps2_cdvd_load_nvram(iris->ps2->cdvd, nvm_path.string().c_str());
+            cdvd::load_nvram(iris->ps2->cdvd, nvm_path.string().c_str());
         }
 
         return true;
     }
 
     if (iris->rom1_path.size()) {
-        ps2_load_rom1(iris->ps2, iris->rom1_path.c_str());
+        ps2::load_rom1(iris->ps2, iris->rom1_path.c_str());
     }
 
     if (iris->rom2_path.size()) {
-        ps2_load_rom2(iris->ps2, iris->rom2_path.c_str());
+        ps2::load_rom2(iris->ps2, iris->rom2_path.c_str());
     }
 
     if (iris->nvram_path.size()) {
-        ps2_cdvd_load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
+        cdvd::load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
     }
 
     return true;

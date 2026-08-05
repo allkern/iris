@@ -4,10 +4,15 @@
 #include <unordered_map>
 #include <vector>
 
-#include "vu.h"
+#include "vu.hpp"
 
-struct vu_block_entry {
-    struct vu_instruction upper, lower;
+namespace iris::gif { struct Gif; }
+namespace iris::vif { struct Vif; }
+
+namespace iris::vu {
+
+struct BlockEntry {
+    Instruction upper, lower;
     int i_bit;
     int e_bit;
     int m_bit;
@@ -25,29 +30,29 @@ struct vu_block_entry {
     uint8_t lower_is_nop;
 };
 
-struct vu_block {
-    std::vector <vu_block_entry> entries;
+struct Block {
+    std::vector <BlockEntry> entries;
 
     uint32_t tpc;
     int cycles = 0;
 };
 
-struct vu_state {
-    struct vu_reg128 vf[32];
+struct Vu {
+    Reg128 vf[32];
     uint16_t vi[16];
-    struct vu_reg128 acc;
+    Reg128 acc;
 
-    std::vector <vu_block> block_cache;
+    std::vector <Block> block_cache;
     int block_cache_size;
 
     // Single-entry block cache for fast lookup (avoid hash computation)
     uint32_t last_block_lookup_tpc;
-    struct vu_block* last_block_ptr;
+    Block* last_block_ptr;
 
     uint64_t cache_hits;
     uint64_t cache_misses;
 
-    struct vu_instruction upper, lower;
+    Instruction upper, lower;
 
     struct {
         struct {
@@ -88,8 +93,8 @@ struct vu_state {
     uint64_t vf_ready[32][4];
 
     int q_delay;
-    struct vu_reg32 prev_q;
-    struct vu_reg32 p;
+    Reg32 prev_q;
+    Reg32 p;
 
     int xgkick_pending;
     int xgkick_addr;
@@ -102,9 +107,9 @@ struct vu_state {
             uint32_t mac;
             uint32_t clip;
             uint32_t rsv0;
-            struct vu_reg32 r;
-            struct vu_reg32 i;
-            struct vu_reg32 q;
+            Reg32 r;
+            Reg32 i;
+            Reg32 q;
             uint32_t rsv1;
             uint32_t rsv2;
             uint32_t rsv3;
@@ -119,175 +124,180 @@ struct vu_state {
 
     bool disable;
 
-    struct ps2_gif* gif;
-    struct ps2_vif* vif;
-    struct vu_state* vu1;
+    gif::Gif* gif;
+    vif::Vif* vif;
+    Vu* vu1;
+
+    logger::Logger* logger = nullptr;
+    size_t logger_id = 0;
 };
 
 // Upper pipeline
-template <uint32_t di> void vu_i_abs(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_add(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addi(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addx(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addy(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_adda(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addai(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addaq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addax(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_adday(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addaz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_addaw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_sub(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subi(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subx(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_suby(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_suba(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subai(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subaq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subax(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subay(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subaz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_subaw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mul(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_muli(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulx(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_muly(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mula(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulai(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulaq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulax(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulay(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulaz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mulaw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_madd(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddi(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddx(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddy(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_madda(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddai(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddaq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddax(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_madday(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddaz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maddaw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msub(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubi(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubx(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msuby(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msuba(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubai(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubaq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubax(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubay(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubaz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_msubaw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_max(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maxi(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maxx(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maxy(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maxz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_maxw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mini(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_minii(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_minix(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_miniy(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_miniz(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_miniw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_ftoi0(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_ftoi4(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_ftoi12(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_ftoi15(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_itof0(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_itof4(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_itof12(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_itof15(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_nop(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins);
+template <uint32_t di> void i_abs(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_add(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addi(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addx(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addy(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_adda(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addai(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addaq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addax(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_adday(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addaz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_addaw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_sub(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subi(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subx(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_suby(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_suba(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subai(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subaq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subax(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subay(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subaz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_subaw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mul(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_muli(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulx(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_muly(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mula(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulai(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulaq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulax(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulay(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulaz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mulaw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_madd(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddi(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddx(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddy(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_madda(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddai(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddaq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddax(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_madday(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddaz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maddaw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msub(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubi(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubx(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msuby(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msuba(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubai(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubaq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubax(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubay(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubaz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_msubaw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_max(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maxi(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maxx(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maxy(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maxz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_maxw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mini(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_minii(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_minix(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_miniy(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_miniz(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_miniw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_ftoi0(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_ftoi4(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_ftoi12(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_ftoi15(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_itof0(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_itof4(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_itof12(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_itof15(Vu* vu, const Instruction* ins);
+void i_opmula(Vu* vu, const Instruction* ins);
+void i_opmsub(Vu* vu, const Instruction* ins);
+void i_nop(Vu* vu, const Instruction* ins);
+void i_clip(Vu* vu, const Instruction* ins);
 
 // Lower pipeline
-template <uint32_t di> void vu_i_ilw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_ilwr(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_isw(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_iswr(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_lq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_lqd(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_lqi(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mfir(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mfp(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_move(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_mr32(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_rget(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_sq(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_sqd(struct vu_state* vu, const struct vu_instruction* ins);
-template <uint32_t di> void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_b(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_bal(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_eatan(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_eatanxy(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_eatanxz(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_eexp(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_eleng(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ercpr(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_erleng(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ersadd(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ersqrt(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_esadd(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_esin(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_esqrt(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_esum(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fcand(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fceq(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fcget(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fcor(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fcset(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fmand(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fmeq(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fmor(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fsand(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fseq(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fsor(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_fsset(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_iadd(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_iaddi(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_iaddiu(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_iand(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ibeq(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ibgez(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ibgtz(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_iblez(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ibltz(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_ior(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_isub(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_isubiu(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_jalr(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_jr(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_mtir(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_rinit(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_rxor(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_sqrt(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_waitp(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_waitq(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_xitop(struct vu_state* vu, const struct vu_instruction* ins);
-void vu_i_xtop(struct vu_state* vu, const struct vu_instruction* ins);
+template <uint32_t di> void i_ilw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_ilwr(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_isw(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_iswr(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_lq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_lqd(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_lqi(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mfir(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mfp(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_move(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_mr32(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_rget(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_rnext(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_sq(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_sqd(Vu* vu, const Instruction* ins);
+template <uint32_t di> void i_sqi(Vu* vu, const Instruction* ins);
+void i_b(Vu* vu, const Instruction* ins);
+void i_bal(Vu* vu, const Instruction* ins);
+void i_div(Vu* vu, const Instruction* ins);
+void i_eatan(Vu* vu, const Instruction* ins);
+void i_eatanxy(Vu* vu, const Instruction* ins);
+void i_eatanxz(Vu* vu, const Instruction* ins);
+void i_eexp(Vu* vu, const Instruction* ins);
+void i_eleng(Vu* vu, const Instruction* ins);
+void i_ercpr(Vu* vu, const Instruction* ins);
+void i_erleng(Vu* vu, const Instruction* ins);
+void i_ersadd(Vu* vu, const Instruction* ins);
+void i_ersqrt(Vu* vu, const Instruction* ins);
+void i_esadd(Vu* vu, const Instruction* ins);
+void i_esin(Vu* vu, const Instruction* ins);
+void i_esqrt(Vu* vu, const Instruction* ins);
+void i_esum(Vu* vu, const Instruction* ins);
+void i_fcand(Vu* vu, const Instruction* ins);
+void i_fceq(Vu* vu, const Instruction* ins);
+void i_fcget(Vu* vu, const Instruction* ins);
+void i_fcor(Vu* vu, const Instruction* ins);
+void i_fcset(Vu* vu, const Instruction* ins);
+void i_fmand(Vu* vu, const Instruction* ins);
+void i_fmeq(Vu* vu, const Instruction* ins);
+void i_fmor(Vu* vu, const Instruction* ins);
+void i_fsand(Vu* vu, const Instruction* ins);
+void i_fseq(Vu* vu, const Instruction* ins);
+void i_fsor(Vu* vu, const Instruction* ins);
+void i_fsset(Vu* vu, const Instruction* ins);
+void i_iadd(Vu* vu, const Instruction* ins);
+void i_iaddi(Vu* vu, const Instruction* ins);
+void i_iaddiu(Vu* vu, const Instruction* ins);
+void i_iand(Vu* vu, const Instruction* ins);
+void i_ibeq(Vu* vu, const Instruction* ins);
+void i_ibgez(Vu* vu, const Instruction* ins);
+void i_ibgtz(Vu* vu, const Instruction* ins);
+void i_iblez(Vu* vu, const Instruction* ins);
+void i_ibltz(Vu* vu, const Instruction* ins);
+void i_ibne(Vu* vu, const Instruction* ins);
+void i_ior(Vu* vu, const Instruction* ins);
+void i_isub(Vu* vu, const Instruction* ins);
+void i_isubiu(Vu* vu, const Instruction* ins);
+void i_jalr(Vu* vu, const Instruction* ins);
+void i_jr(Vu* vu, const Instruction* ins);
+void i_mtir(Vu* vu, const Instruction* ins);
+void i_rinit(Vu* vu, const Instruction* ins);
+void i_rsqrt(Vu* vu, const Instruction* ins);
+void i_rxor(Vu* vu, const Instruction* ins);
+void i_sqrt(Vu* vu, const Instruction* ins);
+void i_waitp(Vu* vu, const Instruction* ins);
+void i_waitq(Vu* vu, const Instruction* ins);
+void i_xgkick(Vu* vu, const Instruction* ins);
+void i_xitop(Vu* vu, const Instruction* ins);
+void i_xtop(Vu* vu, const Instruction* ins);
+
+}

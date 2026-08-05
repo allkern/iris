@@ -25,9 +25,9 @@ static const char* const type_names[] = {
 int size = 0;
 int type = MEMCARD_TYPE_PS2;
 int slot = 0;
-const char* fpath = nullptr;
+std::string fpath;
 
-void show_memory_card_tool(iris::instance* iris) {
+void show_memory_card_tool(instance* iris) {
     using namespace ImGui;
 
     SetNextWindowSizeConstraints(ImVec2(350, 320), ImVec2(FLT_MAX, FLT_MAX));
@@ -142,7 +142,7 @@ void show_memory_card_tool(iris::instance* iris) {
 
                 if (slot != -1) {
                     if (iris->mcd_slot_type[slot]) {
-                        fpath = f.result().c_str();
+                        fpath = f.result();
 
                         OpenPopup("Confirm detach");
                     } else {
@@ -163,15 +163,15 @@ void show_memory_card_tool(iris::instance* iris) {
             }
         }
 
-        if (fpath && imgui::BeginEx("Confirm detach", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+        if (!fpath.empty() && imgui::BeginEx("Confirm detach", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
             Text("A memory card is already attached to this slot. Do you want to detach it?");
 
             if (Button("Yes")) {
-                if (emu::attach_memory_card(iris, slot, fpath)) {
+                if (emu::attach_memory_card(iris, slot, fpath.c_str())) {
                     if (slot == 0) {
-                        iris->mcd0_path = std::string(fpath);
+                        iris->mcd0_path = fpath;
                     } else {
-                        iris->mcd1_path = std::string(fpath);
+                        iris->mcd1_path = fpath;
                     }
 
                     push_info(iris, "Memory card attached successfully.");
@@ -179,13 +179,13 @@ void show_memory_card_tool(iris::instance* iris) {
                     push_info(iris, "Failed to attach memory card.");
                 }
 
-                fpath = nullptr;
+                fpath.clear();
             }
 
             SameLine();
 
             if (Button("No")) {
-                fpath = nullptr;
+                fpath.clear();
             }
 
             End();

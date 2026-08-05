@@ -1,5 +1,7 @@
 #include "chromtable.hpp"
 
+namespace iris::ipu {
+
 VLC_Entry ChromTable::table[] =
 {
     {0x0, 0, 2},
@@ -32,5 +34,7 @@ unsigned int ChromTable::index_table[10] =
 
 ChromTable::ChromTable() : VLC_Table(table, SIZE, 10, index_table)
 {
+
+}
 
 }

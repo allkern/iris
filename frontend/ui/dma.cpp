@@ -8,7 +8,7 @@
 
 namespace iris {
 
-void show_ee_dmac(iris::instance* iris) {
+void show_ee_dmac(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("EE DMAC", &iris->show_ee_dmac)) {
@@ -16,7 +16,7 @@ void show_ee_dmac(iris::instance* iris) {
     } End();
 }
 
-void show_iop_dma(iris::instance* iris) {
+void show_iop_dma(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("IOP DMA", &iris->show_iop_dma)) {

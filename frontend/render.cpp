@@ -3,7 +3,7 @@
 
 #include "iris.hpp"
 
-#include "gs/gs_dump.h"
+#include "gs/gs_dump.hpp"
 
 #define RENDER_MAX_SHADER_PASSES 16
 
@@ -17,7 +17,7 @@ namespace iris::render {
 static int frame = 0;
 static constexpr uint32_t DESCRIPTOR_SET_RING_SIZE = 8;
 
-bool create_image(iris::instance* iris, uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkImage& image, VkImageView& view, VkDeviceMemory& memory) {
+bool create_image(instance* iris, uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkImage& image, VkImageView& view, VkDeviceMemory& memory) {
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -87,7 +87,7 @@ bool create_image(iris::instance* iris, uint32_t width, uint32_t height, VkForma
     return true;
 }
 
-bool rebuild_framebuffers(iris::instance* iris) {
+bool rebuild_framebuffers(instance* iris) {
     if (!shaders::count(iris))
         return true;
 
@@ -160,11 +160,11 @@ bool rebuild_framebuffers(iris::instance* iris) {
     return true;
 }
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     // Initialize our renderer
-    iris->renderer = renderer_create();
+    iris->renderer = gs::renderer::create();
 
-    renderer_create_info info = {};
+    gs::renderer::CreateInfo info = {};
 
     info.backend = iris->renderer_backend;
     info.gif = iris->ps2->gif;
@@ -176,12 +176,12 @@ bool init(iris::instance* iris) {
     info.device_create_info = iris->device_create_info;
 
     switch (info.backend) {
-        case RENDERER_BACKEND_HARDWARE: {
+        case gs::renderer::BACKEND_HARDWARE: {
             info.config = &iris->hardware_backend_config;
         } break;
     }
 
-    if (!renderer_init(iris->renderer, info)) {
+    if (!gs::renderer::init(iris->renderer, info)) {
         fprintf(stderr, "render: Failed to initialize renderer backend\n");
 
         return false;
@@ -296,7 +296,7 @@ bool init(iris::instance* iris) {
     return true;
 }
 
-static inline VkDescriptorSet get_frame_descriptor_set(iris::instance* iris) {
+static inline VkDescriptorSet get_frame_descriptor_set(instance* iris) {
     if (!iris->descriptor_sets.size()) {
         return iris->descriptor_set;
     }
@@ -306,7 +306,7 @@ static inline VkDescriptorSet get_frame_descriptor_set(iris::instance* iris) {
     return iris->descriptor_sets[frame_index % iris->descriptor_sets.size()];
 }
 
-static inline VkDescriptorSet get_frame_shader_descriptor_set(iris::instance* iris, uint32_t pass_index) {
+static inline VkDescriptorSet get_frame_shader_descriptor_set(instance* iris, uint32_t pass_index) {
     if (!iris->shader_descriptor_sets.size()) {
         return iris->shader_descriptor_set;
     }
@@ -317,7 +317,7 @@ static inline VkDescriptorSet get_frame_shader_descriptor_set(iris::instance* ir
     return iris->shader_descriptor_sets[slot % iris->shader_descriptor_sets.size()];
 }
 
-static inline void update_vertex_buffer(iris::instance* iris, VkCommandBuffer command_buffer) {
+static inline void update_vertex_buffer(instance* iris, VkCommandBuffer command_buffer) {
     SDL_Rect size, rect, display;
 
     const int normalized_angle = ((iris->angle % 360) + 360) % 360;
@@ -482,7 +482,7 @@ static inline void update_vertex_buffer(iris::instance* iris, VkCommandBuffer co
     );
 }
 
-static inline void update_descriptor_set(iris::instance* iris, VkDescriptorSet set, VkImageView view, VkSampler sampler) {
+static inline void update_descriptor_set(instance* iris, VkDescriptorSet set, VkImageView view, VkSampler sampler) {
     VkDescriptorImageInfo image_info = {};
     image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     image_info.imageView = view;
@@ -500,7 +500,7 @@ static inline void update_descriptor_set(iris::instance* iris, VkDescriptorSet s
     vkUpdateDescriptorSets(iris->device, 1, &descriptor_write, 0, nullptr);
 }
 
-void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, VkImageView& output_view, VkImage& output_image) {
+void render_shader_passes(instance* iris, VkCommandBuffer command_buffer, VkImageView& output_view, VkImage& output_image) {
     if (!shaders::count(iris))
         return;
 
@@ -605,13 +605,13 @@ void render_shader_passes(iris::instance* iris, VkCommandBuffer command_buffer, 
     }
 }
 
-bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer) {
-    renderer_image image;
+bool render_frame(instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer) {
+    gs::renderer::Image image;
 
     if (iris->pause) {
         image = iris->image;
     } else {
-        image = renderer_get_frame(iris->renderer);
+        image = gs::renderer::get_frame(iris->renderer);
     }
 
     bool need_rebuild = image.width != iris->image.width ||
@@ -713,17 +713,17 @@ bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFrameb
     return true;
 }
 
-void switch_backend(iris::instance* iris, int backend) {
+void switch_backend(instance* iris, int backend) {
     if (iris->renderer_backend == backend)
         return;
 
     vulkan::wait_idle(iris);
 
-    renderer_destroy(iris->renderer);
+    gs::renderer::destroy(iris->renderer);
 
-    iris->renderer = renderer_create();
+    iris->renderer = gs::renderer::create();
 
-    renderer_create_info info = {};
+    gs::renderer::CreateInfo info = {};
 
     info.backend = backend;
     info.gif = iris->ps2->gif;
@@ -735,12 +735,12 @@ void switch_backend(iris::instance* iris, int backend) {
     info.device_create_info = iris->device_create_info;
 
     switch (info.backend) {
-        case RENDERER_BACKEND_HARDWARE: {
+        case gs::renderer::BACKEND_HARDWARE: {
             info.config = &iris->hardware_backend_config;
         } break;
     }
 
-    if (!renderer_init(iris->renderer, info)) {
+    if (!gs::renderer::init(iris->renderer, info)) {
         fprintf(stderr, "render: Failed to initialize renderer backend\n");
     } else {
         iris->renderer_backend = backend;
@@ -748,12 +748,12 @@ void switch_backend(iris::instance* iris, int backend) {
 }
 
 static void gsdump_tap(void* udata, int path, const void* data, size_t size) {
-    gs_dump_transfer((struct gs_dump*)udata, path, data, size);
+    gs::dump::transfer((gs::dump::Dump*)udata, path, data, size);
 }
 
-void gs_dump_start(iris::instance* iris, std::string path, int frames, int delay, std::string serial) {
+void gs_dump_start(instance* iris, std::string path, int frames, int delay, std::string serial) {
     if (!iris->gsdump)
-        iris->gsdump = gs_dump_create();
+        iris->gsdump = gs::dump::create();
 
     iris->gsdump_path = path;
     iris->gsdump_serial = serial;
@@ -762,7 +762,7 @@ void gs_dump_start(iris::instance* iris, std::string path, int frames, int delay
     iris->gsdump_armed = true;
 }
 
-void gs_dump_tick(iris::instance* iris) {
+void gs_dump_tick(instance* iris) {
     if (!iris->gsdump)
         return;
 
@@ -777,16 +777,16 @@ void gs_dump_tick(iris::instance* iris) {
 
         std::vector<uint8_t> vram(0x400000);
 
-        renderer_read_vram(iris->renderer, vram.data(), vram.size());
+        gs::renderer::read_vram(iris->renderer, vram.data(), vram.size());
 
-        ps2_gif_set_dump_tap(iris->ps2->gif, iris->gsdump, gsdump_tap);
+        gif::set_dump_tap(iris->ps2->gif, iris->gsdump, gsdump_tap);
 
         const char* serial = iris->gsdump_serial.empty() ? nullptr : iris->gsdump_serial.c_str();
 
-        if (!gs_dump_begin(iris->gsdump, iris->gsdump_path.c_str(),
+        if (!gs::dump::begin(iris->gsdump, iris->gsdump_path.c_str(),
                 iris->ps2->gs, iris->ps2->gif,
                 vram.data(), (uint32_t)vram.size(), serial, 0)) {
-            ps2_gif_set_dump_tap(iris->ps2->gif, nullptr, nullptr);
+            gif::set_dump_tap(iris->ps2->gif, nullptr, nullptr);
             iris->gsdump_frames_remaining = 0;
 
             fprintf(stderr, "render: Failed to open GS dump '%s'\n", iris->gsdump_path.c_str());
@@ -795,25 +795,25 @@ void gs_dump_tick(iris::instance* iris) {
         return;
     }
 
-    if (gs_dump_is_active(iris->gsdump)) {
-        gs_dump_vsync(iris->gsdump, iris->ps2->gs);
+    if (gs::dump::is_active(iris->gsdump)) {
+        gs::dump::vsync(iris->gsdump, iris->ps2->gs);
 
         if (--iris->gsdump_frames_remaining <= 0) {
-            gs_dump_end(iris->gsdump);
+            gs::dump::end(iris->gsdump);
 
-            ps2_gif_set_dump_tap(iris->ps2->gif, nullptr, nullptr);
+            gif::set_dump_tap(iris->ps2->gif, nullptr, nullptr);
         }
     }
 }
 
-void refresh(iris::instance* iris) {
+void refresh(instance* iris) {
     switch (iris->renderer_backend) {
-        case RENDERER_BACKEND_HARDWARE: {
-            renderer_set_config(iris->renderer, &iris->hardware_backend_config);
+        case gs::renderer::BACKEND_HARDWARE: {
+            gs::renderer::set_config(iris->renderer, &iris->hardware_backend_config);
         } break;
     }
 
-    iris->image = renderer_get_frame(iris->renderer);
+    iris->image = gs::renderer::get_frame(iris->renderer);
 
     if (iris->image.view == VK_NULL_HANDLE)
         return;
@@ -830,7 +830,7 @@ void refresh(iris::instance* iris) {
     rebuild_framebuffers(iris);
 }
 
-void destroy(iris::instance* iris) {
+void destroy(instance* iris) {
     if (!iris->window)
         return;
 
@@ -862,10 +862,10 @@ void destroy(iris::instance* iris) {
 
     shaders::clear(iris);
 
-    if (iris->renderer) renderer_destroy(iris->renderer);
+    if (iris->renderer) gs::renderer::destroy(iris->renderer);
 
     if (iris->gsdump) {
-        gs_dump_destroy(iris->gsdump);
+        gs::dump::destroy(iris->gsdump);
 
         iris->gsdump = nullptr;
     }

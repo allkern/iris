@@ -9,7 +9,7 @@
 
 namespace iris {
 
-void show_about_window(iris::instance* iris) {
+void show_about_window(instance* iris) {
     using namespace ImGui;
 
     static ImGuiWindowFlags flags =

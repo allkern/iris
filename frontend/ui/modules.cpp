@@ -1,7 +1,7 @@
 #include "iris.hpp"
 
 #include "iop/iop_def.hpp"
-#include "iop/hle/loadcore.h"
+#include "iop/hle/loadcore.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
@@ -24,10 +24,10 @@ static ImGuiTableFlags table_sizing_flags[] = {
 static int table_sizing_combo = 0;
 static int table_sizing = ImGuiTableFlags_SizingStretchProp;
 
-static inline void show_modules_table(iris::instance* iris) {
+static inline void show_modules_table(instance* iris) {
     using namespace ImGui;
 
-    struct iop_state* iop = iris->ps2->iop;
+    iop::Iop* iop = iris->ps2->iop;
 
     if (BeginTable("##iopmodules", 4, ImGuiTableFlags_RowBg | table_sizing)) {
         PushFont(iris->font_small_code);
@@ -39,7 +39,7 @@ static inline void show_modules_table(iris::instance* iris) {
         PopFont();
 
         for (int i = 0; i < iop->module_count; i++) {
-            struct iop_module *mod = &iop->module_list[i];
+            iop::hle::loadcore::Module *mod = &iop->module_list[i];
 
             TableNextRow();
 
@@ -71,11 +71,11 @@ static inline void show_modules_table(iris::instance* iris) {
     }
 }
 
-static inline struct iop_module* find_iop_module(iris::instance* iris, uint32_t addr) {
-    struct iop_state* iop = iris->ps2->iop;
+static inline iop::hle::loadcore::Module* find_iop_module(instance* iris, uint32_t addr) {
+    iop::Iop* iop = iris->ps2->iop;
 
     for (int i = 0; i < iop->module_count; i++) {
-        struct iop_module* mod = &iop->module_list[i];
+        iop::hle::loadcore::Module* mod = &iop->module_list[i];
 
         if ((addr >= mod->text_addr) && (addr < (mod->text_addr + mod->text_size)))
             return mod;
@@ -84,10 +84,10 @@ static inline struct iop_module* find_iop_module(iris::instance* iris, uint32_t 
     return NULL;
 }
 
-void show_iop_modules(iris::instance* iris) {
+void show_iop_modules(instance* iris) {
     using namespace ImGui;
 
-    struct iop_state* iop = iris->ps2->iop;
+    iop::Iop* iop = iris->ps2->iop;
 
     if (imgui::BeginEx("IOP Modules", &iris->show_iop_modules, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
@@ -110,7 +110,7 @@ void show_iop_modules(iris::instance* iris) {
         }
 
         if (Button(ICON_MS_REFRESH)) {
-            refresh_module_list(iris->ps2->iop);
+            iop::hle::loadcore::refresh_module_list(iris->ps2->iop);
         }
 
         Separator();
@@ -123,7 +123,7 @@ void show_iop_modules(iris::instance* iris) {
 
         Separator();
 
-        const struct iop_module* mod = find_iop_module(iris, iop->pc);
+        const iop::hle::loadcore::Module* mod = find_iop_module(iris, iop->pc);
 
         if (!mod) {
             Text("Current module: <unknown>\n");

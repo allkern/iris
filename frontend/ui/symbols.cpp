@@ -27,13 +27,13 @@ static ImGuiTableFlags symbols_table_sizing_flags[] = {
 static int symbols_table_sizing_combo = 0;
 static int symbols_table_sizing = ImGuiTableFlags_SizingStretchProp;
 
-std::vector <iris::elf_symbol> symbols_list;
+std::vector <elf_symbol> symbols_list;
 
 bool regex = false;
 bool case_sensitive = false;
 bool autosearch = true;
 
-void filter_symbols(iris::instance* iris, const char* filter, bool regex, bool case_sensitive) {
+void filter_symbols(instance* iris, const char* filter, bool regex, bool case_sensitive) {
     symbols_list.clear();
 
     if (filter[0] == '\0') {
@@ -44,7 +44,7 @@ void filter_symbols(iris::instance* iris, const char* filter, bool regex, bool c
 
     std::string filter_str(filter);
 
-    for (const iris::elf_symbol& sym : iris->symbols) {
+    for (const elf_symbol& sym : iris->symbols) {
         if (regex) {
             std::regex r(filter_str, std::regex::ECMAScript | (case_sensitive ? std::regex_constants::syntax_option_type(0) : std::regex::icase));
 
@@ -69,14 +69,14 @@ void filter_symbols(iris::instance* iris, const char* filter, bool regex, bool c
 }
 
 int edit_callback(ImGuiInputTextCallbackData* data) {
-    iris::instance* iris = (iris::instance*)data->UserData;
+    instance* iris = (instance*)data->UserData;
 
     filter_symbols(iris, data->Buf, regex, case_sensitive);
 
     return 0;
 }
 
-void show_symbols(iris::instance* iris) {
+void show_symbols(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("Symbols", &iris->show_symbols, ImGuiWindowFlags_MenuBar)) {
@@ -151,21 +151,21 @@ void show_symbols(iris::instance* iris) {
 
                     // Sort by symbol
                     if (sort_specs->Specs->ColumnIndex == 0) {
-                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const iris::elf_symbol& a, const iris::elf_symbol& b) {
+                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf_symbol& a, const elf_symbol& b) {
                             return sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending ? std::string(a.name) < std::string(b.name) : std::string(a.name) > std::string(b.name);
                         });
                     }
 
                     // Sort by address
                     if (sort_specs->Specs->ColumnIndex == 1) {
-                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const iris::elf_symbol& a, const iris::elf_symbol& b) {
+                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf_symbol& a, const elf_symbol& b) {
                             return sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending ? a.addr < b.addr : a.addr > b.addr;
                         });
                     }
 
                     // Sort by size
                     if (sort_specs->Specs->ColumnIndex == 2) {
-                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const iris::elf_symbol& a, const iris::elf_symbol& b) {
+                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf_symbol& a, const elf_symbol& b) {
                             return sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending ? a.size < b.size : a.size > b.size;
                         });
                     }
@@ -186,7 +186,7 @@ void show_symbols(iris::instance* iris) {
 
             int index = 0;
 
-            for (const iris::elf_symbol& symbol : symbols_list) {
+            for (const elf_symbol& symbol : symbols_list) {
                 TableNextRow();
 
                 TableSetColumnIndex(0);
@@ -197,7 +197,7 @@ void show_symbols(iris::instance* iris) {
 
                 char label[64];
 
-                sprintf(label, "%zu##%d", symbol.size, index++);
+                sprintf(label, "%llu##%d", (unsigned long long)symbol.size, index++);
 
                 if (Selectable(label, false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)) {
                     if (IsMouseDoubleClicked(ImGuiMouseButton_Left)) {

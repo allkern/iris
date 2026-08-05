@@ -3,7 +3,7 @@
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 
-#include "rom.h"
+#include "rom.hpp"
 
 namespace iris {
 
@@ -28,7 +28,7 @@ int is_valid(const char* path) {
 
     fread(buf, 1, size, f);
 
-    int valid = ps2_rom0_is_valid(buf, size);
+    int valid = rom::is_valid(rom::Type::ROM0, buf, size);
 
     fclose(f);
 
@@ -37,7 +37,7 @@ int is_valid(const char* path) {
     return valid ? 2 : 1;
 }
 
-void show_memory_card_stage(iris::instance* iris) {
+void show_memory_card_stage(instance* iris) {
     using namespace ImGui;
 
     if (BeginChild("##iconchild", ImVec2(100.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
@@ -85,7 +85,7 @@ void show_memory_card_stage(iris::instance* iris) {
     } EndChild();
 }
 
-void show_bios_stage(iris::instance* iris) {
+void show_bios_stage(instance* iris) {
     using namespace ImGui;
 
     static char buf[512];
@@ -148,7 +148,7 @@ void show_bios_stage(iris::instance* iris) {
             } break;
         }
 
-        TextColored(col, text);
+        TextColored(col, "%s", text);
     }
 
     // To-do: Add file validation
@@ -161,7 +161,7 @@ void show_bios_stage(iris::instance* iris) {
         iris->bios_path = buf;
         iris->dump_to_file = true;
 
-        if (!ps2_load_bios(iris->ps2, iris->bios_path.c_str())) {
+        if (!ps2::load_bios(iris->ps2, iris->bios_path.c_str())) {
             push_info(iris, "Couldn't load BIOS");
 
             stage = 0;
@@ -175,7 +175,7 @@ void show_bios_stage(iris::instance* iris) {
     EndDisabled();
 }
 
-void show_bios_setting_window(iris::instance* iris) {
+void show_bios_setting_window(instance* iris) {
     using namespace ImGui;
 
     OpenPopup("Welcome");

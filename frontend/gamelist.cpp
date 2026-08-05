@@ -6,7 +6,7 @@
 
 namespace iris::gamelist {
 
-// void make_gamelist_cache(iris::instance* iris, std::string path) {
+// void make_gamelist_cache(instance* iris, std::string path) {
 //     for (const auto& entry : std::filesystem::directory_iterator(path)) {
 //         if (entry.is_regular_file()) {
 //             std::string ext = entry.path().extension().string();
@@ -16,7 +16,7 @@ namespace iris::gamelist {
 //             }
 
 //             if (ext == ".iso" || ext == ".bin" || ext == ".cue" || ext == ".chd" || ext == ".cso" || ext == ".zso") {
-//                 struct disc_state* disc = disc_open(entry.path().string().c_str());
+//                 iop::disc::Disc* disc = iop::disc::open(entry.path().string().c_str());
 
 //                 gamelist_entry e;
 
@@ -29,7 +29,7 @@ namespace iris::gamelist {
 
 //                 if (disc) {
 //                     parse_disc(disc, &e);
-//                     disc_close(disc);
+//                     iop::disc::close(disc);
 //                 }
 
 //                 gamelist_cache.push_back(e);
@@ -38,11 +38,11 @@ namespace iris::gamelist {
 //     }
 // }
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     return true;
 }
 
-void destroy(iris::instance* iris) {
+void destroy(instance* iris) {
 }
 
 }

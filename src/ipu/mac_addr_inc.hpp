@@ -1,6 +1,7 @@
-#ifndef MAC_ADDR_INC_H
-#define MAC_ADDR_INC_H
+#pragma once
 #include "vlc_table.hpp"
+
+namespace iris::ipu {
 
 class MacroblockAddrInc : public VLC_Table
 {
@@ -13,4 +14,4 @@ class MacroblockAddrInc : public VLC_Table
         MacroblockAddrInc();
 };
 
-#endif // MAC_ADDR_INC_H
+}

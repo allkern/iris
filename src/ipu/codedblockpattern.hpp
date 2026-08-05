@@ -1,6 +1,7 @@
-#ifndef CODEDBLOCKPATTERN_HPP
-#define CODEDBLOCKPATTERN_HPP
+#pragma once
 #include "vlc_table.hpp"
+
+namespace iris::ipu {
 
 class CodedBlockPattern : public VLC_Table
 {
@@ -13,4 +14,4 @@ class CodedBlockPattern : public VLC_Table
         CodedBlockPattern();
 };
 
-#endif // CODEDBLOCKPATTERN_HPP
+}

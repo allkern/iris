@@ -3,8 +3,12 @@
 #include <vector>
 #include <asmjit/ujit.h>
 
-#include "iop.h"
-#include "arena.h"
+#include "iop.hpp"
+#include "arena.hpp"
+#include "hle/loadcore.hpp"
+#include "logger.hpp"
+
+namespace iris::iop {
 
 enum {
     IOP_I_INVALID,
@@ -80,7 +84,7 @@ enum {
     IOP_I_MAX
 };
 
-struct iop_instruction {
+struct Instruction {
     uint32_t opcode = 0;
     uint32_t id = 0;
     uint32_t rs = 0;
@@ -99,20 +103,20 @@ struct iop_instruction {
     // 2 - immediate branch
     int branch = 0;
 
-    void (*func)(struct iop_state*, iop_instruction&) = nullptr;
+    void (*func)(Iop*, Instruction&) = nullptr;
 };
 
-typedef void (*iop_compiled_block)(struct iop_state*);
+typedef void (*compiled_block)(Iop*);
 
-struct iop_block {
-    iop_compiled_block func = nullptr;
+struct Block {
+    compiled_block func = nullptr;
     uint32_t cycles = 0;
     uint32_t start_pc = 0;
     uint32_t end_pc = 0;
 };
 
-struct iop_cache_page {
-    iop_block* blocks;
+struct CachePage {
+    Block* blocks;
     uint32_t min_code_addr;
     uint32_t max_code_addr;
     bool valid;
@@ -122,10 +126,10 @@ struct iop_cache_page {
 #define IOP_BLOCK_LUT_SIZE 65536
 #define IOP_BLOCK_LUT_MASK (IOP_BLOCK_LUT_SIZE - 1)
 
-struct iop_block_lut_entry {
+struct BlockLutEntry {
     uint32_t pc;
     uint32_t gen;
-    iop_block* block;
+    Block* block;
 };
 
 #ifndef _IOP_CACHE_PAGESIZE
@@ -134,7 +138,7 @@ struct iop_block_lut_entry {
 
 #define IOP_CACHE_PAGECOUNT (0x20000000u / _IOP_CACHE_PAGESIZE)
 
-struct iop_cached_reg {
+struct CachedReg {
     asmjit::ujit::Gp reg;
     bool valid = false;
     bool dirty = false;
@@ -142,7 +146,7 @@ struct iop_cached_reg {
     uint32_t value = 0;
 };
 
-struct iop_state {
+struct Iop {
     uint32_t r[32] = { 0 };
     uint32_t hi = 0, lo = 0;
     uint32_t opcode = 0;
@@ -154,16 +158,16 @@ struct iop_state {
     int branch = 0, delay_slot = 0, branch_taken = 0;
     uint32_t cop0_r[16] = { 0 };
 
-    struct iop_bus_s bus = { nullptr };
+    iop::bus::Iface bus = { nullptr };
 
-    iop_cache_page block_cache[IOP_CACHE_PAGECOUNT] = { nullptr };
+    CachePage block_cache[IOP_CACHE_PAGECOUNT] = { nullptr };
 
-    iop_block* last_cached_block = nullptr;
+    Block* last_cached_block = nullptr;
     uint32_t last_cached_block_pc = 0;
     uint32_t executing_cache_page = 0xffffffff;
     uint32_t deferred_invalidate_page = 0xffffffff;
 
-    iop_block_lut_entry block_lut[IOP_BLOCK_LUT_SIZE] = {};
+    BlockLutEntry block_lut[IOP_BLOCK_LUT_SIZE] = {};
     uint32_t block_lut_gen = 1;
 
     void (*kputchar)(void*, char) = nullptr;
@@ -174,11 +178,11 @@ struct iop_state {
     // ASMJIT stuff
     asmjit::JitRuntime rt;
     asmjit::CodeHolder code;
-    asmjit::FileLogger* logger;
+    asmjit::FileLogger* jit_logger;
     asmjit::ujit::BackendCompiler* bc;
     asmjit::ujit::UniCompiler* uc;
-    asmjit::ujit::Gp iop_ptr;
-    iop_cached_reg reg_cache[32];
+    asmjit::ujit::Gp ptr;
+    CachedReg reg_cache[32];
     bool load_pending = false;
     bool load_pending_reg_known = false;
     int load_pending_reg = 0;
@@ -186,13 +190,16 @@ struct iop_state {
     uint32_t module_list_addr = 0;
     uint32_t thread_list_addr = 0;
 
-    std::vector <iop_instruction> instruction_buf;
+    std::vector <Instruction> instruction_buf;
     uint32_t instruction_buf_index = 0;
-    struct arena_state* block_arena = nullptr;
+    arena::Arena* block_arena = nullptr;
     
     /* cache module list */
     int module_count = 0;
-    struct iop_module* module_list = nullptr;
+    iop::hle::loadcore::Module* module_list = nullptr;
+
+    logger::Logger* logger = nullptr;
+    size_t logger_id = 0;
 };
 
 #define TSW_IOP_NONE 0x0
@@ -204,7 +211,7 @@ struct iop_state {
 #define TSW_IOP_VPL 0x6
 #define TSW_IOP_FPL 0x7
 
-struct iop_thread_ctx {
+struct ThreadCtx {
     uint32_t unk;
     uint32_t at;
     uint32_t v0;
@@ -245,7 +252,7 @@ struct iop_thread_ctx {
     uint32_t unk2;
 };
 
-struct iop_thread {
+struct Thread {
     /* Links for priority list */
     uint32_t next;
     uint32_t prev;
@@ -254,13 +261,13 @@ struct iop_thread {
     uint16_t id;
     uint8_t status;
     uint16_t priority;
-    uint32_t reg_storage; // iop_thread_ctx*
+    uint32_t reg_storage; // ThreadCtx*
     int unk14;
     int unk18;
     uint16_t wait_type;
     uint16_t wakeup_count;
     uint32_t wait_id; // ptr to wait object
-    uint32_t next_thread; // iop_thread*
+    uint32_t next_thread; // Thread*
     uint32_t event_bits;
     uint16_t event_mode;
     uint16_t init_prio;
@@ -278,3 +285,5 @@ struct iop_thread {
     uint32_t thread_preempt_count;
     uint32_t release_count;
 };
+
+}

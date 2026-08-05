@@ -5,14 +5,14 @@
 
 namespace iris::platform {
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     return true;
 }
 
-bool apply_settings(iris::instance* iris) {
+bool apply_settings(instance* iris) {
     return true;
 }
 
-void destroy(iris::instance* iris) {}
+void destroy(instance* iris) {}
 
 }

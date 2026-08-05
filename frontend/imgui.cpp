@@ -79,7 +79,7 @@ static constexpr uint32_t DESCRIPTOR_SET_RING_SIZE = 8;
 
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
-static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
+static bool setup_vulkan_window(instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
     wd->Surface = iris->surface;
 
     VkAttachmentDescription attachment = {};
@@ -159,7 +159,7 @@ static bool setup_vulkan_window(iris::instance* iris, ImGui_ImplVulkanH_Window* 
     return true;
 }
 
-void set_vsync(iris::instance* iris, bool vsync) {
+void set_vsync(instance* iris, bool vsync) {
     std::vector <VkPresentModeKHR> present_modes;
 
     if (vsync) {
@@ -180,7 +180,7 @@ void set_vsync(iris::instance* iris, bool vsync) {
     render::refresh(iris);
 }
 
-bool setup_fonts(iris::instance* iris, ImGuiIO& io) {
+bool setup_fonts(instance* iris, ImGuiIO& io) {
     io.Fonts->AddFontDefault();
 
     ImFontConfig config;
@@ -217,7 +217,7 @@ bool setup_fonts(iris::instance* iris, ImGuiIO& io) {
     return true;
 }
 
-void set_theme(iris::instance* iris, int theme, bool set_bg_color) {
+void set_theme(instance* iris, int theme, bool set_bg_color) {
     // Init 'Granite' theme
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowPadding           = ImVec2(8.0, 8.0);
@@ -351,57 +351,57 @@ void set_theme(iris::instance* iris, int theme, bool set_bg_color) {
 
         case IRIS_THEME_CHERRY: {
             // cherry colors, 3 intensities
-            #define HI(v)   ImVec4(0.502f, 0.075f, 0.256f, v)
-            #define MED(v)  ImVec4(0.455f, 0.198f, 0.301f, v)
-            #define LOW(v)  ImVec4(0.232f, 0.201f, 0.271f, v)
+            #define COL_HI(v)   ImVec4(0.502f, 0.075f, 0.256f, v)
+            #define COL_MED(v)  ImVec4(0.455f, 0.198f, 0.301f, v)
+            #define COL_LOW(v)  ImVec4(0.232f, 0.201f, 0.271f, v)
             // backgrounds
-            #define BG(v)   ImVec4(0.200f, 0.220f, 0.270f, v)
+            #define COL_BG(v)   ImVec4(0.200f, 0.220f, 0.270f, v)
             // text
-            #define TEXT(v) ImVec4(0.860f, 0.930f, 0.890f, v)
+            #define COL_TEXT(v) ImVec4(0.860f, 0.930f, 0.890f, v)
 
             auto &style = ImGui::GetStyle();
-            style.Colors[ImGuiCol_Text]                  = TEXT(0.78f);
-            style.Colors[ImGuiCol_TextDisabled]          = TEXT(0.28f);
+            style.Colors[ImGuiCol_Text]                  = COL_TEXT(0.78f);
+            style.Colors[ImGuiCol_TextDisabled]          = COL_TEXT(0.28f);
             style.Colors[ImGuiCol_WindowBg]              = ImVec4(0.13f, 0.14f, 0.17f, 1.00f);
-            style.Colors[ImGuiCol_ChildBg]               = BG( 0.58f);
-            style.Colors[ImGuiCol_PopupBg]               = BG( 0.9f);
+            style.Colors[ImGuiCol_ChildBg]               = COL_BG( 0.58f);
+            style.Colors[ImGuiCol_PopupBg]               = COL_BG( 0.9f);
             style.Colors[ImGuiCol_Border]                = ImVec4(0.31f, 0.31f, 1.00f, 0.00f);
             style.Colors[ImGuiCol_BorderShadow]          = ImVec4(0.00f, 0.00f, 0.00f, 0.00f);
-            style.Colors[ImGuiCol_FrameBg]               = BG( 1.00f);
-            style.Colors[ImGuiCol_FrameBgHovered]        = MED( 0.78f);
-            style.Colors[ImGuiCol_FrameBgActive]         = MED( 1.00f);
-            style.Colors[ImGuiCol_TitleBg]               = LOW( 1.00f);
-            style.Colors[ImGuiCol_TitleBgActive]         = HI( 1.00f);
-            style.Colors[ImGuiCol_TitleBgCollapsed]      = BG( 0.75f);
-            style.Colors[ImGuiCol_MenuBarBg]             = BG( 0.47f);
-            style.Colors[ImGuiCol_ScrollbarBg]           = BG( 1.00f);
+            style.Colors[ImGuiCol_FrameBg]               = COL_BG( 1.00f);
+            style.Colors[ImGuiCol_FrameBgHovered]        = COL_MED( 0.78f);
+            style.Colors[ImGuiCol_FrameBgActive]         = COL_MED( 1.00f);
+            style.Colors[ImGuiCol_TitleBg]               = COL_LOW( 1.00f);
+            style.Colors[ImGuiCol_TitleBgActive]         = COL_HI( 1.00f);
+            style.Colors[ImGuiCol_TitleBgCollapsed]      = COL_BG( 0.75f);
+            style.Colors[ImGuiCol_MenuBarBg]             = COL_BG( 0.47f);
+            style.Colors[ImGuiCol_ScrollbarBg]           = COL_BG( 1.00f);
             style.Colors[ImGuiCol_ScrollbarGrab]         = ImVec4(0.09f, 0.15f, 0.16f, 1.00f);
-            style.Colors[ImGuiCol_ScrollbarGrabHovered]  = MED( 0.78f);
-            style.Colors[ImGuiCol_ScrollbarGrabActive]   = MED( 1.00f);
+            style.Colors[ImGuiCol_ScrollbarGrabHovered]  = COL_MED( 0.78f);
+            style.Colors[ImGuiCol_ScrollbarGrabActive]   = COL_MED( 1.00f);
             style.Colors[ImGuiCol_CheckMark]             = ImVec4(0.71f, 0.22f, 0.27f, 1.00f);
             style.Colors[ImGuiCol_SliderGrab]            = ImVec4(0.47f, 0.77f, 0.83f, 0.14f);
             style.Colors[ImGuiCol_SliderGrabActive]      = ImVec4(0.71f, 0.22f, 0.27f, 1.00f);
             style.Colors[ImGuiCol_Button]                = ImVec4(0.47f, 0.77f, 0.83f, 0.14f);
-            style.Colors[ImGuiCol_ButtonHovered]         = MED( 0.86f);
-            style.Colors[ImGuiCol_ButtonActive]          = MED( 1.00f);
-            style.Colors[ImGuiCol_Header]                = MED( 0.76f);
-            style.Colors[ImGuiCol_HeaderHovered]         = MED( 0.86f);
-            style.Colors[ImGuiCol_HeaderActive]          = HI( 1.00f);
+            style.Colors[ImGuiCol_ButtonHovered]         = COL_MED( 0.86f);
+            style.Colors[ImGuiCol_ButtonActive]          = COL_MED( 1.00f);
+            style.Colors[ImGuiCol_Header]                = COL_MED( 0.76f);
+            style.Colors[ImGuiCol_HeaderHovered]         = COL_MED( 0.86f);
+            style.Colors[ImGuiCol_HeaderActive]          = COL_HI( 1.00f);
             style.Colors[ImGuiCol_ResizeGrip]            = ImVec4(0.47f, 0.77f, 0.83f, 0.04f);
-            style.Colors[ImGuiCol_ResizeGripHovered]     = MED( 0.78f);
-            style.Colors[ImGuiCol_ResizeGripActive]      = MED( 1.00f);
-            style.Colors[ImGuiCol_PlotLines]             = TEXT(0.63f);
-            style.Colors[ImGuiCol_PlotLinesHovered]      = MED( 1.00f);
-            style.Colors[ImGuiCol_PlotHistogram]         = TEXT(0.63f);
-            style.Colors[ImGuiCol_PlotHistogramHovered]  = MED( 1.00f);
-            style.Colors[ImGuiCol_TextSelectedBg]        = MED( 0.43f);
-            style.Colors[ImGuiCol_ModalWindowDimBg]      = BG( 0.73f);
+            style.Colors[ImGuiCol_ResizeGripHovered]     = COL_MED( 0.78f);
+            style.Colors[ImGuiCol_ResizeGripActive]      = COL_MED( 1.00f);
+            style.Colors[ImGuiCol_PlotLines]             = COL_TEXT(0.63f);
+            style.Colors[ImGuiCol_PlotLinesHovered]      = COL_MED( 1.00f);
+            style.Colors[ImGuiCol_PlotHistogram]         = COL_TEXT(0.63f);
+            style.Colors[ImGuiCol_PlotHistogramHovered]  = COL_MED( 1.00f);
+            style.Colors[ImGuiCol_TextSelectedBg]        = COL_MED( 0.43f);
+            style.Colors[ImGuiCol_ModalWindowDimBg]      = COL_BG( 0.73f);
 
-            #undef HI
-            #undef MED
-            #undef LOW
-            #undef BG
-            #undef TEXT
+            #undef COL_HI
+            #undef COL_MED
+            #undef COL_LOW
+            #undef COL_BG
+            #undef COL_TEXT
 
             if (!set_bg_color) break;
 
@@ -491,7 +491,7 @@ void set_theme(iris::instance* iris, int theme, bool set_bg_color) {
     pstyle.Colors[ImPlotCol_PlotBg]     = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-void set_codeview_scheme(iris::instance* iris, int scheme) {
+void set_codeview_scheme(instance* iris, int scheme) {
     switch (scheme) {
         default: case IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK: {
             iris->codeview_color_text = IM_COL32(131, 148, 150, 255);
@@ -572,7 +572,7 @@ void set_codeview_scheme(iris::instance* iris, int scheme) {
     }
 }
 
-VkShaderModule create_shader(iris::instance* iris, uint32_t* code, size_t size) {
+VkShaderModule create_shader(instance* iris, uint32_t* code, size_t size) {
     VkShaderModuleCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     info.pCode = code;
@@ -587,7 +587,7 @@ VkShaderModule create_shader(iris::instance* iris, uint32_t* code, size_t size) 
     return shader;
 }
 
-VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkShaderModule frag_shader) {
+VkPipeline create_pipeline(instance* iris, VkShaderModule vert_shader, VkShaderModule frag_shader) {
     // Create pipeline layout
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
 
@@ -725,7 +725,7 @@ VkPipeline create_pipeline(iris::instance* iris, VkShaderModule vert_shader, VkS
     return pipeline;
 }
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     VkDescriptorSetLayoutBinding sampler_layout_binding = {};
     sampler_layout_binding.binding = 0;
     sampler_layout_binding.descriptorCount = 1;
@@ -877,7 +877,7 @@ bool init(iris::instance* iris) {
     return true;
 }
 
-void cleanup(iris::instance* iris) {
+void cleanup(instance* iris) {
     vulkan::wait_idle(iris);
 
     vulkan::free_texture(iris, iris->ps1_memory_card_icon);
@@ -896,7 +896,7 @@ void cleanup(iris::instance* iris) {
     iris->instance = NULL;
 }
 
-bool render_frame(iris::instance* iris, ImDrawData* draw_data) {
+bool render_frame(instance* iris, ImDrawData* draw_data) {
     if (iris->swapchain_rebuild)
         return true;
 
@@ -1059,7 +1059,7 @@ bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags) {
     return ImGui::Begin(name, p_open, flags);
 }
 
-void start_dim(iris::instance* iris, float alpha, size_t ms) {
+void start_dim(instance* iris, float alpha, size_t ms) {
     if (iris->dim_active) {
         return;
     }
@@ -1072,14 +1072,14 @@ void start_dim(iris::instance* iris, float alpha, size_t ms) {
     iris->dim_end = false;
 }
 
-void end_dim(iris::instance* iris) {
+void end_dim(instance* iris) {
     iris->dim_current_alpha = 1.0f;
     iris->dim_active = true;
     iris->dim_end = true;
     iris->dim_start = SDL_GetTicks();
 }
 
-void render_dim(iris::instance* iris) {
+void render_dim(instance* iris) {
     using namespace ImGui;
 
     ImDrawList* draw_list = GetForegroundDrawList(GetMainViewport());

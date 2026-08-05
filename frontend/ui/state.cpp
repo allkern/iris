@@ -6,11 +6,11 @@
 
 #include "res/IconsMaterialSymbols.h"
 
-#include "ee/ee_dis.h"
+#include "ee/ee_dis.hpp"
 #include "ee/ee_def.hpp"
 #include "ee/vu_def.hpp"
 #include "iop/iop_def.hpp"
-#include "iop/iop_dis.h"
+#include "iop/iop_dis.hpp"
 
 #define IM_RGB(r, g, b) ImVec4(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), 1.0)
 
@@ -101,7 +101,7 @@ uint32_t vu0i_prev[32];
 uint32_t vu0i_frames[32];
 uint32_t ee_fpu_prev[32];
 uint32_t ee_fpu_frames[32];
-struct vu_reg128 vu0f_prev[32];
+vu::Reg128 vu0f_prev[32];
 uint128_t vu0f_frames[32];
 uint32_t iop_prev[32];
 uint32_t iop_frames[32];
@@ -111,10 +111,10 @@ bool vu0f_float;
 static ImGuiTableFlags ee_table_sizing = ImGuiTableFlags_SizingStretchSame;
 static ImGuiTableFlags iop_table_sizing = ImGuiTableFlags_SizingStretchProp;
 
-static inline void show_ee_main_registers(iris::instance* iris) {
+static inline void show_ee_main_registers(instance* iris) {
     using namespace ImGui;
 
-    struct ee_state* ee = iris->ps2->ee;
+    ee::Ee* ee = iris->ps2->ee;
 
     for (int i = 0; i < 32; i++) {
         for (int j = 0; j < 4; j++) {
@@ -212,10 +212,10 @@ static inline void show_ee_main_registers(iris::instance* iris) {
     PopFont();
 }
 
-static inline void show_ee_cop0_registers(iris::instance* iris) {
+static inline void show_ee_cop0_registers(instance* iris) {
     using namespace ImGui;
 
-    struct ee_state* ee = iris->ps2->ee;
+    ee::Ee* ee = iris->ps2->ee;
 
     for (int i = 0; i < 32; i++) {
         if (ee_cop0_prev[i] != ee->cop0_r[i])
@@ -308,10 +308,10 @@ static inline void show_ee_cop0_registers(iris::instance* iris) {
     PopFont();
 }
 
-static inline void show_ee_fpu_registers(iris::instance* iris) {
+static inline void show_ee_fpu_registers(instance* iris) {
 using namespace ImGui;
 
-    struct ee_state* ee = iris->ps2->ee;
+    ee::Ee* ee = iris->ps2->ee;
 
     for (int i = 0; i < 32; i++) {
         if (ee_fpu_prev[i] != ee->f[i].u32)
@@ -460,10 +460,10 @@ using namespace ImGui;
     PopFont();
 }
 
-static inline void show_vu0_float(iris::instance* iris) {
+static inline void show_vu0_float(instance* iris) {
     using namespace ImGui;
 
-    struct vu_state* vu0 = iris->ps2->ee->vu0;
+    vu::Vu* vu0 = iris->ps2->ee->vu0;
 
     for (int i = 0; i < 32; i++) {
         for (int j = 0; j < 4; j++) {
@@ -578,10 +578,10 @@ static inline void show_vu0_float(iris::instance* iris) {
     PopFont();
 }
 
-static inline void show_vu0_integer(iris::instance* iris) {
+static inline void show_vu0_integer(instance* iris) {
     using namespace ImGui;
 
-    struct vu_state* vu0 = iris->ps2->ee->vu0;
+    vu::Vu* vu0 = iris->ps2->ee->vu0;
 
     for (int i = 0; i < 32; i++) {
         if (vu0i_prev[i] != (i < 16 ? vu0->vi[i] : vu0->cr[i-16]))
@@ -682,12 +682,12 @@ static inline void show_vu0_integer(iris::instance* iris) {
     PopFont();
 }
 
-static inline void show_iop_main_registers(iris::instance* iris) {
+static inline void show_iop_main_registers(instance* iris) {
     using namespace ImGui;
 
     PushFont(iris->font_code);
 
-    struct iop_state* iop = iris->ps2->iop;
+    iop::Iop* iop = iris->ps2->iop;
 
     for (int i = 0; i < 32; i++) {
         if (iop_prev[i] != iop->r[i])
@@ -771,7 +771,7 @@ static inline void show_iop_main_registers(iris::instance* iris) {
     PopFont();
 }
 
-static inline void show_work_in_progress(iris::instance* iris) {
+static inline void show_work_in_progress(instance* iris) {
     using namespace ImGui;
 
     Text("Work-in-progress!");
@@ -804,7 +804,7 @@ static const char* ee_reg_group_names[] = {
 
 static int ee_reg_group = 0;
 
-void show_ee_state(iris::instance* iris) {
+void show_ee_state(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("EE state", &iris->show_ee_state, ImGuiWindowFlags_MenuBar)) {
@@ -821,7 +821,7 @@ void show_ee_state(iris::instance* iris) {
                     ImGui::EndMenu();
                 }
 
-                if (MenuItem("Display VU0f as floats", nullptr, &vu0f_float));
+                MenuItem("Display VU0f as floats", nullptr, &vu0f_float);
 
                 ImGui::EndMenu();
             }
@@ -890,7 +890,7 @@ void show_ee_state(iris::instance* iris) {
     }
 }
 
-void show_iop_state(iris::instance* iris) {
+void show_iop_state(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("IOP state", &iris->show_iop_state, ImGuiWindowFlags_MenuBar)) {

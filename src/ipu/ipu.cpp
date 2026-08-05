@@ -4,14 +4,10 @@
 #include <cstring>
 #include <limits>
 #include "ipu.hpp"
-#include "ee/dmac.h"
-#include "ee/intc.h"
+#include "ee/dmac.hpp"
+#include "ee/intc.hpp"
 
-#if defined(IRIS_IPU_TRACE)
-#define printf(...) std::printf(__VA_ARGS__)
-#else
-#define printf(...) ((void)0)
-#endif
+namespace iris::ipu {
 
 /**
   * The majority of this code is based upon Play!'s implementation of the IPU.
@@ -23,7 +19,7 @@
   * https://github.com/jpd002/Play--Framework/blob/master/src/idct/IEEE1180.cpp (IDCT transformation)
   */
 
-uint32_t ImageProcessingUnit::inverse_scan_zigzag[0x40] =
+uint32_t Ipu::inverse_scan_zigzag[0x40] =
 {
     0,  1,  5,  6, 14, 15, 27, 28,
     2,  4,  7,  13, 16, 26, 29, 42,
@@ -35,7 +31,7 @@ uint32_t ImageProcessingUnit::inverse_scan_zigzag[0x40] =
     35, 36, 48, 49, 57, 58, 62, 63
 };
 
-uint32_t ImageProcessingUnit::inverse_scan_alternate[0x40] =
+uint32_t Ipu::inverse_scan_alternate[0x40] =
 {
     0, 4, 6, 20, 22, 36, 38, 52,
     1, 5, 7, 21, 23, 37, 39, 53,
@@ -47,7 +43,7 @@ uint32_t ImageProcessingUnit::inverse_scan_alternate[0x40] =
     13, 14, 29, 33, 45, 49, 59, 63
 };
 
-uint32_t ImageProcessingUnit::quantizer_linear[0x20] =
+uint32_t Ipu::quantizer_linear[0x20] =
 {
     0,  2,  4,  6,  8,  10,  12,  14,
     16,  18,  20,  22,  24,  26,  28,  30,
@@ -55,7 +51,7 @@ uint32_t ImageProcessingUnit::quantizer_linear[0x20] =
     48,  50,  52,  54,  56,  58,  60,  62
 };
 
-uint32_t ImageProcessingUnit::quantizer_nonlinear[0x20] =
+uint32_t Ipu::quantizer_nonlinear[0x20] =
 {
     0,  1,  2,  3,  4,  5,  6,  7,
     8,  10,  12,  14,  16,  18,  20,  22,
@@ -87,7 +83,7 @@ static const uint8_t default_nonintra_IQ[0x40] =
     23, 24, 25, 27, 28, 30, 31, 33,
 };
 
-ImageProcessingUnit::ImageProcessingUnit(struct ps2_intc* intc, struct ps2_dmac* dmac) : intc(intc), dmac(dmac)
+Ipu::Ipu(ee::intc::Intc* intc, ee::dmac::Dmac* dmac) : intc(intc), dmac(dmac)
 {
     //Generate CrCb->RGB conversion map
     for (unsigned int i = 0; i < 0x40; i += 0x8)
@@ -131,7 +127,7 @@ ImageProcessingUnit::ImageProcessingUnit(struct ps2_intc* intc, struct ps2_dmac*
     dither_mtx[3][3] = -2;
 }
 
-void ImageProcessingUnit::reset()
+void Ipu::reset()
 {
     dct_coeff = nullptr;
     VDEC_table = nullptr;
@@ -154,7 +150,7 @@ void ImageProcessingUnit::reset()
     command_decoding = false;
 }
 
-void ImageProcessingUnit::run()
+void Ipu::run()
 {
     if (ctrl.busy)
     {
@@ -241,28 +237,28 @@ void ImageProcessingUnit::run()
         // }
         // catch (VLC_Error& e)
         // {
-        //     std::fprintf(stderr, "ipu: VLC error: %s\n", e.what());
+        //     std::iris_debug(this, "VLC error: {}", e.what());
 
         //     ctrl.error_code = true;
         //     finish_command();
         // }
     }
     if (can_write_FIFO()) {
-        dmac->channels[DMAC_IPU_TO].dreq = 1;
-        // printf("ipu: set ipu_to dreq\n");
-        dmac_handle_ipu_to_transfer(dmac);
+        dmac->channels[ee::dmac::IPU_TO].dreq = 1;
+        // iris_debug(this, "set ipu_to dreq");
+        ee::dmac::handle_ipu_to_transfer(dmac);
     }
     if (can_read_FIFO()) {
-        dmac->channels[DMAC_IPU_FROM].dreq = 1;
-        printf("ipu: Output FIFO ready\n");
-        // printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
-        dmac_handle_ipu_from_transfer(dmac);
+        dmac->channels[ee::dmac::IPU_FROM].dreq = 1;
+        iris_debug(this, "Output FIFO ready");
+        // iris_debug(this, "set ipu_from dreq out={:x}", out_FIFO.f.size());
+        ee::dmac::handle_ipu_from_transfer(dmac);
     }
 }
 
 #define IPU_BATCH_STEPS 64
 
-void ImageProcessingUnit::run_until_stalled()
+void Ipu::run_until_stalled()
 {
     for (int i = 0; i < IPU_BATCH_STEPS; i++)
     {
@@ -276,15 +272,15 @@ void ImageProcessingUnit::run_until_stalled()
     }
 }
 
-void ImageProcessingUnit::finish_command()
+void Ipu::finish_command()
 {
     ctrl.busy = false;
     command_decoding = false;
 
-    ps2_intc_irq(intc, EE_INTC_IPU);
+    ee::intc::irq(intc, ee::intc::IPU);
 }
 
-bool ImageProcessingUnit::process_IDEC()
+bool Ipu::process_IDEC()
 {
     while (true)
     {
@@ -295,19 +291,19 @@ bool ImageProcessingUnit::process_IDEC()
                 idec.state = IDEC_STATE::ADVANCE;
                 return false;
             case IDEC_STATE::ADVANCE:
-                printf("ipu: Advance stream\n");
+                iris_debug(this, "Advance stream");
                 if (!in_FIFO.advance_stream(command_option & 0x3F))
                     return false;
                 idec.state = IDEC_STATE::MACRO_I_TYPE;
                 break;
             case IDEC_STATE::MACRO_I_TYPE:
-                printf("ipu: Decode macroblock I type\n");
+                iris_debug(this, "Decode macroblock I type");
                 if (!macroblock_I_pic.get_symbol(in_FIFO, idec.macro_type))
                     return false;
                 idec.state = IDEC_STATE::DCT_TYPE;
                 break;
             case IDEC_STATE::DCT_TYPE:
-                printf("ipu: Decode DCT\n");
+                iris_debug(this, "Decode DCT");
                 if (idec.decodes_dct)
                 {
                     uint32_t value;
@@ -322,7 +318,7 @@ bool ImageProcessingUnit::process_IDEC()
                 idec.state = IDEC_STATE::QSC;
                 break;
             case IDEC_STATE::QSC:
-                printf("ipu: Decode QSC\n");
+                iris_debug(this, "Decode QSC");
                 if (idec.macro_type & 0x10)
                 {
                     if (!in_FIFO.get_bits(idec.qsc, 5))
@@ -333,7 +329,7 @@ bool ImageProcessingUnit::process_IDEC()
                 break;
             case IDEC_STATE::INIT_BDEC:
                 //We don't need to advance, and the macroblock is always intra so no need to check for a CBP.
-                printf("ipu: Init BDEC\n");
+                iris_debug(this, "Init BDEC");
                 bdec.state = BDEC_STATE::RESET_DC;
                 bdec.intra = true;
                 bdec.quantizer_step = idec.qsc;
@@ -346,7 +342,7 @@ bool ImageProcessingUnit::process_IDEC()
                 idec.state = IDEC_STATE::READ_BLOCK;
                 break;
             case IDEC_STATE::READ_BLOCK:
-                printf("ipu: Read macroblock\n");
+                iris_debug(this, "Read macroblock");
                 if (!process_BDEC())
                     return false;
                 idec.blocks_decoded++;
@@ -354,7 +350,7 @@ bool ImageProcessingUnit::process_IDEC()
                 break;
             case IDEC_STATE::INIT_CSC:
                 //BDEC outputs in RAW16. CSC works in RAW8, so we need to convert appropriately.
-                printf("ipu: Init CSC\n");
+                iris_debug(this, "Init CSC");
                 for (int i = 0; i < RAW_BLOCK_SIZE / 8; i++)
                 {
                     uint128_t quad = idec.temp_fifo.f.front();
@@ -379,14 +375,14 @@ bool ImageProcessingUnit::process_IDEC()
                 idec.state = IDEC_STATE::EXEC_CSC;
                 break;
             case IDEC_STATE::EXEC_CSC:
-                printf("ipu: Exec CSC\n");
+                iris_debug(this, "Exec CSC");
                 if (!process_CSC())
                     return false;
                 idec.state = IDEC_STATE::CHECK_START_CODE;
                 break;
             case IDEC_STATE::CHECK_START_CODE:
             {
-                printf("ipu: Check start code\n");
+                iris_debug(this, "Check start code");
                 uint32_t code;
                 if (!in_FIFO.get_bits(code, 8))
                     return false;
@@ -401,7 +397,7 @@ bool ImageProcessingUnit::process_IDEC()
                 break;
             case IDEC_STATE::VALID_START_CODE:
             {
-                printf("ipu: Validate start code\n");
+                iris_debug(this, "Validate start code");
                 uint32_t code;
                 if (!in_FIFO.get_bits(code, 24))
                 {
@@ -430,7 +426,7 @@ bool ImageProcessingUnit::process_IDEC()
                 break;
             case IDEC_STATE::MACRO_INC:
             {
-                printf("ipu: Macroblock increment\n");
+                iris_debug(this, "Macroblock increment");
                 uint32_t inc;
                 if (!macroblock_increment.get_symbol(in_FIFO, inc))
                     return false;
@@ -442,13 +438,13 @@ bool ImageProcessingUnit::process_IDEC()
             }
                 break;
             case IDEC_STATE::DONE:
-                printf("ipu: IDEC done!\n");
+                iris_debug(this, "IDEC done!");
                 return true;
         }
     }
 }
 
-bool ImageProcessingUnit::process_BDEC()
+bool Ipu::process_BDEC()
 {
     while (true)
     {
@@ -460,14 +456,14 @@ bool ImageProcessingUnit::process_BDEC()
                 bdec.state = BDEC_STATE::GET_CBP;
                 break;
             case BDEC_STATE::GET_CBP:
-                printf("ipu: Get CBP!\n");
+                iris_debug(this, "Get CBP!");
                 if (!bdec.intra)
                 {
                     uint32_t pattern;
                     if (!cbp.get_symbol(in_FIFO, pattern))
                         return false;
                     ctrl.coded_block_pattern = pattern;
-                    printf("CBP: %d\n", ctrl.coded_block_pattern);
+                    iris_debug(this, "CBP: {}", ctrl.coded_block_pattern);
                 }
                 else
                     ctrl.coded_block_pattern = 0x3F;
@@ -476,7 +472,7 @@ bool ImageProcessingUnit::process_BDEC()
             case BDEC_STATE::RESET_DC:
                 if (bdec.reset_dc)
                 {
-                    printf("ipu: Reset DC!\n");
+                    iris_debug(this, "Reset DC!");
 
                     int16_t value;
                     switch (ctrl.intra_DC_precision)
@@ -498,7 +494,7 @@ bool ImageProcessingUnit::process_BDEC()
                 bdec.state = BDEC_STATE::BEGIN_DECODING;
                 break;
             case BDEC_STATE::BEGIN_DECODING:
-                printf("ipu: Begin decoding block %d!\n", bdec.block_index);
+                iris_debug(this, "Begin decoding block {}!", bdec.block_index);
 
                 bdec.cur_block = bdec.blocks[bdec.block_index];
                 memset(bdec.cur_block, 0, sizeof(int16_t) * 64);
@@ -513,12 +509,12 @@ bool ImageProcessingUnit::process_BDEC()
 
                     if (bdec.intra && ctrl.intra_VLC_table)
                     {
-                        printf("ipu: Use DCT coefficient table 1\n");
+                        iris_debug(this, "Use DCT coefficient table 1");
                         dct_coeff = &dct_coeff1;
                     }
                     else
                     {
-                        printf("ipu: Use DCT coefficient table 0\n");
+                        iris_debug(this, "Use DCT coefficient table 0");
                         dct_coeff = &dct_coeff0;
                     }
 
@@ -530,14 +526,14 @@ bool ImageProcessingUnit::process_BDEC()
                 break;
             case BDEC_STATE::READ_COEFFS:
             {
-                printf("ipu: Read coeffs!\n");
+                iris_debug(this, "Read coeffs!");
                 if (!BDEC_read_coeffs())
                     return false;
-                printf("ipu: Dequantize!\n");
+                iris_debug(this, "Dequantize!");
                 dequantize(bdec.cur_block);
-                printf("ipu: Inverse scan!\n");
+                iris_debug(this, "Inverse scan!");
                 inverse_scan(bdec.cur_block);
-                printf("ipu: IDCT!\n");
+                iris_debug(this, "IDCT!");
 
                 int16_t temp[0x40];
                 memcpy(temp, bdec.cur_block, 0x40 * sizeof(int16_t));
@@ -546,7 +542,7 @@ bool ImageProcessingUnit::process_BDEC()
             }
                 break;
             case BDEC_STATE::LOAD_NEXT_BLOCK:
-                printf("ipu: Load next block!\n");
+                iris_debug(this, "Load next block!");
                 bdec.block_index++;
                 if (bdec.block_index == 6)
                     bdec.state = BDEC_STATE::DONE;
@@ -555,7 +551,7 @@ bool ImageProcessingUnit::process_BDEC()
                 break;
             case BDEC_STATE::DONE:
             {
-                printf("ipu: BDEC done!\n");
+                iris_debug(this, "BDEC done!");
                 uint128_t quad;
                 for (int i = 0; i < 8; i++)
                 {
@@ -599,7 +595,7 @@ bool ImageProcessingUnit::process_BDEC()
                     if (!bits)
                     {
                         ctrl.start_code = true;
-                        printf("ipu: Start code detected!\n");
+                        iris_debug(this, "Start code detected!");
                     }
                     return true;
                 }
@@ -610,7 +606,7 @@ bool ImageProcessingUnit::process_BDEC()
     }
 }
 
-void ImageProcessingUnit::inverse_scan(int16_t *block)
+void Ipu::inverse_scan(int16_t *block)
 {
     int16_t temp[0x40];
     memcpy(temp, block, 0x40 * sizeof(int16_t));
@@ -626,7 +622,7 @@ void ImageProcessingUnit::inverse_scan(int16_t *block)
     }
 }
 
-void ImageProcessingUnit::dequantize(int16_t *block)
+void Ipu::dequantize(int16_t *block)
 {
     int q_scale;
     if (ctrl.nonlinear_Q_step)
@@ -647,7 +643,7 @@ void ImageProcessingUnit::dequantize(int16_t *block)
                 block[0] *= 2;
                 break;
             default:
-                printf("ipu: Dequantize: Intra DC precision == 3!\n");
+                iris_debug(this, "Dequantize: Intra DC precision == 3!");
                 block[0] = 0;
                 break;
         }
@@ -727,7 +723,7 @@ void ImageProcessingUnit::dequantize(int16_t *block)
 #  define PI 3.14159265358979323846
 # endif
 #endif
-void ImageProcessingUnit::prepare_IDCT()
+void Ipu::prepare_IDCT()
 {
     int freq, time;
     double scale;
@@ -742,7 +738,7 @@ void ImageProcessingUnit::prepare_IDCT()
     }
 }
 
-void ImageProcessingUnit::perform_IDCT(const int16_t* pUV, int16_t* pXY)
+void Ipu::perform_IDCT(const int16_t* pUV, int16_t* pXY)
 {
     int i, j, k, v;
     double partial_product;
@@ -785,14 +781,14 @@ void ImageProcessingUnit::perform_IDCT(const int16_t* pUV, int16_t* pXY)
 
 //End IDCT code
 
-bool ImageProcessingUnit::BDEC_read_coeffs()
+bool Ipu::BDEC_read_coeffs()
 {
     while (true)
     {
         switch (bdec.read_coeff_state)
         {
             case BDEC_Command::READ_COEFF::INIT:
-                printf("ipu: READ_COEFF Init!\n");
+                iris_debug(this, "READ_COEFF Init!");
                 bdec.read_diff_state = BDEC_Command::READ_DIFF::SIZE;
                 bdec.subblock_index = 0;
                 if (bdec.intra)
@@ -804,7 +800,7 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
                     bdec.read_coeff_state = BDEC_Command::READ_COEFF::CHECK_END;
                 break;
             case BDEC_Command::READ_COEFF::READ_DC_DIFF:
-                printf("ipu: READ_COEFF Read DC diffs!\n");
+                iris_debug(this, "READ_COEFF Read DC diffs!");
                 if (!BDEC_read_diff())
                     return false;
                 bdec.cur_block[0] = (int16_t)(bdec.dc_predictor[bdec.cur_channel] + bdec.dc_diff);
@@ -812,7 +808,7 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
                 bdec.read_coeff_state = BDEC_Command::READ_COEFF::CHECK_END;
                 break;
             case BDEC_Command::READ_COEFF::CHECK_END:
-                printf("ipu: READ_COEFF Check end of block!\n");
+                iris_debug(this, "READ_COEFF Check end of block!");
             {
                 uint32_t end = 0;
                 if (!dct_coeff->get_end_of_block(in_FIFO, end))
@@ -824,7 +820,7 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
             }
                 break;
             case BDEC_Command::READ_COEFF::COEFF:
-                printf("ipu: READ_COEFF Read coeffs!\n");
+                iris_debug(this, "READ_COEFF Read coeffs!");
             {
                 RunLevelPair pair;
                 if (!bdec.subblock_index)
@@ -837,7 +833,7 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
                     if (!dct_coeff->get_runlevel_pair(in_FIFO, pair, ctrl.MPEG1))
                         return false;
                 }
-                printf("ipu: Run: %d Level: %d\n", pair.run, pair.level);
+                iris_debug(this, "Run: {} Level: {}", pair.run, pair.level);
                 bdec.subblock_index += pair.run;
 
                 if (bdec.subblock_index < 0x40)
@@ -853,7 +849,7 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
             }
                 break;
             case BDEC_Command::READ_COEFF::SKIP_END:
-                printf("ipu: READ_COEFF Skip end!\n");
+                iris_debug(this, "READ_COEFF Skip end!");
                 if (!dct_coeff->get_skip_block(in_FIFO))
                     return false;
                 return true;
@@ -861,14 +857,14 @@ bool ImageProcessingUnit::BDEC_read_coeffs()
     }
 }
 
-bool ImageProcessingUnit::BDEC_read_diff()
+bool Ipu::BDEC_read_diff()
 {
     while (true)
     {
         switch (bdec.read_diff_state)
         {
             case BDEC_Command::READ_DIFF::SIZE:
-                printf("ipu: READ_DIFF SIZE!\n");
+                iris_debug(this, "READ_DIFF SIZE!");
                 if (bdec.cur_channel == 0)
                 {
                     if (!lum_table.get_symbol(in_FIFO, bdec.dc_size))
@@ -882,7 +878,7 @@ bool ImageProcessingUnit::BDEC_read_diff()
                 bdec.read_diff_state = BDEC_Command::READ_DIFF::DIFF;
                 break;
             case BDEC_Command::READ_DIFF::DIFF:
-                printf("ipu: READ_DIFF DIFF!\n");
+                iris_debug(this, "READ_DIFF DIFF!");
                 if (!bdec.dc_size)
                     bdec.dc_diff = 0;
                 else
@@ -904,7 +900,7 @@ bool ImageProcessingUnit::BDEC_read_diff()
     }
 }
 
-void ImageProcessingUnit::convert_RGB32_to_RGB16(const uint8_t* rgb32, uint16_t* rgb16, bool dithering)
+void Ipu::convert_RGB32_to_RGB16(const uint8_t* rgb32, uint16_t* rgb16, bool dithering)
 {
     for (int i = 0; i < 16; ++i)
     {
@@ -922,35 +918,35 @@ void ImageProcessingUnit::convert_RGB32_to_RGB16(const uint8_t* rgb32, uint16_t*
     }
 }
 
-void ImageProcessingUnit::process_VDEC()
+void Ipu::process_VDEC()
 {
     int table = command_option >> 26;
     switch (table)
     {
         case 0:
-            printf("ipu: MBAI\n");
+            iris_debug(this, "MBAI");
             VDEC_table = &macroblock_increment;
             break;
         case 1:
-            printf("ipu: MBT\n");
+            iris_debug(this, "MBT");
             switch (ctrl.picture_type)
             {
                 case 0x1:
-                    printf("ipu: I pic\n");
+                    iris_debug(this, "I pic");
                     VDEC_table = &macroblock_I_pic;
                     break;
                 case 0x2:
-                    printf("ipu: P pic\n");
+                    iris_debug(this, "P pic");
                     VDEC_table = &macroblock_P_pic;
                     break;
                 case 0x3:
-                    printf("ipu: B pic\n");
+                    iris_debug(this, "B pic");
                     VDEC_table = &macroblock_B_pic;
                     break;
             }
             break;
         case 2:
-            printf("ipu: MC\n");
+            iris_debug(this, "MC");
             VDEC_table = &motioncode;
             break;
     }
@@ -971,14 +967,14 @@ void ImageProcessingUnit::process_VDEC()
                     vdec_state = VDEC_STATE::DONE;
                 break;
             case VDEC_STATE::DONE:
-                printf("ipu: VDEC done! Output: $%08X infifo=%d\n", command_output, in_FIFO.f.size());
+                iris_debug(this, "VDEC done! Output: ${:08x} infifo={}", command_output, in_FIFO.f.size());
                 finish_command();
                 return;
         }
     }
 }
 
-void ImageProcessingUnit::process_FDEC()
+void Ipu::process_FDEC()
 {
     while (true)
     {
@@ -996,13 +992,13 @@ void ImageProcessingUnit::process_FDEC()
                 break;
             case VDEC_STATE::DONE:
                 finish_command();
-                printf("ipu: FDEC result: $%08X\n", command_output);
+                iris_debug(this, "FDEC result: ${:08x}", command_output);
                 return;
         }
     }
 }
 
-bool ImageProcessingUnit::process_CSC()
+bool Ipu::process_CSC()
 {
     while (true)
     {
@@ -1117,19 +1113,19 @@ bool ImageProcessingUnit::process_CSC()
                 }
                 csc.macroblocks--;
                 csc.state = CSC_STATE::BEGIN;
-                dmac->channels[DMAC_IPU_FROM].dreq = 1;
-                // printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
-                dmac_handle_ipu_from_transfer(dmac);
+                dmac->channels[ee::dmac::IPU_FROM].dreq = 1;
+                // iris_debug(this, "set ipu_from dreq out={:x}", out_FIFO.f.size());
+                ee::dmac::handle_ipu_from_transfer(dmac);
             }
                 break;
             case CSC_STATE::DONE:
-                printf("ipu: CSC done!\n");
+                iris_debug(this, "CSC done!");
                 return true;
         }
     }
 }
 
-bool ImageProcessingUnit::process_PACK()
+bool Ipu::process_PACK()
 {
     while (true)
     {
@@ -1226,30 +1222,30 @@ bool ImageProcessingUnit::process_PACK()
                 }
                 pack.macroblocks--;
                 pack.state = PACK_STATE::BEGIN;
-                dmac->channels[DMAC_IPU_FROM].dreq = 1;
-                printf("ipu: set ipu_from dreq out=%x\n", out_FIFO.f.size());
-                dmac_handle_ipu_from_transfer(dmac);
+                dmac->channels[ee::dmac::IPU_FROM].dreq = 1;
+                iris_debug(this, "set ipu_from dreq out={:x}", out_FIFO.f.size());
+                ee::dmac::handle_ipu_from_transfer(dmac);
             }
                 break;
             case PACK_STATE::DONE:
-                printf("ipu: PACK done!\n");
+                iris_debug(this, "PACK done!");
                 return true;
         }
     }
 }
 
-uint64_t ImageProcessingUnit::read_command()
+uint64_t Ipu::read_command()
 {
     uint64_t reg = 0;
     reg |= command_output;
     reg |= (uint64_t)command_decoding << 63UL;
 
-    printf("ipu: Read command: $%08X\n", command_output);
+    iris_debug(this, "Read command: ${:08x}", command_output);
 
     return reg;
 }
 
-uint32_t ImageProcessingUnit::read_control()
+uint32_t Ipu::read_control()
 {
     uint32_t reg = 0;
     reg |= in_FIFO.f.size();
@@ -1266,7 +1262,7 @@ uint32_t ImageProcessingUnit::read_control()
     return reg;
 }
 
-uint32_t ImageProcessingUnit::read_BP()
+uint32_t Ipu::read_BP()
 {
     uint32_t reg = 0;
     uint8_t fifo_size = in_FIFO.f.size();
@@ -1279,11 +1275,11 @@ uint32_t ImageProcessingUnit::read_BP()
     }
     reg |= in_FIFO.bit_pointer;
     reg |= fifo_size << 8;
-    printf("ipu: Read BP: $%08X\n", reg);
+    iris_debug(this, "Read BP: ${:08x}", reg);
     return reg;
 }
 
-uint64_t ImageProcessingUnit::read_top()
+uint64_t Ipu::read_top()
 {
     uint64_t reg = 0;
     int max_bits = (in_FIFO.f.size() * 128) - in_FIFO.bit_pointer;
@@ -1308,9 +1304,9 @@ uint64_t ImageProcessingUnit::read_top()
     return reg;
 }
 
-void ImageProcessingUnit::write_command(uint32_t value)
+void Ipu::write_command(uint32_t value)
 {
-    printf("ipu: Write command: $%08X\n", value);
+    iris_debug(this, "Write command: ${:08x}", value);
     if (!ctrl.busy)
     {
         ctrl.busy = true;
@@ -1321,13 +1317,13 @@ void ImageProcessingUnit::write_command(uint32_t value)
         switch (command)
         {
             case 0x00:
-                printf("ipu: BCLR\n");
+                iris_debug(this, "BCLR");
                 in_FIFO.reset();
                 in_FIFO.bit_pointer = command_option & 0x7F;
                 finish_command();
                 break;
             case 0x01:
-                printf("ipu: IDEC\n");
+                iris_debug(this, "IDEC");
                 idec.state = IDEC_STATE::DELAY;
                 idec.macro_type = 0;
                 idec.qsc = (command_option >> 16) & 0x1F;
@@ -1336,7 +1332,7 @@ void ImageProcessingUnit::write_command(uint32_t value)
                 csc.use_RGB16 = command_option & (1 << 27);
                 break;
             case 0x02:
-                printf("ipu: BDEC\n");
+                iris_debug(this, "BDEC");
                 bdec.state = BDEC_STATE::ADVANCE;
                 bdec.out_fifo = &out_FIFO;
                 ctrl.coded_block_pattern = 0x3F;
@@ -1348,42 +1344,42 @@ void ImageProcessingUnit::write_command(uint32_t value)
                 bdec.check_start_code = true;
                 break;
             case 0x03:
-                printf("ipu: VDEC\n");
+                iris_debug(this, "VDEC");
                 command_decoding = true;
                 vdec_state = VDEC_STATE::ADVANCE;
                 process_VDEC();
                 break;
             case 0x04:
-                printf("ipu: FDEC\n");
+                iris_debug(this, "FDEC");
                 command_decoding = true;
                 fdec_state = VDEC_STATE::ADVANCE;
                 process_FDEC();
                 break;
             case 0x05:
-                printf("ipu: SETIQ\n");
+                iris_debug(this, "SETIQ");
                 bytes_left = 64;
                 setiq_state = SETIQ_STATE::ADVANCE;
                 break;
             case 0x06:
-                printf("ipu: SETVQ\n");
+                iris_debug(this, "SETVQ");
                 bytes_left = 32;
                 break;
             case 0x07:
-                printf("ipu: CSC\n");
+                iris_debug(this, "CSC");
                 csc.state = CSC_STATE::BEGIN;
                 csc.macroblocks = command_option & 0x7FF;
                 csc.use_RGB16 = command_option & (1 << 27);
                 csc.use_dithering = command_option & (1 << 26);
                 break;
             case 0x08:
-                printf("ipu: PACK\n");
+                iris_debug(this, "PACK");
                 pack.state = PACK_STATE::BEGIN;
                 pack.macroblocks = command_option & 0x7FF;
                 pack.use_RGB16 = command_option & (1 << 27);
                 pack.use_dithering = command_option & (1 << 26);
                 break;
             case 0x09:
-                printf("ipu: SETTH\n");
+                iris_debug(this, "SETTH");
                 TH0 = command_option & 0x1FF;
                 TH1 = (command_option >> 16) & 0x1FF;
                 finish_command();
@@ -1392,9 +1388,9 @@ void ImageProcessingUnit::write_command(uint32_t value)
     }
 }
 
-void ImageProcessingUnit::write_control(uint32_t value)
+void Ipu::write_control(uint32_t value)
 {
-    printf("ipu: Write control: $%08X\n", value);
+    iris_debug(this, "Write control: ${:08x}", value);
     ctrl.intra_DC_precision = (value >> 16) & 0x3;
     ctrl.alternate_scan = value & (1 << 20);
     ctrl.intra_VLC_table = value & (1 << 21);
@@ -1415,34 +1411,34 @@ void ImageProcessingUnit::write_control(uint32_t value)
     }
 }
 
-bool ImageProcessingUnit::can_read_FIFO()
+bool Ipu::can_read_FIFO()
 {
     return out_FIFO.f.size() > 0;
 }
 
-bool ImageProcessingUnit::can_write_FIFO()
+bool Ipu::can_write_FIFO()
 {
     return in_FIFO.f.size() < 8;
 }
 
-uint128_t ImageProcessingUnit::read_FIFO()
+uint128_t Ipu::read_FIFO()
 {
     if (!out_FIFO.f.size()) {
-        dmac->channels[DMAC_IPU_FROM].dreq = 0;
+        dmac->channels[ee::dmac::IPU_FROM].dreq = 0;
         return { 0 };
     }
     uint128_t quad = out_FIFO.f.front();
     out_FIFO.f.pop_front();
     if (!out_FIFO.f.size()) {
-        printf("ipu: clear ipu_from dreq\n");
-        dmac->channels[DMAC_IPU_FROM].dreq = 0;
+        iris_debug(this, "clear ipu_from dreq");
+        dmac->channels[ee::dmac::IPU_FROM].dreq = 0;
     }
     return quad;
 }
 
-void ImageProcessingUnit::write_FIFO(uint128_t quad)
+void Ipu::write_FIFO(uint128_t quad)
 {
-    printf("ipu: Write FIFO: $%08X_%08X_%08X_%08X\n", quad.u32[3], quad.u32[2], quad.u32[1], quad.u32[0]);
+    iris_debug(this, "Write FIFO: ${:08x}_{:08x}_{:08x}_{:08x}", quad.u32[3], quad.u32[2], quad.u32[1], quad.u32[0]);
 
     //Certain games (Theme Park, Neo Contra, etc) read command output without sending a command.
     //They expect to read the first word of a newly started IPU_TO transfer.
@@ -1454,7 +1450,7 @@ void ImageProcessingUnit::write_FIFO(uint128_t quad)
     }
     if (in_FIFO.f.size() == 7)
     {
-        dmac->channels[DMAC_IPU_TO].dreq = 0;
+        dmac->channels[ee::dmac::IPU_TO].dreq = 0;
     }
     if (in_FIFO.f.size() >= 8)
     {
@@ -1463,98 +1459,93 @@ void ImageProcessingUnit::write_FIFO(uint128_t quad)
     in_FIFO.bit_cache_dirty = true;
 }
 
-struct ps2_ipu {
-    ImageProcessingUnit* ipu;
-};
+Ipu* create(logger::Logger* logger, ee::dmac::Dmac* dmac, ee::intc::Intc* intc) {
+    Ipu* ipu = new Ipu(intc, dmac);
 
-extern "C" struct ps2_ipu* ps2_ipu_create(void) {
-    return (struct ps2_ipu*)malloc(sizeof(struct ps2_ipu));
+    ipu->logger = logger;
+    ipu->logger_id = logger::register_source(logger, "ipu");
+
+    return ipu;
 }
 
-extern "C" void ps2_ipu_init(struct ps2_ipu* ipu, struct ps2_dmac* dmac, struct ps2_intc* intc) {
-    ipu->ipu = new ImageProcessingUnit(intc, dmac);
+void reset(Ipu* ipu) {
+    ipu->reset();
 }
 
-extern "C" void ps2_ipu_reset(struct ps2_ipu* ipu) {
-    ipu->ipu->reset();
+void destroy(Ipu* ipu) {
+    delete ipu;
 }
 
-extern "C" uint64_t ps2_ipu_read64(struct ps2_ipu* ipu, uint32_t addr) {
-    switch (addr) {
-        case 0x10002000: return ipu->ipu->read_command();
-        case 0x10002010: return ipu->ipu->read_control();
-        case 0x10002020: return ipu->ipu->read_BP();
-        case 0x10002030: return ipu->ipu->read_top();
-    }
-
-    std::fprintf(stderr, "ipu: Unhandled IPU read address %08x\n", addr);
-
-    return 0;
+bool is_busy(Ipu* ipu) {
+    return ipu->ctrl.busy;
 }
 
-extern "C" void ps2_ipu_write64(struct ps2_ipu* ipu, uint32_t addr, uint64_t data) {
-    switch (addr) {
-        case 0x10002000: ipu->ipu->write_command(data); ps2_ipu_run(ipu); return;
-        case 0x10002010: ipu->ipu->write_control(data); ps2_ipu_run(ipu); return;
-        case 0x10002020: return; // (W) ipu->ipu->write_BP(); return;
-        case 0x10002030: return; // (W) ipu->ipu->write_top(); return;
-    }
-
-    fprintf(stderr, "ipu: Unhandled IPU write address %08x\n", addr);
-
-    exit(1);
-}
-
-extern "C" uint128_t ps2_ipu_read128(struct ps2_ipu* ipu, uint32_t addr) {
-    ps2_ipu_run(ipu);
-
-    switch (addr) {
-        case 0x10007000: return ipu->ipu->read_FIFO();
-        case 0x10007010: break; // (W) ipu->ipu->write_FIFO();
-    }
-
-    fprintf(stderr, "ipu: Unhandled IPU read address %08x\n", addr);
-
-    return { 0 }; // Return a zeroed quad if the address is unhandled
-}
-
-extern "C" void ps2_ipu_write128(struct ps2_ipu* ipu, uint32_t addr, uint128_t data) {
-    switch (addr) {
-        case 0x10007000: break; // (R) ipu->ipu->read_FIFO();
-        case 0x10007010: ipu->ipu->write_FIFO(data); ps2_ipu_run(ipu); return;
-    }
-
-    std::fprintf(stderr, "ipu: Unhandled IPU write address %08x\n", addr);
-
-    exit(1);
-}
-
-int ps2_ipu_is_busy(struct ps2_ipu* ipu) {
-    return ipu->ipu->ctrl.busy;
-}
-
-void ps2_ipu_run(struct ps2_ipu* ipu) {
+void run(Ipu* ipu) {
+    // The IPU drives its own register writes, so a command that kicks the
+    // pipeline can re-enter here before the previous run has unwound.
     static bool running = false;
 
     if (running) return;
 
     running = true;
 
-    ipu->ipu->run_until_stalled();
+    ipu->run_until_stalled();
 
     running = false;
 }
 
-extern "C" void ps2_ipu_destroy(struct ps2_ipu* ipu) {
-    delete ipu->ipu;
+uint64_t read64(Ipu* ipu, uint32_t addr) {
+    switch (addr) {
+        case 0x10002000: return ipu->read_command();
+        case 0x10002010: return ipu->read_control();
+        case 0x10002020: return ipu->read_BP();
+        case 0x10002030: return ipu->read_top();
+    }
 
-    free(ipu);
+    iris_error(ipu, "Unhandled 64-bit read from address {:08x}", addr);
+
+    return 0;
 }
 
-uint128_t ps2_ipu_fifo_read(struct ps2_ipu* ipu) {
-    return ipu->ipu->read_FIFO();
+void write64(Ipu* ipu, uint32_t addr, uint64_t data) {
+    switch (addr) {
+        case 0x10002000: ipu->write_command(data); run(ipu); return;
+        case 0x10002010: ipu->write_control(data); run(ipu); return;
+        case 0x10002020: return; // (W) write_BP
+        case 0x10002030: return; // (W) write_top
+    }
+
+    iris_fatal_error(ipu, "Unhandled 64-bit write to address {:08x}", addr);
 }
 
-void ps2_ipu_fifo_write(struct ps2_ipu* ipu, uint128_t data) {
-    ipu->ipu->write_FIFO(data);
+uint128_t read128(Ipu* ipu, uint32_t addr) {
+    run(ipu);
+
+    switch (addr) {
+        case 0x10007000: return ipu->read_FIFO();
+        case 0x10007010: break; // (W) write_FIFO
+    }
+
+    iris_error(ipu, "Unhandled 128-bit read from address {:08x}", addr);
+
+    return { 0 };
+}
+
+void write128(Ipu* ipu, uint32_t addr, uint128_t data) {
+    switch (addr) {
+        case 0x10007000: break; // (R) read_FIFO
+        case 0x10007010: ipu->write_FIFO(data); run(ipu); return;
+    }
+
+    iris_fatal_error(ipu, "Unhandled 128-bit write to address {:08x}", addr);
+}
+
+uint128_t fifo_read(Ipu* ipu) {
+    return ipu->read_FIFO();
+}
+
+void fifo_write(Ipu* ipu, uint128_t data) {
+    ipu->write_FIFO(data);
+}
+
 }

@@ -10,7 +10,7 @@
 #include "config.hpp"
 #include "net.hpp"
 
-#include "iop/disc.h"
+#include "iop/disc.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 
@@ -73,29 +73,29 @@ std::string upper(const std::string& str) {
     return result;
 }
 
-void parse_disc(struct disc_state* disc, gamelist_entry* entry) {
-    int type = disc_get_type(disc);
+void parse_disc(iop::disc::Disc* disc, gamelist_entry* entry) {
+    int type = iop::disc::get_type(disc);
 
     switch (type) {
-        case CDVD_DISC_PSX_CD: entry->type = "PlayStation CD"; break; 
-        case CDVD_DISC_PSX_CDDA: entry->type = "PlayStation CDDA"; break; 
-        case CDVD_DISC_PS2_CD: entry->type = "PlayStation 2 CD"; break; 
-        case CDVD_DISC_PS2_CDDA: entry->type = "PlayStation 2 CDDA"; break; 
-        case CDVD_DISC_PS2_DVD: entry->type = "PlayStation 2 DVD"; break; 
-        case CDVD_DISC_CDDA: entry->type = "CD Audio"; break; 
-        case CDVD_DISC_DVD_VIDEO: entry->type = "DVD Video"; break; 
+        case iop::disc::CDVD_DISC_PSX_CD: entry->type = "PlayStation CD"; break; 
+        case iop::disc::CDVD_DISC_PSX_CDDA: entry->type = "PlayStation CDDA"; break; 
+        case iop::disc::CDVD_DISC_PS2_CD: entry->type = "PlayStation 2 CD"; break; 
+        case iop::disc::CDVD_DISC_PS2_CDDA: entry->type = "PlayStation 2 CDDA"; break; 
+        case iop::disc::CDVD_DISC_PS2_DVD: entry->type = "PlayStation 2 DVD"; break; 
+        case iop::disc::CDVD_DISC_CDDA: entry->type = "CD Audio"; break; 
+        case iop::disc::CDVD_DISC_DVD_VIDEO: entry->type = "DVD Video"; break; 
     }
 
     char serial[128];
 
-    if (!disc_get_serial(disc, serial)) {
+    if (!iop::disc::get_serial(disc, serial)) {
         serial[0] = '\0';
     }
 
     entry->serial = std::string(serial);
 
     std::replace(entry->serial.begin(), entry->serial.end(), '_', '-');
-    std::remove(entry->serial.begin(), entry->serial.end(), '.');
+    entry->serial.erase(std::remove(entry->serial.begin(), entry->serial.end(), '.'), entry->serial.end());
 
     if (entry->serial.length() > 10) {
         entry->serial = entry->serial.substr(0, 10);
@@ -104,7 +104,7 @@ void parse_disc(struct disc_state* disc, gamelist_entry* entry) {
     }
 }
 
-void make_gamelist_cache(iris::instance* iris, std::string path) {
+void make_gamelist_cache(instance* iris, std::string path) {
     gamelist_cache_status = GAMELIST_CACHE_PARSING;
 
     for (const auto& entry : std::filesystem::directory_iterator(path)) {
@@ -116,7 +116,7 @@ void make_gamelist_cache(iris::instance* iris, std::string path) {
             }
 
             if (ext == ".iso" || ext == ".bin" || ext == ".cue" || ext == ".chd" || ext == ".cso" || ext == ".zso") {
-                struct disc_state* disc = disc_open(entry.path().string().c_str());
+                iop::disc::Disc* disc = iop::disc::open(entry.path().string().c_str());
 
                 gamelist_entry e;
 
@@ -129,7 +129,7 @@ void make_gamelist_cache(iris::instance* iris, std::string path) {
 
                 if (disc) {
                     parse_disc(disc, &e);
-                    disc_close(disc);
+                    iop::disc::close(disc);
                 }
 
                 gamelist_cache.push_back(e);
@@ -280,10 +280,10 @@ void draw_badge(const char* text, ImU32 color, float bg_alpha = 0.5f, float roun
 
     SetCursorPosX(GetCursorPosX() + x_pad);
 
-    TextColored(text_color, text);
+    TextColored(text_color, "%s", text);
 }
 
-void draw_table(iris::instance* iris) {
+void draw_table(instance* iris) {
     using namespace ImGui;
 
     if (BeginTable("##gamelist_tabs", 4, ImGuiTableFlags_Sortable | ImGuiTableFlags_NoBordersInBody)) {
@@ -370,17 +370,17 @@ void draw_table(iris::instance* iris) {
             if (BeginChild(("title" + std::to_string(i)).c_str(), ImVec2(0, height), 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs)) {
                 SetCursorPosY(height2 - title_height);
                 PushFont(iris->font_heading);
-                Text(entry.name.c_str());
+                Text("%s", entry.name.c_str());
                 PopFont();
                 SetCursorPosY(height2 + padding * 2);
-                TextDisabled((entry.type + " • " + entry.serial).c_str());
+                TextDisabled("%s", (entry.type + " • " + entry.serial).c_str());
             } EndChild();
 
             TableNextColumn();
             if (BeginChild(("region" + std::to_string(i)).c_str(), ImVec2(0, height), 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs)) {
                 SetCursorPosX(GetContentRegionAvail().x / 2 - CalcTextSize(entry.region.c_str()).x / 2);
                 SetCursorPosY(height2 - subtitle_height / 2);
-                TextDisabled(entry.region.c_str());
+                TextDisabled("%s", entry.region.c_str());
             } EndChild();
 
 
@@ -399,7 +399,7 @@ void draw_table(iris::instance* iris) {
     }
 }
 
-void gamelib_filter_symbols(iris::instance* iris, const std::string& filter, bool regex, bool case_sensitive) {
+void gamelib_filter_symbols(instance* iris, const std::string& filter, bool regex, bool case_sensitive) {
     gamelist_cache.clear();
 
     if (filter[0] == '\0') {
@@ -435,14 +435,14 @@ void gamelib_filter_symbols(iris::instance* iris, const std::string& filter, boo
 }
 
 int gamelib_edit_callback(ImGuiInputTextCallbackData* data) {
-    iris::instance* iris = (iris::instance*)data->UserData;
+    instance* iris = (instance*)data->UserData;
 
     gamelib_filter_symbols(iris, data->Buf, gamelib_regex, gamelib_case_sensitive);
 
     return 0;
 }
 
-void show_gamelist(iris::instance* iris) {
+void show_gamelist(instance* iris) {
     using namespace ImGui;
 
     if (!gamelist_cache_thread_started) {
@@ -488,7 +488,7 @@ void show_gamelist(iris::instance* iris) {
 
         ImGui::SetCursorPos(cursor_pos);
 
-        Text(buf);
+        Text("%s", buf);
 
         return;
     }

@@ -1,6 +1,7 @@
-#ifndef CHROMTABLE_HPP
-#define CHROMTABLE_HPP
+#pragma once
 #include "vlc_table.hpp"
+
+namespace iris::ipu {
 
 class ChromTable : public VLC_Table
 {
@@ -13,4 +14,4 @@ class ChromTable : public VLC_Table
         ChromTable();
 };
 
-#endif // CHROMTABLE_HPP
+}

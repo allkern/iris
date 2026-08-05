@@ -1,7 +1,3 @@
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 #include <signal.h>
 #include <assert.h>
 #include <math.h>
@@ -14,14 +10,16 @@
 #include <smmintrin.h>
 #endif
 
-#include "ee.h"
-#include "bus.h"
-#include "vu.h"
-#include "ee_dis.h"
+#include "ee.hpp"
+#include "bus.hpp"
+#include "vu.hpp"
+#include "ee_dis.hpp"
 #include "ee_def.hpp"
 #include "ee_mmi.hpp"
 #include "ee_fpu.hpp"
 #include "ee_lsw.hpp"
+
+namespace iris::ee {
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
 #define min(a, b) ((a) < (b) ? (a) : (b))
@@ -39,54 +37,48 @@
 #define SSUBOVF64 __builtin_ssubll_overflow
 #endif
 
-#define VU_D_FLD (0x01e00000)
-#define VU_D_X (0x01000000)
-#define VU_D_Y (0x00800000)
-#define VU_D_Z (0x00400000)
-#define VU_D_W (0x00200000)
-
 // file = fopen("vu.dump", "a"); fprintf(file, #ins "\n"); fclose(file);
-#define VU_LOWER(ins) { ps2_vu_decode_lower(ee->vu0, i.opcode); vu_i_ ## ins(ee->vu0, &ee->vu0->lower); }
-#define VU_UPPER(ins) { ps2_vu_decode_upper(ee->vu0, i.opcode); vu_i_ ## ins(ee->vu0, &ee->vu0->upper); }
+#define VU_LOWER(ins) { vu::decode_lower(ee->vu0, i.opcode); vu::i_ ## ins(ee->vu0, &ee->vu0->lower); }
+#define VU_UPPER(ins) { vu::decode_upper(ee->vu0, i.opcode); vu::i_ ## ins(ee->vu0, &ee->vu0->upper); }
 #define VU_LOWER_TEMPLATE(ins) { \
-    ps2_vu_decode_lower(ee->vu0, i.opcode); \
+    vu::decode_lower(ee->vu0, i.opcode); \
     switch ((i.opcode >> 21) & 0xf) { \
-        case 0: vu_i_ ## ins <0>(ee->vu0, &ee->vu0->lower); break; \
-        case 1: vu_i_ ## ins <VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 2: vu_i_ ## ins <VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 3: vu_i_ ## ins <VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 4: vu_i_ ## ins <VU_D_Y>(ee->vu0, &ee->vu0->lower); break; \
-        case 5: vu_i_ ## ins <VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 6: vu_i_ ## ins <VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 7: vu_i_ ## ins <VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 8: vu_i_ ## ins <VU_D_X>(ee->vu0, &ee->vu0->lower); break; \
-        case 9: vu_i_ ## ins <VU_D_X | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 10: vu_i_ ## ins <VU_D_X | VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 11: vu_i_ ## ins <VU_D_X | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 12: vu_i_ ## ins <VU_D_X | VU_D_Y>(ee->vu0, &ee->vu0->lower); break; \
-        case 13: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 14: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 15: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 0: vu::i_ ## ins <0>(ee->vu0, &ee->vu0->lower); break; \
+        case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 2: vu::i_ ## ins <vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 3: vu::i_ ## ins <vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 4: vu::i_ ## ins <vu::D_Y>(ee->vu0, &ee->vu0->lower); break; \
+        case 5: vu::i_ ## ins <vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 6: vu::i_ ## ins <vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 7: vu::i_ ## ins <vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 8: vu::i_ ## ins <vu::D_X>(ee->vu0, &ee->vu0->lower); break; \
+        case 9: vu::i_ ## ins <vu::D_X | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 10: vu::i_ ## ins <vu::D_X | vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 11: vu::i_ ## ins <vu::D_X | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 12: vu::i_ ## ins <vu::D_X | vu::D_Y>(ee->vu0, &ee->vu0->lower); break; \
+        case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
+        case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
     } }
 #define VU_UPPER_TEMPLATE(ins) { \
-    ps2_vu_decode_upper(ee->vu0, i.opcode); \
+    vu::decode_upper(ee->vu0, i.opcode); \
     switch ((i.opcode >> 21) & 0xf) { \
-        case 0: vu_i_ ## ins <0>(ee->vu0, &ee->vu0->upper); break; \
-        case 1: vu_i_ ## ins <VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 2: vu_i_ ## ins <VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 3: vu_i_ ## ins <VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 4: vu_i_ ## ins <VU_D_Y>(ee->vu0, &ee->vu0->upper); break; \
-        case 5: vu_i_ ## ins <VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 6: vu_i_ ## ins <VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 7: vu_i_ ## ins <VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 8: vu_i_ ## ins <VU_D_X>(ee->vu0, &ee->vu0->upper); break; \
-        case 9: vu_i_ ## ins <VU_D_X | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 10: vu_i_ ## ins <VU_D_X | VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 11: vu_i_ ## ins <VU_D_X | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 12: vu_i_ ## ins <VU_D_X | VU_D_Y>(ee->vu0, &ee->vu0->upper); break; \
-        case 13: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 14: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 15: vu_i_ ## ins <VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 0: vu::i_ ## ins <0>(ee->vu0, &ee->vu0->upper); break; \
+        case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 2: vu::i_ ## ins <vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 3: vu::i_ ## ins <vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 4: vu::i_ ## ins <vu::D_Y>(ee->vu0, &ee->vu0->upper); break; \
+        case 5: vu::i_ ## ins <vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 6: vu::i_ ## ins <vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 7: vu::i_ ## ins <vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 8: vu::i_ ## ins <vu::D_X>(ee->vu0, &ee->vu0->upper); break; \
+        case 9: vu::i_ ## ins <vu::D_X | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 10: vu::i_ ## ins <vu::D_X | vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 11: vu::i_ ## ins <vu::D_X | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 12: vu::i_ ## ins <vu::D_X | vu::D_Y>(ee->vu0, &ee->vu0->upper); break; \
+        case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
+        case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
     } }
 
 static inline int fast_abs32(int a) {
@@ -153,11 +145,11 @@ static inline uint32_t unpack_5551_8888(uint32_t v) {
            ((v & 0x8000) << 16);
 }
 
-#define EE_KUSEG 0
-#define EE_KSEG0 1
-#define EE_KSEG1 2
-#define EE_KSSEG 3
-#define EE_KSEG3 4
+#define KUSEG 0
+#define KSEG0 1
+#define KSEG1 2
+#define KSSEG 3
+#define KSEG3 4
 
 /*
     i.rs = (opcode >> 21) & 0x1f;
@@ -168,35 +160,35 @@ static inline uint32_t unpack_5551_8888(uint32_t v) {
     i.i16 = opcode & 0xffff;
     i.i26 = opcode & 0x3ffffff;
 */
-#define EE_D_RS (i.rs.r)
-#define EE_D_FS (i.rd.r)
-#define EE_D_RT (i.rt.r)
-#define EE_D_RD (i.rd.r)
-#define EE_D_FD (i.sa)
-#define EE_D_SA (i.sa)
-#define EE_D_I15 (i.i15)
-#define EE_D_I16 (i.i16)
-#define EE_D_I26 (i.i26)
-#define EE_D_SI26 ((int32_t)(EE_D_I26 << 6) >> 4)
-#define EE_D_SI16 ((int32_t)(EE_D_I16 << 16) >> 14)
+#define D_RS (i.rs.r)
+#define D_FS (i.rd.r)
+#define D_RT (i.rt.r)
+#define D_RD (i.rd.r)
+#define D_FD (i.sa)
+#define D_SA (i.sa)
+#define D_I15 (i.i15)
+#define D_I16 (i.i16)
+#define D_I26 (i.i26)
+#define D_SI26 ((int32_t)(D_I26 << 6) >> 4)
+#define D_SI16 ((int32_t)(D_I16 << 16) >> 14)
 
-#define EE_RT ee->r[EE_D_RT].ul64
-#define EE_RD ee->r[EE_D_RD].ul64
-#define EE_RS ee->r[EE_D_RS].ul64
-#define EE_RT32 ee->r[EE_D_RT].ul32
-#define EE_RD32 ee->r[EE_D_RD].ul32
-#define EE_RS32 ee->r[EE_D_RS].ul32
-#define EE_FD ee->f[EE_D_FD].f
-#define EE_FT (fpu_cvtf(ee->f[EE_D_RT].f))
-#define EE_FS (fpu_cvtf(ee->f[EE_D_FS].f))
-#define EE_FT32 ee->f[EE_D_RT].u32
-#define EE_FD32 ee->f[EE_D_FD].u32
-#define EE_FS32 ee->f[EE_D_FS].u32
+#define RT ee->r[D_RT].ul64
+#define RD ee->r[D_RD].ul64
+#define RS ee->r[D_RS].ul64
+#define RT32 ee->r[D_RT].ul32
+#define RD32 ee->r[D_RD].ul32
+#define RS32 ee->r[D_RS].ul32
+#define FD ee->f[D_FD].f
+#define FT (fpu_cvtf(ee->f[D_RT].f))
+#define FS (fpu_cvtf(ee->f[D_FS].f))
+#define FT32 ee->f[D_RT].u32
+#define FD32 ee->f[D_FD].u32
+#define FS32 ee->f[D_FS].u32
 
-#define EE_HI0 ee->hi.u64[0]
-#define EE_LO0 ee->lo.u64[0]
-#define EE_HI1 ee->hi.u64[1]
-#define EE_LO1 ee->lo.u64[1]
+#define HI0 ee->hi.u64[0]
+#define LO0 ee->lo.u64[0]
+#define HI1 ee->hi.u64[1]
+#define LO1 ee->lo.u64[1]
 
 #define BRANCH(cond, offset) \
     if (cond) { ee->next_pc = ee->pc + (offset); }
@@ -209,30 +201,30 @@ static inline uint32_t unpack_5551_8888(uint32_t v) {
 #define SE648(v) ((int64_t)((int8_t)(v)))
 #define SE3216(v) ((int32_t)((int16_t)(v)))
 
-static inline void ee_print_disassembly(struct ee_state* ee, const ee_instruction& i) {
+static inline void print_disassembly(Ee* ee, const Instruction& i) {
     char buf[128];
-    struct ee_dis_state ds;
+    dis::Dis ds;
 
     ds.print_address = 1;
     ds.print_opcode = 1;
     ds.pc = ee->pc;
 
-    puts(ee_disassemble(buf, i.opcode, &ds));
+    puts(dis::disassemble(buf, i.opcode, &ds));
 }
 
-static inline int ee_get_segment(uint32_t virt) {
+static inline int get_segment(uint32_t virt) {
     switch (virt & 0xe0000000) {
-        case 0x00000000: return EE_KUSEG;
-        case 0x20000000: return EE_KUSEG;
-        case 0x40000000: return EE_KUSEG;
-        case 0x60000000: return EE_KUSEG;
-        case 0x80000000: return EE_KSEG0;
-        case 0xa0000000: return EE_KSEG1;
-        case 0xc0000000: return EE_KSSEG;
-        case 0xe0000000: return EE_KSEG3;
+        case 0x00000000: return KUSEG;
+        case 0x20000000: return KUSEG;
+        case 0x40000000: return KUSEG;
+        case 0x60000000: return KUSEG;
+        case 0x80000000: return KSEG0;
+        case 0xa0000000: return KSEG1;
+        case 0xc0000000: return KSSEG;
+        case 0xe0000000: return KSEG3;
     }
 
-    return EE_KUSEG;
+    return KUSEG;
 }
 
 static inline float fpu_cvtf(float f) {
@@ -255,7 +247,7 @@ static inline float fpu_cvtf(float f) {
     return *(float*)&u32;
 }
 
-static inline float fpu_cvtsw(union ee_fpu_reg* reg) {
+static inline float fpu_cvtsw(union FpuReg* reg) {
     switch (reg->u32 & 0x7F800000) {
         case 0x0: {
             reg->u32 &= 0x80000000;
@@ -269,7 +261,7 @@ static inline float fpu_cvtsw(union ee_fpu_reg* reg) {
     return reg->f;
 }
 
-static inline void fpu_cvtws(union ee_fpu_reg* d, union ee_fpu_reg* s) {
+static inline void fpu_cvtws(union FpuReg* d, union FpuReg* s) {
     if ((s->u32 & 0x7F800000) <= 0x4E800000)
         d->s32 = (int32_t)fpu_cvtf(s->f);
     else if ((s->u32 & 0x80000000) == 0)
@@ -278,7 +270,7 @@ static inline void fpu_cvtws(union ee_fpu_reg* d, union ee_fpu_reg* s) {
         d->u32 = 0x80000000;
 }
 
-static inline int fpu_check_overflow(struct ee_state* ee, union ee_fpu_reg* reg) {
+static inline int fpu_check_overflow(Ee* ee, union FpuReg* reg) {
     if ((reg->u32 & ~0x80000000) == 0x7f800000) {
         reg->u32 = (reg->u32 & 0x80000000) | 0x7f7fffff;
         ee->fcr |= FPU_FLG_O | FPU_FLG_SO;
@@ -291,7 +283,7 @@ static inline int fpu_check_overflow(struct ee_state* ee, union ee_fpu_reg* reg)
     return 0;
 }
 
-static inline int fpu_check_underflow(struct ee_state* ee, union ee_fpu_reg* reg) {
+static inline int fpu_check_underflow(Ee* ee, union FpuReg* reg) {
     if (((reg->u32 & 0x7F800000) == 0) && ((reg->u32 & 0x007FFFFF) != 0)) {
         reg->u32 &= 0x80000000;
         ee->fcr |= FPU_FLG_U | FPU_FLG_SU;
@@ -304,7 +296,7 @@ static inline int fpu_check_underflow(struct ee_state* ee, union ee_fpu_reg* reg
     return 0;
 }
 
-static inline int fpu_check_overflow_no_flags(struct ee_state* ee, union ee_fpu_reg* reg) {
+static inline int fpu_check_overflow_no_flags(Ee* ee, union FpuReg* reg) {
     if ((reg->u32 & ~0x80000000) == 0x7f800000) {
         reg->u32 = (reg->u32 & 0x80000000) | 0x7f7fffff;
 
@@ -314,7 +306,7 @@ static inline int fpu_check_overflow_no_flags(struct ee_state* ee, union ee_fpu_
     return 0;
 }
 
-static inline int fpu_check_underflow_no_flags(struct ee_state* ee, union ee_fpu_reg* reg) {
+static inline int fpu_check_underflow_no_flags(Ee* ee, union FpuReg* reg) {
     if (((reg->u32 & 0x7F800000) == 0) && ((reg->u32 & 0x007FFFFF) != 0)) {
         reg->u32 &= 0x80000000;
 
@@ -332,12 +324,12 @@ static inline int fpu_min(int32_t a, int32_t b) {
     return (a < 0 && b < 0) ? max(a, b) : min(a, b);
 }
 
-void ee_exception_level1(struct ee_state* ee, uint32_t cause);
+void exception_level1(Ee* ee, uint32_t cause);
 
 #ifdef _EE_USE_MMU
-static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t virt) {
+static inline VtlbEntry* search_vtlb(Ee* ee, uint32_t virt) {
     for (int i = 0; i < 48; i++) {
-        struct ee_vtlb_entry* e = &ee->vtlb[i];
+        VtlbEntry* e = &ee->vtlb[i];
 
         if (e->s) {
             uint32_t mask = 0xffffc000;
@@ -349,12 +341,11 @@ static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t
 
         uint32_t mask = (~e->mask) & 0xffffe000;
 
-        // printf("ee: TLB search index=%d virt=%08x vpn2=%08x mask=%08x\n",
-        //     i,
+        // iris_debug(ee, "TLB search index={} virt={:08x} vpn2={:08x} mask={:08x}", //     i,
         //     virt,
         //     e->vpn2,
         //     mask
-        // );
+        //);
 
         if ((virt & mask) == (e->vpn2 & mask)) {
             return e;
@@ -364,25 +355,25 @@ static inline struct ee_vtlb_entry* ee_search_vtlb(struct ee_state* ee, uint32_t
     return nullptr;
 }
 
-static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t* phys, int load) {
-    int seg = ee_get_segment(virt);
+static inline int translate_virt(Ee* ee, uint32_t virt, uint32_t* phys, int load) {
+    int seg = get_segment(virt);
 
     // Assume we're in kernel mode
-    if (seg == EE_KSEG0 || seg == EE_KSEG1) {
+    if (seg == KSEG0 || seg == KSEG1) {
         *phys = virt & 0x1fffffff;
 
         return 0;
     }
 
-    struct ee_vtlb_entry* entry = ee_search_vtlb(ee, virt);
+    VtlbEntry* entry = search_vtlb(ee, virt);
 
     if (!entry) {
-        ee_exception_level1(ee, load ? CAUSE_EXC1_TLBL : CAUSE_EXC1_TLBS);
+        exception_level1(ee, load ? CAUSE_EXC1_TLBL : CAUSE_EXC1_TLBS);
 
         ee->context &= 0x7ffff0;
         ee->context |= (virt & 0xFFFFE000) >> 9;
 
-        printf("ee: TLB miss on %s at virt=%08x\n", load ? "load" : "store", virt);
+        iris_debug(ee, "TLB miss on {} at virt={:08x}", load ? "load" : "store", virt);
 
         return -1;
     }
@@ -393,8 +384,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
         return 1;
     }
 
-    // printf("ee: virt=%08x vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
-    //     virt,
+    // iris_debug(ee, "virt={:08x} vpn2={:08x} even={pfn={:08x} v={} d={}} odd={pfn={:08x} v={} d={}} mask={:08x} s={} g={}", //     virt,
     //     entry->vpn2,
     //     entry->pfn0,
     //     entry->v0,
@@ -405,7 +395,7 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
     //     entry->mask,
     //     entry->s,
     //     entry->g
-    // );
+    //);
 
     uint32_t nmask = 0xfffff000 & ~(entry->mask >> 1);
     uint32_t pfn = entry->pfn0;
@@ -418,27 +408,27 @@ static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t
 
     *phys = pfn | (virt & ~nmask);
 
-    // printf("ee: Translated virt=%08x to phys=%08x\n", virt, *phys);
+    // iris_debug(ee, "Translated virt={:08x} to phys={:08x}", virt, *phys);
 
     // if (odd) exit(1);
     return 0;
 }
 
 #define BUS_READ_FUNC(b)                                                        \
-    static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) {  \
+    static inline uint64_t bus_read ## b(Ee* ee, uint32_t addr) {  \
         uint32_t phys;                                                          \
-        if (ee_translate_virt(ee, addr, &phys, 1) == 1)                         \
-            return ps2_ram_read ## b(ee->spr, phys);                            \
+        if (translate_virt(ee, addr, &phys, 1) == 1)                         \
+            return ram::read ## b(ee->spr, phys);                            \
         if (phys == 0x1000f000) ee->intc_reads++;                               \
         if (phys == 0x12001000) ee->csr_reads++;                                \
         return ee->bus.read ## b(ee->bus.udata, phys);                          \
     }
 
 #define BUS_WRITE_FUNC(b)                                                                   \
-    static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) {  \
+    static inline void bus_write ## b(Ee* ee, uint32_t addr, uint64_t data) {  \
         uint32_t phys;                                                                      \
-        if (ee_translate_virt(ee, addr, &phys, 0) == 1)                                     \
-            { ps2_ram_write ## b(ee->spr, phys, data); return; }                            \
+        if (translate_virt(ee, addr, &phys, 0) == 1)                                     \
+            { ram::write ## b(ee->spr, phys, data); return; }                            \
         ee->bus.write ## b(ee->bus.udata, phys, data);                                      \
     }
 
@@ -447,11 +437,11 @@ BUS_READ_FUNC(16)
 BUS_READ_FUNC(32)
 BUS_READ_FUNC(64)
 
-static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
+static inline uint128_t bus_read128(Ee* ee, uint32_t addr) {
     uint32_t phys;
 
-    if (ee_translate_virt(ee, addr, &phys, 1) == 1)
-        return ps2_ram_read128(ee->spr, phys);
+    if (translate_virt(ee, addr, &phys, 1) == 1)
+        return ram::read128(ee->spr, phys);
 
     return ee->bus.read128(ee->bus.udata, phys);
 }
@@ -461,48 +451,48 @@ BUS_WRITE_FUNC(16)
 BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
-static inline void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
+static inline void bus_write128(Ee* ee, uint32_t addr, uint128_t data) {
     uint32_t phys;
 
-    if (ee_translate_virt(ee, addr, &phys, 0) == 1)
-        { ps2_ram_write128(ee->spr, phys, data); return; }
+    if (translate_virt(ee, addr, &phys, 0) == 1)
+        { ram::write128(ee->spr, phys, data); return; }
 
     ee->bus.write128(ee->bus.udata, phys, data);
 }
 #else
-static inline int ee_translate_virt(struct ee_state* ee, uint32_t virt, uint32_t* phys) {
-    int seg = ee_get_segment(virt);
+static inline int translate_virt(Ee* ee, uint32_t virt, uint32_t* phys) {
+    int seg = get_segment(virt);
 
     // Assume we're in kernel mode
-    if (seg == EE_KSEG0 || seg == EE_KSEG1) {
+    if (seg == KSEG0 || seg == KSEG1) {
         *phys = virt & 0x1fffffff;
 
         return 0;
     }
 
-    ee_page* page = &ee->pagetable[virt / EE_MIN_PAGESIZE];
+    Page* page = &ee->pagetable[virt / MIN_PAGESIZE];
 
     if (!page->valid) {
-        printf("ee: Segmentation fault at 0x%08x\n", virt);
+        iris_debug(ee, "Segmentation fault at 0x{:08x}", virt);
 
         return -1;
     }
 
-    *phys = (page->pfn * EE_MIN_PAGESIZE) | (virt & (EE_MIN_PAGESIZE - 1));
+    *phys = (page->pfn * MIN_PAGESIZE) | (virt & (MIN_PAGESIZE - 1));
 
-    // printf("ee: Translated virt=%08x to phys=%08x\n", virt, *phys);
+    // iris_debug(ee, "Translated virt={:08x} to phys={:08x}", virt, *phys);
 
     return 0;
 }
 
-#define EE_CACHE_PAGECOUNT (0x20000000 / EE_MIN_PAGESIZE)
+#define CACHE_PAGECOUNT (0x20000000 / MIN_PAGESIZE)
 
-void ee_vfast_clear(struct ee_state* ee);
+void vfast_clear(Ee* ee);
 
-void ee_purge_cache(struct ee_state* ee) {
-    ee_vfast_clear(ee);
+void purge_cache(Ee* ee) {
+    vfast_clear(ee);
 
-    for (int i = 0; i < EE_CACHE_PAGECOUNT; i++) {
+    for (int i = 0; i < CACHE_PAGECOUNT; i++) {
         ee->block_cache[i].dirty = true;
         ee->block_cache[i].valid = false;
 
@@ -519,16 +509,16 @@ void ee_purge_cache(struct ee_state* ee) {
     ee->block_lut_gen++;
 }
 
-static inline bool ee_is_executable_region(uint32_t addr) {
+static inline bool is_executable_region(uint32_t addr) {
     // EE should only ever execute from RAM (and its mirrors), and the BIOS
     return addr < 0x8000000 || (addr >= 0x1fc00000 && addr < 0x20000000);
 }
 
-static inline void ee_invalidate_page(struct ee_state* ee, uint32_t addr) {
-    if (!ee_is_executable_region(addr))
+static inline void invalidate_page(Ee* ee, uint32_t addr) {
+    if (!is_executable_region(addr))
         return;
 
-    uint32_t page = addr / EE_MIN_PAGESIZE;
+    uint32_t page = addr / MIN_PAGESIZE;
 
     if (ee->block_cache[page].dirty || !ee->block_cache[page].valid)
         return;
@@ -536,15 +526,15 @@ static inline void ee_invalidate_page(struct ee_state* ee, uint32_t addr) {
     if (addr < ee->block_cache[page].min_code_addr || addr >= ee->block_cache[page].max_code_addr)
         return;
 
-    // printf("ee: Invalidating page at addr=%08x page=%u\n", addr, page);
+    // iris_debug(ee, "Invalidating page at addr={:08x} page={}", addr, page);
 
     ee->block_cache[page].dirty = true;
     ee->block_lut_gen++;
 }
 
 #define INVALIDATE_CACHE_PAGE(addr) { \
-    if (ee_is_executable_region(addr)) { \
-        uint32_t page = (addr) / EE_MIN_PAGESIZE; \
+    if (is_executable_region(addr)) { \
+        uint32_t page = (addr) / MIN_PAGESIZE; \
         if (ee->block_cache[page]) { \
             ee->block_cache_dirty[page] = true; \
         } \
@@ -559,23 +549,23 @@ static inline void ee_invalidate_page(struct ee_state* ee, uint32_t addr) {
 // }
 
 #define BUS_READ_FUNC(b)                                                       \
-    static inline uint64_t bus_read ## b(struct ee_state* ee, uint32_t addr) { \
+    static inline uint64_t bus_read ## b(Ee* ee, uint32_t addr) { \
         if ((addr & 0xf0000000) == 0x70000000)                                 \
-            return ps2_ram_read ## b(ee->spr, addr & 0x3fff);                  \
+            return ram::read ## b(ee->spr, addr & 0x3fff);                  \
         uint32_t phys;                                                         \
-        ee_translate_virt(ee, addr, &phys);                                    \
+        translate_virt(ee, addr, &phys);                                    \
         if (phys == 0x1000f000) ee->intc_reads++;                              \
         if (phys == 0x12001000) ee->csr_reads++;                               \
         return ee->bus.read ## b(ee->bus.udata, phys);                         \
     }
 
 #define BUS_WRITE_FUNC(b)                                                                  \
-    static inline void bus_write ## b(struct ee_state* ee, uint32_t addr, uint64_t data) { \
+    static inline void bus_write ## b(Ee* ee, uint32_t addr, uint64_t data) { \
         if ((addr & 0xf0000000) == 0x70000000)                                             \
-        { ps2_ram_write ## b(ee->spr, addr & 0x3fff, data); return; }                      \
+        { ram::write ## b(ee->spr, addr & 0x3fff, data); return; }                      \
         uint32_t phys;                                                                     \
-        ee_translate_virt(ee, addr, &phys);                                                \
-        ee_invalidate_page(ee, phys);                                                      \
+        translate_virt(ee, addr, &phys);                                                \
+        invalidate_page(ee, phys);                                                      \
         ee->bus.write ## b(ee->bus.udata, phys, data);                                     \
     }
 
@@ -584,18 +574,18 @@ BUS_READ_FUNC(16)
 BUS_READ_FUNC(32)
 BUS_READ_FUNC(64)
 
-static inline uint128_t bus_read128(struct ee_state* ee, uint32_t addr) {
+static inline uint128_t bus_read128(Ee* ee, uint32_t addr) {
     if ((addr & 0xf0000000) == 0x70000000)
-        return ps2_ram_read128(ee->spr, addr & 0x3ff0);
+        return ram::read128(ee->spr, addr & 0x3ff0);
 
     uint32_t phys;
 
-    ee_translate_virt(ee, addr, &phys);
+    translate_virt(ee, addr, &phys);
 
     return ee->bus.read128(ee->bus.udata, phys);
 }
 
-// static inline __m128i bus_read128_sse(struct ee_state* ee, uint32_t addr) {
+// static inline __m128i bus_read128_sse(Ee* ee, uint32_t addr) {
 //     uint128_t result = bus_read128(ee, addr);
 
 //     return _mm_load_si128((__m128i*)&result);
@@ -606,17 +596,17 @@ BUS_WRITE_FUNC(16)
 BUS_WRITE_FUNC(32)
 BUS_WRITE_FUNC(64)
 
-void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
+void bus_write128(Ee* ee, uint32_t addr, uint128_t data) {
     if ((addr & 0xf0000000) == 0x70000000) {
-        ps2_ram_write128(ee->spr, addr & 0x3ff0, data);
+        ram::write128(ee->spr, addr & 0x3ff0, data);
 
         return;
     }
 
     uint32_t phys;
 
-    ee_translate_virt(ee, addr, &phys);
-    ee_invalidate_page(ee, phys);
+    translate_virt(ee, addr, &phys);
+    invalidate_page(ee, phys);
 
     ee->bus.write128(ee->bus.udata, phys, data);
 }
@@ -625,42 +615,42 @@ void bus_write128(struct ee_state* ee, uint32_t addr, uint128_t data) {
 #undef BUS_READ_FUNC
 #undef BUS_WRITE_FUNC
 
-static void ee_jit_read128(struct ee_state* ee, uint32_t addr, uint128_t* out) {
+static void jit_read128(Ee* ee, uint32_t addr, uint128_t* out) {
     *out = bus_read128(ee, addr);
 }
 
-static void ee_jit_write128(struct ee_state* ee, uint32_t addr, const uint128_t* in) {
+static void jit_write128(Ee* ee, uint32_t addr, const uint128_t* in) {
     bus_write128(ee, addr, *in);
 }
 
-#define EE_FOLD_NO_PHYS 0xffffffffu
-#define EE_VFAST_SPR_PAGE 0xffffffffu
+#define FOLD_NO_PHYS 0xffffffffu
+#define VFAST_SPR_PAGE 0xffffffffu
 
-static inline void* ee_vfast_page_base(struct ee_state* ee, uint32_t vaddr, int write, uint32_t* out_phys_page) {
+static inline void* vfast_page_base(Ee* ee, uint32_t vaddr, int write, uint32_t* out_phys_page) {
     if ((vaddr & 0xf0000000) == 0x70000000) {
-        *out_phys_page = EE_VFAST_SPR_PAGE;
+        *out_phys_page = VFAST_SPR_PAGE;
 
         return ee->spr->buf + ((vaddr & 0x3fff) & ~0xfff);
     }
 
     uint32_t phys;
-    int seg = ee_get_segment(vaddr);
+    int seg = get_segment(vaddr);
 
-    if (seg == EE_KSEG0 || seg == EE_KSEG1) {
+    if (seg == KSEG0 || seg == KSEG1) {
         phys = vaddr & 0x1fffffff;
     } else {
-        ee_page* page = &ee->pagetable[vaddr / EE_MIN_PAGESIZE];
+        Page* page = &ee->pagetable[vaddr / MIN_PAGESIZE];
 
         if (!page->valid)
             return nullptr;
 
-        phys = (page->pfn * EE_MIN_PAGESIZE) | (vaddr & (EE_MIN_PAGESIZE - 1));
+        phys = (page->pfn * MIN_PAGESIZE) | (vaddr & (MIN_PAGESIZE - 1));
     }
 
     if (phys >= 0x20000000)
         return nullptr;
 
-    struct ee_bus* bus = (struct ee_bus*)ee->bus.udata;
+    ee::bus::Bus* bus = (ee::bus::Bus*)ee->bus.udata;
 
     if (!bus)
         return nullptr;
@@ -675,48 +665,48 @@ static inline void* ee_vfast_page_base(struct ee_state* ee, uint32_t vaddr, int 
     return (uint8_t*)ptr + (phys & 0x1000);
 }
 
-static void* ee_fold_host_ptr(struct ee_state* ee, uint32_t vaddr, int bytes, bool write, uint32_t* out_phys) {
+static void* fold_host_ptr(Ee* ee, uint32_t vaddr, int bytes, bool write, uint32_t* out_phys) {
     if (((vaddr & 0xfff) + bytes) > 0x1000)
         return nullptr;
 
     uint32_t pp;
 
-    void* base = ee_vfast_page_base(ee, vaddr, write, &pp);
+    void* base = vfast_page_base(ee, vaddr, write, &pp);
 
     if (!base)
         return nullptr;
 
-    *out_phys = (pp == EE_VFAST_SPR_PAGE) ? EE_FOLD_NO_PHYS : ((pp << 12) | (vaddr & 0xfff));
+    *out_phys = (pp == VFAST_SPR_PAGE) ? FOLD_NO_PHYS : ((pp << 12) | (vaddr & 0xfff));
 
     return (uint8_t*)base + (vaddr & 0xfff);
 }
 
-#define EE_VFAST_ENTRIES 0x100000
+#define VFAST_ENTRIES 0x100000
 
-void ee_vfast_clear(struct ee_state* ee) {
+void vfast_clear(Ee* ee) {
     if (ee->vfast_r) {
-        memset(ee->vfast_r, 0, EE_VFAST_ENTRIES * sizeof(void*));
+        memset(ee->vfast_r, 0, VFAST_ENTRIES * sizeof(void*));
     }
 }
 
-#define EE_VFAST_READ_FUNC(b)                                                     \
-    static uint64_t ee_vfast_read ## b(struct ee_state* ee, uint32_t addr) {      \
+#define VFAST_READ_FUNC(b)                                                     \
+    static uint64_t vfast_read ## b(Ee* ee, uint32_t addr) {      \
         uint32_t pp;                                                              \
-        void* base = ee_vfast_page_base(ee, addr, 0, &pp);                        \
+        void* base = vfast_page_base(ee, addr, 0, &pp);                        \
         if (base) ee->vfast_r[addr >> 12] = base;                                 \
         return bus_read ## b(ee, addr);                                           \
     }
 
-EE_VFAST_READ_FUNC(8)
-EE_VFAST_READ_FUNC(16)
-EE_VFAST_READ_FUNC(32)
-EE_VFAST_READ_FUNC(64)
+VFAST_READ_FUNC(8)
+VFAST_READ_FUNC(16)
+VFAST_READ_FUNC(32)
+VFAST_READ_FUNC(64)
 
-#undef EE_VFAST_READ_FUNC
+#undef VFAST_READ_FUNC
 
 // Materializes a baked host pointer into a register. Kept separate so every
 // folded access constructs its address the same way.
-static inline asmjit::ujit::Gp ee_fold_base(asmjit::ujit::UniCompiler& uc, void* host) {
+static inline asmjit::ujit::Gp fold_base(asmjit::ujit::UniCompiler& uc, void* host) {
     asmjit::ujit::Gp base = uc.new_gp_ptr();
 
     uc.mov(base, asmjit::Imm((uint64_t)(uintptr_t)host));
@@ -724,7 +714,7 @@ static inline asmjit::ujit::Gp ee_fold_base(asmjit::ujit::UniCompiler& uc, void*
     return base;
 }
 
-static inline int ee_skip_fmv(struct ee_state* ee, uint32_t addr) {
+static inline int skip_fmv(Ee* ee, uint32_t addr) {
     if (bus_read32(ee, addr + 4) != 0x03E00008)
         return 0;
 
@@ -740,21 +730,21 @@ static inline int ee_skip_fmv(struct ee_state* ee, uint32_t addr) {
         return 0;
     }
 
-    printf("ee: Skipping FMV\n");
+    iris_debug(ee, "Skipping FMV");
 
     return 1;
 }
 
-static inline void ee_set_pc(struct ee_state* ee, uint32_t addr) {
+static inline void set_pc(Ee* ee, uint32_t addr) {
     if (ee->fmv_skip) {
-        if (ee_skip_fmv(ee, addr)) return;
+        if (skip_fmv(ee, addr)) return;
     }
 
     ee->next_pc = addr;
 }
 
-void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
-    uint32_t vec = EE_VEC_COMMON;
+void exception_level1(Ee* ee, uint32_t cause) {
+    uint32_t vec = VEC_COMMON;
 
     // Get a running region off a back edge promptly. Not load-bearing today --
     // everything reaching here terminates its sub-block anyway -- but it keeps
@@ -764,88 +754,87 @@ void ee_exception_level1(struct ee_state* ee, uint32_t cause) {
     switch (cause) {
         case CAUSE_EXC1_TLBL:
         case CAUSE_EXC1_TLBS:
-            vec = EE_VEC_TLB;
+            vec = VEC_TLB;
             break;
         case CAUSE_EXC1_TLBIL:
         case CAUSE_EXC1_TLBIS:
             cause <<= 2;
             break;
         case CAUSE_EXC1_INT:
-            vec = EE_VEC_IRQ;
+            vec = VEC_IRQ;
             break;
     }
 
-    ee->cause &= ~EE_CAUSE_EXC;
+    ee->cause &= ~CAUSE_EXC;
     ee->cause |= cause;
 
-    if (!(ee->status & EE_SR_EXL)) {
+    if (!(ee->status & SR_EXL)) {
         ee->epc = ee->pc;
-        ee->cause &= ~EE_CAUSE_BD;
+        ee->cause &= ~CAUSE_BD;
     }
 
-    ee->status |= EE_SR_EXL;
+    ee->status |= SR_EXL;
 
-    uint32_t addr = ((ee->status & EE_SR_BEV) ? 0xbfc00200 : 0x80000000) + vec;
+    uint32_t addr = ((ee->status & SR_BEV) ? 0xbfc00200 : 0x80000000) + vec;
 
-    ee_set_pc(ee, addr);
+    set_pc(ee, addr);
 
     ee->pc = addr;
 
-    // printf("ee: Exception level 1, cause=%d, vec=%08x, pc=%08x next_pc=%08x\n", cause, addr, ee->pc, ee->next_pc);
+    // iris_debug(ee, "Exception level 1, cause={}, vec={:08x}, pc={:08x} next_pc={:08x}", cause, addr, ee->pc, ee->next_pc);
 }
 
-static inline void ee_exception_level2(struct ee_state* ee, uint32_t cause) {
-    ee->exit_req = 1;   // see ee_exception_level1
+static inline void exception_level2(Ee* ee, uint32_t cause) {
+    ee->exit_req = 1;   // see exception_level1
 
     uint32_t vec;
 
-    ee->cause &= ~EE_CAUSE_EXC2;
+    ee->cause &= ~CAUSE_EXC2;
     ee->cause |= cause;
 
     ee->errorepc = ee->pc - 4;
 
     if (ee->delay_slot) {
         ee->errorepc -= 4;
-        ee->cause |= EE_CAUSE_BD2;
+        ee->cause |= CAUSE_BD2;
     } else {
-        ee->cause &= ~EE_CAUSE_BD2;
+        ee->cause &= ~CAUSE_BD2;
     }
 
-    ee->status |= EE_SR_ERL;
+    ee->status |= SR_ERL;
 
     if ((cause == CAUSE_EXC2_RES) | (cause == CAUSE_EXC2_NMI)) {
-        ee_set_pc(ee, EE_VEC_RESET);
+        set_pc(ee, VEC_RESET);
 
         return;
     }
 
     if (cause == CAUSE_EXC2_PERFC) {
-        vec = EE_VEC_COUNTER;
+        vec = VEC_COUNTER;
     } else {
-        vec = EE_VEC_DEBUG;
+        vec = VEC_DEBUG;
     }
 
-    ee_set_pc(ee, ((ee->status & EE_SR_DEV) ? 0xbfc00200 : 0x80000000) + vec);
+    set_pc(ee, ((ee->status & SR_DEV) ? 0xbfc00200 : 0x80000000) + vec);
 }
 
-static inline int ee_check_irq(struct ee_state* ee) {
-    int irq_enabled = (ee->status & EE_SR_IE) && (ee->status & EE_SR_EIE) &&
-        (!(ee->status & EE_SR_EXL)) && (!(ee->status & EE_SR_ERL));
-    int int0_pending = (ee->status & EE_SR_IM2) && (ee->cause & EE_CAUSE_IP2);
-    int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
+static inline int check_irq(Ee* ee) {
+    int irq_enabled = (ee->status & SR_IE) && (ee->status & SR_EIE) &&
+        (!(ee->status & SR_EXL)) && (!(ee->status & SR_ERL));
+    int int0_pending = (ee->status & SR_IM2) && (ee->cause & CAUSE_IP2);
+    int int1_pending = (ee->status & SR_IM3) && (ee->cause & CAUSE_IP3);
 
     if (irq_enabled && (int0_pending || int1_pending)) {
-        // printf("ee: Handling irq at pc=%08x (int0=%d (%d) int1=%d (%d)) sr=%08x delay_slot=%d\n",
-        //     ee->pc,
-        //     int0_pending, !!(ee->status & EE_SR_IM2),
-        //     int1_pending, !!(ee->status & EE_SR_IM3),
+        // iris_debug(ee, "Handling irq at pc={:08x} (int0={} ({}) int1={} ({})) sr={:08x} delay_slot={}", //     ee->pc,
+        //     int0_pending, !!(ee->status & SR_IM2),
+        //     int1_pending, !!(ee->status & SR_IM3),
         //     ee->status,
         //     ee->delay_slot
-        // );
+        //);
 
         ee->intc_reads = 0;
 
-        ee_exception_level1(ee, CAUSE_EXC1_INT);
+        exception_level1(ee, CAUSE_EXC1_INT);
 
         return 1;
     }
@@ -853,215 +842,215 @@ static inline int ee_check_irq(struct ee_state* ee) {
     return 0;
 }
 
-void ee_set_int0(struct ee_state* ee, int v) {
+void set_int0(Ee* ee, int v) {
     if (v) {
-        ee->cause |= EE_CAUSE_IP2;
+        ee->cause |= CAUSE_IP2;
         ee->exit_req = 1;   // let a running region's back edge bail out
     } else {
-        ee->cause &= ~EE_CAUSE_IP2;
+        ee->cause &= ~CAUSE_IP2;
     }
 }
 
-void ee_set_int1(struct ee_state* ee, int v) {
+void set_int1(Ee* ee, int v) {
     if (v) {
-        ee->cause |= EE_CAUSE_IP3;
+        ee->cause |= CAUSE_IP3;
         ee->exit_req = 1;
     } else {
-        ee->cause &= ~EE_CAUSE_IP3;
+        ee->cause &= ~CAUSE_IP3;
     }
 }
 
-void ee_set_cpcond0(struct ee_state* ee, int v) {
+void set_cpcond0(Ee* ee, int v) {
     ee->cpcond0 = v;
 }
 
-static inline void ee_i_abss(struct ee_state* ee, const ee_instruction& i) {
-    ee->f[EE_D_FD].u32 = ee->f[EE_D_FS].u32 & 0x7fffffff;
-    // EE_FD = fabsf(EE_FS);
+static inline void i_abss(Ee* ee, const Instruction& i) {
+    ee->f[D_FD].u32 = ee->f[D_FS].u32 & 0x7fffffff;
+    // FD = fabsf(FS);
 }
-static inline void ee_i_add(struct ee_state* ee, const ee_instruction& i) {
-    int32_t s = EE_RS;
-    int32_t t = EE_RT;
+static inline void i_add(Ee* ee, const Instruction& i) {
+    int32_t s = RS;
+    int32_t t = RT;
 
     int32_t r = s + t;
     uint32_t o = (s ^ r) & (t ^ r);
 
     if (o & 0x80000000) {
-        ee_exception_level1(ee, CAUSE_EXC1_OV);
+        exception_level1(ee, CAUSE_EXC1_OV);
     } else {
-        EE_RD = SE6432(r);
+        RD = SE6432(r);
     }
 }
-static inline void ee_i_addas(struct ee_state* ee, const ee_instruction& i) {
-    ee->a.f = EE_FS + EE_FT;
+static inline void i_addas(Ee* ee, const Instruction& i) {
+    ee->a.f = FS + FT;
 
     if (fpu_check_overflow(ee, &ee->a))
         return;
 
     fpu_check_underflow(ee, &ee->a);
 }
-static inline void ee_i_addi(struct ee_state* ee, const ee_instruction& i) {
-    int32_t s = EE_RS;
-    int32_t t = SE3216(EE_D_I16);
+static inline void i_addi(Ee* ee, const Instruction& i) {
+    int32_t s = RS;
+    int32_t t = SE3216(D_I16);
     int32_t r;
 
     if (__builtin_sadd_overflow(s, t, &r)) {
-        ee_exception_level1(ee, CAUSE_EXC1_OV);
+        exception_level1(ee, CAUSE_EXC1_OV);
     } else {
-        EE_RT = SE6432(r);
+        RT = SE6432(r);
     }
 }
-static inline void ee_i_addiu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6432(EE_RS32 + SE3216(EE_D_I16));
+static inline void i_addiu(Ee* ee, const Instruction& i) {
+    RT = SE6432(RS32 + SE3216(D_I16));
 }
-static inline void ee_i_adds(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_FD;
+static inline void i_adds(Ee* ee, const Instruction& i) {
+    int d = D_FD;
 
-    ee->f[d].f = EE_FS + EE_FT;
+    ee->f[d].f = FS + FT;
 
     if (fpu_check_overflow(ee, &ee->f[d]))
         return;
 
     fpu_check_underflow(ee, &ee->f[d]);
 }
-static inline void ee_i_addu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(EE_RS + EE_RT);
+static inline void i_addu(Ee* ee, const Instruction& i) {
+    RD = SE6432(RS + RT);
 }
-static inline void ee_i_and(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RS & EE_RT;
+static inline void i_and(Ee* ee, const Instruction& i) {
+    RD = RS & RT;
 }
-static inline void ee_i_andi(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = EE_RS & EE_D_I16;
+static inline void i_andi(Ee* ee, const Instruction& i) {
+    RT = RS & D_I16;
 }
-static inline void ee_i_bc0f(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH(!ee->cpcond0, EE_D_SI16);
+static inline void i_bc0f(Ee* ee, const Instruction& i) {
+    BRANCH(!ee->cpcond0, D_SI16);
 }
-static inline void ee_i_bc0fl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY(!ee->cpcond0, EE_D_SI16);
+static inline void i_bc0fl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY(!ee->cpcond0, D_SI16);
 }
-static inline void ee_i_bc0t(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH(ee->cpcond0, EE_D_SI16);
+static inline void i_bc0t(Ee* ee, const Instruction& i) {
+    BRANCH(ee->cpcond0, D_SI16);
 }
-static inline void ee_i_bc0tl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY(ee->cpcond0, EE_D_SI16);
+static inline void i_bc0tl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY(ee->cpcond0, D_SI16);
 }
-static inline void ee_i_bc1f(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((ee->fcr & FPU_FLG_C) == 0, EE_D_SI16);
+static inline void i_bc1f(Ee* ee, const Instruction& i) {
+    BRANCH((ee->fcr & FPU_FLG_C) == 0, D_SI16);
 }
-static inline void ee_i_bc1fl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((ee->fcr & FPU_FLG_C) == 0, EE_D_SI16);
+static inline void i_bc1fl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY((ee->fcr & FPU_FLG_C) == 0, D_SI16);
 }
-static inline void ee_i_bc1t(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((ee->fcr & FPU_FLG_C) != 0, EE_D_SI16);
+static inline void i_bc1t(Ee* ee, const Instruction& i) {
+    BRANCH((ee->fcr & FPU_FLG_C) != 0, D_SI16);
 }
-static inline void ee_i_bc1tl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((ee->fcr & FPU_FLG_C) != 0, EE_D_SI16);
+static inline void i_bc1tl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY((ee->fcr & FPU_FLG_C) != 0, D_SI16);
 }
-static inline void ee_i_bc2f(struct ee_state* ee, const ee_instruction& i) { BRANCH(1, EE_D_SI16); }
-static inline void ee_i_bc2fl(struct ee_state* ee, const ee_instruction& i) { BRANCH_LIKELY(1, EE_D_SI16); }
-static inline void ee_i_bc2t(struct ee_state* ee, const ee_instruction& i) { BRANCH(0, EE_D_SI16); }
-static inline void ee_i_bc2tl(struct ee_state* ee, const ee_instruction& i) { BRANCH_LIKELY(0, EE_D_SI16); }
-static inline void ee_i_beq(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH(EE_RS == EE_RT, EE_D_SI16);
+static inline void i_bc2f(Ee* ee, const Instruction& i) { BRANCH(1, D_SI16); }
+static inline void i_bc2fl(Ee* ee, const Instruction& i) { BRANCH_LIKELY(1, D_SI16); }
+static inline void i_bc2t(Ee* ee, const Instruction& i) { BRANCH(0, D_SI16); }
+static inline void i_bc2tl(Ee* ee, const Instruction& i) { BRANCH_LIKELY(0, D_SI16); }
+static inline void i_beq(Ee* ee, const Instruction& i) {
+    BRANCH(RS == RT, D_SI16);
 }
-static inline void ee_i_beql(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY(EE_RS == EE_RT, EE_D_SI16);
+static inline void i_beql(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY(RS == RT, D_SI16);
 }
-static inline void ee_i_bgez(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((int64_t)EE_RS >= (int64_t)0, EE_D_SI16);
+static inline void i_bgez(Ee* ee, const Instruction& i) {
+    BRANCH((int64_t)RS >= (int64_t)0, D_SI16);
 }
-static inline void ee_i_bgezal(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_bgezal(Ee* ee, const Instruction& i) {
     ee->r[31].ul64 = ee->next_pc;
 
-    BRANCH((int64_t)EE_RS >= (int64_t)0, EE_D_SI16);
+    BRANCH((int64_t)RS >= (int64_t)0, D_SI16);
 }
-static inline void ee_i_bgezall(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_bgezall(Ee* ee, const Instruction& i) {
     ee->r[31].ul64 = ee->next_pc;
 
-    BRANCH_LIKELY((int64_t)EE_RS >= (int64_t)0, EE_D_SI16);
+    BRANCH_LIKELY((int64_t)RS >= (int64_t)0, D_SI16);
 }
-static inline void ee_i_bgezl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((int64_t)EE_RS >= (int64_t)0, EE_D_SI16);
+static inline void i_bgezl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY((int64_t)RS >= (int64_t)0, D_SI16);
 }
-static inline void ee_i_bgtz(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((int64_t)EE_RS > (int64_t)0, EE_D_SI16);
+static inline void i_bgtz(Ee* ee, const Instruction& i) {
+    BRANCH((int64_t)RS > (int64_t)0, D_SI16);
 }
-static inline void ee_i_bgtzl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((int64_t)EE_RS > (int64_t)0, EE_D_SI16);
+static inline void i_bgtzl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY((int64_t)RS > (int64_t)0, D_SI16);
 }
-static inline void ee_i_blez(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((int64_t)EE_RS <= (int64_t)0, EE_D_SI16);
+static inline void i_blez(Ee* ee, const Instruction& i) {
+    BRANCH((int64_t)RS <= (int64_t)0, D_SI16);
 }
-static inline void ee_i_blezl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((int64_t)EE_RS <= (int64_t)0, EE_D_SI16);
+static inline void i_blezl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY((int64_t)RS <= (int64_t)0, D_SI16);
 }
-static inline void ee_i_bltz(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH((int64_t)EE_RS < (int64_t)0, EE_D_SI16);
+static inline void i_bltz(Ee* ee, const Instruction& i) {
+    BRANCH((int64_t)RS < (int64_t)0, D_SI16);
 }
-static inline void ee_i_bltzal(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_bltzal(Ee* ee, const Instruction& i) {
     ee->r[31].ul64 = ee->next_pc;
 
-    BRANCH((int64_t)EE_RS < (int64_t)0, EE_D_SI16);
+    BRANCH((int64_t)RS < (int64_t)0, D_SI16);
 }
-static inline void ee_i_bltzall(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_bltzall(Ee* ee, const Instruction& i) {
     ee->r[31].ul64 = ee->next_pc;
 
-    BRANCH_LIKELY((int64_t)EE_RS < (int64_t)0, EE_D_SI16);
+    BRANCH_LIKELY((int64_t)RS < (int64_t)0, D_SI16);
 }
-static inline void ee_i_bltzl(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY((int64_t)EE_RS < (int64_t)0, EE_D_SI16);
+static inline void i_bltzl(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY((int64_t)RS < (int64_t)0, D_SI16);
 }
-static inline void ee_i_bne(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH(EE_RS != EE_RT, EE_D_SI16);
+static inline void i_bne(Ee* ee, const Instruction& i) {
+    BRANCH(RS != RT, D_SI16);
 }
-static inline void ee_i_bnel(struct ee_state* ee, const ee_instruction& i) {
-    BRANCH_LIKELY(EE_RS != EE_RT, EE_D_SI16);
+static inline void i_bnel(Ee* ee, const Instruction& i) {
+    BRANCH_LIKELY(RS != RT, D_SI16);
 }
-static inline void ee_i_break(struct ee_state* ee, const ee_instruction& i) {
-    ee_exception_level1(ee, CAUSE_EXC1_BP);
+static inline void i_break(Ee* ee, const Instruction& i) {
+    exception_level1(ee, CAUSE_EXC1_BP);
 }
-static inline void ee_i_cache(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_cache(Ee* ee, const Instruction& i) {
     /* To-do: Cache emulation */
 } 
-static inline void ee_i_ceq(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_FS == EE_FT) {
+static inline void i_ceq(Ee* ee, const Instruction& i) {
+    if (FS == FT) {
         ee->fcr |= FPU_FLG_C;
     } else {
         ee->fcr &= ~FPU_FLG_C;
     }
 }
-static inline void ee_i_cf(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_cf(Ee* ee, const Instruction& i) {
     ee->fcr &= ~FPU_FLG_C; 
 }
-static inline void ee_i_cfc1(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6432((EE_D_FS >= 16) ? ee->fcr : 0x2e30);
+static inline void i_cfc1(Ee* ee, const Instruction& i) {
+    RT = SE6432((D_FS >= 16) ? ee->fcr : 0x2e30);
 }
-static inline void ee_i_cfc2(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6432(ps2_vu_read_vi(ee->vu0, EE_D_RD));
+static inline void i_cfc2(Ee* ee, const Instruction& i) {
+    RT = SE6432(vu::read_vi(ee->vu0, D_RD));
 }
-static inline void ee_i_cle(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_FS <= EE_FT) {
+static inline void i_cle(Ee* ee, const Instruction& i) {
+    if (FS <= FT) {
         ee->fcr |= FPU_FLG_C;
     } else {
         ee->fcr &= ~FPU_FLG_C;
     }
 }
-static inline void ee_i_clt(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_FS < EE_FT) {
+static inline void i_clt(Ee* ee, const Instruction& i) {
+    if (FS < FT) {
         ee->fcr |= FPU_FLG_C;
     } else {
         ee->fcr &= ~FPU_FLG_C;
     }
 }
-static inline void ee_i_ctc1(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_D_FS < 16)
+static inline void i_ctc1(Ee* ee, const Instruction& i) {
+    if (D_FS < 16)
         return;
 
-    ee->fcr = EE_RT32; // (ee->fcr & ~(0x83c078)) | (EE_RT & 0x83c078);
+    ee->fcr = RT32; // (ee->fcr & ~(0x83c078)) | (RT & 0x83c078);
 }
-static inline void ee_i_ctc2(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_ctc2(Ee* ee, const Instruction& i) {
     // To-do: Handle FBRST, VPU_STAT, CMSAR1
-    int d = EE_D_RD;
+    int d = D_RD;
 
     static const char* regs[] = {
         "Status flag",
@@ -1082,86 +1071,86 @@ static inline void ee_i_ctc2(struct ee_state* ee, const ee_instruction& i) {
         "CMSAR1",
     };
 
-    ps2_vu_write_vi(ee->vu0, d, EE_RT32);
+    vu::write_vi(ee->vu0, d, RT32);
 
-    if ((i.opcode & 1) && vu_is_interlocked(ee->vu0)) {
-        vu_execute_program_tpc(ee->vu0);
+    if ((i.opcode & 1) && vu::is_interlocked(ee->vu0)) {
+        vu::execute_program_tpc(ee->vu0);
     }
 }
-static inline void ee_i_cvts(struct ee_state* ee, const ee_instruction& i) {
-    EE_FD = (float)ee->f[EE_D_FS].s32;
-    EE_FD = fpu_cvtsw(&ee->f[EE_D_FD]);
+static inline void i_cvts(Ee* ee, const Instruction& i) {
+    FD = (float)ee->f[D_FS].s32;
+    FD = fpu_cvtsw(&ee->f[D_FD]);
 }
-static inline void ee_i_cvtw(struct ee_state* ee, const ee_instruction& i) {
-    fpu_cvtws(&ee->f[EE_D_FD], &ee->f[EE_D_FS]);
+static inline void i_cvtw(Ee* ee, const Instruction& i) {
+    fpu_cvtws(&ee->f[D_FD], &ee->f[D_FS]);
 }
-static inline void ee_i_dadd(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_dadd(Ee* ee, const Instruction& i) {
     long long r;
 
-    if (SADDOVF64((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
-        ee_exception_level1(ee, CAUSE_EXC1_OV);
+    if (SADDOVF64((int64_t)RS, (int64_t)RT, &r)) {
+        exception_level1(ee, CAUSE_EXC1_OV);
     } else {
-        EE_RD = r;
+        RD = r;
     }
 }
-static inline void ee_i_daddi(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_daddi(Ee* ee, const Instruction& i) {
     long long r;
 
-    if (SADDOVF64((int64_t)EE_RS, SE6416(EE_D_I16), &r)) {
-        ee_exception_level1(ee, CAUSE_EXC1_OV);
+    if (SADDOVF64((int64_t)RS, SE6416(D_I16), &r)) {
+        exception_level1(ee, CAUSE_EXC1_OV);
     } else {
-        EE_RT = r;
+        RT = r;
     }
 }
-static inline void ee_i_daddiu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = EE_RS + SE6416(EE_D_I16);
+static inline void i_daddiu(Ee* ee, const Instruction& i) {
+    RT = RS + SE6416(D_I16);
 }
-static inline void ee_i_daddu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RS + EE_RT;
+static inline void i_daddu(Ee* ee, const Instruction& i) {
+    RD = RS + RT;
 }
-static inline void ee_i_di(struct ee_state* ee, const ee_instruction& i) {
-    int edi = ee->status & EE_SR_EDI;
-    int exl = ee->status & EE_SR_EXL;
-    int erl = ee->status & EE_SR_ERL;
-    int ksu = ee->status & EE_SR_KSU;
+static inline void i_di(Ee* ee, const Instruction& i) {
+    int edi = ee->status & SR_EDI;
+    int exl = ee->status & SR_EXL;
+    int erl = ee->status & SR_ERL;
+    int ksu = ee->status & SR_KSU;
     
     if (edi || exl || erl || !ksu)
-        ee->status &= ~EE_SR_EIE;
+        ee->status &= ~SR_EIE;
 }
-static inline void ee_i_div(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int s = EE_D_RS;
+static inline void i_div(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int s = D_RS;
 
     if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
-        EE_LO0 = (int32_t)0x80000000;
-        EE_HI0 = 0;
+        LO0 = (int32_t)0x80000000;
+        HI0 = 0;
     } else if (ee->r[t].ul32 != 0) {
-        EE_HI0 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
-        EE_LO0 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
+        HI0 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
+        LO0 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
     } else {
-        EE_HI0 = SE6432(ee->r[s].ul32);
-        EE_LO0 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
+        HI0 = SE6432(ee->r[s].ul32);
+        LO0 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
     }
 }
-static inline void ee_i_div1(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int s = EE_D_RS;
+static inline void i_div1(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int s = D_RS;
 
     if (ee->r[s].ul32 == 0x80000000 && ee->r[t].ul32 == 0xffffffff) {
-        EE_LO1 = (int32_t)0x80000000;
-        EE_HI1 = 0;
+        LO1 = (int32_t)0x80000000;
+        HI1 = 0;
     } else if (ee->r[t].ul32 != 0) {
-        EE_HI1 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
-        EE_LO1 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
+        HI1 = SE6432(ee->r[s].sl32 % ee->r[t].sl32);
+        LO1 = SE6432(ee->r[s].sl32 / ee->r[t].sl32);
     } else {
-        EE_HI1 = SE6432(ee->r[s].ul32);
-        EE_LO1 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
+        HI1 = SE6432(ee->r[s].ul32);
+        LO1 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
     }
 }
-static inline void ee_i_divs(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_FD;
-    int s = EE_D_FS;
+static inline void i_divs(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_FD;
+    int s = D_FS;
 
     ee->fcr &= ~(FPU_FLG_I | FPU_FLG_D);
 
@@ -1179,179 +1168,179 @@ static inline void ee_i_divs(struct ee_state* ee, const ee_instruction& i) {
         return;
     }
 
-    ee->f[d].f = EE_FS / EE_FT;
+    ee->f[d].f = FS / FT;
 
     if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
         return;
 
     fpu_check_underflow_no_flags(ee, &ee->f[d]);
 }
-static inline void ee_i_divu(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int s = EE_D_RS;
+static inline void i_divu(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int s = D_RS;
 
     if (!ee->r[t].ul32) {
-        EE_LO0 = -1;
-        EE_HI0 = SE6432(ee->r[s].ul32);
+        LO0 = -1;
+        HI0 = SE6432(ee->r[s].ul32);
 
         return;
     }
 
-    EE_HI0 = SE6432(ee->r[s].ul32 % ee->r[t].ul32);
-    EE_LO0 = SE6432(ee->r[s].ul32 / ee->r[t].ul32);
+    HI0 = SE6432(ee->r[s].ul32 % ee->r[t].ul32);
+    LO0 = SE6432(ee->r[s].ul32 / ee->r[t].ul32);
 }
-static inline void ee_i_divu1(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int s = EE_D_RS;
+static inline void i_divu1(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int s = D_RS;
 
     if (!ee->r[t].ul32) {
-        EE_LO1 = -1;
-        EE_HI1 = SE6432(ee->r[s].ul32);
+        LO1 = -1;
+        HI1 = SE6432(ee->r[s].ul32);
 
         return;
     }
 
-    EE_HI1 = SE6432(ee->r[s].ul32 % ee->r[t].ul32);
-    EE_LO1 = SE6432(ee->r[s].ul32 / ee->r[t].ul32);
+    HI1 = SE6432(ee->r[s].ul32 % ee->r[t].ul32);
+    LO1 = SE6432(ee->r[s].ul32 / ee->r[t].ul32);
 }
-static inline void ee_i_dsll(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RT << EE_D_SA;
+static inline void i_dsll(Ee* ee, const Instruction& i) {
+    RD = RT << D_SA;
 }
-static inline void ee_i_dsll32(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RT << (EE_D_SA + 32);
+static inline void i_dsll32(Ee* ee, const Instruction& i) {
+    RD = RT << (D_SA + 32);
 }
-static inline void ee_i_dsllv(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RT << (EE_RS & 0x3f);
+static inline void i_dsllv(Ee* ee, const Instruction& i) {
+    RD = RT << (RS & 0x3f);
 }
-static inline void ee_i_dsra(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = ((int64_t)EE_RT) >> EE_D_SA;
+static inline void i_dsra(Ee* ee, const Instruction& i) {
+    RD = ((int64_t)RT) >> D_SA;
 }
-static inline void ee_i_dsra32(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = ((int64_t)EE_RT) >> (EE_D_SA + 32);
+static inline void i_dsra32(Ee* ee, const Instruction& i) {
+    RD = ((int64_t)RT) >> (D_SA + 32);
 }
-static inline void ee_i_dsrav(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = ((int64_t)EE_RT) >> (EE_RS & 0x3f);
+static inline void i_dsrav(Ee* ee, const Instruction& i) {
+    RD = ((int64_t)RT) >> (RS & 0x3f);
 }
-static inline void ee_i_dsrl(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RT >> EE_D_SA;
+static inline void i_dsrl(Ee* ee, const Instruction& i) {
+    RD = RT >> D_SA;
 }
-static inline void ee_i_dsrl32(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RT >> (EE_D_SA + 32);
+static inline void i_dsrl32(Ee* ee, const Instruction& i) {
+    RD = RT >> (D_SA + 32);
 }
-static inline void ee_i_dsrlv(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RT >> (EE_RS & 0x3f);
+static inline void i_dsrlv(Ee* ee, const Instruction& i) {
+    RD = RT >> (RS & 0x3f);
 }
-static inline void ee_i_dsub(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_dsub(Ee* ee, const Instruction& i) {
     long long r;
 
-    if (SSUBOVF64((int64_t)EE_RS, (int64_t)EE_RT, &r)) {
-        ee_exception_level1(ee, CAUSE_EXC1_OV);
+    if (SSUBOVF64((int64_t)RS, (int64_t)RT, &r)) {
+        exception_level1(ee, CAUSE_EXC1_OV);
     } else {
-        EE_RD = r;
+        RD = r;
     }
 }
-static inline void ee_i_dsubu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RS - EE_RT;
+static inline void i_dsubu(Ee* ee, const Instruction& i) {
+    RD = RS - RT;
 }
-static inline void ee_i_ei(struct ee_state* ee, const ee_instruction& i) {
-    int edi = ee->status & EE_SR_EDI;
-    int exl = ee->status & EE_SR_EXL;
-    int erl = ee->status & EE_SR_ERL;
-    int ksu = ee->status & EE_SR_KSU;
+static inline void i_ei(Ee* ee, const Instruction& i) {
+    int edi = ee->status & SR_EDI;
+    int exl = ee->status & SR_EXL;
+    int erl = ee->status & SR_ERL;
+    int ksu = ee->status & SR_KSU;
     
     if (edi || exl || erl || !ksu)
-        ee->status |= EE_SR_EIE;
+        ee->status |= SR_EIE;
 }
-static inline void ee_i_eret(struct ee_state* ee, const ee_instruction& i) {
-    if (ee->status & EE_SR_ERL) {
-        ee_set_pc(ee, ee->errorepc);
+static inline void i_eret(Ee* ee, const Instruction& i) {
+    if (ee->status & SR_ERL) {
+        set_pc(ee, ee->errorepc);
 
-        ee->status &= ~EE_SR_ERL;
+        ee->status &= ~SR_ERL;
     } else {
-        ee_set_pc(ee, ee->epc);
+        set_pc(ee, ee->epc);
 
-        ee->status &= ~EE_SR_EXL;
+        ee->status &= ~SR_EXL;
     }
 
-    // printf("ee: ERET at pc=%08x next_pc=%08x\n", ee->pc, ee->next_pc);
+    // iris_debug(ee, "ERET at pc={:08x} next_pc={:08x}", ee->pc, ee->next_pc);
 }
-static inline void ee_i_j(struct ee_state* ee, const ee_instruction& i) {
-    ee_set_pc(ee, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
+static inline void i_j(Ee* ee, const Instruction& i) {
+    set_pc(ee, (ee->next_pc & 0xf0000000) | (D_I26 << 2));
 }
-static inline void ee_i_jal(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_jal(Ee* ee, const Instruction& i) {
     ee->r[31].ul64 = ee->next_pc;
 
-    ee_set_pc(ee, (ee->next_pc & 0xf0000000) | (EE_D_I26 << 2));
+    set_pc(ee, (ee->next_pc & 0xf0000000) | (D_I26 << 2));
 }
-static inline void ee_i_jalr(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_jalr(Ee* ee, const Instruction& i) {
     uint32_t next_pc = ee->next_pc;
 
-    ee_set_pc(ee, EE_RS32);
+    set_pc(ee, RS32);
 
-    EE_RD = next_pc;
+    RD = next_pc;
 }
-static inline void ee_i_jr(struct ee_state* ee, const ee_instruction& i) {
-    ee_set_pc(ee, EE_RS32);
+static inline void i_jr(Ee* ee, const Instruction& i) {
+    set_pc(ee, RS32);
 }
-static inline void ee_i_lb(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE648(bus_read8(ee, EE_RS32 + SE3216(EE_D_I16)));
+static inline void i_lb(Ee* ee, const Instruction& i) {
+    RT = SE648(bus_read8(ee, RS32 + SE3216(D_I16)));
 }
-static inline void ee_i_lbu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = bus_read8(ee, EE_RS32 + SE3216(EE_D_I16));
+static inline void i_lbu(Ee* ee, const Instruction& i) {
+    RT = bus_read8(ee, RS32 + SE3216(D_I16));
 }
-static inline void ee_i_ld(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = bus_read64(ee, EE_RS32 + SE3216(EE_D_I16));
+static inline void i_ld(Ee* ee, const Instruction& i) {
+    RT = bus_read64(ee, RS32 + SE3216(D_I16));
 }
-static inline void ee_i_ldl(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_ldl(Ee* ee, const Instruction& i) {
     static const uint8_t ldl_shift[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
     static const uint64_t ldl_mask[8] = {
         0x00ffffffffffffffULL, 0x0000ffffffffffffULL, 0x000000ffffffffffULL, 0x00000000ffffffffULL,
         0x0000000000ffffffULL, 0x000000000000ffffULL, 0x00000000000000ffULL, 0x0000000000000000ULL
     };
 
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t shift = addr & 7;
     uint64_t data = bus_read64(ee, addr & ~7);
 
-    EE_RT = (EE_RT & ldl_mask[shift]) | (data << ldl_shift[shift]);
+    RT = (RT & ldl_mask[shift]) | (data << ldl_shift[shift]);
 }
-static inline void ee_i_ldr(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_ldr(Ee* ee, const Instruction& i) {
     static const uint8_t ldr_shift[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
     static const uint64_t ldr_mask[8] = {
         0x0000000000000000ULL, 0xff00000000000000ULL, 0xffff000000000000ULL, 0xffffff0000000000ULL,
         0xffffffff00000000ULL, 0xffffffffff000000ULL, 0xffffffffffff0000ULL, 0xffffffffffffff00ULL
     };
 
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t shift = addr & 7;
     uint64_t data = bus_read64(ee, addr & ~7);
 
-    EE_RT = (EE_RT & ldr_mask[shift]) | (data >> ldr_shift[shift]);
+    RT = (RT & ldr_mask[shift]) | (data >> ldr_shift[shift]);
 }
-static inline void ee_i_lh(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6416(bus_read16(ee, EE_RS32 + SE3216(EE_D_I16)));
+static inline void i_lh(Ee* ee, const Instruction& i) {
+    RT = SE6416(bus_read16(ee, RS32 + SE3216(D_I16)));
 }
-static inline void ee_i_lhu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = bus_read16(ee, EE_RS32 + SE3216(EE_D_I16));
+static inline void i_lhu(Ee* ee, const Instruction& i) {
+    RT = bus_read16(ee, RS32 + SE3216(D_I16));
 }
-static inline void ee_i_lq(struct ee_state* ee, const ee_instruction& i) {
-    ee->r[EE_D_RT] = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
+static inline void i_lq(Ee* ee, const Instruction& i) {
+    ee->r[D_RT] = bus_read128(ee, (RS32 + SE3216(D_I16)) & ~0xf);
 }
-static inline void ee_i_lqc2(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RT;
+static inline void i_lqc2(Ee* ee, const Instruction& i) {
+    int d = D_RT;
 
     if (!d) return;
 
-    ee->vu0->vf[EE_D_RT].u128 = bus_read128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf);
+    ee->vu0->vf[D_RT].u128 = bus_read128(ee, (RS32 + SE3216(D_I16)) & ~0xf);
 }
-static inline void ee_i_lui(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6432(EE_D_I16 << 16);
+static inline void i_lui(Ee* ee, const Instruction& i) {
+    RT = SE6432(D_I16 << 16);
 }
-static inline void ee_i_lw(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6432(bus_read32(ee, EE_RS32 + SE3216(EE_D_I16)));
+static inline void i_lw(Ee* ee, const Instruction& i) {
+    RT = SE6432(bus_read32(ee, RS32 + SE3216(D_I16)));
 }
-static inline void ee_i_lwc1(struct ee_state* ee, const ee_instruction& i) {
-    EE_FT32 = bus_read32(ee, EE_RS32 + SE3216(EE_D_I16));
+static inline void i_lwc1(Ee* ee, const Instruction& i) {
+    FT32 = bus_read32(ee, RS32 + SE3216(D_I16));
 }
 
 static const uint32_t LWl_MASK[4] = { 0x00ffffff, 0x0000ffff, 0x000000ff, 0x00000000 };
@@ -1359,71 +1348,71 @@ static const uint32_t LWR_MASK[4] = { 0x00000000, 0xff000000, 0xffff0000, 0xffff
 static const int LWl_SHIFT[4] = { 24, 16, 8, 0 };
 static const int LWR_SHIFT[4] = { 0, 8, 16, 24 };
 
-static inline void ee_i_lwl(struct ee_state* ee, const ee_instruction& i) {
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+static inline void i_lwl(Ee* ee, const Instruction& i) {
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t shift = addr & 3;
     uint32_t mem = bus_read32(ee, addr & ~3);
 
     // ensure the compiler does correct sign extension into 64 bits by using s32
-    EE_RT = (int32_t)((EE_RT32 & LWl_MASK[shift]) | (mem << LWl_SHIFT[shift]));
+    RT = (int32_t)((RT32 & LWl_MASK[shift]) | (mem << LWl_SHIFT[shift]));
 }
 
-static inline void ee_i_lwr(struct ee_state* ee, const ee_instruction& i) {
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+static inline void i_lwr(Ee* ee, const Instruction& i) {
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t shift = addr & 3;
     uint32_t data = bus_read32(ee, addr & ~3);
 
     // Use unsigned math here, and conditionally sign extend below, when needed.
-    data = (EE_RT32 & LWR_MASK[shift]) | (data >> LWR_SHIFT[shift]);
+    data = (RT32 & LWR_MASK[shift]) | (data >> LWR_SHIFT[shift]);
 
     if (!shift) {
         // This special case requires sign extension into the full 64 bit dest.
-        EE_RT = (int32_t)data;
+        RT = (int32_t)data;
     } else {
         // This case sets the lower 32 bits of the target register.  Upper
         // 32 bits are always preserved.
-        EE_RT32 = data;
+        RT32 = data;
     }
 
-    // printf("lwr mem=%08x reg=%016lx addr=%08x shift=%d\n", data, ee->r[EE_D_RT].u64[0], addr, shift);
+    // iris_debug(ee, "lwr mem={:08x} reg={:016x} addr={:08x} shift={}", data, ee->r[D_RT].u64[0], addr, shift);
 }
-static inline void ee_i_lwu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = bus_read32(ee, EE_RS32 + SE3216(EE_D_I16));
+static inline void i_lwu(Ee* ee, const Instruction& i) {
+    RT = bus_read32(ee, RS32 + SE3216(D_I16));
 }
-static inline void ee_i_madd(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
+static inline void i_madd(Ee* ee, const Instruction& i) {
+    uint64_t r = SE6432(RS32) * SE6432(RT32);
     uint64_t d = (uint64_t)ee->lo.u32[0] | (ee->hi.u64[0] << 32);
 
     d += r;
 
-    EE_LO0 = SE6432(d & 0xffffffff);
-    EE_HI0 = SE6432(d >> 32);
+    LO0 = SE6432(d & 0xffffffff);
+    HI0 = SE6432(d >> 32);
 
-    EE_RD = EE_LO0;
+    RD = LO0;
 }
-static inline void ee_i_madd1(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
-    uint64_t d = (EE_LO1 & 0xffffffff) | (EE_HI1 << 32);
+static inline void i_madd1(Ee* ee, const Instruction& i) {
+    uint64_t r = SE6432(RS32) * SE6432(RT32);
+    uint64_t d = (LO1 & 0xffffffff) | (HI1 << 32);
 
     d += r;
 
-    EE_LO1 = SE6432(d & 0xffffffff);
-    EE_HI1 = SE6432(d >> 32);
+    LO1 = SE6432(d & 0xffffffff);
+    HI1 = SE6432(d >> 32);
 
-    EE_RD = EE_LO1;
+    RD = LO1;
 }
-static inline void ee_i_maddas(struct ee_state* ee, const ee_instruction& i) {
-    ee->a.f += EE_FS * EE_FT;
+static inline void i_maddas(Ee* ee, const Instruction& i) {
+    ee->a.f += FS * FT;
 
     if (fpu_check_overflow(ee, &ee->a))
         return;
 
     fpu_check_underflow(ee, &ee->a);
 }
-static inline void ee_i_madds(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_FD;
-    int s = EE_D_FS;
+static inline void i_madds(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_FD;
+    int s = D_FS;
 
     float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
 
@@ -1434,80 +1423,80 @@ static inline void ee_i_madds(struct ee_state* ee, const ee_instruction& i) {
 
     fpu_check_underflow(ee, &ee->f[d]);
 }
-static inline void ee_i_maddu(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
+static inline void i_maddu(Ee* ee, const Instruction& i) {
+    uint64_t r = (uint64_t)RS32 * (uint64_t)RT32;
     uint64_t d = (uint64_t)ee->lo.u32[0] | (ee->hi.u64[0] << 32);
 
     d += r;
 
-    EE_LO0 = SE6432(d & 0xffffffff);
-    EE_HI0 = SE6432(d >> 32);
+    LO0 = SE6432(d & 0xffffffff);
+    HI0 = SE6432(d >> 32);
 
-    EE_RD = EE_LO0;
+    RD = LO0;
 }
-static inline void ee_i_maddu1(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
+static inline void i_maddu1(Ee* ee, const Instruction& i) {
+    uint64_t r = (uint64_t)RS32 * (uint64_t)RT32;
     uint64_t d = (uint64_t)ee->lo.u32[2] | (ee->hi.u64[1] << 32);
 
     d += r;
 
-    EE_LO1 = SE6432(d & 0xffffffff);
-    EE_HI1 = SE6432(d >> 32);
+    LO1 = SE6432(d & 0xffffffff);
+    HI1 = SE6432(d >> 32);
 
-    EE_RD = EE_LO1;
+    RD = LO1;
 }
-static inline void ee_i_maxs(struct ee_state* ee, const ee_instruction& i) {
-    ee->f[EE_D_FD].u32 = fpu_max(ee->f[EE_D_FS].u32, ee->f[EE_D_RT].u32);
-
-    ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
-}
-static inline void ee_i_mfc0(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6432(ee->cop0_r[EE_D_RD]);
-}
-static inline void ee_i_mfc1(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = SE6432(EE_FS32);
-}
-static inline void ee_i_mfhi(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_HI0;
-}
-static inline void ee_i_mfhi1(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_HI1;
-}
-static inline void ee_i_mflo(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_LO0;
-}
-static inline void ee_i_mflo1(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_LO1;
-}
-static inline void ee_i_mfsa(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = ee->sa & 0xf;
-}
-static inline void ee_i_mins(struct ee_state* ee, const ee_instruction& i) {
-    ee->f[EE_D_FD].u32 = fpu_min(ee->f[EE_D_FS].u32, ee->f[EE_D_RT].u32);
+static inline void i_maxs(Ee* ee, const Instruction& i) {
+    ee->f[D_FD].u32 = fpu_max(ee->f[D_FS].u32, ee->f[D_RT].u32);
 
     ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
 }
-static inline void ee_i_movn(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_RT) EE_RD = EE_RS;
+static inline void i_mfc0(Ee* ee, const Instruction& i) {
+    RT = SE6432(ee->cop0_r[D_RD]);
 }
-static inline void ee_i_movs(struct ee_state* ee, const ee_instruction& i) {
-    EE_FD32 = EE_FS32;
+static inline void i_mfc1(Ee* ee, const Instruction& i) {
+    RT = SE6432(FS32);
 }
-static inline void ee_i_movz(struct ee_state* ee, const ee_instruction& i) {
-    if (!EE_RT) EE_RD = EE_RS;
+static inline void i_mfhi(Ee* ee, const Instruction& i) {
+    RD = HI0;
 }
-static inline void ee_i_msubas(struct ee_state* ee, const ee_instruction& i) {
-    ee->a.f -= EE_FS * EE_FT;
+static inline void i_mfhi1(Ee* ee, const Instruction& i) {
+    RD = HI1;
+}
+static inline void i_mflo(Ee* ee, const Instruction& i) {
+    RD = LO0;
+}
+static inline void i_mflo1(Ee* ee, const Instruction& i) {
+    RD = LO1;
+}
+static inline void i_mfsa(Ee* ee, const Instruction& i) {
+    RD = ee->sa & 0xf;
+}
+static inline void i_mins(Ee* ee, const Instruction& i) {
+    ee->f[D_FD].u32 = fpu_min(ee->f[D_FS].u32, ee->f[D_RT].u32);
+
+    ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
+}
+static inline void i_movn(Ee* ee, const Instruction& i) {
+    if (RT) RD = RS;
+}
+static inline void i_movs(Ee* ee, const Instruction& i) {
+    FD32 = FS32;
+}
+static inline void i_movz(Ee* ee, const Instruction& i) {
+    if (!RT) RD = RS;
+}
+static inline void i_msubas(Ee* ee, const Instruction& i) {
+    ee->a.f -= FS * FT;
 
     if (fpu_check_overflow(ee, &ee->a))
         return;
 
     fpu_check_underflow(ee, &ee->a);
 }
-static inline void ee_i_msubs(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_FD;
-    int s = EE_D_FS;
+static inline void i_msubs(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_FD;
+    int s = D_FS;
 
     float temp = fpu_cvtf(ee->f[s].f) * fpu_cvtf(ee->f[t].f);
 
@@ -1518,107 +1507,107 @@ static inline void ee_i_msubs(struct ee_state* ee, const ee_instruction& i) {
 
     fpu_check_underflow(ee, &ee->f[d]);
 }
-static inline void ee_i_mtc0(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
+static inline void i_mtc0(Ee* ee, const Instruction& i) {
+    int d = D_RD;
 
     if (d == 4) {
         ee->cop0_r[4] &= 0x7ffff0;
-        ee->cop0_r[4] |= (EE_RT32 & 0xff800000);
+        ee->cop0_r[4] |= (RT32 & 0xff800000);
     } else {
-        ee->cop0_r[EE_D_RD] = EE_RT32;
+        ee->cop0_r[D_RD] = RT32;
     }
 }
-static inline void ee_i_mtc1(struct ee_state* ee, const ee_instruction& i) {
-    EE_FS32 = EE_RT32;
+static inline void i_mtc1(Ee* ee, const Instruction& i) {
+    FS32 = RT32;
 }
-static inline void ee_i_mthi(struct ee_state* ee, const ee_instruction& i) {
-    EE_HI0 = EE_RS;
+static inline void i_mthi(Ee* ee, const Instruction& i) {
+    HI0 = RS;
 }
-static inline void ee_i_mthi1(struct ee_state* ee, const ee_instruction& i) {
-    EE_HI1 = EE_RS;
+static inline void i_mthi1(Ee* ee, const Instruction& i) {
+    HI1 = RS;
 }
-static inline void ee_i_mtlo(struct ee_state* ee, const ee_instruction& i) {
-    EE_LO0 = EE_RS;
+static inline void i_mtlo(Ee* ee, const Instruction& i) {
+    LO0 = RS;
 }
-static inline void ee_i_mtlo1(struct ee_state* ee, const ee_instruction& i) {
-    EE_LO1 = EE_RS;
+static inline void i_mtlo1(Ee* ee, const Instruction& i) {
+    LO1 = RS;
 }
-static inline void ee_i_mtsa(struct ee_state* ee, const ee_instruction& i) {
-    ee->sa = ((uint32_t)EE_RS) & 0xf;
+static inline void i_mtsa(Ee* ee, const Instruction& i) {
+    ee->sa = ((uint32_t)RS) & 0xf;
 }
-static inline void ee_i_mtsab(struct ee_state* ee, const ee_instruction& i) {
-    ee->sa = (EE_RS ^ EE_D_I16) & 15;
+static inline void i_mtsab(Ee* ee, const Instruction& i) {
+    ee->sa = (RS ^ D_I16) & 15;
 }
-static inline void ee_i_mtsah(struct ee_state* ee, const ee_instruction& i) {
-    ee->sa = ((EE_RS ^ EE_D_I16) & 7) << 1;
+static inline void i_mtsah(Ee* ee, const Instruction& i) {
+    ee->sa = ((RS ^ D_I16) & 7) << 1;
 }
-static inline void ee_i_mulas(struct ee_state* ee, const ee_instruction& i) {
-    ee->a.f = EE_FS * EE_FT;
+static inline void i_mulas(Ee* ee, const Instruction& i) {
+    ee->a.f = FS * FT;
 
     if (fpu_check_overflow(ee, &ee->a))
         return;
 
     fpu_check_underflow(ee, &ee->a);
 }
-static inline void ee_i_muls(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_FD;
+static inline void i_muls(Ee* ee, const Instruction& i) {
+    int d = D_FD;
 
-    ee->f[d].f = EE_FS * EE_FT;
+    ee->f[d].f = FS * FT;
 
     if (fpu_check_overflow(ee, &ee->f[d]))
         return;
 
     fpu_check_underflow(ee, &ee->f[d]);
 }
-static inline void ee_i_mult(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
+static inline void i_mult(Ee* ee, const Instruction& i) {
+    uint64_t r = SE6432(RS32) * SE6432(RT32);
 
-    EE_LO0 = SE6432(r & 0xffffffff);
-    EE_HI0 = SE6432(r >> 32);
+    LO0 = SE6432(r & 0xffffffff);
+    HI0 = SE6432(r >> 32);
 
-    EE_RD = EE_LO0;
+    RD = LO0;
 }
-static inline void ee_i_mult1(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = SE6432(EE_RS32) * SE6432(EE_RT32);
+static inline void i_mult1(Ee* ee, const Instruction& i) {
+    uint64_t r = SE6432(RS32) * SE6432(RT32);
 
-    EE_LO1 = SE6432(r & 0xffffffff);
-    EE_HI1 = SE6432(r >> 32);
+    LO1 = SE6432(r & 0xffffffff);
+    HI1 = SE6432(r >> 32);
 
-    EE_RD = EE_LO1;
+    RD = LO1;
 }
-static inline void ee_i_multu(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
+static inline void i_multu(Ee* ee, const Instruction& i) {
+    uint64_t r = (uint64_t)RS32 * (uint64_t)RT32;
 
-    EE_LO0 = SE6432(r & 0xffffffff);
-    EE_HI0 = SE6432(r >> 32);
+    LO0 = SE6432(r & 0xffffffff);
+    HI0 = SE6432(r >> 32);
 
-    EE_RD = EE_LO0;
+    RD = LO0;
 }
-static inline void ee_i_multu1(struct ee_state* ee, const ee_instruction& i) {
-    uint64_t r = (uint64_t)EE_RS32 * (uint64_t)EE_RT32;
+static inline void i_multu1(Ee* ee, const Instruction& i) {
+    uint64_t r = (uint64_t)RS32 * (uint64_t)RT32;
 
-    EE_LO1 = SE6432(r & 0xffffffff);
-    EE_HI1 = SE6432(r >> 32);
+    LO1 = SE6432(r & 0xffffffff);
+    HI1 = SE6432(r >> 32);
 
-    EE_RD = EE_LO1;
+    RD = LO1;
 }
-static inline void ee_i_negs(struct ee_state* ee, const ee_instruction& i) {
-    ee->f[EE_D_FD].u32 = ee->f[EE_D_FS].u32 ^ 0x80000000;
+static inline void i_negs(Ee* ee, const Instruction& i) {
+    ee->f[D_FD].u32 = ee->f[D_FS].u32 ^ 0x80000000;
 
     ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
 }
-static inline void ee_i_nor(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = ~(EE_RS | EE_RT);
+static inline void i_nor(Ee* ee, const Instruction& i) {
+    RD = ~(RS | RT);
 }
-static inline void ee_i_or(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RS | EE_RT;
+static inline void i_or(Ee* ee, const Instruction& i) {
+    RD = RS | RT;
 }
-static inline void ee_i_ori(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = EE_RS | EE_D_I16;
+static inline void i_ori(Ee* ee, const Instruction& i) {
+    RT = RS | D_I16;
 }
-static inline void ee_i_pabsh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pabsh(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 8; i++) {
@@ -1633,9 +1622,9 @@ static inline void ee_i_pabsh(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pabsw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pabsw(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 4; i++) {
@@ -1650,10 +1639,10 @@ static inline void ee_i_pabsw(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_paddb(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_paddb(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 16; i++) {
@@ -1667,10 +1656,10 @@ static inline void ee_i_paddb(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_paddh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_paddh(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 8; i++) {
@@ -1684,10 +1673,10 @@ static inline void ee_i_paddh(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_paddsb(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_paddsb(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 16; i++) {
@@ -1702,10 +1691,10 @@ static inline void ee_i_paddsb(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_paddsh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_paddsh(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 8; i++) {
@@ -1720,10 +1709,10 @@ static inline void ee_i_paddsh(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_paddsw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_paddsw(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 4; i++) {
@@ -1738,10 +1727,10 @@ static inline void ee_i_paddsw(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_paddub(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_paddub(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 16; i++) {
@@ -1756,10 +1745,10 @@ static inline void ee_i_paddub(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_padduh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_padduh(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 8; i++) {
@@ -1774,10 +1763,10 @@ static inline void ee_i_padduh(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_padduw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_padduw(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 4; i++) {
@@ -1792,10 +1781,10 @@ static inline void ee_i_padduw(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_paddw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_paddw(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 4; i++) {
@@ -1809,10 +1798,10 @@ static inline void ee_i_paddw(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_padsbh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_padsbh(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     d->u16[0] = s->u16[0] - t->u16[0];
@@ -1833,10 +1822,10 @@ static inline void ee_i_padsbh(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pand(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pand(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     d->u64[0] = s->u64[0] & t->u64[0];
@@ -1849,10 +1838,10 @@ static inline void ee_i_pand(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pceqb(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pceqb(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 16; i++) {
@@ -1866,10 +1855,10 @@ static inline void ee_i_pceqb(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pceqh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pceqh(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 8; i++) {
@@ -1883,10 +1872,10 @@ static inline void ee_i_pceqh(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pceqw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pceqw(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 4; i++) {
@@ -1900,10 +1889,10 @@ static inline void ee_i_pceqw(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pcgtb(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pcgtb(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 16; i++) {
@@ -1917,10 +1906,10 @@ static inline void ee_i_pcgtb(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pcgth(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pcgth(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 8; i++) {
@@ -1934,10 +1923,10 @@ static inline void ee_i_pcgth(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pcgtw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* s = &ee->r[EE_D_RS];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pcgtw(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* s = &ee->r[D_RS];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     for (int i = 0; i < 4; i++) {
@@ -1951,9 +1940,9 @@ static inline void ee_i_pcgtw(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pcpyh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t* d = &ee->r[EE_D_RD];
-    uint128_t* t = &ee->r[EE_D_RT];
+static inline void i_pcpyh(Ee* ee, const Instruction& i) {
+    uint128_t* d = &ee->r[D_RD];
+    uint128_t* t = &ee->r[D_RT];
 
 #ifndef _EE_USE_INTRINSICS
     uint128_t tc = *t;
@@ -1979,33 +1968,33 @@ static inline void ee_i_pcpyh(struct ee_state* ee, const ee_instruction& i) {
     _mm_store_si128((__m128i*)d, r);
 #endif
 }
-static inline void ee_i_pcpyld(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_pcpyld(Ee* ee, const Instruction& i) {
 #ifndef _EE_USE_INTRINSICS
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u64[0] = rt.u64[0];
     ee->r[d].u64[1] = rs.u64[0];
 #else
-    __m128i a = _mm_load_si128((__m128i*)&ee->r[EE_D_RT]);
-    __m128i b = _mm_load_si128((__m128i*)&ee->r[EE_D_RS]);
+    __m128i a = _mm_load_si128((__m128i*)&ee->r[D_RT]);
+    __m128i b = _mm_load_si128((__m128i*)&ee->r[D_RS]);
     __m128i r = _mm_unpacklo_epi64(a, b);
 
-    _mm_store_si128((__m128i*)&ee->r[EE_D_RD], r);
+    _mm_store_si128((__m128i*)&ee->r[D_RD], r);
 #endif
 }
-static inline void ee_i_pcpyud(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pcpyud(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u64[0] = rs.u64[1];
     ee->r[d].u64[1] = rt.u64[1];
 }
-static inline void ee_i_pdivbw(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pdivbw(Ee* ee, const Instruction& i) {
+    int s = D_RS;
+    int t = D_RT;
 
     for (int i = 0; i < 4; i++) {
         if (ee->r[s].u32[i] == 0x80000000 && ee->r[t].u16[0] == 0xffff) {
@@ -2034,9 +2023,9 @@ static inline void ee_i_pdivbw(struct ee_state* ee, const ee_instruction& i) {
     // ee->lo.u32[2] = ee->r[s].s32[2] / ee->r[t].s16[0];
     // ee->lo.u32[3] = ee->r[s].s32[3] / ee->r[t].s16[0];
 }
-static inline void ee_i_pdivuw(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pdivuw(Ee* ee, const Instruction& i) {
+    int s = D_RS;
+    int t = D_RT;
 
     for (int i = 0; i < 4; i += 2) {
         if (ee->r[t].u32[i] != 0) {
@@ -2048,9 +2037,9 @@ static inline void ee_i_pdivuw(struct ee_state* ee, const ee_instruction& i) {
         }
     }
 }
-static inline void ee_i_pdivw(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pdivw(Ee* ee, const Instruction& i) {
+    int s = D_RS;
+    int t = D_RT;
 
     for (int i = 0; i < 4; i += 2) {
         if (ee->r[s].u32[i] == 0x80000000 && ee->r[t].u32[i] == 0xffffffff) {
@@ -2075,9 +2064,9 @@ static inline void ee_i_pdivw(struct ee_state* ee, const ee_instruction& i) {
     // ee->lo.u64[0] = SE6432(ee->r[s].s32[0] / ee->r[t].s32[0]);
     // ee->lo.u64[1] = SE6432(ee->r[s].s32[2] / ee->r[t].s32[2]);
 }
-static inline void ee_i_pexch(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_pexch(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[0];
     ee->r[d].u16[1] = rt.u16[2];
@@ -2088,18 +2077,18 @@ static inline void ee_i_pexch(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rt.u16[5];
     ee->r[d].u16[7] = rt.u16[7];
 }
-static inline void ee_i_pexcw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_pexcw(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u32[0] = rt.u32[0];
     ee->r[d].u32[1] = rt.u32[2];
     ee->r[d].u32[2] = rt.u32[1];
     ee->r[d].u32[3] = rt.u32[3];
 }
-static inline void ee_i_pexeh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_pexeh(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[2];
     ee->r[d].u16[1] = rt.u16[1];
@@ -2110,28 +2099,28 @@ static inline void ee_i_pexeh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rt.u16[4];
     ee->r[d].u16[7] = rt.u16[7];
 }
-static inline void ee_i_pexew(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_pexew(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u32[0] = rt.u32[2];
     ee->r[d].u32[1] = rt.u32[1];
     ee->r[d].u32[2] = rt.u32[0];
     ee->r[d].u32[3] = rt.u32[3];
 }
-static inline void ee_i_pext5(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_pext5(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u32[0] = unpack_5551_8888(rt.u32[0]);
     ee->r[d].u32[1] = unpack_5551_8888(rt.u32[1]);
     ee->r[d].u32[2] = unpack_5551_8888(rt.u32[2]);
     ee->r[d].u32[3] = unpack_5551_8888(rt.u32[3]);
 }
-static inline void ee_i_pextlb(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pextlb(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u8[ 0] = rt.u8[0];
     ee->r[d].u8[ 1] = rs.u8[0];
@@ -2150,10 +2139,10 @@ static inline void ee_i_pextlb(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u8[14] = rt.u8[7];
     ee->r[d].u8[15] = rs.u8[7];
 }
-static inline void ee_i_pextlh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pextlh(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[0];
     ee->r[d].u16[1] = rs.u16[0];
@@ -2164,20 +2153,20 @@ static inline void ee_i_pextlh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rt.u16[3];
     ee->r[d].u16[7] = rs.u16[3];
 }
-static inline void ee_i_pextlw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pextlw(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u32[0] = rt.u32[0];
     ee->r[d].u32[1] = rs.u32[0];
     ee->r[d].u32[2] = rt.u32[1];
     ee->r[d].u32[3] = rs.u32[1];
 }
-static inline void ee_i_pextub(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pextub(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u8[ 0] = rt.u8[ 8];
     ee->r[d].u8[ 1] = rs.u8[ 8];
@@ -2196,10 +2185,10 @@ static inline void ee_i_pextub(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u8[14] = rt.u8[15];
     ee->r[d].u8[15] = rs.u8[15];
 }
-static inline void ee_i_pextuh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pextuh(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[4];
     ee->r[d].u16[1] = rs.u16[4];
@@ -2210,20 +2199,20 @@ static inline void ee_i_pextuh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rt.u16[7];
     ee->r[d].u16[7] = rs.u16[7];
 }
-static inline void ee_i_pextuw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pextuw(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u32[0] = rt.u32[2];
     ee->r[d].u32[1] = rs.u32[2];
     ee->r[d].u32[2] = rt.u32[3];
     ee->r[d].u32[3] = rs.u32[3];
 }
-static inline void ee_i_phmadh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_phmadh(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     int32_t r0 = (int32_t)(rs.s16[1] * rt.s16[1]);
     int32_t r1 = (int32_t)(rs.s16[3] * rt.s16[3]);
@@ -2243,10 +2232,10 @@ static inline void ee_i_phmadh(struct ee_state* ee, const ee_instruction& i) {
     ee->hi.u32[2] = ee->r[d].u32[3];
     ee->hi.u32[3] = r3;
 }
-static inline void ee_i_phmsbh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_phmsbh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     int32_t r1 = ee->r[s].s16[1] * ee->r[t].s16[1];
     int32_t r3 = ee->r[s].s16[3] * ee->r[t].s16[3];
@@ -2266,10 +2255,10 @@ static inline void ee_i_phmsbh(struct ee_state* ee, const ee_instruction& i) {
     ee->hi.u32[2] = ee->r[d].u32[3];
     ee->hi.u32[3] = ~r7;
 }
-static inline void ee_i_pinteh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pinteh(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[0];
     ee->r[d].u16[1] = rs.u16[0];
@@ -2280,10 +2269,10 @@ static inline void ee_i_pinteh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rt.u16[6];
     ee->r[d].u16[7] = rs.u16[6];
 }
-static inline void ee_i_pinth(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    uint128_t rs = ee->r[EE_D_RS];
-    int d = EE_D_RD;
+static inline void i_pinth(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    uint128_t rs = ee->r[D_RS];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[0];
     ee->r[d].u16[1] = rs.u16[4];
@@ -2294,26 +2283,26 @@ static inline void ee_i_pinth(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rt.u16[3];
     ee->r[d].u16[7] = rs.u16[7];
 }
-static inline void ee_i_plzcw(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_plzcw(Ee* ee, const Instruction& i) {
     for (int j = 0; j < 2; j++) {
-        uint32_t word = ee->r[EE_D_RS].u32[j];
+        uint32_t word = ee->r[D_RS].u32[j];
 
         int msb = word & 0x80000000;
 
         word = (msb ? ~word : word);
 
-        ee->r[EE_D_RD].u32[j] = (word ? (__builtin_clz(word) - 1) : 0x1f);
+        ee->r[D_RD].u32[j] = (word ? (__builtin_clz(word) - 1) : 0x1f);
     }
 
     // PLZCW only defines the low two words; normalize the upper half to zero so
     // the JIT (which writes the whole 128-bit register) matches.
-    ee->r[EE_D_RD].u32[2] = 0;
-    ee->r[EE_D_RD].u32[3] = 0;
+    ee->r[D_RD].u32[2] = 0;
+    ee->r[D_RD].u32[3] = 0;
 }
-static inline void ee_i_pmaddh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pmaddh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     uint32_t r0 = SE3216(ee->r[s].u16[0]) * SE3216(ee->r[t].u16[0]);
     uint32_t r1 = SE3216(ee->r[s].u16[1]) * SE3216(ee->r[t].u16[1]);
@@ -2346,10 +2335,10 @@ static inline void ee_i_pmaddh(struct ee_state* ee, const ee_instruction& i) {
     ee->lo.u32[2] = ee->r[d].u32[2];
     ee->hi.u32[2] = ee->r[d].u32[3];
 }
-static inline void ee_i_pmadduw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pmadduw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     uint64_t r0 = (uint64_t)ee->r[s].u32[0] * (uint64_t)ee->r[t].u32[0];
     uint64_t r1 = (uint64_t)ee->r[s].u32[2] * (uint64_t)ee->r[t].u32[2];
@@ -2361,10 +2350,10 @@ static inline void ee_i_pmadduw(struct ee_state* ee, const ee_instruction& i) {
     ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
     ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
 }
-static inline void ee_i_pmaddw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pmaddw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     uint64_t r0 = (int64_t)ee->r[s].s32[0] * (int64_t)ee->r[t].s32[0];
     uint64_t r1 = (int64_t)ee->r[s].s32[2] * (int64_t)ee->r[t].s32[2];
@@ -2376,10 +2365,10 @@ static inline void ee_i_pmaddw(struct ee_state* ee, const ee_instruction& i) {
     ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
     ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
 }
-static inline void ee_i_pmaxh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pmaxh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->r[d].u16[0] = ((int16_t)ee->r[s].u16[0] > (int16_t)ee->r[t].u16[0]) ? ee->r[s].u16[0] : ee->r[t].u16[0];
     ee->r[d].u16[1] = ((int16_t)ee->r[s].u16[1] > (int16_t)ee->r[t].u16[1]) ? ee->r[s].u16[1] : ee->r[t].u16[1];
@@ -2390,43 +2379,43 @@ static inline void ee_i_pmaxh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ((int16_t)ee->r[s].u16[6] > (int16_t)ee->r[t].u16[6]) ? ee->r[s].u16[6] : ee->r[t].u16[6];
     ee->r[d].u16[7] = ((int16_t)ee->r[s].u16[7] > (int16_t)ee->r[t].u16[7]) ? ee->r[s].u16[7] : ee->r[t].u16[7];
 }
-static inline void ee_i_pmaxw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pmaxw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->r[d].u32[0] = ((int32_t)ee->r[s].u32[0] > (int32_t)ee->r[t].u32[0]) ? ee->r[s].u32[0] : ee->r[t].u32[0];
     ee->r[d].u32[1] = ((int32_t)ee->r[s].u32[1] > (int32_t)ee->r[t].u32[1]) ? ee->r[s].u32[1] : ee->r[t].u32[1];
     ee->r[d].u32[2] = ((int32_t)ee->r[s].u32[2] > (int32_t)ee->r[t].u32[2]) ? ee->r[s].u32[2] : ee->r[t].u32[2];
     ee->r[d].u32[3] = ((int32_t)ee->r[s].u32[3] > (int32_t)ee->r[t].u32[3]) ? ee->r[s].u32[3] : ee->r[t].u32[3];
 }
-static inline void ee_i_pmfhi(struct ee_state* ee, const ee_instruction& i) {
-    ee->r[EE_D_RD] = ee->hi;
+static inline void i_pmfhi(Ee* ee, const Instruction& i) {
+    ee->r[D_RD] = ee->hi;
 }
-static inline void ee_i_pmfhllw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
+static inline void i_pmfhllw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
 
     ee->r[d].u32[0] = ee->lo.u32[0];
     ee->r[d].u32[1] = ee->hi.u32[0];
     ee->r[d].u32[2] = ee->lo.u32[2];
     ee->r[d].u32[3] = ee->hi.u32[2];
 }
-static inline void ee_i_pmfhluw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
+static inline void i_pmfhluw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
 
     ee->r[d].u32[0] = ee->lo.u32[1];
     ee->r[d].u32[1] = ee->hi.u32[1];
     ee->r[d].u32[2] = ee->lo.u32[3];
     ee->r[d].u32[3] = ee->hi.u32[3];
 }
-static inline void ee_i_pmfhlslw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
+static inline void i_pmfhlslw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
 
     ee->r[d].u64[0] = SE6432(saturate32(((uint64_t)ee->lo.u32[0]) | (ee->hi.u64[0] << 32)));
     ee->r[d].u64[1] = SE6432(saturate32(((uint64_t)ee->lo.u32[2]) | (ee->hi.u64[1] << 32)));
 }
-static inline void ee_i_pmfhllh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
+static inline void i_pmfhllh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
 
     ee->r[d].u16[0] = ee->lo.u16[0];
     ee->r[d].u16[1] = ee->lo.u16[2];
@@ -2438,8 +2427,8 @@ static inline void ee_i_pmfhllh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[7] = ee->hi.u16[6];
     
 }
-static inline void ee_i_pmfhlsh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
+static inline void i_pmfhlsh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
 
     ee->r[d].u16[0] = saturate16(ee->lo.u32[0]);
     ee->r[d].u16[1] = saturate16(ee->lo.u32[1]);
@@ -2450,13 +2439,13 @@ static inline void ee_i_pmfhlsh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = saturate16(ee->hi.u32[2]);
     ee->r[d].u16[7] = saturate16(ee->hi.u32[3]);
 }
-static inline void ee_i_pmflo(struct ee_state* ee, const ee_instruction& i) {
-    ee->r[EE_D_RD] = ee->lo;
+static inline void i_pmflo(Ee* ee, const Instruction& i) {
+    ee->r[D_RD] = ee->lo;
 }
-static inline void ee_i_pminh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pminh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->r[d].u16[0] = ((int16_t)ee->r[s].u16[0] < (int16_t)ee->r[t].u16[0]) ? ee->r[s].u16[0] : ee->r[t].u16[0];
     ee->r[d].u16[1] = ((int16_t)ee->r[s].u16[1] < (int16_t)ee->r[t].u16[1]) ? ee->r[s].u16[1] : ee->r[t].u16[1];
@@ -2467,20 +2456,20 @@ static inline void ee_i_pminh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ((int16_t)ee->r[s].u16[6] < (int16_t)ee->r[t].u16[6]) ? ee->r[s].u16[6] : ee->r[t].u16[6];
     ee->r[d].u16[7] = ((int16_t)ee->r[s].u16[7] < (int16_t)ee->r[t].u16[7]) ? ee->r[s].u16[7] : ee->r[t].u16[7];
 }
-static inline void ee_i_pminw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pminw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->r[d].u32[0] = (ee->r[s].s32[0] < ee->r[t].s32[0]) ? ee->r[s].u32[0] : ee->r[t].u32[0];
     ee->r[d].u32[1] = (ee->r[s].s32[1] < ee->r[t].s32[1]) ? ee->r[s].u32[1] : ee->r[t].u32[1];
     ee->r[d].u32[2] = (ee->r[s].s32[2] < ee->r[t].s32[2]) ? ee->r[s].u32[2] : ee->r[t].u32[2];
     ee->r[d].u32[3] = (ee->r[s].s32[3] < ee->r[t].s32[3]) ? ee->r[s].u32[3] : ee->r[t].u32[3];
 }
-static inline void ee_i_pmsubh(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_pmsubh(Ee* ee, const Instruction& i) {
+    int s = D_RS;
+    int t = D_RT;
+    int d = D_RD;
 
     int32_t r0 = (int32_t)ee->r[s].s16[0] * (int32_t)ee->r[t].s16[0];
     int32_t r1 = (int32_t)ee->r[s].s16[1] * (int32_t)ee->r[t].s16[1];
@@ -2505,16 +2494,16 @@ static inline void ee_i_pmsubh(struct ee_state* ee, const ee_instruction& i) {
     ee->hi.u32[1] = ee->hi.u32[1] - r3;
     ee->hi.u32[3] = ee->hi.u32[3] - r7;
 }
-static inline void ee_i_pmsubw(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_pmsubw(Ee* ee, const Instruction& i) {
+    int s = D_RS;
+    int t = D_RT;
+    int d = D_RD;
 
     // Multiply-subtract counterpart of PMADDW, using PCSX2's recompiler
     // semantics: full 64-bit accumulator (HI<<32)|LO minus the signed product,
     // then split. Real hardware has an "off by one" multiplier quirk (PMSUBW
     // divides by 0xFFFFFFFF instead of >>32); PCSX2's JIT ignores it, and this
-    // matches the JIT so the two stay in sync (see ee_mmi::pmsubw).
+    // matches the JIT so the two stay in sync (see mmi::pmsubw).
     uint64_t r0 = (int64_t)ee->r[s].s32[0] * (int64_t)ee->r[t].s32[0];
     uint64_t r1 = (int64_t)ee->r[s].s32[2] * (int64_t)ee->r[t].s32[2];
 
@@ -2525,24 +2514,24 @@ static inline void ee_i_pmsubw(struct ee_state* ee, const ee_instruction& i) {
     ee->lo.u64[1] = SE6432(ee->r[d].u32[2]);
     ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
 }
-static inline void ee_i_pmthi(struct ee_state* ee, const ee_instruction& i) {
-    ee->hi = ee->r[EE_D_RS];
+static inline void i_pmthi(Ee* ee, const Instruction& i) {
+    ee->hi = ee->r[D_RS];
 }
-static inline void ee_i_pmthl(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
+static inline void i_pmthl(Ee* ee, const Instruction& i) {
+    int s = D_RS;
 
     ee->lo.u32[0] = ee->r[s].u32[0];
     ee->lo.u32[2] = ee->r[s].u32[2];
     ee->hi.u32[0] = ee->r[s].u32[1];
     ee->hi.u32[2] = ee->r[s].u32[3];
 }
-static inline void ee_i_pmtlo(struct ee_state* ee, const ee_instruction& i) {
-    ee->lo = ee->r[EE_D_RS];
+static inline void i_pmtlo(Ee* ee, const Instruction& i) {
+    ee->lo = ee->r[D_RS];
 }
-static inline void ee_i_pmulth(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pmulth(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->lo.u32[0] = (int32_t)(int16_t)ee->r[s].u16[0] * (int32_t)(int16_t)ee->r[t].u16[0];
     ee->lo.u32[1] = (int32_t)(int16_t)ee->r[s].u16[1] * (int32_t)(int16_t)ee->r[t].u16[1];
@@ -2557,10 +2546,10 @@ static inline void ee_i_pmulth(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u32[2] = ee->lo.u32[2];
     ee->r[d].u32[3] = ee->hi.u32[2];
 }
-static inline void ee_i_pmultuw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_pmultuw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->r[d].u64[0] = (uint64_t)ee->r[s].u32[0] * (uint64_t)ee->r[t].u32[0];
     ee->r[d].u64[1] = (uint64_t)ee->r[s].u32[2] * (uint64_t)ee->r[t].u32[2];
@@ -2570,10 +2559,10 @@ static inline void ee_i_pmultuw(struct ee_state* ee, const ee_instruction& i) {
     ee->hi.u64[0] = SE6432(ee->r[d].u32[1]);
     ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
 }
-static inline void ee_i_pmultw(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_pmultw(Ee* ee, const Instruction& i) {
+    int s = D_RS;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u64[0] = SE6432(ee->r[s].u32[0]) * SE6432(ee->r[t].u32[0]);
     ee->r[d].u64[1] = SE6432(ee->r[s].u32[2]) * SE6432(ee->r[t].u32[2]);
@@ -2583,25 +2572,25 @@ static inline void ee_i_pmultw(struct ee_state* ee, const ee_instruction& i) {
     ee->hi.u64[0] = SE6432(ee->r[d].u32[1]);
     ee->hi.u64[1] = SE6432(ee->r[d].u32[3]);
 }
-static inline void ee_i_pnor(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rs = ee->r[EE_D_RS];
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_pnor(Ee* ee, const Instruction& i) {
+    uint128_t rs = ee->r[D_RS];
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u64[0] = ~(rs.u64[0] | rt.u64[0]);
     ee->r[d].u64[1] = ~(rs.u64[1] | rt.u64[1]);
 }
-static inline void ee_i_por(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rs = ee->r[EE_D_RS];
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_por(Ee* ee, const Instruction& i) {
+    uint128_t rs = ee->r[D_RS];
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u64[0] = rs.u64[0] | rt.u64[0];
     ee->r[d].u64[1] = rs.u64[1] | rt.u64[1];
 }
-static inline void ee_i_ppac5(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_ppac5(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u32[0] = ((rt.u32[0] & 0x000000f8) >> 3) |
                       ((rt.u32[0] & 0x0000f800) >> 6) |
@@ -2620,10 +2609,10 @@ static inline void ee_i_ppac5(struct ee_state* ee, const ee_instruction& i) {
                       ((rt.u32[3] & 0x00f80000) >> 9) |
                       ((rt.u32[3] & 0x80000000) >> 16);
 }
-static inline void ee_i_ppacb(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rs = ee->r[EE_D_RS];
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_ppacb(Ee* ee, const Instruction& i) {
+    uint128_t rs = ee->r[D_RS];
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u8[0 ] = rt.u8[ 0];
     ee->r[d].u8[1 ] = rt.u8[ 2];
@@ -2642,10 +2631,10 @@ static inline void ee_i_ppacb(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u8[14] = rs.u8[12];
     ee->r[d].u8[15] = rs.u8[14];
 }
-static inline void ee_i_ppach(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rs = ee->r[EE_D_RS];
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_ppach(Ee* ee, const Instruction& i) {
+    uint128_t rs = ee->r[D_RS];
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[0];
     ee->r[d].u16[1] = rt.u16[2];
@@ -2656,22 +2645,22 @@ static inline void ee_i_ppach(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rs.u16[4];
     ee->r[d].u16[7] = rs.u16[6];
 }
-static inline void ee_i_ppacw(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rs = ee->r[EE_D_RS];
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_ppacw(Ee* ee, const Instruction& i) {
+    uint128_t rs = ee->r[D_RS];
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u32[0] = rt.u32[0];
     ee->r[d].u32[1] = rt.u32[2];
     ee->r[d].u32[2] = rs.u32[0];
     ee->r[d].u32[3] = rs.u32[2];
 }
-static inline void ee_i_pref(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_pref(Ee* ee, const Instruction& i) {
     // Does nothing
 }
-static inline void ee_i_prevh(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_prevh(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u16[0] = rt.u16[3];
     ee->r[d].u16[1] = rt.u16[2];
@@ -2682,19 +2671,19 @@ static inline void ee_i_prevh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = rt.u16[5];
     ee->r[d].u16[7] = rt.u16[4];
 }
-static inline void ee_i_prot3w(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_prot3w(Ee* ee, const Instruction& i) {
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u32[0] = rt.u32[1];
     ee->r[d].u32[1] = rt.u32[2];
     ee->r[d].u32[2] = rt.u32[0];
     ee->r[d].u32[3] = rt.u32[3];
 }
-static inline void ee_i_psllh(struct ee_state* ee, const ee_instruction& i) {
-    int sa = EE_D_SA & 0xf;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_psllh(Ee* ee, const Instruction& i) {
+    int sa = D_SA & 0xf;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u16[0] = ee->r[t].u16[0] << sa;
     ee->r[d].u16[1] = ee->r[t].u16[1] << sa;
@@ -2705,28 +2694,28 @@ static inline void ee_i_psllh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ee->r[t].u16[6] << sa;
     ee->r[d].u16[7] = ee->r[t].u16[7] << sa;
 }
-static inline void ee_i_psllvw(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_RD;
-    int s = EE_D_RS;
+static inline void i_psllvw(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_RD;
+    int s = D_RS;
 
     ee->r[d].u64[0] = SE6432(ee->r[t].u32[0] << (ee->r[s].u32[0] & 31));
     ee->r[d].u64[1] = SE6432(ee->r[t].u32[2] << (ee->r[s].u32[2] & 31));
 }
-static inline void ee_i_psllw(struct ee_state* ee, const ee_instruction& i) {
-    int sa = EE_D_SA;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_psllw(Ee* ee, const Instruction& i) {
+    int sa = D_SA;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u32[0] = ee->r[t].u32[0] << sa;
     ee->r[d].u32[1] = ee->r[t].u32[1] << sa;
     ee->r[d].u32[2] = ee->r[t].u32[2] << sa;
     ee->r[d].u32[3] = ee->r[t].u32[3] << sa;
 }
-static inline void ee_i_psrah(struct ee_state* ee, const ee_instruction& i) {
-    int sa = EE_D_SA & 0xf;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_psrah(Ee* ee, const Instruction& i) {
+    int sa = D_SA & 0xf;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u16[0] = ((int16_t)ee->r[t].u16[0]) >> sa;
     ee->r[d].u16[1] = ((int16_t)ee->r[t].u16[1]) >> sa;
@@ -2737,28 +2726,28 @@ static inline void ee_i_psrah(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ((int16_t)ee->r[t].u16[6]) >> sa;
     ee->r[d].u16[7] = ((int16_t)ee->r[t].u16[7]) >> sa;
 }
-static inline void ee_i_psravw(struct ee_state* ee, const ee_instruction& i) {
-    int s = EE_D_RS;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_psravw(Ee* ee, const Instruction& i) {
+    int s = D_RS;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u64[0] = SE6432((int32_t)ee->r[t].u32[0] >> (ee->r[s].u32[0] & 31));
     ee->r[d].u64[1] = SE6432((int32_t)ee->r[t].u32[2] >> (ee->r[s].u32[2] & 31));
 }
-static inline void ee_i_psraw(struct ee_state* ee, const ee_instruction& i) {
-    int sa = EE_D_SA;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_psraw(Ee* ee, const Instruction& i) {
+    int sa = D_SA;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u32[0] = ((int32_t)ee->r[t].u32[0]) >> sa;
     ee->r[d].u32[1] = ((int32_t)ee->r[t].u32[1]) >> sa;
     ee->r[d].u32[2] = ((int32_t)ee->r[t].u32[2]) >> sa;
     ee->r[d].u32[3] = ((int32_t)ee->r[t].u32[3]) >> sa;
 }
-static inline void ee_i_psrlh(struct ee_state* ee, const ee_instruction& i) {
-    int sa = EE_D_SA & 0xf;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_psrlh(Ee* ee, const Instruction& i) {
+    int sa = D_SA & 0xf;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u16[0] = ee->r[t].u16[0] >> sa;
     ee->r[d].u16[1] = ee->r[t].u16[1] >> sa;
@@ -2769,28 +2758,28 @@ static inline void ee_i_psrlh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ee->r[t].u16[6] >> sa;
     ee->r[d].u16[7] = ee->r[t].u16[7] >> sa;
 }
-static inline void ee_i_psrlvw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psrlvw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->r[d].u64[0] = SE6432(ee->r[t].u32[0] >> (ee->r[s].u32[0] & 31));
     ee->r[d].u64[1] = SE6432(ee->r[t].u32[2] >> (ee->r[s].u32[2] & 31));
 }
-static inline void ee_i_psrlw(struct ee_state* ee, const ee_instruction& i) {
-    int sa = EE_D_SA;
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_psrlw(Ee* ee, const Instruction& i) {
+    int sa = D_SA;
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[d].u32[0] = ee->r[t].u32[0] >> sa;
     ee->r[d].u32[1] = ee->r[t].u32[1] >> sa;
     ee->r[d].u32[2] = ee->r[t].u32[2] >> sa;
     ee->r[d].u32[3] = ee->r[t].u32[3] >> sa;
 }
-static inline void ee_i_psubb(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int s = EE_D_RS;
-    int d = EE_D_RD;
+static inline void i_psubb(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int s = D_RS;
+    int d = D_RD;
 
     ee->r[d].u8[0 ] = ee->r[s].u8[0 ] - ee->r[t].u8[0 ];
     ee->r[d].u8[1 ] = ee->r[s].u8[1 ] - ee->r[t].u8[1 ];
@@ -2809,10 +2798,10 @@ static inline void ee_i_psubb(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u8[14] = ee->r[s].u8[14] - ee->r[t].u8[14];
     ee->r[d].u8[15] = ee->r[s].u8[15] - ee->r[t].u8[15];
 }
-static inline void ee_i_psubh(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int s = EE_D_RS;
-    int d = EE_D_RD;
+static inline void i_psubh(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int s = D_RS;
+    int d = D_RD;
 
     ee->r[d].u16[0] = ee->r[s].u16[0] - ee->r[t].u16[0];
     ee->r[d].u16[1] = ee->r[s].u16[1] - ee->r[t].u16[1];
@@ -2823,10 +2812,10 @@ static inline void ee_i_psubh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = ee->r[s].u16[6] - ee->r[t].u16[6];
     ee->r[d].u16[7] = ee->r[s].u16[7] - ee->r[t].u16[7];
 }
-static inline void ee_i_psubsb(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psubsb(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     int32_t r0  = ((int32_t)(int8_t)ee->r[s].u8[0 ]) - ((int32_t)(int8_t)ee->r[t].u8[0 ]);
     int32_t r1  = ((int32_t)(int8_t)ee->r[s].u8[1 ]) - ((int32_t)(int8_t)ee->r[t].u8[1 ]);
@@ -2862,10 +2851,10 @@ static inline void ee_i_psubsb(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u8[14] = (r14 >= 0x7f) ? 0x7f : ((r14 < -0x80) ? 0x80 : r14);
     ee->r[d].u8[15] = (r15 >= 0x7f) ? 0x7f : ((r15 < -0x80) ? 0x80 : r15);
 }
-static inline void ee_i_psubsh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psubsh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     int32_t r0 = SE3216(ee->r[s].u16[0]) - SE3216(ee->r[t].u16[0]);
     int32_t r1 = SE3216(ee->r[s].u16[1]) - SE3216(ee->r[t].u16[1]);
@@ -2885,10 +2874,10 @@ static inline void ee_i_psubsh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = (r6 >= 0x7fff) ? 0x7fff : ((r6 < -0x8000) ? 0x8000 : r6);
     ee->r[d].u16[7] = (r7 >= 0x7fff) ? 0x7fff : ((r7 < -0x8000) ? 0x8000 : r7);
 }
-static inline void ee_i_psubsw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psubsw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     int64_t r0 = SE6432(ee->r[s].u32[0]) - SE6432(ee->r[t].u32[0]);
     int64_t r1 = SE6432(ee->r[s].u32[1]) - SE6432(ee->r[t].u32[1]);
@@ -2900,10 +2889,10 @@ static inline void ee_i_psubsw(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u32[2] = (r2 >= 0x7fffffff) ? 0x7fffffff : ((r2 < (int32_t)0x80000000) ? 0x80000000 : r2);
     ee->r[d].u32[3] = (r3 >= 0x7fffffff) ? 0x7fffffff : ((r3 < (int32_t)0x80000000) ? 0x80000000 : r3);
 }
-static inline void ee_i_psubub(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psubub(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     int32_t r0  = ((int32_t)ee->r[s].u8[0 ]) - ((int32_t)ee->r[t].u8[0 ]);
     int32_t r1  = ((int32_t)ee->r[s].u8[1 ]) - ((int32_t)ee->r[t].u8[1 ]);
@@ -2939,10 +2928,10 @@ static inline void ee_i_psubub(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u8[14] = (r14 < 0) ? 0 : r14;
     ee->r[d].u8[15] = (r15 < 0) ? 0 : r15;
 }
-static inline void ee_i_psubuh(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psubuh(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     int32_t r0 = (int32_t)(ee->r[s].u16[0]) - (int32_t)(ee->r[t].u16[0]);
     int32_t r1 = (int32_t)(ee->r[s].u16[1]) - (int32_t)(ee->r[t].u16[1]);
@@ -2962,10 +2951,10 @@ static inline void ee_i_psubuh(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u16[6] = (r6 < 0) ? 0 : r6;
     ee->r[d].u16[7] = (r7 < 0) ? 0 : r7;
 }
-static inline void ee_i_psubuw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psubuw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     int64_t r0 = (int64_t)ee->r[s].u32[0] - (int64_t)ee->r[t].u32[0];
     int64_t r1 = (int64_t)ee->r[s].u32[1] - (int64_t)ee->r[t].u32[1];
@@ -2977,28 +2966,28 @@ static inline void ee_i_psubuw(struct ee_state* ee, const ee_instruction& i) {
     ee->r[d].u32[2] = (r2 < 0) ? 0 : r2;
     ee->r[d].u32[3] = (r3 < 0) ? 0 : r3;
 }
-static inline void ee_i_psubw(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_RD;
-    int s = EE_D_RS;
-    int t = EE_D_RT;
+static inline void i_psubw(Ee* ee, const Instruction& i) {
+    int d = D_RD;
+    int s = D_RS;
+    int t = D_RT;
 
     ee->r[d].u32[0] = ee->r[s].u32[0] - ee->r[t].u32[0];
     ee->r[d].u32[1] = ee->r[s].u32[1] - ee->r[t].u32[1];
     ee->r[d].u32[2] = ee->r[s].u32[2] - ee->r[t].u32[2];
     ee->r[d].u32[3] = ee->r[s].u32[3] - ee->r[t].u32[3];
 }
-static inline void ee_i_pxor(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rs = ee->r[EE_D_RS];
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_pxor(Ee* ee, const Instruction& i) {
+    uint128_t rs = ee->r[D_RS];
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     ee->r[d].u64[0] = rs.u64[0] ^ rt.u64[0];
     ee->r[d].u64[1] = rs.u64[1] ^ rt.u64[1];
 }
-static inline void ee_i_qfsrv(struct ee_state* ee, const ee_instruction& i) {
-    uint128_t rs = ee->r[EE_D_RS];
-    uint128_t rt = ee->r[EE_D_RT];
-    int d = EE_D_RD;
+static inline void i_qfsrv(Ee* ee, const Instruction& i) {
+    uint128_t rs = ee->r[D_RS];
+    uint128_t rt = ee->r[D_RT];
+    int d = D_RD;
 
     int shift = ee->sa * 8;
 
@@ -3025,24 +3014,24 @@ static inline void ee_i_qfsrv(struct ee_state* ee, const ee_instruction& i) {
 
     ee->r[d] = v;
 }
-static inline void ee_i_qmfc2(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_qmfc2(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_RD;
 
     ee->r[t].u64[0] = ee->vu0->vf[d].u64[0];
     ee->r[t].u64[1] = ee->vu0->vf[d].u64[1];
 }
-static inline void ee_i_qmtc2(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_RD;
+static inline void i_qmtc2(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_RD;
 
     if (!d) return;
 
     ee->vu0->vf[d].u128 = ee->r[t];
 }
-static inline void ee_i_rsqrts(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_FD;
+static inline void i_rsqrts(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_FD;
 
     ee->fcr &= ~(FPU_FLG_I | FPU_FLG_D);
 
@@ -3054,9 +3043,9 @@ static inline void ee_i_rsqrts(struct ee_state* ee, const ee_instruction& i) {
     } else if (ee->f[t].u32 & 0x80000000) {
         ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
 
-        ee->f[d].f = EE_FS / sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
+        ee->f[d].f = FS / sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
     } else {
-        ee->f[d].f = EE_FS / sqrtf(fpu_cvtf(ee->f[t].f));
+        ee->f[d].f = FS / sqrtf(fpu_cvtf(ee->f[t].f));
     }
 
     if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
@@ -3064,68 +3053,68 @@ static inline void ee_i_rsqrts(struct ee_state* ee, const ee_instruction& i) {
 
     fpu_check_underflow_no_flags(ee, &ee->f[d]);
 }
-static inline void ee_i_sb(struct ee_state* ee, const ee_instruction& i) {
-    bus_write8(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
+static inline void i_sb(Ee* ee, const Instruction& i) {
+    bus_write8(ee, RS32 + SE3216(D_I16), RT);
 }
-static inline void ee_i_sd(struct ee_state* ee, const ee_instruction& i) {
-    bus_write64(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
+static inline void i_sd(Ee* ee, const Instruction& i) {
+    bus_write64(ee, RS32 + SE3216(D_I16), RT);
 }
-static inline void ee_i_sdl(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_sdl(Ee* ee, const Instruction& i) {
     static const uint8_t sdl_shift[8] = { 56, 48, 40, 32, 24, 16, 8, 0 };
     static const uint64_t sdl_mask[8] = {
         0xffffffffffffff00ULL, 0xffffffffffff0000ULL, 0xffffffffff000000ULL, 0xffffffff00000000ULL,
         0xffffff0000000000ULL, 0xffff000000000000ULL, 0xff00000000000000ULL, 0x0000000000000000ULL
     };
 
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t shift = addr & 7;
     uint64_t data = bus_read64(ee, addr & ~7);
 
-    bus_write64(ee, addr & ~7, (EE_RT >> sdl_shift[shift]) | (data & sdl_mask[shift]));
+    bus_write64(ee, addr & ~7, (RT >> sdl_shift[shift]) | (data & sdl_mask[shift]));
 }
-static inline void ee_i_sdr(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_sdr(Ee* ee, const Instruction& i) {
     static const uint8_t sdr_shift[8] = { 0, 8, 16, 24, 32, 40, 48, 56 };
     static const uint64_t sdr_mask[8] = {
         0x0000000000000000ULL, 0x00000000000000ffULL, 0x000000000000ffffULL, 0x0000000000ffffffULL,
         0x00000000ffffffffULL, 0x000000ffffffffffULL, 0x0000ffffffffffffULL, 0x00ffffffffffffffULL
     };
 
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t shift = addr & 7;
     uint64_t data = bus_read64(ee, addr & ~7);
 
-    bus_write64(ee, addr & ~7, (EE_RT << sdr_shift[shift]) | (data & sdr_mask[shift]));
+    bus_write64(ee, addr & ~7, (RT << sdr_shift[shift]) | (data & sdr_mask[shift]));
 }
-static inline void ee_i_sh(struct ee_state* ee, const ee_instruction& i) {
-    bus_write16(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT);
+static inline void i_sh(Ee* ee, const Instruction& i) {
+    bus_write16(ee, RS32 + SE3216(D_I16), RT);
 }
-static inline void ee_i_sll(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(EE_RT32 << EE_D_SA);
+static inline void i_sll(Ee* ee, const Instruction& i) {
+    RD = SE6432(RT32 << D_SA);
 }
-static inline void ee_i_sllv(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(EE_RT32 << (EE_RS & 0x1f));
+static inline void i_sllv(Ee* ee, const Instruction& i) {
+    RD = SE6432(RT32 << (RS & 0x1f));
 }
-static inline void ee_i_slt(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = (int64_t)EE_RS < (int64_t)EE_RT;
+static inline void i_slt(Ee* ee, const Instruction& i) {
+    RD = (int64_t)RS < (int64_t)RT;
 }
-static inline void ee_i_slti(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = ((int64_t)EE_RS) < SE6416(EE_D_I16);
+static inline void i_slti(Ee* ee, const Instruction& i) {
+    RT = ((int64_t)RS) < SE6416(D_I16);
 }
-static inline void ee_i_sltiu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = EE_RS < (uint64_t)(SE6416(EE_D_I16));
+static inline void i_sltiu(Ee* ee, const Instruction& i) {
+    RT = RS < (uint64_t)(SE6416(D_I16));
 }
-static inline void ee_i_sltu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RS < EE_RT;
+static inline void i_sltu(Ee* ee, const Instruction& i) {
+    RD = RS < RT;
 }
-static inline void ee_i_sq(struct ee_state* ee, const ee_instruction& i) {
-    bus_write128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf, ee->r[EE_D_RT]);
+static inline void i_sq(Ee* ee, const Instruction& i) {
+    bus_write128(ee, (RS32 + SE3216(D_I16)) & ~0xf, ee->r[D_RT]);
 }
-static inline void ee_i_sqc2(struct ee_state* ee, const ee_instruction& i) {
-    bus_write128(ee, (EE_RS32 + SE3216(EE_D_I16)) & ~0xf, ee->vu0->vf[EE_D_RT].u128);
+static inline void i_sqc2(Ee* ee, const Instruction& i) {
+    bus_write128(ee, (RS32 + SE3216(D_I16)) & ~0xf, ee->vu0->vf[D_RT].u128);
 }
-static inline void ee_i_sqrts(struct ee_state* ee, const ee_instruction& i) {
-    int t = EE_D_RT;
-    int d = EE_D_FD;
+static inline void i_sqrts(Ee* ee, const Instruction& i) {
+    int t = D_RT;
+    int d = D_FD;
 
     ee->fcr &= ~(FPU_FLG_I | FPU_FLG_D);
 
@@ -3139,89 +3128,89 @@ static inline void ee_i_sqrts(struct ee_state* ee, const ee_instruction& i) {
         ee->f[d].f = sqrtf(fpu_cvtf(ee->f[t].f));
     }
 }
-static inline void ee_i_sra(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(((int32_t)EE_RT32) >> EE_D_SA);
+static inline void i_sra(Ee* ee, const Instruction& i) {
+    RD = SE6432(((int32_t)RT32) >> D_SA);
 }
-static inline void ee_i_srav(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(((int32_t)EE_RT32) >> (EE_RS & 0x1f));
+static inline void i_srav(Ee* ee, const Instruction& i) {
+    RD = SE6432(((int32_t)RT32) >> (RS & 0x1f));
 }
-static inline void ee_i_srl(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(EE_RT32 >> EE_D_SA);
+static inline void i_srl(Ee* ee, const Instruction& i) {
+    RD = SE6432(RT32 >> D_SA);
 }
-static inline void ee_i_srlv(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(EE_RT32 >> (EE_RS & 0x1f));
+static inline void i_srlv(Ee* ee, const Instruction& i) {
+    RD = SE6432(RT32 >> (RS & 0x1f));
 }
-static inline void ee_i_sub(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_sub(Ee* ee, const Instruction& i) {
     int32_t r;
 
-    int o = __builtin_ssub_overflow(EE_RS32, EE_RT32, &r);
+    int o = __builtin_ssub_overflow(RS32, RT32, &r);
 
     if (o) {
-        ee_exception_level1(ee, CAUSE_EXC1_OV);
+        exception_level1(ee, CAUSE_EXC1_OV);
     } else {
-        EE_RD = SE6432(r);
+        RD = SE6432(r);
     }
 }
-static inline void ee_i_subas(struct ee_state* ee, const ee_instruction& i) {
-    ee->a.f = EE_FS - EE_FT;
+static inline void i_subas(Ee* ee, const Instruction& i) {
+    ee->a.f = FS - FT;
 
     if (fpu_check_overflow(ee, &ee->a))
         return;
 
     fpu_check_underflow(ee, &ee->a);
 }
-static inline void ee_i_subs(struct ee_state* ee, const ee_instruction& i) {
-    int d = EE_D_FD;
+static inline void i_subs(Ee* ee, const Instruction& i) {
+    int d = D_FD;
 
-    ee->f[d].f = EE_FS - EE_FT;
+    ee->f[d].f = FS - FT;
 
     if (fpu_check_overflow(ee, &ee->f[d]))
         return;
 
     fpu_check_underflow(ee, &ee->f[d]);
 }
-static inline void ee_i_subu(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = SE6432(EE_RS - EE_RT);
+static inline void i_subu(Ee* ee, const Instruction& i) {
+    RD = SE6432(RS - RT);
 }
-static inline void ee_i_sw(struct ee_state* ee, const ee_instruction& i) {
-    bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), EE_RT32);
+static inline void i_sw(Ee* ee, const Instruction& i) {
+    bus_write32(ee, RS32 + SE3216(D_I16), RT32);
 }
-static inline void ee_i_swc1(struct ee_state* ee, const ee_instruction& i) {
-    bus_write32(ee, EE_RS32 + SE3216(EE_D_I16), EE_FT32);
+static inline void i_swc1(Ee* ee, const Instruction& i) {
+    bus_write32(ee, RS32 + SE3216(D_I16), FT32);
 }
-static inline void ee_i_swl(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_swl(Ee* ee, const Instruction& i) {
     static const uint32_t swl_mask[4] = { 0xffffff00, 0xffff0000, 0xff000000, 0x00000000 };
     static const uint8_t swl_shift[4] = { 24, 16, 8, 0 };
 
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t mem = bus_read32(ee, addr & ~3);
 
     int shift = addr & 3;
 
-    bus_write32(ee, addr & ~3, (EE_RT32 >> swl_shift[shift] | (mem & swl_mask[shift])));
+    bus_write32(ee, addr & ~3, (RT32 >> swl_shift[shift] | (mem & swl_mask[shift])));
 
-    // printf("swl mem=%08x reg=%016lx addr=%08x shift=%d rs=%08x i16=%04x\n", mem, ee->r[EE_D_RT].u64[0], addr, shift, EE_RS32, EE_D_I16);
+    // iris_debug(ee, "swl mem={:08x} reg={:016x} addr={:08x} shift={} rs={:08x} i16={:04x}", mem, ee->r[D_RT].u64[0], addr, shift, RS32, D_I16);
 }
-static inline void ee_i_swr(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_swr(Ee* ee, const Instruction& i) {
     static const uint32_t swr_mask[4] = { 0x00000000, 0x000000ff, 0x0000ffff, 0x00ffffff };
     static const uint8_t swr_shift[4] = { 0, 8, 16, 24 };
 
-    uint32_t addr = EE_RS32 + SE3216(EE_D_I16);
+    uint32_t addr = RS32 + SE3216(D_I16);
     uint32_t mem = bus_read32(ee, addr & ~3);
 
     int shift = addr & 3;
 
-    bus_write32(ee, addr & ~3, (EE_RT32 << swr_shift[shift]) | (mem & swr_mask[shift]));
+    bus_write32(ee, addr & ~3, (RT32 << swr_shift[shift]) | (mem & swr_mask[shift]));
 
-    // printf("swl mem=%08x reg=%016lx addr=%08x shift=%d rs=%08x i16=%04x\n", mem, ee->r[EE_D_RT].u64[0], addr, shift, EE_RS32, EE_D_I16);
+    // iris_debug(ee, "swl mem={:08x} reg={:016x} addr={:08x} shift={} rs={:08x} i16={:04x}", mem, ee->r[D_RT].u64[0], addr, shift, RS32, D_I16);
 }
-static inline void ee_i_sync(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_sync(Ee* ee, const Instruction& i) {
     /* Do nothing */
 }
 
-// #include "syscall.h"
+// #include "syscall.hpp"
 
-static inline void ee_get_thread_list(struct ee_state* ee) {
+static inline void get_thread_list(Ee* ee) {
     if (ee->thread_list_base) return;
 
     uint32_t offset = 0;
@@ -3239,7 +3228,7 @@ static inline void ee_get_thread_list(struct ee_state* ee) {
 
             ee->thread_list_base = 0x80010000 + (op & 0xffff) - 8;
 
-            printf("ee: Found thread list base at %08x\n", ee->thread_list_base);
+            iris_debug(ee, "Found Thread list base at {:08x}", ee->thread_list_base);
 
             break;
         }
@@ -3248,7 +3237,7 @@ static inline void ee_get_thread_list(struct ee_state* ee) {
     }
 }
 
-static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_syscall(Ee* ee, const Instruction& i) {
     uint32_t id = ee->r[3].ul64;
 
     if (id & 0x80000000) {
@@ -3258,7 +3247,7 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
     switch (id) {
         // ChangeThreadPriority
         case 0x29: {
-            ee_get_thread_list(ee);
+            get_thread_list(ee);
         } break;
 
         // SetOsdConfigParam
@@ -3308,28 +3297,28 @@ static inline void ee_i_syscall(struct ee_state* ee, const ee_instruction& i) {
 
         // FlushCache
         case 0x64: {
-            // printf("ee: Flushed %zd blocks\n", ee->block_cache.size());
+            // iris_debug(ee, "Flushed {} blocks", ee->block_cache.size());
         } break;
     }
 
-    ee_exception_level1(ee, CAUSE_EXC1_SYS);
+    exception_level1(ee, CAUSE_EXC1_SYS);
 }
-static inline void ee_i_teq(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_RS == EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
+static inline void i_teq(Ee* ee, const Instruction& i) {
+    if (RS == RT) exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_teqi(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_RS == SE6416(EE_D_I16)) ee_exception_level1(ee, CAUSE_EXC1_TR);
+static inline void i_teqi(Ee* ee, const Instruction& i) {
+    if (RS == SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_tge(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_RS >= EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
+static inline void i_tge(Ee* ee, const Instruction& i) {
+    if (RS >= RT) exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_tgei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgei unimplemented\n"); exit(1); }
-static inline void ee_i_tgeiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeiu unimplemented\n"); exit(1); }
-static inline void ee_i_tgeu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tgeu unimplemented\n"); exit(1); }
-static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_tgei(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tgei unimplemented"); }
+static inline void i_tgeiu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tgeiu unimplemented"); }
+static inline void i_tgeu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tgeu unimplemented"); }
+static inline void i_tlbp(Ee* ee, const Instruction& i) {
     int index = ee->index & 0x3f;
 
-    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+    VtlbEntry* entry = &ee->vtlb[index];
 
     if ((ee->entryhi & 0xffffe000) == entry->vpn2 && (ee->entryhi & 0xff) == entry->asid) {
         ee->index |= 0x80000000;
@@ -3337,17 +3326,17 @@ static inline void ee_i_tlbp(struct ee_state* ee, const ee_instruction& i) {
         ee->index &= ~0x80000000;
     }
 }
-static inline void ee_i_tlbr(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_tlbr(Ee* ee, const Instruction& i) {
     int index = ee->index & 0x3f;
 
-    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+    VtlbEntry* entry = &ee->vtlb[index];
 
     ee->entryhi = entry->vpn2 | entry->asid;
     ee->entrylo0 = (entry->pfn0 >> 6) | (entry->v0 << 1) | (entry->d0 << 2) | (entry->c0 << 3) | (entry->s << 31) | (entry->g);
     ee->entrylo1 = (entry->pfn1 >> 6) | (entry->v1 << 1) | (entry->d1 << 2) | (entry->c1 << 3) | (entry->s << 31) | (entry->g);
     ee->pagemask = entry->mask;
 }
-static inline void ee_write_pagetable(struct ee_state* ee, const struct ee_vtlb_entry* entry) {
+static inline void write_pagetable(Ee* ee, const VtlbEntry* entry) {
     uint32_t pagecount;
 
     switch ((ee->pagemask >> 13) & 0xfff) {
@@ -3360,10 +3349,10 @@ static inline void ee_write_pagetable(struct ee_state* ee, const struct ee_vtlb_
         case 0xfff: { pagecount = 1 << 12; } break;
     }
 
-    uint32_t vpn0 = entry->vpn2 / EE_MIN_PAGESIZE;
+    uint32_t vpn0 = entry->vpn2 / MIN_PAGESIZE;
     uint32_t vpn1 = vpn0 + pagecount;
-    uint32_t pfn0 = entry->pfn0 / EE_MIN_PAGESIZE;
-    uint32_t pfn1 = entry->pfn1 / EE_MIN_PAGESIZE;
+    uint32_t pfn0 = entry->pfn0 / MIN_PAGESIZE;
+    uint32_t pfn1 = entry->pfn1 / MIN_PAGESIZE;
 
     for (int i = 0; i < pagecount; i++) {
         ee->pagetable[vpn0+i].pfn = pfn0 + i;
@@ -3378,10 +3367,10 @@ static inline void ee_write_pagetable(struct ee_state* ee, const struct ee_vtlb_
         ee->pagetable[vpn1+i].global = entry->g;
     }
 
-    ee_flush_cache(ee);
+    flush_cache(ee);
 }
-static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
-    struct ee_vtlb_entry* entry = &ee->vtlb[ee->index & 0x3f];
+static inline void i_tlbwi(Ee* ee, const Instruction& i) {
+    VtlbEntry* entry = &ee->vtlb[ee->index & 0x3f];
 
     entry->asid = ee->entryhi & 0xff;
     entry->pfn0 = (ee->entrylo0 & 0x3ffffc0) << 6;
@@ -3397,10 +3386,9 @@ static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     entry->s = (ee->entrylo0 >> 31) & 1;
     entry->g = (ee->entrylo0 & 1) && (ee->entrylo1 & 1);
 
-    ee_write_pagetable(ee, entry);
+    write_pagetable(ee, entry);
 
-    // printf("ee: Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
-    //     ee->index,
+    // iris_debug(ee, "Index={} vpn2={:08x} even={pfn={:08x} v={} d={}} odd={pfn={:08x} v={} d={}} mask={:08x} s={} g={}", //     ee->index,
     //     entry->vpn2,
     //     entry->pfn0,
     //     entry->v0,
@@ -3411,12 +3399,12 @@ static inline void ee_i_tlbwi(struct ee_state* ee, const ee_instruction& i) {
     //     entry->mask,
     //     entry->s,
     //     entry->g
-    // );
+    //);
 }
-static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
+static inline void i_tlbwr(Ee* ee, const Instruction& i) {
     int index = (ee->count % (48 - ee->wired)) + ee->wired;
 
-    struct ee_vtlb_entry* entry = &ee->vtlb[index];
+    VtlbEntry* entry = &ee->vtlb[index];
 
     entry->asid = ee->entryhi & 0xff;
     entry->pfn0 = (ee->entrylo0 & 0x3ffffc0) << 6;
@@ -3432,10 +3420,9 @@ static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
     entry->s = (ee->entrylo0 >> 31) & 1;
     entry->g = (ee->entrylo0 & 1) && (ee->entrylo1 & 1);
 
-    ee_write_pagetable(ee, entry);
+    write_pagetable(ee, entry);
 
-    // printf("ee: tlbwr Index=%d vpn2=%08x even={pfn=%08x v=%d d=%d} odd={pfn=%08x v=%d d=%d} mask=%08x s=%d g=%d\n",
-    //     index,
+    // iris_debug(ee, "tlbwr Index={} vpn2={:08x} even={pfn={:08x} v={} d={}} odd={pfn={:08x} v={} d={}} mask={:08x} s={} g={}", //     index,
     //     entry->vpn2,
     //     entry->pfn0,
     //     entry->v0,
@@ -3446,185 +3433,164 @@ static inline void ee_i_tlbwr(struct ee_state* ee, const ee_instruction& i) {
     //     entry->mask,
     //     entry->s,
     //     entry->g
-    // );
+    //);
 }
-static inline void ee_i_tlt(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlt unimplemented\n"); exit(1); }
-static inline void ee_i_tlti(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tlti unimplemented\n"); exit(1); }
-static inline void ee_i_tltiu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tltiu unimplemented\n"); exit(1); }
-static inline void ee_i_tltu(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tltu unimplemented\n"); exit(1); }
-static inline void ee_i_tne(struct ee_state* ee, const ee_instruction& i) {
-    if (EE_RS != EE_RT) ee_exception_level1(ee, CAUSE_EXC1_TR);
+static inline void i_tlt(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tlt unimplemented"); }
+static inline void i_tlti(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tlti unimplemented"); }
+static inline void i_tltiu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tltiu unimplemented"); }
+static inline void i_tltu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tltu unimplemented"); }
+static inline void i_tne(Ee* ee, const Instruction& i) {
+    if (RS != RT) exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void ee_i_tnei(struct ee_state* ee, const ee_instruction& i) { fprintf(stderr, "ee: tnei unimplemented\n"); exit(1); }
-static inline void ee_i_vabs(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(abs) }
-static inline void ee_i_vadd(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(add) }
-static inline void ee_i_vadda(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(adda) }
-static inline void ee_i_vaddai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addai) }
-static inline void ee_i_vaddaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addaq) }
-static inline void ee_i_vaddaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addaw) }
-static inline void ee_i_vaddax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addax) }
-static inline void ee_i_vadday(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(adday) }
-static inline void ee_i_vaddaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addaz) }
-static inline void ee_i_vaddi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addi) }
-static inline void ee_i_vaddq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addq) }
-static inline void ee_i_vaddw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addw) }
-static inline void ee_i_vaddx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addx) }
-static inline void ee_i_vaddy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addy) }
-static inline void ee_i_vaddz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(addz) }
-static inline void ee_i_vcallms(struct ee_state* ee, const ee_instruction& i) {
-    vu_execute_program(ee->vu0, EE_D_I15);
+static inline void i_tnei(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tnei unimplemented"); }
+static inline void i_vabs(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(abs) }
+static inline void i_vadd(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(add) }
+static inline void i_vadda(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(adda) }
+static inline void i_vaddai(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addai) }
+static inline void i_vaddaq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addaq) }
+static inline void i_vaddaw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addaw) }
+static inline void i_vaddax(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addax) }
+static inline void i_vadday(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(adday) }
+static inline void i_vaddaz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addaz) }
+static inline void i_vaddi(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addi) }
+static inline void i_vaddq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addq) }
+static inline void i_vaddw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addw) }
+static inline void i_vaddx(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addx) }
+static inline void i_vaddy(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addy) }
+static inline void i_vaddz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(addz) }
+static inline void i_vcallms(Ee* ee, const Instruction& i) {
+    vu::execute_program(ee->vu0, D_I15);
 }
-static inline void ee_i_vcallmsr(struct ee_state* ee, const ee_instruction& i) {
-    vu_execute_program(ee->vu0, ee->vu0->cmsar0);
+static inline void i_vcallmsr(Ee* ee, const Instruction& i) {
+    vu::execute_program(ee->vu0, ee->vu0->cmsar0);
 }
-static inline void ee_i_vclipw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(clip) }
-static inline void ee_i_vdiv(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(div) ee->vu0->q_delay = 0; }
-static inline void ee_i_vftoi0(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi0) }
-static inline void ee_i_vftoi12(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi12) }
-static inline void ee_i_vftoi15(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi15) }
-static inline void ee_i_vftoi4(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(ftoi4) }
-static inline void ee_i_viadd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(iadd) }
-static inline void ee_i_viaddi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(iaddi) }
-static inline void ee_i_viand(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(iand) }
-static inline void ee_i_vilwr(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(ilwr) }
-static inline void ee_i_vior(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(ior) }
-static inline void ee_i_visub(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(isub) }
-static inline void ee_i_viswr(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(iswr) }
-static inline void ee_i_vitof0(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof0) }
-static inline void ee_i_vitof12(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof12) }
-static inline void ee_i_vitof15(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof15) }
-static inline void ee_i_vitof4(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(itof4) }
-static inline void ee_i_vlqd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(lqd) }
-static inline void ee_i_vlqi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(lqi) }
-static inline void ee_i_vmadd(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(madd) }
-static inline void ee_i_vmadda(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(madda) }
-static inline void ee_i_vmaddai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddai) }
-static inline void ee_i_vmaddaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddaq) }
-static inline void ee_i_vmaddaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddaw) }
-static inline void ee_i_vmaddax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddax) }
-static inline void ee_i_vmadday(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(madday) }
-static inline void ee_i_vmaddaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddaz) }
-static inline void ee_i_vmaddi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddi) }
-static inline void ee_i_vmaddq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddq) }
-static inline void ee_i_vmaddw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddw) }
-static inline void ee_i_vmaddx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddx) }
-static inline void ee_i_vmaddy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddy) }
-static inline void ee_i_vmaddz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maddz) }
-static inline void ee_i_vmax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(max) }
-static inline void ee_i_vmaxi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxi) }
-static inline void ee_i_vmaxw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxw) }
-static inline void ee_i_vmaxx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxx) }
-static inline void ee_i_vmaxy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxy) }
-static inline void ee_i_vmaxz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(maxz) }
-static inline void ee_i_vmfir(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mfir) }
-static inline void ee_i_vmini(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mini) }
-static inline void ee_i_vminii(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(minii) }
-static inline void ee_i_vminiw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(miniw) }
-static inline void ee_i_vminix(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(minix) }
-static inline void ee_i_vminiy(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(miniy) }
-static inline void ee_i_vminiz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(miniz) }
-static inline void ee_i_vmove(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(move) }
-static inline void ee_i_vmr32(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(mr32) }
-static inline void ee_i_vmsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msub) }
-static inline void ee_i_vmsuba(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msuba) }
-static inline void ee_i_vmsubai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubai) }
-static inline void ee_i_vmsubaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubaq) }
-static inline void ee_i_vmsubaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubaw) }
-static inline void ee_i_vmsubax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubax) }
-static inline void ee_i_vmsubay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubay) }
-static inline void ee_i_vmsubaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubaz) }
-static inline void ee_i_vmsubi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubi) }
-static inline void ee_i_vmsubq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubq) }
-static inline void ee_i_vmsubw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubw) }
-static inline void ee_i_vmsubx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubx) }
-static inline void ee_i_vmsuby(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msuby) }
-static inline void ee_i_vmsubz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(msubz) }
-static inline void ee_i_vmtir(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(mtir) }
-static inline void ee_i_vmul(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mul) }
-static inline void ee_i_vmula(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mula) }
-static inline void ee_i_vmulai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulai) }
-static inline void ee_i_vmulaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulaq) }
-static inline void ee_i_vmulaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulaw) }
-static inline void ee_i_vmulax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulax) }
-static inline void ee_i_vmulay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulay) }
-static inline void ee_i_vmulaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulaz) }
-static inline void ee_i_vmuli(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(muli) }
-static inline void ee_i_vmulq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulq) }
-static inline void ee_i_vmulw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulw) }
-static inline void ee_i_vmulx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulx) }
-static inline void ee_i_vmuly(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(muly) }
-static inline void ee_i_vmulz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(mulz) }
-static inline void ee_i_vnop(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(nop) }
-static inline void ee_i_vopmsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(opmsub) }
-static inline void ee_i_vopmula(struct ee_state* ee, const ee_instruction& i) { VU_UPPER(opmula) }
-static inline void ee_i_vrget(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(rget) }
-static inline void ee_i_vrinit(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rinit) }
-static inline void ee_i_vrnext(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(rnext) }
-static inline void ee_i_vrsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rsqrt) ee->vu0->q_delay = 0; }
-static inline void ee_i_vrxor(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(rxor) }
-static inline void ee_i_vsqd(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(sqd) }
-static inline void ee_i_vsqi(struct ee_state* ee, const ee_instruction& i) { VU_LOWER_TEMPLATE(sqi) }
-static inline void ee_i_vsqrt(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(sqrt) ee->vu0->q_delay = 0; }
-static inline void ee_i_vsub(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(sub) }
-static inline void ee_i_vsuba(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(suba) }
-static inline void ee_i_vsubai(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subai) }
-static inline void ee_i_vsubaq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subaq) }
-static inline void ee_i_vsubaw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subaw) }
-static inline void ee_i_vsubax(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subax) }
-static inline void ee_i_vsubay(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subay) }
-static inline void ee_i_vsubaz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subaz) }
-static inline void ee_i_vsubi(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subi) }
-static inline void ee_i_vsubq(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subq) }
-static inline void ee_i_vsubw(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subw) }
-static inline void ee_i_vsubx(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subx) }
-static inline void ee_i_vsuby(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(suby) }
-static inline void ee_i_vsubz(struct ee_state* ee, const ee_instruction& i) { VU_UPPER_TEMPLATE(subz) }
-static inline void ee_i_vwaitq(struct ee_state* ee, const ee_instruction& i) { VU_LOWER(waitq) }
-static inline void ee_i_xor(struct ee_state* ee, const ee_instruction& i) {
-    EE_RD = EE_RS ^ EE_RT;
+static inline void i_vclipw(Ee* ee, const Instruction& i) { VU_UPPER(clip) }
+static inline void i_vdiv(Ee* ee, const Instruction& i) { VU_LOWER(div) ee->vu0->q_delay = 0; }
+static inline void i_vftoi0(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(ftoi0) }
+static inline void i_vftoi12(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(ftoi12) }
+static inline void i_vftoi15(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(ftoi15) }
+static inline void i_vftoi4(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(ftoi4) }
+static inline void i_viadd(Ee* ee, const Instruction& i) { VU_LOWER(iadd) }
+static inline void i_viaddi(Ee* ee, const Instruction& i) { VU_LOWER(iaddi) }
+static inline void i_viand(Ee* ee, const Instruction& i) { VU_LOWER(iand) }
+static inline void i_vilwr(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(ilwr) }
+static inline void i_vior(Ee* ee, const Instruction& i) { VU_LOWER(ior) }
+static inline void i_visub(Ee* ee, const Instruction& i) { VU_LOWER(isub) }
+static inline void i_viswr(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(iswr) }
+static inline void i_vitof0(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(itof0) }
+static inline void i_vitof12(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(itof12) }
+static inline void i_vitof15(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(itof15) }
+static inline void i_vitof4(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(itof4) }
+static inline void i_vlqd(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(lqd) }
+static inline void i_vlqi(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(lqi) }
+static inline void i_vmadd(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(madd) }
+static inline void i_vmadda(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(madda) }
+static inline void i_vmaddai(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddai) }
+static inline void i_vmaddaq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddaq) }
+static inline void i_vmaddaw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddaw) }
+static inline void i_vmaddax(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddax) }
+static inline void i_vmadday(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(madday) }
+static inline void i_vmaddaz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddaz) }
+static inline void i_vmaddi(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddi) }
+static inline void i_vmaddq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddq) }
+static inline void i_vmaddw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddw) }
+static inline void i_vmaddx(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddx) }
+static inline void i_vmaddy(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddy) }
+static inline void i_vmaddz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maddz) }
+static inline void i_vmax(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(max) }
+static inline void i_vmaxi(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maxi) }
+static inline void i_vmaxw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maxw) }
+static inline void i_vmaxx(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maxx) }
+static inline void i_vmaxy(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maxy) }
+static inline void i_vmaxz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(maxz) }
+static inline void i_vmfir(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mfir) }
+static inline void i_vmini(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mini) }
+static inline void i_vminii(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(minii) }
+static inline void i_vminiw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(miniw) }
+static inline void i_vminix(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(minix) }
+static inline void i_vminiy(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(miniy) }
+static inline void i_vminiz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(miniz) }
+static inline void i_vmove(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(move) }
+static inline void i_vmr32(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(mr32) }
+static inline void i_vmsub(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msub) }
+static inline void i_vmsuba(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msuba) }
+static inline void i_vmsubai(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubai) }
+static inline void i_vmsubaq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubaq) }
+static inline void i_vmsubaw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubaw) }
+static inline void i_vmsubax(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubax) }
+static inline void i_vmsubay(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubay) }
+static inline void i_vmsubaz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubaz) }
+static inline void i_vmsubi(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubi) }
+static inline void i_vmsubq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubq) }
+static inline void i_vmsubw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubw) }
+static inline void i_vmsubx(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubx) }
+static inline void i_vmsuby(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msuby) }
+static inline void i_vmsubz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(msubz) }
+static inline void i_vmtir(Ee* ee, const Instruction& i) { VU_LOWER(mtir) }
+static inline void i_vmul(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mul) }
+static inline void i_vmula(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mula) }
+static inline void i_vmulai(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulai) }
+static inline void i_vmulaq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulaq) }
+static inline void i_vmulaw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulaw) }
+static inline void i_vmulax(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulax) }
+static inline void i_vmulay(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulay) }
+static inline void i_vmulaz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulaz) }
+static inline void i_vmuli(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(muli) }
+static inline void i_vmulq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulq) }
+static inline void i_vmulw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulw) }
+static inline void i_vmulx(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulx) }
+static inline void i_vmuly(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(muly) }
+static inline void i_vmulz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(mulz) }
+static inline void i_vnop(Ee* ee, const Instruction& i) { VU_UPPER(nop) }
+static inline void i_vopmsub(Ee* ee, const Instruction& i) { VU_UPPER(opmsub) }
+static inline void i_vopmula(Ee* ee, const Instruction& i) { VU_UPPER(opmula) }
+static inline void i_vrget(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(rget) }
+static inline void i_vrinit(Ee* ee, const Instruction& i) { VU_LOWER(rinit) }
+static inline void i_vrnext(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(rnext) }
+static inline void i_vrsqrt(Ee* ee, const Instruction& i) { VU_LOWER(rsqrt) ee->vu0->q_delay = 0; }
+static inline void i_vrxor(Ee* ee, const Instruction& i) { VU_LOWER(rxor) }
+static inline void i_vsqd(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(sqd) }
+static inline void i_vsqi(Ee* ee, const Instruction& i) { VU_LOWER_TEMPLATE(sqi) }
+static inline void i_vsqrt(Ee* ee, const Instruction& i) { VU_LOWER(sqrt) ee->vu0->q_delay = 0; }
+static inline void i_vsub(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(sub) }
+static inline void i_vsuba(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(suba) }
+static inline void i_vsubai(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subai) }
+static inline void i_vsubaq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subaq) }
+static inline void i_vsubaw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subaw) }
+static inline void i_vsubax(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subax) }
+static inline void i_vsubay(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subay) }
+static inline void i_vsubaz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subaz) }
+static inline void i_vsubi(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subi) }
+static inline void i_vsubq(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subq) }
+static inline void i_vsubw(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subw) }
+static inline void i_vsubx(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subx) }
+static inline void i_vsuby(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(suby) }
+static inline void i_vsubz(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(subz) }
+static inline void i_vwaitq(Ee* ee, const Instruction& i) { VU_LOWER(waitq) }
+static inline void i_xor(Ee* ee, const Instruction& i) {
+    RD = RS ^ RT;
 }
-static inline void ee_i_xori(struct ee_state* ee, const ee_instruction& i) {
-    EE_RT = EE_RS ^ EE_D_I16;
+static inline void i_xori(Ee* ee, const Instruction& i) {
+    RT = RS ^ D_I16;
 }
-static inline void ee_i_invalid(struct ee_state* ee, const ee_instruction& i) {
-    fprintf(stderr, "ee: Invalid instruction %08x at PC=%08x\n", i.opcode, ee->pc);
-
-    exit(1);
+static inline void i_invalid(Ee* ee, const Instruction& i) {
+    iris_fatal_error(ee, "Invalid instruction {:08x} at PC={:08x}", i.opcode, ee->pc);
 }
 
-struct ee_state* ee_create(void) {
-    return new ee_state();
-}
+Ee* create(logger::Logger* logger, int ram_size) {
+    Ee* ee = new Ee();
 
-void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, int ram_size, struct ee_bus_s bus) {
-    ee->prid = 0x2e20;
-    ee->pc = EE_VEC_RESET;
-    ee->next_pc = ee->pc + 4;
-    ee->bus = bus;
-    ee->vu0 = vu0;
-    ee->vu1 = vu1;
-
-    // Initialize block lookup cache (intentionally mismatches so first real lookup succeeds)
-    ee->last_block_lookup_pc = ~0u;
-    ee->last_block_ptr = nullptr;
-
-    // gen starts at 1 so the zero-initialized LUT entries (gen 0) never match
-    ee->block_lut_gen = 1;
+    ee->logger = logger;
+    ee->logger_id = logger::register_source(logger, "ee");
+    ee->ram_size = ram_size - 1;
 
     // Inline load fast path: virtual-page -> host-pointer table, filled lazily.
     // Null only if the allocation fails, in which case loads fall back to the bus.
-    ee->vfast_r = (void**)calloc(EE_VFAST_ENTRIES, sizeof(void*));
+    ee->vfast_r = (void**)calloc(VFAST_ENTRIES, sizeof(void*));
 
-    // To-do: Set SR
-
-    ee->spr = ps2_ram_create();
-    ps2_ram_init(ee->spr, 0x4000);
-
-    // EE's FPU uses round to zero by default
-    fesetround(FE_TOWARDZERO);
-
-    ee->fcr = 0x01000001;
-    ee->ram_size = ram_size - 1;
+    ee->spr = ram::create(logger, 0x4000);
+    ee->block_cache.resize(CACHE_PAGECOUNT);
+    ee->jit_logger = new asmjit::FileLogger(stdout);
 
     ee->osd_config.screen_type = 1; // 4:3
     ee->osd_config.ps1drv_config = 0; // ???
@@ -3635,17 +3601,18 @@ void ee_init(struct ee_state* ee, struct vu_state* vu0, struct vu_state* vu1, in
     ee->osd_config.language = 1; // English
     ee->osd_config.version = 1; // Indicates normal kernel without extended language settings
 
-    ee->block_cache.clear();
-    ee->block_cache.resize(EE_CACHE_PAGECOUNT);
+    reset(ee);
 
-    ee->logger = new asmjit::FileLogger(stdout);
-
-    for (int i = 0; i < 32; i++) {
-        ee->reg_cache[i].valid = false;
-    }
+    return ee;
 }
 
-void ee_reset(struct ee_state* ee) {
+void connect(Ee* ee, vu::Vu* vu0, vu::Vu* vu1, BusInterface bus) {
+    ee->bus = bus;
+    ee->vu0 = vu0;
+    ee->vu1 = vu1;
+}
+
+void reset(Ee* ee) {
     for (int i = 0; i < 32; i++)
         ee->r[i] = { 0 };
 
@@ -3667,38 +3634,33 @@ void ee_reset(struct ee_state* ee) {
     ee->branch_taken = 0;
     ee->delay_slot = 0;
     ee->prid = 0x2e20;
-    ee->pc = EE_VEC_RESET;
+    ee->pc = VEC_RESET;
     ee->next_pc = ee->pc + 4;
     ee->intc_reads = 0;
     ee->csr_reads = 0;
 
-    ee_purge_cache(ee);
+    purge_cache(ee);
 
     ee->rt.reset(asmjit::ResetPolicy::kHard);
 
     fesetround(FE_TOWARDZERO);
 
-    ps2_ram_reset(ee->spr);
+    ram::reset(ee->spr);
 
     ee->fcr = 0x01000001;
 }
 
-void ee_destroy(struct ee_state* ee) {
-    ps2_ram_destroy(ee->spr);
+void destroy(Ee* ee) {
+    ram::destroy(ee->spr);
 
     free(ee->vfast_r);
 
-    delete ee->logger;
+    delete ee->jit_logger;
     delete ee;
 }
 
-#define EE_BRANCH_NORMAL 1
-#define EE_BRANCH_IMMEDIATE 2
-#define EE_BRANCH_LIKELY 3
-#define EE_BRANCH_COND 4
-
-ee_instruction ee_decode(uint32_t opcode) {
-    ee_instruction i;
+Instruction decode(uint32_t opcode) {
+    Instruction i;
 
     i.opcode = opcode;
     i.rs.r = (opcode >> 21) & 0x1f;
@@ -3715,179 +3677,179 @@ ee_instruction ee_decode(uint32_t opcode) {
     switch ((opcode & 0xFC000000) >> 26) {
         case 0x00000000 >> 26: { // special
             switch (opcode & 0x0000003F) {
-                case 0x00000000: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLL; i.func = ee_i_sll; return i;
-                case 0x00000002: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SRL; i.func = ee_i_srl; return i;
-                case 0x00000003: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SRA; i.func = ee_i_sra; return i;
-                case 0x00000004: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLLV; i.func = ee_i_sllv; return i;
-                case 0x00000006: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SRLV; i.func = ee_i_srlv; return i;
-                case 0x00000007: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SRAV; i.func = ee_i_srav; return i;
-                case 0x00000008: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.id = EE_I_JR; i.func = ee_i_jr; return i;
-                case 0x00000009: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.id = EE_I_JALR; i.func = ee_i_jalr; return i;
-                case 0x0000000A: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MOVZ; i.func = ee_i_movz; return i;
-                case 0x0000000B: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MOVN; i.func = ee_i_movn; return i;
-                case 0x0000000C: i.cycles = EE_CYC_DEFAULT; i.branch = 2; i.id = EE_I_SYSCALL; i.func = ee_i_syscall; return i;
-                case 0x0000000D: i.cycles = EE_CYC_DEFAULT; i.branch = 2; i.id = EE_I_BREAK; i.func = ee_i_break; return i;
-                case 0x0000000F: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SYNC; i.func = ee_i_sync; return i;
-                case 0x00000010: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MFHI; i.func = ee_i_mfhi; return i;
-                case 0x00000011: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MTHI; i.func = ee_i_mthi; return i;
-                case 0x00000012: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MFLO; i.func = ee_i_mflo; return i;
-                case 0x00000013: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MTLO; i.func = ee_i_mtlo; return i;
-                case 0x00000014: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSLLV; i.func = ee_i_dsllv; return i;
-                case 0x00000016: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSRLV; i.func = ee_i_dsrlv; return i;
-                case 0x00000017: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSRAV; i.func = ee_i_dsrav; return i;
-                case 0x00000018: i.cycles = EE_CYC_MULT; i.id = EE_I_MULT; i.func = ee_i_mult; return i;
-                case 0x00000019: i.cycles = EE_CYC_MULT; i.id = EE_I_MULTU; i.func = ee_i_multu; return i;
-                case 0x0000001A: i.cycles = EE_CYC_DIV; i.id = EE_I_DIV; i.func = ee_i_div; return i;
-                case 0x0000001B: i.cycles = EE_CYC_DIV; i.id = EE_I_DIVU; i.func = ee_i_divu; return i;
-                case 0x00000020: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADD; i.func = ee_i_add; return i;
-                case 0x00000021: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADDU; i.func = ee_i_addu; return i;
-                case 0x00000022: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SUB; i.func = ee_i_sub; return i;
-                case 0x00000023: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SUBU; i.func = ee_i_subu; return i;
-                case 0x00000024: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_AND; i.func = ee_i_and; return i;
-                case 0x00000025: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_OR; i.func = ee_i_or; return i;
-                case 0x00000026: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_XOR; i.func = ee_i_xor; return i;
-                case 0x00000027: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_NOR; i.func = ee_i_nor; return i;
-                case 0x00000028: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MFSA; i.func = ee_i_mfsa; return i;
-                case 0x00000029: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MTSA; i.func = ee_i_mtsa; return i;
-                case 0x0000002A: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLT; i.func = ee_i_slt; return i;
-                case 0x0000002B: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLTU; i.func = ee_i_sltu; return i;
-                case 0x0000002C: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DADD; i.func = ee_i_dadd; return i;
-                case 0x0000002D: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DADDU; i.func = ee_i_daddu; return i;
-                case 0x0000002E: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSUB; i.func = ee_i_dsub; return i;
-                case 0x0000002F: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSUBU; i.func = ee_i_dsubu; return i;
-                case 0x00000030: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TGE; i.func = ee_i_tge; return i;
-                case 0x00000031: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TGEU; i.func = ee_i_tgeu; return i;
-                case 0x00000032: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TLT; i.func = ee_i_tlt; return i;
-                case 0x00000033: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TLTU; i.func = ee_i_tltu; return i;
-                case 0x00000034: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TEQ; i.func = ee_i_teq; return i;
-                case 0x00000036: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TNE; i.func = ee_i_tne; return i;
-                case 0x00000038: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSLL; i.func = ee_i_dsll; return i;
-                case 0x0000003A: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSRL; i.func = ee_i_dsrl; return i;
-                case 0x0000003B: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSRA; i.func = ee_i_dsra; return i;
-                case 0x0000003C: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSLL32; i.func = ee_i_dsll32; return i;
-                case 0x0000003E: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSRL32; i.func = ee_i_dsrl32; return i;
-                case 0x0000003F: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DSRA32; i.func = ee_i_dsra32; return i;
+                case 0x00000000: i.cycles = CYC_DEFAULT; i.id = I_SLL; i.func = i_sll; return i;
+                case 0x00000002: i.cycles = CYC_DEFAULT; i.id = I_SRL; i.func = i_srl; return i;
+                case 0x00000003: i.cycles = CYC_DEFAULT; i.id = I_SRA; i.func = i_sra; return i;
+                case 0x00000004: i.cycles = CYC_DEFAULT; i.id = I_SLLV; i.func = i_sllv; return i;
+                case 0x00000006: i.cycles = CYC_DEFAULT; i.id = I_SRLV; i.func = i_srlv; return i;
+                case 0x00000007: i.cycles = CYC_DEFAULT; i.id = I_SRAV; i.func = i_srav; return i;
+                case 0x00000008: i.cycles = CYC_DEFAULT; i.branch = 1; i.id = I_JR; i.func = i_jr; return i;
+                case 0x00000009: i.cycles = CYC_DEFAULT; i.branch = 1; i.id = I_JALR; i.func = i_jalr; return i;
+                case 0x0000000A: i.cycles = CYC_DEFAULT; i.id = I_MOVZ; i.func = i_movz; return i;
+                case 0x0000000B: i.cycles = CYC_DEFAULT; i.id = I_MOVN; i.func = i_movn; return i;
+                case 0x0000000C: i.cycles = CYC_DEFAULT; i.branch = 2; i.id = I_SYSCALL; i.func = i_syscall; return i;
+                case 0x0000000D: i.cycles = CYC_DEFAULT; i.branch = 2; i.id = I_BREAK; i.func = i_break; return i;
+                case 0x0000000F: i.cycles = CYC_DEFAULT; i.id = I_SYNC; i.func = i_sync; return i;
+                case 0x00000010: i.cycles = CYC_DEFAULT; i.id = I_MFHI; i.func = i_mfhi; return i;
+                case 0x00000011: i.cycles = CYC_DEFAULT; i.id = I_MTHI; i.func = i_mthi; return i;
+                case 0x00000012: i.cycles = CYC_DEFAULT; i.id = I_MFLO; i.func = i_mflo; return i;
+                case 0x00000013: i.cycles = CYC_DEFAULT; i.id = I_MTLO; i.func = i_mtlo; return i;
+                case 0x00000014: i.cycles = CYC_DEFAULT; i.id = I_DSLLV; i.func = i_dsllv; return i;
+                case 0x00000016: i.cycles = CYC_DEFAULT; i.id = I_DSRLV; i.func = i_dsrlv; return i;
+                case 0x00000017: i.cycles = CYC_DEFAULT; i.id = I_DSRAV; i.func = i_dsrav; return i;
+                case 0x00000018: i.cycles = CYC_MULT; i.id = I_MULT; i.func = i_mult; return i;
+                case 0x00000019: i.cycles = CYC_MULT; i.id = I_MULTU; i.func = i_multu; return i;
+                case 0x0000001A: i.cycles = CYC_DIV; i.id = I_DIV; i.func = i_div; return i;
+                case 0x0000001B: i.cycles = CYC_DIV; i.id = I_DIVU; i.func = i_divu; return i;
+                case 0x00000020: i.cycles = CYC_DEFAULT; i.id = I_ADD; i.func = i_add; return i;
+                case 0x00000021: i.cycles = CYC_DEFAULT; i.id = I_ADDU; i.func = i_addu; return i;
+                case 0x00000022: i.cycles = CYC_DEFAULT; i.id = I_SUB; i.func = i_sub; return i;
+                case 0x00000023: i.cycles = CYC_DEFAULT; i.id = I_SUBU; i.func = i_subu; return i;
+                case 0x00000024: i.cycles = CYC_DEFAULT; i.id = I_AND; i.func = i_and; return i;
+                case 0x00000025: i.cycles = CYC_DEFAULT; i.id = I_OR; i.func = i_or; return i;
+                case 0x00000026: i.cycles = CYC_DEFAULT; i.id = I_XOR; i.func = i_xor; return i;
+                case 0x00000027: i.cycles = CYC_DEFAULT; i.id = I_NOR; i.func = i_nor; return i;
+                case 0x00000028: i.cycles = CYC_DEFAULT; i.id = I_MFSA; i.func = i_mfsa; return i;
+                case 0x00000029: i.cycles = CYC_DEFAULT; i.id = I_MTSA; i.func = i_mtsa; return i;
+                case 0x0000002A: i.cycles = CYC_DEFAULT; i.id = I_SLT; i.func = i_slt; return i;
+                case 0x0000002B: i.cycles = CYC_DEFAULT; i.id = I_SLTU; i.func = i_sltu; return i;
+                case 0x0000002C: i.cycles = CYC_DEFAULT; i.id = I_DADD; i.func = i_dadd; return i;
+                case 0x0000002D: i.cycles = CYC_DEFAULT; i.id = I_DADDU; i.func = i_daddu; return i;
+                case 0x0000002E: i.cycles = CYC_DEFAULT; i.id = I_DSUB; i.func = i_dsub; return i;
+                case 0x0000002F: i.cycles = CYC_DEFAULT; i.id = I_DSUBU; i.func = i_dsubu; return i;
+                case 0x00000030: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TGE; i.func = i_tge; return i;
+                case 0x00000031: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TGEU; i.func = i_tgeu; return i;
+                case 0x00000032: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TLT; i.func = i_tlt; return i;
+                case 0x00000033: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TLTU; i.func = i_tltu; return i;
+                case 0x00000034: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TEQ; i.func = i_teq; return i;
+                case 0x00000036: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TNE; i.func = i_tne; return i;
+                case 0x00000038: i.cycles = CYC_DEFAULT; i.id = I_DSLL; i.func = i_dsll; return i;
+                case 0x0000003A: i.cycles = CYC_DEFAULT; i.id = I_DSRL; i.func = i_dsrl; return i;
+                case 0x0000003B: i.cycles = CYC_DEFAULT; i.id = I_DSRA; i.func = i_dsra; return i;
+                case 0x0000003C: i.cycles = CYC_DEFAULT; i.id = I_DSLL32; i.func = i_dsll32; return i;
+                case 0x0000003E: i.cycles = CYC_DEFAULT; i.id = I_DSRL32; i.func = i_dsrl32; return i;
+                case 0x0000003F: i.cycles = CYC_DEFAULT; i.id = I_DSRA32; i.func = i_dsra32; return i;
             }
         } break;
         case 0x04000000 >> 26: { // regimm
             switch ((opcode & 0x001F0000) >> 16) {
-                case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BLTZ; i.func = ee_i_bltz; return i;
-                case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BGEZ; i.func = ee_i_bgez; return i;
-                case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BLTZL; i.func = ee_i_bltzl; return i;
-                case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BGEZL; i.func = ee_i_bgezl; return i;
-                case 0x00080000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TGEI; i.func = ee_i_tgei; return i;
-                case 0x00090000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TGEIU; i.func = ee_i_tgeiu; return i;
-                case 0x000A0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TLTI; i.func = ee_i_tlti; return i;
-                case 0x000B0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TLTIU; i.func = ee_i_tltiu; return i;
-                case 0x000C0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TEQI; i.func = ee_i_teqi; return i;
-                case 0x000E0000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 4; i.id = EE_I_TNEI; i.func = ee_i_tnei; return i;
-                case 0x00100000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BLTZAL; i.func = ee_i_bltzal; return i;
-                case 0x00110000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BGEZAL; i.func = ee_i_bgezal; return i;
-                case 0x00120000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BLTZALL; i.func = ee_i_bltzall; return i;
-                case 0x00130000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BGEZALL; i.func = ee_i_bgezall; return i;
-                case 0x00180000 >> 16: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MTSAB; i.func = ee_i_mtsab; return i;
-                case 0x00190000 >> 16: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_MTSAH; i.func = ee_i_mtsah; return i;
+                case 0x00000000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BLTZ; i.func = i_bltz; return i;
+                case 0x00010000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BGEZ; i.func = i_bgez; return i;
+                case 0x00020000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BLTZL; i.func = i_bltzl; return i;
+                case 0x00030000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BGEZL; i.func = i_bgezl; return i;
+                case 0x00080000 >> 16: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TGEI; i.func = i_tgei; return i;
+                case 0x00090000 >> 16: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TGEIU; i.func = i_tgeiu; return i;
+                case 0x000A0000 >> 16: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TLTI; i.func = i_tlti; return i;
+                case 0x000B0000 >> 16: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TLTIU; i.func = i_tltiu; return i;
+                case 0x000C0000 >> 16: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TEQI; i.func = i_teqi; return i;
+                case 0x000E0000 >> 16: i.cycles = CYC_BRANCH; i.branch = 4; i.id = I_TNEI; i.func = i_tnei; return i;
+                case 0x00100000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BLTZAL; i.func = i_bltzal; return i;
+                case 0x00110000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BGEZAL; i.func = i_bgezal; return i;
+                case 0x00120000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BLTZALL; i.func = i_bltzall; return i;
+                case 0x00130000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BGEZALL; i.func = i_bgezall; return i;
+                case 0x00180000 >> 16: i.cycles = CYC_DEFAULT; i.id = I_MTSAB; i.func = i_mtsab; return i;
+                case 0x00190000 >> 16: i.cycles = CYC_DEFAULT; i.id = I_MTSAH; i.func = i_mtsah; return i;
             }
         } break;
-        case 0x08000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.id = EE_I_J; i.func = ee_i_j; return i;
-        case 0x0C000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 1; i.id = EE_I_JAL; i.func = ee_i_jal; return i;
-        case 0x10000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BEQ; i.func = ee_i_beq; return i;
-        case 0x14000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BNE; i.func = ee_i_bne; return i;
-        case 0x18000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BLEZ; i.func = ee_i_blez; return i;
-        case 0x1C000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BGTZ; i.func = ee_i_bgtz; return i;
-        case 0x20000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADDI; i.func = ee_i_addi; return i;
-        case 0x24000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ADDIU; i.func = ee_i_addiu; return i;
-        case 0x28000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLTI; i.func = ee_i_slti; return i;
-        case 0x2C000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_SLTIU; i.func = ee_i_sltiu; return i;
-        case 0x30000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ANDI; i.func = ee_i_andi; return i;
-        case 0x34000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_ORI; i.func = ee_i_ori; return i;
-        case 0x38000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_XORI; i.func = ee_i_xori; return i;
-        case 0x3C000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_LUI; i.func = ee_i_lui; return i;
+        case 0x08000000 >> 26: i.cycles = CYC_DEFAULT; i.branch = 1; i.id = I_J; i.func = i_j; return i;
+        case 0x0C000000 >> 26: i.cycles = CYC_DEFAULT; i.branch = 1; i.id = I_JAL; i.func = i_jal; return i;
+        case 0x10000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BEQ; i.func = i_beq; return i;
+        case 0x14000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BNE; i.func = i_bne; return i;
+        case 0x18000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BLEZ; i.func = i_blez; return i;
+        case 0x1C000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BGTZ; i.func = i_bgtz; return i;
+        case 0x20000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_ADDI; i.func = i_addi; return i;
+        case 0x24000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_ADDIU; i.func = i_addiu; return i;
+        case 0x28000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_SLTI; i.func = i_slti; return i;
+        case 0x2C000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_SLTIU; i.func = i_sltiu; return i;
+        case 0x30000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_ANDI; i.func = i_andi; return i;
+        case 0x34000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_ORI; i.func = i_ori; return i;
+        case 0x38000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_XORI; i.func = i_xori; return i;
+        case 0x3C000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_LUI; i.func = i_lui; return i;
         case 0x40000000 >> 26: { // cop0
             switch ((opcode & 0x03E00000) >> 21) {
-                case 0x00000000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MFC0; i.func = ee_i_mfc0; return i;
-                case 0x00800000 >> 21: if (i.rd.r == 12) i.branch = 2; i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MTC0; i.func = ee_i_mtc0; return i;
+                case 0x00000000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_MFC0; i.func = i_mfc0; return i;
+                case 0x00800000 >> 21: if (i.rd.r == 12) i.branch = 2; i.cycles = CYC_COP_DEFAULT; i.id = I_MTC0; i.func = i_mtc0; return i;
                 case 0x01000000 >> 21: {
                     switch ((opcode & 0x001F0000) >> 16) {
-                        case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BC0F; i.func = ee_i_bc0f; return i;
-                        case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BC0T; i.func = ee_i_bc0t; return i;
-                        case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BC0FL; i.func = ee_i_bc0fl; return i;
-                        case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BC0TL; i.func = ee_i_bc0tl; return i;
+                        case 0x00000000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BC0F; i.func = i_bc0f; return i;
+                        case 0x00010000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BC0T; i.func = i_bc0t; return i;
+                        case 0x00020000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BC0FL; i.func = i_bc0fl; return i;
+                        case 0x00030000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BC0TL; i.func = i_bc0tl; return i;
                     }
                 } break;
                 case 0x02000000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_TLBR; i.func = ee_i_tlbr; return i;
-                        case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_TLBWI; i.func = ee_i_tlbwi; return i;
-                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_TLBWR; i.func = ee_i_tlbwr; return i;
-                        case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_TLBP; i.func = ee_i_tlbp; return i;
-                        case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_ERET; i.func = ee_i_eret; return i;
-                        case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_EI; i.func = ee_i_ei; return i;
-                        case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.branch = 2; i.id = EE_I_DI; i.func = ee_i_di; return i;
+                        case 0x00000001: i.cycles = CYC_COP_DEFAULT; i.id = I_TLBR; i.func = i_tlbr; return i;
+                        case 0x00000002: i.cycles = CYC_COP_DEFAULT; i.branch = 2; i.id = I_TLBWI; i.func = i_tlbwi; return i;
+                        case 0x00000006: i.cycles = CYC_COP_DEFAULT; i.branch = 2; i.id = I_TLBWR; i.func = i_tlbwr; return i;
+                        case 0x00000008: i.cycles = CYC_COP_DEFAULT; i.id = I_TLBP; i.func = i_tlbp; return i;
+                        case 0x00000018: i.cycles = CYC_COP_DEFAULT; i.branch = 2; i.id = I_ERET; i.func = i_eret; return i;
+                        case 0x00000038: i.cycles = CYC_COP_DEFAULT; i.branch = 2; i.id = I_EI; i.func = i_ei; return i;
+                        case 0x00000039: i.cycles = CYC_COP_DEFAULT; i.branch = 2; i.id = I_DI; i.func = i_di; return i;
                     }
                 } break;
             }
         } break;
         case 0x44000000 >> 26: { // cop1
             switch ((opcode & 0x03E00000) >> 21) {
-                case 0x00000000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MFC1; i.func = ee_i_mfc1; return i;
-                case 0x00400000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CFC1; i.func = ee_i_cfc1; return i;
-                case 0x00800000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MTC1; i.func = ee_i_mtc1; return i;
-                case 0x00C00000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CTC1; i.func = ee_i_ctc1; return i;
+                case 0x00000000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_MFC1; i.func = i_mfc1; return i;
+                case 0x00400000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_CFC1; i.func = i_cfc1; return i;
+                case 0x00800000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_MTC1; i.func = i_mtc1; return i;
+                case 0x00C00000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_CTC1; i.func = i_ctc1; return i;
                 case 0x01000000 >> 21: {
                     switch ((opcode & 0x001F0000) >> 16) {
-                        case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BC1F; i.func = ee_i_bc1f; return i;
-                        case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BC1T; i.func = ee_i_bc1t; return i;
-                        case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BC1FL; i.func = ee_i_bc1fl; return i;
-                        case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BC1TL; i.func = ee_i_bc1tl; return i;
+                        case 0x00000000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BC1F; i.func = i_bc1f; return i;
+                        case 0x00010000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BC1T; i.func = i_bc1t; return i;
+                        case 0x00020000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BC1FL; i.func = i_bc1fl; return i;
+                        case 0x00030000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BC1TL; i.func = i_bc1tl; return i;
                     }
                 } break;
                 case 0x02000000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000000: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_ADDS; i.func = ee_i_adds; return i;
-                        case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_SUBS; i.func = ee_i_subs; return i;
-                        case 0x00000002: i.cycles = EE_CYC_FPU_MULT; i.id = EE_I_MULS; i.func = ee_i_muls; return i;
-                        case 0x00000003: i.cycles = EE_CYC_FPU_DIV; i.id = EE_I_DIVS; i.func = ee_i_divs; return i;
-                        case 0x00000004: i.cycles = EE_CYC_FPU_DIV; i.id = EE_I_SQRTS; i.func = ee_i_sqrts; return i;
-                        case 0x00000005: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_ABSS; i.func = ee_i_abss; return i;
-                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MOVS; i.func = ee_i_movs; return i;
-                        case 0x00000007: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_NEGS; i.func = ee_i_negs; return i;
-                        case 0x00000016: i.cycles = EE_CYC_FPU_DIV; i.id = EE_I_RSQRTS; i.func = ee_i_rsqrts; return i;
-                        case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_ADDAS; i.func = ee_i_addas; return i;
-                        case 0x00000019: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_SUBAS; i.func = ee_i_subas; return i;
-                        case 0x0000001A: i.cycles = EE_CYC_FPU_MULT; i.id = EE_I_MULAS; i.func = ee_i_mulas; return i;
-                        case 0x0000001C: i.cycles = EE_CYC_FPU_MULT; i.id = EE_I_MADDS; i.func = ee_i_madds; return i;
-                        case 0x0000001D: i.cycles = EE_CYC_FPU_MULT; i.id = EE_I_MSUBS; i.func = ee_i_msubs; return i;
-                        case 0x0000001E: i.cycles = EE_CYC_FPU_MULT; i.id = EE_I_MADDAS; i.func = ee_i_maddas; return i;
-                        case 0x0000001F: i.cycles = EE_CYC_FPU_MULT; i.id = EE_I_MSUBAS; i.func = ee_i_msubas; return i;
-                        case 0x00000024: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CVTW; i.func = ee_i_cvtw; return i;
-                        case 0x00000028: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MAXS; i.func = ee_i_maxs; return i;
-                        case 0x00000029: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MINS; i.func = ee_i_mins; return i;
-                        case 0x00000030: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CF; i.func = ee_i_cf; return i;
-                        case 0x00000032: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CEQ; i.func = ee_i_ceq; return i;
-                        case 0x00000034: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CLT; i.func = ee_i_clt; return i;
-                        case 0x00000036: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CLE; i.func = ee_i_cle; return i;
+                        case 0x00000000: i.cycles = CYC_COP_DEFAULT; i.id = I_ADDS; i.func = i_adds; return i;
+                        case 0x00000001: i.cycles = CYC_COP_DEFAULT; i.id = I_SUBS; i.func = i_subs; return i;
+                        case 0x00000002: i.cycles = CYC_FPU_MULT; i.id = I_MULS; i.func = i_muls; return i;
+                        case 0x00000003: i.cycles = CYC_FPU_DIV; i.id = I_DIVS; i.func = i_divs; return i;
+                        case 0x00000004: i.cycles = CYC_FPU_DIV; i.id = I_SQRTS; i.func = i_sqrts; return i;
+                        case 0x00000005: i.cycles = CYC_COP_DEFAULT; i.id = I_ABSS; i.func = i_abss; return i;
+                        case 0x00000006: i.cycles = CYC_COP_DEFAULT; i.id = I_MOVS; i.func = i_movs; return i;
+                        case 0x00000007: i.cycles = CYC_COP_DEFAULT; i.id = I_NEGS; i.func = i_negs; return i;
+                        case 0x00000016: i.cycles = CYC_FPU_DIV; i.id = I_RSQRTS; i.func = i_rsqrts; return i;
+                        case 0x00000018: i.cycles = CYC_COP_DEFAULT; i.id = I_ADDAS; i.func = i_addas; return i;
+                        case 0x00000019: i.cycles = CYC_COP_DEFAULT; i.id = I_SUBAS; i.func = i_subas; return i;
+                        case 0x0000001A: i.cycles = CYC_FPU_MULT; i.id = I_MULAS; i.func = i_mulas; return i;
+                        case 0x0000001C: i.cycles = CYC_FPU_MULT; i.id = I_MADDS; i.func = i_madds; return i;
+                        case 0x0000001D: i.cycles = CYC_FPU_MULT; i.id = I_MSUBS; i.func = i_msubs; return i;
+                        case 0x0000001E: i.cycles = CYC_FPU_MULT; i.id = I_MADDAS; i.func = i_maddas; return i;
+                        case 0x0000001F: i.cycles = CYC_FPU_MULT; i.id = I_MSUBAS; i.func = i_msubas; return i;
+                        case 0x00000024: i.cycles = CYC_COP_DEFAULT; i.id = I_CVTW; i.func = i_cvtw; return i;
+                        case 0x00000028: i.cycles = CYC_COP_DEFAULT; i.id = I_MAXS; i.func = i_maxs; return i;
+                        case 0x00000029: i.cycles = CYC_COP_DEFAULT; i.id = I_MINS; i.func = i_mins; return i;
+                        case 0x00000030: i.cycles = CYC_COP_DEFAULT; i.id = I_CF; i.func = i_cf; return i;
+                        case 0x00000032: i.cycles = CYC_COP_DEFAULT; i.id = I_CEQ; i.func = i_ceq; return i;
+                        case 0x00000034: i.cycles = CYC_COP_DEFAULT; i.id = I_CLT; i.func = i_clt; return i;
+                        case 0x00000036: i.cycles = CYC_COP_DEFAULT; i.id = I_CLE; i.func = i_cle; return i;
                     }
                 } break;
                 case 0x02800000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000020: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CVTS; i.func = ee_i_cvts; return i;
+                        case 0x00000020: i.cycles = CYC_COP_DEFAULT; i.id = I_CVTS; i.func = i_cvts; return i;
                     }
                 } break;
             }
         } break;
         case 0x48000000 >> 26: { // cop2
             switch ((opcode & 0x03E00000) >> 21) {
-                case 0x00200000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_QMFC2; i.func = ee_i_qmfc2; return i;
-                case 0x00400000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CFC2; i.func = ee_i_cfc2; return i;
-                case 0x00A00000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_QMTC2; i.func = ee_i_qmtc2; return i;
-                case 0x00C00000 >> 21: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_CTC2; i.func = ee_i_ctc2; return i;
+                case 0x00200000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_QMFC2; i.func = i_qmfc2; return i;
+                case 0x00400000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_CFC2; i.func = i_cfc2; return i;
+                case 0x00A00000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_QMTC2; i.func = i_qmtc2; return i;
+                case 0x00C00000 >> 21: i.cycles = CYC_COP_DEFAULT; i.id = I_CTC2; i.func = i_ctc2; return i;
                 case 0x01000000 >> 21: {
                     switch ((opcode & 0x001F0000) >> 16) {
-                        case 0x00000000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BC2F; i.func = ee_i_bc2f; return i;
-                        case 0x00010000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 1; i.id = EE_I_BC2T; i.func = ee_i_bc2t; return i;
-                        case 0x00020000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BC2FL; i.func = ee_i_bc2fl; return i;
-                        case 0x00030000 >> 16: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BC2TL; i.func = ee_i_bc2tl; return i;
+                        case 0x00000000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BC2F; i.func = i_bc2f; return i;
+                        case 0x00010000 >> 16: i.cycles = CYC_BRANCH; i.branch = 1; i.id = I_BC2T; i.func = i_bc2t; return i;
+                        case 0x00020000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BC2FL; i.func = i_bc2fl; return i;
+                        case 0x00030000 >> 16: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BC2TL; i.func = i_bc2tl; return i;
                     }
                 } break;
                 case 0x02000000 >> 21:
@@ -3907,61 +3869,61 @@ ee_instruction ee_decode(uint32_t opcode) {
                 case 0x03C00000 >> 21:
                 case 0x03E00000 >> 21: {
                     switch (opcode & 0x0000003F) {
-                        case 0x00000000: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDX; i.func = ee_i_vaddx; return i;
-                        case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDY; i.func = ee_i_vaddy; return i;
-                        case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDZ; i.func = ee_i_vaddz; return i;
-                        case 0x00000003: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDW; i.func = ee_i_vaddw; return i;
-                        case 0x00000004: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBX; i.func = ee_i_vsubx; return i;
-                        case 0x00000005: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBY; i.func = ee_i_vsuby; return i;
-                        case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBZ; i.func = ee_i_vsubz; return i;
-                        case 0x00000007: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBW; i.func = ee_i_vsubw; return i;
-                        case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDX; i.func = ee_i_vmaddx; return i;
-                        case 0x00000009: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDY; i.func = ee_i_vmaddy; return i;
-                        case 0x0000000A: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDZ; i.func = ee_i_vmaddz; return i;
-                        case 0x0000000B: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDW; i.func = ee_i_vmaddw; return i;
-                        case 0x0000000C: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBX; i.func = ee_i_vmsubx; return i;
-                        case 0x0000000D: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBY; i.func = ee_i_vmsuby; return i;
-                        case 0x0000000E: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBZ; i.func = ee_i_vmsubz; return i;
-                        case 0x0000000F: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBW; i.func = ee_i_vmsubw; return i;
-                        case 0x00000010: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMAXX; i.func = ee_i_vmaxx; return i;
-                        case 0x00000011: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMAXY; i.func = ee_i_vmaxy; return i;
-                        case 0x00000012: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMAXZ; i.func = ee_i_vmaxz; return i;
-                        case 0x00000013: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMAXW; i.func = ee_i_vmaxw; return i;
-                        case 0x00000014: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMINIX; i.func = ee_i_vminix; return i;
-                        case 0x00000015: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMINIY; i.func = ee_i_vminiy; return i;
-                        case 0x00000016: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMINIZ; i.func = ee_i_vminiz; return i;
-                        case 0x00000017: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMINIW; i.func = ee_i_vminiw; return i;
-                        case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULX; i.func = ee_i_vmulx; return i;
-                        case 0x00000019: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULY; i.func = ee_i_vmuly; return i;
-                        case 0x0000001A: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULZ; i.func = ee_i_vmulz; return i;
-                        case 0x0000001B: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULW; i.func = ee_i_vmulw; return i;
-                        case 0x0000001C: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULQ; i.func = ee_i_vmulq; return i;
-                        case 0x0000001D: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMAXI; i.func = ee_i_vmaxi; return i;
-                        case 0x0000001E: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULI; i.func = ee_i_vmuli; return i;
-                        case 0x0000001F: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMINII; i.func = ee_i_vminii; return i;
-                        case 0x00000020: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDQ; i.func = ee_i_vaddq; return i;
-                        case 0x00000021: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDQ; i.func = ee_i_vmaddq; return i;
-                        case 0x00000022: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDI; i.func = ee_i_vaddi; return i;
-                        case 0x00000023: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDI; i.func = ee_i_vmaddi; return i;
-                        case 0x00000024: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBQ; i.func = ee_i_vsubq; return i;
-                        case 0x00000025: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBQ; i.func = ee_i_vmsubq; return i;
-                        case 0x00000026: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBI; i.func = ee_i_vsubi; return i;
-                        case 0x00000027: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBI; i.func = ee_i_vmsubi; return i;
-                        case 0x00000028: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADD; i.func = ee_i_vadd; return i;
-                        case 0x00000029: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADD; i.func = ee_i_vmadd; return i;
-                        case 0x0000002A: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMUL; i.func = ee_i_vmul; return i;
-                        case 0x0000002B: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMAX; i.func = ee_i_vmax; return i;
-                        case 0x0000002C: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUB; i.func = ee_i_vsub; return i;
-                        case 0x0000002D: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUB; i.func = ee_i_vmsub; return i;
-                        case 0x0000002E: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VOPMSUB; i.func = ee_i_vopmsub; return i;
-                        case 0x0000002F: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMINI; i.func = ee_i_vmini; return i;
-                        case 0x00000030: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VIADD; i.func = ee_i_viadd; return i;
-                        case 0x00000031: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VISUB; i.func = ee_i_visub; return i;
-                        case 0x00000032: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VIADDI; i.func = ee_i_viaddi; return i;
-                        case 0x00000034: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VIAND; i.func = ee_i_viand; return i;
-                        case 0x00000035: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VIOR; i.func = ee_i_vior; return i;
-                        case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VCALLMS; i.func = ee_i_vcallms; return i;
-                        case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VCALLMSR; i.func = ee_i_vcallmsr; return i;
+                        case 0x00000000: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDX; i.func = i_vaddx; return i;
+                        case 0x00000001: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDY; i.func = i_vaddy; return i;
+                        case 0x00000002: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDZ; i.func = i_vaddz; return i;
+                        case 0x00000003: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDW; i.func = i_vaddw; return i;
+                        case 0x00000004: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBX; i.func = i_vsubx; return i;
+                        case 0x00000005: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBY; i.func = i_vsuby; return i;
+                        case 0x00000006: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBZ; i.func = i_vsubz; return i;
+                        case 0x00000007: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBW; i.func = i_vsubw; return i;
+                        case 0x00000008: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDX; i.func = i_vmaddx; return i;
+                        case 0x00000009: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDY; i.func = i_vmaddy; return i;
+                        case 0x0000000A: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDZ; i.func = i_vmaddz; return i;
+                        case 0x0000000B: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDW; i.func = i_vmaddw; return i;
+                        case 0x0000000C: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBX; i.func = i_vmsubx; return i;
+                        case 0x0000000D: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBY; i.func = i_vmsuby; return i;
+                        case 0x0000000E: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBZ; i.func = i_vmsubz; return i;
+                        case 0x0000000F: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBW; i.func = i_vmsubw; return i;
+                        case 0x00000010: i.cycles = CYC_COP_DEFAULT; i.id = I_VMAXX; i.func = i_vmaxx; return i;
+                        case 0x00000011: i.cycles = CYC_COP_DEFAULT; i.id = I_VMAXY; i.func = i_vmaxy; return i;
+                        case 0x00000012: i.cycles = CYC_COP_DEFAULT; i.id = I_VMAXZ; i.func = i_vmaxz; return i;
+                        case 0x00000013: i.cycles = CYC_COP_DEFAULT; i.id = I_VMAXW; i.func = i_vmaxw; return i;
+                        case 0x00000014: i.cycles = CYC_COP_DEFAULT; i.id = I_VMINIX; i.func = i_vminix; return i;
+                        case 0x00000015: i.cycles = CYC_COP_DEFAULT; i.id = I_VMINIY; i.func = i_vminiy; return i;
+                        case 0x00000016: i.cycles = CYC_COP_DEFAULT; i.id = I_VMINIZ; i.func = i_vminiz; return i;
+                        case 0x00000017: i.cycles = CYC_COP_DEFAULT; i.id = I_VMINIW; i.func = i_vminiw; return i;
+                        case 0x00000018: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULX; i.func = i_vmulx; return i;
+                        case 0x00000019: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULY; i.func = i_vmuly; return i;
+                        case 0x0000001A: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULZ; i.func = i_vmulz; return i;
+                        case 0x0000001B: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULW; i.func = i_vmulw; return i;
+                        case 0x0000001C: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULQ; i.func = i_vmulq; return i;
+                        case 0x0000001D: i.cycles = CYC_COP_DEFAULT; i.id = I_VMAXI; i.func = i_vmaxi; return i;
+                        case 0x0000001E: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULI; i.func = i_vmuli; return i;
+                        case 0x0000001F: i.cycles = CYC_COP_DEFAULT; i.id = I_VMINII; i.func = i_vminii; return i;
+                        case 0x00000020: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDQ; i.func = i_vaddq; return i;
+                        case 0x00000021: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDQ; i.func = i_vmaddq; return i;
+                        case 0x00000022: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDI; i.func = i_vaddi; return i;
+                        case 0x00000023: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDI; i.func = i_vmaddi; return i;
+                        case 0x00000024: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBQ; i.func = i_vsubq; return i;
+                        case 0x00000025: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBQ; i.func = i_vmsubq; return i;
+                        case 0x00000026: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBI; i.func = i_vsubi; return i;
+                        case 0x00000027: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBI; i.func = i_vmsubi; return i;
+                        case 0x00000028: i.cycles = CYC_COP_DEFAULT; i.id = I_VADD; i.func = i_vadd; return i;
+                        case 0x00000029: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADD; i.func = i_vmadd; return i;
+                        case 0x0000002A: i.cycles = CYC_COP_DEFAULT; i.id = I_VMUL; i.func = i_vmul; return i;
+                        case 0x0000002B: i.cycles = CYC_COP_DEFAULT; i.id = I_VMAX; i.func = i_vmax; return i;
+                        case 0x0000002C: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUB; i.func = i_vsub; return i;
+                        case 0x0000002D: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUB; i.func = i_vmsub; return i;
+                        case 0x0000002E: i.cycles = CYC_COP_DEFAULT; i.id = I_VOPMSUB; i.func = i_vopmsub; return i;
+                        case 0x0000002F: i.cycles = CYC_COP_DEFAULT; i.id = I_VMINI; i.func = i_vmini; return i;
+                        case 0x00000030: i.cycles = CYC_COP_DEFAULT; i.id = I_VIADD; i.func = i_viadd; return i;
+                        case 0x00000031: i.cycles = CYC_COP_DEFAULT; i.id = I_VISUB; i.func = i_visub; return i;
+                        case 0x00000032: i.cycles = CYC_COP_DEFAULT; i.id = I_VIADDI; i.func = i_viaddi; return i;
+                        case 0x00000034: i.cycles = CYC_COP_DEFAULT; i.id = I_VIAND; i.func = i_viand; return i;
+                        case 0x00000035: i.cycles = CYC_COP_DEFAULT; i.id = I_VIOR; i.func = i_vior; return i;
+                        case 0x00000038: i.cycles = CYC_COP_DEFAULT; i.id = I_VCALLMS; i.func = i_vcallms; return i;
+                        case 0x00000039: i.cycles = CYC_COP_DEFAULT; i.id = I_VCALLMSR; i.func = i_vcallmsr; return i;
                         case 0x0000003C:
                         case 0x0000003D:
                         case 0x0000003E:
@@ -3969,260 +3931,260 @@ ee_instruction ee_decode(uint32_t opcode) {
                             uint32_t func = (opcode & 3) | ((opcode & 0x7c0) >> 4);
 
                             switch (func) {
-                                case 0x00000000: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDAX; i.func = ee_i_vaddax; return i;
-                                case 0x00000001: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDAY; i.func = ee_i_vadday; return i;
-                                case 0x00000002: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDAZ; i.func = ee_i_vaddaz; return i;
-                                case 0x00000003: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDAW; i.func = ee_i_vaddaw; return i;
-                                case 0x00000004: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBAX; i.func = ee_i_vsubax; return i;
-                                case 0x00000005: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBAY; i.func = ee_i_vsubay; return i;
-                                case 0x00000006: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBAZ; i.func = ee_i_vsubaz; return i;
-                                case 0x00000007: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBAW; i.func = ee_i_vsubaw; return i;
-                                case 0x00000008: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDAX; i.func = ee_i_vmaddax; return i;
-                                case 0x00000009: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDAY; i.func = ee_i_vmadday; return i;
-                                case 0x0000000A: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDAZ; i.func = ee_i_vmaddaz; return i;
-                                case 0x0000000B: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDAW; i.func = ee_i_vmaddaw; return i;
-                                case 0x0000000C: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBAX; i.func = ee_i_vmsubax; return i;
-                                case 0x0000000D: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBAY; i.func = ee_i_vmsubay; return i;
-                                case 0x0000000E: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBAZ; i.func = ee_i_vmsubaz; return i;
-                                case 0x0000000F: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBAW; i.func = ee_i_vmsubaw; return i;
-                                case 0x00000010: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VITOF0; i.func = ee_i_vitof0; return i;
-                                case 0x00000011: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VITOF4; i.func = ee_i_vitof4; return i;
-                                case 0x00000012: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VITOF12; i.func = ee_i_vitof12; return i;
-                                case 0x00000013: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VITOF15; i.func = ee_i_vitof15; return i;
-                                case 0x00000014: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VFTOI0; i.func = ee_i_vftoi0; return i;
-                                case 0x00000015: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VFTOI4; i.func = ee_i_vftoi4; return i;
-                                case 0x00000016: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VFTOI12; i.func = ee_i_vftoi12; return i;
-                                case 0x00000017: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VFTOI15; i.func = ee_i_vftoi15; return i;
-                                case 0x00000018: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULAX; i.func = ee_i_vmulax; return i;
-                                case 0x00000019: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULAY; i.func = ee_i_vmulay; return i;
-                                case 0x0000001A: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULAZ; i.func = ee_i_vmulaz; return i;
-                                case 0x0000001B: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULAW; i.func = ee_i_vmulaw; return i;
-                                case 0x0000001C: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULAQ; i.func = ee_i_vmulaq; return i;
-                                case 0x0000001D: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VABS; i.func = ee_i_vabs; return i;
-                                case 0x0000001E: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULAI; i.func = ee_i_vmulai; return i;
-                                case 0x0000001F: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VCLIPW; i.func = ee_i_vclipw; return i;
-                                case 0x00000020: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDAQ; i.func = ee_i_vaddaq; return i;
-                                case 0x00000021: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDAQ; i.func = ee_i_vmaddaq; return i;
-                                case 0x00000022: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDAI; i.func = ee_i_vaddai; return i;
-                                case 0x00000023: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDAI; i.func = ee_i_vmaddai; return i;
-                                case 0x00000024: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBAQ; i.func = ee_i_vsubaq; return i;
-                                case 0x00000025: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBAQ; i.func = ee_i_vmsubaq; return i;
-                                case 0x00000026: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBAI; i.func = ee_i_vsubai; return i;
-                                case 0x00000027: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBAI; i.func = ee_i_vmsubai; return i;
-                                case 0x00000028: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VADDA; i.func = ee_i_vadda; return i;
-                                case 0x00000029: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMADDA; i.func = ee_i_vmadda; return i;
-                                case 0x0000002A: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMULA; i.func = ee_i_vmula; return i;
-                                case 0x0000002C: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSUBA; i.func = ee_i_vsuba; return i;
-                                case 0x0000002D: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMSUBA; i.func = ee_i_vmsuba; return i;
-                                case 0x0000002E: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VOPMULA; i.func = ee_i_vopmula; return i;
-                                case 0x0000002F: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VNOP; i.func = ee_i_vnop; return i;
-                                case 0x00000030: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMOVE; i.func = ee_i_vmove; return i;
-                                case 0x00000031: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMR32; i.func = ee_i_vmr32; return i;
-                                case 0x00000034: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VLQI; i.func = ee_i_vlqi; return i;
-                                case 0x00000035: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSQI; i.func = ee_i_vsqi; return i;
-                                case 0x00000036: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VLQD; i.func = ee_i_vlqd; return i;
-                                case 0x00000037: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSQD; i.func = ee_i_vsqd; return i;
-                                case 0x00000038: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VDIV; i.func = ee_i_vdiv; return i;
-                                case 0x00000039: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VSQRT; i.func = ee_i_vsqrt; return i;
-                                case 0x0000003A: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VRSQRT; i.func = ee_i_vrsqrt; return i;
-                                case 0x0000003B: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VWAITQ; i.func = ee_i_vwaitq; return i;
-                                case 0x0000003C: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMTIR; i.func = ee_i_vmtir; return i;
-                                case 0x0000003D: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VMFIR; i.func = ee_i_vmfir; return i;
-                                case 0x0000003E: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VILWR; i.func = ee_i_vilwr; return i;
-                                case 0x0000003F: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VISWR; i.func = ee_i_viswr; return i;
-                                case 0x00000040: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VRNEXT; i.func = ee_i_vrnext; return i;
-                                case 0x00000041: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VRGET; i.func = ee_i_vrget; return i;
-                                case 0x00000042: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VRINIT; i.func = ee_i_vrinit; return i;
-                                case 0x00000043: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_VRXOR; i.func = ee_i_vrxor; return i;
+                                case 0x00000000: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDAX; i.func = i_vaddax; return i;
+                                case 0x00000001: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDAY; i.func = i_vadday; return i;
+                                case 0x00000002: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDAZ; i.func = i_vaddaz; return i;
+                                case 0x00000003: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDAW; i.func = i_vaddaw; return i;
+                                case 0x00000004: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBAX; i.func = i_vsubax; return i;
+                                case 0x00000005: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBAY; i.func = i_vsubay; return i;
+                                case 0x00000006: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBAZ; i.func = i_vsubaz; return i;
+                                case 0x00000007: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBAW; i.func = i_vsubaw; return i;
+                                case 0x00000008: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDAX; i.func = i_vmaddax; return i;
+                                case 0x00000009: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDAY; i.func = i_vmadday; return i;
+                                case 0x0000000A: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDAZ; i.func = i_vmaddaz; return i;
+                                case 0x0000000B: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDAW; i.func = i_vmaddaw; return i;
+                                case 0x0000000C: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBAX; i.func = i_vmsubax; return i;
+                                case 0x0000000D: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBAY; i.func = i_vmsubay; return i;
+                                case 0x0000000E: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBAZ; i.func = i_vmsubaz; return i;
+                                case 0x0000000F: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBAW; i.func = i_vmsubaw; return i;
+                                case 0x00000010: i.cycles = CYC_COP_DEFAULT; i.id = I_VITOF0; i.func = i_vitof0; return i;
+                                case 0x00000011: i.cycles = CYC_COP_DEFAULT; i.id = I_VITOF4; i.func = i_vitof4; return i;
+                                case 0x00000012: i.cycles = CYC_COP_DEFAULT; i.id = I_VITOF12; i.func = i_vitof12; return i;
+                                case 0x00000013: i.cycles = CYC_COP_DEFAULT; i.id = I_VITOF15; i.func = i_vitof15; return i;
+                                case 0x00000014: i.cycles = CYC_COP_DEFAULT; i.id = I_VFTOI0; i.func = i_vftoi0; return i;
+                                case 0x00000015: i.cycles = CYC_COP_DEFAULT; i.id = I_VFTOI4; i.func = i_vftoi4; return i;
+                                case 0x00000016: i.cycles = CYC_COP_DEFAULT; i.id = I_VFTOI12; i.func = i_vftoi12; return i;
+                                case 0x00000017: i.cycles = CYC_COP_DEFAULT; i.id = I_VFTOI15; i.func = i_vftoi15; return i;
+                                case 0x00000018: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULAX; i.func = i_vmulax; return i;
+                                case 0x00000019: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULAY; i.func = i_vmulay; return i;
+                                case 0x0000001A: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULAZ; i.func = i_vmulaz; return i;
+                                case 0x0000001B: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULAW; i.func = i_vmulaw; return i;
+                                case 0x0000001C: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULAQ; i.func = i_vmulaq; return i;
+                                case 0x0000001D: i.cycles = CYC_COP_DEFAULT; i.id = I_VABS; i.func = i_vabs; return i;
+                                case 0x0000001E: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULAI; i.func = i_vmulai; return i;
+                                case 0x0000001F: i.cycles = CYC_COP_DEFAULT; i.id = I_VCLIPW; i.func = i_vclipw; return i;
+                                case 0x00000020: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDAQ; i.func = i_vaddaq; return i;
+                                case 0x00000021: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDAQ; i.func = i_vmaddaq; return i;
+                                case 0x00000022: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDAI; i.func = i_vaddai; return i;
+                                case 0x00000023: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDAI; i.func = i_vmaddai; return i;
+                                case 0x00000024: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBAQ; i.func = i_vsubaq; return i;
+                                case 0x00000025: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBAQ; i.func = i_vmsubaq; return i;
+                                case 0x00000026: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBAI; i.func = i_vsubai; return i;
+                                case 0x00000027: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBAI; i.func = i_vmsubai; return i;
+                                case 0x00000028: i.cycles = CYC_COP_DEFAULT; i.id = I_VADDA; i.func = i_vadda; return i;
+                                case 0x00000029: i.cycles = CYC_COP_DEFAULT; i.id = I_VMADDA; i.func = i_vmadda; return i;
+                                case 0x0000002A: i.cycles = CYC_COP_DEFAULT; i.id = I_VMULA; i.func = i_vmula; return i;
+                                case 0x0000002C: i.cycles = CYC_COP_DEFAULT; i.id = I_VSUBA; i.func = i_vsuba; return i;
+                                case 0x0000002D: i.cycles = CYC_COP_DEFAULT; i.id = I_VMSUBA; i.func = i_vmsuba; return i;
+                                case 0x0000002E: i.cycles = CYC_COP_DEFAULT; i.id = I_VOPMULA; i.func = i_vopmula; return i;
+                                case 0x0000002F: i.cycles = CYC_COP_DEFAULT; i.id = I_VNOP; i.func = i_vnop; return i;
+                                case 0x00000030: i.cycles = CYC_COP_DEFAULT; i.id = I_VMOVE; i.func = i_vmove; return i;
+                                case 0x00000031: i.cycles = CYC_COP_DEFAULT; i.id = I_VMR32; i.func = i_vmr32; return i;
+                                case 0x00000034: i.cycles = CYC_COP_DEFAULT; i.id = I_VLQI; i.func = i_vlqi; return i;
+                                case 0x00000035: i.cycles = CYC_COP_DEFAULT; i.id = I_VSQI; i.func = i_vsqi; return i;
+                                case 0x00000036: i.cycles = CYC_COP_DEFAULT; i.id = I_VLQD; i.func = i_vlqd; return i;
+                                case 0x00000037: i.cycles = CYC_COP_DEFAULT; i.id = I_VSQD; i.func = i_vsqd; return i;
+                                case 0x00000038: i.cycles = CYC_COP_DEFAULT; i.id = I_VDIV; i.func = i_vdiv; return i;
+                                case 0x00000039: i.cycles = CYC_COP_DEFAULT; i.id = I_VSQRT; i.func = i_vsqrt; return i;
+                                case 0x0000003A: i.cycles = CYC_COP_DEFAULT; i.id = I_VRSQRT; i.func = i_vrsqrt; return i;
+                                case 0x0000003B: i.cycles = CYC_COP_DEFAULT; i.id = I_VWAITQ; i.func = i_vwaitq; return i;
+                                case 0x0000003C: i.cycles = CYC_COP_DEFAULT; i.id = I_VMTIR; i.func = i_vmtir; return i;
+                                case 0x0000003D: i.cycles = CYC_COP_DEFAULT; i.id = I_VMFIR; i.func = i_vmfir; return i;
+                                case 0x0000003E: i.cycles = CYC_COP_DEFAULT; i.id = I_VILWR; i.func = i_vilwr; return i;
+                                case 0x0000003F: i.cycles = CYC_COP_DEFAULT; i.id = I_VISWR; i.func = i_viswr; return i;
+                                case 0x00000040: i.cycles = CYC_COP_DEFAULT; i.id = I_VRNEXT; i.func = i_vrnext; return i;
+                                case 0x00000041: i.cycles = CYC_COP_DEFAULT; i.id = I_VRGET; i.func = i_vrget; return i;
+                                case 0x00000042: i.cycles = CYC_COP_DEFAULT; i.id = I_VRINIT; i.func = i_vrinit; return i;
+                                case 0x00000043: i.cycles = CYC_COP_DEFAULT; i.id = I_VRXOR; i.func = i_vrxor; return i;
                             }
                         } break;
                     }
                 } break;
             }
         } break;
-        case 0x50000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BEQL; i.func = ee_i_beql; return i;
-        case 0x54000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BNEL; i.func = ee_i_bnel; return i;
-        case 0x58000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BLEZL; i.func = ee_i_blezl; return i;
-        case 0x5C000000 >> 26: i.cycles = EE_CYC_BRANCH; i.branch = 3; i.id = EE_I_BGTZL; i.func = ee_i_bgtzl; return i;
-        case 0x60000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 4; i.id = EE_I_DADDI; i.func = ee_i_daddi; return i;
-        case 0x64000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_DADDIU; i.func = ee_i_daddiu; return i;
-        case 0x68000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LDL; i.func = ee_i_ldl; return i;
-        case 0x6C000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LDR; i.func = ee_i_ldr; return i;
+        case 0x50000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BEQL; i.func = i_beql; return i;
+        case 0x54000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BNEL; i.func = i_bnel; return i;
+        case 0x58000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BLEZL; i.func = i_blezl; return i;
+        case 0x5C000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BGTZL; i.func = i_bgtzl; return i;
+        case 0x60000000 >> 26: i.cycles = CYC_DEFAULT; i.branch = 4; i.id = I_DADDI; i.func = i_daddi; return i;
+        case 0x64000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_DADDIU; i.func = i_daddiu; return i;
+        case 0x68000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LDL; i.func = i_ldl; return i;
+        case 0x6C000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LDR; i.func = i_ldr; return i;
         case 0x70000000 >> 26: { // mmi
             switch (opcode & 0x0000003F) {
-                case 0x00000000: i.cycles = EE_CYC_MULT; i.id = EE_I_MADD; i.func = ee_i_madd; return i;
-                case 0x00000001: i.cycles = EE_CYC_MULT; i.id = EE_I_MADDU; i.func = ee_i_maddu; return i;
-                case 0x00000004: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PLZCW; i.func = ee_i_plzcw; return i;
+                case 0x00000000: i.cycles = CYC_MULT; i.id = I_MADD; i.func = i_madd; return i;
+                case 0x00000001: i.cycles = CYC_MULT; i.id = I_MADDU; i.func = i_maddu; return i;
+                case 0x00000004: i.cycles = CYC_MMI_DEFAULT; i.id = I_PLZCW; i.func = i_plzcw; return i;
                 case 0x00000008: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDW; i.func = ee_i_paddw; return i;
-                        case 0x00000040 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBW; i.func = ee_i_psubw; return i;
-                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCGTW; i.func = ee_i_pcgtw; return i;
-                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMAXW; i.func = ee_i_pmaxw; return i;
-                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDH; i.func = ee_i_paddh; return i;
-                        case 0x00000140 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBH; i.func = ee_i_psubh; return i;
-                        case 0x00000180 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCGTH; i.func = ee_i_pcgth; return i;
-                        case 0x000001C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMAXH; i.func = ee_i_pmaxh; return i;
-                        case 0x00000200 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDB; i.func = ee_i_paddb; return i;
-                        case 0x00000240 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBB; i.func = ee_i_psubb; return i;
-                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCGTB; i.func = ee_i_pcgtb; return i;
-                        case 0x00000400 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDSW; i.func = ee_i_paddsw; return i;
-                        case 0x00000440 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBSW; i.func = ee_i_psubsw; return i;
-                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXTLW; i.func = ee_i_pextlw; return i;
-                        case 0x000004C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PPACW; i.func = ee_i_ppacw; return i;
-                        case 0x00000500 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDSH; i.func = ee_i_paddsh; return i;
-                        case 0x00000540 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBSH; i.func = ee_i_psubsh; return i;
-                        case 0x00000580 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXTLH; i.func = ee_i_pextlh; return i;
-                        case 0x000005C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PPACH; i.func = ee_i_ppach; return i;
-                        case 0x00000600 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDSB; i.func = ee_i_paddsb; return i;
-                        case 0x00000640 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBSB; i.func = ee_i_psubsb; return i;
-                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXTLB; i.func = ee_i_pextlb; return i;
-                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PPACB; i.func = ee_i_ppacb; return i;
-                        case 0x00000780 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXT5; i.func = ee_i_pext5; return i;
-                        case 0x000007C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PPAC5; i.func = ee_i_ppac5; return i;
+                        case 0x00000000 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDW; i.func = i_paddw; return i;
+                        case 0x00000040 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBW; i.func = i_psubw; return i;
+                        case 0x00000080 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCGTW; i.func = i_pcgtw; return i;
+                        case 0x000000C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMAXW; i.func = i_pmaxw; return i;
+                        case 0x00000100 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDH; i.func = i_paddh; return i;
+                        case 0x00000140 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBH; i.func = i_psubh; return i;
+                        case 0x00000180 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCGTH; i.func = i_pcgth; return i;
+                        case 0x000001C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMAXH; i.func = i_pmaxh; return i;
+                        case 0x00000200 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDB; i.func = i_paddb; return i;
+                        case 0x00000240 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBB; i.func = i_psubb; return i;
+                        case 0x00000280 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCGTB; i.func = i_pcgtb; return i;
+                        case 0x00000400 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDSW; i.func = i_paddsw; return i;
+                        case 0x00000440 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBSW; i.func = i_psubsw; return i;
+                        case 0x00000480 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXTLW; i.func = i_pextlw; return i;
+                        case 0x000004C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PPACW; i.func = i_ppacw; return i;
+                        case 0x00000500 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDSH; i.func = i_paddsh; return i;
+                        case 0x00000540 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBSH; i.func = i_psubsh; return i;
+                        case 0x00000580 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXTLH; i.func = i_pextlh; return i;
+                        case 0x000005C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PPACH; i.func = i_ppach; return i;
+                        case 0x00000600 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDSB; i.func = i_paddsb; return i;
+                        case 0x00000640 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBSB; i.func = i_psubsb; return i;
+                        case 0x00000680 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXTLB; i.func = i_pextlb; return i;
+                        case 0x000006C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PPACB; i.func = i_ppacb; return i;
+                        case 0x00000780 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXT5; i.func = i_pext5; return i;
+                        case 0x000007C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PPAC5; i.func = i_ppac5; return i;
                     }
                 } break;
                 case 0x00000009: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMADDW; i.func = ee_i_pmaddw; return i;
-                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSLLVW; i.func = ee_i_psllvw; return i;
-                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSRLVW; i.func = ee_i_psrlvw; return i;
-                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMSUBW; i.func = ee_i_pmsubw; return i;
-                        case 0x00000200 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMFHI; i.func = ee_i_pmfhi; return i;
-                        case 0x00000240 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMFLO; i.func = ee_i_pmflo; return i;
-                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PINTH; i.func = ee_i_pinth; return i;
-                        case 0x00000300 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMULTW; i.func = ee_i_pmultw; return i;
-                        case 0x00000340 >> 6: i.cycles = EE_CYC_MMI_DIV; i.id = EE_I_PDIVW; i.func = ee_i_pdivw; return i;
-                        case 0x00000380 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCPYLD; i.func = ee_i_pcpyld; return i;
-                        case 0x00000400 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMADDH; i.func = ee_i_pmaddh; return i;
-                        case 0x00000440 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PHMADH; i.func = ee_i_phmadh; return i;
-                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PAND; i.func = ee_i_pand; return i;
-                        case 0x000004C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PXOR; i.func = ee_i_pxor; return i;
-                        case 0x00000500 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMSUBH; i.func = ee_i_pmsubh; return i;
-                        case 0x00000540 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PHMSBH; i.func = ee_i_phmsbh; return i;
-                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXEH; i.func = ee_i_pexeh; return i;
-                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PREVH; i.func = ee_i_prevh; return i;
-                        case 0x00000700 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMULTH; i.func = ee_i_pmulth; return i;
-                        case 0x00000740 >> 6: i.cycles = EE_CYC_MMI_DIV; i.id = EE_I_PDIVBW; i.func = ee_i_pdivbw; return i;
-                        case 0x00000780 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXEW; i.func = ee_i_pexew; return i;
-                        case 0x000007C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PROT3W; i.func = ee_i_prot3w; return i;
+                        case 0x00000000 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMADDW; i.func = i_pmaddw; return i;
+                        case 0x00000080 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSLLVW; i.func = i_psllvw; return i;
+                        case 0x000000C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSRLVW; i.func = i_psrlvw; return i;
+                        case 0x00000100 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMSUBW; i.func = i_pmsubw; return i;
+                        case 0x00000200 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMFHI; i.func = i_pmfhi; return i;
+                        case 0x00000240 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMFLO; i.func = i_pmflo; return i;
+                        case 0x00000280 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PINTH; i.func = i_pinth; return i;
+                        case 0x00000300 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMULTW; i.func = i_pmultw; return i;
+                        case 0x00000340 >> 6: i.cycles = CYC_MMI_DIV; i.id = I_PDIVW; i.func = i_pdivw; return i;
+                        case 0x00000380 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCPYLD; i.func = i_pcpyld; return i;
+                        case 0x00000400 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMADDH; i.func = i_pmaddh; return i;
+                        case 0x00000440 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PHMADH; i.func = i_phmadh; return i;
+                        case 0x00000480 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PAND; i.func = i_pand; return i;
+                        case 0x000004C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PXOR; i.func = i_pxor; return i;
+                        case 0x00000500 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMSUBH; i.func = i_pmsubh; return i;
+                        case 0x00000540 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PHMSBH; i.func = i_phmsbh; return i;
+                        case 0x00000680 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXEH; i.func = i_pexeh; return i;
+                        case 0x000006C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PREVH; i.func = i_prevh; return i;
+                        case 0x00000700 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMULTH; i.func = i_pmulth; return i;
+                        case 0x00000740 >> 6: i.cycles = CYC_MMI_DIV; i.id = I_PDIVBW; i.func = i_pdivbw; return i;
+                        case 0x00000780 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXEW; i.func = i_pexew; return i;
+                        case 0x000007C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PROT3W; i.func = i_prot3w; return i;
                     }
                 } break;
-                case 0x00000010: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MFHI1; i.func = ee_i_mfhi1; return i;
-                case 0x00000011: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MTHI1; i.func = ee_i_mthi1; return i;
-                case 0x00000012: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MFLO1; i.func = ee_i_mflo1; return i;
-                case 0x00000013: i.cycles = EE_CYC_COP_DEFAULT; i.id = EE_I_MTLO1; i.func = ee_i_mtlo1; return i;
-                case 0x00000018: i.cycles = EE_CYC_MULT; i.id = EE_I_MULT1; i.func = ee_i_mult1; return i;
-                case 0x00000019: i.cycles = EE_CYC_MULT; i.id = EE_I_MULTU1; i.func = ee_i_multu1; return i;
-                case 0x0000001A: i.cycles = EE_CYC_DIV; i.id = EE_I_DIV1; i.func = ee_i_div1; return i;
-                case 0x0000001B: i.cycles = EE_CYC_DIV; i.id = EE_I_DIVU1; i.func = ee_i_divu1; return i;
-                case 0x00000020: i.cycles = EE_CYC_MULT; i.id = EE_I_MADD1; i.func = ee_i_madd1; return i;
-                case 0x00000021: i.cycles = EE_CYC_MULT; i.id = EE_I_MADDU1; i.func = ee_i_maddu1; return i;
+                case 0x00000010: i.cycles = CYC_COP_DEFAULT; i.id = I_MFHI1; i.func = i_mfhi1; return i;
+                case 0x00000011: i.cycles = CYC_COP_DEFAULT; i.id = I_MTHI1; i.func = i_mthi1; return i;
+                case 0x00000012: i.cycles = CYC_COP_DEFAULT; i.id = I_MFLO1; i.func = i_mflo1; return i;
+                case 0x00000013: i.cycles = CYC_COP_DEFAULT; i.id = I_MTLO1; i.func = i_mtlo1; return i;
+                case 0x00000018: i.cycles = CYC_MULT; i.id = I_MULT1; i.func = i_mult1; return i;
+                case 0x00000019: i.cycles = CYC_MULT; i.id = I_MULTU1; i.func = i_multu1; return i;
+                case 0x0000001A: i.cycles = CYC_DIV; i.id = I_DIV1; i.func = i_div1; return i;
+                case 0x0000001B: i.cycles = CYC_DIV; i.id = I_DIVU1; i.func = i_divu1; return i;
+                case 0x00000020: i.cycles = CYC_MULT; i.id = I_MADD1; i.func = i_madd1; return i;
+                case 0x00000021: i.cycles = CYC_MULT; i.id = I_MADDU1; i.func = i_maddu1; return i;
                 case 0x00000028: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000040 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PABSW; i.func = ee_i_pabsw; return i;
-                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCEQW; i.func = ee_i_pceqw; return i;
-                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMINW; i.func = ee_i_pminw; return i;
-                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADSBH; i.func = ee_i_padsbh; return i;
-                        case 0x00000140 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PABSH; i.func = ee_i_pabsh; return i;
-                        case 0x00000180 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCEQH; i.func = ee_i_pceqh; return i;
-                        case 0x000001C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMINH; i.func = ee_i_pminh; return i;
-                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCEQB; i.func = ee_i_pceqb; return i;
-                        case 0x00000400 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDUW; i.func = ee_i_padduw; return i;
-                        case 0x00000440 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBUW; i.func = ee_i_psubuw; return i;
-                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXTUW; i.func = ee_i_pextuw; return i;
-                        case 0x00000500 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDUH; i.func = ee_i_padduh; return i;
-                        case 0x00000540 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBUH; i.func = ee_i_psubuh; return i;
-                        case 0x00000580 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXTUH; i.func = ee_i_pextuh; return i;
-                        case 0x00000600 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PADDUB; i.func = ee_i_paddub; return i;
-                        case 0x00000640 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSUBUB; i.func = ee_i_psubub; return i;
-                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXTUB; i.func = ee_i_pextub; return i;
-                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_QFSRV; i.func = ee_i_qfsrv; return i;
+                        case 0x00000040 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PABSW; i.func = i_pabsw; return i;
+                        case 0x00000080 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCEQW; i.func = i_pceqw; return i;
+                        case 0x000000C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMINW; i.func = i_pminw; return i;
+                        case 0x00000100 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADSBH; i.func = i_padsbh; return i;
+                        case 0x00000140 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PABSH; i.func = i_pabsh; return i;
+                        case 0x00000180 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCEQH; i.func = i_pceqh; return i;
+                        case 0x000001C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMINH; i.func = i_pminh; return i;
+                        case 0x00000280 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCEQB; i.func = i_pceqb; return i;
+                        case 0x00000400 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDUW; i.func = i_padduw; return i;
+                        case 0x00000440 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBUW; i.func = i_psubuw; return i;
+                        case 0x00000480 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXTUW; i.func = i_pextuw; return i;
+                        case 0x00000500 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDUH; i.func = i_padduh; return i;
+                        case 0x00000540 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBUH; i.func = i_psubuh; return i;
+                        case 0x00000580 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXTUH; i.func = i_pextuh; return i;
+                        case 0x00000600 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PADDUB; i.func = i_paddub; return i;
+                        case 0x00000640 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSUBUB; i.func = i_psubub; return i;
+                        case 0x00000680 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXTUB; i.func = i_pextub; return i;
+                        case 0x000006C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_QFSRV; i.func = i_qfsrv; return i;
                     }
                 } break;
                 case 0x00000029: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMADDUW; i.func = ee_i_pmadduw; return i;
-                        case 0x000000C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSRAVW; i.func = ee_i_psravw; return i;
-                        case 0x00000200 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMTHI; i.func = ee_i_pmthi; return i;
-                        case 0x00000240 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMTLO; i.func = ee_i_pmtlo; return i;
-                        case 0x00000280 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PINTEH; i.func = ee_i_pinteh; return i;
-                        case 0x00000300 >> 6: i.cycles = EE_CYC_MMI_MULT; i.id = EE_I_PMULTUW; i.func = ee_i_pmultuw; return i;
-                        case 0x00000340 >> 6: i.cycles = EE_CYC_MMI_DIV; i.id = EE_I_PDIVUW; i.func = ee_i_pdivuw; return i;
-                        case 0x00000380 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCPYUD; i.func = ee_i_pcpyud; return i;
-                        case 0x00000480 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_POR; i.func = ee_i_por; return i;
-                        case 0x000004C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PNOR; i.func = ee_i_pnor; return i;
-                        case 0x00000680 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXCH; i.func = ee_i_pexch; return i;
-                        case 0x000006C0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PCPYH; i.func = ee_i_pcpyh; return i;
-                        case 0x00000780 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PEXCW; i.func = ee_i_pexcw; return i;
+                        case 0x00000000 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMADDUW; i.func = i_pmadduw; return i;
+                        case 0x000000C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSRAVW; i.func = i_psravw; return i;
+                        case 0x00000200 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMTHI; i.func = i_pmthi; return i;
+                        case 0x00000240 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMTLO; i.func = i_pmtlo; return i;
+                        case 0x00000280 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PINTEH; i.func = i_pinteh; return i;
+                        case 0x00000300 >> 6: i.cycles = CYC_MMI_MULT; i.id = I_PMULTUW; i.func = i_pmultuw; return i;
+                        case 0x00000340 >> 6: i.cycles = CYC_MMI_DIV; i.id = I_PDIVUW; i.func = i_pdivuw; return i;
+                        case 0x00000380 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCPYUD; i.func = i_pcpyud; return i;
+                        case 0x00000480 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_POR; i.func = i_por; return i;
+                        case 0x000004C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PNOR; i.func = i_pnor; return i;
+                        case 0x00000680 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXCH; i.func = i_pexch; return i;
+                        case 0x000006C0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PCPYH; i.func = i_pcpyh; return i;
+                        case 0x00000780 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PEXCW; i.func = i_pexcw; return i;
                     }
                 } break;
                 case 0x00000030: {
                     switch ((opcode & 0x000007C0) >> 6) {
-                        case 0x00000000 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMFHLLW; i.func = ee_i_pmfhllw; return i;
-                        case 0x00000040 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMFHLUW; i.func = ee_i_pmfhluw; return i;
-                        case 0x00000080 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMFHLSLW; i.func = ee_i_pmfhlslw; return i;
-                        case 0x000000c0 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMFHLLH; i.func = ee_i_pmfhllh; return i;
-                        case 0x00000100 >> 6: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMFHLSH; i.func = ee_i_pmfhlsh; return i;
+                        case 0x00000000 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMFHLLW; i.func = i_pmfhllw; return i;
+                        case 0x00000040 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMFHLUW; i.func = i_pmfhluw; return i;
+                        case 0x00000080 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMFHLSLW; i.func = i_pmfhlslw; return i;
+                        case 0x000000c0 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMFHLLH; i.func = i_pmfhllh; return i;
+                        case 0x00000100 >> 6: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMFHLSH; i.func = i_pmfhlsh; return i;
                     }
                 } break;
-                case 0x00000031: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PMTHL; i.func = ee_i_pmthl; return i;
-                case 0x00000034: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSLLH; i.func = ee_i_psllh; return i;
-                case 0x00000036: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSRLH; i.func = ee_i_psrlh; return i;
-                case 0x00000037: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSRAH; i.func = ee_i_psrah; return i;
-                case 0x0000003C: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSLLW; i.func = ee_i_psllw; return i;
-                case 0x0000003E: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSRLW; i.func = ee_i_psrlw; return i;
-                case 0x0000003F: i.cycles = EE_CYC_MMI_DEFAULT; i.id = EE_I_PSRAW; i.func = ee_i_psraw; return i;
+                case 0x00000031: i.cycles = CYC_MMI_DEFAULT; i.id = I_PMTHL; i.func = i_pmthl; return i;
+                case 0x00000034: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSLLH; i.func = i_psllh; return i;
+                case 0x00000036: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSRLH; i.func = i_psrlh; return i;
+                case 0x00000037: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSRAH; i.func = i_psrah; return i;
+                case 0x0000003C: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSLLW; i.func = i_psllw; return i;
+                case 0x0000003E: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSRLW; i.func = i_psrlw; return i;
+                case 0x0000003F: i.cycles = CYC_MMI_DEFAULT; i.id = I_PSRAW; i.func = i_psraw; return i;
             }
         } break;
-        case 0x78000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LQ; i.func = ee_i_lq; return i;
-        case 0x7C000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_SQ; i.func = ee_i_sq; return i;
-        case 0x80000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LB; i.func = ee_i_lb; return i;
-        case 0x84000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LH; i.func = ee_i_lh; return i;
-        case 0x88000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LWL; i.func = ee_i_lwl; return i;
-        case 0x8C000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LW; i.func = ee_i_lw; return i;
-        case 0x90000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LBU; i.func = ee_i_lbu; return i;
-        case 0x94000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LHU; i.func = ee_i_lhu; return i;
-        case 0x98000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LWR; i.func = ee_i_lwr; return i;
-        case 0x9C000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LWU; i.func = ee_i_lwu; return i;
-        case 0xA0000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SB; i.func = ee_i_sb; return i;
-        case 0xA4000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SH; i.func = ee_i_sh; return i;
-        case 0xA8000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SWL; i.func = ee_i_swl; return i;
-        case 0xAC000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SW; i.func = ee_i_sw; return i;
-        case 0xB0000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SDL; i.func = ee_i_sdl; return i;
-        case 0xB4000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SDR; i.func = ee_i_sdr; return i;
-        case 0xB8000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SWR; i.func = ee_i_swr; return i;
-        case 0xBC000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.branch = 2; i.id = EE_I_CACHE; i.func = ee_i_cache; return i;
-        case 0xC4000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LWC1; i.func = ee_i_lwc1; return i;
-        case 0xCC000000 >> 26: i.cycles = EE_CYC_DEFAULT; i.id = EE_I_PREF; i.func = ee_i_pref; return i;
-        case 0xD8000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LQC2; i.func = ee_i_lqc2; return i;
-        case 0xDC000000 >> 26: i.cycles = EE_CYC_LOAD; i.id = EE_I_LD; i.func = ee_i_ld; return i;
-        case 0xE4000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SWC1; i.func = ee_i_swc1; return i;
-        case 0xF8000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SQC2; i.func = ee_i_sqc2; return i;
-        case 0xFC000000 >> 26: i.cycles = EE_CYC_STORE; i.id = EE_I_SD; i.func = ee_i_sd; return i;
+        case 0x78000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LQ; i.func = i_lq; return i;
+        case 0x7C000000 >> 26: i.cycles = CYC_LOAD; i.id = I_SQ; i.func = i_sq; return i;
+        case 0x80000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LB; i.func = i_lb; return i;
+        case 0x84000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LH; i.func = i_lh; return i;
+        case 0x88000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LWL; i.func = i_lwl; return i;
+        case 0x8C000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LW; i.func = i_lw; return i;
+        case 0x90000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LBU; i.func = i_lbu; return i;
+        case 0x94000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LHU; i.func = i_lhu; return i;
+        case 0x98000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LWR; i.func = i_lwr; return i;
+        case 0x9C000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LWU; i.func = i_lwu; return i;
+        case 0xA0000000 >> 26: i.cycles = CYC_STORE; i.id = I_SB; i.func = i_sb; return i;
+        case 0xA4000000 >> 26: i.cycles = CYC_STORE; i.id = I_SH; i.func = i_sh; return i;
+        case 0xA8000000 >> 26: i.cycles = CYC_STORE; i.id = I_SWL; i.func = i_swl; return i;
+        case 0xAC000000 >> 26: i.cycles = CYC_STORE; i.id = I_SW; i.func = i_sw; return i;
+        case 0xB0000000 >> 26: i.cycles = CYC_STORE; i.id = I_SDL; i.func = i_sdl; return i;
+        case 0xB4000000 >> 26: i.cycles = CYC_STORE; i.id = I_SDR; i.func = i_sdr; return i;
+        case 0xB8000000 >> 26: i.cycles = CYC_STORE; i.id = I_SWR; i.func = i_swr; return i;
+        case 0xBC000000 >> 26: i.cycles = CYC_DEFAULT; i.branch = 2; i.id = I_CACHE; i.func = i_cache; return i;
+        case 0xC4000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LWC1; i.func = i_lwc1; return i;
+        case 0xCC000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_PREF; i.func = i_pref; return i;
+        case 0xD8000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LQC2; i.func = i_lqc2; return i;
+        case 0xDC000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LD; i.func = i_ld; return i;
+        case 0xE4000000 >> 26: i.cycles = CYC_STORE; i.id = I_SWC1; i.func = i_swc1; return i;
+        case 0xF8000000 >> 26: i.cycles = CYC_STORE; i.id = I_SQC2; i.func = i_sqc2; return i;
+        case 0xFC000000 >> 26: i.cycles = CYC_STORE; i.id = I_SD; i.func = i_sd; return i;
     }
 
-    i.id = EE_I_INVALID; i.func = ee_i_invalid;
+    i.id = I_INVALID; i.func = i_invalid;
 
     return i;
 }
 
-static inline ee_sub_block ee_decode_sub_block(struct ee_state* ee, uint32_t pc, int max_cycles, std::vector<ee_instruction>& out) {
-    ee_sub_block sb;
+static inline SubBlock decode_sub_block(Ee* ee, uint32_t pc, int max_cycles, std::vector<Instruction>& out) {
+    SubBlock sb;
 
     sb.start_pc = pc;
     sb.end_pc = pc;
     sb.cycles = 0;
     sb.first = (uint32_t)out.size();
     sb.count = 0;
-    sb.term = EE_TERM_FALLTHROUGH;
+    sb.term = TERM_FALLTHROUGH;
     sb.branch_idx = -1;
     sb.succ_pc[0] = sb.succ_pc[1] = 0;
     sb.has_succ[0] = sb.has_succ[1] = false;
     sb.succ[0] = sb.succ[1] = -1;
     sb.back_edge_target = false;
 
-    ee_instruction i;
+    Instruction i;
 
     bool delay_slot = false;
 
@@ -4230,7 +4192,7 @@ static inline ee_sub_block ee_decode_sub_block(struct ee_state* ee, uint32_t pc,
         ee->opcode = bus_read32(ee, sb.end_pc);
 
         if (ee->opcode != 0) {
-            i = ee_decode(ee->opcode);
+            i = decode(ee->opcode);
 
             out.push_back(i);
 
@@ -4240,9 +4202,7 @@ static inline ee_sub_block ee_decode_sub_block(struct ee_state* ee, uint32_t pc,
         }
 
         if (i.branch == 1 && delay_slot) {
-            fprintf(stderr, "ee: Branch in delay slot at PC=%08x (Unhandled edge case)\n", sb.end_pc);
-
-            exit(1);
+            iris_fatal_error(ee, "Branch in delay slot at PC={:08x} (Unhandled edge case)", sb.end_pc);
         }
 
         sb.cycles++; // += i.cycles;
@@ -4250,12 +4210,12 @@ static inline ee_sub_block ee_decode_sub_block(struct ee_state* ee, uint32_t pc,
         if (i.branch == 1 || i.branch == 3) {
             delay_slot = true;
 
-            sb.term = i.branch == 1 ? EE_TERM_BRANCH : EE_TERM_LIKELY;
+            sb.term = i.branch == 1 ? TERM_BRANCH : TERM_LIKELY;
             sb.branch_idx = (int32_t)sb.count - 1;
 
             max_cycles = 2;
         } else if (i.branch != 0) {
-            sb.term = EE_TERM_EXCEPT;
+            sb.term = TERM_EXCEPT;
             sb.branch_idx = (int32_t)sb.count - 1;
 
             max_cycles = 1;
@@ -4264,7 +4224,7 @@ static inline ee_sub_block ee_decode_sub_block(struct ee_state* ee, uint32_t pc,
         // Arbitrarily big number for MMI instructions, perf benefits from
         // long MMI sequences, keeping guest SIMD regs in host SIMD regs
         // longer is good
-        // if (i.cycles == EE_CYC_MMI_DEFAULT && !delay_slot) {
+        // if (i.cycles == CYC_MMI_DEFAULT && !delay_slot) {
         //     max_cycles = 16;
         // }
 
@@ -4276,34 +4236,34 @@ static inline ee_sub_block ee_decode_sub_block(struct ee_state* ee, uint32_t pc,
     return sb;
 }
 
-static inline bool ee_branch_is_pcrel(int id) {
+static inline bool branch_is_pcrel(int id) {
     switch (id) {
-        case EE_I_BEQ:  case EE_I_BNE:  case EE_I_BEQL: case EE_I_BNEL:
-        case EE_I_BLTZ: case EE_I_BGEZ: case EE_I_BLEZ: case EE_I_BGTZ:
-        case EE_I_BLTZL: case EE_I_BGEZL: case EE_I_BLEZL: case EE_I_BGTZL:
-        case EE_I_BLTZAL: case EE_I_BGEZAL: case EE_I_BLTZALL: case EE_I_BGEZALL:
-        case EE_I_BC0F: case EE_I_BC0T: case EE_I_BC0FL: case EE_I_BC0TL:
-        case EE_I_BC1F: case EE_I_BC1T: case EE_I_BC1FL: case EE_I_BC1TL:
+        case I_BEQ:  case I_BNE:  case I_BEQL: case I_BNEL:
+        case I_BLTZ: case I_BGEZ: case I_BLEZ: case I_BGTZ:
+        case I_BLTZL: case I_BGEZL: case I_BLEZL: case I_BGTZL:
+        case I_BLTZAL: case I_BGEZAL: case I_BLTZALL: case I_BGEZALL:
+        case I_BC0F: case I_BC0T: case I_BC0FL: case I_BC0TL:
+        case I_BC1F: case I_BC1T: case I_BC1FL: case I_BC1TL:
             return true;
     }
 
     return false;
 }
 
-static inline void ee_successors(const struct ee_block& block, ee_sub_block& sb) {
-    if (sb.term == EE_TERM_FALLTHROUGH) {
+static inline void successors(const Block& block, SubBlock& sb) {
+    if (sb.term == TERM_FALLTHROUGH) {
         sb.succ_pc[0] = sb.end_pc;
         sb.has_succ[0] = true;
 
         return;
     }
 
-    if (sb.term != EE_TERM_BRANCH && sb.term != EE_TERM_LIKELY) return;
+    if (sb.term != TERM_BRANCH && sb.term != TERM_LIKELY) return;
     if (sb.branch_idx < 0) return;
 
-    const ee_instruction& br = block.instructions[sb.first + sb.branch_idx];
+    const Instruction& br = block.instructions[sb.first + sb.branch_idx];
 
-    if (!ee_branch_is_pcrel(br.id)) return;
+    if (!branch_is_pcrel(br.id)) return;
 
     int32_t off = (int32_t)(br.i16 << 16) >> 14;
 
@@ -4312,34 +4272,34 @@ static inline void ee_successors(const struct ee_block& block, ee_sub_block& sb)
     sb.has_succ[0] = true;
     sb.has_succ[1] = true;
 
-    bool is_rr = br.id == EE_I_BEQ || br.id == EE_I_BNE ||
-                 br.id == EE_I_BEQL || br.id == EE_I_BNEL;
+    bool is_rr = br.id == I_BEQ || br.id == I_BNE ||
+                 br.id == I_BEQL || br.id == I_BNEL;
 
     if (is_rr && br.rs.r == br.rt.r) {
-        bool eq = br.id == EE_I_BEQ || br.id == EE_I_BEQL;
+        bool eq = br.id == I_BEQ || br.id == I_BEQL;
 
         sb.has_succ[0] = !eq;
         sb.has_succ[1] = eq;
     }
 }
 
-static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycles) {
+static inline Block* cache_block(Ee* ee, int max_cycles) {
     uint32_t phys;
 
-    ee_translate_virt(ee, ee->pc, &phys);
+    translate_virt(ee, ee->pc, &phys);
 
-    uint32_t page = phys / EE_MIN_PAGESIZE;
-    uint32_t offset = (phys & (EE_MIN_PAGESIZE - 1)) >> 2;
+    uint32_t page = phys / MIN_PAGESIZE;
+    uint32_t offset = (phys & (MIN_PAGESIZE - 1)) >> 2;
 
     if (!ee->block_cache[page].valid) {
-        ee->block_cache[page].blocks = new struct ee_block[EE_MIN_PAGESIZE >> 2];
+        ee->block_cache[page].blocks = new Block[MIN_PAGESIZE >> 2];
         ee->block_cache[page].dirty = false;
         ee->block_cache[page].valid = true;
         ee->block_cache[page].min_code_addr = ee->pc;
         ee->block_cache[page].max_code_addr = ee->pc;
     }
 
-    struct ee_block& block = ee->block_cache[page].blocks[offset];
+    Block& block = ee->block_cache[page].blocks[offset];
 
 #ifdef _EE_DISABLE_CACHE
     block.instructions.clear();
@@ -4355,9 +4315,9 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
 
     ee->sub_blocks.clear();
 
-    bool grow = max_cycles >= EE_BLOCK_MAX_INSTRS;
+    bool grow = max_cycles >= BLOCK_MAX_INSTRS;
 
-    uint32_t page_base = ee->pc & ~(uint32_t)(EE_MIN_PAGESIZE - 1);
+    uint32_t page_base = ee->pc & ~(uint32_t)(MIN_PAGESIZE - 1);
 
     std::vector <uint32_t> pending;
 
@@ -4370,7 +4330,7 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
 
         bool seen = false;
 
-        for (const ee_sub_block& s : ee->sub_blocks) {
+        for (const SubBlock& s : ee->sub_blocks) {
             if (s.start_pc == pc) {
                 seen = true;
                 break;
@@ -4383,26 +4343,26 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
             if (!grow)
                 break;
 
-            if (ee->sub_blocks.size() >= (size_t)EE_REGION_MAX_BLOCKS)
+            if (ee->sub_blocks.size() >= (size_t)REGION_MAX_BLOCKS)
                 break;
 
-            if (block.instructions.size() >= EE_REGION_MAX_INSTRS)
+            if (block.instructions.size() >= REGION_MAX_INSTRS)
                 break;
         }
 
-        ee->sub_blocks.push_back(ee_decode_sub_block(ee, pc, max_cycles, block.instructions));
+        ee->sub_blocks.push_back(decode_sub_block(ee, pc, max_cycles, block.instructions));
 
         if (!grow) break;
 
-        ee_successors(block, ee->sub_blocks.back());
+        successors(block, ee->sub_blocks.back());
 
-        const ee_sub_block& sb = ee->sub_blocks.back();
+        const SubBlock& sb = ee->sub_blocks.back();
 
         for (int e = 1; e >= 0; e--) {
             if (!sb.has_succ[e])
                 continue;
 
-            if ((sb.succ_pc[e] & ~(uint32_t)(EE_MIN_PAGESIZE - 1)) != page_base)
+            if ((sb.succ_pc[e] & ~(uint32_t)(MIN_PAGESIZE - 1)) != page_base)
                 continue;
 
             pending.push_back(sb.succ_pc[e]);
@@ -4410,7 +4370,7 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
     }
 
     for (size_t k = 0; k < ee->sub_blocks.size(); k++) {
-        ee_sub_block& s = ee->sub_blocks[k];
+        SubBlock& s = ee->sub_blocks[k];
 
         for (int e = 0; e < 2; e++) {
             if (!s.has_succ[e]) continue;
@@ -4433,7 +4393,7 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
     block.end_pc = ee->sub_blocks.front().end_pc;
     block.cycles = ee->sub_blocks.front().cycles;
 
-    for (const ee_sub_block& s : ee->sub_blocks) {
+    for (const SubBlock& s : ee->sub_blocks) {
         if (ee->block_cache[page].max_code_addr < s.end_pc) {
             ee->block_cache[page].max_code_addr = s.end_pc;
         }
@@ -4446,14 +4406,14 @@ static inline struct ee_block* ee_cache_block(struct ee_state* ee, int max_cycle
     return &block;
 }
 
-void ee_compile_block(struct ee_state* ee, struct ee_block* block);
+void compile_block(Ee* ee, Block* block);
 
-static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
+static inline Block* find_block(Ee* ee, uint32_t pc) {
 #ifdef _EE_DISABLE_CACHE
     return nullptr;
 #endif
 
-    ee_block_lut_entry& lut = ee->block_lut[(pc >> 2) & EE_BLOCK_LUT_MASK];
+    BlockLutEntry& lut = ee->block_lut[(pc >> 2) & BLOCK_LUT_MASK];
 
     if (lut.pc == pc && lut.gen == ee->block_lut_gen) {
         return lut.block;
@@ -4461,9 +4421,9 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
 
     uint32_t phys;
 
-    ee_translate_virt(ee, ee->pc, &phys);
+    translate_virt(ee, ee->pc, &phys);
 
-    uint32_t page = phys / EE_MIN_PAGESIZE;
+    uint32_t page = phys / MIN_PAGESIZE;
 
     if (!ee->block_cache[page].valid) {
         return nullptr;
@@ -4484,9 +4444,9 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
         return nullptr;
     }
 
-    uint32_t offset = (phys & (EE_MIN_PAGESIZE - 1)) >> 2;
+    uint32_t offset = (phys & (MIN_PAGESIZE - 1)) >> 2;
 
-    struct ee_block& block = ee->block_cache[page].blocks[offset];
+    Block& block = ee->block_cache[page].blocks[offset];
 
     if (!block.cycles) {
         return nullptr;
@@ -4499,41 +4459,41 @@ static inline struct ee_block* ee_find_block(struct ee_state* ee, uint32_t pc) {
     return &block;
 }
 
-#define EE(m) ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, m))
+#define EE(m) ujit::mem_ptr(ee->state_ptr, offsetof(Ee, m))
 
-static inline void ee_flush_vec(struct ee_state* ee, asmjit::ujit::UniCompiler* uc, int i) {
+static inline void flush_vec(Ee* ee, asmjit::ujit::UniCompiler* uc, int i) {
     using namespace asmjit;
 
     if (!ee->vec_cache[i].valid) return;
 
     if (ee->vec_cache[i].dirty) {
-        uc->v_storeu128(ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)), ee->vec_cache[i].vec);
+        uc->v_storeu128(ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i * sizeof(uint128_t)), ee->vec_cache[i].vec);
     }
 
     ee->vec_cache[i].valid = false;
     ee->vec_cache[i].dirty = false;
 }
 
-static inline void ee_materialize_const(struct ee_state* ee, asmjit::ujit::UniCompiler* uc, int i) {
+static inline void materialize_const(Ee* ee, asmjit::ujit::UniCompiler* uc, int i) {
     ee->reg_cache[i].reg = uc->new_gp64();
     uc->mov(ee->reg_cache[i].reg, asmjit::Imm((int64_t)ee->reg_cache[i].value));
     ee->reg_cache[i].valid = true;
 }
 
-static inline void ee_set_const(struct ee_state* ee, asmjit::ujit::UniCompiler* uc, int i, uint64_t value) {
+static inline void set_const(Ee* ee, asmjit::ujit::UniCompiler* uc, int i, uint64_t value) {
     if (!i) return;
 
-    ee_flush_vec(ee, uc, i);
+    flush_vec(ee, uc, i);
 
     ee->reg_cache[i].constant = true;
     ee->reg_cache[i].valid = false;
     ee->reg_cache[i].value = value;
 }
 
-static inline ee_cached_reg& ee_get_reg(struct ee_state* ee, asmjit::ujit::UniCompiler* uc, int i, bool sync = true, bool b64 = true) {
+static inline CachedReg& get_reg(Ee* ee, asmjit::ujit::UniCompiler* uc, int i, bool sync = true, bool b64 = true) {
     using namespace asmjit;
 
-    ee_flush_vec(ee, uc, i);
+    flush_vec(ee, uc, i);
 
     if (!ee->reg_cache[i].valid) {
         ee->reg_cache[i].reg = b64 ? uc->new_gp64() : uc->new_gp32();
@@ -4542,9 +4502,9 @@ static inline ee_cached_reg& ee_get_reg(struct ee_state* ee, asmjit::ujit::UniCo
             if (ee->reg_cache[i].constant) {
                 uc->mov(ee->reg_cache[i].reg, Imm((int64_t)ee->reg_cache[i].value));
             } else if (b64) {
-                uc->load_u64(ee->reg_cache[i].reg, ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)));
+                uc->load_u64(ee->reg_cache[i].reg, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i * sizeof(uint128_t)));
             } else {
-                uc->load_u32(ee->reg_cache[i].reg, ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)));
+                uc->load_u32(ee->reg_cache[i].reg, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i * sizeof(uint128_t)));
             }
         }
 
@@ -4556,13 +4516,13 @@ static inline ee_cached_reg& ee_get_reg(struct ee_state* ee, asmjit::ujit::UniCo
     return ee->reg_cache[i];
 }
 
-static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniCompiler* uc) {
+static inline void flush_reg_cache(Ee* ee, asmjit::ujit::UniCompiler* uc) {
     using namespace asmjit;
 
     for (int i = 0; i < 32; i++) {
         if (ee->vec_cache[i].valid) {
             if (ee->vec_cache[i].dirty) {
-                uc->v_storeu128(ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)), ee->vec_cache[i].vec);
+                uc->v_storeu128(ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i * sizeof(uint128_t)), ee->vec_cache[i].vec);
             }
 
             ee->vec_cache[i].valid = false;
@@ -4570,11 +4530,11 @@ static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniComp
         }
 
         if (!ee->reg_cache[i].valid && ee->reg_cache[i].constant) {
-            ee_materialize_const(ee, uc, i);
+            materialize_const(ee, uc, i);
         }
 
         if (ee->reg_cache[i].valid) {
-            uc->store_u64(ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i * sizeof(uint128_t)), ee->reg_cache[i].reg);
+            uc->store_u64(ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i * sizeof(uint128_t)), ee->reg_cache[i].reg);
         }
 
         ee->reg_cache[i].valid = false;
@@ -4582,7 +4542,7 @@ static inline void ee_flush_reg_cache(struct ee_state* ee, asmjit::ujit::UniComp
     }
 }
 
-static inline void ee_sext32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& dst, const asmjit::ujit::Gp& src) {
+static inline void sext32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& dst, const asmjit::ujit::Gp& src) {
 #if defined(ASMJIT_UJIT_AARCH64)
     uc.cc->sxtw(dst.r64(), src.r32());
 #else
@@ -4590,11 +4550,11 @@ static inline void ee_sext32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::
 #endif
 }
 
-static inline void ee_sext32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& reg) {
-    ee_sext32(uc, reg, reg);
+static inline void sext32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& reg) {
+    sext32(uc, reg, reg);
 }
 
-static inline void ee_store_imm32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Mem& dst, uint32_t value) {
+static inline void store_imm32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Mem& dst, uint32_t value) {
 #if defined(ASMJIT_UJIT_AARCH64)
     asmjit::ujit::Gp tmp = uc.new_gp32();
 
@@ -4609,7 +4569,7 @@ static inline void ee_store_imm32(asmjit::ujit::UniCompiler& uc, const asmjit::u
 #endif
 }
 
-static inline void ee_sub_imm32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Mem& dst, uint32_t value) {
+static inline void sub_imm32(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Mem& dst, uint32_t value) {
 #if defined(ASMJIT_UJIT_AARCH64)
     asmjit::ujit::Gp tmp = uc.new_gp32();
 
@@ -4625,14 +4585,14 @@ static inline void ee_sub_imm32(asmjit::ujit::UniCompiler& uc, const asmjit::uji
 #endif
 }
 
-static inline void ee_sextn(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& reg, uint32_t bits) {
+static inline void sextn(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& reg, uint32_t bits) {
     uint32_t shift = 64u - bits;
 
     uc.shl(reg.r64(), reg.r64(), asmjit::Imm(shift));
     uc.sar(reg.r64(), reg.r64(), asmjit::Imm(shift));
 }
 
-static inline void ee_load_reg_vec128(struct ee_state* ee, asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Vec& dst, int idx) {
+static inline void load_reg_vec128(Ee* ee, asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Vec& dst, int idx) {
     using namespace asmjit;
 
     uc.v_loadu128(dst, EE(r[idx]));
@@ -4642,7 +4602,7 @@ static inline void ee_load_reg_vec128(struct ee_state* ee, asmjit::ujit::UniComp
     }
 }
 
-static inline asmjit::ujit::Vec ee_get_vec(struct ee_state* ee, asmjit::ujit::UniCompiler& uc, int idx) {
+static inline asmjit::ujit::Vec get_vec(Ee* ee, asmjit::ujit::UniCompiler& uc, int idx) {
     using namespace asmjit;
 
     if (ee->vec_cache[idx].valid) {
@@ -4650,7 +4610,7 @@ static inline asmjit::ujit::Vec ee_get_vec(struct ee_state* ee, asmjit::ujit::Un
     }
 
     if (ee->reg_cache[idx].constant && !ee->reg_cache[idx].valid) {
-        ee_materialize_const(ee, &uc, idx);
+        materialize_const(ee, &uc, idx);
     }
 
     ujit::Vec v = uc.new_vec128();
@@ -4673,7 +4633,7 @@ static inline asmjit::ujit::Vec ee_get_vec(struct ee_state* ee, asmjit::ujit::Un
     return v;
 }
 
-static inline void ee_set_vec(struct ee_state* ee, asmjit::ujit::UniCompiler& uc, int idx, const asmjit::ujit::Vec& v) {
+static inline void set_vec(Ee* ee, asmjit::ujit::UniCompiler& uc, int idx, const asmjit::ujit::Vec& v) {
     ee->vec_cache[idx].vec = v;
     ee->vec_cache[idx].valid = true;
     ee->vec_cache[idx].dirty = true;
@@ -4681,27 +4641,27 @@ static inline void ee_set_vec(struct ee_state* ee, asmjit::ujit::UniCompiler& uc
     ee->reg_cache[idx].constant = false;
 }
 
-static inline void ee_sync_reg_to_mem(struct ee_state* ee, asmjit::ujit::UniCompiler& uc, int idx) {
+static inline void sync_reg_to_mem(Ee* ee, asmjit::ujit::UniCompiler& uc, int idx) {
     using namespace asmjit;
 
     if (ee->vec_cache[idx].valid) {
         if (ee->vec_cache[idx].dirty) {
-            uc.v_storeu128(ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + idx * sizeof(uint128_t)), ee->vec_cache[idx].vec);
+            uc.v_storeu128(ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + idx * sizeof(uint128_t)), ee->vec_cache[idx].vec);
             ee->vec_cache[idx].dirty = false;
         }
     } else if (ee->reg_cache[idx].valid) {
-        uc.store_u64(ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + idx * sizeof(uint128_t)), ee->reg_cache[idx].reg);
+        uc.store_u64(ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + idx * sizeof(uint128_t)), ee->reg_cache[idx].reg);
     } else if (ee->reg_cache[idx].constant) {
-        ee_materialize_const(ee, &uc, idx);
-        uc.store_u64(ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + idx * sizeof(uint128_t)), ee->reg_cache[idx].reg);
+        materialize_const(ee, &uc, idx);
+        uc.store_u64(ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + idx * sizeof(uint128_t)), ee->reg_cache[idx].reg);
     }
 }
 
-enum { EE_MMI_WR_RD = 1, EE_MMI_WR_HI = 2, EE_MMI_WR_LO = 4 };
+enum { MMI_WR_RD = 1, MMI_WR_HI = 2, MMI_WR_LO = 4 };
 
-typedef void (*ee_wide_emit_fn)(asmjit::ujit::UniCompiler&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&);
+typedef void (*WideEmitFn)(asmjit::ujit::UniCompiler&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&, const asmjit::ujit::Vec&);
 
-static inline void ee_emit_mmi_wide(struct ee_state* ee, asmjit::ujit::UniCompiler& uc, const ee_instruction& i, ee_wide_emit_fn emit, unsigned wmask, bool reads_st) {
+static inline void emit_mmi_wide(Ee* ee, asmjit::ujit::UniCompiler& uc, const Instruction& i, WideEmitFn emit, unsigned wmask, bool reads_st) {
     using namespace asmjit;
 
     ujit::Vec vhi = uc.new_vec128();
@@ -4713,28 +4673,28 @@ static inline void ee_emit_mmi_wide(struct ee_state* ee, asmjit::ujit::UniCompil
     ujit::Vec vrs = vhi, vrt = vhi;
 
     if (reads_st) {
-        vrs = ee_get_vec(ee, uc, i.rs.r);
-        vrt = ee_get_vec(ee, uc, i.rt.r);
+        vrs = get_vec(ee, uc, i.rs.r);
+        vrt = get_vec(ee, uc, i.rt.r);
     }
 
-    ujit::Vec vrd = (wmask & EE_MMI_WR_RD) ? uc.new_vec128() : vhi;
+    ujit::Vec vrd = (wmask & MMI_WR_RD) ? uc.new_vec128() : vhi;
 
     emit(uc, vrd, vhi, vlo, vrs, vrt);
 
-    if ((wmask & EE_MMI_WR_RD) && i.rd.r) {
-        ee_set_vec(ee, uc, i.rd.r, vrd);
+    if ((wmask & MMI_WR_RD) && i.rd.r) {
+        set_vec(ee, uc, i.rd.r, vrd);
     }
     
-    if (wmask & EE_MMI_WR_HI) {
+    if (wmask & MMI_WR_HI) {
         uc.v_storeu128(EE(hi), vhi);
     }
 
-    if (wmask & EE_MMI_WR_LO) {
+    if (wmask & MMI_WR_LO) {
        uc.v_storeu128(EE(lo), vlo);
     }
 }
 
-static inline bool ee_reg_is_const(struct ee_state* ee, int r, uint64_t* v) {
+static inline bool reg_is_const(Ee* ee, int r, uint64_t* v) {
     if (r == 0) {
         *v = 0;
         
@@ -4750,11 +4710,11 @@ static inline bool ee_reg_is_const(struct ee_state* ee, int r, uint64_t* v) {
     return false;
 }
 
-static inline bool ee_one_const(struct ee_state* ee, int ra, int rb, uint64_t* c, int* other) {
+static inline bool one_const(Ee* ee, int ra, int rb, uint64_t* c, int* other) {
     uint64_t va, vb;
 
-    bool ca = ee_reg_is_const(ee, ra, &va);
-    bool cb = ee_reg_is_const(ee, rb, &vb);
+    bool ca = reg_is_const(ee, ra, &va);
+    bool cb = reg_is_const(ee, rb, &vb);
 
     if (ca == cb)
         return false;
@@ -4765,32 +4725,32 @@ static inline bool ee_one_const(struct ee_state* ee, int ra, int rb, uint64_t* c
     return true;
 }
 
-static inline bool ee_fits_imm32(uint64_t c) {
+static inline bool fits_imm32(uint64_t c) {
     return c == (uint64_t)(int64_t)(int32_t)c;
 }
 
 static int n = 0;
 
-void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
+void compile_block(Ee* ee, Block* block) {
     using namespace asmjit;
 
     CodeHolder code;
 
     code.init(ee->rt.environment(), ee->rt.cpu_features());
-    // code.set_logger(ee->logger);
+    // code.set_logger(ee->jit_logger);
 
     // if (code.logger()) {
-    //     printf("---------------------------------- Block at PC=%08x, %zu sub-blocks, %zu instructions\n", block->start_pc, ee->sub_blocks.size(), block->instructions.size());
+    //     iris_debug(ee, "---------------------------------- Block at PC={:08x}, {} sub-blocks, {} instructions", block->start_pc, ee->sub_blocks.size(), block->instructions.size());
     // }
 
     ujit::BackendCompiler bc(&code);
     ujit::UniCompiler uc(&bc, ee->rt.cpu_features(), ee->rt.cpu_hints());
 
-    FuncNode* func = uc.add_func(FuncSignature::build<void, ee_state*>());
+    FuncNode* func = uc.add_func(FuncSignature::build<void, Ee*>());
 
-    ee->ee_ptr = uc.new_gp_ptr();
+    ee->state_ptr = uc.new_gp_ptr();
 
-    func->set_arg(0, ee->ee_ptr);
+    func->set_arg(0, ee->state_ptr);
 
     asmjit::Label block_exit = uc.new_label();
 
@@ -4802,11 +4762,11 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
     uint32_t region_phys;
 
-    ee_translate_virt(ee, block->start_pc, &region_phys);
+    translate_virt(ee, block->start_pc, &region_phys);
 
-    const bool* region_dirty = &ee->block_cache[region_phys / EE_MIN_PAGESIZE].dirty;
+    const bool* region_dirty = &ee->block_cache[region_phys / MIN_PAGESIZE].dirty;
 
-    const ee_sub_block* cur_sb = &ee->sub_blocks[0];
+    const SubBlock* cur_sb = &ee->sub_blocks[0];
 
     size_t cur_sb_i = 0;
 
@@ -4818,7 +4778,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     auto sb_links = [&]() { return cur_sb->succ[0] >= 0 || cur_sb->succ[1] >= 0; };
 
     auto emit_branch_target = [&](int32_t off) {
-        ee_store_imm32(uc, EE(next_pc), (sb_end_pc - 4) + off);
+        store_imm32(uc, EE(next_pc), (sb_end_pc - 4) + off);
     };
 
     auto emit_edge = [&](int side, int32_t off) {
@@ -4826,7 +4786,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
         if (side == 1) emit_branch_target(off);
 
-        ee_flush_reg_cache(ee, &uc);
+        flush_reg_cache(ee, &uc);
 
         if (s < 0) {
             uc.j(block_exit);
@@ -4856,7 +4816,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     };
 
     auto emit_branch_likely = [&](const ujit::UniCondition& taken, int32_t off) {
-        ee_flush_reg_cache(ee, &uc);
+        flush_reg_cache(ee, &uc);
 
         Label l_taken = uc.new_label();
 
@@ -4872,7 +4832,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     };
 
     auto emit_link = [&]() {
-        ee_cached_reg& ra = ee_get_reg(ee, &uc, 31, false);
+        CachedReg& ra = get_reg(ee, &uc, 31, false);
 
         uc.mov(ra.reg, Imm((uint64_t)sb_end_pc));
     };
@@ -4883,84 +4843,84 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             else emit_branch_target(off);
         } else if (likely) {
             if (sb_links()) { emit_edge(0, off); pending = PEND_DONE; }
-            else { ee_flush_reg_cache(ee, &uc); uc.ret(); }
+            else { flush_reg_cache(ee, &uc); uc.ret(); }
         }
     };
 
-    enum { EE_ZC_LTZ, EE_ZC_GEZ, EE_ZC_LEZ, EE_ZC_GTZ };
+    enum { ZC_LTZ, ZC_GEZ, ZC_LEZ, ZC_GTZ };
 
-    auto emit_branch_z = [&](const ee_instruction& i, int op, bool likely, bool link) {
+    auto emit_branch_z = [&](const Instruction& i, int op, bool likely, bool link) {
         if (link) emit_link();
 
         uint64_t cs;
 
-        if (!sb_links() && ee_reg_is_const(ee, i.rs.r, &cs)) {
+        if (!sb_links() && reg_is_const(ee, i.rs.r, &cs)) {
             int64_t v = (int64_t)cs;
 
-            bool taken = op == EE_ZC_LTZ ? v <  0 :
-                         op == EE_ZC_GEZ ? v >= 0 :
-                         op == EE_ZC_LEZ ? v <= 0 :
+            bool taken = op == ZC_LTZ ? v <  0 :
+                         op == ZC_GEZ ? v >= 0 :
+                         op == ZC_LEZ ? v <= 0 :
                                            v >  0;
 
-            emit_branch_folded(taken, likely, EE_D_SI16);
+            emit_branch_folded(taken, likely, D_SI16);
 
             return;
         }
 
-        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
         if (likely) {
-            emit_branch_likely(op == EE_ZC_LTZ ? ujit::scmp_lt(rs.reg, Imm(0)) :
-                               op == EE_ZC_GEZ ? ujit::scmp_ge(rs.reg, Imm(0)) :
-                               op == EE_ZC_LEZ ? ujit::scmp_le(rs.reg, Imm(0)) :
-                                                 ujit::scmp_gt(rs.reg, Imm(0)), EE_D_SI16);
+            emit_branch_likely(op == ZC_LTZ ? ujit::scmp_lt(rs.reg, Imm(0)) :
+                               op == ZC_GEZ ? ujit::scmp_ge(rs.reg, Imm(0)) :
+                               op == ZC_LEZ ? ujit::scmp_le(rs.reg, Imm(0)) :
+                                                 ujit::scmp_gt(rs.reg, Imm(0)), D_SI16);
         } else {
-            emit_branch(op == EE_ZC_LTZ ? ujit::scmp_ge(rs.reg, Imm(0)) :
-                        op == EE_ZC_GEZ ? ujit::scmp_lt(rs.reg, Imm(0)) :
-                        op == EE_ZC_LEZ ? ujit::scmp_gt(rs.reg, Imm(0)) :
-                                          ujit::scmp_le(rs.reg, Imm(0)), EE_D_SI16);
+            emit_branch(op == ZC_LTZ ? ujit::scmp_ge(rs.reg, Imm(0)) :
+                        op == ZC_GEZ ? ujit::scmp_lt(rs.reg, Imm(0)) :
+                        op == ZC_LEZ ? ujit::scmp_gt(rs.reg, Imm(0)) :
+                                          ujit::scmp_le(rs.reg, Imm(0)), D_SI16);
         }
     };
 
-    auto emit_branch_eq = [&](const ee_instruction& i, bool eq, bool likely) {
+    auto emit_branch_eq = [&](const Instruction& i, bool eq, bool likely) {
         uint64_t cs, ct;
 
-        if (!sb_links() && ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-            emit_branch_folded(eq ? cs == ct : cs != ct, likely, EE_D_SI16);
+        if (!sb_links() && reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+            emit_branch_folded(eq ? cs == ct : cs != ct, likely, D_SI16);
 
             return;
         }
 
         if (i.rs.r == i.rt.r) {
-            emit_branch_folded(eq, likely, EE_D_SI16);
+            emit_branch_folded(eq, likely, D_SI16);
 
             return;
         }
 
-        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-        ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+        CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
         if (likely) {
-            emit_branch_likely(eq ? ujit::cmp_eq(rs.reg, rt.reg) : ujit::cmp_ne(rs.reg, rt.reg), EE_D_SI16);
+            emit_branch_likely(eq ? ujit::cmp_eq(rs.reg, rt.reg) : ujit::cmp_ne(rs.reg, rt.reg), D_SI16);
         } else {
-            emit_branch(eq ? ujit::cmp_ne(rs.reg, rt.reg) : ujit::cmp_eq(rs.reg, rt.reg), EE_D_SI16);
+            emit_branch(eq ? ujit::cmp_ne(rs.reg, rt.reg) : ujit::cmp_eq(rs.reg, rt.reg), D_SI16);
         }
     };
 
     for (size_t sb_i = 0; sb_i < ee->sub_blocks.size(); sb_i++) {
-        const ee_sub_block& sb = ee->sub_blocks[sb_i];
+        const SubBlock& sb = ee->sub_blocks[sb_i];
 
         sb_end_pc = sb.end_pc;
         cur_sb = &sb;
         cur_sb_i = sb_i;
         pending = PEND_NONE;
 
-        ee_flush_reg_cache(ee, &uc);
+        flush_reg_cache(ee, &uc);
 
         uc.bind(sb_label[sb_i]);
 
         if (sb.back_edge_target) {
-            ee_store_imm32(uc, EE(next_pc), sb.start_pc);
+            store_imm32(uc, EE(next_pc), sb.start_pc);
 
             ujit::Gp t = uc.new_gp32();
 
@@ -4980,62 +4940,62 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             uc.j(block_exit, ujit::test_nz(x));
         }
 
-        ee_store_imm32(uc, EE(pc), sb.end_pc - 4);
-        ee_store_imm32(uc, EE(next_pc), sb.end_pc);
+        store_imm32(uc, EE(pc), sb.end_pc - 4);
+        store_imm32(uc, EE(next_pc), sb.end_pc);
 
-        ee_sub_imm32(uc, EE(cycles_left), sb.cycles);
+        sub_imm32(uc, EE(cycles_left), sb.cycles);
 
         for (uint32_t sb_n = 0; sb_n < sb.count; sb_n++) {
-            const ee_instruction& i = block->instructions[sb.first + sb_n];
+            const Instruction& i = block->instructions[sb.first + sb_n];
 
             switch (i.id) {
-                case EE_I_ADDI:
-                case EE_I_ADDIU: {
+                case I_ADDI:
+                case I_ADDIU: {
                     if (!i.rt.r) continue;
 
                     uint64_t cs;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs)) {
-                        ee_set_const(ee, &uc, i.rt.r, (int64_t)(int32_t)((uint32_t)cs + (int32_t)(int16_t)i.i16));
+                    if (reg_is_const(ee, i.rs.r, &cs)) {
+                        set_const(ee, &uc, i.rt.r, (int64_t)(int32_t)((uint32_t)cs + (int32_t)(int16_t)i.i16));
                         continue;
                     }
 
                     bool sync = i.rt.r == i.rs.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
 
                     if (!i.rs.r) {
                         uc.mov(rt.reg, Imm((int64_t)(int16_t)i.i16));
                     } else {
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                         uc.add(rt.reg, rs.reg, Imm((int32_t)(int16_t)i.i16));
 
-                        ee_sext32(uc, rt.reg);
+                        sext32(uc, rt.reg);
                     }
 
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_DADDI:
-                case EE_I_DADDIU: {
+                case I_DADDI:
+                case I_DADDIU: {
                     if (!i.rt.r) continue;
 
                     uint64_t cs;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs)) {
-                        ee_set_const(ee, &uc, i.rt.r, cs + (int64_t)(int16_t)i.i16);
+                    if (reg_is_const(ee, i.rs.r, &cs)) {
+                        set_const(ee, &uc, i.rt.r, cs + (int64_t)(int16_t)i.i16);
                         continue;
                     }
 
                     bool sync = i.rt.r == i.rs.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
 
                     if (!i.rs.r) {
                         uc.mov(rt.reg, Imm((int64_t)(int16_t)i.i16));
                     } else {
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                         uc.add(rt.reg, rs.reg, Imm((int32_t)(int16_t)i.i16));
                     }
@@ -5043,42 +5003,42 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_MFC0: {
+                case I_MFC0: {
                     if (!i.rt.r) continue;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, false);
 
                     uc.load_u32(rt.reg, EE(cop0_r[i.rd.r]));
 
-                    ee_sext32(uc, rt.reg);
+                    sext32(uc, rt.reg);
                 } break;
 
-                case EE_I_MTC0: {
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                case I_MTC0: {
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.store_u32(EE(cop0_r[i.rd.r]), rt.reg);
                 } break;
 
-                case EE_I_SUB:
-                case EE_I_SUBU: {
+                case I_SUB:
+                case I_SUBU: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cs - (uint32_t)ct));
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cs - (uint32_t)ct));
                         continue;
                     }
 
                     uint64_t kt;
 
-                    if (!ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &kt)) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, i.rs.r == i.rd.r);
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    if (!reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &kt)) {
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, i.rs.r == i.rd.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                         uc.add(rd.reg, rs.reg, Imm((int32_t)(uint32_t)(0 - kt)));
 
-                        ee_sext32(uc, rd.reg);
+                        sext32(uc, rd.reg);
 
                         ee->reg_cache[i.rd.r].constant = false;
 
@@ -5087,62 +5047,62 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.sub(rd.reg, rs.reg, rt.reg);
 
-                    ee_sext32(uc, rd.reg);
+                    sext32(uc, rd.reg);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_ANDI:
-                case EE_I_XORI: {
+                case I_ANDI:
+                case I_XORI: {
                     if (!i.rt.r) continue;
 
                     uint64_t cs;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs)) {
+                    if (reg_is_const(ee, i.rs.r, &cs)) {
                         uint64_t imm = (uint16_t)i.i16;
-                        ee_set_const(ee, &uc, i.rt.r, i.id == EE_I_ANDI ? (cs & imm) : (cs ^ imm));
+                        set_const(ee, &uc, i.rt.r, i.id == I_ANDI ? (cs & imm) : (cs ^ imm));
 
                         continue;
                     }
 
                     bool sync = i.rt.r == i.rs.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     switch (i.id) {
-                        case EE_I_ANDI: uc.and_(rt.reg, rs.reg, Imm(i.i16)); break;
-                        case EE_I_XORI: uc.xor_(rt.reg, rs.reg, Imm(i.i16)); break;
+                        case I_ANDI: uc.and_(rt.reg, rs.reg, Imm(i.i16)); break;
+                        case I_XORI: uc.xor_(rt.reg, rs.reg, Imm(i.i16)); break;
                     }
 
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_ORI: {
+                case I_ORI: {
                     if (!i.rt.r) continue;
 
                     uint64_t cs;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs)) {
-                        ee_set_const(ee, &uc, i.rt.r, cs | (uint64_t)(uint16_t)i.i16);
+                    if (reg_is_const(ee, i.rs.r, &cs)) {
+                        set_const(ee, &uc, i.rt.r, cs | (uint64_t)(uint16_t)i.i16);
 
                         continue;
                     }
 
                     bool sync = i.rs.r == i.rt.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
 
                     if (!i.rs.r) {
                         uc.mov(rt.reg, Imm(i.i16));
                     } else {
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                         uc.or_(rt.reg, rs.reg, Imm(i.i16));
                     }
@@ -5150,17 +5110,17 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_AND:
-                case EE_I_OR:
-                case EE_I_XOR: {
+                case I_AND:
+                case I_OR:
+                case I_XOR: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        uint64_t v = i.id == EE_I_AND ? (cs & ct) : i.id == EE_I_OR ? (cs | ct) : (cs ^ ct);
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        uint64_t v = i.id == I_AND ? (cs & ct) : i.id == I_OR ? (cs | ct) : (cs ^ ct);
 
-                        ee_set_const(ee, &uc, i.rd.r, v);
+                        set_const(ee, &uc, i.rd.r, v);
 
                         continue;
                     }
@@ -5168,21 +5128,21 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uint64_t kc;
                     int ko;
 
-                    if (ee_one_const(ee, i.rs.r, i.rt.r, &kc, &ko)) {
-                        if (i.id == EE_I_AND && kc == 0) {
-                            ee_set_const(ee, &uc, i.rd.r, 0);
+                    if (one_const(ee, i.rs.r, i.rt.r, &kc, &ko)) {
+                        if (i.id == I_AND && kc == 0) {
+                            set_const(ee, &uc, i.rd.r, 0);
 
                             continue;
                         }
 
-                        if (ee_fits_imm32(kc)) {
-                            ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
-                            ee_cached_reg& rs = ee_get_reg(ee, &uc, ko);
+                        if (fits_imm32(kc)) {
+                            CachedReg& rd = get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
+                            CachedReg& rs = get_reg(ee, &uc, ko);
 
                             switch (i.id) {
-                                case EE_I_AND: uc.and_(rd.reg, rs.reg, Imm((int64_t)kc)); break;
-                                case EE_I_OR: uc.or_(rd.reg, rs.reg, Imm((int64_t)kc)); break;
-                                case EE_I_XOR: uc.xor_(rd.reg, rs.reg, Imm((int64_t)kc)); break;
+                                case I_AND: uc.and_(rd.reg, rs.reg, Imm((int64_t)kc)); break;
+                                case I_OR: uc.or_(rd.reg, rs.reg, Imm((int64_t)kc)); break;
+                                case I_XOR: uc.xor_(rd.reg, rs.reg, Imm((int64_t)kc)); break;
                             }
 
                             ee->reg_cache[i.rd.r].constant = false;
@@ -5193,16 +5153,16 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp tmp = uc.new_gp64();
 
                     switch (i.id) {
-                        case EE_I_AND: uc.and_(tmp, rs.reg, rt.reg); break;
-                        case EE_I_OR: uc.or_(tmp, rs.reg, rt.reg); break;
-                        case EE_I_XOR: uc.xor_(tmp, rs.reg, rt.reg); break;
+                        case I_AND: uc.and_(tmp, rs.reg, rt.reg); break;
+                        case I_OR: uc.or_(tmp, rs.reg, rt.reg); break;
+                        case I_XOR: uc.xor_(tmp, rs.reg, rt.reg); break;
                     }
 
                     uc.mov(rd.reg, tmp);
@@ -5210,13 +5170,13 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_NOR: {
+                case I_NOR: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, ~(cs | ct));
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, ~(cs | ct));
 
                         continue;
                     }
@@ -5224,16 +5184,16 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uint64_t kc;
                     int ko;
 
-                    if (ee_one_const(ee, i.rs.r, i.rt.r, &kc, &ko)) {
+                    if (one_const(ee, i.rs.r, i.rt.r, &kc, &ko)) {
                         if (kc == ~0ull) {
-                            ee_set_const(ee, &uc, i.rd.r, 0);
+                            set_const(ee, &uc, i.rd.r, 0);
 
                             continue;
                         }
 
-                        if (ee_fits_imm32(kc)) {
-                            ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
-                            ee_cached_reg& rs = ee_get_reg(ee, &uc, ko);
+                        if (fits_imm32(kc)) {
+                            CachedReg& rd = get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
+                            CachedReg& rs = get_reg(ee, &uc, ko);
 
                             uc.or_(rd.reg, rs.reg, Imm((int64_t)kc));
                             uc.not_(rd.reg, rd.reg);
@@ -5246,9 +5206,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp tmp = uc.new_gp64();
 
@@ -5259,13 +5219,13 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SLT: {
+                case I_SLT: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, (int64_t)cs < (int64_t)ct ? 1 : 0);
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, (int64_t)cs < (int64_t)ct ? 1 : 0);
 
                         continue;
                     }
@@ -5273,9 +5233,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uint64_t kc;
                     int ko;
 
-                    if (ee_one_const(ee, i.rs.r, i.rt.r, &kc, &ko) && ee_fits_imm32(kc)) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
-                        ee_cached_reg& rn = ee_get_reg(ee, &uc, ko);
+                    if (one_const(ee, i.rs.r, i.rt.r, &kc, &ko) && fits_imm32(kc)) {
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
+                        CachedReg& rn = get_reg(ee, &uc, ko);
 
                         ujit::UniCondition c = (ko == i.rs.r) ? ujit::scmp_lt(rn.reg, Imm((int64_t)kc)) : ujit::scmp_gt(rn.reg, Imm((int64_t)kc));
 
@@ -5288,22 +5248,22 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.select(rd.reg, Imm(1), Imm(0), ujit::scmp_lt(rs.reg, rt.reg));
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SLTU: {
+                case I_SLTU: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, cs < ct ? 1 : 0);
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, cs < ct ? 1 : 0);
 
                         continue;
                     }
@@ -5311,9 +5271,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uint64_t kc;
                     int ko;
 
-                    if (ee_one_const(ee, i.rs.r, i.rt.r, &kc, &ko) && ee_fits_imm32(kc)) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
-                        ee_cached_reg& rn = ee_get_reg(ee, &uc, ko);
+                    if (one_const(ee, i.rs.r, i.rt.r, &kc, &ko) && fits_imm32(kc)) {
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
+                        CachedReg& rn = get_reg(ee, &uc, ko);
 
                         ujit::UniCondition c = (ko == i.rs.r) ? ujit::ucmp_lt(rn.reg, Imm((int64_t)kc)) : ujit::ucmp_gt(rn.reg, Imm((int64_t)kc));
 
@@ -5326,51 +5286,51 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.select(rd.reg, Imm(1), Imm(0), ujit::ucmp_lt(rs.reg, rt.reg));
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SLTI: {
+                case I_SLTI: {
                     if (!i.rt.r) continue;
 
                     uint64_t cs;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs)) {
-                        ee_set_const(ee, &uc, i.rt.r, (int64_t)cs < (int64_t)(int16_t)i.i16 ? 1 : 0);
+                    if (reg_is_const(ee, i.rs.r, &cs)) {
+                        set_const(ee, &uc, i.rt.r, (int64_t)cs < (int64_t)(int16_t)i.i16 ? 1 : 0);
 
                         continue;
                     }
 
                     bool sync = i.rs.r == i.rt.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     uc.select(rt.reg, Imm(1), Imm(0), ujit::scmp_lt(rs.reg, Imm((int64_t)(int16_t)i.i16)));
 
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_SLTIU: {
+                case I_SLTIU: {
                     if (!i.rt.r) continue;
 
                     uint64_t cs;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs)) {
-                        ee_set_const(ee, &uc, i.rt.r, cs < (uint64_t)(int64_t)(int16_t)i.i16 ? 1 : 0);
+                    if (reg_is_const(ee, i.rs.r, &cs)) {
+                        set_const(ee, &uc, i.rt.r, cs < (uint64_t)(int64_t)(int16_t)i.i16 ? 1 : 0);
 
                         continue;
                     }
 
                     bool sync = i.rs.r == i.rt.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     if (i.rs.r == 0) {
                         uc.mov(rt.reg, Imm(0ull < ((int64_t)(int16_t)i.i16)));
@@ -5384,92 +5344,92 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                 } break;
 
                 // NOPs
-                case EE_I_CACHE:
-                case EE_I_PREF:
-                case EE_I_SYNC: {
+                case I_CACHE:
+                case I_PREF:
+                case I_SYNC: {
                     continue;
                 } break;
 
-                case EE_I_BEQ:  emit_branch_eq(i, true,  false); break;
-                case EE_I_BNE:  emit_branch_eq(i, false, false); break;
-                case EE_I_BEQL: emit_branch_eq(i, true,  true);  break;
-                case EE_I_BNEL: emit_branch_eq(i, false, true);  break;
+                case I_BEQ:  emit_branch_eq(i, true,  false); break;
+                case I_BNE:  emit_branch_eq(i, false, false); break;
+                case I_BEQL: emit_branch_eq(i, true,  true);  break;
+                case I_BNEL: emit_branch_eq(i, false, true);  break;
 
-                case EE_I_BLTZ:    emit_branch_z(i, EE_ZC_LTZ, false, false); break;
-                case EE_I_BGEZ:    emit_branch_z(i, EE_ZC_GEZ, false, false); break;
-                case EE_I_BLEZ:    emit_branch_z(i, EE_ZC_LEZ, false, false); break;
-                case EE_I_BGTZ:    emit_branch_z(i, EE_ZC_GTZ, false, false); break;
-                case EE_I_BLTZAL:  emit_branch_z(i, EE_ZC_LTZ, false, true);  break;
-                case EE_I_BGEZAL:  emit_branch_z(i, EE_ZC_GEZ, false, true);  break;
-                case EE_I_BLTZL:   emit_branch_z(i, EE_ZC_LTZ, true,  false); break;
-                case EE_I_BGEZL:   emit_branch_z(i, EE_ZC_GEZ, true,  false); break;
-                case EE_I_BLEZL:   emit_branch_z(i, EE_ZC_LEZ, true,  false); break;
-                case EE_I_BGTZL:   emit_branch_z(i, EE_ZC_GTZ, true,  false); break;
-                case EE_I_BLTZALL: emit_branch_z(i, EE_ZC_LTZ, true,  true);  break;
-                case EE_I_BGEZALL: emit_branch_z(i, EE_ZC_GEZ, true,  true);  break;
+                case I_BLTZ:    emit_branch_z(i, ZC_LTZ, false, false); break;
+                case I_BGEZ:    emit_branch_z(i, ZC_GEZ, false, false); break;
+                case I_BLEZ:    emit_branch_z(i, ZC_LEZ, false, false); break;
+                case I_BGTZ:    emit_branch_z(i, ZC_GTZ, false, false); break;
+                case I_BLTZAL:  emit_branch_z(i, ZC_LTZ, false, true);  break;
+                case I_BGEZAL:  emit_branch_z(i, ZC_GEZ, false, true);  break;
+                case I_BLTZL:   emit_branch_z(i, ZC_LTZ, true,  false); break;
+                case I_BGEZL:   emit_branch_z(i, ZC_GEZ, true,  false); break;
+                case I_BLEZL:   emit_branch_z(i, ZC_LEZ, true,  false); break;
+                case I_BGTZL:   emit_branch_z(i, ZC_GTZ, true,  false); break;
+                case I_BLTZALL: emit_branch_z(i, ZC_LTZ, true,  true);  break;
+                case I_BGEZALL: emit_branch_z(i, ZC_GEZ, true,  true);  break;
 
-                case EE_I_BC0F: {
+                case I_BC0F: {
                     ujit::Gp cc = uc.new_gp32();
                     uc.load_u32(cc, EE(cpcond0));
-                    emit_branch(ujit::test_nz(cc), EE_D_SI16);
+                    emit_branch(ujit::test_nz(cc), D_SI16);
                 } break;
 
-                case EE_I_BC0T: {
+                case I_BC0T: {
                     ujit::Gp cc = uc.new_gp32();
                     uc.load_u32(cc, EE(cpcond0));
-                    emit_branch(ujit::test_z(cc), EE_D_SI16);
+                    emit_branch(ujit::test_z(cc), D_SI16);
                 } break;
 
-                case EE_I_BC0FL: {
+                case I_BC0FL: {
                     ujit::Gp cc = uc.new_gp32();
                     uc.load_u32(cc, EE(cpcond0));
-                    emit_branch_likely(ujit::test_z(cc), EE_D_SI16);
+                    emit_branch_likely(ujit::test_z(cc), D_SI16);
                 } break;
 
-                case EE_I_BC0TL: {
+                case I_BC0TL: {
                     ujit::Gp cc = uc.new_gp32();
                     uc.load_u32(cc, EE(cpcond0));
-                    emit_branch_likely(ujit::test_nz(cc), EE_D_SI16);
+                    emit_branch_likely(ujit::test_nz(cc), D_SI16);
                 } break;
 
-                case EE_I_BC1F: {
+                case I_BC1F: {
                     ujit::Gp f = uc.new_gp32();
                     uc.load_u32(f, EE(fcr));
-                    emit_branch(ujit::test_nz(f, Imm(FPU_FLG_C)), EE_D_SI16);
+                    emit_branch(ujit::test_nz(f, Imm(FPU_FLG_C)), D_SI16);
                 } break;
 
-                case EE_I_BC1T: {
+                case I_BC1T: {
                     ujit::Gp f = uc.new_gp32();
                     uc.load_u32(f, EE(fcr));
-                    emit_branch(ujit::test_z(f, Imm(FPU_FLG_C)), EE_D_SI16);
+                    emit_branch(ujit::test_z(f, Imm(FPU_FLG_C)), D_SI16);
                 } break;
 
-                case EE_I_BC1FL: {
+                case I_BC1FL: {
                     ujit::Gp f = uc.new_gp32();
                     uc.load_u32(f, EE(fcr));
-                    emit_branch_likely(ujit::test_z(f, Imm(FPU_FLG_C)), EE_D_SI16);
+                    emit_branch_likely(ujit::test_z(f, Imm(FPU_FLG_C)), D_SI16);
                 } break;
 
-                case EE_I_BC1TL: {
+                case I_BC1TL: {
                     ujit::Gp f = uc.new_gp32();
                     uc.load_u32(f, EE(fcr));
-                    emit_branch_likely(ujit::test_nz(f, Imm(FPU_FLG_C)), EE_D_SI16);
+                    emit_branch_likely(ujit::test_nz(f, Imm(FPU_FLG_C)), D_SI16);
                 } break;
 
-                case EE_I_BC2F:
-                case EE_I_BC2FL: {
-                    emit_branch_target(EE_D_SI16);
+                case I_BC2F:
+                case I_BC2FL: {
+                    emit_branch_target(D_SI16);
                 } break;
 
-                case EE_I_BC2T: {
+                case I_BC2T: {
                 } break;
 
-                case EE_I_BC2TL: {
-                    ee_flush_reg_cache(ee, &uc);
+                case I_BC2TL: {
+                    flush_reg_cache(ee, &uc);
                     uc.ret();
                 } break;
 
-                case EE_I_J: {
+                case I_J: {
                     ujit::Gp tmp = uc.new_gp32();
 
                     uc.mov(tmp, Imm((i.i26 << 2) | (sb_end_pc & 0xF0000000)));
@@ -5477,24 +5437,24 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     Label L0 = uc.new_label();
                     Label L1 = uc.new_label();
 
-                    ujit::Gp skip_fmv = uc.new_gp32();
+                    ujit::Gp skip_fmv_reg = uc.new_gp32();
 
-                    uc.load_u32(skip_fmv, EE(fmv_skip));
-                    uc.j(L0, ujit::test_z(skip_fmv));
+                    uc.load_u32(skip_fmv_reg, EE(fmv_skip));
+                    uc.j(L0, ujit::test_z(skip_fmv_reg));
 
                     InvokeNode* invoke_node;
 
                     bc.invoke(
                         Out(invoke_node),
-                        (uintptr_t)ee_skip_fmv,
-                        FuncSignature::build<int, ee_state*, uint32_t>()
+                        (uintptr_t)skip_fmv,
+                        FuncSignature::build<int, Ee*, uint32_t>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, tmp);
-                    invoke_node->set_ret(0, skip_fmv);
+                    invoke_node->set_ret(0, skip_fmv_reg);
 
-                    uc.j(L1, ujit::test_nz(skip_fmv));
+                    uc.j(L1, ujit::test_nz(skip_fmv_reg));
 
                     uc.bind(L0);
                     uc.store_u32(EE(next_pc), tmp);
@@ -5502,14 +5462,14 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.bind(L1);
                 } break;
 
-                case EE_I_JR: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_JR: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     uc.store_u32(EE(next_pc), rs.reg);
                 } break;
 
-                case EE_I_JAL: {
-                    ee_cached_reg& ra = ee_get_reg(ee, &uc, 31, false);
+                case I_JAL: {
+                    CachedReg& ra = get_reg(ee, &uc, 31, false);
 
                     uc.mov(ra.reg, Imm((uint64_t)sb_end_pc));
 
@@ -5520,24 +5480,24 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     Label L0 = uc.new_label();
                     Label L1 = uc.new_label();
 
-                    ujit::Gp skip_fmv = uc.new_gp32();
+                    ujit::Gp skip_fmv_reg = uc.new_gp32();
 
-                    uc.load_u32(skip_fmv, EE(fmv_skip));
-                    uc.j(L0, ujit::test_z(skip_fmv));
+                    uc.load_u32(skip_fmv_reg, EE(fmv_skip));
+                    uc.j(L0, ujit::test_z(skip_fmv_reg));
 
                     InvokeNode* invoke_node;
 
                     bc.invoke(
                         Out(invoke_node),
-                        (uintptr_t)ee_skip_fmv,
-                        FuncSignature::build<int, ee_state*, uint32_t>()
+                        (uintptr_t)skip_fmv,
+                        FuncSignature::build<int, Ee*, uint32_t>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, tmp);
-                    invoke_node->set_ret(0, skip_fmv);
+                    invoke_node->set_ret(0, skip_fmv_reg);
 
-                    uc.j(L1, ujit::test_nz(skip_fmv));
+                    uc.j(L1, ujit::test_nz(skip_fmv_reg));
 
                     uc.bind(L0);
                     uc.store_u32(EE(next_pc), tmp);
@@ -5545,57 +5505,57 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.bind(L1);
                 } break;
 
-                case EE_I_JALR: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_JALR: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     if (!i.rd.r) {
                         uc.store_u32(EE(next_pc), rs.reg);
                     } else {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, false);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, false);
 
                         uc.store_u32(EE(next_pc), rs.reg);
                         uc.mov(rd.reg, Imm((uint64_t)sb_end_pc));
                     }
                 } break;
 
-                case EE_I_SLL: {
+                case I_SLL: {
                     if (!i.rd.r) continue;
 
                     uint64_t ct;
 
-                    if (ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)ct << i.sa));
+                    if (reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)ct << i.sa));
 
                         continue;
                     }
 
                     bool sync = i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.shl(rd.reg, rt.reg, Imm(i.sa));
 
-                    ee_sext32(uc, rd.reg);
+                    sext32(uc, rd.reg);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SRL: {
+                case I_SRL: {
                     if (!i.rd.r) continue;
 
                     uint64_t ct;
 
-                    if (ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, (uint64_t)((uint32_t)ct >> i.sa));
+                    if (reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, (uint64_t)((uint32_t)ct >> i.sa));
 
                         continue;
                     }
 
                     bool sync = i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp tmp = uc.new_gp64();
 
@@ -5605,53 +5565,53 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SRA: {
+                case I_SRA: {
                     if (!i.rd.r) continue;
 
                     uint64_t ct;
 
-                    if (ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((int32_t)ct >> i.sa));
+                    if (reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((int32_t)ct >> i.sa));
 
                         continue;
                     }
 
                     bool sync = i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp tmp1 = rd.reg.r32();
                     ujit::Gp tmp2 = rt.reg.r32();
 
                     uc.sar(tmp1, tmp2, Imm(i.sa));
 
-                    ee_sext32(uc, rd.reg, tmp1);
+                    sext32(uc, rd.reg, tmp1);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SLLV: {
+                case I_SLLV: {
                     if (!i.rd.r) continue;
 
                     uint64_t camt;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &camt)) {
+                    if (reg_is_const(ee, i.rs.r, &camt)) {
                         uint32_t sa = (uint32_t)camt & 0x1f;
                         uint64_t cval;
 
-                        if (ee_reg_is_const(ee, i.rt.r, &cval)) {
-                            ee_set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cval << sa));
+                        if (reg_is_const(ee, i.rt.r, &cval)) {
+                            set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cval << sa));
 
                             continue;
                         }
 
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
-                        ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
+                        CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                         uc.shl(rd.reg, rt.reg, Imm(sa));
 
-                        ee_sext32(uc, rd.reg);
+                        sext32(uc, rd.reg);
 
                         ee->reg_cache[i.rd.r].constant = false;
 
@@ -5660,44 +5620,44 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp tmp = uc.new_gp64();
 
                     uc.and_(tmp, rs.reg, Imm(0x1F));
                     uc.shl(rd.reg, rt.reg, tmp);
 
-                    ee_sext32(uc, rd.reg);
+                    sext32(uc, rd.reg);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SRLV: {
+                case I_SRLV: {
                     if (!i.rd.r) continue;
 
                     uint64_t camt;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &camt)) {
+                    if (reg_is_const(ee, i.rs.r, &camt)) {
                         uint32_t sa = (uint32_t)camt & 0x1f;
                         uint64_t cval;
 
-                        if (ee_reg_is_const(ee, i.rt.r, &cval)) {
-                            ee_set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cval >> sa));
+                        if (reg_is_const(ee, i.rt.r, &cval)) {
+                            set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cval >> sa));
 
                             continue;
                         }
 
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
-                        ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
+                        CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                         ujit::Gp rd32 = rd.reg.r32();
                         ujit::Gp rt32 = rt.reg.r32();
 
                         uc.shr(rd32, rt32, Imm(sa));
 
-                        ee_sext32(uc, rd.reg, rd32);
+                        sext32(uc, rd.reg, rd32);
 
                         ee->reg_cache[i.rd.r].constant = false;
 
@@ -5706,9 +5666,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp tmp = uc.new_gp32();
                     ujit::Gp rd32 = rd.reg.r32();
@@ -5718,35 +5678,35 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.and_(tmp, rs32, Imm(0x1F));
                     uc.shr(rd32, rt32, tmp);
 
-                    ee_sext32(uc, rd.reg, rd32);
+                    sext32(uc, rd.reg, rd32);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_SRAV: {
+                case I_SRAV: {
                     if (!i.rd.r) continue;
 
                     uint64_t camt;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &camt)) {
+                    if (reg_is_const(ee, i.rs.r, &camt)) {
                         uint32_t sa = (uint32_t)camt & 0x1f;
                         uint64_t cval;
 
-                        if (ee_reg_is_const(ee, i.rt.r, &cval)) {
-                            ee_set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((int32_t)cval >> sa));
+                        if (reg_is_const(ee, i.rt.r, &cval)) {
+                            set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((int32_t)cval >> sa));
 
                             continue;
                         }
 
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
-                        ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
+                        CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                         ujit::Gp rd32 = rd.reg.r32();
                         ujit::Gp rt32 = rt.reg.r32();
 
                         uc.sar(rd32, rt32, Imm(sa));
 
-                        ee_sext32(uc, rd.reg, rd32);
+                        sext32(uc, rd.reg, rd32);
 
                         ee->reg_cache[i.rd.r].constant = false;
 
@@ -5755,9 +5715,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp tmp = uc.new_gp32();
                     ujit::Gp rd32 = rd.reg.r32();
@@ -5767,32 +5727,32 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.and_(tmp, rs32, Imm(0x1F));
                     uc.sar(rd32, rt32, tmp);
 
-                    ee_sext32(uc, rd.reg, rd32);
+                    sext32(uc, rd.reg, rd32);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_DSLL:
-                case EE_I_DSRL:
-                case EE_I_DSRA:
-                case EE_I_DSLL32:
-                case EE_I_DSRL32:
-                case EE_I_DSRA32: {
+                case I_DSLL:
+                case I_DSRL:
+                case I_DSRA:
+                case I_DSLL32:
+                case I_DSRL32:
+                case I_DSRA32: {
                     if (!i.rd.r) continue;
 
                     uint64_t ct;
-                    if (ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        uint32_t sa = i.sa + ((i.id == EE_I_DSLL32 || i.id == EE_I_DSRL32 || i.id == EE_I_DSRA32) ? 32 : 0);
+                    if (reg_is_const(ee, i.rt.r, &ct)) {
+                        uint32_t sa = i.sa + ((i.id == I_DSLL32 || i.id == I_DSRL32 || i.id == I_DSRA32) ? 32 : 0);
                         uint64_t v;
 
                         switch (i.id) {
-                            case EE_I_DSLL:
-                            case EE_I_DSLL32: {
+                            case I_DSLL:
+                            case I_DSLL32: {
                                 v = ct << sa;
                             } break;
 
-                            case EE_I_DSRL: 
-                            case EE_I_DSRL32: {
+                            case I_DSRL: 
+                            case I_DSRL32: {
                                 v = ct >> sa;
                             } break;
 
@@ -5801,60 +5761,60 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                             } break;
                         }
 
-                        ee_set_const(ee, &uc, i.rd.r, v);
+                        set_const(ee, &uc, i.rd.r, v);
 
                         continue;
                     }
 
                     bool sync = i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     switch (i.id) {
-                        case EE_I_DSLL: uc.shl(rd.reg, rt.reg, Imm(i.sa)); break;
-                        case EE_I_DSRL: uc.shr(rd.reg, rt.reg, Imm(i.sa)); break;
-                        case EE_I_DSRA: uc.sar(rd.reg, rt.reg, Imm(i.sa)); break;
-                        case EE_I_DSLL32: uc.shl(rd.reg, rt.reg, Imm(i.sa + 32)); break;
-                        case EE_I_DSRL32: uc.shr(rd.reg, rt.reg, Imm(i.sa + 32)); break;
-                        case EE_I_DSRA32: uc.sar(rd.reg, rt.reg, Imm(i.sa + 32)); break;
+                        case I_DSLL: uc.shl(rd.reg, rt.reg, Imm(i.sa)); break;
+                        case I_DSRL: uc.shr(rd.reg, rt.reg, Imm(i.sa)); break;
+                        case I_DSRA: uc.sar(rd.reg, rt.reg, Imm(i.sa)); break;
+                        case I_DSLL32: uc.shl(rd.reg, rt.reg, Imm(i.sa + 32)); break;
+                        case I_DSRL32: uc.shr(rd.reg, rt.reg, Imm(i.sa + 32)); break;
+                        case I_DSRA32: uc.sar(rd.reg, rt.reg, Imm(i.sa + 32)); break;
                     }
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_DSLLV:
-                case EE_I_DSRLV:
-                case EE_I_DSRAV: {
+                case I_DSLLV:
+                case I_DSRLV:
+                case I_DSRAV: {
                     if (!i.rd.r) continue;
 
                     uint64_t camt;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &camt)) {
+                    if (reg_is_const(ee, i.rs.r, &camt)) {
                         uint32_t sa = (uint32_t)camt & 0x3f;
                         uint64_t cval;
 
-                        if (ee_reg_is_const(ee, i.rt.r, &cval)) {
+                        if (reg_is_const(ee, i.rt.r, &cval)) {
                             uint64_t v;
 
                             switch (i.id) {
-                                case EE_I_DSLLV: v = cval << sa; break;
-                                case EE_I_DSRLV: v = cval >> sa; break;
-                                case EE_I_DSRAV: v = (uint64_t)((int64_t)cval >> sa); break;
+                                case I_DSLLV: v = cval << sa; break;
+                                case I_DSRLV: v = cval >> sa; break;
+                                case I_DSRAV: v = (uint64_t)((int64_t)cval >> sa); break;
                             }
 
-                            ee_set_const(ee, &uc, i.rd.r, v);
+                            set_const(ee, &uc, i.rd.r, v);
 
                             continue;
                         }
 
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
-                        ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, i.rt.r == i.rd.r);
+                        CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                         switch (i.id) {
-                            case EE_I_DSLLV: uc.shl(rd.reg, rt.reg, Imm(sa)); break;
-                            case EE_I_DSRLV: uc.shr(rd.reg, rt.reg, Imm(sa)); break;
-                            case EE_I_DSRAV: uc.sar(rd.reg, rt.reg, Imm(sa)); break;
+                            case I_DSLLV: uc.shl(rd.reg, rt.reg, Imm(sa)); break;
+                            case I_DSRLV: uc.shr(rd.reg, rt.reg, Imm(sa)); break;
+                            case I_DSRAV: uc.sar(rd.reg, rt.reg, Imm(sa)); break;
                         }
 
                         ee->reg_cache[i.rd.r].constant = false;
@@ -5864,33 +5824,33 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rt.r == i.rd.r || i.rs.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp tmp = uc.new_gp64();
 
                     uc.and_(tmp, rs.reg, Imm(0x3F));
 
                     switch (i.id) {
-                        case EE_I_DSLLV: uc.shl(rd.reg, rt.reg, tmp); break;
-                        case EE_I_DSRLV: uc.shr(rd.reg, rt.reg, tmp); break;
-                        case EE_I_DSRAV: uc.sar(rd.reg, rt.reg, tmp); break;
+                        case I_DSLLV: uc.shl(rd.reg, rt.reg, tmp); break;
+                        case I_DSRLV: uc.shr(rd.reg, rt.reg, tmp); break;
+                        case I_DSRAV: uc.sar(rd.reg, rt.reg, tmp); break;
                     }
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_LUI: {
+                case I_LUI: {
                     if (!i.rt.r) continue;
 
-                    ee_set_const(ee, &uc, i.rt.r, (int64_t)(int32_t)(i.i16 << 16));
+                    set_const(ee, &uc, i.rt.r, (int64_t)(int32_t)(i.i16 << 16));
 
                     continue;
                 } break;
 
-                case EE_I_LWC1: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_LWC1: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp tmp = uc.new_gp32();
                     ujit::Gp addr = uc.new_gp32();
@@ -5903,18 +5863,18 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(invoke_node),
                         bus_read32,
-                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, addr);
                     invoke_node->set_ret(0, tmp);
 
                     uc.store_u32(EE(f[i.rt.r]), tmp);
                 } break;
 
-                case EE_I_SWC1: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_SWC1: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp addr = uc.new_gp32();
                     ujit::Gp val = uc.new_gp64();
@@ -5928,46 +5888,46 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(invoke_node),
                         (uintptr_t)bus_write32,
-                        FuncSignature::build<void, ee_state*, uint32_t, uint64_t>()
+                        FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, addr);
                     invoke_node->set_arg(2, val);
                 } break;
 
-                case EE_I_MTC1: {
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                case I_MTC1: {
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.store_u32(EE(f[i.rd.r]), rt.reg.r32());
                 } break;
 
-                case EE_I_MFC1: {
+                case I_MFC1: {
                     if (!i.rt.r) continue;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, false);
 
                     uc.load_u32(rt.reg, EE(f[i.rd.r]));
-                    ee_sext32(uc, rt.reg);
+                    sext32(uc, rt.reg);
 
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_MOVS:
-                case EE_I_ABSS:
-                case EE_I_NEGS: {
+                case I_MOVS:
+                case I_ABSS:
+                case I_NEGS: {
                     ujit::Gp tmp = uc.new_gp32();
 
                     uc.load_u32(tmp, EE(f[i.rd.r]));
 
                     switch (i.id) {
-                        case EE_I_ABSS: uc.and_(tmp, tmp, Imm(0x7fffffff)); break;
-                        case EE_I_NEGS: uc.xor_(tmp, tmp, Imm(0x80000000)); break;
+                        case I_ABSS: uc.and_(tmp, tmp, Imm(0x7fffffff)); break;
+                        case I_NEGS: uc.xor_(tmp, tmp, Imm(0x80000000)); break;
                     }
 
                     uc.store_u32(EE(f[i.sa]), tmp);
 
-                    if (i.id != EE_I_MOVS) {
+                    if (i.id != I_MOVS) {
                         ujit::Gp fcr = uc.new_gp32();
 
                         uc.load_u32(fcr, EE(fcr));
@@ -5976,10 +5936,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     }
                 } break;
 
-                case EE_I_ADDS:
-                case EE_I_SUBS:
-                case EE_I_MULS:
-                case EE_I_DIVS: {
+                case I_ADDS:
+                case I_SUBS:
+                case I_MULS:
+                case I_DIVS: {
                     ujit::Gp fs  = uc.new_gp32();
                     ujit::Gp ft  = uc.new_gp32();
                     ujit::Gp fcr = uc.new_gp32();
@@ -5990,18 +5950,18 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.load_u32(fcr, EE(fcr));
 
                     switch (i.id) {
-                        case EE_I_ADDS: ee_fpu::adds(uc, out, fcr, fs, ft); break;
-                        case EE_I_SUBS: ee_fpu::subs(uc, out, fcr, fs, ft); break;
-                        case EE_I_MULS: ee_fpu::muls(uc, out, fcr, fs, ft); break;
-                        case EE_I_DIVS: ee_fpu::divs(uc, out, fcr, fs, ft); break;
+                        case I_ADDS: fpu::adds(uc, out, fcr, fs, ft); break;
+                        case I_SUBS: fpu::subs(uc, out, fcr, fs, ft); break;
+                        case I_MULS: fpu::muls(uc, out, fcr, fs, ft); break;
+                        case I_DIVS: fpu::divs(uc, out, fcr, fs, ft); break;
                     }
 
                     uc.store_u32(EE(f[i.sa]), out);
                     uc.store_u32(EE(fcr), fcr);
                 } break;
 
-                case EE_I_MAXS:
-                case EE_I_MINS: {
+                case I_MAXS:
+                case I_MINS: {
                     ujit::Gp fs = uc.new_gp32();
                     ujit::Gp ft = uc.new_gp32();
                     ujit::Gp out = uc.new_gp32();
@@ -6009,10 +5969,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.load_u32(fs, EE(f[i.rd.r]));
                     uc.load_u32(ft, EE(f[i.rt.r]));
 
-                    if (i.id == EE_I_MAXS) {
-                        ee_fpu::maxs(uc, out, fs, ft);
+                    if (i.id == I_MAXS) {
+                        fpu::maxs(uc, out, fs, ft);
                     } else {
-                        ee_fpu::mins(uc, out, fs, ft);   
+                        fpu::mins(uc, out, fs, ft);   
                     }
 
                     uc.store_u32(EE(f[i.sa]), out);
@@ -6024,15 +5984,15 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.store_u32(EE(fcr), fcr);
                 } break;
 
-                case EE_I_ADDAS:
-                case EE_I_SUBAS:
-                case EE_I_MULAS:
-                case EE_I_MADDAS:
-                case EE_I_MSUBAS:
-                case EE_I_MADDS:
-                case EE_I_MSUBS:
-                case EE_I_SQRTS:
-                case EE_I_RSQRTS: {
+                case I_ADDAS:
+                case I_SUBAS:
+                case I_MULAS:
+                case I_MADDAS:
+                case I_MSUBAS:
+                case I_MADDS:
+                case I_MSUBS:
+                case I_SQRTS:
+                case I_RSQRTS: {
                     ujit::Gp fs = uc.new_gp32();
                     ujit::Gp ft = uc.new_gp32();
                     ujit::Gp fcr = uc.new_gp32();
@@ -6042,24 +6002,24 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.load_u32(ft, EE(f[i.rt.r]));
                     uc.load_u32(fcr, EE(fcr));
 
-                    bool to_acc = i.id == EE_I_ADDAS || i.id == EE_I_SUBAS || i.id == EE_I_MULAS ||
-                                i.id == EE_I_MADDAS || i.id == EE_I_MSUBAS;
+                    bool to_acc = i.id == I_ADDAS || i.id == I_SUBAS || i.id == I_MULAS ||
+                                i.id == I_MADDAS || i.id == I_MSUBAS;
 
                     switch (i.id) {
-                        case EE_I_ADDAS: ee_fpu::adds(uc, out, fcr, fs, ft); break;
-                        case EE_I_SUBAS: ee_fpu::subs(uc, out, fcr, fs, ft); break;
-                        case EE_I_MULAS: ee_fpu::muls(uc, out, fcr, fs, ft); break;
-                        case EE_I_SQRTS: ee_fpu::sqrts(uc, out, fcr, ft); break;
-                        case EE_I_RSQRTS: ee_fpu::rsqrts(uc, out, fcr, fs, ft); break;
+                        case I_ADDAS: fpu::adds(uc, out, fcr, fs, ft); break;
+                        case I_SUBAS: fpu::subs(uc, out, fcr, fs, ft); break;
+                        case I_MULAS: fpu::muls(uc, out, fcr, fs, ft); break;
+                        case I_SQRTS: fpu::sqrts(uc, out, fcr, ft); break;
+                        case I_RSQRTS: fpu::rsqrts(uc, out, fcr, fs, ft); break;
 
                         default: {
                             ujit::Gp acc = uc.new_gp32(); uc.load_u32(acc, EE(a));
 
                             switch (i.id) {
-                                case EE_I_MADDS: ee_fpu::madds(uc, out, fcr, acc, fs, ft); break;
-                                case EE_I_MSUBS: ee_fpu::msubs(uc, out, fcr, acc, fs, ft); break;
-                                case EE_I_MADDAS: ee_fpu::maddas(uc, out, fcr, acc, fs, ft); break;
-                                case EE_I_MSUBAS: ee_fpu::msubas(uc, out, fcr, acc, fs, ft); break;
+                                case I_MADDS: fpu::madds(uc, out, fcr, acc, fs, ft); break;
+                                case I_MSUBS: fpu::msubs(uc, out, fcr, acc, fs, ft); break;
+                                case I_MADDAS: fpu::maddas(uc, out, fcr, acc, fs, ft); break;
+                                case I_MSUBAS: fpu::msubas(uc, out, fcr, acc, fs, ft); break;
                             }
                         } break;
                     }
@@ -6068,16 +6028,16 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.store_u32(EE(fcr), fcr);
                 } break;
 
-                case EE_I_CF:
-                case EE_I_CEQ:
-                case EE_I_CLT:
-                case EE_I_CLE: {
+                case I_CF:
+                case I_CEQ:
+                case I_CLT:
+                case I_CLE: {
                     ujit::Gp fcr = uc.new_gp32();
 
                     uc.load_u32(fcr, EE(fcr));
 
-                    if (i.id == EE_I_CF) {
-                        ee_fpu::cf(uc, fcr);
+                    if (i.id == I_CF) {
+                        fpu::cf(uc, fcr);
                     } else {
                         ujit::Gp fs = uc.new_gp32();
                         ujit::Gp ft = uc.new_gp32();
@@ -6086,43 +6046,43 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uc.load_u32(ft, EE(f[i.rt.r]));
 
                         switch (i.id) {
-                            case EE_I_CEQ: ee_fpu::ceq(uc, fcr, fs, ft); break;
-                            case EE_I_CLT: ee_fpu::clt(uc, fcr, fs, ft); break;
-                            case EE_I_CLE: ee_fpu::cle(uc, fcr, fs, ft); break;
+                            case I_CEQ: fpu::ceq(uc, fcr, fs, ft); break;
+                            case I_CLT: fpu::clt(uc, fcr, fs, ft); break;
+                            case I_CLE: fpu::cle(uc, fcr, fs, ft); break;
                         }
                     }
 
                     uc.store_u32(EE(fcr), fcr);
                 } break;
 
-                case EE_I_CVTW:
-                case EE_I_CVTS: {
+                case I_CVTW:
+                case I_CVTS: {
                     ujit::Gp fs = uc.new_gp32();
                     ujit::Gp out = uc.new_gp32();
 
                     uc.load_u32(fs, EE(f[i.rd.r]));
 
-                    if (i.id == EE_I_CVTW) {
-                        ee_fpu::cvtws(uc, out, fs);
+                    if (i.id == I_CVTW) {
+                        fpu::cvtws(uc, out, fs);
                     } else {
-                        ee_fpu::cvtsw(uc, out, fs);
+                        fpu::cvtsw(uc, out, fs);
                     }
 
                     uc.store_u32(EE(f[i.sa]), out);
                 } break;
 
-                case EE_I_LB:
-                case EE_I_LH:
-                case EE_I_LW:
-                case EE_I_LD: {
+                case I_LB:
+                case I_LH:
+                case I_LW:
+                case I_LD: {
                     uintptr_t func;
                     int bytes;
 
                     switch (i.id) {
-                        case EE_I_LB: func = (uintptr_t)bus_read8;  bytes = 1; break;
-                        case EE_I_LH: func = (uintptr_t)bus_read16; bytes = 2; break;
-                        case EE_I_LW: func = (uintptr_t)bus_read32; bytes = 4; break;
-                        case EE_I_LD: func = (uintptr_t)bus_read64; bytes = 8; break;
+                        case I_LB: func = (uintptr_t)bus_read8;  bytes = 1; break;
+                        case I_LH: func = (uintptr_t)bus_read16; bytes = 2; break;
+                        case I_LW: func = (uintptr_t)bus_read32; bytes = 4; break;
+                        case I_LD: func = (uintptr_t)bus_read64; bytes = 8; break;
                     }
 
                     uint64_t cs;
@@ -6130,19 +6090,19 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     void* host = nullptr;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs))
-                        host = ee_fold_host_ptr(ee, (uint32_t)cs + (int32_t)(int16_t)i.i16, bytes, false, &phys);
+                    if (reg_is_const(ee, i.rs.r, &cs))
+                        host = fold_host_ptr(ee, (uint32_t)cs + (int32_t)(int16_t)i.i16, bytes, false, &phys);
 
                     if (host) {
                         if (i.rt.r) {
-                            ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
-                            ujit::Gp base = ee_fold_base(uc, host);
+                            CachedReg& rt = get_reg(ee, &uc, i.rt.r, false);
+                            ujit::Gp base = fold_base(uc, host);
 
                             switch (i.id) {
-                                case EE_I_LB: uc.load_i8(rt.reg, ujit::mem_ptr(base, 0)); break;
-                                case EE_I_LH: uc.load_i16(rt.reg, ujit::mem_ptr(base, 0)); break;
-                                case EE_I_LW: uc.load_i32(rt.reg, ujit::mem_ptr(base, 0)); break;
-                                case EE_I_LD: uc.load_u64(rt.reg, ujit::mem_ptr(base, 0)); break;
+                                case I_LB: uc.load_i8(rt.reg, ujit::mem_ptr(base, 0)); break;
+                                case I_LH: uc.load_i16(rt.reg, ujit::mem_ptr(base, 0)); break;
+                                case I_LW: uc.load_i32(rt.reg, ujit::mem_ptr(base, 0)); break;
+                                case I_LD: uc.load_u64(rt.reg, ujit::mem_ptr(base, 0)); break;
                             }
 
                             ee->reg_cache[i.rt.r].constant = false;
@@ -6155,14 +6115,14 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uintptr_t slow_func;
 
                         switch (i.id) {
-                            case EE_I_LB: slow_func = (uintptr_t)ee_vfast_read8;  break;
-                            case EE_I_LH: slow_func = (uintptr_t)ee_vfast_read16; break;
-                            case EE_I_LW: slow_func = (uintptr_t)ee_vfast_read32; break;
-                            case EE_I_LD: slow_func = (uintptr_t)ee_vfast_read64; break;
+                            case I_LB: slow_func = (uintptr_t)vfast_read8;  break;
+                            case I_LH: slow_func = (uintptr_t)vfast_read16; break;
+                            case I_LW: slow_func = (uintptr_t)vfast_read32; break;
+                            case I_LD: slow_func = (uintptr_t)vfast_read64; break;
                         }
 
-                        ee_cached_reg& frt = ee_get_reg(ee, &uc, i.rt.r, i.rt.r == i.rs.r);
-                        ee_cached_reg& frs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& frt = get_reg(ee, &uc, i.rt.r, i.rt.r == i.rs.r);
+                        CachedReg& frs = get_reg(ee, &uc, i.rs.r);
 
                         ujit::Gp addr = uc.new_gp32();
                         ujit::Gp pidx = uc.new_gp32();
@@ -6188,10 +6148,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uc.and_(off, off, Imm(0xfff));
 
                         switch (i.id) {
-                            case EE_I_LB: uc.load_u8(frt.reg, ujit::mem_ptr(base, off, 0)); break;
-                            case EE_I_LH: uc.load_u16(frt.reg, ujit::mem_ptr(base, off, 0)); break;
-                            case EE_I_LW: uc.load_u32(frt.reg, ujit::mem_ptr(base, off, 0)); break;
-                            case EE_I_LD: uc.load_u64(frt.reg, ujit::mem_ptr(base, off, 0)); break;
+                            case I_LB: uc.load_u8(frt.reg, ujit::mem_ptr(base, off, 0)); break;
+                            case I_LH: uc.load_u16(frt.reg, ujit::mem_ptr(base, off, 0)); break;
+                            case I_LW: uc.load_u32(frt.reg, ujit::mem_ptr(base, off, 0)); break;
+                            case I_LD: uc.load_u64(frt.reg, ujit::mem_ptr(base, off, 0)); break;
                         }
 
                         uc.j(done);
@@ -6202,19 +6162,19 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         bc.invoke(
                             Out(slow_node),
                             slow_func,
-                            FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                            FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
 
-                        slow_node->set_arg(0, ee->ee_ptr);
+                        slow_node->set_arg(0, ee->state_ptr);
                         slow_node->set_arg(1, addr);
                         slow_node->set_ret(0, frt.reg);
 
                         uc.bind(done);
 
                         switch (i.id) {
-                            case EE_I_LB: ee_sextn(uc, frt.reg, 8); break;
-                            case EE_I_LH: ee_sextn(uc, frt.reg, 16); break;
-                            case EE_I_LW: ee_sext32(uc, frt.reg); break;
+                            case I_LB: sextn(uc, frt.reg, 8); break;
+                            case I_LH: sextn(uc, frt.reg, 16); break;
+                            case I_LW: sext32(uc, frt.reg); break;
                         }
 
                         ee->reg_cache[i.rt.r].constant = false;
@@ -6223,7 +6183,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     }
 
                     if (!i.rt.r) {
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
                         ujit::Gp tmp = uc.new_gp32();
 
                         uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
@@ -6234,10 +6194,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         bc.invoke(
                             Out(invoke_node),
                             func,
-                            FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                            FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
 
-                        invoke_node->set_arg(0, ee->ee_ptr);
+                        invoke_node->set_arg(0, ee->state_ptr);
                         invoke_node->set_arg(1, tmp);
 
                         continue;
@@ -6245,8 +6205,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rt.r == i.rs.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
                     ujit::Gp tmp = uc.new_gp32();
 
                     uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
@@ -6257,29 +6217,29 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(invoke_node),
                         func,
-                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, tmp);
                     invoke_node->set_ret(0, rt.reg);
 
-                    if (i.id != EE_I_LD) {
+                    if (i.id != I_LD) {
                         switch (i.id) {
-                            case EE_I_LB: ee_sextn(uc, rt.reg, 8); break;
-                            case EE_I_LH: ee_sextn(uc, rt.reg, 16); break;
-                            case EE_I_LW: ee_sext32(uc, rt.reg); break;
+                            case I_LB: sextn(uc, rt.reg, 8); break;
+                            case I_LH: sextn(uc, rt.reg, 16); break;
+                            case I_LW: sext32(uc, rt.reg); break;
                         }
                     }
 
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_LDL:
-                case EE_I_LDR: {
-                    bool is_l = i.id == EE_I_LDL;
+                case I_LDL:
+                case I_LDR: {
+                    bool is_l = i.id == I_LDL;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp addr = uc.new_gp32();
                     ujit::Gp aligned = uc.new_gp32();
@@ -6297,10 +6257,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(rd_node),
                         (uintptr_t)bus_read64,
-                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
 
-                    rd_node->set_arg(0, ee->ee_ptr);
+                    rd_node->set_arg(0, ee->state_ptr);
                     rd_node->set_arg(1, aligned);
                     rd_node->set_ret(0, data);
 
@@ -6336,7 +6296,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uc.not_(mask, mask);
                     }
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.and_(rt.reg, rt.reg, mask);
                     uc.or_(rt.reg, rt.reg, shifted);
@@ -6344,16 +6304,16 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_LBU:
-                case EE_I_LHU:
-                case EE_I_LWU: {
+                case I_LBU:
+                case I_LHU:
+                case I_LWU: {
                     uintptr_t func;
                     int bytes;
 
                     switch (i.id) {
-                        case EE_I_LBU: func = (uintptr_t)bus_read8;  bytes = 1; break;
-                        case EE_I_LHU: func = (uintptr_t)bus_read16; bytes = 2; break;
-                        case EE_I_LWU: func = (uintptr_t)bus_read32; bytes = 4; break;
+                        case I_LBU: func = (uintptr_t)bus_read8;  bytes = 1; break;
+                        case I_LHU: func = (uintptr_t)bus_read16; bytes = 2; break;
+                        case I_LWU: func = (uintptr_t)bus_read32; bytes = 4; break;
                     }
 
                     uint64_t cs;
@@ -6361,20 +6321,20 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     void* host = nullptr;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs)) {
-                        host = ee_fold_host_ptr(ee, (uint32_t)cs + (int32_t)(int16_t)i.i16, bytes, false, &phys);
+                    if (reg_is_const(ee, i.rs.r, &cs)) {
+                        host = fold_host_ptr(ee, (uint32_t)cs + (int32_t)(int16_t)i.i16, bytes, false, &phys);
                     }
 
                     if (host) {
                         if (i.rt.r) {
-                            ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
+                            CachedReg& rt = get_reg(ee, &uc, i.rt.r, false);
 
-                            ujit::Gp base = ee_fold_base(uc, host);
+                            ujit::Gp base = fold_base(uc, host);
 
                             switch (i.id) {
-                                case EE_I_LBU: uc.load_u8(rt.reg, ujit::mem_ptr(base, 0)); break;
-                                case EE_I_LHU: uc.load_u16(rt.reg, ujit::mem_ptr(base, 0)); break;
-                                case EE_I_LWU: uc.load_u32(rt.reg, ujit::mem_ptr(base, 0)); break;
+                                case I_LBU: uc.load_u8(rt.reg, ujit::mem_ptr(base, 0)); break;
+                                case I_LHU: uc.load_u16(rt.reg, ujit::mem_ptr(base, 0)); break;
+                                case I_LWU: uc.load_u32(rt.reg, ujit::mem_ptr(base, 0)); break;
                             }
 
                             ee->reg_cache[i.rt.r].constant = false;
@@ -6387,13 +6347,13 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uintptr_t slow_func;
 
                         switch (i.id) {
-                            case EE_I_LBU: slow_func = (uintptr_t)ee_vfast_read8; break;
-                            case EE_I_LHU: slow_func = (uintptr_t)ee_vfast_read16; break;
-                            case EE_I_LWU: slow_func = (uintptr_t)ee_vfast_read32; break;
+                            case I_LBU: slow_func = (uintptr_t)vfast_read8; break;
+                            case I_LHU: slow_func = (uintptr_t)vfast_read16; break;
+                            case I_LWU: slow_func = (uintptr_t)vfast_read32; break;
                         }
 
-                        ee_cached_reg& frt = ee_get_reg(ee, &uc, i.rt.r, i.rt.r == i.rs.r);
-                        ee_cached_reg& frs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& frt = get_reg(ee, &uc, i.rt.r, i.rt.r == i.rs.r);
+                        CachedReg& frs = get_reg(ee, &uc, i.rs.r);
 
                         ujit::Gp addr = uc.new_gp32();
                         ujit::Gp pidx = uc.new_gp32();
@@ -6419,9 +6379,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uc.and_(off, off, Imm(0xfff));
 
                         switch (i.id) {
-                            case EE_I_LBU: uc.load_u8(frt.reg, ujit::mem_ptr(base, off, 0)); break;
-                            case EE_I_LHU: uc.load_u16(frt.reg, ujit::mem_ptr(base, off, 0)); break;
-                            case EE_I_LWU: uc.load_u32(frt.reg, ujit::mem_ptr(base, off, 0)); break;
+                            case I_LBU: uc.load_u8(frt.reg, ujit::mem_ptr(base, off, 0)); break;
+                            case I_LHU: uc.load_u16(frt.reg, ujit::mem_ptr(base, off, 0)); break;
+                            case I_LWU: uc.load_u32(frt.reg, ujit::mem_ptr(base, off, 0)); break;
                         }
 
                         uc.j(done);
@@ -6432,10 +6392,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         bc.invoke(
                             Out(slow_node),
                             slow_func,
-                            FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                            FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
 
-                        slow_node->set_arg(0, ee->ee_ptr);
+                        slow_node->set_arg(0, ee->state_ptr);
                         slow_node->set_arg(1, addr);
                         slow_node->set_ret(0, frt.reg);
 
@@ -6447,7 +6407,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     }
 
                     if (!i.rt.r) {
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
                         ujit::Gp tmp = uc.new_gp32();
 
                         uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
@@ -6458,10 +6418,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         bc.invoke(
                             Out(invoke_node),
                             func,
-                            FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                            FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
 
-                        invoke_node->set_arg(0, ee->ee_ptr);
+                        invoke_node->set_arg(0, ee->state_ptr);
                         invoke_node->set_arg(1, tmp);
 
                         continue;
@@ -6469,8 +6429,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rt.r == i.rs.r;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp tmp = uc.new_gp32();
 
@@ -6482,18 +6442,18 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(invoke_node),
                         func,
-                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, tmp);
                     invoke_node->set_ret(0, rt.reg);
 
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_LQ: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_LQ: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp addr = uc.new_gp32();
 
@@ -6512,17 +6472,17 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     ujit::Gp ptr = uc.new_gp_ptr();
 
-                    uc.lea(ptr, ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + rt * sizeof(uint128_t)));
+                    uc.lea(ptr, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + rt * sizeof(uint128_t)));
 
                     InvokeNode* invoke_node;
 
                     bc.invoke(
                         Out(invoke_node),
-                        (uintptr_t)ee_jit_read128,
-                        FuncSignature::build<void, ee_state*, uint32_t, uint128_t*>()
+                        (uintptr_t)jit_read128,
+                        FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, addr);
                     invoke_node->set_arg(2, ptr);
 
@@ -6532,18 +6492,18 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     }
                 } break;
 
-                case EE_I_SB:
-                case EE_I_SH:
-                case EE_I_SW:
-                case EE_I_SD: {
+                case I_SB:
+                case I_SH:
+                case I_SW:
+                case I_SD: {
                     uintptr_t func;
                     int bytes;
 
                     switch (i.id) {
-                        case EE_I_SB: func = (uintptr_t)bus_write8; bytes = 1; break;
-                        case EE_I_SH: func = (uintptr_t)bus_write16; bytes = 2; break;
-                        case EE_I_SW: func = (uintptr_t)bus_write32; bytes = 4; break;
-                        case EE_I_SD: func = (uintptr_t)bus_write64; bytes = 8; break;
+                        case I_SB: func = (uintptr_t)bus_write8; bytes = 1; break;
+                        case I_SH: func = (uintptr_t)bus_write16; bytes = 2; break;
+                        case I_SW: func = (uintptr_t)bus_write32; bytes = 4; break;
+                        case I_SD: func = (uintptr_t)bus_write64; bytes = 8; break;
                     }
 
                     {
@@ -6551,52 +6511,52 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uint32_t phys;
                         void* host = nullptr;
 
-                        if (ee_reg_is_const(ee, i.rs.r, &cs))
-                            host = ee_fold_host_ptr(ee, (uint32_t)cs + (int32_t)(int16_t)i.i16, bytes, true, &phys);
+                        if (reg_is_const(ee, i.rs.r, &cs))
+                            host = fold_host_ptr(ee, (uint32_t)cs + (int32_t)(int16_t)i.i16, bytes, true, &phys);
 
                         if (host) {
-                            ee_cached_reg& frt = ee_get_reg(ee, &uc, i.rt.r);
+                            CachedReg& frt = get_reg(ee, &uc, i.rt.r);
 
-                            if (phys != EE_FOLD_NO_PHYS) {
-                                ee_cache_page* pg = &ee->block_cache[phys / EE_MIN_PAGESIZE];
+                            if (phys != FOLD_NO_PHYS) {
+                                CachePage* pg = &ee->block_cache[phys / MIN_PAGESIZE];
 
                                 asmjit::Label no_smc = uc.new_label();
                                 ujit::Gp pgp = uc.new_gp_ptr();
                                 ujit::Gp pgv = uc.new_gp32();
 
                                 uc.mov(pgp, Imm((uint64_t)(uintptr_t)pg));
-                                uc.load_u8(pgv, ujit::mem_ptr(pgp, offsetof(ee_cache_page, valid)));
+                                uc.load_u8(pgv, ujit::mem_ptr(pgp, offsetof(CachePage, valid)));
                                 uc.j(no_smc, ujit::test_z(pgv));
 
                                 InvokeNode* inv_node;
 
                                 bc.invoke(
                                     Out(inv_node),
-                                    (uintptr_t)ee_invalidate_page,
-                                    FuncSignature::build<void, ee_state*, uint32_t>()
+                                    (uintptr_t)invalidate_page,
+                                    FuncSignature::build<void, Ee*, uint32_t>()
                                 );
 
-                                inv_node->set_arg(0, ee->ee_ptr);
+                                inv_node->set_arg(0, ee->state_ptr);
                                 inv_node->set_arg(1, Imm(phys));
 
                                 uc.bind(no_smc);
                             }
 
-                            ujit::Gp base = ee_fold_base(uc, host);
+                            ujit::Gp base = fold_base(uc, host);
 
                             switch (i.id) {
-                                case EE_I_SB: uc.store_u8(ujit::mem_ptr(base, 0), frt.reg); break;
-                                case EE_I_SH: uc.store_u16(ujit::mem_ptr(base, 0), frt.reg); break;
-                                case EE_I_SW: uc.store_u32(ujit::mem_ptr(base, 0), frt.reg); break;
-                                case EE_I_SD: uc.store_u64(ujit::mem_ptr(base, 0), frt.reg); break;
+                                case I_SB: uc.store_u8(ujit::mem_ptr(base, 0), frt.reg); break;
+                                case I_SH: uc.store_u16(ujit::mem_ptr(base, 0), frt.reg); break;
+                                case I_SW: uc.store_u32(ujit::mem_ptr(base, 0), frt.reg); break;
+                                case I_SD: uc.store_u64(ujit::mem_ptr(base, 0), frt.reg); break;
                             }
 
                             continue;
                         }
                     }
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp tmp1 = uc.new_gp64();
 
@@ -6608,20 +6568,20 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(invoke_node),
                         func,
-                        FuncSignature::build<void, ee_state*, uint32_t, uint64_t>()
+                        FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, tmp1);
                     invoke_node->set_arg(2, rt.reg);
                 } break;
 
-                case EE_I_SDL:
-                case EE_I_SDR: {
-                    bool is_l = i.id == EE_I_SDL;
+                case I_SDL:
+                case I_SDR: {
+                    bool is_l = i.id == I_SDL;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp addr = uc.new_gp32();
                     ujit::Gp aligned = uc.new_gp32();
@@ -6639,10 +6599,10 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(rd_node),
                         (uintptr_t)bus_read64,
-                        FuncSignature::build<uint64_t, ee_state*, uint32_t>()
+                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
 
-                    rd_node->set_arg(0, ee->ee_ptr);
+                    rd_node->set_arg(0, ee->state_ptr);
                     rd_node->set_arg(1, aligned);
                     rd_node->set_ret(0, data);
 
@@ -6686,16 +6646,16 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     bc.invoke(
                         Out(wr_node),
                         (uintptr_t)bus_write64,
-                        FuncSignature::build<void, ee_state*, uint32_t, uint64_t>()
+                        FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
                     );
 
-                    wr_node->set_arg(0, ee->ee_ptr);
+                    wr_node->set_arg(0, ee->state_ptr);
                     wr_node->set_arg(1, aligned);
                     wr_node->set_arg(2, store_val);
                 } break;
 
-                case EE_I_SQ: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_SQ: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp addr = uc.new_gp32();
 
@@ -6703,31 +6663,31 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.add(addr, addr, rs.reg.r32());
                     uc.and_(addr, addr, Imm(~0xf));
 
-                    ee_sync_reg_to_mem(ee, uc, i.rt.r);
+                    sync_reg_to_mem(ee, uc, i.rt.r);
 
                     ujit::Gp ptr = uc.new_gp_ptr();
 
-                    uc.lea(ptr, ujit::mem_ptr(ee->ee_ptr, offsetof(ee_state, r) + i.rt.r * sizeof(uint128_t)));
+                    uc.lea(ptr, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i.rt.r * sizeof(uint128_t)));
 
                     InvokeNode* invoke_node;
 
                     bc.invoke(
                         Out(invoke_node),
-                        (uintptr_t)ee_jit_write128,
-                        FuncSignature::build<void, ee_state*, uint32_t, uint128_t*>()
+                        (uintptr_t)jit_write128,
+                        FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, addr);
                     invoke_node->set_arg(2, ptr);
                 } break;
 
-                case EE_I_LQC2: {
+                case I_LQC2: {
                     int rt = i.rt.r;
 
                     if (!rt) continue;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp addr = uc.new_gp32();
 
@@ -6738,23 +6698,23 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ujit::Gp ptr = uc.new_gp_ptr();
 
                     uc.load_u64(ptr, EE(vu0));
-                    uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu_state, vf) + rt * sizeof(vu_reg128))));
+                    uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + rt * sizeof(vu::Reg128))));
 
                     InvokeNode* invoke_node;
 
                     bc.invoke(
                         Out(invoke_node),
-                        (uintptr_t)ee_jit_read128,
-                        FuncSignature::build<void, ee_state*, uint32_t, uint128_t*>()
+                        (uintptr_t)jit_read128,
+                        FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, addr);
                     invoke_node->set_arg(2, ptr);
                 } break;
 
-                case EE_I_SQC2: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_SQC2: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     ujit::Gp addr = uc.new_gp32();
 
@@ -6765,202 +6725,202 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ujit::Gp ptr = uc.new_gp_ptr();
 
                     uc.load_u64(ptr, EE(vu0));
-                    uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu_state, vf) + i.rt.r * sizeof(vu_reg128))));
+                    uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + i.rt.r * sizeof(vu::Reg128))));
 
                     InvokeNode* invoke_node;
 
                     bc.invoke(
                         Out(invoke_node),
-                        (uintptr_t)ee_jit_write128,
-                        FuncSignature::build<void, ee_state*, uint32_t, uint128_t*>()
+                        (uintptr_t)jit_write128,
+                        FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, addr);
                     invoke_node->set_arg(2, ptr);
                 } break;
 
-                case EE_I_QMFC2: {
+                case I_QMFC2: {
                     if (!i.rt.r) continue;
 
                     ujit::Gp ptr = uc.new_gp_ptr();
                     uc.load_u64(ptr, EE(vu0));
 
                     ujit::Vec v = uc.new_vec128();
-                    uc.v_loadu128(v, ujit::mem_ptr(ptr, (int)(offsetof(vu_state, vf) + i.rd.r * sizeof(vu_reg128))));
+                    uc.v_loadu128(v, ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + i.rd.r * sizeof(vu::Reg128))));
 
-                    ee_set_vec(ee, uc, i.rt.r, v);
+                    set_vec(ee, uc, i.rt.r, v);
                 } break;
 
-                case EE_I_QMTC2: {
+                case I_QMTC2: {
                     if (!i.rd.r) continue;
 
-                    ujit::Vec v = ee_get_vec(ee, uc, i.rt.r);
+                    ujit::Vec v = get_vec(ee, uc, i.rt.r);
 
                     ujit::Gp ptr = uc.new_gp_ptr();
 
                     uc.load_u64(ptr, EE(vu0));
-                    uc.v_storeu128(ujit::mem_ptr(ptr, (int)(offsetof(vu_state, vf) + i.rd.r * sizeof(vu_reg128))), v);
+                    uc.v_storeu128(ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + i.rd.r * sizeof(vu::Reg128))), v);
                 } break;
 
-                case EE_I_PADDB:  case EE_I_PADDH:  case EE_I_PADDW:
-                case EE_I_PSUBB:  case EE_I_PSUBH:  case EE_I_PSUBW:
-                case EE_I_PADDUB: case EE_I_PADDUH: case EE_I_PSUBUB: case EE_I_PSUBUH:
-                case EE_I_PADDSB: case EE_I_PADDSH: case EE_I_PSUBSB: case EE_I_PSUBSH:
-                case EE_I_PADDSW: case EE_I_PSUBSW: case EE_I_PADDUW: case EE_I_PSUBUW:
-                case EE_I_PADSBH:
-                case EE_I_PAND:   case EE_I_POR:    case EE_I_PXOR:   case EE_I_PNOR:
-                case EE_I_PCEQB:  case EE_I_PCEQH:  case EE_I_PCEQW:
-                case EE_I_PCGTB:  case EE_I_PCGTH:  case EE_I_PCGTW:
-                case EE_I_PMAXH:  case EE_I_PMAXW:  case EE_I_PMINH:  case EE_I_PMINW:
-                case EE_I_PEXTLB: case EE_I_PEXTLH: case EE_I_PEXTLW:
-                case EE_I_PEXTUB: case EE_I_PEXTUH: case EE_I_PEXTUW:
-                case EE_I_PCPYLD: case EE_I_PCPYUD: case EE_I_PINTH:  case EE_I_PINTEH:
-                case EE_I_PPACB:  case EE_I_PPACH:  case EE_I_PPACW: {
+                case I_PADDB:  case I_PADDH:  case I_PADDW:
+                case I_PSUBB:  case I_PSUBH:  case I_PSUBW:
+                case I_PADDUB: case I_PADDUH: case I_PSUBUB: case I_PSUBUH:
+                case I_PADDSB: case I_PADDSH: case I_PSUBSB: case I_PSUBSH:
+                case I_PADDSW: case I_PSUBSW: case I_PADDUW: case I_PSUBUW:
+                case I_PADSBH:
+                case I_PAND:   case I_POR:    case I_PXOR:   case I_PNOR:
+                case I_PCEQB:  case I_PCEQH:  case I_PCEQW:
+                case I_PCGTB:  case I_PCGTH:  case I_PCGTW:
+                case I_PMAXH:  case I_PMAXW:  case I_PMINH:  case I_PMINW:
+                case I_PEXTLB: case I_PEXTLH: case I_PEXTLW:
+                case I_PEXTUB: case I_PEXTUH: case I_PEXTUW:
+                case I_PCPYLD: case I_PCPYUD: case I_PINTH:  case I_PINTEH:
+                case I_PPACB:  case I_PPACH:  case I_PPACW: {
                     if (!i.rd.r) continue;
 
-                    ujit::Vec vrs = ee_get_vec(ee, uc, i.rs.r);
-                    ujit::Vec vrt = ee_get_vec(ee, uc, i.rt.r);
+                    ujit::Vec vrs = get_vec(ee, uc, i.rs.r);
+                    ujit::Vec vrt = get_vec(ee, uc, i.rt.r);
                     ujit::Vec vrd = uc.new_vec128();
 
                     switch (i.id) {
-                        case EE_I_PADDB:  ee_mmi::paddb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDH:  ee_mmi::paddh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDW:  ee_mmi::paddw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBB:  ee_mmi::psubb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBH:  ee_mmi::psubh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBW:  ee_mmi::psubw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDUB: ee_mmi::paddub(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDUH: ee_mmi::padduh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBUB: ee_mmi::psubub(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBUH: ee_mmi::psubuh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDSB: ee_mmi::paddsb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDSH: ee_mmi::paddsh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBSB: ee_mmi::psubsb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBSH: ee_mmi::psubsh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDSW: ee_mmi::paddsw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBSW: ee_mmi::psubsw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADDUW: ee_mmi::padduw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PSUBUW: ee_mmi::psubuw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PADSBH: ee_mmi::padsbh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PAND:   ee_mmi::pand(uc, vrd, vrs, vrt); break;
-                        case EE_I_POR:    ee_mmi::por(uc, vrd, vrs, vrt); break;
-                        case EE_I_PXOR:   ee_mmi::pxor(uc, vrd, vrs, vrt); break;
-                        case EE_I_PNOR:   ee_mmi::pnor(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCEQB:  ee_mmi::pceqb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCEQH:  ee_mmi::pceqh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCEQW:  ee_mmi::pceqw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCGTB:  ee_mmi::pcgtb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCGTH:  ee_mmi::pcgth(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCGTW:  ee_mmi::pcgtw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PMAXH:  ee_mmi::pmaxh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PMAXW:  ee_mmi::pmaxw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PMINH:  ee_mmi::pminh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PMINW:  ee_mmi::pminw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PEXTLB: ee_mmi::pextlb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PEXTLH: ee_mmi::pextlh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PEXTLW: ee_mmi::pextlw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PEXTUB: ee_mmi::pextub(uc, vrd, vrs, vrt); break;
-                        case EE_I_PEXTUH: ee_mmi::pextuh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PEXTUW: ee_mmi::pextuw(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCPYLD: ee_mmi::pcpyld(uc, vrd, vrs, vrt); break;
-                        case EE_I_PCPYUD: ee_mmi::pcpyud(uc, vrd, vrs, vrt); break;
-                        case EE_I_PINTH:  ee_mmi::pinth(uc, vrd, vrs, vrt); break;
-                        case EE_I_PINTEH: ee_mmi::pinteh(uc, vrd, vrs, vrt); break;
-                        case EE_I_PPACB:  ee_mmi::ppacb(uc, vrd, vrs, vrt); break;
-                        case EE_I_PPACH:  ee_mmi::ppach(uc, vrd, vrs, vrt); break;
-                        case EE_I_PPACW:  ee_mmi::ppacw(uc, vrd, vrs, vrt); break;
+                        case I_PADDB:  mmi::paddb(uc, vrd, vrs, vrt); break;
+                        case I_PADDH:  mmi::paddh(uc, vrd, vrs, vrt); break;
+                        case I_PADDW:  mmi::paddw(uc, vrd, vrs, vrt); break;
+                        case I_PSUBB:  mmi::psubb(uc, vrd, vrs, vrt); break;
+                        case I_PSUBH:  mmi::psubh(uc, vrd, vrs, vrt); break;
+                        case I_PSUBW:  mmi::psubw(uc, vrd, vrs, vrt); break;
+                        case I_PADDUB: mmi::paddub(uc, vrd, vrs, vrt); break;
+                        case I_PADDUH: mmi::padduh(uc, vrd, vrs, vrt); break;
+                        case I_PSUBUB: mmi::psubub(uc, vrd, vrs, vrt); break;
+                        case I_PSUBUH: mmi::psubuh(uc, vrd, vrs, vrt); break;
+                        case I_PADDSB: mmi::paddsb(uc, vrd, vrs, vrt); break;
+                        case I_PADDSH: mmi::paddsh(uc, vrd, vrs, vrt); break;
+                        case I_PSUBSB: mmi::psubsb(uc, vrd, vrs, vrt); break;
+                        case I_PSUBSH: mmi::psubsh(uc, vrd, vrs, vrt); break;
+                        case I_PADDSW: mmi::paddsw(uc, vrd, vrs, vrt); break;
+                        case I_PSUBSW: mmi::psubsw(uc, vrd, vrs, vrt); break;
+                        case I_PADDUW: mmi::padduw(uc, vrd, vrs, vrt); break;
+                        case I_PSUBUW: mmi::psubuw(uc, vrd, vrs, vrt); break;
+                        case I_PADSBH: mmi::padsbh(uc, vrd, vrs, vrt); break;
+                        case I_PAND:   mmi::pand(uc, vrd, vrs, vrt); break;
+                        case I_POR:    mmi::por(uc, vrd, vrs, vrt); break;
+                        case I_PXOR:   mmi::pxor(uc, vrd, vrs, vrt); break;
+                        case I_PNOR:   mmi::pnor(uc, vrd, vrs, vrt); break;
+                        case I_PCEQB:  mmi::pceqb(uc, vrd, vrs, vrt); break;
+                        case I_PCEQH:  mmi::pceqh(uc, vrd, vrs, vrt); break;
+                        case I_PCEQW:  mmi::pceqw(uc, vrd, vrs, vrt); break;
+                        case I_PCGTB:  mmi::pcgtb(uc, vrd, vrs, vrt); break;
+                        case I_PCGTH:  mmi::pcgth(uc, vrd, vrs, vrt); break;
+                        case I_PCGTW:  mmi::pcgtw(uc, vrd, vrs, vrt); break;
+                        case I_PMAXH:  mmi::pmaxh(uc, vrd, vrs, vrt); break;
+                        case I_PMAXW:  mmi::pmaxw(uc, vrd, vrs, vrt); break;
+                        case I_PMINH:  mmi::pminh(uc, vrd, vrs, vrt); break;
+                        case I_PMINW:  mmi::pminw(uc, vrd, vrs, vrt); break;
+                        case I_PEXTLB: mmi::pextlb(uc, vrd, vrs, vrt); break;
+                        case I_PEXTLH: mmi::pextlh(uc, vrd, vrs, vrt); break;
+                        case I_PEXTLW: mmi::pextlw(uc, vrd, vrs, vrt); break;
+                        case I_PEXTUB: mmi::pextub(uc, vrd, vrs, vrt); break;
+                        case I_PEXTUH: mmi::pextuh(uc, vrd, vrs, vrt); break;
+                        case I_PEXTUW: mmi::pextuw(uc, vrd, vrs, vrt); break;
+                        case I_PCPYLD: mmi::pcpyld(uc, vrd, vrs, vrt); break;
+                        case I_PCPYUD: mmi::pcpyud(uc, vrd, vrs, vrt); break;
+                        case I_PINTH:  mmi::pinth(uc, vrd, vrs, vrt); break;
+                        case I_PINTEH: mmi::pinteh(uc, vrd, vrs, vrt); break;
+                        case I_PPACB:  mmi::ppacb(uc, vrd, vrs, vrt); break;
+                        case I_PPACH:  mmi::ppach(uc, vrd, vrs, vrt); break;
+                        case I_PPACW:  mmi::ppacw(uc, vrd, vrs, vrt); break;
                     }
 
-                    ee_set_vec(ee, uc, i.rd.r, vrd);
+                    set_vec(ee, uc, i.rd.r, vrd);
                 } break;
 
-                case EE_I_PCPYH: case EE_I_PEXEH: case EE_I_PREVH: case EE_I_PEXCH:
-                case EE_I_PEXEW: case EE_I_PEXCW: case EE_I_PROT3W:
-                case EE_I_PABSH: case EE_I_PABSW:
-                case EE_I_PEXT5: case EE_I_PPAC5: {
+                case I_PCPYH: case I_PEXEH: case I_PREVH: case I_PEXCH:
+                case I_PEXEW: case I_PEXCW: case I_PROT3W:
+                case I_PABSH: case I_PABSW:
+                case I_PEXT5: case I_PPAC5: {
                     if (!i.rd.r) continue;
 
-                    ujit::Vec vrt = ee_get_vec(ee, uc, i.rt.r);
+                    ujit::Vec vrt = get_vec(ee, uc, i.rt.r);
                     ujit::Vec vrd = uc.new_vec128();
 
                     switch (i.id) {
-                        case EE_I_PCPYH:  ee_mmi::pcpyh(uc, vrd, vrt); break;
-                        case EE_I_PEXEH:  ee_mmi::pexeh(uc, vrd, vrt); break;
-                        case EE_I_PREVH:  ee_mmi::prevh(uc, vrd, vrt); break;
-                        case EE_I_PEXCH:  ee_mmi::pexch(uc, vrd, vrt); break;
-                        case EE_I_PEXEW:  ee_mmi::pexew(uc, vrd, vrt); break;
-                        case EE_I_PEXCW:  ee_mmi::pexcw(uc, vrd, vrt); break;
-                        case EE_I_PROT3W: ee_mmi::prot3w(uc, vrd, vrt); break;
-                        case EE_I_PABSH:  ee_mmi::pabsh(uc, vrd, vrt); break;
-                        case EE_I_PABSW:  ee_mmi::pabsw(uc, vrd, vrt); break;
-                        case EE_I_PEXT5:  ee_mmi::pext5(uc, vrd, vrt); break;
-                        case EE_I_PPAC5:  ee_mmi::ppac5(uc, vrd, vrt); break;
+                        case I_PCPYH:  mmi::pcpyh(uc, vrd, vrt); break;
+                        case I_PEXEH:  mmi::pexeh(uc, vrd, vrt); break;
+                        case I_PREVH:  mmi::prevh(uc, vrd, vrt); break;
+                        case I_PEXCH:  mmi::pexch(uc, vrd, vrt); break;
+                        case I_PEXEW:  mmi::pexew(uc, vrd, vrt); break;
+                        case I_PEXCW:  mmi::pexcw(uc, vrd, vrt); break;
+                        case I_PROT3W: mmi::prot3w(uc, vrd, vrt); break;
+                        case I_PABSH:  mmi::pabsh(uc, vrd, vrt); break;
+                        case I_PABSW:  mmi::pabsw(uc, vrd, vrt); break;
+                        case I_PEXT5:  mmi::pext5(uc, vrd, vrt); break;
+                        case I_PPAC5:  mmi::ppac5(uc, vrd, vrt); break;
                     }
 
-                    ee_set_vec(ee, uc, i.rd.r, vrd);
+                    set_vec(ee, uc, i.rd.r, vrd);
                 } break;
 
-                case EE_I_PSLLH:
-                case EE_I_PSLLW:
-                case EE_I_PSRLH:
-                case EE_I_PSRLW:
-                case EE_I_PSRAH:
-                case EE_I_PSRAW: {
+                case I_PSLLH:
+                case I_PSLLW:
+                case I_PSRLH:
+                case I_PSRLW:
+                case I_PSRAH:
+                case I_PSRAW: {
                     if (!i.rd.r) continue;
 
-                    ujit::Vec vrt = ee_get_vec(ee, uc, i.rt.r);
+                    ujit::Vec vrt = get_vec(ee, uc, i.rt.r);
                     ujit::Vec vrd = uc.new_vec128();
 
                     switch (i.id) {
-                        case EE_I_PSLLH: ee_mmi::psllh(uc, vrd, vrt, i.sa); break;
-                        case EE_I_PSLLW: ee_mmi::psllw(uc, vrd, vrt, i.sa); break;
-                        case EE_I_PSRLH: ee_mmi::psrlh(uc, vrd, vrt, i.sa); break;
-                        case EE_I_PSRLW: ee_mmi::psrlw(uc, vrd, vrt, i.sa); break;
-                        case EE_I_PSRAH: ee_mmi::psrah(uc, vrd, vrt, i.sa); break;
-                        case EE_I_PSRAW: ee_mmi::psraw(uc, vrd, vrt, i.sa); break;
+                        case I_PSLLH: mmi::psllh(uc, vrd, vrt, i.sa); break;
+                        case I_PSLLW: mmi::psllw(uc, vrd, vrt, i.sa); break;
+                        case I_PSRLH: mmi::psrlh(uc, vrd, vrt, i.sa); break;
+                        case I_PSRLW: mmi::psrlw(uc, vrd, vrt, i.sa); break;
+                        case I_PSRAH: mmi::psrah(uc, vrd, vrt, i.sa); break;
+                        case I_PSRAW: mmi::psraw(uc, vrd, vrt, i.sa); break;
                     }
 
-                    ee_set_vec(ee, uc, i.rd.r, vrd);
+                    set_vec(ee, uc, i.rd.r, vrd);
                 } break;
 
-                case EE_I_PMFHI: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmfhi, EE_MMI_WR_RD, false); break;
-                case EE_I_PMFLO: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmflo, EE_MMI_WR_RD, false); break;
-                case EE_I_PMTHI: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmthi, EE_MMI_WR_HI, true); break;
-                case EE_I_PMTLO: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmtlo, EE_MMI_WR_LO, true); break;
-                case EE_I_PMTHL: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmthl, EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMULTW:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmultw,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMULTUW: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmultuw, EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMADDW:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmaddw,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMADDUW: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmadduw, EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMULTH:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmulth,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMADDH:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmaddh,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMSUBW:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmsubw,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PMSUBH:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmsubh,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PHMADH:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::phmadh,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
-                case EE_I_PHMSBH:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::phmsbh,  EE_MMI_WR_RD | EE_MMI_WR_HI | EE_MMI_WR_LO, true); break;
+                case I_PMFHI: emit_mmi_wide(ee, uc, i, mmi::pmfhi, MMI_WR_RD, false); break;
+                case I_PMFLO: emit_mmi_wide(ee, uc, i, mmi::pmflo, MMI_WR_RD, false); break;
+                case I_PMTHI: emit_mmi_wide(ee, uc, i, mmi::pmthi, MMI_WR_HI, true); break;
+                case I_PMTLO: emit_mmi_wide(ee, uc, i, mmi::pmtlo, MMI_WR_LO, true); break;
+                case I_PMTHL: emit_mmi_wide(ee, uc, i, mmi::pmthl, MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMULTW:  emit_mmi_wide(ee, uc, i, mmi::pmultw,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMULTUW: emit_mmi_wide(ee, uc, i, mmi::pmultuw, MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMADDW:  emit_mmi_wide(ee, uc, i, mmi::pmaddw,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMADDUW: emit_mmi_wide(ee, uc, i, mmi::pmadduw, MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMULTH:  emit_mmi_wide(ee, uc, i, mmi::pmulth,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMADDH:  emit_mmi_wide(ee, uc, i, mmi::pmaddh,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMSUBW:  emit_mmi_wide(ee, uc, i, mmi::pmsubw,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PMSUBH:  emit_mmi_wide(ee, uc, i, mmi::pmsubh,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PHMADH:  emit_mmi_wide(ee, uc, i, mmi::phmadh,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
+                case I_PHMSBH:  emit_mmi_wide(ee, uc, i, mmi::phmsbh,  MMI_WR_RD | MMI_WR_HI | MMI_WR_LO, true); break;
 
-                case EE_I_MOVZ:
-                case EE_I_MOVN: {
+                case I_MOVZ:
+                case I_MOVN: {
                     if (!i.rd.r) continue;
 
                     uint64_t crt;
 
-                    if (ee_reg_is_const(ee, i.rt.r, &crt)) {
-                        bool moves = (i.id == EE_I_MOVZ) ? (crt == 0) : (crt != 0);
+                    if (reg_is_const(ee, i.rt.r, &crt)) {
+                        bool moves = (i.id == I_MOVZ) ? (crt == 0) : (crt != 0);
 
                         if (!moves) continue;
 
                         uint64_t crs;
 
-                        if (ee_reg_is_const(ee, i.rs.r, &crs)) {
-                            ee_set_const(ee, &uc, i.rd.r, crs);
+                        if (reg_is_const(ee, i.rs.r, &crs)) {
+                            set_const(ee, &uc, i.rd.r, crs);
 
                             continue;
                         }
 
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, i.rs.r == i.rd.r);
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, i.rs.r == i.rd.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                         uc.mov(rd.reg, rs.reg);
 
@@ -6969,11 +6929,11 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         continue;
                     }
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
-                    ujit::CondCode cond_code = i.id == EE_I_MOVZ ? ujit::CondCode::kZero : ujit::CondCode::kNotZero;
+                    ujit::CondCode cond_code = i.id == I_MOVZ ? ujit::CondCode::kZero : ujit::CondCode::kNotZero;
                     ujit::UniCondition cond(ujit::UniOpCond::kTest, cond_code, rt.reg, rt.reg);
 
                     uc.cmov(rd.reg, rs.reg, cond);
@@ -6981,14 +6941,14 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_ADD:
-                case EE_I_ADDU: {
+                case I_ADD:
+                case I_ADDU: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cs + (uint32_t)ct));
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cs + (uint32_t)ct));
 
                         continue;
                     }
@@ -6996,13 +6956,13 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uint64_t kc;
                     int ko;
 
-                    if (ee_one_const(ee, i.rs.r, i.rt.r, &kc, &ko)) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, ko);
+                    if (one_const(ee, i.rs.r, i.rt.r, &kc, &ko)) {
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
+                        CachedReg& rs = get_reg(ee, &uc, ko);
 
                         uc.add(rd.reg, rs.reg, Imm((int32_t)(uint32_t)kc));
 
-                        ee_sext32(uc, rd.reg);
+                        sext32(uc, rd.reg);
 
                         ee->reg_cache[i.rd.r].constant = false;
 
@@ -7011,32 +6971,32 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
 
                     if (!i.rs.r || !i.rt.r) {
-                        ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs.r ? i.rs.r : i.rt.r);
+                        CachedReg& src = get_reg(ee, &uc, i.rs.r ? i.rs.r : i.rt.r);
 
                         uc.mov(rd.reg, src.reg);
                     } else {
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                        ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                         uc.add(rd.reg, rs.reg, rt.reg);
                     }
 
-                    ee_sext32(uc, rd.reg);
+                    sext32(uc, rd.reg);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_DADD:
-                case EE_I_DADDU: {
+                case I_DADD:
+                case I_DADDU: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, cs + ct);
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, cs + ct);
 
                         continue;
                     }
@@ -7044,9 +7004,9 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uint64_t kc;
                     int ko;
 
-                    if (ee_one_const(ee, i.rs.r, i.rt.r, &kc, &ko) && ee_fits_imm32(kc)) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, ko);
+                    if (one_const(ee, i.rs.r, i.rt.r, &kc, &ko) && fits_imm32(kc)) {
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, ko == i.rd.r);
+                        CachedReg& rs = get_reg(ee, &uc, ko);
 
                         uc.add(rd.reg, rs.reg, Imm((int64_t)kc));
 
@@ -7057,15 +7017,15 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
 
                     if (!i.rs.r || !i.rt.r) {
-                        ee_cached_reg& src = ee_get_reg(ee, &uc, i.rs.r ? i.rs.r : i.rt.r);
+                        CachedReg& src = get_reg(ee, &uc, i.rs.r ? i.rs.r : i.rt.r);
 
                         uc.mov(rd.reg, src.reg);
                     } else {
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                        ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                        CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                         uc.add(rd.reg, rs.reg, rt.reg);
                     }
@@ -7073,23 +7033,23 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_DSUB:
-                case EE_I_DSUBU: {
+                case I_DSUB:
+                case I_DSUBU: {
                     if (!i.rd.r) continue;
 
                     uint64_t cs, ct;
 
-                    if (ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &ct)) {
-                        ee_set_const(ee, &uc, i.rd.r, cs - ct);
+                    if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
+                        set_const(ee, &uc, i.rd.r, cs - ct);
 
                         continue;
                     }
 
                     uint64_t kt;
 
-                    if (!ee_reg_is_const(ee, i.rs.r, &cs) && ee_reg_is_const(ee, i.rt.r, &kt) && ee_fits_imm32((uint64_t)(0 - kt))) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, i.rs.r == i.rd.r);
-                        ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    if (!reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &kt) && fits_imm32((uint64_t)(0 - kt))) {
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, i.rs.r == i.rd.r);
+                        CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                         uc.add(rd.reg, rs.reg, Imm((int64_t)(uint64_t)(0 - kt)));
 
@@ -7100,60 +7060,60 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bool sync = i.rs.r == i.rd.r || i.rt.r == i.rd.r;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, sync);
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, sync);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.sub(rd.reg, rs.reg, rt.reg);
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
 
-                case EE_I_MFHI:
-                case EE_I_MFHI1:
-                case EE_I_MFLO:
-                case EE_I_MFLO1: {
+                case I_MFHI:
+                case I_MFHI1:
+                case I_MFLO:
+                case I_MFLO1: {
                     if (!i.rd.r) continue;
 
-                    bool is_hi = i.id == EE_I_MFHI || i.id == EE_I_MFHI1;
-                    bool is_p1 = i.id == EE_I_MFHI1 || i.id == EE_I_MFLO1;
+                    bool is_hi = i.id == I_MFHI || i.id == I_MFHI1;
+                    bool is_p1 = i.id == I_MFHI1 || i.id == I_MFLO1;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, false);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, false);
 
                     uc.load_u64(rd.reg, is_hi ? (is_p1 ? EE(hi.u64[1]) : EE(hi.u64[0])) : (is_p1 ? EE(lo.u64[1]) : EE(lo.u64[0])));
                 } break;
 
-                case EE_I_MTHI:
-                case EE_I_MTHI1:
-                case EE_I_MTLO:
-                case EE_I_MTLO1: {
-                    bool is_hi = i.id == EE_I_MTHI || i.id == EE_I_MTHI1;
-                    bool is_p1 = i.id == EE_I_MTHI1 || i.id == EE_I_MTLO1;
+                case I_MTHI:
+                case I_MTHI1:
+                case I_MTLO:
+                case I_MTLO1: {
+                    bool is_hi = i.id == I_MTHI || i.id == I_MTHI1;
+                    bool is_p1 = i.id == I_MTHI1 || i.id == I_MTLO1;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     uc.store_u64(is_hi ? (is_p1 ? EE(hi.u64[1]) : EE(hi.u64[0]))
                                     : (is_p1 ? EE(lo.u64[1]) : EE(lo.u64[0])), rs.reg);
                 } break;
 
-                case EE_I_MFSA: {
+                case I_MFSA: {
                     if (!i.rd.r) continue;
 
-                    ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, false);
+                    CachedReg& rd = get_reg(ee, &uc, i.rd.r, false);
 
                     uc.load_u32(rd.reg, EE(sa));
                     uc.and_(rd.reg, rd.reg, Imm(0xf));
                 } break;
 
-                case EE_I_MTSA:
-                case EE_I_MTSAB:
-                case EE_I_MTSAH: {
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
+                case I_MTSA:
+                case I_MTSAB:
+                case I_MTSAH: {
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
                     ujit::Gp t = uc.new_gp32();
 
-                    if (i.id == EE_I_MTSA) {
+                    if (i.id == I_MTSA) {
                         uc.and_(t, rs.reg.r32(), Imm(0xf));
-                    } else if (i.id == EE_I_MTSAB) {
+                    } else if (i.id == I_MTSAB) {
                         uc.xor_(t, rs.reg.r32(), Imm((uint32_t)i.i16));
                         uc.and_(t, t, Imm(15));
                     } else {
@@ -7165,12 +7125,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.store_u32(EE(sa), t);
                 } break;
 
-                case EE_I_MULT:
-                case EE_I_MULT1: {
-                    bool is_p1 = i.id == EE_I_MULT1;
+                case I_MULT:
+                case I_MULT1: {
+                    bool is_p1 = i.id == I_MULT1;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp a = uc.new_gp64();
                     ujit::Gp b = uc.new_gp64();
@@ -7178,30 +7138,30 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ujit::Gp lo = uc.new_gp64();
                     ujit::Gp hi = uc.new_gp64();
 
-                    ee_sext32(uc, a, rs.reg);
-                    ee_sext32(uc, b, rt.reg);
+                    sext32(uc, a, rs.reg);
+                    sext32(uc, b, rt.reg);
 
                     uc.mul(prod, a, b);
 
-                    ee_sext32(uc, lo, prod);
+                    sext32(uc, lo, prod);
                     uc.sar(hi, prod, Imm(32));
 
                     uc.store_u64(is_p1 ? EE(lo.u64[1]) : EE(lo.u64[0]), lo);
                     uc.store_u64(is_p1 ? EE(hi.u64[1]) : EE(hi.u64[0]), hi);
 
                     if (i.rd.r) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, false);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, false);
 
                         uc.mov(rd.reg, lo);
                     }
                 } break;
 
-                case EE_I_MULTU:
-                case EE_I_MULTU1: {
-                    bool is_p1 = i.id == EE_I_MULTU1;
+                case I_MULTU:
+                case I_MULTU1: {
+                    bool is_p1 = i.id == I_MULTU1;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp a = uc.new_gp64();
                     ujit::Gp b = uc.new_gp64();
@@ -7214,28 +7174,28 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     uc.mul(prod, a, b);
 
-                    ee_sext32(uc, lo, prod);
+                    sext32(uc, lo, prod);
                     uc.sar(hi, prod, Imm(32));
 
                     uc.store_u64(is_p1 ? EE(lo.u64[1]) : EE(lo.u64[0]), lo);
                     uc.store_u64(is_p1 ? EE(hi.u64[1]) : EE(hi.u64[0]), hi);
 
                     if (i.rd.r) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, false);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, false);
 
                         uc.mov(rd.reg, lo);
                     }
                 } break;
 
-                case EE_I_MADD:
-                case EE_I_MADD1:
-                case EE_I_MADDU:
-                case EE_I_MADDU1: {
-                    bool is_p1 = i.id == EE_I_MADD1 || i.id == EE_I_MADDU1;
-                    bool is_u  = i.id == EE_I_MADDU || i.id == EE_I_MADDU1;
+                case I_MADD:
+                case I_MADD1:
+                case I_MADDU:
+                case I_MADDU1: {
+                    bool is_p1 = i.id == I_MADD1 || i.id == I_MADDU1;
+                    bool is_u  = i.id == I_MADDU || i.id == I_MADDU1;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp a = uc.new_gp64();
                     ujit::Gp b = uc.new_gp64();
@@ -7246,8 +7206,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                         uc.mov(a.r32(), rs.reg.r32());
                         uc.mov(b.r32(), rt.reg.r32());
                     } else {
-                        ee_sext32(uc, a, rs.reg);
-                        ee_sext32(uc, b, rt.reg);
+                        sext32(uc, a, rs.reg);
+                        sext32(uc, b, rt.reg);
                     }
 
                     ujit::Gp prod = uc.new_gp64();
@@ -7264,25 +7224,25 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.or_(acc, acc, hia);
                     uc.add(acc, acc, prod);
 
-                    ee_sext32(uc, lo, acc);
+                    sext32(uc, lo, acc);
                     uc.sar(hi, acc, Imm(32));
 
                     uc.store_u64(is_p1 ? EE(lo.u64[1]) : EE(lo.u64[0]), lo);
                     uc.store_u64(is_p1 ? EE(hi.u64[1]) : EE(hi.u64[0]), hi);
 
                     if (i.rd.r) {
-                        ee_cached_reg& rd = ee_get_reg(ee, &uc, i.rd.r, false);
+                        CachedReg& rd = get_reg(ee, &uc, i.rd.r, false);
 
                         uc.mov(rd.reg, lo);
                     }
                 } break;
 
-                case EE_I_DIV:
-                case EE_I_DIV1: {
-                    bool is_p1 = i.id == EE_I_DIV1;
+                case I_DIV:
+                case I_DIV1: {
+                    bool is_p1 = i.id == I_DIV1;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp s = uc.new_gp32();
                     ujit::Gp t = uc.new_gp32();
@@ -7336,8 +7296,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.neg(nr, ur);
                     uc.select(r, nr, ur, ujit::scmp_lt(s, Imm(0)));
 
-                    ee_sext32(uc, lo, q);
-                    ee_sext32(uc, hi, r);
+                    sext32(uc, lo, q);
+                    sext32(uc, hi, r);
 
                     uc.j(l_done);
 
@@ -7346,8 +7306,8 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ujit::Gp zq = uc.new_gp32();
                     uc.select(zq, Imm(1), Imm(-1), ujit::scmp_lt(s, Imm(0)));
 
-                    ee_sext32(uc, lo, zq);
-                    ee_sext32(uc, hi, s);
+                    sext32(uc, lo, zq);
+                    sext32(uc, hi, s);
 
                     uc.j(l_done);
 
@@ -7361,12 +7321,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.store_u64(is_p1 ? EE(hi.u64[1]) : EE(hi.u64[0]), hi);
                 } break;
 
-                case EE_I_DIVU:
-                case EE_I_DIVU1: {
-                    bool is_p1 = i.id == EE_I_DIVU1;
+                case I_DIVU:
+                case I_DIVU1: {
+                    bool is_p1 = i.id == I_DIVU1;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp s = uc.new_gp32();
                     ujit::Gp t = uc.new_gp32();
@@ -7388,15 +7348,15 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.udiv(q, s, t);
                     uc.umod(r, s, t);
 
-                    ee_sext32(uc, lo, q);
-                    ee_sext32(uc, hi, r);
+                    sext32(uc, lo, q);
+                    sext32(uc, hi, r);
 
                     uc.j(l_done);
 
                     uc.bind(l_zero);
                     uc.mov(lo, Imm((int64_t)-1));
 
-                    ee_sext32(uc, hi, s);
+                    sext32(uc, hi, s);
 
                     uc.bind(l_done);
 
@@ -7404,43 +7364,43 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.store_u64(is_p1 ? EE(hi.u64[1]) : EE(hi.u64[0]), hi);
                 } break;
 
-                case EE_I_PLZCW: {
+                case I_PLZCW: {
                     if (!i.rd.r) continue;
 
-                    ujit::Vec vrs = ee_get_vec(ee, uc, i.rs.r);
+                    ujit::Vec vrs = get_vec(ee, uc, i.rs.r);
                     ujit::Vec vrd = uc.new_vec128();
 
-                    ee_mmi::plzcw(uc, vrd, vrs);
+                    mmi::plzcw(uc, vrd, vrs);
 
-                    ee_set_vec(ee, uc, i.rd.r, vrd);
+                    set_vec(ee, uc, i.rd.r, vrd);
                 } break;
 
-                case EE_I_PSLLVW:
-                case EE_I_PSRLVW:
-                case EE_I_PSRAVW: {
+                case I_PSLLVW:
+                case I_PSRLVW:
+                case I_PSRAVW: {
                     if (!i.rd.r) continue;
 
-                    ujit::Vec vrs = ee_get_vec(ee, uc, i.rs.r);
-                    ujit::Vec vrt = ee_get_vec(ee, uc, i.rt.r);
+                    ujit::Vec vrs = get_vec(ee, uc, i.rs.r);
+                    ujit::Vec vrt = get_vec(ee, uc, i.rt.r);
                     ujit::Vec vrd = uc.new_vec128();
 
-                    if (i.id == EE_I_PSLLVW) {
-                        ee_mmi::psllvw(uc, vrd, vrs, vrt);
-                    } else if (i.id == EE_I_PSRLVW) {
-                        ee_mmi::psrlvw(uc, vrd, vrs, vrt);
+                    if (i.id == I_PSLLVW) {
+                        mmi::psllvw(uc, vrd, vrs, vrt);
+                    } else if (i.id == I_PSRLVW) {
+                        mmi::psrlvw(uc, vrd, vrs, vrt);
                     } else {
-                        ee_mmi::psravw(uc, vrd, vrs, vrt);
+                        mmi::psravw(uc, vrd, vrs, vrt);
                     }
 
-                    ee_set_vec(ee, uc, i.rd.r, vrd);
+                    set_vec(ee, uc, i.rd.r, vrd);
                 } break;
 
-                case EE_I_PMFHLLW:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmfhllw,  EE_MMI_WR_RD, false); break;
-                case EE_I_PMFHLSH:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmfhlsh,  EE_MMI_WR_RD, false); break;
-                case EE_I_PMFHLLH:  ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmfhllh,  EE_MMI_WR_RD, false); break;
-                case EE_I_PMFHLSLW: ee_emit_mmi_wide(ee, uc, i, ee_mmi::pmfhlslw, EE_MMI_WR_RD, false); break;
+                case I_PMFHLLW:  emit_mmi_wide(ee, uc, i, mmi::pmfhllw,  MMI_WR_RD, false); break;
+                case I_PMFHLSH:  emit_mmi_wide(ee, uc, i, mmi::pmfhlsh,  MMI_WR_RD, false); break;
+                case I_PMFHLLH:  emit_mmi_wide(ee, uc, i, mmi::pmfhllh,  MMI_WR_RD, false); break;
+                case I_PMFHLSLW: emit_mmi_wide(ee, uc, i, mmi::pmfhlslw, MMI_WR_RD, false); break;
 
-                case EE_I_PMFHLUW: {
+                case I_PMFHLUW: {
                     if (!i.rd.r) continue;
 
                     ujit::Gp w0 = uc.new_gp32();
@@ -7460,14 +7420,14 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.s_insert_u32(v, w2, 2);
                     uc.s_insert_u32(v, w3, 3);
 
-                    ee_set_vec(ee, uc, i.rd.r, v);
+                    set_vec(ee, uc, i.rd.r, v);
                 } break;
 
-                case EE_I_QFSRV: {
+                case I_QFSRV: {
                     if (!i.rd.r) continue;
 
-                    ujit::Vec vrt = ee_get_vec(ee, uc, i.rt.r);
-                    ujit::Vec vrs = ee_get_vec(ee, uc, i.rs.r);
+                    ujit::Vec vrt = get_vec(ee, uc, i.rt.r);
+                    ujit::Vec vrs = get_vec(ee, uc, i.rs.r);
 
                     uc.v_storeu128(EE(qfsrv_buf[0]), vrt);
                     uc.v_storeu128(EE(qfsrv_buf[16]), vrs);
@@ -7485,32 +7445,32 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     uc.v_loadu128(out, ujit::mem_ptr(base, off, 0));
 
-                    ee_set_vec(ee, uc, i.rd.r, out);
+                    set_vec(ee, uc, i.rd.r, out);
                 } break;
 
-                case EE_I_CFC1: {
+                case I_CFC1: {
                     if (!i.rt.r) continue;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, false);
 
-                    if (EE_D_FS >= 16) {
+                    if (D_FS >= 16) {
                         uc.load_u32(rt.reg, EE(fcr));
 
-                        ee_sext32(uc, rt.reg);
+                        sext32(uc, rt.reg);
                     } else {
                         uc.mov(rt.reg, Imm((int64_t)0x2e30));
                     }
                 } break;
 
-                case EE_I_CTC1: {
-                    if (EE_D_FS < 16) continue;
+                case I_CTC1: {
+                    if (D_FS < 16) continue;
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     uc.store_u32(EE(fcr), rt.reg);
                 } break;
 
-                case EE_I_CFC2: {
+                case I_CFC2: {
                     if (!i.rt.r) continue;
 
                     ujit::Gp vu = uc.new_gp_ptr();
@@ -7521,7 +7481,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bc.invoke(
                         Out(inv),
-                        (uintptr_t)ps2_vu_read_vi,
+                        (uintptr_t)vu::read_vi,
                         FuncSignature::build<uint32_t, void*, int32_t>()
                     );
 
@@ -7531,14 +7491,14 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     ujit::Gp res = uc.new_gp32();
                     inv->set_ret(0, res);
 
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, false);
-                    ee_sext32(uc, rt.reg, res);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, false);
+                    sext32(uc, rt.reg, res);
 
                     ee->reg_cache[i.rt.r].constant = false;
                 } break;
 
-                case EE_I_CTC2: {
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r);
+                case I_CTC2: {
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp val = uc.new_gp32();
                     ujit::Gp vu = uc.new_gp_ptr();
@@ -7550,7 +7510,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bc.invoke(
                         Out(inv),
-                        (uintptr_t)ps2_vu_write_vi,
+                        (uintptr_t)vu::write_vi,
                         FuncSignature::build<void, void*, int32_t, uint32_t>()
                     );
 
@@ -7563,7 +7523,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                         bc.invoke(
                             Out(inv_lock),
-                            (uintptr_t)vu_is_interlocked,
+                            (uintptr_t)vu::is_interlocked,
                             FuncSignature::build<int32_t, void*>()
                         );
 
@@ -7581,7 +7541,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                         bc.invoke(
                             Out(inv_exec),
-                            (uintptr_t)vu_execute_program_tpc,
+                            (uintptr_t)vu::execute_program_tpc,
                             FuncSignature::build<void, void*>()
                         );
 
@@ -7591,12 +7551,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     }
                 } break;
 
-                case EE_I_ERET: {
+                case I_ERET: {
                     ujit::Gp st = uc.new_gp32();
                     ujit::Gp t = uc.new_gp32();
 
                     uc.load_u32(st, EE(status));
-                    uc.and_(t, st, Imm(EE_SR_ERL));
+                    uc.and_(t, st, Imm(SR_ERL));
 
                     ujit::Gp addr = uc.new_gp32();
                     ujit::Gp nst = uc.new_gp32();
@@ -7607,12 +7567,12 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.j(l_erl, ujit::test_nz(t));
 
                     uc.load_u32(addr, EE(epc));
-                    uc.and_(nst, st, Imm(~(uint32_t)EE_SR_EXL));
+                    uc.and_(nst, st, Imm(~(uint32_t)SR_EXL));
                     uc.j(l_done);
 
                     uc.bind(l_erl);
                     uc.load_u32(addr, EE(errorepc));
-                    uc.and_(nst, st, Imm(~(uint32_t)EE_SR_ERL));
+                    uc.and_(nst, st, Imm(~(uint32_t)SR_ERL));
 
                     uc.bind(l_done);
 
@@ -7628,11 +7588,11 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     bc.invoke(
                         Out(eret_inv),
-                        (uintptr_t)ee_skip_fmv,
-                        FuncSignature::build<int, ee_state*, uint32_t>()
+                        (uintptr_t)skip_fmv,
+                        FuncSignature::build<int, Ee*, uint32_t>()
                     );
 
-                    eret_inv->set_arg(0, ee->ee_ptr);
+                    eret_inv->set_arg(0, ee->state_ptr);
                     eret_inv->set_arg(1, addr);
                     eret_inv->set_ret(0, fs);
 
@@ -7645,15 +7605,15 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
                     uc.store_u32(EE(status), nst);
                 } break;
 
-                case EE_I_EI:
-                case EE_I_DI: {
+                case I_EI:
+                case I_DI: {
                     ujit::Gp st = uc.new_gp32();
                     ujit::Gp t = uc.new_gp32();
                     ujit::Gp k = uc.new_gp32();
 
                     uc.load_u32(st, EE(status));
-                    uc.and_(t, st, Imm(EE_SR_EDI | EE_SR_EXL | EE_SR_ERL));
-                    uc.and_(k, st, Imm(EE_SR_KSU));
+                    uc.and_(t, st, Imm(SR_EDI | SR_EXL | SR_ERL));
+                    uc.and_(k, st, Imm(SR_KSU));
 
                     Label l_do = uc.new_label();
                     Label l_skip = uc.new_label();
@@ -7665,26 +7625,26 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     ujit::Gp nv = uc.new_gp32();
 
-                    if (i.id == EE_I_EI) {
-                        uc.or_(nv, st, Imm(EE_SR_EIE));
+                    if (i.id == I_EI) {
+                        uc.or_(nv, st, Imm(SR_EIE));
                     } else {
-                        uc.and_(nv, st, Imm(~(uint32_t)EE_SR_EIE));
+                        uc.and_(nv, st, Imm(~(uint32_t)SR_EIE));
                     }
 
                     uc.store_u32(EE(status), nv);
                     uc.bind(l_skip);
                 } break;
 
-                case EE_I_LWL:
-                case EE_I_LWR:
-                case EE_I_SWL:
-                case EE_I_SWR: {
-                    bool is_load = i.id == EE_I_LWL || i.id == EE_I_LWR;
+                case I_LWL:
+                case I_LWR:
+                case I_SWL:
+                case I_SWR: {
+                    bool is_load = i.id == I_LWL || i.id == I_LWR;
 
                     if (is_load && !i.rt.r) continue;
 
-                    ee_cached_reg& rs = ee_get_reg(ee, &uc, i.rs.r);
-                    ee_cached_reg& rt = ee_get_reg(ee, &uc, i.rt.r, is_load ? (i.rt.r == i.rs.r) : true);
+                    CachedReg& rs = get_reg(ee, &uc, i.rs.r);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, is_load ? (i.rt.r == i.rs.r) : true);
 
                     ujit::Gp addr = uc.new_gp32();
 
@@ -7700,46 +7660,46 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
                     InvokeNode* rd;
 
-                    bc.invoke(Out(rd), (uintptr_t)bus_read32, FuncSignature::build<uint64_t, ee_state*, uint32_t>());
-                    rd->set_arg(0, ee->ee_ptr);
+                    bc.invoke(Out(rd), (uintptr_t)bus_read32, FuncSignature::build<uint64_t, Ee*, uint32_t>());
+                    rd->set_arg(0, ee->state_ptr);
                     rd->set_arg(1, aligned);
                     rd->set_ret(0, mem);
 
-                    if (i.id == EE_I_LWL) {
-                        uc.mov(rt.reg, ee_lsw::lwl(uc, rt.reg, mem, shift));
+                    if (i.id == I_LWL) {
+                        uc.mov(rt.reg, lsw::lwl(uc, rt.reg, mem, shift));
 
                         ee->reg_cache[i.rt.r].constant = false;
-                    } else if (i.id == EE_I_LWR) {
-                        uc.mov(rt.reg, ee_lsw::lwr(uc, rt.reg, mem, shift));
+                    } else if (i.id == I_LWR) {
+                        uc.mov(rt.reg, lsw::lwr(uc, rt.reg, mem, shift));
 
                         ee->reg_cache[i.rt.r].constant = false;
                     } else {
-                        ujit::Gp val = (i.id == EE_I_SWL) ? ee_lsw::swl(uc, rt.reg, mem, shift) : ee_lsw::swr(uc, rt.reg, mem, shift);
+                        ujit::Gp val = (i.id == I_SWL) ? lsw::swl(uc, rt.reg, mem, shift) : lsw::swr(uc, rt.reg, mem, shift);
                         ujit::Gp val64 = uc.new_gp64();
                         
                         uc.mov(val64.r32(), val);
 
                         InvokeNode* wr;
 
-                        bc.invoke(Out(wr), (uintptr_t)bus_write32, FuncSignature::build<void, ee_state*, uint32_t, uint64_t>());
-                        wr->set_arg(0, ee->ee_ptr);
+                        bc.invoke(Out(wr), (uintptr_t)bus_write32, FuncSignature::build<void, Ee*, uint32_t, uint64_t>());
+                        wr->set_arg(0, ee->state_ptr);
                         wr->set_arg(1, aligned);
                         wr->set_arg(2, val64);
                     }
                 } break;
 
                 default: {
-                    ee_flush_reg_cache(ee, &uc);
+                    flush_reg_cache(ee, &uc);
 
                     InvokeNode* invoke_node;
 
                     bc.invoke(
                         Out(invoke_node),
                         (uintptr_t)i.func,
-                        FuncSignature::build<void, ee_state*, ee_instruction&>()
+                        FuncSignature::build<void, Ee*, Instruction&>()
                     );
 
-                    invoke_node->set_arg(0, ee->ee_ptr);
+                    invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, Imm((uintptr_t)&i));
 
                     uc.store_zero_u64(EE(r[0].u64[0]));
@@ -7748,7 +7708,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
             }
         }
 
-        ee_flush_reg_cache(ee, &uc);
+        flush_reg_cache(ee, &uc);
 
         switch (pending) {
             case PEND_DONE: break;
@@ -7794,7 +7754,7 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
 
     uc.bind(block_exit);
 
-    ee_flush_reg_cache(ee, &uc);
+    flush_reg_cache(ee, &uc);
 
     uc.ret();
 
@@ -7803,58 +7763,54 @@ void ee_compile_block(struct ee_state* ee, struct ee_block* block) {
     Error err = uc.finalize();
 
     if (err != Error::kOk) {
-        printf("ee: Failed to finalize JIT compilation %d\n", err);
-
-        exit(1);
+        iris_fatal_error(ee, "Failed to finalize JIT compilation ({})", (uint32_t)err);
     }
 
     Error err1 = ee->rt.add(&block->func, &code);
 
     if (err1 != Error::kOk) {
-        printf("ee: Failed to add JIT code to runtime %d\n", err1);
-
-        exit(1);
+        iris_fatal_error(ee, "Failed to add JIT code to runtime ({})", (uint32_t)err1);
     }
 
     // if (code.logger()) {
     //     char buf[128];
 
-    //     ee_dis_state ds;
+    //     dis::Dis ds;
     //     ds.print_opcode = true;
     //     ds.print_address = true;
     //     ds.pc = block->start_pc;
 
-    //     printf("\n <------- Guest disassembly for block at PC=0x%08x:\n", block->start_pc);
+    //     iris_debug(ee, "\n <------- Guest disassembly for block at PC=0x{:08x}:", block->start_pc);
 
     //     for (const auto& i : block->instructions) {
-    //         puts(ee_disassemble(buf, i.opcode, &ds));
+    //         puts(dis::disassemble(buf, i.opcode, &ds));
 
     //         ds.pc += 4;
     //     }
     // }
 }
 
-static inline bool ee_is_irq_pending(struct ee_state* ee) {
-    int irq_enabled = (ee->status & EE_SR_IE) && (ee->status & EE_SR_EIE) &&
-        (!(ee->status & EE_SR_EXL)) && (!(ee->status & EE_SR_ERL));
-    int int0_pending = (ee->status & EE_SR_IM2) && (ee->cause & EE_CAUSE_IP2);
-    int int1_pending = (ee->status & EE_SR_IM3) && (ee->cause & EE_CAUSE_IP3);
+static inline bool is_irq_pending(Ee* ee) {
+    int irq_enabled = (ee->status & SR_IE) && (ee->status & SR_EIE) &&
+        (!(ee->status & SR_EXL)) && (!(ee->status & SR_ERL));
+    int int0_pending = (ee->status & SR_IM2) && (ee->cause & CAUSE_IP2);
+    int int1_pending = (ee->status & SR_IM3) && (ee->cause & CAUSE_IP3);
 
     return irq_enabled && (int0_pending || int1_pending);
 }
 
-static inline int _ee_run_block(struct ee_state* ee, int budget, int compile_hint) {
+static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
     int total = 0;
 
     while (true) {
-        struct ee_block* block = ee_find_block(ee, ee->pc);
+        Block* block = find_block(ee, ee->pc);
 
         if (!block) {
             ee->cache_misses++;
 
-            block = ee_cache_block(ee, compile_hint);
+            block = cache_block(ee, compile_hint);
 
-            ee_compile_block(ee, block);
+            compile_block(ee, block);
         } else {
             ee->cache_hits++;
         }
@@ -7883,9 +7839,9 @@ static inline int _ee_run_block(struct ee_state* ee, int budget, int compile_hin
         total += cycles;
 
         if (ee->pending_purge) {
-            printf("ee: Purging cache\n");
+            iris_debug(ee, "Purging cache");
 
-            ee_purge_cache(ee);
+            purge_cache(ee);
 
             ee->pending_purge = false;
 
@@ -7898,18 +7854,18 @@ static inline int _ee_run_block(struct ee_state* ee, int budget, int compile_hin
         if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000)
             break;
 
-        if (ee_is_irq_pending(ee))
+        if (is_irq_pending(ee))
             break;
     }
 
     return total;
 }
 
-int ee_run_block(struct ee_state* ee, int max_cycles) {
-    if (ee_is_irq_pending(ee)) {
+int run_block(Ee* ee, int max_cycles) {
+    if (is_irq_pending(ee)) {
         int cycles = _ee_run_block(ee, 1, 4);
 
-        ee_exception_level1(ee, CAUSE_EXC1_INT);
+        exception_level1(ee, CAUSE_EXC1_INT);
 
         return cycles;
     }
@@ -7925,25 +7881,25 @@ int ee_run_block(struct ee_state* ee, int max_cycles) {
     }
 
     // max_cycles is the remaining timeslice budget; chain blocks up to it.
-    return _ee_run_block(ee, max_cycles, EE_BLOCK_MAX_INSTRS);
+    return _ee_run_block(ee, max_cycles, BLOCK_MAX_INSTRS);
 }
 
-int ee_step(struct ee_state* ee) {
-    static ee_instruction i;
+int step(Ee* ee) {
+    static Instruction i;
 
     ee->delay_slot = ee->branch;
     ee->branch = 0;
 
     // Would check for interrupts here, but we do this outside of the core
     // to reduce overhead
-    ee_check_irq(ee);
+    check_irq(ee);
 
     ee->prev_pc = ee->pc;
     ee->opcode = bus_read32(ee, ee->pc);
     ee->pc = ee->next_pc;
     ee->next_pc += 4;
 
-    i = ee_decode(ee->opcode);
+    i = decode(ee->opcode);
 
     i.func(ee, i);
 
@@ -7956,13 +7912,13 @@ int ee_step(struct ee_state* ee) {
     return 1;
 }
 
-void ee_flush_cache(struct ee_state* ee) {
-    ee_vfast_clear(ee);
+void flush_cache(Ee* ee) {
+    vfast_clear(ee);
 
     if (ee->block_cache.empty())
         return;
 
-    for (int i = 0; i < EE_CACHE_PAGECOUNT; i++) {
+    for (int i = 0; i < CACHE_PAGECOUNT; i++) {
         ee->block_cache[i].dirty = true;
     }
 
@@ -7971,51 +7927,53 @@ void ee_flush_cache(struct ee_state* ee) {
     ee->block_lut_gen++;
 }
 
-uint32_t ee_get_pc(struct ee_state* ee) {
+uint32_t get_pc(Ee* ee) {
     return ee->pc;
 }
 
-struct ps2_ram* ee_get_spr(struct ee_state* ee) {
+ram::Ram* get_spr(Ee* ee) {
     return ee->spr;
 }
 
-void ee_set_fmv_skip(struct ee_state* ee, int v) {
+void set_fmv_skip(Ee* ee, int v) {
     ee->fmv_skip = v;
 }
 
-void ee_reset_intc_reads(struct ee_state* ee) {
+void reset_intc_reads(Ee* ee) {
     ee->intc_reads = 0;
 }
 
-void ee_reset_csr_reads(struct ee_state* ee) {
+void reset_csr_reads(Ee* ee) {
     ee->csr_reads = 0;
 }
 
-void ee_set_ram_size(struct ee_state* ee, int ram_size) {
+void set_ram_size(Ee* ee, int ram_size) {
     ee->ram_size = ram_size - 1;
 }
 
-void ee_set_osd_config(struct ee_state* ee, struct ee_osd_config config) {
+void set_osd_config(Ee* ee, OsdConfig config) {
     ee->osd_config = config;
 }
 
-struct ee_osd_config ee_get_osd_config(struct ee_state* ee) {
+OsdConfig get_osd_config(Ee* ee) {
     return ee->osd_config;
 }
 
-void ee_invalidate_block(struct ee_state* ee, uint32_t addr) {
-    uint32_t page = addr / EE_MIN_PAGESIZE;
+void invalidate_block(Ee* ee, uint32_t addr) {
+    uint32_t page = addr / MIN_PAGESIZE;
 
     // if (ee->block_cache[page].valid && !ee->block_cache[page].dirty) {
-    //     printf("ee: Invalidating block at address 0x%08x\n", addr);
+    //     iris_debug(ee, "Invalidating block at address 0x{:08x}", addr);
     // }
 
     ee->block_cache[page].dirty = true;
     ee->block_lut_gen++;
 }
 
-void ee_invalidate_range(struct ee_state* ee, uint32_t addr, uint32_t size) {
-    for (uint32_t i = 0; i < size; i += EE_MIN_PAGESIZE) {
-        ee_invalidate_block(ee, addr + i);
+void invalidate_range(Ee* ee, uint32_t addr, uint32_t size) {
+    for (uint32_t i = 0; i < size; i += MIN_PAGESIZE) {
+        invalidate_block(ee, addr + i);
     }
+}
+
 }

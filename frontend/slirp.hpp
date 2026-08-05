@@ -2,7 +2,7 @@
 
 #include <string>
 
-struct ps2_smap;
+namespace iris::speed::smap { struct Smap; }
 
 namespace iris::slirp {
 
@@ -17,10 +17,10 @@ struct config {
 
 bool valid_ipv4(const std::string& s);
 
-bool start(struct ps2_smap* smap, const config& cfg);
+bool start(speed::smap::Smap* smap, const config& cfg);
 void stop();
-void restart(struct ps2_smap* smap, const config& cfg);
+void restart(speed::smap::Smap* smap, const config& cfg);
 bool running();
-void pump(struct ps2_smap* smap);
+void pump(speed::smap::Smap* smap);
 
 }

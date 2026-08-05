@@ -1,21 +1,20 @@
-#include "loadcore.h"
+#include "loadcore.hpp"
 
 #include "../iop_def.hpp"
 
-#include <stdlib.h>
-#include <string.h>
+namespace iris::iop::hle::loadcore {
 
-static unsigned get_module_list(struct iop_state* iop)
+static unsigned get_module_list(iop::Iop* iop)
 {
     /* Loadcore puts a pointer at 0x3f0 to an array in its data section */
-    unsigned bootmodes_ptr = iop_read32(iop, 0x3f0);
+    unsigned bootmodes_ptr = iop::read32(iop, 0x3f0);
     unsigned p = bootmodes_ptr - 0x60;
     unsigned found = 0;
 
     /* see if the string starting with PsIIload is there*/
     while (p < bootmodes_ptr) {
-        if (iop_read32(iop, p) == 0x49497350
-            && iop_read32(iop, p + 4) == 0x64616F6C) {
+        if (iop::read32(iop, p) == 0x49497350
+            && iop::read32(iop, p + 4) == 0x64616F6C) {
             found = p;
             break;
         }
@@ -34,16 +33,16 @@ static unsigned get_module_list(struct iop_state* iop)
     return lc_struct + 0x10;
 }
 
-static unsigned get_thread_list(struct iop_state* iop)
+static unsigned get_thread_list(iop::Iop* iop)
 {
-    unsigned module_version = iop_read32(iop, iop->r[4] + 8);
+    unsigned module_version = iop::read32(iop, iop->r[4] + 8);
 
     /* Read address of ordinal 3 */
-    unsigned func = iop_read32(iop, iop->r[4] + 0x20);
+    unsigned func = iop::read32(iop, iop->r[4] + 0x20);
 
     /* Read lui+ori of address to the thread manager global */
-    unsigned th_struct = iop_read32(iop, func) << 16;
-    th_struct |= iop_read32(iop, func + 4) & 0xffff;
+    unsigned th_struct = iop::read32(iop, func) << 16;
+    th_struct |= iop::read32(iop, func + 4) & 0xffff;
 
     unsigned th_list = th_struct + 0x42c;
     if (module_version > 0x101) {
@@ -53,11 +52,11 @@ static unsigned get_thread_list(struct iop_state* iop)
     return th_list;
 }
 
-static void iop_strncpy(struct iop_state* iop, char* dest, unsigned src, int n)
+static void iop_strncpy(iop::Iop* iop, char* dest, unsigned src, int n)
 {
     char c;
 
-    while ((c = iop_read8(iop, src)) && n) {
+    while ((c = iop::read8(iop, src)) && n) {
         *dest = c;
         dest++;
         src++;
@@ -65,36 +64,36 @@ static void iop_strncpy(struct iop_state* iop, char* dest, unsigned src, int n)
     }
 }
 
-static void cache_loaded_modules(struct iop_state* iop, unsigned list)
+static void cache_loaded_modules(iop::Iop* iop, unsigned list)
 {
-    unsigned ent = iop_read32(iop, list);
-    struct iop_module* mod;
+    unsigned ent = iop::read32(iop, list);
+    Module* mod;
     int count = 0;
 
     while (ent) {
-        ent = iop_read32(iop, ent);
+        ent = iop::read32(iop, ent);
         count++;
     }
 
-    mod = (struct iop_module*)calloc(count, sizeof(*mod));
+    mod = (Module*)calloc(count, sizeof(*mod));
 
-    ent = iop_read32(iop, list);
+    ent = iop::read32(iop, list);
     int i = 0;
     while (ent != 0) {
-        if (iop_read32(iop, ent + 4)) {
-            iop_strncpy(iop, mod[i].name, iop_read32(iop, ent + 4), sizeof(mod[i].name));
+        if (iop::read32(iop, ent + 4)) {
+            iop_strncpy(iop, mod[i].name, iop::read32(iop, ent + 4), sizeof(mod[i].name));
         } else {
             strcpy(mod[i].name, "-- MISSING --");
         }
-        mod[i].version = iop_read16(iop, ent + 8);
-        mod[i].entry = iop_read32(iop, ent + 0x10);
-        mod[i].gp = iop_read32(iop, ent + 0x14);
-        mod[i].text_addr = iop_read32(iop, ent + 0x18);
-        mod[i].text_size = iop_read32(iop, ent + 0x1c);
-        mod[i].data_size = iop_read32(iop, ent + 0x20);
-        mod[i].bss_size = iop_read32(iop, ent + 0x24);
+        mod[i].version = iop::read16(iop, ent + 8);
+        mod[i].entry = iop::read32(iop, ent + 0x10);
+        mod[i].gp = iop::read32(iop, ent + 0x14);
+        mod[i].text_addr = iop::read32(iop, ent + 0x18);
+        mod[i].text_size = iop::read32(iop, ent + 0x1c);
+        mod[i].data_size = iop::read32(iop, ent + 0x20);
+        mod[i].bss_size = iop::read32(iop, ent + 0x24);
 
-        ent = iop_read32(iop, ent);
+        ent = iop::read32(iop, ent);
         i++;
     }
 
@@ -102,9 +101,9 @@ static void cache_loaded_modules(struct iop_state* iop, unsigned list)
     iop->module_list = mod;
 }
 
-void refresh_module_list(struct iop_state* iop)
+void refresh_module_list(iop::Iop* iop)
 {
-    struct iop_module* mod = iop->module_list;
+    Module* mod = iop->module_list;
 
     iop->module_count = 0;
     iop->module_list = NULL;
@@ -113,7 +112,7 @@ void refresh_module_list(struct iop_state* iop)
     cache_loaded_modules(iop, iop->module_list_addr);
 }
 
-int loadcore_reg_lib_ent(struct iop_state* iop)
+int reg_lib_ent(iop::Iop* iop)
 {
     unsigned module_list = get_module_list(iop);
     iop->module_list_addr = module_list;
@@ -125,8 +124,9 @@ int loadcore_reg_lib_ent(struct iop_state* iop)
     if (strncmp(name, "thbase", 6) == 0) {
         unsigned thread_list = get_thread_list(iop);
         iop->thread_list_addr = thread_list;
-		printf("iop: found thread list at %x\n", thread_list);
     }
 
     return 0;
+}
+
 }

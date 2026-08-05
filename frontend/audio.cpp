@@ -15,7 +15,7 @@ static inline int16_t clamp_s16(float v) {
 }
 
 void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
-    iris::instance* iris = (iris::instance*)userdata;
+    instance* iris = (instance*)userdata;
 
     if (iris->pause)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -23,9 +23,9 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
     if (iris->pause || !additional_amount)
         return;
 
-    struct ps2_spu2* spu2 = iris->ps2->spu2;
+    spu2::Spu2* spu2 = iris->ps2->spu2;
 
-    uint32_t frames = (uint32_t)additional_amount / sizeof(spu2_sample);
+    uint32_t frames = (uint32_t)additional_amount / sizeof(spu2::Sample);
 
     iris->audio_buf.resize(frames);
 
@@ -45,7 +45,7 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
 
         for (int c = 0; c < 2; c++) {
             if (i < avail[c]) {
-                struct spu2_sample s = spu2->c[c].adma_buffer[(read[c] + i) & mask];
+                spu2::Sample s = spu2->c[c].adma_buffer[(read[c] + i) & mask];
 
                 l += s.s16[0];
                 r += s.s16[1];
@@ -62,15 +62,15 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
         __atomic_store_n(&spu2->c[c].adma_read, read[c] + consumed, __ATOMIC_RELEASE);
     }
 
-    SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), frames * sizeof(spu2_sample));
+    SDL_PutAudioStreamData(stream, (void*)iris->audio_buf.data(), frames * sizeof(spu2::Sample));
 }
 
-static std::vector <spu2_sample> samples;
+static std::vector <spu2::Sample> samples;
 
 void update_spu2(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
-    iris::instance* iris = (iris::instance*)userdata;
+    instance* iris = (instance*)userdata;
 
-    additional_amount /= sizeof(spu2_sample);
+    additional_amount /= sizeof(spu2::Sample);
 
     if (iris->pause)
         std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -80,30 +80,30 @@ void update_spu2(void* userdata, SDL_AudioStream* stream, int additional_amount,
 
     // printf("audio: iop cycles elapsed since last sync: %llu\n", iris->ps2->iop->total_cycles - prev_iop_cycles);
 
-    struct ps2_spu2* spu2 = iris->ps2->spu2;
+    spu2::Spu2* spu2 = iris->ps2->spu2;
 
     // FILE* file = fopen("audio.raw", "ab");
 
     samples.resize(additional_amount);
 
     for (int i = 0; i < additional_amount; i++) {
-        struct spu2_sample s;
+        spu2::Sample s;
 
 #if SPU2_SYNC
-        if (!ps2_spu2_pop_sample(spu2, &s))
+        if (!spu2::pop_sample(spu2, &s))
             s.u32 = 0;
 #else
-        s = ps2_spu2_get_sample(spu2, !iris->mute_adma);
+        s = spu2::get_sample(spu2, !iris->mute_adma);
 #endif
 
         samples[i].s16[0] = iris->mute ? 0 : clamp_s16(s.s16[0] * iris->volume);
         samples[i].s16[1] = iris->mute ? 0 : clamp_s16(s.s16[1] * iris->volume);
     }
 
-    SDL_PutAudioStreamData(stream, (void*)samples.data(), samples.size() * sizeof(spu2_sample));
+    SDL_PutAudioStreamData(stream, (void*)samples.data(), samples.size() * sizeof(spu2::Sample));
 }
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     SDL_AudioSpec spec;
 
     spec.channels = 2;
@@ -129,7 +129,7 @@ bool init(iris::instance* iris) {
     return true;
 }
 
-void close(iris::instance* iris) {
+void close(instance* iris) {
     for (int i = 0; i < 2; i++) {
         if (!iris->streams[i])
             continue;
@@ -141,7 +141,7 @@ void close(iris::instance* iris) {
     }
 }
 
-bool mute(iris::instance* iris) {
+bool mute(instance* iris) {
     iris->prev_mute = iris->mute;
 
     iris->mute = true;
@@ -152,7 +152,7 @@ bool mute(iris::instance* iris) {
     return iris->prev_mute;
 }
 
-void unmute(iris::instance* iris) {
+void unmute(instance* iris) {
     iris->mute = iris->prev_mute;
 
     if (!iris->mute) {

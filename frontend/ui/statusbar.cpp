@@ -48,18 +48,18 @@ void EndMainStatusBar()
 
 namespace iris {
 
-int get_format_bpp(VkFormat fmt) {
-    switch (fmt) {
-        case GS_PSMCT32: return 32;
-        case GS_PSMCT24: return 24;
-        case GS_PSMCT16:
-        case GS_PSMCT16S: return 16;
+int get_format_bpp(int psm) {
+    switch (psm) {
+        case gs::PSMCT32: return 32;
+        case gs::PSMCT24: return 24;
+        case gs::PSMCT16:
+        case gs::PSMCT16S: return 16;
     }
 
     return 0;
 }
 
-void show_status_bar(iris::instance* iris) {
+void show_status_bar(instance* iris) {
     using namespace ImGui;
 
     if (BeginMainStatusBar()) {
@@ -101,7 +101,7 @@ void show_status_bar(iris::instance* iris) {
             Text("%.1f fps", GetIO().Framerate);
 
             SetCursorPosX(GetWindowWidth() - width - 5);
-            Text(buf);
+            Text("%s", buf);
         } else {
             // | %dx%d | %dx%d | %s | %dbpp | %.1f fps",
             Text("%s", renderers[iris->renderer_backend]);
@@ -115,7 +115,7 @@ void show_status_bar(iris::instance* iris) {
             Text("%.1f fps", GetIO().Framerate);
 
             SetCursorPosX(GetWindowWidth() - width - 5);
-            Text(buf);
+            Text("%s", buf);
         }
 
 

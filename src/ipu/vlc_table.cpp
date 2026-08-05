@@ -2,6 +2,8 @@
 #include <cstdio>
 #include "vlc_table.hpp"
 
+namespace iris::ipu {
+
 VLC_Table::VLC_Table(VLC_Entry* table, int table_size, int max_bits, unsigned int* index_table) :
     table(table), table_size(table_size), max_bits(max_bits), index_table(index_table)
 {
@@ -67,4 +69,6 @@ bool VLC_Table::get_symbol(IPU_FIFO& FIFO, uint32_t &result)
     FIFO.advance_stream(entry.bits);
     result = entry.value;
     return true;
+}
+
 }

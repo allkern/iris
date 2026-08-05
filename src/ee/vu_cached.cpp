@@ -1,44 +1,45 @@
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
 #include <math.h>
 #include <fenv.h>
+#include <algorithm>
 #include <utility>
 
 #if defined(__SSE2__) || defined(_M_X64) || defined(__x86_64__) || defined(__amd64__)
 #include <immintrin.h>
-#define VU_FMAC_SIMD 1
+#define FMAC_SIMD 1
 #endif
 
-#include "vu.h"
+#include "vu.hpp"
 #include "vu_def.hpp"
-#include "vu_dis.h"
+#include "vu_dis.hpp"
+#include <cstdint>
+#include "gif.hpp"
+#include "vif.hpp"
 
-// #define printf(fmt, ...)(0)
+namespace iris::vu {
 
-#define VU_LD_DI(i) (ins->ld_di[i])
-#define VU_LD_D (ins->ld_d)
-#define VU_LD_S (ins->ld_s)
-#define VU_LD_T (ins->ld_t)
-#define VU_LD_SF (ins->ld_sf)
-#define VU_LD_TF (ins->ld_tf)
-#define VU_LD_IMM5 (ins->ld_imm5)
-#define VU_LD_IMM11 (ins->ld_imm11)
-#define VU_LD_IMM12 (ins->ld_imm12)
-#define VU_LD_IMM15 (ins->ld_imm15)
-#define VU_LD_IMM24 (ins->ld_imm24)
-#define VU_ID vu->vi[VU_LD_D]
-#define VU_IS vu->vi[VU_LD_S]
-#define VU_IT vu->vi[VU_LD_T]
-#define VU_UD_DI(i) (ins->ud_di[i])
-#define VU_UD_D (ins->ud_d)
-#define VU_UD_S (ins->ud_s)
-#define VU_UD_T (ins->ud_t)
-#define VU_D_FLD (0x01e00000)
-#define VU_D_X (0x01000000)
-#define VU_D_Y (0x00800000)
-#define VU_D_Z (0x00400000)
-#define VU_D_W (0x00200000)
+#define LD_DI(i) (ins->ld_di[i])
+#define LD_D (ins->ld_d)
+#define LD_S (ins->ld_s)
+#define LD_T (ins->ld_t)
+#define LD_SF (ins->ld_sf)
+#define LD_TF (ins->ld_tf)
+#define LD_IMM5 (ins->ld_imm5)
+#define LD_IMM11 (ins->ld_imm11)
+#define LD_IMM12 (ins->ld_imm12)
+#define LD_IMM15 (ins->ld_imm15)
+#define LD_IMM24 (ins->ld_imm24)
+#define ID vu->vi[LD_D]
+#define IS vu->vi[LD_S]
+#define IT vu->vi[LD_T]
+#define UD_DI(i) (ins->ud_di[i])
+#define UD_D (ins->ud_d)
+#define UD_S (ins->ud_s)
+#define UD_T (ins->ud_t)
+#define D_FLD (0x01e00000)
+#define D_X (0x01000000)
+#define D_Y (0x00800000)
+#define D_Z (0x00400000)
+#define D_W (0x00200000)
 
 [[noreturn]] inline void unreachable() {
     // Uses compiler specific extensions if possible.
@@ -51,15 +52,12 @@
 #endif
 }
 
-struct vu_state* vu_create(void) {
-    return new struct vu_state;
-}
+Vu* create(logger::Logger* logger, int id) {
+    Vu* vu = new Vu();
 
-void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* vif, struct vu_state* vu1) {
+    vu->logger = logger;
+    vu->logger_id = logger::register_source(logger, id ? "vu1" : "vu0");
     vu->id = id;
-    vu->vu1 = vu1;
-    vu->vif = vif;
-    vu->gif = gif;
 
     if (!id) {
         vu->micro_mem_size = 0x1ff;
@@ -69,37 +67,30 @@ void vu_init(struct vu_state* vu, int id, struct ps2_gif* gif, struct ps2_vif* v
         vu->vu_mem_size = 0x3ff;
     }
 
-    vu->vf[0].x = 0.0;
-    vu->vf[0].y = 0.0;
-    vu->vf[0].z = 0.0;
-    vu->vf[0].w = 1.0;
+    reset(vu);
 
-    ps2_vu_reset(vu);
-
-    // VU uses round to zero by default
-    fesetround(FE_TOWARDZERO);
-
-    vu->block_cache_size = 0;
-    vu->block_cache.clear();
-    vu->block_cache.resize(vu->micro_mem_size+1);
+    return vu;
 }
 
-void vu_destroy(struct vu_state* vu) {
+void connect(Vu* vu, gif::Gif* gif, vif::Vif* vif, Vu* vu1) {
+    vu->gif = gif;
+    vu->vif = vif;
+    vu->vu1 = vu1;
+}
+
+void destroy(Vu* vu) {
     delete vu;
 }
 
-#define max(a, b) ((a) > (b) ? (a) : (b))
-#define min(a, b) ((a) < (b) ? (a) : (b))
-
-static inline uint32_t vu_max(int32_t a, int32_t b) {
-    return (a < 0 && b < 0) ? min(a, b) : max(a, b);
+static inline uint32_t max(int32_t a, int32_t b) {
+    return (a < 0 && b < 0) ? std::min(a, b) : std::max(a, b);
 }
 
-static inline uint32_t vu_min(int32_t a, int32_t b) {
-    return (a < 0 && b < 0) ? max(a, b) : min(a, b);
+static inline uint32_t min(int32_t a, int32_t b) {
+    return (a < 0 && b < 0) ? std::max(a, b) : std::min(a, b);
 }
 
-static inline float vu_atan(float t) {
+static inline float atan(float t) {
     //In reality, VU1 uses an approximation to derive the result. This is shown here.
     const static float atan_const[] = {
         0.999999344348907f, -0.333298563957214f,
@@ -117,7 +108,7 @@ static inline float vu_atan(float t) {
     return result;
 }
 
-static inline void vu_update_status(struct vu_state* vu) {
+static inline void update_status(Vu* vu) {
     vu->status &= ~0x3f;
 
     vu->status |= (vu->mac_pipeline[3] & 0x000f) ? 1 : 0;
@@ -128,7 +119,7 @@ static inline void vu_update_status(struct vu_state* vu) {
     vu->status |= (vu->status & 0x3f) << 6;
 }
 
-static inline void vu_set_q(struct vu_state* vu, float value, int delay) {
+static inline void set_q(Vu* vu, float value, int delay) {
     if (vu->q_delay == 0) {
         vu->prev_q.f = vu->q.f;
     }
@@ -137,7 +128,7 @@ static inline void vu_set_q(struct vu_state* vu, float value, int delay) {
     vu->q_delay = delay;
 }
 
-static inline struct vu_reg32 vu_get_q(struct vu_state* vu) {
+static inline Reg32 get_q(Vu* vu) {
     if (!vu->q_delay) {
         return vu->q;
     }
@@ -145,7 +136,7 @@ static inline struct vu_reg32 vu_get_q(struct vu_state* vu) {
     return vu->prev_q;
 }
 
-static inline float vu_update_flags(struct vu_state* vu, float value, int index) {
+static inline float update_flags(Vu* vu, float value, int index) {
     uint32_t value_u = *(uint32_t*)&value;
 
     int flag_id = 3 - index;
@@ -186,11 +177,11 @@ static inline float vu_update_flags(struct vu_state* vu, float value, int index)
     return *(float*)&value_u;
 }
 
-static inline void vu_clear_flags(struct vu_state* vu, int index) {
+static inline void clear_flags(Vu* vu, int index) {
     vu->mac &= ~(0x1111 << (3 - index));
 }
 
-static inline float vu_cvtf(uint32_t value) {
+static inline float cvtf(uint32_t value) {
     switch (value & 0x7f800000) {
         case 0x0: {
             value &= 0x80000000;
@@ -208,7 +199,7 @@ static inline float vu_cvtf(uint32_t value) {
     return *(float*)&value;
 }
 
-int32_t vu_cvti(float value) {
+int32_t cvti(float value) {
     if (value >= 2147483647.0)
         return 2147483647LL;
 
@@ -264,7 +255,7 @@ static inline uint32_t ps2_pack_double(double v) {
     return sign | ((uint32_t)biased << 23) | mantissa;
 }
 
-static inline void vu_set_q_u32(struct vu_state* vu, uint32_t bits, int delay) {
+static inline void set_q_u32(Vu* vu, uint32_t bits, int delay) {
     if (vu->q_delay == 0)
         vu->prev_q = vu->q;
 
@@ -272,64 +263,64 @@ static inline void vu_set_q_u32(struct vu_state* vu, uint32_t bits, int delay) {
     vu->q_delay = delay;
 }
 
-#define VU_STATUS_I 0x0410
-#define VU_STATUS_D 0x0820
+#define STATUS_I 0x0410
+#define STATUS_D 0x0820
 
-static inline void vu_set_vf(struct vu_state* vu, int r, int f, float v) {
+static inline void set_vf(Vu* vu, int r, int f, float v) {
     if (r) vu->vf[r].f[f] = v;
 }
 
-static inline void vu_set_vfu(struct vu_state* vu, int r, int f, int32_t v) {
+static inline void set_vfu(Vu* vu, int r, int f, int32_t v) {
     if (r) vu->vf[r].s32[f] = v;
 }
 
-static inline void vu_set_vf_x(struct vu_state* vu, int r, float v) {
+static inline void set_vf_x(Vu* vu, int r, float v) {
     if (r) vu->vf[r].x = v;
 }
 
-static inline void vu_set_vf_y(struct vu_state* vu, int r, float v) {
+static inline void set_vf_y(Vu* vu, int r, float v) {
     if (r) vu->vf[r].y = v;
 }
 
-static inline void vu_set_vf_z(struct vu_state* vu, int r, float v) {
+static inline void set_vf_z(Vu* vu, int r, float v) {
     if (r) vu->vf[r].z = v;
 }
 
-static inline void vu_set_vf_w(struct vu_state* vu, int r, float v) {
+static inline void set_vf_w(Vu* vu, int r, float v) {
     if (r) vu->vf[r].w = v;
 }
 
-static inline void vu_set_vi(struct vu_state* vu, int r, uint16_t v) {
+static inline void set_vi(Vu* vu, int r, uint16_t v) {
     r &= 0xf;
 
     if (r) vu->vi[r] = v;
 }
 
-static inline float vu_vf_i(struct vu_state* vu, int r, int i) {
-    return vu_cvtf(vu->vf[r].u32[i]);
+static inline float vf_i(Vu* vu, int r, int i) {
+    return cvtf(vu->vf[r].u32[i]);
 }
 
-static inline float vu_vf_x(struct vu_state* vu, int r) {
-    return vu_cvtf(vu->vf[r].u32[0]);
+static inline float vf_x(Vu* vu, int r) {
+    return cvtf(vu->vf[r].u32[0]);
 }
 
-static inline float vu_vf_y(struct vu_state* vu, int r) {
-    return vu_cvtf(vu->vf[r].u32[1]);
+static inline float vf_y(Vu* vu, int r) {
+    return cvtf(vu->vf[r].u32[1]);
 }
 
-static inline float vu_vf_z(struct vu_state* vu, int r) {
-    return vu_cvtf(vu->vf[r].u32[2]);
+static inline float vf_z(Vu* vu, int r) {
+    return cvtf(vu->vf[r].u32[2]);
 }
 
-static inline float vu_vf_w(struct vu_state* vu, int r) {
-    return vu_cvtf(vu->vf[r].u32[3]);
+static inline float vf_w(Vu* vu, int r) {
+    return cvtf(vu->vf[r].u32[3]);
 }
 
-static inline float vu_acc_i(struct vu_state* vu, int i) {
-    return vu_cvtf(vu->acc.u32[i]);
+static inline float acc_i(Vu* vu, int i) {
+    return cvtf(vu->acc.u32[i]);
 }
 
-static inline void vu_mem_write(struct vu_state* vu, uint16_t addr, uint32_t data, int i) {
+static inline void mem_write(Vu* vu, uint16_t addr, uint32_t data, int i) {
     if (!vu->id) {
         if (addr <= 0x3ff) {
             vu->vu_mem[addr & 0xff].u32[i] = data;
@@ -355,7 +346,7 @@ static inline void vu_mem_write(struct vu_state* vu, uint16_t addr, uint32_t dat
             } else if (addr == 0x43a) {
                 vu->vu1->tpc = data;
             } else {
-                // printf("vu: oob write\n");
+                // iris_debug(vu, "oob write");
 
                 // exit(1);
             }
@@ -367,7 +358,7 @@ static inline void vu_mem_write(struct vu_state* vu, uint16_t addr, uint32_t dat
     }
 }
 
-static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
+static inline uint128_t mem_read(Vu* vu, uint32_t addr) {
     if (!vu->id) {
         if (addr <= 0x3ff) {
             return vu->vu_mem[addr & 0xff];
@@ -427,7 +418,7 @@ static inline uint128_t vu_mem_read(struct vu_state* vu, uint32_t addr) {
 //
 //       VU branches in delay slots are fairly common. Crazy Taxi and 18 Wheeler need
 //       this, otherwise you get flickering geometry and the VU might eventually hang.
-static inline void vu_branch(struct vu_state* vu, uint32_t target) {
+static inline void branch(Vu* vu, uint32_t target) {
     target &= 0x7ff;
 
     if (vu->branch_delay) {
@@ -441,11 +432,11 @@ static inline void vu_branch(struct vu_state* vu, uint32_t target) {
     vu->branch_pc = target;
 }
 
-static inline uint32_t vu_delay_slot_link(struct vu_state* vu) {
+static inline uint32_t delay_slot_link(Vu* vu) {
     return ((vu->branch_delay ? vu->branch_pc : vu->tpc) + 1) & 0x7ff;
 }
 
-static inline void vu_write_branch_pipeline(struct vu_state* vu, int dst) {
+static inline void write_branch_pipeline(Vu* vu, int dst) {
     if (!dst)
         return;
 
@@ -460,13 +451,12 @@ static inline void vu_write_branch_pipeline(struct vu_state* vu, int dst) {
     vu->vi_backup_reg = dst;
     vu->vi_backup_value = vu->vi[dst];
 
-    // printf("branch pipeline: dst=%d prev=%04x rw=%d\n",
-    //     vu->branch_pipeline_curr.reg, vu->branch_pipeline_curr.prev,
+    // iris_debug(vu, "branch pipeline: dst={} prev={:04x} rw={}", //     vu->branch_pipeline_curr.reg, vu->branch_pipeline_curr.prev,
     //     vu->branch_pipeline_curr.rw
-    // );
+    //);
 }
 
-static inline uint16_t vu_get_branch_register(struct vu_state* vu, int reg) {
+static inline uint16_t get_branch_register(Vu* vu, int reg) {
     if (vu->vi_backup_cycles && (vu->vi_backup_reg == reg)) {
         return vu->vi_backup_value;
     }
@@ -474,13 +464,13 @@ static inline uint16_t vu_get_branch_register(struct vu_state* vu, int reg) {
     return vu->vi[reg];
 }
 
-void vu_xgkick(struct vu_state* vu) {
+void xgkick(Vu* vu) {
     uint16_t addr = vu->xgkick_addr;
 
     int eop = 1;
 
     do {
-        uint128_t tag = vu_mem_read(vu, addr++);
+        uint128_t tag = mem_read(vu, addr++);
 
         if ((tag.u64[0] | tag.u64[1]) == 0)
             break;
@@ -489,7 +479,7 @@ void vu_xgkick(struct vu_state* vu) {
 
         // if (addr == 0) break;
 
-        // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
+        // iris_debug(vu, "tag: addr={:08x} {:08x} {:08x} {:08x} {:08x}", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
         eop = (tag.u64[0] & 0x8000) != 0;
 
@@ -521,30 +511,24 @@ void vu_xgkick(struct vu_state* vu) {
         if (qwc >= 0x400) {
             return;
 
-            fprintf(stderr, "vu: Weird xgkick tag nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
-                nloop,
+            iris_fatal_error(vu, "Weird xgkick tag nloop={} nregs={} eop={} flg={} qwc={}", nloop,
                 nregs,
                 eop,
                 flg,
-                qwc
-            ); 
-
-            exit(1);
+                qwc);
         }
 
-        ps2_gif_fifo_write(vu->gif, tag, GIF_PATH1);
-
+        gif::fifo_write(vu->gif, tag, gif::PATH1);
 
         for (int i = 0; i < qwc; i++) {
-            // printf("vu: %08x: %08x %08x %08x %08x\n",
-            //     addr,
+            // iris_debug(vu, "{:08x}: {:08x} {:08x} {:08x} {:08x}", //     addr,
             //     vu->vu_mem[addr].u32[3],
             //     vu->vu_mem[addr].u32[2],
             //     vu->vu_mem[addr].u32[1],
             //     vu->vu_mem[addr].u32[0]
-            // );
+            //);
 
-            ps2_gif_fifo_write(vu->gif, vu_mem_read(vu, addr++), GIF_PATH1);
+            gif::fifo_write(vu->gif, mem_read(vu, addr++), gif::PATH1);
 
             addr &= 0x3ff;
 
@@ -568,27 +552,27 @@ void template_seq(F f) {
 
 // Upper pipeline
 template <uint32_t di>
-void vu_i_abs(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+void i_abs(Vu* vu, const Instruction* ins) {
+    int s = UD_S;
+    int t = UD_T;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vf(vu, t, i, fabsf(vu_vf_i(vu, s, i)));
+        if constexpr (di & (D_X >> i)) {
+            set_vf(vu, t, i, fabsf(vf_i(vu, s, i)));
         }
     });
 }
 
-enum vu_alu_op { VU_OP_ADD, VU_OP_SUB, VU_OP_MUL, VU_OP_MADD, VU_OP_MSUB };
-enum vu_src_kind { VU_SRC_VEC, VU_SRC_BCX, VU_SRC_BCY, VU_SRC_BCZ, VU_SRC_BCW, VU_SRC_I, VU_SRC_Q };
+enum alu_op { OP_ADD, OP_SUB, OP_MUL, OP_MADD, OP_MSUB };
+enum src_kind { SRC_VEC, SRC_BCX, SRC_BCY, SRC_BCZ, SRC_BCW, SRC_I, SRC_Q };
 
-#ifdef VU_FMAC_SIMD
+#ifdef FMAC_SIMD
 
-static inline __m128i vu_sel(__m128i mask, __m128i a, __m128i b) {
+static inline __m128i sel(__m128i mask, __m128i a, __m128i b) {
     return _mm_or_si128(_mm_and_si128(mask, a), _mm_andnot_si128(mask, b));
 }
 
-static inline __m128i vu_cvtf4_i(__m128i v) {
+static inline __m128i cvtf4_i(__m128i v) {
     const __m128i em = _mm_set1_epi32(0x7f800000);
     const __m128i sm = _mm_set1_epi32((int)0x80000000);
     const __m128i maxn = _mm_set1_epi32(0x7f7fffff);
@@ -599,25 +583,25 @@ static inline __m128i vu_cvtf4_i(__m128i v) {
     __m128i is255 = _mm_cmpeq_epi32(exp, em);
     __m128i sign = _mm_and_si128(v, sm);
 
-    v = vu_sel(is0, sign, v);
-    v = vu_sel(is255, _mm_or_si128(sign, maxn), v);
+    v = sel(is0, sign, v);
+    v = sel(is255, _mm_or_si128(sign, maxn), v);
 
     return v;
 }
 
-static inline __m128 vu_load_cvtf(const struct vu_reg128* r) {
-    return _mm_castsi128_ps(vu_cvtf4_i(_mm_loadu_si128((const __m128i*)r)));
+static inline __m128 load_cvtf(const Reg128* r) {
+    return _mm_castsi128_ps(cvtf4_i(_mm_loadu_si128((const __m128i*)r)));
 }
 
 template <uint32_t di>
-static constexpr uint32_t vu_nibblemask() {
+static constexpr uint32_t nibblemask() {
     uint32_t nm = 0;
-    for (int i = 0; i < 4; i++) if (di & (VU_D_X >> i)) nm |= 0x1111u << (3 - i);
+    for (int i = 0; i < 4; i++) if (di & (D_X >> i)) nm |= 0x1111u << (3 - i);
     return nm;
 }
 
 template <uint32_t di>
-static inline __m128i vu_flags4(struct vu_state* vu, __m128i v) {
+static inline __m128i flags4(Vu* vu, __m128i v) {
     const __m128i em = _mm_set1_epi32(0x7f800000);
     const __m128i sm = _mm_set1_epi32((int)0x80000000);
     const __m128i mtm = _mm_set1_epi32(0x007fffff);
@@ -634,9 +618,9 @@ static inline __m128i vu_flags4(struct vu_state* vu, __m128i v) {
     __m128i mnz = _mm_xor_si128(_mm_cmpeq_epi32(mant, z), ones);
     __m128i isuf = _mm_and_si128(is0, mnz);
 
-    __m128i r = vu_sel(is0, sign, v);
+    __m128i r = sel(is0, sign, v);
 
-    r = vu_sel(is255, _mm_or_si128(sign, maxn), r);
+    r = sel(is255, _mm_or_si128(sign, maxn), r);
 
     __m128i Z = _mm_srli_epi32(is0, 31);
     __m128i S = _mm_srli_epi32(v, 31);
@@ -650,17 +634,17 @@ static inline __m128i vu_flags4(struct vu_state* vu, __m128i v) {
 
     uint32_t newmac = (uint32_t)_mm_cvtsi128_si32(h2) & 0xFFFFu;
 
-    vu->mac = (vu->mac & ~0xFFFFu) | (newmac & vu_nibblemask<di>());
+    vu->mac = (vu->mac & ~0xFFFFu) | (newmac & nibblemask<di>());
 
     return r;
 }
 
 template <uint32_t di>
-static inline void vu_write_masked(void* dst, __m128i val) {
-    constexpr uint32_t l0 = (di & VU_D_X) ? 0xFFFFFFFFu : 0;
-    constexpr uint32_t l1 = (di & VU_D_Y) ? 0xFFFFFFFFu : 0;
-    constexpr uint32_t l2 = (di & VU_D_Z) ? 0xFFFFFFFFu : 0;
-    constexpr uint32_t l3 = (di & VU_D_W) ? 0xFFFFFFFFu : 0;
+static inline void write_masked(void* dst, __m128i val) {
+    constexpr uint32_t l0 = (di & D_X) ? 0xFFFFFFFFu : 0;
+    constexpr uint32_t l1 = (di & D_Y) ? 0xFFFFFFFFu : 0;
+    constexpr uint32_t l2 = (di & D_Z) ? 0xFFFFFFFFu : 0;
+    constexpr uint32_t l3 = (di & D_W) ? 0xFFFFFFFFu : 0;
 
     if constexpr (l0 && l1 && l2 && l3) {
         _mm_storeu_si128((__m128i*)dst, val);
@@ -669,388 +653,388 @@ static inline void vu_write_masked(void* dst, __m128i val) {
 
         __m128i cur = _mm_loadu_si128((__m128i*)dst);
 
-        _mm_storeu_si128((__m128i*)dst, vu_sel(keep, val, cur));
+        _mm_storeu_si128((__m128i*)dst, sel(keep, val, cur));
     }
 }
 
-template <uint32_t di, vu_alu_op OP, bool TO_ACC, vu_src_kind TK>
-static inline void vu_fmac(struct vu_state* vu, int d, int s, int t) {
-    __m128 sv = vu_load_cvtf(&vu->vf[s]);
+template <uint32_t di, alu_op OP, bool TO_ACC, src_kind TK>
+static inline void fmac(Vu* vu, int d, int s, int t) {
+    __m128 sv = load_cvtf(&vu->vf[s]);
     __m128 tv;
 
-    if constexpr (TK == VU_SRC_VEC) {
-        tv = vu_load_cvtf(&vu->vf[t]);
-    } else if constexpr (TK == VU_SRC_BCX) {
-        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(0, 0, 0, 0));
-    } else if constexpr (TK == VU_SRC_BCY) {
-        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(1, 1, 1, 1));
-    } else if constexpr (TK == VU_SRC_BCZ) {
-        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(2, 2, 2, 2));
-    } else if constexpr (TK == VU_SRC_BCW) {
-        __m128 tf = vu_load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(3, 3, 3, 3));
-    } else if constexpr (TK == VU_SRC_I) {
+    if constexpr (TK == SRC_VEC) {
+        tv = load_cvtf(&vu->vf[t]);
+    } else if constexpr (TK == SRC_BCX) {
+        __m128 tf = load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(0, 0, 0, 0));
+    } else if constexpr (TK == SRC_BCY) {
+        __m128 tf = load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(1, 1, 1, 1));
+    } else if constexpr (TK == SRC_BCZ) {
+        __m128 tf = load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(2, 2, 2, 2));
+    } else if constexpr (TK == SRC_BCW) {
+        __m128 tf = load_cvtf(&vu->vf[t]); tv = _mm_shuffle_ps(tf, tf, _MM_SHUFFLE(3, 3, 3, 3));
+    } else if constexpr (TK == SRC_I) {
         tv = _mm_set1_ps(vu->i.f);
     } else {
-        tv = _mm_set1_ps(vu_get_q(vu).f);
+        tv = _mm_set1_ps(get_q(vu).f);
     }
 
     __m128 r;
-    if constexpr (OP == VU_OP_ADD) {
+    if constexpr (OP == OP_ADD) {
         r = _mm_add_ps(sv, tv);
-    } else if constexpr (OP == VU_OP_SUB) {
+    } else if constexpr (OP == OP_SUB) {
         r = _mm_sub_ps(sv, tv);
-    } else if constexpr (OP == VU_OP_MUL) {
+    } else if constexpr (OP == OP_MUL) {
         r = _mm_mul_ps(sv, tv);
     } else {
-        __m128 acc = vu_load_cvtf(&vu->acc);
+        __m128 acc = load_cvtf(&vu->acc);
         __m128 p = _mm_mul_ps(sv, tv);
-        r = (OP == VU_OP_MADD) ? _mm_add_ps(acc, p) : _mm_sub_ps(acc, p);
+        r = (OP == OP_MADD) ? _mm_add_ps(acc, p) : _mm_sub_ps(acc, p);
     }
 
-    __m128i clamped = vu_flags4<di>(vu, _mm_castps_si128(r));
+    __m128i clamped = flags4<di>(vu, _mm_castps_si128(r));
 
     if constexpr (TO_ACC) {
-        vu_write_masked<di>(&vu->acc, clamped);
+        write_masked<di>(&vu->acc, clamped);
     } else {
-        if (d) vu_write_masked<di>(&vu->vf[d], clamped);
+        if (d) write_masked<di>(&vu->vf[d], clamped);
     }
 
-    vu_update_status(vu);
+    update_status(vu);
 }
 
 #else
 
-template <uint32_t di, vu_alu_op OP, bool TO_ACC, vu_src_kind TK>
-static inline void vu_fmac(struct vu_state* vu, int d, int s, int t) {
+template <uint32_t di, alu_op OP, bool TO_ACC, src_kind TK>
+static inline void fmac(Vu* vu, int d, int s, int t) {
     float iq = 0.0f;
-    if constexpr (TK == VU_SRC_I) iq = vu->i.f;
-    else if constexpr (TK == VU_SRC_Q) iq = vu_get_q(vu).f;
+    if constexpr (TK == SRC_I) iq = vu->i.f;
+    else if constexpr (TK == SRC_Q) iq = get_q(vu).f;
 
     float bc = 0.0f;
-    if constexpr (TK == VU_SRC_BCX) bc = vu_vf_x(vu, t);
-    else if constexpr (TK == VU_SRC_BCY) bc = vu_vf_y(vu, t);
-    else if constexpr (TK == VU_SRC_BCZ) bc = vu_vf_z(vu, t);
-    else if constexpr (TK == VU_SRC_BCW) bc = vu_vf_w(vu, t);
+    if constexpr (TK == SRC_BCX) bc = vf_x(vu, t);
+    else if constexpr (TK == SRC_BCY) bc = vf_y(vu, t);
+    else if constexpr (TK == SRC_BCZ) bc = vf_z(vu, t);
+    else if constexpr (TK == SRC_BCW) bc = vf_w(vu, t);
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            float sf = vu_vf_i(vu, s, i);
+        if constexpr (di & (D_X >> i)) {
+            float sf = vf_i(vu, s, i);
             float tf;
-            if constexpr (TK == VU_SRC_VEC) tf = vu_vf_i(vu, t, i);
-            else if constexpr (TK == VU_SRC_I || TK == VU_SRC_Q) tf = iq;
+            if constexpr (TK == SRC_VEC) tf = vf_i(vu, t, i);
+            else if constexpr (TK == SRC_I || TK == SRC_Q) tf = iq;
             else tf = bc;
 
             float r;
-            if constexpr (OP == VU_OP_ADD) r = sf + tf;
-            else if constexpr (OP == VU_OP_SUB) r = sf - tf;
-            else if constexpr (OP == VU_OP_MUL) r = sf * tf;
-            else if constexpr (OP == VU_OP_MADD) r = vu_acc_i(vu, i) + sf * tf;
-            else r = vu_acc_i(vu, i) - sf * tf;
+            if constexpr (OP == OP_ADD) r = sf + tf;
+            else if constexpr (OP == OP_SUB) r = sf - tf;
+            else if constexpr (OP == OP_MUL) r = sf * tf;
+            else if constexpr (OP == OP_MADD) r = acc_i(vu, i) + sf * tf;
+            else r = acc_i(vu, i) - sf * tf;
 
-            float out = vu_update_flags(vu, r, i);
+            float out = update_flags(vu, r, i);
             if constexpr (TO_ACC) vu->acc.f[i] = out;
-            else vu_set_vf(vu, d, i, out);
+            else set_vf(vu, d, i, out);
         } else {
-            vu_clear_flags(vu, i);
+            clear_flags(vu, i);
         }
     });
 
-    vu_update_status(vu);
+    update_status(vu);
 }
 
 #endif
 
-#define VU_FMAC_D(name, OP, TK) \
+#define FMAC_D(name, OP, TK) \
     template <uint32_t di> \
-    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
-        vu_fmac<di, OP, false, TK>(vu, VU_UD_D, VU_UD_S, VU_UD_T); \
+    void name(Vu* vu, const Instruction* ins) { \
+        fmac<di, OP, false, TK>(vu, UD_D, UD_S, UD_T); \
     }
 
-#define VU_FMAC_A(name, OP, TK) \
+#define FMAC_A(name, OP, TK) \
     template <uint32_t di> \
-    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
-        vu_fmac<di, OP, true, TK>(vu, VU_UD_D, VU_UD_S, VU_UD_T); \
+    void name(Vu* vu, const Instruction* ins) { \
+        fmac<di, OP, true, TK>(vu, UD_D, UD_S, UD_T); \
     }
 
-VU_FMAC_D(vu_i_add,   VU_OP_ADD, VU_SRC_VEC)
-VU_FMAC_D(vu_i_addi,  VU_OP_ADD, VU_SRC_I)
-VU_FMAC_D(vu_i_addq,  VU_OP_ADD, VU_SRC_Q)
-VU_FMAC_D(vu_i_addx,  VU_OP_ADD, VU_SRC_BCX)
-VU_FMAC_D(vu_i_addy,  VU_OP_ADD, VU_SRC_BCY)
-VU_FMAC_D(vu_i_addz,  VU_OP_ADD, VU_SRC_BCZ)
-VU_FMAC_D(vu_i_addw,  VU_OP_ADD, VU_SRC_BCW)
-VU_FMAC_A(vu_i_adda,  VU_OP_ADD, VU_SRC_VEC)
-VU_FMAC_A(vu_i_addai, VU_OP_ADD, VU_SRC_I)
-VU_FMAC_A(vu_i_addaq, VU_OP_ADD, VU_SRC_Q)
-VU_FMAC_A(vu_i_addax, VU_OP_ADD, VU_SRC_BCX)
-VU_FMAC_A(vu_i_adday, VU_OP_ADD, VU_SRC_BCY)
-VU_FMAC_A(vu_i_addaz, VU_OP_ADD, VU_SRC_BCZ)
-VU_FMAC_A(vu_i_addaw, VU_OP_ADD, VU_SRC_BCW)
+FMAC_D(i_add,   OP_ADD, SRC_VEC)
+FMAC_D(i_addi,  OP_ADD, SRC_I)
+FMAC_D(i_addq,  OP_ADD, SRC_Q)
+FMAC_D(i_addx,  OP_ADD, SRC_BCX)
+FMAC_D(i_addy,  OP_ADD, SRC_BCY)
+FMAC_D(i_addz,  OP_ADD, SRC_BCZ)
+FMAC_D(i_addw,  OP_ADD, SRC_BCW)
+FMAC_A(i_adda,  OP_ADD, SRC_VEC)
+FMAC_A(i_addai, OP_ADD, SRC_I)
+FMAC_A(i_addaq, OP_ADD, SRC_Q)
+FMAC_A(i_addax, OP_ADD, SRC_BCX)
+FMAC_A(i_adday, OP_ADD, SRC_BCY)
+FMAC_A(i_addaz, OP_ADD, SRC_BCZ)
+FMAC_A(i_addaw, OP_ADD, SRC_BCW)
 
-VU_FMAC_D(vu_i_sub,   VU_OP_SUB, VU_SRC_VEC)
-VU_FMAC_D(vu_i_subi,  VU_OP_SUB, VU_SRC_I)
-VU_FMAC_D(vu_i_subq,  VU_OP_SUB, VU_SRC_Q)
-VU_FMAC_D(vu_i_subx,  VU_OP_SUB, VU_SRC_BCX)
-VU_FMAC_D(vu_i_suby,  VU_OP_SUB, VU_SRC_BCY)
-VU_FMAC_D(vu_i_subz,  VU_OP_SUB, VU_SRC_BCZ)
-VU_FMAC_D(vu_i_subw,  VU_OP_SUB, VU_SRC_BCW)
-VU_FMAC_A(vu_i_suba,  VU_OP_SUB, VU_SRC_VEC)
-VU_FMAC_A(vu_i_subai, VU_OP_SUB, VU_SRC_I)
-VU_FMAC_A(vu_i_subaq, VU_OP_SUB, VU_SRC_Q)
-VU_FMAC_A(vu_i_subax, VU_OP_SUB, VU_SRC_BCX)
-VU_FMAC_A(vu_i_subay, VU_OP_SUB, VU_SRC_BCY)
-VU_FMAC_A(vu_i_subaz, VU_OP_SUB, VU_SRC_BCZ)
-VU_FMAC_A(vu_i_subaw, VU_OP_SUB, VU_SRC_BCW)
+FMAC_D(i_sub,   OP_SUB, SRC_VEC)
+FMAC_D(i_subi,  OP_SUB, SRC_I)
+FMAC_D(i_subq,  OP_SUB, SRC_Q)
+FMAC_D(i_subx,  OP_SUB, SRC_BCX)
+FMAC_D(i_suby,  OP_SUB, SRC_BCY)
+FMAC_D(i_subz,  OP_SUB, SRC_BCZ)
+FMAC_D(i_subw,  OP_SUB, SRC_BCW)
+FMAC_A(i_suba,  OP_SUB, SRC_VEC)
+FMAC_A(i_subai, OP_SUB, SRC_I)
+FMAC_A(i_subaq, OP_SUB, SRC_Q)
+FMAC_A(i_subax, OP_SUB, SRC_BCX)
+FMAC_A(i_subay, OP_SUB, SRC_BCY)
+FMAC_A(i_subaz, OP_SUB, SRC_BCZ)
+FMAC_A(i_subaw, OP_SUB, SRC_BCW)
 
-VU_FMAC_D(vu_i_mul,   VU_OP_MUL, VU_SRC_VEC)
-VU_FMAC_D(vu_i_muli,  VU_OP_MUL, VU_SRC_I)
-VU_FMAC_D(vu_i_mulq,  VU_OP_MUL, VU_SRC_Q)
-VU_FMAC_D(vu_i_mulx,  VU_OP_MUL, VU_SRC_BCX)
-VU_FMAC_D(vu_i_muly,  VU_OP_MUL, VU_SRC_BCY)
-VU_FMAC_D(vu_i_mulz,  VU_OP_MUL, VU_SRC_BCZ)
-VU_FMAC_D(vu_i_mulw,  VU_OP_MUL, VU_SRC_BCW)
-VU_FMAC_A(vu_i_mula,  VU_OP_MUL, VU_SRC_VEC)
-VU_FMAC_A(vu_i_mulai, VU_OP_MUL, VU_SRC_I)
-VU_FMAC_A(vu_i_mulaq, VU_OP_MUL, VU_SRC_Q)
-VU_FMAC_A(vu_i_mulax, VU_OP_MUL, VU_SRC_BCX)
-VU_FMAC_A(vu_i_mulay, VU_OP_MUL, VU_SRC_BCY)
-VU_FMAC_A(vu_i_mulaz, VU_OP_MUL, VU_SRC_BCZ)
-VU_FMAC_A(vu_i_mulaw, VU_OP_MUL, VU_SRC_BCW)
+FMAC_D(i_mul,   OP_MUL, SRC_VEC)
+FMAC_D(i_muli,  OP_MUL, SRC_I)
+FMAC_D(i_mulq,  OP_MUL, SRC_Q)
+FMAC_D(i_mulx,  OP_MUL, SRC_BCX)
+FMAC_D(i_muly,  OP_MUL, SRC_BCY)
+FMAC_D(i_mulz,  OP_MUL, SRC_BCZ)
+FMAC_D(i_mulw,  OP_MUL, SRC_BCW)
+FMAC_A(i_mula,  OP_MUL, SRC_VEC)
+FMAC_A(i_mulai, OP_MUL, SRC_I)
+FMAC_A(i_mulaq, OP_MUL, SRC_Q)
+FMAC_A(i_mulax, OP_MUL, SRC_BCX)
+FMAC_A(i_mulay, OP_MUL, SRC_BCY)
+FMAC_A(i_mulaz, OP_MUL, SRC_BCZ)
+FMAC_A(i_mulaw, OP_MUL, SRC_BCW)
 
-VU_FMAC_D(vu_i_madd,   VU_OP_MADD, VU_SRC_VEC)
-VU_FMAC_D(vu_i_maddi,  VU_OP_MADD, VU_SRC_I)
-VU_FMAC_D(vu_i_maddq,  VU_OP_MADD, VU_SRC_Q)
-VU_FMAC_D(vu_i_maddx,  VU_OP_MADD, VU_SRC_BCX)
-VU_FMAC_D(vu_i_maddy,  VU_OP_MADD, VU_SRC_BCY)
-VU_FMAC_D(vu_i_maddz,  VU_OP_MADD, VU_SRC_BCZ)
-VU_FMAC_D(vu_i_maddw,  VU_OP_MADD, VU_SRC_BCW)
-VU_FMAC_A(vu_i_madda,  VU_OP_MADD, VU_SRC_VEC)
-VU_FMAC_A(vu_i_maddai, VU_OP_MADD, VU_SRC_I)
-VU_FMAC_A(vu_i_maddaq, VU_OP_MADD, VU_SRC_Q)
-VU_FMAC_A(vu_i_maddax, VU_OP_MADD, VU_SRC_BCX)
-VU_FMAC_A(vu_i_madday, VU_OP_MADD, VU_SRC_BCY)
-VU_FMAC_A(vu_i_maddaz, VU_OP_MADD, VU_SRC_BCZ)
-VU_FMAC_A(vu_i_maddaw, VU_OP_MADD, VU_SRC_BCW)
+FMAC_D(i_madd,   OP_MADD, SRC_VEC)
+FMAC_D(i_maddi,  OP_MADD, SRC_I)
+FMAC_D(i_maddq,  OP_MADD, SRC_Q)
+FMAC_D(i_maddx,  OP_MADD, SRC_BCX)
+FMAC_D(i_maddy,  OP_MADD, SRC_BCY)
+FMAC_D(i_maddz,  OP_MADD, SRC_BCZ)
+FMAC_D(i_maddw,  OP_MADD, SRC_BCW)
+FMAC_A(i_madda,  OP_MADD, SRC_VEC)
+FMAC_A(i_maddai, OP_MADD, SRC_I)
+FMAC_A(i_maddaq, OP_MADD, SRC_Q)
+FMAC_A(i_maddax, OP_MADD, SRC_BCX)
+FMAC_A(i_madday, OP_MADD, SRC_BCY)
+FMAC_A(i_maddaz, OP_MADD, SRC_BCZ)
+FMAC_A(i_maddaw, OP_MADD, SRC_BCW)
 
-VU_FMAC_D(vu_i_msub,   VU_OP_MSUB, VU_SRC_VEC)
-VU_FMAC_D(vu_i_msubi,  VU_OP_MSUB, VU_SRC_I)
-VU_FMAC_D(vu_i_msubq,  VU_OP_MSUB, VU_SRC_Q)
-VU_FMAC_D(vu_i_msubx,  VU_OP_MSUB, VU_SRC_BCX)
-VU_FMAC_D(vu_i_msuby,  VU_OP_MSUB, VU_SRC_BCY)
-VU_FMAC_D(vu_i_msubz,  VU_OP_MSUB, VU_SRC_BCZ)
-VU_FMAC_D(vu_i_msubw,  VU_OP_MSUB, VU_SRC_BCW)
-VU_FMAC_A(vu_i_msuba,  VU_OP_MSUB, VU_SRC_VEC)
-VU_FMAC_A(vu_i_msubai, VU_OP_MSUB, VU_SRC_I)
-VU_FMAC_A(vu_i_msubaq, VU_OP_MSUB, VU_SRC_Q)
-VU_FMAC_A(vu_i_msubax, VU_OP_MSUB, VU_SRC_BCX)
-VU_FMAC_A(vu_i_msubay, VU_OP_MSUB, VU_SRC_BCY)
-VU_FMAC_A(vu_i_msubaz, VU_OP_MSUB, VU_SRC_BCZ)
-VU_FMAC_A(vu_i_msubaw, VU_OP_MSUB, VU_SRC_BCW)
+FMAC_D(i_msub,   OP_MSUB, SRC_VEC)
+FMAC_D(i_msubi,  OP_MSUB, SRC_I)
+FMAC_D(i_msubq,  OP_MSUB, SRC_Q)
+FMAC_D(i_msubx,  OP_MSUB, SRC_BCX)
+FMAC_D(i_msuby,  OP_MSUB, SRC_BCY)
+FMAC_D(i_msubz,  OP_MSUB, SRC_BCZ)
+FMAC_D(i_msubw,  OP_MSUB, SRC_BCW)
+FMAC_A(i_msuba,  OP_MSUB, SRC_VEC)
+FMAC_A(i_msubai, OP_MSUB, SRC_I)
+FMAC_A(i_msubaq, OP_MSUB, SRC_Q)
+FMAC_A(i_msubax, OP_MSUB, SRC_BCX)
+FMAC_A(i_msubay, OP_MSUB, SRC_BCY)
+FMAC_A(i_msubaz, OP_MSUB, SRC_BCZ)
+FMAC_A(i_msubaw, OP_MSUB, SRC_BCW)
 
-#ifdef VU_FMAC_SIMD
-static inline __m128i vu_sm_key(__m128i x) {
+#ifdef FMAC_SIMD
+static inline __m128i sm_key(__m128i x) {
     return _mm_xor_si128(x, _mm_and_si128(_mm_srai_epi32(x, 31), _mm_set1_epi32(0x7fffffff)));
 }
 
-template <uint32_t di, bool IS_MAX, vu_src_kind TK>
-static inline void vu_minmax(struct vu_state* vu, int d, int s, int t) {
+template <uint32_t di, bool IS_MAX, src_kind TK>
+static inline void minmax(Vu* vu, int d, int s, int t) {
     if (!d) return;
     __m128i a = _mm_loadu_si128((const __m128i*)&vu->vf[s]);
     __m128i b;
 
-    if constexpr (TK == VU_SRC_VEC) b = _mm_loadu_si128((const __m128i*)&vu->vf[t]);
-    else if constexpr (TK == VU_SRC_I) b = _mm_set1_epi32(vu->i.s32);
-    else if constexpr (TK == VU_SRC_BCX) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(0, 0, 0, 0));
-    else if constexpr (TK == VU_SRC_BCY) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(1, 1, 1, 1));
-    else if constexpr (TK == VU_SRC_BCZ) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(2, 2, 2, 2));
+    if constexpr (TK == SRC_VEC) b = _mm_loadu_si128((const __m128i*)&vu->vf[t]);
+    else if constexpr (TK == SRC_I) b = _mm_set1_epi32(vu->i.s32);
+    else if constexpr (TK == SRC_BCX) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(0, 0, 0, 0));
+    else if constexpr (TK == SRC_BCY) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(1, 1, 1, 1));
+    else if constexpr (TK == SRC_BCZ) b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(2, 2, 2, 2));
     else b = _mm_shuffle_epi32(_mm_loadu_si128((const __m128i*)&vu->vf[t]), _MM_SHUFFLE(3, 3, 3, 3));
 
-    __m128i agtb = _mm_cmpgt_epi32(vu_sm_key(a), vu_sm_key(b));
-    __m128i res = IS_MAX ? vu_sel(agtb, a, b) : vu_sel(agtb, b, a);
+    __m128i agtb = _mm_cmpgt_epi32(sm_key(a), sm_key(b));
+    __m128i res = IS_MAX ? sel(agtb, a, b) : sel(agtb, b, a);
 
-    vu_write_masked<di>(&vu->vf[d], res);
+    write_masked<di>(&vu->vf[d], res);
 }
 #else
-template <uint32_t di, bool IS_MAX, vu_src_kind TK>
-static inline void vu_minmax(struct vu_state* vu, int d, int s, int t) {
+template <uint32_t di, bool IS_MAX, src_kind TK>
+static inline void minmax(Vu* vu, int d, int s, int t) {
     if (!d) return;
 
     int32_t bc = 0;
 
-    if constexpr (TK == VU_SRC_I) bc = vu->i.s32;
-    else if constexpr (TK == VU_SRC_BCX) bc = vu->vf[t].s32[0];
-    else if constexpr (TK == VU_SRC_BCY) bc = vu->vf[t].s32[1];
-    else if constexpr (TK == VU_SRC_BCZ) bc = vu->vf[t].s32[2];
-    else if constexpr (TK == VU_SRC_BCW) bc = vu->vf[t].s32[3];
+    if constexpr (TK == SRC_I) bc = vu->i.s32;
+    else if constexpr (TK == SRC_BCX) bc = vu->vf[t].s32[0];
+    else if constexpr (TK == SRC_BCY) bc = vu->vf[t].s32[1];
+    else if constexpr (TK == SRC_BCZ) bc = vu->vf[t].s32[2];
+    else if constexpr (TK == SRC_BCW) bc = vu->vf[t].s32[3];
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             int32_t b;
-            if constexpr (TK == VU_SRC_VEC) b = vu->vf[t].s32[i];
+            if constexpr (TK == SRC_VEC) b = vu->vf[t].s32[i];
             else b = bc;
-            vu->vf[d].u32[i] = IS_MAX ? vu_max(vu->vf[s].s32[i], b) : vu_min(vu->vf[s].s32[i], b);
+            vu->vf[d].u32[i] = IS_MAX ? max(vu->vf[s].s32[i], b) : min(vu->vf[s].s32[i], b);
         }
     });
 }
 #endif
 
-#define VU_MINMAX(name, IS_MAX, TK) \
+#define MINMAX(name, IS_MAX, TK) \
     template <uint32_t di> \
-    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
-        vu_minmax<di, IS_MAX, TK>(vu, VU_UD_D, VU_UD_S, VU_UD_T); \
+    void name(Vu* vu, const Instruction* ins) { \
+        minmax<di, IS_MAX, TK>(vu, UD_D, UD_S, UD_T); \
     }
 
-VU_MINMAX(vu_i_max,   true,  VU_SRC_VEC)
-VU_MINMAX(vu_i_maxi,  true,  VU_SRC_I)
-VU_MINMAX(vu_i_maxx,  true,  VU_SRC_BCX)
-VU_MINMAX(vu_i_maxy,  true,  VU_SRC_BCY)
-VU_MINMAX(vu_i_maxz,  true,  VU_SRC_BCZ)
-VU_MINMAX(vu_i_maxw,  true,  VU_SRC_BCW)
-VU_MINMAX(vu_i_mini,  false, VU_SRC_VEC)
-VU_MINMAX(vu_i_minii, false, VU_SRC_I)
-VU_MINMAX(vu_i_minix, false, VU_SRC_BCX)
-VU_MINMAX(vu_i_miniy, false, VU_SRC_BCY)
-VU_MINMAX(vu_i_miniz, false, VU_SRC_BCZ)
-VU_MINMAX(vu_i_miniw, false, VU_SRC_BCW)
+MINMAX(i_max,   true,  SRC_VEC)
+MINMAX(i_maxi,  true,  SRC_I)
+MINMAX(i_maxx,  true,  SRC_BCX)
+MINMAX(i_maxy,  true,  SRC_BCY)
+MINMAX(i_maxz,  true,  SRC_BCZ)
+MINMAX(i_maxw,  true,  SRC_BCW)
+MINMAX(i_mini,  false, SRC_VEC)
+MINMAX(i_minii, false, SRC_I)
+MINMAX(i_minix, false, SRC_BCX)
+MINMAX(i_miniy, false, SRC_BCY)
+MINMAX(i_miniz, false, SRC_BCZ)
+MINMAX(i_miniw, false, SRC_BCW)
 
-#ifdef VU_FMAC_SIMD
-void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+#ifdef FMAC_SIMD
+void i_opmula(Vu* vu, const Instruction* ins) {
+    int s = UD_S;
+    int t = UD_T;
 
-    __m128 sv = vu_load_cvtf(&vu->vf[s]);
-    __m128 tv = vu_load_cvtf(&vu->vf[t]);
+    __m128 sv = load_cvtf(&vu->vf[s]);
+    __m128 tv = load_cvtf(&vu->vf[t]);
     __m128 syzx = _mm_shuffle_ps(sv, sv, _MM_SHUFFLE(3, 0, 2, 1));
     __m128 tzxy = _mm_shuffle_ps(tv, tv, _MM_SHUFFLE(3, 1, 0, 2));
     __m128 prod = _mm_mul_ps(syzx, tzxy);
 
-    __m128i pre = vu_cvtf4_i(_mm_castps_si128(prod));
-    __m128i clamped = vu_flags4<VU_D_X | VU_D_Y | VU_D_Z>(vu, pre);
+    __m128i pre = cvtf4_i(_mm_castps_si128(prod));
+    __m128i clamped = flags4<D_X | D_Y | D_Z>(vu, pre);
 
-    vu_write_masked<VU_D_X | VU_D_Y | VU_D_Z>(&vu->acc, clamped);
+    write_masked<D_X | D_Y | D_Z>(&vu->acc, clamped);
 
-    vu_update_status(vu);
+    update_status(vu);
 }
 
-void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+void i_opmsub(Vu* vu, const Instruction* ins) {
+    int d = UD_D;
+    int s = UD_S;
+    int t = UD_T;
 
-    __m128 sv = vu_load_cvtf(&vu->vf[s]);
-    __m128 tv = vu_load_cvtf(&vu->vf[t]);
+    __m128 sv = load_cvtf(&vu->vf[s]);
+    __m128 tv = load_cvtf(&vu->vf[t]);
     __m128 accv = _mm_loadu_ps((const float*)&vu->acc);
     __m128 syzx = _mm_shuffle_ps(sv, sv, _MM_SHUFFLE(3, 0, 2, 1));
     __m128 tzxy = _mm_shuffle_ps(tv, tv, _MM_SHUFFLE(3, 1, 0, 2));
     __m128 prod = _mm_mul_ps(syzx, tzxy);
     __m128 r = _mm_sub_ps(accv, prod);
 
-    __m128i clamped = vu_flags4<VU_D_X | VU_D_Y | VU_D_Z>(vu, _mm_castps_si128(r));
+    __m128i clamped = flags4<D_X | D_Y | D_Z>(vu, _mm_castps_si128(r));
 
-    if (d) vu_write_masked<VU_D_X | VU_D_Y | VU_D_Z>(&vu->vf[d], clamped);
+    if (d) write_masked<D_X | D_Y | D_Z>(&vu->vf[d], clamped);
 
-    vu_update_status(vu);
+    update_status(vu);
 }
 #else
-void vu_i_opmula(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+void i_opmula(Vu* vu, const Instruction* ins) {
+    int s = UD_S;
+    int t = UD_T;
 
-    vu->acc.x = vu_vf_y(vu, s) * vu_vf_z(vu, t);
-    vu->acc.y = vu_vf_z(vu, s) * vu_vf_x(vu, t);
-    vu->acc.z = vu_vf_x(vu, s) * vu_vf_y(vu, t);
+    vu->acc.x = vf_y(vu, s) * vf_z(vu, t);
+    vu->acc.y = vf_z(vu, s) * vf_x(vu, t);
+    vu->acc.z = vf_x(vu, s) * vf_y(vu, t);
 
-    vu->acc.x = vu_cvtf(vu->acc.u32[0]);
-    vu->acc.y = vu_cvtf(vu->acc.u32[1]);
-    vu->acc.z = vu_cvtf(vu->acc.u32[2]);
+    vu->acc.x = cvtf(vu->acc.u32[0]);
+    vu->acc.y = cvtf(vu->acc.u32[1]);
+    vu->acc.z = cvtf(vu->acc.u32[2]);
 
-    vu->acc.x = vu_update_flags(vu, vu->acc.x, 0);
-    vu->acc.y = vu_update_flags(vu, vu->acc.y, 1);
-    vu->acc.z = vu_update_flags(vu, vu->acc.z, 2);
+    vu->acc.x = update_flags(vu, vu->acc.x, 0);
+    vu->acc.y = update_flags(vu, vu->acc.y, 1);
+    vu->acc.z = update_flags(vu, vu->acc.z, 2);
 
-    vu_clear_flags(vu, 3);
-    vu_update_status(vu);
+    clear_flags(vu, 3);
+    update_status(vu);
 }
 
-void vu_i_opmsub(struct vu_state* vu, const struct vu_instruction* ins) {
-    int d = VU_UD_D;
-    int s = VU_UD_S;
-    int t = VU_UD_T;
+void i_opmsub(Vu* vu, const Instruction* ins) {
+    int d = UD_D;
+    int s = UD_S;
+    int t = UD_T;
 
-    struct vu_reg128 tmp;
+    Reg128 tmp;
 
-    tmp.f[0] = vu->acc.x - vu_vf_y(vu, s) * vu_vf_z(vu, t);
-    tmp.f[1] = vu->acc.y - vu_vf_z(vu, s) * vu_vf_x(vu, t);
-    tmp.f[2] = vu->acc.z - vu_vf_x(vu, s) * vu_vf_y(vu, t);
+    tmp.f[0] = vu->acc.x - vf_y(vu, s) * vf_z(vu, t);
+    tmp.f[1] = vu->acc.y - vf_z(vu, s) * vf_x(vu, t);
+    tmp.f[2] = vu->acc.z - vf_x(vu, s) * vf_y(vu, t);
 
-    vu_set_vf_x(vu, d, vu_update_flags(vu, tmp.f[0], 0));
-    vu_set_vf_y(vu, d, vu_update_flags(vu, tmp.f[1], 1));
-    vu_set_vf_z(vu, d, vu_update_flags(vu, tmp.f[2], 2));
+    set_vf_x(vu, d, update_flags(vu, tmp.f[0], 0));
+    set_vf_y(vu, d, update_flags(vu, tmp.f[1], 1));
+    set_vf_z(vu, d, update_flags(vu, tmp.f[2], 2));
 
-    vu_clear_flags(vu, 3);
-    vu_update_status(vu);
+    clear_flags(vu, 3);
+    update_status(vu);
 }
 #endif
-void vu_i_nop(struct vu_state* vu, const struct vu_instruction* ins) {
+void i_nop(Vu* vu, const Instruction* ins) {
     // No operation
 }
 
-#ifdef VU_FMAC_SIMD
+#ifdef FMAC_SIMD
 template <uint32_t di>
-static inline void vu_ftoi(struct vu_state* vu, int t, int s, float scale) {
-    __m128 f = _mm_mul_ps(vu_load_cvtf(&vu->vf[s]), _mm_set1_ps(scale));
+static inline void ftoi(Vu* vu, int t, int s, float scale) {
+    __m128 f = _mm_mul_ps(load_cvtf(&vu->vf[s]), _mm_set1_ps(scale));
     __m128i iv = _mm_cvttps_epi32(f);
     __m128i povf = _mm_castps_si128(_mm_cmpge_ps(f, _mm_set1_ps(2147483648.0f)));
 
-    iv = vu_sel(povf, _mm_set1_epi32(0x7fffffff), iv);
+    iv = sel(povf, _mm_set1_epi32(0x7fffffff), iv);
 
-    if (t) vu_write_masked<di>(&vu->vf[t], iv);
+    if (t) write_masked<di>(&vu->vf[t], iv);
 }
 
 template <uint32_t di>
-static inline void vu_itof(struct vu_state* vu, int t, int s, float scale) {
+static inline void itof(Vu* vu, int t, int s, float scale) {
     __m128 f = _mm_mul_ps(_mm_cvtepi32_ps(_mm_loadu_si128((const __m128i*)&vu->vf[s])), _mm_set1_ps(scale));
 
-    if (t) vu_write_masked<di>(&vu->vf[t], _mm_castps_si128(f));
+    if (t) write_masked<di>(&vu->vf[t], _mm_castps_si128(f));
 }
 #else
 template <uint32_t di>
-static inline void vu_ftoi(struct vu_state* vu, int t, int s, float scale) {
+static inline void ftoi(Vu* vu, int t, int s, float scale) {
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vfu(vu, t, i, vu_cvti(vu_vf_i(vu, s, i) * scale));
+        if constexpr (di & (D_X >> i)) {
+            set_vfu(vu, t, i, cvti(vf_i(vu, s, i) * scale));
         }
     });
 }
 
 template <uint32_t di>
-static inline void vu_itof(struct vu_state* vu, int t, int s, float scale) {
+static inline void itof(Vu* vu, int t, int s, float scale) {
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * scale));
+        if constexpr (di & (D_X >> i)) {
+            set_vf(vu, t, i, (float)((float)(vu->vf[s].s32[i]) * scale));
         }
     });
 }
 #endif
 
-#define VU_CONV(name, fn, scale) \
+#define CONV(name, fn, scale) \
     template <uint32_t di> \
-    void name(struct vu_state* vu, const struct vu_instruction* ins) { \
-        fn<di>(vu, VU_UD_T, VU_UD_S, scale); \
+    void name(Vu* vu, const Instruction* ins) { \
+        fn<di>(vu, UD_T, UD_S, scale); \
     }
 
-VU_CONV(vu_i_ftoi0,  vu_ftoi, 1.0f)
-VU_CONV(vu_i_ftoi4,  vu_ftoi, (1.0f / 0.0625f))
-VU_CONV(vu_i_ftoi12, vu_ftoi, (1.0f / 0.000244140625f))
-VU_CONV(vu_i_ftoi15, vu_ftoi, (1.0f / 0.000030517578125f))
-VU_CONV(vu_i_itof0,  vu_itof, 1.0f)
-VU_CONV(vu_i_itof4,  vu_itof, 0.0625f)
-VU_CONV(vu_i_itof12, vu_itof, 0.000244140625f)
-VU_CONV(vu_i_itof15, vu_itof, 0.000030517578125f)
+CONV(i_ftoi0,  ftoi, 1.0f)
+CONV(i_ftoi4,  ftoi, (1.0f / 0.0625f))
+CONV(i_ftoi12, ftoi, (1.0f / 0.000244140625f))
+CONV(i_ftoi15, ftoi, (1.0f / 0.000030517578125f))
+CONV(i_itof0,  itof, 1.0f)
+CONV(i_itof4,  itof, 0.0625f)
+CONV(i_itof12, itof, 0.000244140625f)
+CONV(i_itof15, itof, 0.000030517578125f)
 
-void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_UD_T;
-    int s = VU_UD_S;
+void i_clip(Vu* vu, const Instruction* ins) {
+    int t = UD_T;
+    int s = UD_S;
 
     vu->clip <<= 6;
 
@@ -1069,20 +1053,20 @@ void vu_i_clip(struct vu_state* vu, const struct vu_instruction* ins) {
 }
 
 // Lower pipeline
-void vu_i_b(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_branch(vu, vu->tpc + VU_LD_IMM11);
+void i_b(Vu* vu, const Instruction* ins) {
+    branch(vu, vu->tpc + LD_IMM11);
 }
-void vu_i_bal(struct vu_state* vu, const struct vu_instruction* ins) {
+void i_bal(Vu* vu, const Instruction* ins) {
     // Instruction next to the delay slot
-    VU_IT = vu_delay_slot_link(vu);
+    IT = delay_slot_link(vu);
 
-    vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    branch(vu, vu->tpc + LD_IMM11);
 }
-void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
-    int s = VU_LD_S;
-    int tf = VU_LD_TF;
-    int sf = VU_LD_SF;
+void i_div(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
+    int s = LD_S;
+    int tf = LD_TF;
+    int sf = LD_SF;
 
     uint32_t nb = vu->vf[s].u32[sf];
     uint32_t db = vu->vf[t].u32[tf];
@@ -1097,9 +1081,9 @@ void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins) {
 
     if (den == 0.0) {
         if (num == 0.0) {
-            vu->status |= VU_STATUS_I;
+            vu->status |= STATUS_I;
         } else {
-            vu->status |= VU_STATUS_D;
+            vu->status |= STATUS_D;
         }
 
         result = sign | 0x7fffffff;
@@ -1107,36 +1091,36 @@ void vu_i_div(struct vu_state* vu, const struct vu_instruction* ins) {
         result = ps2_pack_double(num / den);
     }
 
-    vu_set_q_u32(vu, result, 7);
+    set_q_u32(vu, result, 7);
 }
-void vu_i_eatan(struct vu_state* vu, const struct vu_instruction* ins) {
-    float x = vu_vf_i(vu, VU_LD_S, VU_LD_SF);
+void i_eatan(Vu* vu, const Instruction* ins) {
+    float x = vf_i(vu, LD_S, LD_SF);
 
     if (x == -1.0f) {
         vu->p.u32 = 0xFF7FFFFF;
     } else {
         x = (x - 1.0f) / (x + 1.0f);
 
-        vu->p.f = vu_atan(x);
+        vu->p.f = atan(x);
     }
 }
-void vu_i_eatanxy(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    float x = vu_vf_x(vu, s);
-    float y = vu_vf_y(vu, s);
+void i_eatanxy(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    float x = vf_x(vu, s);
+    float y = vf_y(vu, s);
 
     if (y + x == 0.0f) {
         vu->p.u32 = 0x7F7FFFFF | (vu->vf[s].u32[1] & 0x80000000);
     } else {
         x = (y - 1.0f) / (y + x);
 
-        vu->p.f = vu_atan(x);
+        vu->p.f = atan(x);
     }
 }
-void vu_i_eatanxz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    float x = vu_vf_x(vu, s);
-    float z = vu_vf_z(vu, s);
+void i_eatanxz(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    float x = vf_x(vu, s);
+    float z = vf_z(vu, s);
 
     //P = atan(z/x)
     if (z + x == 0.0f) {
@@ -1144,419 +1128,419 @@ void vu_i_eatanxz(struct vu_state* vu, const struct vu_instruction* ins) {
     } else {
         x = (z - x) / (z + x);
 
-        vu->p.f = vu_atan(x);
+        vu->p.f = atan(x);
     }
 }
-void vu_i_eexp(struct vu_state* vu, const struct vu_instruction* ins) {
+void i_eexp(Vu* vu, const Instruction* ins) {
     const static float coeffs[] = {
         0.249998688697815f, 0.031257584691048f,
         0.002591371303424f, 0.000171562001924f,
         0.000005430199963f, 0.000000690600018f
     };
 
-    int s = VU_LD_S;
-    int sf = VU_LD_SF;
+    int s = LD_S;
+    int sf = LD_SF;
 
     if (vu->vf[s].u32[sf] & 0x80000000) {
-        vu->p.f = vu_vf_i(vu, s, sf);
+        vu->p.f = vf_i(vu, s, sf);
 
         return;
     }
 
     float value = 1;
-    float x = vu_vf_i(vu, s, sf);
+    float x = vf_i(vu, s, sf);
 
     for (int exp = 1; exp <= 6; exp++)
         value += coeffs[exp - 1] * pow(x, exp);
 
     vu->p.f = 1.0 / value;
 }
-void vu_i_eleng(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
+void i_eleng(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
 
-    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
-    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
-    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+    float x2 = vf_x(vu, s) * vf_x(vu, s);
+    float y2 = vf_y(vu, s) * vf_y(vu, s);
+    float z2 = vf_z(vu, s) * vf_z(vu, s);
 
     vu->p.f = sqrtf(x2 + y2 + z2);
 }
-void vu_i_ercpr(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->p.f = 1.0f / vu_vf_i(vu, VU_LD_S, VU_LD_SF);
+void i_ercpr(Vu* vu, const Instruction* ins) {
+    vu->p.f = 1.0f / vf_i(vu, LD_S, LD_SF);
 }
-void vu_i_erleng(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
+void i_erleng(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
 
-    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
-    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
-    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+    float x2 = vf_x(vu, s) * vf_x(vu, s);
+    float y2 = vf_y(vu, s) * vf_y(vu, s);
+    float z2 = vf_z(vu, s) * vf_z(vu, s);
 
     vu->p.f = 1.0f / sqrtf(x2 + y2 + z2);
 }
-void vu_i_ersadd(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
+void i_ersadd(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
 
-    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
-    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
-    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+    float x2 = vf_x(vu, s) * vf_x(vu, s);
+    float y2 = vf_y(vu, s) * vf_y(vu, s);
+    float z2 = vf_z(vu, s) * vf_z(vu, s);
 
     vu->p.f = 1.0f / (x2 + y2 + z2);
 }
-void vu_i_ersqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->p.f = 1.0f / sqrtf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
+void i_ersqrt(Vu* vu, const Instruction* ins) {
+    vu->p.f = 1.0f / sqrtf(vf_i(vu, LD_S, LD_SF));
 }
-void vu_i_esadd(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
+void i_esadd(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
 
-    float x2 = vu_vf_x(vu, s) * vu_vf_x(vu, s);
-    float y2 = vu_vf_y(vu, s) * vu_vf_y(vu, s);
-    float z2 = vu_vf_z(vu, s) * vu_vf_z(vu, s);
+    float x2 = vf_x(vu, s) * vf_x(vu, s);
+    float y2 = vf_y(vu, s) * vf_y(vu, s);
+    float z2 = vf_z(vu, s) * vf_z(vu, s);
 
     vu->p.f = x2 + y2 + z2;
 }
-void vu_i_esin(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->p.f = sinf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
+void i_esin(Vu* vu, const Instruction* ins) {
+    vu->p.f = sinf(vf_i(vu, LD_S, LD_SF));
 }
-void vu_i_esqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->p.f = sqrtf(vu_vf_i(vu, VU_LD_S, VU_LD_SF));
+void i_esqrt(Vu* vu, const Instruction* ins) {
+    vu->p.f = sqrtf(vf_i(vu, LD_S, LD_SF));
 }
-void vu_i_esum(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
+void i_esum(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
 
-    vu->p.f = vu_vf_x(vu, s) + vu_vf_y(vu, s) + vu_vf_z(vu, s) + vu_vf_w(vu, s);
+    vu->p.f = vf_x(vu, s) + vf_y(vu, s) + vf_z(vu, s) + vf_w(vu, s);
 }
 
-#define VU_CLIP_DELAY 3
-#define VU_VF_LATENCY 4
-#define VU_CLIP_FLAGS(vu) ((vu)->clip_pipeline[VU_CLIP_DELAY])
+#define CLIP_DELAY 3
+#define VF_LATENCY 4
+#define CLIP_FLAGS(vu) ((vu)->clip_pipeline[CLIP_DELAY])
 
-void vu_i_fcand(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->vi[1] = ((VU_CLIP_FLAGS(vu) & 0xffffff) & VU_LD_IMM24) != 0;
+void i_fcand(Vu* vu, const Instruction* ins) {
+    vu->vi[1] = ((CLIP_FLAGS(vu) & 0xffffff) & LD_IMM24) != 0;
 }
-void vu_i_fceq(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->vi[1] = (VU_CLIP_FLAGS(vu) & 0xffffff) == VU_LD_IMM24;
+void i_fceq(Vu* vu, const Instruction* ins) {
+    vu->vi[1] = (CLIP_FLAGS(vu) & 0xffffff) == LD_IMM24;
 }
-void vu_i_fcget(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
+void i_fcget(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
 
     if (!t) return;
 
-    vu->vi[VU_LD_T] = VU_CLIP_FLAGS(vu) & 0xfff;
+    vu->vi[LD_T] = CLIP_FLAGS(vu) & 0xfff;
 }
-void vu_i_fcor(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->vi[1] = ((VU_CLIP_FLAGS(vu) & 0xffffff) | VU_LD_IMM24) == 0xffffff;
+void i_fcor(Vu* vu, const Instruction* ins) {
+    vu->vi[1] = ((CLIP_FLAGS(vu) & 0xffffff) | LD_IMM24) == 0xffffff;
 }
-void vu_i_fcset(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->clip = VU_LD_IMM24;
+void i_fcset(Vu* vu, const Instruction* ins) {
+    vu->clip = LD_IMM24;
 }
-void vu_i_fmand(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_set_vi(vu, VU_LD_T, vu->mac_pipeline[3] & VU_IS);
+void i_fmand(Vu* vu, const Instruction* ins) {
+    set_vi(vu, LD_T, vu->mac_pipeline[3] & IS);
 }
-void vu_i_fmeq(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_set_vi(vu, VU_LD_T, (VU_IS & 0xffff) == (vu->mac_pipeline[3] & 0xffff));
+void i_fmeq(Vu* vu, const Instruction* ins) {
+    set_vi(vu, LD_T, (IS & 0xffff) == (vu->mac_pipeline[3] & 0xffff));
 }
-void vu_i_fmor(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_set_vi(vu, VU_LD_T, (VU_IS & 0xffff) | (vu->mac_pipeline[3] & 0xffff));
+void i_fmor(Vu* vu, const Instruction* ins) {
+    set_vi(vu, LD_T, (IS & 0xffff) | (vu->mac_pipeline[3] & 0xffff));
 }
-void vu_i_fsand(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_set_vi(vu, VU_LD_T, vu->status & VU_LD_IMM12);
+void i_fsand(Vu* vu, const Instruction* ins) {
+    set_vi(vu, LD_T, vu->status & LD_IMM12);
 }
-void vu_i_fseq(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_set_vi(vu, VU_LD_T, (vu->status & 0xfff) == VU_LD_IMM12);
+void i_fseq(Vu* vu, const Instruction* ins) {
+    set_vi(vu, LD_T, (vu->status & 0xfff) == LD_IMM12);
 }
-void vu_i_fsor(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_set_vi(vu, VU_LD_T, (vu->status & 0xfff) | VU_LD_IMM12);
+void i_fsor(Vu* vu, const Instruction* ins) {
+    set_vi(vu, LD_T, (vu->status & 0xfff) | LD_IMM12);
 }
-void vu_i_fsset(struct vu_state* vu, const struct vu_instruction* ins) {
+void i_fsset(Vu* vu, const Instruction* ins) {
     vu->status &= 0x3f;
-    vu->status |= VU_LD_IMM12 & 0xfc0;
+    vu->status |= LD_IMM12 & 0xfc0;
 }
-void vu_i_iadd(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_D);
+void i_iadd(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_D);
 
-    vu_set_vi(vu, VU_LD_D, VU_IS + VU_IT);
+    set_vi(vu, LD_D, IS + IT);
 }
-void vu_i_iaddi(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_T);
+void i_iaddi(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_T);
 
-    vu_set_vi(vu, VU_LD_T, VU_IS + VU_LD_IMM5);
+    set_vi(vu, LD_T, IS + LD_IMM5);
 }
-void vu_i_iaddiu(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_T);
+void i_iaddiu(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_T);
 
-    vu_set_vi(vu, VU_LD_T, VU_IS + VU_LD_IMM15);
+    set_vi(vu, LD_T, IS + LD_IMM15);
 }
-void vu_i_iand(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_T);
+void i_iand(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_T);
 
-    vu_set_vi(vu, VU_LD_D, VU_IS & VU_IT);
+    set_vi(vu, LD_D, IS & IT);
 }
-void vu_i_ibeq(struct vu_state* vu, const struct vu_instruction* ins) {
-    uint16_t t = vu_get_branch_register(vu, VU_LD_T);
-    uint16_t s = vu_get_branch_register(vu, VU_LD_S);
+void i_ibeq(Vu* vu, const Instruction* ins) {
+    uint16_t t = get_branch_register(vu, LD_T);
+    uint16_t s = get_branch_register(vu, LD_S);
 
-    if (t == s) vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    if (t == s) branch(vu, vu->tpc + LD_IMM11);
 }
-void vu_i_ibgez(struct vu_state* vu, const struct vu_instruction* ins) {
-    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+void i_ibgez(Vu* vu, const Instruction* ins) {
+    int16_t s = get_branch_register(vu, LD_S);
 
-    if (s >= 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    if (s >= 0) branch(vu, vu->tpc + LD_IMM11);
 }
-void vu_i_ibgtz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+void i_ibgtz(Vu* vu, const Instruction* ins) {
+    int16_t s = get_branch_register(vu, LD_S);
 
-    if (s > 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    if (s > 0) branch(vu, vu->tpc + LD_IMM11);
 }
-void vu_i_iblez(struct vu_state* vu, const struct vu_instruction* ins) {
-    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+void i_iblez(Vu* vu, const Instruction* ins) {
+    int16_t s = get_branch_register(vu, LD_S);
 
-    if (s <= 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    if (s <= 0) branch(vu, vu->tpc + LD_IMM11);
 }
-void vu_i_ibltz(struct vu_state* vu, const struct vu_instruction* ins) {
-    int16_t s = vu_get_branch_register(vu, VU_LD_S);
+void i_ibltz(Vu* vu, const Instruction* ins) {
+    int16_t s = get_branch_register(vu, LD_S);
 
-    if (s < 0) vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    if (s < 0) branch(vu, vu->tpc + LD_IMM11);
 }
-void vu_i_ibne(struct vu_state* vu, const struct vu_instruction* ins) {
-    uint16_t t = vu_get_branch_register(vu, VU_LD_T);
-    uint16_t s = vu_get_branch_register(vu, VU_LD_S);
+void i_ibne(Vu* vu, const Instruction* ins) {
+    uint16_t t = get_branch_register(vu, LD_T);
+    uint16_t s = get_branch_register(vu, LD_S);
 
-    // printf("ibne vi%02u (%04x), vi%02u (%04x), 0x%08x\n", VU_LD_T, t, VU_LD_S, s, vu->tpc + VU_LD_IMM11);
+    // iris_debug(vu, "ibne vi{} ({:04x}), vi{} ({:04x}), 0x{:08x}", LD_T, t, LD_S, s, vu->tpc + LD_IMM11);
 
-    if (t != s) vu_branch(vu, vu->tpc + VU_LD_IMM11);
+    if (t != s) branch(vu, vu->tpc + LD_IMM11);
 }
 template <uint32_t di>
-void vu_i_ilw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
+void i_ilw(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
 
     if (!t) return;
 
-    uint32_t addr = VU_IS + VU_LD_IMM11;
-    uint128_t data = vu_mem_read(vu, addr);
+    uint32_t addr = IS + LD_IMM11;
+    uint128_t data = mem_read(vu, addr);
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vi[t] = data.u32[i];
         }
     });
 }
 template <uint32_t di>
-void vu_i_ilwr(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_ilwr(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
     if (!t) return;
 
     uint32_t addr = vu->vi[s];
-    uint128_t data = vu_mem_read(vu, addr);
+    uint128_t data = mem_read(vu, addr);
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vi[t] = data.u32[i];
         }
     });
 }
-void vu_i_ior(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_D);
+void i_ior(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_D);
 
-    vu_set_vi(vu, VU_LD_D, VU_IS | VU_IT);
+    set_vi(vu, LD_D, IS | IT);
 }
-void vu_i_isub(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_D);
+void i_isub(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_D);
 
-    vu_set_vi(vu, VU_LD_D, VU_IS - VU_IT);
+    set_vi(vu, LD_D, IS - IT);
 }
-void vu_i_isubiu(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_T);
+void i_isubiu(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_T);
 
-    vu_set_vi(vu, VU_LD_T, VU_IS - VU_LD_IMM15);
+    set_vi(vu, LD_T, IS - LD_IMM15);
 }
 template <uint32_t di>
-void vu_i_isw(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_isw(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
-    uint32_t addr = vu->vi[s] + VU_LD_IMM11;
+    uint32_t addr = vu->vi[s] + LD_IMM11;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_mem_write(vu, addr, vu->vi[t], i);
+        if constexpr (di & (D_X >> i)) {
+            mem_write(vu, addr, vu->vi[t], i);
         }
     });
 }
 template <uint32_t di>
-void vu_i_iswr(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_iswr(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
     uint32_t addr = vu->vi[s];
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_mem_write(vu, addr, vu->vi[t], i);
+        if constexpr (di & (D_X >> i)) {
+            mem_write(vu, addr, vu->vi[t], i);
         }
     });
 }
-void vu_i_jalr(struct vu_state* vu, const struct vu_instruction* ins) {
-    uint16_t s = VU_IS;
+void i_jalr(Vu* vu, const Instruction* ins) {
+    uint16_t s = IS;
 
-    VU_IT = vu_delay_slot_link(vu);
+    IT = delay_slot_link(vu);
 
-    vu_branch(vu, s);
+    branch(vu, s);
 }
-void vu_i_jr(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_branch(vu, VU_IS);
+void i_jr(Vu* vu, const Instruction* ins) {
+    branch(vu, IS);
 }
 template <uint32_t di>
-void vu_i_lq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_lq(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
-    uint32_t addr = vu->vi[s] + VU_LD_IMM11;
-    uint128_t data = vu_mem_read(vu, addr);
+    uint32_t addr = vu->vi[s] + LD_IMM11;
+    uint128_t data = mem_read(vu, addr);
 
     if (!t) return;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vf[t].u32[i] = data.u32[i];
         }
     });
 }
 template <uint32_t di>
-void vu_i_lqd(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_lqd(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
-    vu_write_branch_pipeline(vu, s);
+    write_branch_pipeline(vu, s);
 
-    vu_set_vi(vu, s, vu->vi[s] - 1);
+    set_vi(vu, s, vu->vi[s] - 1);
 
     uint32_t addr = vu->vi[s];
-    uint128_t data = vu_mem_read(vu, addr);
+    uint128_t data = mem_read(vu, addr);
 
     if (!t) return;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vf[t].u32[i] = data.u32[i];
         }
     });
 }
 template <uint32_t di>
-void vu_i_lqi(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_lqi(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
-    vu_write_branch_pipeline(vu, s);
+    write_branch_pipeline(vu, s);
 
     if (t) {
         uint32_t addr = vu->vi[s];
-        uint128_t data = vu_mem_read(vu, addr);
+        uint128_t data = mem_read(vu, addr);
 
         template_seq<4>([&](auto i) {
-            if constexpr (di & (VU_D_X >> i)) {
+            if constexpr (di & (D_X >> i)) {
                 vu->vf[t].u32[i] = data.u32[i];
             }
         });
     }
 
-    vu_set_vi(vu, s, vu->vi[s] + 1);
+    set_vi(vu, s, vu->vi[s] + 1);
 }
 template <uint32_t di>
-void vu_i_mfir(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
+void i_mfir(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
 
     if (!t) return;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu->vf[t].u32[i] = (int32_t)(int16_t)VU_IS;
+        if constexpr (di & (D_X >> i)) {
+            vu->vf[t].u32[i] = (int32_t)(int16_t)IS;
         }
     });
 }
 template <uint32_t di>
-void vu_i_mfp(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
+void i_mfp(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
 
     if (!t) return;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vf[t].u32[i] = vu->p.u32;
         }
     });
 }
 template <uint32_t di>
-void vu_i_move(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_move(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
     if (!t) return;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vf[t].u32[i] = vu->vf[s].u32[i];
         }
     });
 }
 template <uint32_t di>
-void vu_i_mr32(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
+void i_mr32(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
 
     if (!t) return;
 
-    int s = VU_LD_S;
+    int s = LD_S;
 
     uint32_t x = vu->vf[s].u32[0];
 
     // template_seq<4>([&](auto i) {
-    //     if constexpr (di & (VU_D_X >> i)) {
+    //     if constexpr (di & (D_X >> i)) {
     //         vu->vf[t].u32[i] = vu->vf[s].u32[(i + 1) & 3];
     //     }
     // });
 
-    if constexpr (di & VU_D_X) {
+    if constexpr (di & D_X) {
         vu->vf[t].u32[0] = vu->vf[s].u32[1];
     }
-    if constexpr (di & VU_D_Y) {
+    if constexpr (di & D_Y) {
         vu->vf[t].u32[1] = vu->vf[s].u32[2];
     }
-    if constexpr (di & VU_D_Z) {
+    if constexpr (di & D_Z) {
         vu->vf[t].u32[2] = vu->vf[s].u32[3];
     }
-    if constexpr (di & VU_D_W) {
+    if constexpr (di & D_W) {
         vu->vf[t].u32[3] = x;
     }
 }
-void vu_i_mtir(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_write_branch_pipeline(vu, VU_LD_T);
+void i_mtir(Vu* vu, const Instruction* ins) {
+    write_branch_pipeline(vu, LD_T);
 
-    vu_set_vi(vu, VU_LD_T, vu->vf[VU_LD_S].u32[VU_LD_SF] & 0xffff);
+    set_vi(vu, LD_T, vu->vf[LD_S].u32[LD_SF] & 0xffff);
 }
 template <uint32_t di>
-void vu_i_rget(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
+void i_rget(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
 
     if (!t) return;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vf[t].u32[i] = vu->r.u32;
         }
     });
 }
-void vu_i_rinit(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
+void i_rinit(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
 
     vu->r.u32 = 0x3f800000;
 
     if (!s) return;
 
-    vu->r.u32 |= vu->vf[s].u32[VU_LD_SF] & 0x007fffff;
+    vu->r.u32 |= vu->vf[s].u32[LD_SF] & 0x007fffff;
 }
 template <uint32_t di>
-void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins) {
-    int t = VU_LD_T;
+void i_rnext(Vu* vu, const Instruction* ins) {
+    int t = LD_T;
 
     if (!t) return;
 
@@ -1568,19 +1552,19 @@ void vu_i_rnext(struct vu_state* vu, const struct vu_instruction* ins) {
     vu->r.u32 = (vu->r.u32 & 0x7FFFFF) | 0x3F800000;
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
+        if constexpr (di & (D_X >> i)) {
             vu->vf[t].u32[i] = vu->r.u32;
         }
     });
 }
-void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    uint32_t nb = vu->vf[VU_LD_S].u32[VU_LD_SF];
-    uint32_t db = vu->vf[VU_LD_T].u32[VU_LD_TF];
+void i_rsqrt(Vu* vu, const Instruction* ins) {
+    uint32_t nb = vu->vf[LD_S].u32[LD_SF];
+    uint32_t db = vu->vf[LD_T].u32[LD_TF];
 
     vu->status &= ~0x30u;
 
     if (db & 0x80000000) {
-        vu->status |= VU_STATUS_I;
+        vu->status |= STATUS_I;
     }
 
     double num = ps2_to_double(nb);
@@ -1590,7 +1574,7 @@ void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
 
     if (den == 0.0) {
         if (num != 0.0) {
-            vu->status |= VU_STATUS_D;
+            vu->status |= STATUS_D;
         }
 
         result = (nb & 0x80000000) | 0x7fffffff;
@@ -1598,93 +1582,93 @@ void vu_i_rsqrt(struct vu_state* vu, const struct vu_instruction* ins) {
         result = ps2_pack_double(num / sqrt(den));
     }
 
-    vu_set_q_u32(vu, result, 13);
+    set_q_u32(vu, result, 13);
 }
-void vu_i_rxor(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[VU_LD_S].u32[VU_LD_SF]) & 0x007FFFFF);
+void i_rxor(Vu* vu, const Instruction* ins) {
+    vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[LD_S].u32[LD_SF]) & 0x007FFFFF);
 }
 template <uint32_t di>
-void vu_i_sq(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_sq(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
-    uint32_t addr = vu->vi[t] + VU_LD_IMM11;
+    uint32_t addr = vu->vi[t] + LD_IMM11;
 
-    // printf("vu: sq addr=%08x vf%02d=%08x %08x %08x %08x\n", addr, s, vu->vf[s].u32[3], vu->vf[s].u32[2], vu->vf[s].u32[1], vu->vf[s].u32[0]);
+    // iris_debug(vu, "sq addr={:08x} vf{}={:08x} {:08x} {:08x} {:08x}", addr, s, vu->vf[s].u32[3], vu->vf[s].u32[2], vu->vf[s].u32[1], vu->vf[s].u32[0]);
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
+        if constexpr (di & (D_X >> i)) {
+            mem_write(vu, addr, vu->vf[s].u32[i], i);
         }
     });
 }
 template <uint32_t di>
-void vu_i_sqd(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_sqd(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
-    vu_write_branch_pipeline(vu, t);
+    write_branch_pipeline(vu, t);
 
-    vu_set_vi(vu, t, vu->vi[t] - 1);
+    set_vi(vu, t, vu->vi[t] - 1);
 
     uint32_t addr = vu->vi[t];
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
+        if constexpr (di & (D_X >> i)) {
+            mem_write(vu, addr, vu->vf[s].u32[i], i);
         }
     });
 }
 template <uint32_t di>
-void vu_i_sqi(struct vu_state* vu, const struct vu_instruction* ins) {
-    int s = VU_LD_S;
-    int t = VU_LD_T;
+void i_sqi(Vu* vu, const Instruction* ins) {
+    int s = LD_S;
+    int t = LD_T;
 
-    vu_write_branch_pipeline(vu, t);
+    write_branch_pipeline(vu, t);
 
     uint32_t addr = vu->vi[t];
 
     template_seq<4>([&](auto i) {
-        if constexpr (di & (VU_D_X >> i)) {
-            vu_mem_write(vu, addr, vu->vf[s].u32[i], i);
+        if constexpr (di & (D_X >> i)) {
+            mem_write(vu, addr, vu->vf[s].u32[i], i);
         }
     });
 
-    vu_set_vi(vu, t, vu->vi[t] + 1);
+    set_vi(vu, t, vu->vi[t] + 1);
 }
-void vu_i_sqrt(struct vu_state* vu, const struct vu_instruction* ins) {
-    uint32_t tb = vu->vf[VU_LD_T].u32[VU_LD_TF];
+void i_sqrt(Vu* vu, const Instruction* ins) {
+    uint32_t tb = vu->vf[LD_T].u32[LD_TF];
 
     vu->status &= ~0x30u;
 
     if (tb & 0x80000000) {
-        vu->status |= VU_STATUS_I;
+        vu->status |= STATUS_I;
     }
 
     double v = ps2_to_double(tb & 0x7fffffff);
 
-    vu_set_q_u32(vu, ps2_pack_double(sqrt(v)), 7);
+    set_q_u32(vu, ps2_pack_double(sqrt(v)), 7);
 }
-void vu_i_waitp(struct vu_state* vu, const struct vu_instruction* ins) {
+void i_waitp(Vu* vu, const Instruction* ins) {
     // No operation
 }
-void vu_i_waitq(struct vu_state* vu, const struct vu_instruction* ins) {
+void i_waitq(Vu* vu, const Instruction* ins) {
     vu->q_delay = 0;
 }
 
-void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
-    // vu_xgkick(vu);
+void i_xgkick(Vu* vu, const Instruction* ins) {
+    // xgkick(vu);
     // vu->xgkick_pending = 3;
-    // vu->xgkick_addr = VU_IS;
+    // vu->xgkick_addr = IS;
 
     // return;
 
-    uint16_t addr = VU_IS;
+    uint16_t addr = IS;
 
     int eop = 1;
 
     do {
-        uint128_t tag = vu_mem_read(vu, addr++);
+        uint128_t tag = mem_read(vu, addr++);
 
         if ((tag.u64[0] | tag.u64[1]) == 0)
             break;
@@ -1693,7 +1677,7 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
 
         // if (addr == 0) break;
 
-        // printf("tag: addr=%08x %08x %08x %08x %08x\n", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
+        // iris_debug(vu, "tag: addr={:08x} {:08x} {:08x} {:08x} {:08x}", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
         eop = (tag.u64[0] & 0x8000) != 0;
 
@@ -1725,29 +1709,24 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
         if (qwc >= 0x400) {
             return;
 
-            fprintf(stderr, "vu: Weird xgkick tag nloop=%d nregs=%d eop=%d flg=%d qwc=%d\n",
-                nloop,
+            iris_fatal_error(vu, "Weird xgkick tag nloop={} nregs={} eop={} flg={} qwc={}", nloop,
                 nregs,
                 eop,
                 flg,
-                qwc
-            ); 
-
-            exit(1);
+                qwc);
         }
 
-        ps2_gif_fifo_write(vu->gif, tag, GIF_PATH1);
+        gif::fifo_write(vu->gif, tag, gif::PATH1);
 
         for (int i = 0; i < qwc; i++) {
-            // printf("vu: %08x: %08x %08x %08x %08x\n",
-            //     addr,
+            // iris_debug(vu, "{:08x}: {:08x} {:08x} {:08x} {:08x}", //     addr,
             //     vu->vu_mem[addr].u32[3],
             //     vu->vu_mem[addr].u32[2],
             //     vu->vu_mem[addr].u32[1],
             //     vu->vu_mem[addr].u32[0]
-            // );
+            //);
 
-            ps2_gif_fifo_write(vu->gif, vu_mem_read(vu, addr++), GIF_PATH1);
+            gif::fifo_write(vu->gif, mem_read(vu, addr++), gif::PATH1);
 
             addr &= 0x3ff;
 
@@ -1758,20 +1737,20 @@ void vu_i_xgkick(struct vu_state* vu, const struct vu_instruction* ins) {
         }
     } while (!eop);
 }
-void vu_i_xitop(struct vu_state* vu, const struct vu_instruction* ins) {
-    vu_set_vi(vu, VU_LD_T, vu->vif->itop);
+void i_xitop(Vu* vu, const Instruction* ins) {
+    set_vi(vu, LD_T, vu->vif->itop);
 }
-void vu_i_xtop(struct vu_state* vu, const struct vu_instruction* ins) {
+void i_xtop(Vu* vu, const Instruction* ins) {
     if (vu->id == 0) {
-        printf("vu: xtop used in VU0\n");
+        iris_debug(vu, "xtop used in VU0");
 
         // exit(1);
     }
 
-    vu_set_vi(vu, VU_LD_T, vu->vif->top);
+    set_vi(vu, LD_T, vu->vif->top);
 }
 
-uint64_t ps2_vu_read8(struct vu_state* vu, uint32_t addr) {
+uint64_t read8(Vu* vu, uint32_t addr) {
     if (addr <= 0x3FFF) {
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1782,7 +1761,7 @@ uint64_t ps2_vu_read8(struct vu_state* vu, uint32_t addr) {
 
     return *(uint8_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]);
 }
-uint64_t ps2_vu_read16(struct vu_state* vu, uint32_t addr) {
+uint64_t read16(Vu* vu, uint32_t addr) {
     if (addr <= 0x3FFF) {
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1793,7 +1772,7 @@ uint64_t ps2_vu_read16(struct vu_state* vu, uint32_t addr) {
 
     return *(uint16_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]);
 }
-uint64_t ps2_vu_read32(struct vu_state* vu, uint32_t addr) {
+uint64_t read32(Vu* vu, uint32_t addr) {
     if (addr <= 0x3FFF) {
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1804,7 +1783,7 @@ uint64_t ps2_vu_read32(struct vu_state* vu, uint32_t addr) {
 
     return *(uint32_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]);
 }
-uint64_t ps2_vu_read64(struct vu_state* vu, uint32_t addr) {
+uint64_t read64(Vu* vu, uint32_t addr) {
     if (addr <= 0x3FFF) {
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1815,7 +1794,7 @@ uint64_t ps2_vu_read64(struct vu_state* vu, uint32_t addr) {
 
     return *(uint64_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]);
 }
-uint128_t ps2_vu_read128(struct vu_state* vu, uint32_t addr) {
+uint128_t read128(Vu* vu, uint32_t addr) {
     if (addr <= 0x3FFF) {
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1826,9 +1805,9 @@ uint128_t ps2_vu_read128(struct vu_state* vu, uint32_t addr) {
 
     return *(uint128_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]);
 }
-void ps2_vu_write8(struct vu_state* vu, uint32_t addr, uint64_t data) {
+void write8(Vu* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
-        vu_invalidate_range(vu, addr, 1);
+        invalidate_range(vu, addr, 1);
 
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1839,9 +1818,9 @@ void ps2_vu_write8(struct vu_state* vu, uint32_t addr, uint64_t data) {
         *(uint8_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]) = data;
     }
 }
-void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data) {
+void write16(Vu* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
-        vu_invalidate_range(vu, addr, 2);
+        invalidate_range(vu, addr, 2);
 
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1852,9 +1831,9 @@ void ps2_vu_write16(struct vu_state* vu, uint32_t addr, uint64_t data) {
         *(uint16_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]) = data;
     }
 }
-void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data) {
+void write32(Vu* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
-        vu_invalidate_range(vu, addr, 4);
+        invalidate_range(vu, addr, 4);
 
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1865,9 +1844,9 @@ void ps2_vu_write32(struct vu_state* vu, uint32_t addr, uint64_t data) {
         *(uint32_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]) = data;
     }
 }
-void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data) {
+void write64(Vu* vu, uint32_t addr, uint64_t data) {
     if (addr <= 0x3FFF) {
-        vu_invalidate_range(vu, addr, 8);
+        invalidate_range(vu, addr, 8);
 
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1878,9 +1857,9 @@ void ps2_vu_write64(struct vu_state* vu, uint32_t addr, uint64_t data) {
         *(uint64_t*)(&ptr[addr & ((vu->vu_mem_size << 4) | 0xf)]) = data;
     }
 }
-void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
+void write128(Vu* vu, uint32_t addr, uint128_t data) {
     if (addr <= 0x3FFF) {
-        vu_invalidate_range(vu, addr, 16);
+        invalidate_range(vu, addr, 16);
 
         uint8_t* ptr = (uint8_t*)vu->micro_mem;
 
@@ -1892,19 +1871,19 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     }
 }
 
-#define VU_FLD_X 1
-#define VU_FLD_Y 2
-#define VU_FLD_Z 4
-#define VU_FLD_W 8
+#define FLD_X 1
+#define FLD_Y 2
+#define FLD_Z 4
+#define FLD_W 8
 
-#define VU_DEC_UD_S_SRC_T_BROADCAST(bc, f) \
+#define DEC_UD_S_SRC_T_BROADCAST(bc, f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = bc; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(bc, f) \
+#define DEC_UD_D_DST_S_SRC_T_BROADCAST(bc, f) \
     vu->upper.dst.reg = vu->upper.ud_d; \
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
@@ -1913,7 +1892,7 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     vu->upper.src[1].field = bc; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_D_DST_S_SRC_T_SRC(f) \
+#define DEC_UD_D_DST_S_SRC_T_SRC(f) \
     vu->upper.dst.reg = vu->upper.ud_d; \
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
@@ -1922,200 +1901,200 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     vu->upper.src[1].field = vu->upper.dst.field; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_D_DST_S_SRC(f) \
+#define DEC_UD_D_DST_S_SRC(f) \
     vu->upper.dst.reg = vu->upper.ud_d; \
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_D_DST_S_SRC_Q_SRC(f) \
+#define DEC_UD_D_DST_S_SRC_Q_SRC(f) \
     vu->upper.dst.reg = vu->upper.ud_d; \
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
-    vu->upper.src[1].reg = VU_REG_Q; \
+    vu->upper.src[1].reg = REG_Q; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_T_DST_S_SRC(f) \
+#define DEC_UD_T_DST_S_SRC(f) \
     vu->upper.dst.reg = vu->upper.ud_t; \
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_S_SRC_T_SRC(f) \
+#define DEC_UD_S_SRC_T_SRC(f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = vu->upper.src[0].field; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_S_SRC(f) \
+#define DEC_UD_S_SRC(f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
     vu->upper.func = f;
 
-#define VU_DEC_UD_S_SRC_Q_SRC(f) \
+#define DEC_UD_S_SRC_Q_SRC(f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
-    vu->upper.src[1].reg = VU_REG_Q; \
+    vu->upper.src[1].reg = REG_Q; \
     vu->upper.func = f;
 
-#define VU_DEC_OPMULA() \
+#define DEC_OPMULA() \
     vu->upper.src[0].reg = vu->upper.ud_s; \
-    vu->upper.src[0].field = VU_FLD_X | VU_FLD_Y | VU_FLD_Z; \
+    vu->upper.src[0].field = FLD_X | FLD_Y | FLD_Z; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = vu->upper.src[0].field; \
-    vu->upper.func = vu_i_opmula;
+    vu->upper.func = i_opmula;
 
-#define VU_DEC_OPMSUB() \
+#define DEC_OPMSUB() \
     vu->upper.dst.reg = vu->upper.ud_d; \
-    vu->upper.dst.field = VU_FLD_X | VU_FLD_Y | VU_FLD_Z; \
+    vu->upper.dst.field = FLD_X | FLD_Y | FLD_Z; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = vu->upper.dst.field; \
-    vu->upper.func = vu_i_opmsub;
+    vu->upper.func = i_opmsub;
 
-#define VU_DEC_CLIP() \
+#define DEC_CLIP() \
     vu->upper.src[0].reg = vu->upper.ud_s; \
-    vu->upper.src[0].field = VU_FLD_X | VU_FLD_Y | VU_FLD_Z; \
+    vu->upper.src[0].field = FLD_X | FLD_Y | FLD_Z; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
-    vu->upper.src[1].field = VU_FLD_W; \
-    vu->upper.func = vu_i_clip;
+    vu->upper.src[1].field = FLD_W; \
+    vu->upper.func = i_clip;
 
-#define VU_DEC_LD_NONE(f) \
+#define DEC_LD_NONE(f) \
     vu->lower.func = f;
 
-#define VU_DEC_UD_NONE(f) \
+#define DEC_UD_NONE(f) \
     vu->upper.func = f;
 
-#define VU_DEC_LD_T_DST_S_VISRC(f) \
+#define DEC_LD_T_DST_S_VISRC(f) \
     vu->lower.dst.reg = vu->lower.ld_t; \
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.vi_src[0] = vu->lower.ld_s; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_DST_S_VISRC_S_VIDST(f) \
+#define DEC_LD_T_DST_S_VISRC_S_VIDST(f) \
     vu->lower.dst.reg = vu->lower.ld_t; \
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.vi_dst = vu->lower.ld_s; \
     vu->lower.vi_src[0] = vu->lower.vi_dst; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(f) \
+#define DEC_LD_S_SRC_T_VISRC_T_VIDST(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = (opcode >> 21) & 0xf; \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.vi_src[0] = vu->lower.vi_dst; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_S_SF_SRC_T_TF_SRC(f) \
+#define DEC_LD_S_SF_SRC_T_TF_SRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
     vu->lower.src[1].reg = vu->lower.ld_t; \
     vu->lower.src[1].field = vu->lower.ld_tf; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(f) \
-    vu->lower.dst.reg = VU_REG_Q; \
+#define DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(f) \
+    vu->lower.dst.reg = REG_Q; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
     vu->lower.src[1].reg = vu->lower.ld_t; \
     vu->lower.src[1].field = vu->lower.ld_tf; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_VIDST_S_SF_SRC(f) \
+#define DEC_LD_T_VIDST_S_SF_SRC(f) \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_DST_S_VISRC(f) \
+#define DEC_LD_T_DST_S_VISRC(f) \
     vu->lower.dst.reg = vu->lower.ld_t; \
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.vi_src[0] = vu->lower.ld_s; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_TF_SRC(f) \
+#define DEC_LD_T_TF_SRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_t; \
     vu->lower.src[0].field = vu->lower.ld_tf; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_Q_DST_T_TF_SRC(f) \
-    vu->lower.dst.reg = VU_REG_Q; \
+#define DEC_LD_Q_DST_T_TF_SRC(f) \
+    vu->lower.dst.reg = REG_Q; \
     vu->lower.src[0].reg = vu->lower.ld_t; \
     vu->lower.src[0].field = vu->lower.ld_tf; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_S_SRC_T_VISRC(f) \
+#define DEC_LD_S_SRC_T_VISRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = (opcode >> 21) & 0xf; \
     vu->lower.vi_src[0] = vu->lower.ld_t; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_VIDST_S_VISRC(f) \
+#define DEC_LD_T_VIDST_S_VISRC(f) \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.vi_src[0] = vu->lower.ld_s; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_S_VISRC_T_VISRC(f) \
+#define DEC_LD_S_VISRC_T_VISRC(f) \
     vu->lower.vi_src[0] = vu->lower.ld_s; \
     vu->lower.vi_src[1] = vu->lower.ld_t; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_VIDST_S_VISRC(f) \
+#define DEC_LD_T_VIDST_S_VISRC(f) \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.vi_src[0] = vu->lower.ld_s; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_VISRC_S_VISRC(f) \
+#define DEC_LD_T_VISRC_S_VISRC(f) \
     vu->lower.vi_src[0] = vu->lower.ld_t; \
     vu->lower.vi_src[1] = vu->lower.ld_s; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_VIDST(v, f) \
+#define DEC_LD_VIDST(v, f) \
     vu->lower.vi_dst = v; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_VIDST(f) \
+#define DEC_LD_T_VIDST(f) \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_S_VISRC(f) \
+#define DEC_LD_S_VISRC(f) \
     vu->lower.vi_src[0] = vu->lower.ld_s; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_S_FLD_SRC(fld, f) \
+#define DEC_LD_S_FLD_SRC(fld, f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = fld; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(f) \
+#define DEC_LD_D_VIDST_S_VISRC_T_VISRC(f) \
     vu->lower.vi_dst = vu->lower.ld_d; \
     vu->lower.vi_src[0] = vu->lower.ld_s; \
     vu->lower.vi_src[1] = vu->lower.ld_t; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_DST_S_SRC(f) \
+#define DEC_LD_T_DST_S_SRC(f) \
     vu->lower.dst.reg = vu->lower.ld_t; \
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.dst.field; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_T_DST(f) \
+#define DEC_LD_T_DST(f) \
     vu->lower.dst.reg = vu->lower.ld_t; \
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.func = f;
 
-#define VU_DEC_LD_S_SF_SRC(f) \
+#define DEC_LD_S_SF_SRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
     vu->lower.func = f;
 
-#define VU_DEC_MR32(f) \
+#define DEC_MR32(f) \
     vu->lower.dst.reg = vu->lower.ld_t; \
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
@@ -2126,26 +2105,26 @@ void ps2_vu_write128(struct vu_state* vu, uint32_t addr, uint128_t data) {
     [&](uint32_t opcode) { \
         switch ((opcode >> 21) & 0xf) { \
             case 0: return &i<0>; \
-            case 1: return &i<VU_D_W>; \
-            case 2: return &i<VU_D_Z>; \
-            case 3: return &i<VU_D_Z | VU_D_W>; \
-            case 4: return &i<VU_D_Y>; \
-            case 5: return &i<VU_D_Y | VU_D_W>; \
-            case 6: return &i<VU_D_Y | VU_D_Z>; \
-            case 7: return &i<VU_D_Y | VU_D_Z | VU_D_W>; \
-            case 8: return &i<VU_D_X>; \
-            case 9: return &i<VU_D_X | VU_D_W>; \
-            case 10: return &i<VU_D_X | VU_D_Z>; \
-            case 11: return &i<VU_D_X | VU_D_Z | VU_D_W>; \
-            case 12: return &i<VU_D_X | VU_D_Y>; \
-            case 13: return &i<VU_D_X | VU_D_Y | VU_D_W>; \
-            case 14: return &i<VU_D_X | VU_D_Y | VU_D_Z>; \
-            case 15: return &i<VU_D_X | VU_D_Y | VU_D_Z | VU_D_W>; \
+            case 1: return &i<D_W>; \
+            case 2: return &i<D_Z>; \
+            case 3: return &i<D_Z | D_W>; \
+            case 4: return &i<D_Y>; \
+            case 5: return &i<D_Y | D_W>; \
+            case 6: return &i<D_Y | D_Z>; \
+            case 7: return &i<D_Y | D_Z | D_W>; \
+            case 8: return &i<D_X>; \
+            case 9: return &i<D_X | D_W>; \
+            case 10: return &i<D_X | D_Z>; \
+            case 11: return &i<D_X | D_Z | D_W>; \
+            case 12: return &i<D_X | D_Y>; \
+            case 13: return &i<D_X | D_Y | D_W>; \
+            case 14: return &i<D_X | D_Y | D_Z>; \
+            case 15: return &i<D_X | D_Y | D_Z | D_W>; \
             default: __builtin_unreachable(); \
         } \
     __builtin_unreachable(); }(opcode)
 
-void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
+void decode_upper(Vu* vu, uint32_t opcode) {
     vu->upper.opcode = opcode;
     vu->upper.ud_d = (opcode >> 6) & 0x1f;
     vu->upper.ud_s = (opcode >> 11) & 0x1f;
@@ -2173,110 +2152,110 @@ void vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
         // bits 0-1 and bits 6-9 (6 bits) are enough to decode
         // all of the following
         switch (((opcode & 0x3c0) >> 4) | (opcode & 3)) {
-            case 0x00: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_addax)); return;
-            case 0x01: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_adday)); return;
-            case 0x02: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_addaz)); return;
-            case 0x03: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_addaw)); return;
-            case 0x04: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_subax)); return;
-            case 0x05: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_subay)); return;
-            case 0x06: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_subaz)); return;
-            case 0x07: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_subaw)); return;
-            case 0x08: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_maddax)); return;
-            case 0x09: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_madday)); return;
-            case 0x0A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_maddaz)); return;
-            case 0x0B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_maddaw)); return;
-            case 0x0C: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_msubax)); return;
-            case 0x0D: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_msubay)); return;
-            case 0x0E: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_msubaz)); return;
-            case 0x0F: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_msubaw)); return;
-            case 0x10: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof0)); return;
-            case 0x11: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof4)); return;
-            case 0x12: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof12)); return;
-            case 0x13: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_itof15)); return;
-            case 0x14: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi0)); return;
-            case 0x15: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi4)); return;
-            case 0x16: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi12)); return;
-            case 0x17: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_ftoi15)); return;
-            case 0x18: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_mulax)); return;
-            case 0x19: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_mulay)); return;
-            case 0x1A: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_mulaz)); return;
-            case 0x1B: VU_DEC_UD_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_mulaw)); return;
-            case 0x1C: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_mulaq)); return;
-            case 0x1D: VU_DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_abs)); return;
-            case 0x1E: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_mulai)); return;
-            case 0x1F: VU_DEC_CLIP(); return;
-            case 0x20: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_addaq)); return;
-            case 0x21: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_maddaq)); return;
-            case 0x22: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_addai)); return;
-            case 0x23: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_maddai)); return;
-            case 0x24: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_subaq)); return;
-            case 0x25: VU_DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_msubaq)); return;
-            case 0x26: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_subai)); return;
-            case 0x27: VU_DEC_UD_S_SRC(GET_TEMPLATE_FN(vu_i_msubai)); return;
-            case 0x28: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_adda)); return;
-            case 0x29: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_madda)); return;
-            case 0x2A: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_mula)); return;
-            case 0x2C: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_suba)); return;
-            case 0x2D: VU_DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_msuba)); return;
-            case 0x2E: VU_DEC_OPMULA(); return;
-            case 0x2F: VU_DEC_UD_NONE(vu_i_nop); return;
+            case 0x00: DEC_UD_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_addax)); return;
+            case 0x01: DEC_UD_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_adday)); return;
+            case 0x02: DEC_UD_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_addaz)); return;
+            case 0x03: DEC_UD_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_addaw)); return;
+            case 0x04: DEC_UD_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_subax)); return;
+            case 0x05: DEC_UD_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_subay)); return;
+            case 0x06: DEC_UD_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_subaz)); return;
+            case 0x07: DEC_UD_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_subaw)); return;
+            case 0x08: DEC_UD_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_maddax)); return;
+            case 0x09: DEC_UD_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_madday)); return;
+            case 0x0A: DEC_UD_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_maddaz)); return;
+            case 0x0B: DEC_UD_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_maddaw)); return;
+            case 0x0C: DEC_UD_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_msubax)); return;
+            case 0x0D: DEC_UD_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_msubay)); return;
+            case 0x0E: DEC_UD_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_msubaz)); return;
+            case 0x0F: DEC_UD_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_msubaw)); return;
+            case 0x10: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_itof0)); return;
+            case 0x11: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_itof4)); return;
+            case 0x12: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_itof12)); return;
+            case 0x13: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_itof15)); return;
+            case 0x14: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_ftoi0)); return;
+            case 0x15: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_ftoi4)); return;
+            case 0x16: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_ftoi12)); return;
+            case 0x17: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_ftoi15)); return;
+            case 0x18: DEC_UD_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_mulax)); return;
+            case 0x19: DEC_UD_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_mulay)); return;
+            case 0x1A: DEC_UD_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_mulaz)); return;
+            case 0x1B: DEC_UD_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_mulaw)); return;
+            case 0x1C: DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_mulaq)); return;
+            case 0x1D: DEC_UD_T_DST_S_SRC(GET_TEMPLATE_FN(i_abs)); return;
+            case 0x1E: DEC_UD_S_SRC(GET_TEMPLATE_FN(i_mulai)); return;
+            case 0x1F: DEC_CLIP(); return;
+            case 0x20: DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_addaq)); return;
+            case 0x21: DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_maddaq)); return;
+            case 0x22: DEC_UD_S_SRC(GET_TEMPLATE_FN(i_addai)); return;
+            case 0x23: DEC_UD_S_SRC(GET_TEMPLATE_FN(i_maddai)); return;
+            case 0x24: DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_subaq)); return;
+            case 0x25: DEC_UD_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_msubaq)); return;
+            case 0x26: DEC_UD_S_SRC(GET_TEMPLATE_FN(i_subai)); return;
+            case 0x27: DEC_UD_S_SRC(GET_TEMPLATE_FN(i_msubai)); return;
+            case 0x28: DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(i_adda)); return;
+            case 0x29: DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(i_madda)); return;
+            case 0x2A: DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(i_mula)); return;
+            case 0x2C: DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(i_suba)); return;
+            case 0x2D: DEC_UD_S_SRC_T_SRC(GET_TEMPLATE_FN(i_msuba)); return;
+            case 0x2E: DEC_OPMULA(); return;
+            case 0x2F: DEC_UD_NONE(i_nop); return;
         }
     } else {
         // Decode 0000003F style instruction
         switch (opcode & 0x3f) {
-            case 0x00: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_addx)); return;
-            case 0x01: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_addy)); return;
-            case 0x02: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_addz)); return;
-            case 0x03: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_addw)); return;
-            case 0x04: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_subx)); return;
-            case 0x05: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_suby)); return;
-            case 0x06: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_subz)); return;
-            case 0x07: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_subw)); return;
-            case 0x08: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_maddx)); return;
-            case 0x09: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_maddy)); return;
-            case 0x0A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_maddz)); return;
-            case 0x0B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_maddw)); return;
-            case 0x0C: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_msubx)); return;
-            case 0x0D: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_msuby)); return;
-            case 0x0E: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_msubz)); return;
-            case 0x0F: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_msubw)); return;
-            case 0x10: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_maxx)); return;
-            case 0x11: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_maxy)); return;
-            case 0x12: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_maxz)); return;
-            case 0x13: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_maxw)); return;
-            case 0x14: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_minix)); return;
-            case 0x15: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_miniy)); return;
-            case 0x16: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_miniz)); return;
-            case 0x17: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_miniw)); return;
-            case 0x18: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_X, GET_TEMPLATE_FN(vu_i_mulx)); return;
-            case 0x19: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Y, GET_TEMPLATE_FN(vu_i_muly)); return;
-            case 0x1A: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_Z, GET_TEMPLATE_FN(vu_i_mulz)); return;
-            case 0x1B: VU_DEC_UD_D_DST_S_SRC_T_BROADCAST(VU_FLD_W, GET_TEMPLATE_FN(vu_i_mulw)); return;
-            case 0x1C: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_mulq)); return;
-            case 0x1D: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_maxi)); return;
-            case 0x1E: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_muli)); return;
-            case 0x1F: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_minii)); return;
-            case 0x20: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_addq)); return;
-            case 0x21: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_maddq)); return;
-            case 0x22: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_addi)); return;
-            case 0x23: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_maddi)); return;
-            case 0x24: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_subq)); return;
-            case 0x25: VU_DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(vu_i_msubq)); return;
-            case 0x26: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_subi)); return;
-            case 0x27: VU_DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(vu_i_msubi)); return;
-            case 0x28: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_add)); return;
-            case 0x29: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_madd)); return;
-            case 0x2A: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_mul)); return;
-            case 0x2B: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_max)); return;
-            case 0x2C: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_sub)); return;
-            case 0x2D: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_msub)); return;
-            case 0x2E: VU_DEC_OPMSUB(); return;
-            case 0x2F: VU_DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(vu_i_mini)); return;
+            case 0x00: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_addx)); return;
+            case 0x01: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_addy)); return;
+            case 0x02: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_addz)); return;
+            case 0x03: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_addw)); return;
+            case 0x04: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_subx)); return;
+            case 0x05: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_suby)); return;
+            case 0x06: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_subz)); return;
+            case 0x07: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_subw)); return;
+            case 0x08: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_maddx)); return;
+            case 0x09: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_maddy)); return;
+            case 0x0A: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_maddz)); return;
+            case 0x0B: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_maddw)); return;
+            case 0x0C: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_msubx)); return;
+            case 0x0D: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_msuby)); return;
+            case 0x0E: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_msubz)); return;
+            case 0x0F: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_msubw)); return;
+            case 0x10: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_maxx)); return;
+            case 0x11: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_maxy)); return;
+            case 0x12: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_maxz)); return;
+            case 0x13: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_maxw)); return;
+            case 0x14: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_minix)); return;
+            case 0x15: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_miniy)); return;
+            case 0x16: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_miniz)); return;
+            case 0x17: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_miniw)); return;
+            case 0x18: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_X, GET_TEMPLATE_FN(i_mulx)); return;
+            case 0x19: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Y, GET_TEMPLATE_FN(i_muly)); return;
+            case 0x1A: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_Z, GET_TEMPLATE_FN(i_mulz)); return;
+            case 0x1B: DEC_UD_D_DST_S_SRC_T_BROADCAST(FLD_W, GET_TEMPLATE_FN(i_mulw)); return;
+            case 0x1C: DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_mulq)); return;
+            case 0x1D: DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(i_maxi)); return;
+            case 0x1E: DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(i_muli)); return;
+            case 0x1F: DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(i_minii)); return;
+            case 0x20: DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_addq)); return;
+            case 0x21: DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_maddq)); return;
+            case 0x22: DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(i_addi)); return;
+            case 0x23: DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(i_maddi)); return;
+            case 0x24: DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_subq)); return;
+            case 0x25: DEC_UD_D_DST_S_SRC_Q_SRC(GET_TEMPLATE_FN(i_msubq)); return;
+            case 0x26: DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(i_subi)); return;
+            case 0x27: DEC_UD_D_DST_S_SRC(GET_TEMPLATE_FN(i_msubi)); return;
+            case 0x28: DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(i_add)); return;
+            case 0x29: DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(i_madd)); return;
+            case 0x2A: DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(i_mul)); return;
+            case 0x2B: DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(i_max)); return;
+            case 0x2C: DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(i_sub)); return;
+            case 0x2D: DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(i_msub)); return;
+            case 0x2E: DEC_OPMSUB(); return;
+            case 0x2F: DEC_UD_D_DST_S_SRC_T_SRC(GET_TEMPLATE_FN(i_mini)); return;
         }
     }
 }
 
-void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
+void decode_lower(Vu* vu, uint32_t opcode) {
     vu->lower.opcode = opcode;
     vu->lower.ld_d = (opcode >> 6) & 0x1f;
     vu->lower.ld_s = (opcode >> 11) & 0x1f;
@@ -2305,92 +2284,92 @@ void vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
     vu->lower.branch = 0;
 
     switch ((opcode & 0xFE000000) >> 25) {
-        case 0x00: VU_DEC_LD_T_DST_S_VISRC(GET_TEMPLATE_FN(vu_i_lq)); return;
-        case 0x01: VU_DEC_LD_S_SRC_T_VISRC(GET_TEMPLATE_FN(vu_i_sq)); return;
-        case 0x04: VU_DEC_LD_T_VIDST_S_VISRC(GET_TEMPLATE_FN(vu_i_ilw)); return;
-        case 0x05: VU_DEC_LD_S_VISRC_T_VISRC(GET_TEMPLATE_FN(vu_i_isw)); return;
-        case 0x08: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_iaddiu); return;
-        case 0x09: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_isubiu); return;
+        case 0x00: DEC_LD_T_DST_S_VISRC(GET_TEMPLATE_FN(i_lq)); return;
+        case 0x01: DEC_LD_S_SRC_T_VISRC(GET_TEMPLATE_FN(i_sq)); return;
+        case 0x04: DEC_LD_T_VIDST_S_VISRC(GET_TEMPLATE_FN(i_ilw)); return;
+        case 0x05: DEC_LD_S_VISRC_T_VISRC(GET_TEMPLATE_FN(i_isw)); return;
+        case 0x08: DEC_LD_T_VIDST_S_VISRC(i_iaddiu); return;
+        case 0x09: DEC_LD_T_VIDST_S_VISRC(i_isubiu); return;
 
         // Note: The flag check instructions clobber the destination register
         //       "immediately", this means we don't actually need to generate
         //       a dependency.
-        case 0x10: VU_DEC_LD_NONE(vu_i_fceq); return;
-        case 0x11: VU_DEC_LD_NONE(vu_i_fcset); return;
-        case 0x12: VU_DEC_LD_NONE(vu_i_fcand); return;
-        case 0x13: VU_DEC_LD_NONE(vu_i_fcor); return;
-        case 0x14: VU_DEC_LD_NONE(vu_i_fseq); return;
-        case 0x15: VU_DEC_LD_NONE(vu_i_fsset); return;
-        case 0x16: VU_DEC_LD_NONE(vu_i_fsand); return;
-        case 0x17: VU_DEC_LD_NONE(vu_i_fsor); return;
-        case 0x18: VU_DEC_LD_S_VISRC(vu_i_fmeq); return;
-        case 0x1A: VU_DEC_LD_S_VISRC(vu_i_fmand); return;
-        case 0x1B: VU_DEC_LD_S_VISRC(vu_i_fmor); return;
-        case 0x1C: VU_DEC_LD_NONE(vu_i_fcget); return;
-        case 0x20: vu->lower.branch = 1; VU_DEC_LD_NONE(vu_i_b); return;
-        case 0x21: vu->lower.branch = 1; VU_DEC_LD_T_VIDST(vu_i_bal); return;
-        case 0x24: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_jr); return;
-        case 0x25: vu->lower.branch = 1; VU_DEC_LD_T_VIDST_S_VISRC(vu_i_jalr); return;
-        case 0x28: vu->lower.branch = 1; VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibeq); return;
-        case 0x29: vu->lower.branch = 1; VU_DEC_LD_S_VISRC_T_VISRC(vu_i_ibne); return;
-        case 0x2C: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_ibltz); return;
-        case 0x2D: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_ibgtz); return;
-        case 0x2E: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_iblez); return;
-        case 0x2F: vu->lower.branch = 1; VU_DEC_LD_S_VISRC(vu_i_ibgez); return;
+        case 0x10: DEC_LD_NONE(i_fceq); return;
+        case 0x11: DEC_LD_NONE(i_fcset); return;
+        case 0x12: DEC_LD_NONE(i_fcand); return;
+        case 0x13: DEC_LD_NONE(i_fcor); return;
+        case 0x14: DEC_LD_NONE(i_fseq); return;
+        case 0x15: DEC_LD_NONE(i_fsset); return;
+        case 0x16: DEC_LD_NONE(i_fsand); return;
+        case 0x17: DEC_LD_NONE(i_fsor); return;
+        case 0x18: DEC_LD_S_VISRC(i_fmeq); return;
+        case 0x1A: DEC_LD_S_VISRC(i_fmand); return;
+        case 0x1B: DEC_LD_S_VISRC(i_fmor); return;
+        case 0x1C: DEC_LD_NONE(i_fcget); return;
+        case 0x20: vu->lower.branch = 1; DEC_LD_NONE(i_b); return;
+        case 0x21: vu->lower.branch = 1; DEC_LD_T_VIDST(i_bal); return;
+        case 0x24: vu->lower.branch = 1; DEC_LD_S_VISRC(i_jr); return;
+        case 0x25: vu->lower.branch = 1; DEC_LD_T_VIDST_S_VISRC(i_jalr); return;
+        case 0x28: vu->lower.branch = 1; DEC_LD_S_VISRC_T_VISRC(i_ibeq); return;
+        case 0x29: vu->lower.branch = 1; DEC_LD_S_VISRC_T_VISRC(i_ibne); return;
+        case 0x2C: vu->lower.branch = 1; DEC_LD_S_VISRC(i_ibltz); return;
+        case 0x2D: vu->lower.branch = 1; DEC_LD_S_VISRC(i_ibgtz); return;
+        case 0x2E: vu->lower.branch = 1; DEC_LD_S_VISRC(i_iblez); return;
+        case 0x2F: vu->lower.branch = 1; DEC_LD_S_VISRC(i_ibgez); return;
         case 0x40: {
             if ((opcode & 0x3C) == 0x3C) {
                 switch (((opcode & 0x7C0) >> 4) | (opcode & 3)) {
-                    case 0x30: VU_DEC_LD_T_DST_S_SRC(GET_TEMPLATE_FN(vu_i_move)); return;
-                    case 0x31: VU_DEC_MR32(GET_TEMPLATE_FN(vu_i_mr32)); return;
-                    case 0x34: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(GET_TEMPLATE_FN(vu_i_lqi)); return;
-                    case 0x35: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(GET_TEMPLATE_FN(vu_i_sqi)); return;
-                    case 0x36: VU_DEC_LD_T_DST_S_VISRC_S_VIDST(GET_TEMPLATE_FN(vu_i_lqd)); return;
-                    case 0x37: VU_DEC_LD_S_SRC_T_VISRC_T_VIDST(GET_TEMPLATE_FN(vu_i_sqd)); return;
-                    case 0x38: VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(vu_i_div); return;
-                    case 0x39: VU_DEC_LD_Q_DST_T_TF_SRC(vu_i_sqrt); return;
-                    case 0x3A: VU_DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(vu_i_rsqrt); return;
-                    case 0x3B: VU_DEC_LD_NONE(vu_i_waitq); return;
-                    case 0x3C: VU_DEC_LD_T_VIDST_S_SF_SRC(vu_i_mtir); return;
-                    case 0x3D: VU_DEC_LD_T_DST_S_VISRC(GET_TEMPLATE_FN(vu_i_mfir)); return;
-                    case 0x3E: VU_DEC_LD_T_VIDST_S_VISRC(GET_TEMPLATE_FN(vu_i_ilwr)); return;
-                    case 0x3F: VU_DEC_LD_T_VISRC_S_VISRC(GET_TEMPLATE_FN(vu_i_iswr)); return;
-                    case 0x40: VU_DEC_LD_T_DST(GET_TEMPLATE_FN(vu_i_rnext)); return;
-                    case 0x41: VU_DEC_LD_T_DST(GET_TEMPLATE_FN(vu_i_rget)); return;
-                    case 0x42: VU_DEC_LD_S_SF_SRC(vu_i_rinit); return;
-                    case 0x43: VU_DEC_LD_S_SF_SRC(vu_i_rxor); return;
-                    case 0x64: VU_DEC_LD_T_DST(GET_TEMPLATE_FN(vu_i_mfp)); return;
-                    case 0x68: VU_DEC_LD_T_VIDST(vu_i_xtop); return;
-                    case 0x69: VU_DEC_LD_T_VIDST(vu_i_xitop); return;
-                    case 0x6C: VU_DEC_LD_S_VISRC(vu_i_xgkick); return;
-                    case 0x70: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_esadd); return;
-                    case 0x71: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_ersadd); return;
-                    case 0x72: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_eleng); return;
-                    case 0x73: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z, vu_i_erleng); return;
-                    case 0x74: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y, vu_i_eatanxy); return;
-                    case 0x75: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Z, vu_i_eatanxz); return;
-                    case 0x76: VU_DEC_LD_S_FLD_SRC(VU_FLD_X | VU_FLD_Y | VU_FLD_Z | VU_FLD_W, vu_i_esum); return;
-                    case 0x78: VU_DEC_LD_S_SF_SRC(vu_i_esqrt); return;
-                    case 0x79: VU_DEC_LD_S_SF_SRC(vu_i_ersqrt); return;
-                    case 0x7A: VU_DEC_LD_S_SF_SRC(vu_i_ercpr); return;
-                    case 0x7B: VU_DEC_LD_NONE(vu_i_waitp); return;
-                    case 0x7C: VU_DEC_LD_S_SF_SRC(vu_i_esin); return;
-                    case 0x7D: VU_DEC_LD_S_SF_SRC(vu_i_eatan); return;
-                    case 0x7E: VU_DEC_LD_S_SF_SRC(vu_i_eexp); return;
+                    case 0x30: DEC_LD_T_DST_S_SRC(GET_TEMPLATE_FN(i_move)); return;
+                    case 0x31: DEC_MR32(GET_TEMPLATE_FN(i_mr32)); return;
+                    case 0x34: DEC_LD_T_DST_S_VISRC_S_VIDST(GET_TEMPLATE_FN(i_lqi)); return;
+                    case 0x35: DEC_LD_S_SRC_T_VISRC_T_VIDST(GET_TEMPLATE_FN(i_sqi)); return;
+                    case 0x36: DEC_LD_T_DST_S_VISRC_S_VIDST(GET_TEMPLATE_FN(i_lqd)); return;
+                    case 0x37: DEC_LD_S_SRC_T_VISRC_T_VIDST(GET_TEMPLATE_FN(i_sqd)); return;
+                    case 0x38: DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(i_div); return;
+                    case 0x39: DEC_LD_Q_DST_T_TF_SRC(i_sqrt); return;
+                    case 0x3A: DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(i_rsqrt); return;
+                    case 0x3B: DEC_LD_NONE(i_waitq); return;
+                    case 0x3C: DEC_LD_T_VIDST_S_SF_SRC(i_mtir); return;
+                    case 0x3D: DEC_LD_T_DST_S_VISRC(GET_TEMPLATE_FN(i_mfir)); return;
+                    case 0x3E: DEC_LD_T_VIDST_S_VISRC(GET_TEMPLATE_FN(i_ilwr)); return;
+                    case 0x3F: DEC_LD_T_VISRC_S_VISRC(GET_TEMPLATE_FN(i_iswr)); return;
+                    case 0x40: DEC_LD_T_DST(GET_TEMPLATE_FN(i_rnext)); return;
+                    case 0x41: DEC_LD_T_DST(GET_TEMPLATE_FN(i_rget)); return;
+                    case 0x42: DEC_LD_S_SF_SRC(i_rinit); return;
+                    case 0x43: DEC_LD_S_SF_SRC(i_rxor); return;
+                    case 0x64: DEC_LD_T_DST(GET_TEMPLATE_FN(i_mfp)); return;
+                    case 0x68: DEC_LD_T_VIDST(i_xtop); return;
+                    case 0x69: DEC_LD_T_VIDST(i_xitop); return;
+                    case 0x6C: DEC_LD_S_VISRC(i_xgkick); return;
+                    case 0x70: DEC_LD_S_FLD_SRC(FLD_X | FLD_Y | FLD_Z, i_esadd); return;
+                    case 0x71: DEC_LD_S_FLD_SRC(FLD_X | FLD_Y | FLD_Z, i_ersadd); return;
+                    case 0x72: DEC_LD_S_FLD_SRC(FLD_X | FLD_Y | FLD_Z, i_eleng); return;
+                    case 0x73: DEC_LD_S_FLD_SRC(FLD_X | FLD_Y | FLD_Z, i_erleng); return;
+                    case 0x74: DEC_LD_S_FLD_SRC(FLD_X | FLD_Y, i_eatanxy); return;
+                    case 0x75: DEC_LD_S_FLD_SRC(FLD_X | FLD_Z, i_eatanxz); return;
+                    case 0x76: DEC_LD_S_FLD_SRC(FLD_X | FLD_Y | FLD_Z | FLD_W, i_esum); return;
+                    case 0x78: DEC_LD_S_SF_SRC(i_esqrt); return;
+                    case 0x79: DEC_LD_S_SF_SRC(i_ersqrt); return;
+                    case 0x7A: DEC_LD_S_SF_SRC(i_ercpr); return;
+                    case 0x7B: DEC_LD_NONE(i_waitp); return;
+                    case 0x7C: DEC_LD_S_SF_SRC(i_esin); return;
+                    case 0x7D: DEC_LD_S_SF_SRC(i_eatan); return;
+                    case 0x7E: DEC_LD_S_SF_SRC(i_eexp); return;
                 }
             } else {
                 switch (opcode & 0x3F) {
-                    case 0x30: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_iadd); return;
-                    case 0x31: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_isub); return;
-                    case 0x32: VU_DEC_LD_T_VIDST_S_VISRC(vu_i_iaddi); return;
-                    case 0x34: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_iand); return;
-                    case 0x35: VU_DEC_LD_D_VIDST_S_VISRC_T_VISRC(vu_i_ior); return;
+                    case 0x30: DEC_LD_D_VIDST_S_VISRC_T_VISRC(i_iadd); return;
+                    case 0x31: DEC_LD_D_VIDST_S_VISRC_T_VISRC(i_isub); return;
+                    case 0x32: DEC_LD_T_VIDST_S_VISRC(i_iaddi); return;
+                    case 0x34: DEC_LD_D_VIDST_S_VISRC_T_VISRC(i_iand); return;
+                    case 0x35: DEC_LD_D_VIDST_S_VISRC_T_VISRC(i_ior); return;
                 }
             }
         } break;
     }
 }
 
-static inline void vu_advance_fmac_pipeline(struct vu_state* vu) {
+static inline void advance_fmac_pipeline(Vu* vu) {
     vu->upper_pipeline[3] = vu->upper_pipeline[2];
     vu->upper_pipeline[2] = vu->upper_pipeline[1];
     vu->upper_pipeline[1] = vu->upper_pipeline[0];
@@ -2403,7 +2382,7 @@ static inline void vu_advance_fmac_pipeline(struct vu_state* vu) {
     vu->lower_pipeline[0].dst.field = vu->lower.dst.field;
 }
 
-static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
+static inline int get_fmac_stall_cycles(Vu* vu) {
     for (int i = 0; i < 0x4; i++) {
         for (int j = 0; j < 2; j++) {
             if (vu->upper.src[j].reg == vu->lower_pipeline[i].dst.reg) {
@@ -2417,12 +2396,12 @@ static inline int vu_get_fmac_stall_cycles(struct vu_state* vu) {
     return 0;
 }
 
-vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
+Block* find_block(Vu* vu, uint32_t tpc) {
     if (tpc == vu->last_block_lookup_tpc) {
         return vu->last_block_ptr;
     }
 
-    vu_block* block = &vu->block_cache[tpc & vu->micro_mem_size];
+    Block* block = &vu->block_cache[tpc & vu->micro_mem_size];
 
     if (!block->cycles) {
         return nullptr;
@@ -2437,10 +2416,10 @@ vu_block* vu_find_block(struct vu_state* vu, uint32_t tpc) {
 
 static int c = 0;
 
-static inline int vu_vf_write_mask(const struct vu_instruction& ins);
+static inline int vf_write_mask(const Instruction& ins);
 
-vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
-    vu_block* block = &vu->block_cache[tpc & vu->micro_mem_size];
+Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
+    Block* block = &vu->block_cache[tpc & vu->micro_mem_size];
 
     vu->block_cache_size++;
 
@@ -2448,12 +2427,12 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
     block->cycles = 0;
     block->entries.clear();
 
-    // printf("vu: caching block at %04x\n", tpc);
+    // iris_debug(vu, "caching block at {:04x}", tpc);
 
     bool delay_slot = false;
 
     for (int i = 0; i < max_cycles; i++) {
-        vu_block_entry entry = { 0 };
+        BlockEntry entry = { 0 };
 
         uint64_t liw = vu->micro_mem[tpc++ & 0x7ff];
         uint32_t upper = liw >> 32;
@@ -2466,31 +2445,31 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
         entry.e_bit = (upper & 0x40000000) != 0;
         entry.m_bit = (upper & 0x20000000) != 0;
 
-        vu_decode_upper(vu, upper & 0x7ffffff);
+        decode_upper(vu, upper & 0x7ffffff);
 
         entry.upper = vu->upper;
 
         if (!entry.i_bit) {
-            vu_decode_lower(vu, lower);
+            decode_lower(vu, lower);
 
             entry.lower = vu->lower;
             entry.branch = vu->lower.branch;
             entry.hazard0 = vu->upper.dst.reg == vu->lower.src[0].reg;
             entry.hazard1 = vu->upper.dst.reg == vu->lower.src[1].reg;
             entry.hazard2 = vu->upper.dst.reg == vu->lower.dst.reg;
-            entry.hazard3 = vu->lower.dst.reg == VU_REG_Q;
+            entry.hazard3 = vu->lower.dst.reg == REG_Q;
 
             entry.lw_reg = (entry.lower.dst.reg && entry.lower.dst.reg < 32) ? entry.lower.dst.reg : 0;
-            entry.lw_mask = entry.lw_reg ? vu_vf_write_mask(entry.lower) : 0;
-            entry.is_mtir = (entry.lower.func == vu_i_mtir) && (entry.lower.src[0].reg != 0);
+            entry.lw_mask = entry.lw_reg ? vf_write_mask(entry.lower) : 0;
+            entry.is_mtir = (entry.lower.func == i_mtir) && (entry.lower.src[0].reg != 0);
             entry.mtir_reg = entry.lower.src[0].reg;
             entry.mtir_comp = entry.lower.src[0].field;
-            entry.is_waitq = entry.lower.func == vu_i_waitq;
-            entry.lower_is_nop = entry.lower.func == vu_i_nop;
+            entry.is_waitq = entry.lower.func == i_waitq;
+            entry.lower_is_nop = entry.lower.func == i_nop;
         }
 
         entry.uw_reg = (entry.upper.dst.reg && entry.upper.dst.reg < 32) ? entry.upper.dst.reg : 0;
-        entry.uw_mask = entry.uw_reg ? vu_vf_write_mask(entry.upper) : 0;
+        entry.uw_mask = entry.uw_reg ? vf_write_mask(entry.upper) : 0;
 
         // If this entry is a branch or has the E bit set, we end the block here
         if (entry.branch || entry.e_bit) {
@@ -2499,7 +2478,7 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
 
         // if (entry.branch) {
         //     // if (delay_slot) {
-        //     //     printf("vu%d: warning: branch in delay slot at %04x\n", vu->id, (tpc - 1) & 0x7ff);
+        //     //     iris_debug(vu, "vu{}: warning: branch in delay slot at {:04x}", vu->id, (tpc - 1) & 0x7ff);
         //     // }
 
         //     delay_slot = true;
@@ -2512,24 +2491,23 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
         block->entries.push_back(entry);
     }
 
-    // vu_dis_state ds;
+    // Dis ds;
 
     // ds.addr = block->tpc;
     // ds.print_address = 0;
     // ds.print_opcode = 0;
 
-    // for (const vu_block_entry& entry : block->entries) {
+    // for (const BlockEntry& entry : block->entries) {
     //     char upper_buf[512];
     //     char lower_buf[512];
 
-    //     printf(" %s %04x: %08x %08x %-40s %s\n",
-    //         entry.i_bit ? "I" : entry.e_bit ? "E" : " ",
+    //     iris_debug(vu, "{} {:04x}: {:08x} {:08x} {} {}", //         entry.i_bit ? "I" : entry.e_bit ? "E" : " ",
     //         ds.addr++,
     //         entry.upper.opcode,
     //         entry.lower.opcode,
-    //         vu_disassemble_upper(upper_buf, entry.upper.opcode, &ds),
-    //         vu_disassemble_lower(lower_buf, entry.lower.opcode, &ds)
-    //     );
+    //         disassemble_upper(upper_buf, entry.upper.opcode, &ds),
+    //         disassemble_lower(lower_buf, entry.lower.opcode, &ds)
+    //);
     // }
 
     // Prime fast lookup with a pointer known to be valid after this insertion.
@@ -2539,7 +2517,7 @@ vu_block* vu_cache_block(struct vu_state* vu, uint32_t tpc, int max_cycles) {
     return block;
 }
 
-static inline void vu_shift_flag_pipeline(struct vu_state* vu) {
+static inline void shift_flag_pipeline(Vu* vu) {
     vu->mac_pipeline[3] = vu->mac_pipeline[2];
     vu->mac_pipeline[2] = vu->mac_pipeline[1];
     vu->mac_pipeline[1] = vu->mac_pipeline[0];
@@ -2551,8 +2529,8 @@ static inline void vu_shift_flag_pipeline(struct vu_state* vu) {
     vu->clip_pipeline[0] = vu->clip;
 }
 
-static inline int vu_vf_write_mask(const struct vu_instruction& ins) {
-    if (ins.func == vu_i_opmsub)
+static inline int vf_write_mask(const Instruction& ins) {
+    if (ins.func == i_opmsub)
         return 0x7;
 
     int mask = 0;
@@ -2566,7 +2544,7 @@ static inline int vu_vf_write_mask(const struct vu_instruction& ins) {
     return mask;
 }
 
-static inline int vu_interlock_stall(struct vu_state* vu, const vu_block_entry& entry) {
+static inline int interlock_stall(Vu* vu, const BlockEntry& entry) {
     if (!entry.is_mtir)
         return 0;
 
@@ -2579,11 +2557,11 @@ static inline int vu_interlock_stall(struct vu_state* vu, const vu_block_entry& 
     return (int)(ready - vu->vu_cycle);
 }
 
-static inline void vu_record_vf_writes(struct vu_state* vu, const vu_block_entry& entry) {
+static inline void record_vf_writes(Vu* vu, const BlockEntry& entry) {
     if (entry.uw_reg) {
         for (int c = 0; c < 4; c++) {
             if (entry.uw_mask & (1 << c)) {
-                vu->vf_ready[entry.uw_reg][c] = vu->vu_cycle + VU_VF_LATENCY;
+                vu->vf_ready[entry.uw_reg][c] = vu->vu_cycle + VF_LATENCY;
             }
         }
     }
@@ -2591,18 +2569,18 @@ static inline void vu_record_vf_writes(struct vu_state* vu, const vu_block_entry
     if (entry.lw_reg) {
         for (int c = 0; c < 4; c++){
             if (entry.lw_mask & (1 << c)) {
-                vu->vf_ready[entry.lw_reg][c] = vu->vu_cycle + VU_VF_LATENCY;
+                vu->vf_ready[entry.lw_reg][c] = vu->vu_cycle + VF_LATENCY;
             }
         }
     }
 }
 
-void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
-    for (int stall = vu_interlock_stall(vu, entry); stall--; ) {
+void execute_block_entry(Vu* vu, const BlockEntry& entry) {
+    for (int stall = interlock_stall(vu, entry); stall--; ) {
         if (vu->q_delay)
             vu->q_delay--;
 
-        vu_shift_flag_pipeline(vu);
+        shift_flag_pipeline(vu);
 
         vu->vu_cycle++;
     }
@@ -2610,7 +2588,7 @@ void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
     if (vu->q_delay)
         vu->q_delay--;
 
-    vu_update_status(vu);
+    update_status(vu);
 
     if (entry.i_bit) {
         entry.upper.func(vu, &entry.upper);
@@ -2643,7 +2621,7 @@ void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
 
             entry.upper.func(vu, &entry.upper);
 
-            struct vu_reg128 tmp = vu->vf[entry.upper.dst.reg];
+            Reg128 tmp = vu->vf[entry.upper.dst.reg];
 
             entry.lower.func(vu, &entry.lower);
 
@@ -2655,7 +2633,7 @@ void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
         }
     }
 
-    vu_shift_flag_pipeline(vu);
+    shift_flag_pipeline(vu);
 
     if (vu->vi_backup_cycles) {
         vu->vi_backup_cycles--;
@@ -2666,15 +2644,15 @@ void vu_execute_block_entry(struct vu_state* vu, const vu_block_entry& entry) {
         }
     }
 
-    vu_record_vf_writes(vu, entry);
+    record_vf_writes(vu, entry);
 
     vu->vu_cycle++;
 }
 
-bool vu_execute_block(struct vu_state* vu, vu_block* block) {
-    // printf("vu: Input TPC %04x\n", vu->tpc);
+bool execute_block(Vu* vu, Block* block) {
+    // iris_debug(vu, "Input TPC {:04x}", vu->tpc);
 
-    for (const vu_block_entry& entry : block->entries) {
+    for (const BlockEntry& entry : block->entries) {
         // Immediately end execution. TPC still points at this instruction, so the
         // interlock resume re-runs it with any pending branch intact.
         if (entry.m_bit) {
@@ -2688,7 +2666,7 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
 
         vu->tpc = (vu->tpc + 1) & 0x7ff;
 
-        vu_execute_block_entry(vu, entry);
+        execute_block_entry(vu, entry);
 
         bool taken = false;
 
@@ -2714,29 +2692,29 @@ bool vu_execute_block(struct vu_state* vu, vu_block* block) {
             break;
     }
 
-    // printf("vu: Output TPC %04x\n", vu->tpc);
+    // iris_debug(vu, "Output TPC {:04x}", vu->tpc);
 
     return false;
 }
 
-static void vu_run(struct vu_state* vu) {
+static void run(Vu* vu) {
     while (true) {
-        vu_block* block = vu_find_block(vu, vu->tpc);
+        Block* block = find_block(vu, vu->tpc);
 
         if (!block) {
             vu->cache_misses++;
 
-            block = vu_cache_block(vu, vu->tpc, 64);
+            block = cache_block(vu, vu->tpc, 64);
         } else {
             vu->cache_hits++;
         }
 
-        if (vu_execute_block(vu, block))
+        if (execute_block(vu, block))
             break;
     }
 }
 
-void vu_execute_program(struct vu_state* vu, uint32_t addr) {
+void execute_program(Vu* vu, uint32_t addr) {
     if (vu->disable)
         return;
 
@@ -2755,10 +2733,10 @@ void vu_execute_program(struct vu_state* vu, uint32_t addr) {
         for (int c = 0; c < 4; c++)
             vu->vf_ready[i][c] = 0;
 
-    vu_run(vu);
+    run(vu);
 }
 
-void ps2_vu_write_vi(struct vu_state* vu, int index, uint32_t value) {
+void write_vi(Vu* vu, int index, uint32_t value) {
     switch (index) {
         case 0: return;
         case 1: case 2: case 3:
@@ -2804,12 +2782,12 @@ void ps2_vu_write_vi(struct vu_state* vu, int index, uint32_t value) {
 
             if (value & 2) {
                 // Reset VU0
-                ps2_vu_reset(vu);
+                reset(vu);
             }
 
             if (value & 0x200) {
                 // Reset VU1
-                ps2_vu_reset(vu->vu1);
+                reset(vu->vu1);
             }
         } break;
         case 29: return; // VU VPU-STAT register, read-only
@@ -2817,12 +2795,12 @@ void ps2_vu_write_vi(struct vu_state* vu, int index, uint32_t value) {
         case 31: {
             vu->cmsar1 = value & 0xffff;
 
-            vu_execute_program(vu->vu1, vu->cmsar1 >> 3);
+            execute_program(vu->vu1, vu->cmsar1 >> 3);
         } break;
     }
 }
 
-uint32_t ps2_vu_read_vi(struct vu_state* vu, int index) {
+uint32_t read_vi(Vu* vu, int index) {
     switch (index) {
         case 0: case 1: case 2: case 3:
         case 4: case 5: case 6: case 7:
@@ -2841,7 +2819,7 @@ uint32_t ps2_vu_read_vi(struct vu_state* vu, int index) {
     }
 }
 
-void ps2_vu_reset(struct vu_state* vu) {
+void reset(Vu* vu) {
     vu->disable = false;
 
     for (int i = 0; i < 16; i++)
@@ -2898,51 +2876,45 @@ void ps2_vu_reset(struct vu_state* vu) {
     vu->block_cache.resize(vu->micro_mem_size+1);
 
     vu->vf[0].w = 1.0;
+
+    fesetround(FE_TOWARDZERO);
 }
 
-void ps2_vu_decode_upper(struct vu_state* vu, uint32_t opcode) {
-    vu_decode_upper(vu, opcode);
-}
-
-void ps2_vu_decode_lower(struct vu_state* vu, uint32_t opcode) {
-    vu_decode_lower(vu, opcode);
-}
-
-void vu_execute_program_tpc(struct vu_state* vu) {
+void execute_program_tpc(Vu* vu) {
     if (vu->disable)
         return;
 
     // Clear VU0 interlock
     vu->waiting_for_interlock = false;
 
-    vu_run(vu);
+    run(vu);
 }
 
-uint128_t* vu_get_vu_mem_ptr(struct vu_state* vu, uint32_t addr) {
+uint128_t* get_vu_mem_ptr(Vu* vu, uint32_t addr) {
     return &vu->vu_mem[addr & vu->vu_mem_size];
 }
 
-uint64_t* vu_get_micro_mem_ptr(struct vu_state* vu, uint32_t addr) {
+uint64_t* get_micro_mem_ptr(Vu* vu, uint32_t addr) {
     return &vu->micro_mem[addr & vu->micro_mem_size];
 }
 
-uint32_t vu_get_tpc(struct vu_state* vu) {
+uint32_t get_tpc(Vu* vu) {
     return vu->tpc;
 }
 
-void ps2_vu_execute_lower(struct vu_state* vu, uint32_t opcode) {
-    vu_decode_lower(vu, opcode);
+void execute_lower(Vu* vu, uint32_t opcode) {
+    decode_lower(vu, opcode);
 
     vu->lower.func(vu, &vu->lower);
 }
 
-void ps2_vu_execute_upper(struct vu_state* vu, uint32_t opcode) {
-    vu_decode_upper(vu, opcode);
+void execute_upper(Vu* vu, uint32_t opcode) {
+    decode_upper(vu, opcode);
 
     vu->upper.func(vu, &vu->upper);
 }
 
-void vu_clear_block_cache(struct vu_state* vu) {
+void clear_block_cache(Vu* vu) {
     vu->block_cache_size = 0;
     vu->block_cache.clear();
     vu->block_cache.resize(vu->micro_mem_size+1);
@@ -2951,7 +2923,7 @@ void vu_clear_block_cache(struct vu_state* vu) {
     vu->last_block_ptr = nullptr;
 }
 
-void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
+void invalidate_range(Vu* vu, uint32_t addr, uint32_t size) {
     if (!size || vu->block_cache_size == 0) {
         return;
     }
@@ -2962,7 +2934,7 @@ void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
     const uint32_t byte_count = word_count << 3;
 
     if (size >= byte_count) {
-        for (vu_block& block : vu->block_cache) {
+        for (Block& block : vu->block_cache) {
             if (!block.cycles) {
                 continue;
             }
@@ -2985,7 +2957,7 @@ void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
 
     int invalidated = 0;
 
-    for (vu_block& block : vu->block_cache) {
+    for (Block& block : vu->block_cache) {
         if (!block.cycles) {
             continue;
         }
@@ -3025,8 +2997,10 @@ void vu_invalidate_range(struct vu_state* vu, uint32_t addr, uint32_t size) {
     vu->last_block_ptr = nullptr;
 }
 
-int vu_is_interlocked(struct vu_state* vu) {
+int is_interlocked(Vu* vu) {
     return vu->waiting_for_interlock;
 }
 
 // #undef printf
+
+}

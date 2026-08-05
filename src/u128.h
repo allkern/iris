@@ -1,9 +1,6 @@
 #ifndef U128_H
 #define U128_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
 
 #include <stdint.h>
 #include <stddef.h>
@@ -28,8 +25,5 @@ typedef union {
     int8_t sl8;
 } uint128_t;
 
-#ifdef __cplusplus
-}
-#endif
 
 #endif

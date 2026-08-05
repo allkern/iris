@@ -2,6 +2,8 @@
 #include <cstdio>
 #include "ipu_fifo.hpp"
 
+namespace iris::ipu {
+
 bool IPU_FIFO::get_bits(uint32_t &data, int bits)
 {
     const int fifo_bits = static_cast<int>(f.size()) * 128;
@@ -84,4 +86,6 @@ void IPU_FIFO::byte_align()
     int bits = bit_pointer & 0x7;
     if (bits)
         advance_stream(8 - bits);
+}
+
 }

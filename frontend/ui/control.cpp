@@ -7,20 +7,20 @@
 
 #include "res/IconsMaterialSymbols.h"
 
-#include "ee/ee_dis.h"
+#include "ee/ee_dis.hpp"
 #include "ee/ee_def.hpp"
 #include "ee/vu_def.hpp"
 #include "iop/iop_def.hpp"
-#include "iop/iop_dis.h"
+#include "iop/iop_dis.hpp"
 
 #define IM_RGB(r, g, b) ImVec4(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), 1.0)
 
 namespace iris {
 
-struct ee_dis_state g_ee_dis_state;
-struct iop_dis_state g_iop_dis_state;
+ee::dis::Dis g_ee_dis_state;
+iop::dis::Dis g_iop_dis_state;
 
-void print_highlighted(iris::instance* iris, const char* buf) {
+void print_highlighted(instance* iris, const char* buf) {
     using namespace ImGui;
 
     std::vector <std::string> tokens;
@@ -116,7 +116,7 @@ void print_highlighted(iris::instance* iris, const char* buf) {
     NewLine();
 }
 
-static void show_ee_disassembly_view(iris::instance* iris) {
+static void show_ee_disassembly_view(instance* iris) {
     using namespace ImGui;
 
     float font_scale = GetStyle().FontScaleMain;
@@ -204,13 +204,13 @@ static void show_ee_disassembly_view(iris::instance* iris) {
                 }
             }
 
-            uint32_t opcode = ee_bus_read32(iris->ps2->ee_bus, g_ee_dis_state.pc & 0x1fffffff);
+            uint32_t opcode = ee::bus::read32(iris->ps2->ee_bus, g_ee_dis_state.pc & 0x1fffffff);
 
             char buf[128], id[16];
 
             char addr_str[9]; sprintf(addr_str, "%08x", g_ee_dis_state.pc);
             char opcode_str[9]; sprintf(opcode_str, "%08x", opcode);
-            char* disassembly = ee_disassemble(buf, opcode, &g_ee_dis_state);
+            char* disassembly = ee::dis::disassemble(buf, opcode, &g_ee_dis_state);
 
             sprintf(id, "##%d", row);
 
@@ -319,7 +319,7 @@ static void show_ee_disassembly_view(iris::instance* iris) {
     GetStyle().FontScaleMain = font_scale;
 }
 
-static void show_iop_disassembly_view(iris::instance* iris) {
+static void show_iop_disassembly_view(instance* iris) {
     using namespace ImGui;
 
     float font_scale = GetStyle().FontScaleMain;
@@ -389,13 +389,13 @@ static void show_iop_disassembly_view(iris::instance* iris) {
 
             TableSetColumnIndex(2);
 
-            uint32_t opcode = iop_bus_read32(iris->ps2->iop_bus, g_iop_dis_state.addr & 0x1fffffff);
+            uint32_t opcode = iop::bus::read32(iris->ps2->iop_bus, g_iop_dis_state.addr & 0x1fffffff);
 
             char buf[128];
 
             char addr_str[9]; sprintf(addr_str, "%08x", g_iop_dis_state.addr);
             char opcode_str[9]; sprintf(opcode_str, "%08x", opcode);
-            char* disassembly = iop_disassemble(buf, opcode, &g_iop_dis_state);
+            char* disassembly = iop::dis::disassemble(buf, opcode, &g_iop_dis_state);
 
             Text("%s ", addr_str); SameLine();
             TextDisabled("%s ", opcode_str); SameLine();
@@ -504,7 +504,7 @@ static void show_iop_disassembly_view(iris::instance* iris) {
     GetStyle().FontScaleMain = font_scale;
 }
 
-void show_ee_control(iris::instance* iris) {
+void show_ee_control(instance* iris) {
     using namespace ImGui;
 
     PushFont(iris->font_icons);
@@ -535,7 +535,7 @@ void show_ee_control(iris::instance* iris) {
         } SameLine();
 
         if (Button(ICON_MS_AUTORENEW)) {
-            ee_flush_cache(iris->ps2->ee);
+            ee::flush_cache(iris->ps2->ee);
         }
 
         InputInt("Address", (int32_t*)&iris->ee_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
@@ -570,7 +570,7 @@ void show_ee_control(iris::instance* iris) {
     PopFont();
 }
 
-void show_iop_control(iris::instance* iris) {
+void show_iop_control(instance* iris) {
     using namespace ImGui;
 
     PushFont(iris->font_icons);
@@ -583,7 +583,7 @@ void show_iop_control(iris::instance* iris) {
         if (Button(ICON_MS_STEP)) {
             iris->pause = true;
 
-            ps2_step_iop(iris->ps2);
+            ps2::step_iop(iris->ps2);
         } SameLine();
 
         if (Button(ICON_MS_MOVE_DOWN)) {

@@ -13,12 +13,12 @@ namespace iris {
 
 static MemoryEditor editor;
 
-void show_memory_viewer(iris::instance* iris) {
+void show_memory_viewer(instance* iris) {
     using namespace ImGui;
 
     editor.FontOptions = iris->font_body;
 
-    struct ps2_state* ps2 = iris->ps2;
+    ps2::Ps2* ps2 = iris->ps2;
 
     if (imgui::BeginEx("Memory", &iris->show_memory_viewer)) {
         if (BeginTabBar("##tabbar")) {
@@ -55,7 +55,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("IOP SPR")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->iop_spr->buf, RAM_SIZE_1KB, 0);
+                editor.DrawContents(ps2->iop_spr->buf, ram::SIZE_1KB, 0);
 
                 PopFont();
 
@@ -75,7 +75,7 @@ void show_memory_viewer(iris::instance* iris) {
             if (BeginTabItem("SPU2")) {
                 PushFont(iris->font_code);
 
-                editor.DrawContents(ps2->spu2->ram, RAM_SIZE_2MB, 0);
+                editor.DrawContents(ps2->spu2->ram, ram::SIZE_2MB, 0);
 
                 PopFont();
 

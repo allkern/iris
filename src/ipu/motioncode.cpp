@@ -1,5 +1,7 @@
 #include "motioncode.hpp"
 
+namespace iris::ipu {
+
 VLC_Entry MotionCode::table[] =
 {
     {0x1, 0x10000, 1},
@@ -63,5 +65,7 @@ unsigned int MotionCode::index_table[11] =
 MotionCode::MotionCode() :
     VLC_Table(table, SIZE, 11, index_table)
 {
+
+}
 
 }

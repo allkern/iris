@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include "dct_coeff_table1.hpp"
 
-#define printf(fmt, ...)(0)
+namespace iris::ipu {
 
 VLC_Entry DCT_Coeff_Table1::table[] =
 {
@@ -301,7 +301,6 @@ bool DCT_Coeff_Table1::get_end_of_block(IPU_FIFO &FIFO, uint32_t &result)
     if (!FIFO.get_bits(result, 4))
         return false;
 
-    printf("[DCT_Coeff_Table1] EOB: $%08X\n", result);
     result = (result == 6);
     return true;
 }
@@ -321,12 +320,10 @@ bool DCT_Coeff_Table1::get_runlevel_pair(IPU_FIFO &FIFO, RunLevelPair &pair, boo
     if (!peek_symbol(FIFO, entry))
         return false;
 
-    printf("Key: $%08X Value: $%08X Bits: %d\n", entry.key, entry.value, entry.bits);
     int bit_count = entry.bits;
     RunLevelPair cur_pair = runlevel_table[entry.value];
     if (cur_pair.run == RUN_ESCAPE)
     {
-        printf("[DCT_Coeff_Table1] RUN_ESCAPE\n");
         uint32_t run = 0;
         if (!peek_value(FIFO, 6, bit_count, run))
             return false;
@@ -389,4 +386,6 @@ bool DCT_Coeff_Table1::get_runlevel_pair_dc(IPU_FIFO &FIFO, RunLevelPair &pair, 
 {
     //DCT_Coeff_Table1 only gets called by intra macroblocks, so this should never happen
     return false;
+}
+
 }

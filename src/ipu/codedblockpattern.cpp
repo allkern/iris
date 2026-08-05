@@ -1,5 +1,7 @@
 #include "codedblockpattern.hpp"
 
+namespace iris::ipu {
+
 VLC_Entry CodedBlockPattern::table[] =
 {
     {0x7, 60, 3},
@@ -111,5 +113,7 @@ unsigned int CodedBlockPattern::index_table[9] =
 
 CodedBlockPattern::CodedBlockPattern() : VLC_Table(table, SIZE, 9, index_table)
 {
+
+}
 
 }

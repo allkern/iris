@@ -47,7 +47,7 @@ std::vector <VkLayerProperties> get_instance_layers() {
     return layers;
 }
 
-bool is_instance_extension_supported(iris::instance* iris, const char* name) {
+bool is_instance_extension_supported(instance* iris, const char* name) {
     return std::find_if(
         iris->instance_extensions.begin(),
         iris->instance_extensions.end(),
@@ -57,7 +57,7 @@ bool is_instance_extension_supported(iris::instance* iris, const char* name) {
     ) != iris->instance_extensions.end();
 }
 
-bool is_instance_layer_supported(iris::instance* iris, const char* name) {
+bool is_instance_layer_supported(instance* iris, const char* name) {
     return std::find_if(
         iris->instance_layers.begin(),
         iris->instance_layers.end(),
@@ -67,7 +67,7 @@ bool is_instance_layer_supported(iris::instance* iris, const char* name) {
     ) != iris->instance_layers.end();
 }
 
-bool is_device_extension_supported(iris::instance* iris, const char* name) {
+bool is_device_extension_supported(instance* iris, const char* name) {
     return std::find_if(
         iris->device_extensions.begin(),
         iris->device_extensions.end(),
@@ -77,7 +77,7 @@ bool is_device_extension_supported(iris::instance* iris, const char* name) {
     ) != iris->device_extensions.end();
 }
 
-bool is_device_layer_supported(iris::instance* iris, const char* name) {
+bool is_device_layer_supported(instance* iris, const char* name) {
     return std::find_if(
         iris->device_layers.begin(),
         iris->device_layers.end(),
@@ -87,7 +87,7 @@ bool is_device_layer_supported(iris::instance* iris, const char* name) {
     ) != iris->device_layers.end();
 }
 
-std::vector <VkExtensionProperties> get_device_extensions(iris::instance* iris) {
+std::vector <VkExtensionProperties> get_device_extensions(instance* iris) {
     std::vector <VkExtensionProperties> extensions;
 
     uint32_t count;
@@ -105,7 +105,7 @@ std::vector <VkExtensionProperties> get_device_extensions(iris::instance* iris) 
     return extensions;
 }
 
-std::vector <VkLayerProperties> get_device_layers(iris::instance* iris) {
+std::vector <VkLayerProperties> get_device_layers(instance* iris) {
     std::vector <VkLayerProperties> layers;
 
     uint32_t count;
@@ -129,7 +129,7 @@ struct instance_create_info {
     VkInstanceCreateFlags flags = 0;
 };
 
-VkInstance create_instance(iris::instance* iris, const instance_create_info& info) {
+VkInstance create_instance(instance* iris, const instance_create_info& info) {
     VkInstance instance = VK_NULL_HANDLE;
 
     for (const char* ext : info.enabled_extensions) {
@@ -176,7 +176,7 @@ VkInstance create_instance(iris::instance* iris, const instance_create_info& inf
     return instance;
 }
 
-static inline uint32_t find_memory_type(iris::instance* iris, uint32_t filter, VkMemoryPropertyFlags properties) {
+static inline uint32_t find_memory_type(instance* iris, uint32_t filter, VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties mp;
     vkGetPhysicalDeviceMemoryProperties(iris->physical_device, &mp);
 
@@ -196,7 +196,7 @@ struct device_create_info {
     void* data;
 };
 
-VkDevice create_device(iris::instance* iris, const device_create_info& info) {
+VkDevice create_device(instance* iris, const device_create_info& info) {
     VkDevice device = VK_NULL_HANDLE;
 
     for (const char* ext : info.enabled_extensions) {
@@ -316,7 +316,7 @@ VkDevice create_device(iris::instance* iris, const device_create_info& info) {
     return device;
 }
 
-void enumerate_physical_devices(iris::instance* iris) {
+void enumerate_physical_devices(instance* iris) {
     uint32_t count = 0;
 
     vkEnumeratePhysicalDevices(iris->instance, &count, nullptr);
@@ -336,7 +336,7 @@ void enumerate_physical_devices(iris::instance* iris) {
 
         vkGetPhysicalDeviceProperties(device, &properties);
 
-        iris::vulkan_gpu gpu;
+        vulkan_gpu gpu;
 
         gpu.device = device;
         gpu.type = properties.deviceType;
@@ -347,7 +347,7 @@ void enumerate_physical_devices(iris::instance* iris) {
     }
 }
 
-VkPhysicalDevice find_suitable_physical_device(iris::instance* iris) {
+VkPhysicalDevice find_suitable_physical_device(instance* iris) {
     if (!iris->vulkan_gpus.size())
         return VK_NULL_HANDLE;
 
@@ -367,7 +367,7 @@ VkPhysicalDevice find_suitable_physical_device(iris::instance* iris) {
     return iris->vulkan_gpus[0].device;
 }
 
-int find_graphics_queue_family_index(iris::instance* iris) {
+int find_graphics_queue_family_index(instance* iris) {
     uint32_t count = 0;
 
     vkGetPhysicalDeviceQueueFamilyProperties(iris->physical_device, &count, nullptr);
@@ -391,7 +391,7 @@ int find_graphics_queue_family_index(iris::instance* iris) {
     return -1;
 }
 
-VkBuffer create_buffer(iris::instance* iris, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory& buffer_memory) {
+VkBuffer create_buffer(instance* iris, VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkDeviceMemory& buffer_memory) {
     VkBuffer buffer = VK_NULL_HANDLE;
 
     VkBufferCreateInfo buffer_info = {};
@@ -437,7 +437,7 @@ VkBuffer create_buffer(iris::instance* iris, VkDeviceSize size, VkBufferUsageFla
     return buffer;
 }
 
-void load_buffer(iris::instance* iris, VkDeviceMemory buffer_memory, void* data, VkDeviceSize size) {
+void load_buffer(instance* iris, VkDeviceMemory buffer_memory, void* data, VkDeviceSize size) {
     void* ptr;
 
     vkMapMemory(iris->device, buffer_memory, 0, size, 0, &ptr);
@@ -445,7 +445,7 @@ void load_buffer(iris::instance* iris, VkDeviceMemory buffer_memory, void* data,
     vkUnmapMemory(iris->device, buffer_memory);
 }
 
-bool copy_buffer(iris::instance* iris, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
+bool copy_buffer(instance* iris, VkBuffer src, VkBuffer dst, VkDeviceSize size) {
     VkCommandPool command_pool = VK_NULL_HANDLE;
 
     VkCommandPoolCreateInfo info = {};
@@ -494,7 +494,7 @@ bool copy_buffer(iris::instance* iris, VkBuffer src, VkBuffer dst, VkDeviceSize 
     return true;
 }
 
-bool create_descriptor_pool(iris::instance* iris) {
+bool create_descriptor_pool(instance* iris) {
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 512 }
     };
@@ -519,7 +519,7 @@ bool create_descriptor_pool(iris::instance* iris) {
     return true;
 }
 
-texture upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride) {
+texture upload_texture(instance* iris, void* pixels, int width, int height, int stride) {
     texture tex = {};
 
     tex.width = width;
@@ -770,7 +770,7 @@ texture upload_texture(iris::instance* iris, void* pixels, int width, int height
     return tex;
 }
 
-void free_texture(iris::instance* iris, texture& tex) {
+void free_texture(instance* iris, texture& tex) {
     if (!iris->device)
         return;
 
@@ -780,7 +780,7 @@ void free_texture(iris::instance* iris, texture& tex) {
     if (tex.image_memory) vkFreeMemory(iris->device, tex.image_memory, nullptr);
 }
 
-bool init(iris::instance* iris, bool enable_validation) {
+bool init(instance* iris, bool enable_validation) {
     if (volkInitialize() != VK_SUCCESS) {
         fprintf(stderr, "vulkan: Failed to initialize volk loader\n");
 
@@ -1037,7 +1037,7 @@ bool init(iris::instance* iris, bool enable_validation) {
     return true;
 }
 
-void cleanup(iris::instance* iris) {
+void cleanup(instance* iris) {
     vulkan::wait_idle(iris);
 
     if (iris->descriptor_set_layout) vkDestroyDescriptorSetLayout(iris->device, iris->descriptor_set_layout, nullptr);
@@ -1092,7 +1092,7 @@ void insert_image_memory_barrier(
     );
 }
 
-void* read_image(iris::instance* iris, VkImage src_image, VkFormat format, int width, int height) {
+void* read_image(instance* iris, VkImage src_image, VkFormat format, int width, int height) {
     if (src_image == VK_NULL_HANDLE) {
         printf("vulkan: Source image is null\n");
 
@@ -1353,7 +1353,7 @@ void* read_image(iris::instance* iris, VkImage src_image, VkFormat format, int w
     return buf;
 }
 
-void wait_idle(iris::instance* iris) {
+void wait_idle(instance* iris) {
     if (iris->device) {
         vkDeviceWaitIdle(iris->device);
     } else if (iris->queue) {
@@ -1363,7 +1363,7 @@ void wait_idle(iris::instance* iris) {
 
 // Dump GPU fault info after a VK_ERROR_DEVICE_LOST. Requires VK_EXT_device_fault
 // (enabled in init() when supported). Safe to call on an already-lost device.
-void dump_device_fault(iris::instance* iris) {
+void dump_device_fault(instance* iris) {
     // Only report once - after a loss every frame hits a device-lost path.
     if (iris->device_fault_dumped)
         return;
@@ -1437,7 +1437,7 @@ void dump_device_fault(iris::instance* iris) {
     }
 }
 
-texture load_texture_from_memory(iris::instance* iris, const void* data, size_t size) {
+texture load_texture_from_memory(instance* iris, const void* data, size_t size) {
     int x, y, c;
 
     stbi_uc* buf = stbi_load_from_memory((const stbi_uc*)data, size, &x, &y, &c, 4);
@@ -1449,7 +1449,7 @@ texture load_texture_from_memory(iris::instance* iris, const void* data, size_t 
     return tex;
 }
 
-texture load_texture_from_file(iris::instance* iris, std::string path) {
+texture load_texture_from_file(instance* iris, std::string path) {
     int x, y, c;
 
     stbi_uc* buf = stbi_load(path.c_str(), &x, &y, &c, 4);

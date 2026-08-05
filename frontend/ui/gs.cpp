@@ -112,10 +112,10 @@ static const char* gs_context_names[] = {
 
 static int gs_context = 0;
 
-void show_privileged_registers(iris::instance* iris) {
+void show_privileged_registers(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = iris->ps2->gs;
+    gs::Gs* gs = iris->ps2->gs;
 
     PushFont(iris->font_code);
 
@@ -137,7 +137,7 @@ void show_privileged_registers(iris::instance* iris) {
 
             TableSetColumnIndex(1);
 
-            Text("%08lx%08lx", regs[i] >> 32, regs[i] & 0xffffffff);
+            Text("%08x%08x", (uint32_t)(regs[i] >> 32), (uint32_t)regs[i]);
         }
 
         EndTable();
@@ -146,10 +146,10 @@ void show_privileged_registers(iris::instance* iris) {
     PopFont();
 }
 
-void show_context_registers(iris::instance* iris, int ctx) {
+void show_context_registers(instance* iris, int ctx) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = iris->ps2->gs;
+    gs::Gs* gs = iris->ps2->gs;
 
     PushFont(iris->font_code);
 
@@ -171,7 +171,7 @@ void show_context_registers(iris::instance* iris, int ctx) {
 
             TableSetColumnIndex(1);
 
-            Text("%08lx%08lx", regs[i] >> 32, regs[i] & 0xffffffff);
+            Text("%08x%08x", (uint32_t)(regs[i] >> 32), (uint32_t)regs[i]);
         }
 
         EndTable();
@@ -180,10 +180,10 @@ void show_context_registers(iris::instance* iris, int ctx) {
     PopFont();
 }
 
-void show_internal_registers(iris::instance* iris) {
+void show_internal_registers(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = iris->ps2->gs;
+    gs::Gs* gs = iris->ps2->gs;
 
     PushFont(iris->font_code);
 
@@ -205,7 +205,7 @@ void show_internal_registers(iris::instance* iris) {
 
             TableSetColumnIndex(1);
 
-            Text("%08lx%08lx", regs[i] >> 32, regs[i] & 0xffffffff);
+            Text("%08x%08x", (uint32_t)(regs[i] >> 32), (uint32_t)regs[i]);
         }
 
         EndTable();
@@ -214,7 +214,7 @@ void show_internal_registers(iris::instance* iris) {
     PopFont();
 }
 
-static inline void show_gs_vertex_xy(iris::instance* iris, const gs_vertex* vtx) {
+static inline void show_gs_vertex_xy(instance* iris, const gs::Vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -225,18 +225,18 @@ static inline void show_gs_vertex_xy(iris::instance* iris, const gs_vertex* vtx)
 
     PushFont(iris->font_code);
 
-    Text("0x%04lx, 0x%04lx", vtx->xyz & 0xffff, (vtx->xyz >> 16) & 0xffff);
+    Text("0x%04x, 0x%04x", (uint32_t)(vtx->xyz & 0xffff), (uint32_t)((vtx->xyz >> 16) & 0xffff));
 
     TableSetColumnIndex(2);
 
-    Text("%d.%04ld, %d.%04ld", vtx->x, (vtx->xyz & 0xf) * 625, vtx->y, ((vtx->xyz >> 16) & 0xf) * 625);
+    Text("%d.%04u, %d.%04u", vtx->x, (uint32_t)((vtx->xyz & 0xf) * 625), vtx->y, (uint32_t)(((vtx->xyz >> 16) & 0xf) * 625));
 
     PopFont();
 
     TableNextRow();
 }
 
-static inline void show_gs_vertex_z(iris::instance* iris, const gs_vertex* vtx) {
+static inline void show_gs_vertex_z(instance* iris, const gs::Vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -258,7 +258,7 @@ static inline void show_gs_vertex_z(iris::instance* iris, const gs_vertex* vtx) 
     TableNextRow();
 }
 
-static inline void show_gs_vertex_stq(iris::instance* iris, const gs_vertex* vtx) {
+static inline void show_gs_vertex_stq(instance* iris, const gs::Vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -269,7 +269,7 @@ static inline void show_gs_vertex_stq(iris::instance* iris, const gs_vertex* vtx
 
     PushFont(iris->font_code);
 
-    Text("0x%08lx, 0x%08lx, 0x%08lx", vtx->st & 0xffffffff, vtx->st >> 32, vtx->rgbaq >> 32);
+    Text("0x%08x, 0x%08x, 0x%08x", (uint32_t)vtx->st, (uint32_t)(vtx->st >> 32), (uint32_t)(vtx->rgbaq >> 32));
 
     TableSetColumnIndex(2);
 
@@ -280,7 +280,7 @@ static inline void show_gs_vertex_stq(iris::instance* iris, const gs_vertex* vtx
     TableNextRow();
 }
 
-static inline void show_gs_vertex_uv(iris::instance* iris, const gs_vertex* vtx) {
+static inline void show_gs_vertex_uv(instance* iris, const gs::Vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -291,16 +291,16 @@ static inline void show_gs_vertex_uv(iris::instance* iris, const gs_vertex* vtx)
 
     PushFont(iris->font_code);
 
-    Text("0x%08lx, 0x%08lx",
-        vtx->uv & 0x3fff,
-        (vtx->uv >> 16) & 0x3fff
+    Text("0x%08x, 0x%08x",
+        (uint32_t)(vtx->uv & 0x3fff),
+        (uint32_t)((vtx->uv >> 16) & 0x3fff)
     );
 
     TableSetColumnIndex(2);
 
-    Text("%d.%04ld, %d.%04ld",
-        vtx->u, (vtx->uv & 0xf) * 625,
-        vtx->v, ((vtx->uv >> 16) & 0xf) * 625
+    Text("%d.%04u, %d.%04u",
+        vtx->u, (uint32_t)((vtx->uv & 0xf) * 625),
+        vtx->v, (uint32_t)(((vtx->uv >> 16) & 0xf) * 625)
     );
 
     PopFont();
@@ -308,7 +308,7 @@ static inline void show_gs_vertex_uv(iris::instance* iris, const gs_vertex* vtx)
     TableNextRow();
 }
 
-static inline void show_gs_vertex_rgba(iris::instance* iris, const gs_vertex* vtx) {
+static inline void show_gs_vertex_rgba(instance* iris, const gs::Vertex* vtx) {
     using namespace ImGui;
 
     TableSetColumnIndex(0);
@@ -319,15 +319,15 @@ static inline void show_gs_vertex_rgba(iris::instance* iris, const gs_vertex* vt
 
     PushFont(iris->font_code);
 
-    Text("0x%08lx", vtx->rgbaq & 0xffffffff);
+    Text("0x%08x", (uint32_t)vtx->rgbaq);
 
     TableSetColumnIndex(2);
 
-    Text("0x%02lx, 0x%02lx, 0x%02lx, 0x%02lx",
-        vtx->rgbaq & 0xff,
-        (vtx->rgbaq >> 8) & 0xff,
-        (vtx->rgbaq >> 16) & 0xff,
-        (vtx->rgbaq >> 24) & 0xff
+    Text("0x%02x, 0x%02x, 0x%02x, 0x%02x",
+        (uint32_t)(vtx->rgbaq & 0xff),
+        (uint32_t)((vtx->rgbaq >> 8) & 0xff),
+        (uint32_t)((vtx->rgbaq >> 16) & 0xff),
+        (uint32_t)((vtx->rgbaq >> 24) & 0xff)
     ); SameLine();
 
     ImVec4 color = ImVec4(
@@ -349,7 +349,7 @@ static inline void show_gs_vertex_rgba(iris::instance* iris, const gs_vertex* vt
     TableNextRow();
 }
 
-void show_gs_vertex(iris::instance* iris, const gs_vertex* vtx) {
+void show_gs_vertex(instance* iris, const gs::Vertex* vtx) {
     using namespace ImGui;
 
     if (BeginTable("table10", 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
@@ -372,10 +372,10 @@ void show_gs_vertex(iris::instance* iris, const gs_vertex* vtx) {
     }
 }
 
-void show_gs_queue(iris::instance* iris) {
+void show_gs_queue(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = iris->ps2->gs;
+    gs::Gs* gs = iris->ps2->gs;
 
     for (unsigned int i = 0; i < gs->vqi; i++) {
         char buf[32]; sprintf(buf, "Vertex %d", i+1);
@@ -402,7 +402,7 @@ void show_gs_queue(iris::instance* iris) {
     }
 }
 
-void show_gs_registers(iris::instance* iris) {
+void show_gs_registers(instance* iris) {
     using namespace ImGui;
 
     if (BeginTable("table6", 4, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
@@ -452,10 +452,10 @@ const char* format_names[] = {
 int format = 0;
 static SDL_GPUTexture* tex = nullptr;
 
-void show_gs_memory(iris::instance* iris) {
+void show_gs_memory(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_gs* gs = iris->ps2->gs;
+    gs::Gs* gs = iris->ps2->gs;
 
     static char buf0[16];
     static char buf1[16];
@@ -618,7 +618,7 @@ void show_gs_memory(iris::instance* iris) {
     // ImageWithBg((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
 }
 
-void show_gs_debugger(iris::instance* iris) {
+void show_gs_debugger(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("GS", &iris->show_gs_debugger, ImGuiWindowFlags_MenuBar)) {

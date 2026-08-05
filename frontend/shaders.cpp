@@ -31,7 +31,7 @@ constexpr unsigned int g_noise_frag_shader_size = sizeof(g_noise_frag_shader_dat
 
 namespace iris::shaders {
 
-bool pass::init(iris::instance* iris, const void* data, size_t size, std::string id) {
+bool pass::init(instance* iris, const void* data, size_t size, std::string id) {
     m_vert_shader = iris->default_vert_shader;
     m_iris = iris;
     m_id = id;
@@ -50,7 +50,7 @@ bool pass::init(iris::instance* iris, const void* data, size_t size, std::string
     return rebuild();
 }
 
-pass::pass(iris::instance* iris, const void* data, size_t size, std::string id) {
+pass::pass(instance* iris, const void* data, size_t size, std::string id) {
     init(iris, data, size, id);
 }
 
@@ -351,11 +351,11 @@ std::unordered_map <std::string, std::pair <void*, size_t>> g_builtin_shaders = 
     { "iris-ntsc-noise", { (void*)g_noise_frag_shader_data, (size_t)g_noise_frag_shader_size } }
 };
 
-void push(iris::instance* iris, void* data, size_t size, std::string id) {
+void push(instance* iris, void* data, size_t size, std::string id) {
     iris->shader_passes.push_back(new pass(iris, data, size, id));
 }
 
-void push(iris::instance* iris, std::string id) {
+void push(instance* iris, std::string id) {
     auto s = g_builtin_shaders.find(id);
 
     if (s != g_builtin_shaders.end()) {
@@ -363,49 +363,49 @@ void push(iris::instance* iris, std::string id) {
     }
 }
 
-void pop(iris::instance* iris) {
+void pop(instance* iris) {
     delete iris->shader_passes.back();
 
     iris->shader_passes.pop_back();
 }
 
-void insert(iris::instance* iris, int i, void* data, size_t size, std::string id) {
+void insert(instance* iris, int i, void* data, size_t size, std::string id) {
     iris->shader_passes.insert(
         iris->shader_passes.begin() + i,
         new pass(iris, data, size, id)
     );
 }
 
-void erase(iris::instance* iris, int i) {
+void erase(instance* iris, int i) {
     delete iris->shader_passes.at(i);
 
     iris->shader_passes.erase(iris->shader_passes.begin() + i);
 }
 
-pass* at(iris::instance* iris, int i) {
+pass* at(instance* iris, int i) {
     return iris->shader_passes.at(i);
 }
 
-void swap(iris::instance* iris, int a, int b) {
+void swap(instance* iris, int a, int b) {
     pass* t = iris->shader_passes.at(a);
 
     iris->shader_passes[a] = iris->shader_passes[b];
     iris->shader_passes[b] = t;
 }
 
-pass* front(iris::instance* iris) {
+pass* front(instance* iris) {
     return iris->shader_passes.front();
 }
 
-pass* back(iris::instance* iris) {
+pass* back(instance* iris) {
     return iris->shader_passes.back();
 }
 
-size_t count(iris::instance* iris) {
+size_t count(instance* iris) {
     return iris->shader_passes.size();
 }
 
-void clear(iris::instance* iris) {
+void clear(instance* iris) {
     for (auto& pass : iris->shader_passes) {
         delete pass;
     }
@@ -413,7 +413,7 @@ void clear(iris::instance* iris) {
     iris->shader_passes.clear();
 }
 
-std::vector <shaders::pass*>& vector(iris::instance* iris) {
+std::vector <shaders::pass*>& vector(instance* iris) {
     return iris->shader_passes;
 }
 

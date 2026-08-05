@@ -2,7 +2,7 @@
 #include <cstdlib>
 #include "dct_coeff_table0.hpp"
 
-#define printf(fmt, ...)(0)
+namespace iris::ipu {
 
 VLC_Entry DCT_Coeff_Table0::table[] =
 {
@@ -321,7 +321,6 @@ bool DCT_Coeff_Table0::get_end_of_block(IPU_FIFO &FIFO, uint32_t &result)
     if (!FIFO.get_bits(result, 2))
         return false;
 
-    printf("[DCT_Coeff_Table0] EOB: $%08X\n", result);
     result = (result == 2);
     return true;
 }
@@ -343,7 +342,6 @@ bool DCT_Coeff_Table0::get_runlevel_pair(IPU_FIFO &FIFO, RunLevelPair &pair, boo
 
     int bit_count = entry.bits;
     RunLevelPair cur_pair = runlevel_table[entry.value];
-    printf("Run level pair index: %d (Key: $%02X)\n", entry.value, entry.key);
     if (cur_pair.run == RUN_ESCAPE)
     {
         uint32_t run;
@@ -424,4 +422,6 @@ bool DCT_Coeff_Table0::get_runlevel_pair_dc(IPU_FIFO &FIFO, RunLevelPair &pair, 
     }
     else
         return get_runlevel_pair(FIFO, pair, MPEG1);
+}
+
 }

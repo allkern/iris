@@ -5,8 +5,8 @@
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 
-#include "ps2_elf.h"
-#include "ps2_iso9660.h"
+#include "ps2_elf.hpp"
+#include "ps2_iso9660.hpp"
 
 namespace iris {
 
@@ -43,7 +43,7 @@ int fullscreen_flags[] = {
     SDL_WINDOW_FULLSCREEN
 };
 
-void show_main_menubar(iris::instance* iris) {
+void show_main_menubar(instance* iris) {
     using namespace ImGui;
 
     PushFont(iris->font_icons);
@@ -161,7 +161,7 @@ void show_main_menubar(iris::instance* iris) {
             //     );
 
             //     if (file) {
-            //         struct iso9660_state* iso = iso9660_open(file);
+            //         iso9660::Iso* iso = iso9660::open(file);
 
             //         if (!iso) {
             //             printf("iris: Couldn't open disc image \"%s\"\n", file);
@@ -171,23 +171,23 @@ void show_main_menubar(iris::instance* iris) {
             //             return;
             //         }
 
-            //         char* boot_file = iso9660_get_boot_path(iso);
+            //         char* boot_file = iso9660::get_boot_path(iso);
 
             //         if (!boot_file)
             //             return;
 
             //         // Temporarily disable window updates
-            //         struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+            //         gs::Callback cb = *gs::get_callback(iris->ps2->gs, gs::EVENT_VBLANK);
 
-            //         ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
-            //         ps2_boot_file(iris->ps2, boot_file);
+            //         gs::remove_callback(iris->ps2->gs, gs::EVENT_VBLANK);
+            //         ps2::boot_file(iris->ps2, boot_file);
 
             //         // Re-enable window updates
-            //         ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+            //         gs::init_callback(iris->ps2->gs, gs::EVENT_VBLANK, cb.func, cb.udata);
 
-            //         ps2_cdvd_open(iris->ps2->cdvd, file);
+            //         cdvd::open(iris->ps2->cdvd, file);
 
-            //         iso9660_close(iso);
+            //         iso9660::close(iso);
 
             //         iris->loaded = file;
             //     }
@@ -211,16 +211,16 @@ void show_main_menubar(iris::instance* iris) {
             //         str = "host:" + str;
 
             //         // Temporarily disable window updates
-            //         struct gs_callback cb = *ps2_gs_get_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+            //         gs::Callback cb = *gs::get_callback(iris->ps2->gs, gs::EVENT_VBLANK);
 
-            //         ps2_gs_remove_callback(iris->ps2->gs, GS_EVENT_VBLANK);
+            //         gs::remove_callback(iris->ps2->gs, gs::EVENT_VBLANK);
 
-            //         ps2_boot_file(iris->ps2, str.c_str());
+            //         ps2::boot_file(iris->ps2, str.c_str());
 
-            //         // ps2_elf_load(iris->ps2, file);
+            //         // elf::load(iris->ps2, file);
 
             //         // Re-enable window updates
-            //         ps2_gs_init_callback(iris->ps2->gs, GS_EVENT_VBLANK, cb.func, cb.udata);
+            //         gs::init_callback(iris->ps2->gs, gs::EVENT_VBLANK, cb.func, cb.udata);
 
             //         iris->loaded = file;
             //     }
@@ -234,7 +234,7 @@ void show_main_menubar(iris::instance* iris) {
 
             // To-do: Show confirm dialog maybe?
             if (MenuItem(ICON_MS_REFRESH " Reset")) {
-                ps2_reset(iris->ps2);
+                ps2::reset(iris->ps2);
             }
 
             if (MenuItem(ICON_MS_FOLDER " Change disc...")) {
@@ -258,7 +258,7 @@ void show_main_menubar(iris::instance* iris) {
 
                 if (f.result().size()) {
                     // 2-second delay to allow the disc to spin up
-                    if (!ps2_cdvd_open(iris->ps2->cdvd, f.result().at(0).c_str(), 38860800*2)) {
+                    if (!cdvd::open(iris->ps2->cdvd, f.result().at(0).c_str(), 38860800*2)) {
                         iris->loaded = f.result().at(0);
                     }
                 }
@@ -267,7 +267,7 @@ void show_main_menubar(iris::instance* iris) {
             if (MenuItem(ICON_MS_EJECT " Eject disc")) {
                 iris->loaded = "";
 
-                ps2_cdvd_close(iris->ps2->cdvd);
+                cdvd::close(iris->ps2->cdvd);
             }
 
             if (MenuItem(ICON_MS_CLOSE " Close")) {
@@ -281,7 +281,7 @@ void show_main_menubar(iris::instance* iris) {
             if (BeginMenu(ICON_MS_MONITOR " Display")) {
                 if (BeginMenu(ICON_MS_BRUSH " Renderer")) {
                     for (int i = 0; i < 3; i++) {
-                        BeginDisabled(i == RENDERER_BACKEND_SOFTWARE);
+                        BeginDisabled(i == gs::renderer::BACKEND_SOFTWARE);
 
                         if (MenuItem(renderer_names[i], nullptr, i == iris->renderer_backend)) {
                             render::switch_backend(iris, i);
@@ -437,7 +437,7 @@ void show_main_menubar(iris::instance* iris) {
                     icon = ICON_MS_VOLUME_DOWN;
                 }
 
-                Text(icon); SameLine();
+                Text("%s", icon); SameLine();
                 
                 SetNextItemWidth(100.0f);
                 SliderFloat("Volume", &iris->volume, 0.0f, 1.0f, "%.1f");
@@ -466,8 +466,8 @@ void show_main_menubar(iris::instance* iris) {
             ImGui::EndMenu();
         }
         if (BeginMenu("Tools")) {
-            if (MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->show_imgui_demo));
-            if (MenuItem(ICON_MS_SEARCH " Memory search", NULL, &iris->show_memory_search));
+            MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->show_imgui_demo);
+            MenuItem(ICON_MS_SEARCH " Memory search", NULL, &iris->show_memory_search);
             if (MenuItem(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
                 audio::mute(iris);
 
@@ -509,43 +509,43 @@ void show_main_menubar(iris::instance* iris) {
         if (BeginMenu("Debug")) {
             SeparatorText("EE");
             // if (BeginMenu(ICON_MS_BUG_REPORT " EE")) {
-                if (MenuItem(ICON_MS_SETTINGS " Control##ee", NULL, &iris->show_ee_control));
-                if (MenuItem(ICON_MS_EDIT_NOTE " State##ee", NULL, &iris->show_ee_state));
-                if (MenuItem(ICON_MS_TERMINAL " Logs##ee", NULL, &iris->show_ee_logs));
-                if (MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->show_ee_interrupts));
+                MenuItem(ICON_MS_SETTINGS " Control##ee", NULL, &iris->show_ee_control);
+                MenuItem(ICON_MS_EDIT_NOTE " State##ee", NULL, &iris->show_ee_state);
+                MenuItem(ICON_MS_TERMINAL " Logs##ee", NULL, &iris->show_ee_logs);
+                MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->show_ee_interrupts);
 
                 BeginDisabled(iris->symbols.empty());
-                if (MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->show_symbols));
+                MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->show_symbols);
                 EndDisabled();
 
-                if (MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->show_ee_threads));
+                MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->show_ee_threads);
 
                 // ImGui::EndMenu();
             // }
 
             SeparatorText("IOP");
             // if (BeginMenu(ICON_MS_BUG_REPORT " IOP")) {
-                if (MenuItem(ICON_MS_SETTINGS " Control##iop", NULL, &iris->show_iop_control));
-                if (MenuItem(ICON_MS_EDIT_NOTE " State##iop", NULL, &iris->show_iop_state));
-                if (MenuItem(ICON_MS_TERMINAL " Logs##iop", NULL, &iris->show_iop_logs));
-                if (MenuItem(ICON_MS_BOLT " Interrupts##iop", NULL, &iris->show_iop_interrupts));
-                if (MenuItem(ICON_MS_EXTENSION " Modules##iop", NULL, &iris->show_iop_modules));
-                if (MenuItem(ICON_MS_ACCOUNT_TREE " Threads##iop", NULL, &iris->show_iop_threads));
+                MenuItem(ICON_MS_SETTINGS " Control##iop", NULL, &iris->show_iop_control);
+                MenuItem(ICON_MS_EDIT_NOTE " State##iop", NULL, &iris->show_iop_state);
+                MenuItem(ICON_MS_TERMINAL " Logs##iop", NULL, &iris->show_iop_logs);
+                MenuItem(ICON_MS_BOLT " Interrupts##iop", NULL, &iris->show_iop_interrupts);
+                MenuItem(ICON_MS_EXTENSION " Modules##iop", NULL, &iris->show_iop_modules);
+                MenuItem(ICON_MS_ACCOUNT_TREE " Threads##iop", NULL, &iris->show_iop_threads);
 
             //     ImGui::EndMenu();
             // }
 
             Separator();
 
-            if (MenuItem(ICON_MS_BUG_REPORT " Breakpoints", NULL, &iris->show_breakpoints));
-            if (MenuItem(ICON_MS_BRUSH " GS debugger", NULL, &iris->show_gs_debugger));
-            if (MenuItem(ICON_MS_MUSIC_NOTE " SPU2 debugger", NULL, &iris->show_spu2_debugger));
-            if (MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->show_memory_viewer));
-            if (MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->show_vu_disassembler));
-            if (MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->show_pad_debugger));
-            if (MenuItem(ICON_MS_TIMER " Timers", NULL, &iris->show_timers));
-            if (MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->show_overlay));
-            if (MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->show_sysmem_logs));
+            MenuItem(ICON_MS_BUG_REPORT " Breakpoints", NULL, &iris->show_breakpoints);
+            MenuItem(ICON_MS_BRUSH " GS debugger", NULL, &iris->show_gs_debugger);
+            MenuItem(ICON_MS_MUSIC_NOTE " SPU2 debugger", NULL, &iris->show_spu2_debugger);
+            MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->show_memory_viewer);
+            MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->show_vu_disassembler);
+            MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->show_pad_debugger);
+            MenuItem(ICON_MS_TIMER " Timers", NULL, &iris->show_timers);
+            MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->show_overlay);
+            MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->show_sysmem_logs);
 
             Separator();
 
@@ -556,7 +556,7 @@ void show_main_menubar(iris::instance* iris) {
                     if (MenuItem(buf, nullptr, iris->timescale == (1 << i))) {
                         iris->timescale = (1 << i);
 
-                        ps2_set_timescale(iris->ps2, iris->timescale);
+                        ps2::set_timescale(iris->ps2, iris->timescale);
                     }
                 }
 
@@ -565,7 +565,7 @@ void show_main_menubar(iris::instance* iris) {
 
             if (MenuItem(ICON_MS_SKIP_NEXT " Skip FMVs", NULL, &iris->skip_fmv)) {
                 printf("Skip FMVs: %d\n", iris->skip_fmv);
-                ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
+                ee::set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
             }
 
             if (MenuItem(ICON_MS_CLOSE " Close all")) {

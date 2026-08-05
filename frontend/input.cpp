@@ -14,7 +14,7 @@ constexpr unsigned int g_gamecontrollerdb_size = sizeof(g_gamecontrollerdb_data)
 
 namespace iris {
 
-void keyboard_device::handle_event(iris::instance* iris, SDL_Event* event) {
+void keyboard_device::handle_event(instance* iris, SDL_Event* event) {
     auto ievent = input::sdl_event_to_input_event(event);
     auto action = input::get_input_action(iris, m_slot, ievent.u64);
 
@@ -24,7 +24,7 @@ void keyboard_device::handle_event(iris::instance* iris, SDL_Event* event) {
     input::execute_action(iris, *action, m_slot, event->type == SDL_EVENT_KEY_DOWN ? 1.0f : 0.0f);
 }
 
-void gamepad_device::handle_event(iris::instance* iris, SDL_Event* event) {
+void gamepad_device::handle_event(instance* iris, SDL_Event* event) {
     auto ievent = input::sdl_event_to_input_event(event);
     auto action = input::get_input_action(iris, m_slot, ievent.u64);
 
@@ -47,13 +47,13 @@ void gamepad_device::handle_event(iris::instance* iris, SDL_Event* event) {
 
 namespace iris::input {
 
-void load_db_default(iris::instance* iris) {
+void load_db_default(instance* iris) {
     SDL_IOStream* ios = SDL_IOFromConstMem(g_gamecontrollerdb_data, g_gamecontrollerdb_size);
 
     SDL_AddGamepadMappingsFromIO(ios, true);
 }
 
-bool load_db_from_file(iris::instance* iris, const char* path) {
+bool load_db_from_file(instance* iris, const char* path) {
     if (SDL_AddGamepadMappingsFromFile(path) == -1)
         return false;
 
@@ -63,7 +63,7 @@ bool load_db_from_file(iris::instance* iris, const char* path) {
 #define IEVENT(event, id, mod) \
     (((uint64_t)event << 32) | (((id & 0xf0000fff) | ((mod & 0xffff) << 12)) & 0xffffffff))
 
-void init_default_mapping(iris::instance* iris, int id) {
+void init_default_mapping(instance* iris, int id) {
     mapping& map = iris->input_maps[id];
 
     if (id == 0) {
@@ -136,7 +136,7 @@ void init_default_mapping(iris::instance* iris, int id) {
     }
 }
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     if (!iris->gcdb_path.size()) {
         fprintf(stdout, "input: Adding default database\n");
 
@@ -147,7 +147,7 @@ bool init(iris::instance* iris) {
         load_db_from_file(iris, iris->gcdb_path.c_str());
     }
 
-    iris->input_devices[0] = new iris::keyboard_device();
+    iris->input_devices[0] = new keyboard_device();
 
     if (iris->input_maps.size() == 0) {
         mapping map;
@@ -243,73 +243,74 @@ bool init(iris::instance* iris) {
     return true;
 }
 
-input_action* get_input_action(iris::instance* iris, int slot, uint64_t input) {
+input_action* get_input_action(instance* iris, int slot, uint64_t input) {
     if (iris->input_map[slot] == -1)
         return nullptr;
 
     return iris->input_maps[iris->input_map[slot]].map.get_value(input);
 }
 
-static inline void change_button(iris::instance* iris, int slot, float value, uint32_t button) {
+static inline void change_button(instance* iris, int slot, float value, uint32_t button) {
     if (!iris->ds[slot]) return;
 
     if (value > 0.5f) {
-        ds_button_press(iris->ds[slot], button);
+        dev::ds::button_press(iris->ds[slot], button);
     } else {
-        ds_button_release(iris->ds[slot], button);
+        dev::ds::button_release(iris->ds[slot], button);
     }
 }
 
-static inline void change_s14x_switch(iris::instance* iris, float value, uint32_t mask) {
+static inline void change_s14x_switch(instance* iris, float value, uint32_t mask) {
     if (!iris->ps2->s14x_ioboard)
         return;
 
     if (value > 0.5) {
-        s14x_ioboard_press_switch(iris->ps2->s14x_ioboard, mask);
+        s14x::ioboard::press_switch(iris->ps2->s14x_ioboard, mask);
     } else {
-        s14x_ioboard_release_switch(iris->ps2->s14x_ioboard, mask);
+        s14x::ioboard::release_switch(iris->ps2->s14x_ioboard, mask);
     }
 }
 
-void execute_action(iris::instance* iris, input_action action, int slot, float value) {
+void execute_action(instance* iris, input_action action, int slot, float value) {
     if (!iris->ds[slot])
         return;
 
     switch (action) {
-        case IRIS_DS_BT_SELECT: change_button(iris, slot, value, DS_BT_SELECT); break;
-        case IRIS_DS_BT_L3: change_button(iris, slot, value, DS_BT_L3); break;
-        case IRIS_DS_BT_R3: change_button(iris, slot, value, DS_BT_R3); break;
-        case IRIS_DS_BT_START: change_button(iris, slot, value, DS_BT_START); break;
-        case IRIS_DS_BT_UP: change_button(iris, slot, value, DS_BT_UP); break;
-        case IRIS_DS_BT_RIGHT: change_button(iris, slot, value, DS_BT_RIGHT); break;
-        case IRIS_DS_BT_DOWN: change_button(iris, slot, value, DS_BT_DOWN); break;
-        case IRIS_DS_BT_LEFT: change_button(iris, slot, value, DS_BT_LEFT); break;
-        case IRIS_DS_BT_L2: change_button(iris, slot, value, DS_BT_L2); break;
-        case IRIS_DS_BT_R2: change_button(iris, slot, value, DS_BT_R2); break;
-        case IRIS_DS_BT_L1: change_button(iris, slot, value, DS_BT_L1); break;
-        case IRIS_DS_BT_R1: change_button(iris, slot, value, DS_BT_R1); break;
-        case IRIS_DS_BT_TRIANGLE: change_button(iris, slot, value, DS_BT_TRIANGLE); break;
-        case IRIS_DS_BT_CIRCLE: change_button(iris, slot, value, DS_BT_CIRCLE); break;
-        case IRIS_DS_BT_CROSS: change_button(iris, slot, value, DS_BT_CROSS); break;
-        case IRIS_DS_BT_SQUARE: change_button(iris, slot, value, DS_BT_SQUARE); break;
-        case IRIS_DS_BT_ANALOG: change_button(iris, slot, value, DS_BT_ANALOG); break;
-        case IRIS_DS_AX_RIGHTV_POS: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_V, 0x7f + (value * 0x80)); break;
-        case IRIS_DS_AX_RIGHTV_NEG: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_V, 0x7f - (value * 0x7f)); break;
-        case IRIS_DS_AX_RIGHTH_POS: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_H, 0x7f + (value * 0x80)); break;
-        case IRIS_DS_AX_RIGHTH_NEG: ds_analog_change(iris->ds[slot], DS_AX_RIGHT_H, 0x7f - (value * 0x7f)); break;
-        case IRIS_DS_AX_LEFTV_POS: ds_analog_change(iris->ds[slot], DS_AX_LEFT_V, 0x7f + (value * 0x80)); break;
-        case IRIS_DS_AX_LEFTV_NEG: ds_analog_change(iris->ds[slot], DS_AX_LEFT_V, 0x7f - (value * 0x7f)); break;
-        case IRIS_DS_AX_LEFTH_POS: ds_analog_change(iris->ds[slot], DS_AX_LEFT_H, 0x7f + (value * 0x80)); break;
-        case IRIS_DS_AX_LEFTH_NEG: ds_analog_change(iris->ds[slot], DS_AX_LEFT_H, 0x7f - (value * 0x7f)); break;
-        case IRIS_S14X_SW_SERVICE: change_s14x_switch(iris, value, S14X_IOBOARD_SW_SERVICE); break;
-        case IRIS_S14X_SW_TEST: change_s14x_switch(iris, value, S14X_IOBOARD_SW_TEST); break;
-        case IRIS_S14X_SW_ENTER: change_s14x_switch(iris, value, S14X_IOBOARD_SW_ENTER); break;
-        case IRIS_S14X_SW_UP: change_s14x_switch(iris, value, S14X_IOBOARD_SW_UP); break;
-        case IRIS_S14X_SW_DOWN: change_s14x_switch(iris, value, S14X_IOBOARD_SW_DOWN); break;
-        case IRIS_S14X_SW_P1_START: change_s14x_switch(iris, value, S14X_IOBOARD_SW_P1_START); break;
-        case IRIS_S14X_SW_P2_START: change_s14x_switch(iris, value, S14X_IOBOARD_SW_P2_START); break;
-        case IRIS_S14X_SW_P3_START: change_s14x_switch(iris, value, S14X_IOBOARD_SW_P3_START); break;
-        case IRIS_S14X_SW_P4_START: change_s14x_switch(iris, value, S14X_IOBOARD_SW_P4_START); break;
+        case IRIS_DS_BT_SELECT: change_button(iris, slot, value, dev::ds::BT_SELECT); break;
+        case IRIS_DS_BT_L3: change_button(iris, slot, value, dev::ds::BT_L3); break;
+        case IRIS_DS_BT_R3: change_button(iris, slot, value, dev::ds::BT_R3); break;
+        case IRIS_DS_BT_START: change_button(iris, slot, value, dev::ds::BT_START); break;
+        case IRIS_DS_BT_UP: change_button(iris, slot, value, dev::ds::BT_UP); break;
+        case IRIS_DS_BT_RIGHT: change_button(iris, slot, value, dev::ds::BT_RIGHT); break;
+        case IRIS_DS_BT_DOWN: change_button(iris, slot, value, dev::ds::BT_DOWN); break;
+        case IRIS_DS_BT_LEFT: change_button(iris, slot, value, dev::ds::BT_LEFT); break;
+        case IRIS_DS_BT_L2: change_button(iris, slot, value, dev::ds::BT_L2); break;
+        case IRIS_DS_BT_R2: change_button(iris, slot, value, dev::ds::BT_R2); break;
+        case IRIS_DS_BT_L1: change_button(iris, slot, value, dev::ds::BT_L1); break;
+        case IRIS_DS_BT_R1: change_button(iris, slot, value, dev::ds::BT_R1); break;
+        case IRIS_DS_BT_TRIANGLE: change_button(iris, slot, value, dev::ds::BT_TRIANGLE); break;
+        case IRIS_DS_BT_CIRCLE: change_button(iris, slot, value, dev::ds::BT_CIRCLE); break;
+        case IRIS_DS_BT_CROSS: change_button(iris, slot, value, dev::ds::BT_CROSS); break;
+        case IRIS_DS_BT_SQUARE: change_button(iris, slot, value, dev::ds::BT_SQUARE); break;
+        case IRIS_DS_BT_ANALOG: change_button(iris, slot, value, dev::ds::BT_ANALOG); break;
+        case IRIS_DS_AX_RIGHTV_POS: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_RIGHT_V, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_RIGHTV_NEG: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_RIGHT_V, 0x7f - (value * 0x7f)); break;
+        case IRIS_DS_AX_RIGHTH_POS: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_RIGHT_H, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_RIGHTH_NEG: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_RIGHT_H, 0x7f - (value * 0x7f)); break;
+        case IRIS_DS_AX_LEFTV_POS: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_LEFT_V, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_LEFTV_NEG: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_LEFT_V, 0x7f - (value * 0x7f)); break;
+        case IRIS_DS_AX_LEFTH_POS: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_LEFT_H, 0x7f + (value * 0x80)); break;
+        case IRIS_DS_AX_LEFTH_NEG: dev::ds::analog_change(iris->ds[slot], dev::ds::AX_LEFT_H, 0x7f - (value * 0x7f)); break;
+        case IRIS_S14X_SW_SERVICE: change_s14x_switch(iris, value, s14x::ioboard::SW_SERVICE); break;
+        case IRIS_S14X_SW_TEST: change_s14x_switch(iris, value, s14x::ioboard::SW_TEST); break;
+        case IRIS_S14X_SW_ENTER: change_s14x_switch(iris, value, s14x::ioboard::SW_ENTER); break;
+        case IRIS_S14X_SW_UP: change_s14x_switch(iris, value, s14x::ioboard::SW_UP); break;
+        case IRIS_S14X_SW_DOWN: change_s14x_switch(iris, value, s14x::ioboard::SW_DOWN); break;
+        case IRIS_S14X_SW_P1_START: change_s14x_switch(iris, value, s14x::ioboard::SW_P1_START); break;
+        case IRIS_S14X_SW_P2_START: change_s14x_switch(iris, value, s14x::ioboard::SW_P2_START); break;
+        case IRIS_S14X_SW_P3_START: change_s14x_switch(iris, value, s14x::ioboard::SW_P3_START); break;
+        case IRIS_S14X_SW_P4_START: change_s14x_switch(iris, value, s14x::ioboard::SW_P4_START); break;
+        case IRIS_INPUT_ACTION_MAX: break;
     }
 }
 
@@ -352,7 +353,7 @@ input_event sdl_event_to_input_event(SDL_Event* event) {
     return ievent;
 }
 
-std::string get_default_screenshot_filename(iris::instance* iris) {
+std::string get_default_screenshot_filename(instance* iris) {
     SDL_Time t;
     SDL_DateTime dt;
 
@@ -379,7 +380,7 @@ std::string get_default_screenshot_filename(iris::instance* iris) {
     return str;
 }
 
-int get_screenshot_jpg_quality(iris::instance* iris) {
+int get_screenshot_jpg_quality(instance* iris) {
     switch (iris->screenshot_jpg_quality_mode) {
         case IRIS_SCREENSHOT_JPG_QUALITY_MINIMUM: return 1;
         case IRIS_SCREENSHOT_JPG_QUALITY_LOW:     return 25;
@@ -392,7 +393,7 @@ int get_screenshot_jpg_quality(iris::instance* iris) {
     return 90;
 }
 
-bool save_screenshot(iris::instance* iris, std::string path) {
+bool save_screenshot(instance* iris, std::string path) {
     std::filesystem::path fn(path);
 
     std::string directory = iris->snap_path;
@@ -427,7 +428,7 @@ bool save_screenshot(iris::instance* iris, std::string path) {
     int width = 0, height = 0, offset = 0;
 
     if (iris->screenshot_mode == IRIS_SCREENSHOT_MODE_INTERNAL) {
-        renderer_image* image = iris->screenshot_shader_processing ? &iris->output_image : &iris->image;
+        gs::renderer::Image* image = iris->screenshot_shader_processing ? &iris->output_image : &iris->image;
 
         ptr = vulkan::read_image(iris,
             image->image,
@@ -508,7 +509,7 @@ bool save_screenshot(iris::instance* iris, std::string path) {
     return true;
 }
 
-void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
+void handle_keydown_event(instance* iris, SDL_Event* event) {
     SDL_Keycode key = event->key.key;
 
     switch (key) {
@@ -529,7 +530,7 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
         } break;
         case SDLK_F1: {
             printf("ps2: Sending poweroff signal\n");
-            ps2_cdvd_power_off(iris->ps2->cdvd);
+            cdvd::power_off(iris->ps2->cdvd);
         } break;
 
         case SDLK_F2: {
@@ -548,7 +549,7 @@ void handle_keydown_event(iris::instance* iris, SDL_Event* event) {
     }
 }
 
-void handle_keyup_event(iris::instance* iris, SDL_Event* event) {
+void handle_keyup_event(instance* iris, SDL_Event* event) {
     // Add special keyup handling here if needed
 
     if (iris->input_devices[0]) iris->input_devices[0]->handle_event(iris, event);

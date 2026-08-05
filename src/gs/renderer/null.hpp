@@ -7,15 +7,17 @@
 
 #include "renderer.hpp"
 
-void* null_create();
-bool null_init(void* udata, const renderer_create_info& info);
-void null_reset(void* udata);
-void null_destroy(void* udata);
-void null_set_config(void* udata, void* config);
-renderer_image null_get_frame(void* udata);
+namespace iris::gs::renderer::null {
 
-extern "C" {
-void null_transfer(void* udata, int path, const void* data, size_t size);
-void null_readback(void* udata, void* data, size_t size);
-void null_read_vram(void* udata, void* dst, size_t size);
+void* create();
+bool init(void* udata, const CreateInfo& info);
+void reset(void* udata);
+void destroy(void* udata);
+void set_config(void* udata, void* config);
+Image get_frame(void* udata);
+
+void transfer(void* udata, int path, const void* data, size_t size);
+void readback(void* udata, void* data, size_t size);
+void read_vram(void* udata, void* dst, size_t size);
+
 }

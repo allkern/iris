@@ -8,13 +8,13 @@
 
 namespace iris {
 
-void show_pad_debugger(iris::instance* iris) {
+void show_pad_debugger(instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginEx("DualShock 2", &iris->show_pad_debugger)) {
         if (BeginTabBar("##padtabbar")) {
             if (BeginTabItem("Slot 1")) {
-                struct ds_state* ds = (struct ds_state*)iris->ps2->sio2->port[0].udata;
+                dev::ds::Ds* ds = (dev::ds::Ds*)iris->ps2->sio2->port[0].udata;
 
                 if (!ds) {
                     Text("No controller connected");
@@ -39,7 +39,7 @@ void show_pad_debugger(iris::instance* iris) {
             }
 
             if (BeginTabItem("Slot 2")) {
-                struct ds_state* ds = (struct ds_state*)iris->ps2->sio2->port[1].udata;
+                dev::ds::Ds* ds = (dev::ds::Ds*)iris->ps2->sio2->port[1].udata;
 
                 if (!ds) {
                     Text("No controller connected");

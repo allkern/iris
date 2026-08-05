@@ -1,8 +1,8 @@
 #include "iris.hpp"
 #include "config.hpp"
 
-#include "ps2_elf.h"
-#include "ps2_iso9660.h"
+#include "ps2_elf.hpp"
+#include "ps2_iso9660.hpp"
 
 #define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
@@ -48,7 +48,7 @@ void print_help() {
     );
 }
 
-bool parse_mappings_file(iris::instance* iris) {
+bool parse_mappings_file(instance* iris) {
     iris->mappings_path = iris->pref_path + "mappings.toml";
 
     std::ifstream mappings_file(iris->mappings_path);
@@ -91,7 +91,7 @@ bool parse_mappings_file(iris::instance* iris) {
     return true;
 }
 
-bool parse_toml_settings(iris::instance* iris, bool reset) {
+bool parse_toml_settings(instance* iris, bool reset) {
     iris->settings_path = iris->pref_path + "settings.toml";
 
     toml::table tbl;
@@ -159,7 +159,7 @@ bool parse_toml_settings(iris::instance* iris, bool reset) {
     iris->filter = display["filter"].value_or(true);
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);
-    iris->renderer_backend = display["renderer"].value_or(RENDERER_BACKEND_HARDWARE);
+    iris->renderer_backend = display["renderer"].value_or(gs::renderer::BACKEND_HARDWARE);
     iris->window_width = display["window_width"].value_or(960);
     iris->window_height = display["window_height"].value_or(720);
     iris->menubar_height = display["menubar_height"].value_or(0);
@@ -205,13 +205,13 @@ bool parse_toml_settings(iris::instance* iris, bool reset) {
     iris->timescale = debugger["timescale"].value_or(2);
 
     auto usb = tbl["usb"];
-    iris->usb_devices[0] = usb["port1_device"].value_or(USB_DEVICE_NONE);
-    iris->usb_devices[1] = usb["port2_device"].value_or(USB_DEVICE_NONE);
+    iris->usb_devices[0] = usb["port1_device"].value_or(usb::USB_DEVICE_NONE);
+    iris->usb_devices[1] = usb["port2_device"].value_or(usb::USB_DEVICE_NONE);
     iris->usb_msd_paths[0] = usb["port1_msd_image"].value_or("");
     iris->usb_msd_paths[1] = usb["port2_msd_image"].value_or("");
 
     auto system = tbl["system"];
-    iris->system = system["model"].value_or(PS2_SYSTEM_AUTO);
+    iris->system = system["model"].value_or(ps2::AUTO);
     iris->autostart = system["autostart"].value_or(true);
 
     toml::array* mac_array = system["mac_address"].as_array();
@@ -307,7 +307,7 @@ bool parse_toml_settings(iris::instance* iris, bool reset) {
                 continue;
             }
 
-            iris::recent r = {
+            recent r = {
                 entry->operator[]("path").value_or(std::string()),
                 entry->operator[]("type").value_or(0)
             };
@@ -340,7 +340,7 @@ bool check_for_quick_exit(int argc, const char* argv[]) {
 
             return true;
         } else if (a == "--reset-settings") {
-            iris::instance* tmp = iris::create();
+            instance* tmp = create();
 
             if (std::filesystem::exists("portable") || std::filesystem::exists("portable.txt")) {
                 tmp->pref_path = "./";
@@ -366,7 +366,7 @@ bool check_for_quick_exit(int argc, const char* argv[]) {
     return false;
 }
 
-void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
+void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
     std::string bios_path;
     std::string rom1_path;
     std::string rom2_path;
@@ -416,14 +416,14 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     }
 
     if (bios_path.size()) {
-        if (!ps2_load_bios(iris->ps2, bios_path.c_str())) {
+        if (!ps2::load_bios(iris->ps2, bios_path.c_str())) {
             // push_info(iris, "Couldn't load BIOS");
 
             iris->show_bios_setting_window = true;
         }
     } else {
         if (iris->bios_path.size()) {
-            if (!ps2_load_bios(iris->ps2, iris->bios_path.c_str())) {
+            if (!ps2::load_bios(iris->ps2, iris->bios_path.c_str())) {
                 // push_info(iris, "Couldn't load BIOS");
 
                 iris->show_bios_setting_window = true;
@@ -434,80 +434,80 @@ void parse_cli_settings(iris::instance* iris, int argc, const char* argv[]) {
     }
 
     if (rom1_path.size()) {
-        if (!ps2_load_rom1(iris->ps2, rom1_path.c_str())) {
+        if (!ps2::load_rom1(iris->ps2, rom1_path.c_str())) {
             // push_info(iris, "Couldn't load ROM1");
         }
     } else {
         if (iris->rom1_path.size()) {
-            if (!ps2_load_rom1(iris->ps2, iris->rom1_path.c_str())) {
+            if (!ps2::load_rom1(iris->ps2, iris->rom1_path.c_str())) {
                 // push_info(iris, "Couldn't load ROM1");
             }
         }
     }
 
     if (rom2_path.size()) {
-        if (!ps2_load_rom2(iris->ps2, rom2_path.c_str())) {
+        if (!ps2::load_rom2(iris->ps2, rom2_path.c_str())) {
             // push_info(iris, "Couldn't load ROM2");
         }
     } else {
         if (iris->rom2_path.size()) {
-            if (!ps2_load_rom2(iris->ps2, iris->rom2_path.c_str())) {
+            if (!ps2::load_rom2(iris->ps2, iris->rom2_path.c_str())) {
                 // push_info(iris, "Couldn't load ROM2");
             }
         }
     }
 
     if (iris->elf_path.size()) {
-        ps2_set_system(iris->ps2, iris->system);
-        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
-        ps2_elf_load(iris->ps2, iris->elf_path.c_str());
+        ps2::set_system(iris->ps2, iris->system);
+        ps2::load_bios(iris->ps2, iris->bios_path.c_str());
+        elf::load(iris->ps2, iris->elf_path.c_str());
 
         iris->loaded = iris->elf_path;
     }
 
     if (iris->boot_path.size()) {
-        ps2_set_system(iris->ps2, iris->system);
-        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
-        ps2_boot_file(iris->ps2, iris->boot_path.c_str());
+        ps2::set_system(iris->ps2, iris->system);
+        ps2::load_bios(iris->ps2, iris->bios_path.c_str());
+        ps2::boot_file(iris->ps2, iris->boot_path.c_str());
 
         iris->loaded = iris->boot_path;
     }
 
     if (iris->disc_path.size()) {
-        if (ps2_cdvd_open(iris->ps2->cdvd, iris->disc_path.c_str(), 0))
+        if (cdvd::open(iris->ps2->cdvd, iris->disc_path.c_str(), 0))
             return;
 
-        char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
+        char* boot_file = iop::disc::get_boot_path(iris->ps2->cdvd->disc);
 
         if (!boot_file)
             return;
 
-        ps2_set_system(iris->ps2, iris->system);
-        ps2_load_bios(iris->ps2, iris->bios_path.c_str());
-        ps2_boot_file(iris->ps2, boot_file);
+        ps2::set_system(iris->ps2, iris->system);
+        ps2::load_bios(iris->ps2, iris->bios_path.c_str());
+        ps2::boot_file(iris->ps2, boot_file);
 
         iris->loaded = iris->disc_path;
     }
 }
 
-void apply_device_maps(iris::instance* iris) {
-    ps2_iop_clear_device_maps(iris->ps2);
+void apply_device_maps(instance* iris) {
+    ps2::iop_clear_device_maps(iris->ps2);
 
     const std::string& host = iris->host_from_elf ? iris->host_elf_dir : iris->host_path;
 
-    ps2_iop_map_device(iris->ps2, "host", host.c_str());
+    ps2::iop_map_device(iris->ps2, "host", host.c_str());
 
     for (const auto& p : iris->device_maps) {
         const std::string& device = p.first;
         const std::string& path = p.second;
 
         if (device.size() && path.size() && device != "host") {
-            ps2_iop_map_device(iris->ps2, device.c_str(), path.c_str());
+            ps2::iop_map_device(iris->ps2, device.c_str(), path.c_str());
         }
     }
 }
 
-bool init(iris::instance* iris, int argc, const char* argv[]) {
+bool init(instance* iris, int argc, const char* argv[]) {
     parse_toml_settings(iris, false);
 
     parse_cli_settings(iris, argc, argv);
@@ -521,24 +521,24 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         emu::attach_memory_card(iris, 1, iris->mcd1_path.c_str());
 
     // Apply settings loaded from file/CLI
-    ps2_set_timescale(iris->ps2, iris->timescale);
+    ps2::set_timescale(iris->ps2, iris->timescale);
 
     apply_device_maps(iris);
 
-    ee_set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
+    ee::set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
 
-    ps2_set_system(iris->ps2, iris->system);
-    ps2_speed_load_flash(iris->ps2->speed, iris->flash_path.c_str());
-    ps2_speed_load_hdd(iris->ps2->speed, iris->hdd_path.c_str());
-    ps2_speed_set_mac_address(iris->ps2->speed, iris->mac_address);
+    ps2::set_system(iris->ps2, iris->system);
+    speed::load_flash(iris->ps2->speed, iris->flash_path.c_str());
+    speed::load_hdd(iris->ps2->speed, iris->hdd_path.c_str());
+    speed::set_mac_address(iris->ps2->speed, iris->mac_address);
 
-    iris::slirp::start(iris->ps2->speed->smap, iris->slirp_config);
+    slirp::start(iris->ps2->speed->smap, iris->slirp_config);
 
     for (int i = 0; i < 2; i++) {
         if (iris->usb_msd_paths[i].size())
-            ps2_usb_msd_set_image(iris->ps2->usb, i, iris->usb_msd_paths[i].c_str());
+            usb::msd_set_image(iris->ps2->usb, i, iris->usb_msd_paths[i].c_str());
 
-        ps2_usb_set_port_device(iris->ps2->usb, i, iris->usb_devices[i]);
+        usb::set_port_device(iris->ps2->usb, i, iris->usb_devices[i]);
     }
 
     for (int i = 1; i < argc; i++) {
@@ -547,17 +547,17 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
         if (a == "--autoboot-disc") {
             std::string path = argv[i+1];
 
-            if (ps2_cdvd_open(iris->ps2->cdvd, path.c_str(), 0))
+            if (cdvd::open(iris->ps2->cdvd, path.c_str(), 0))
                 return false;
 
-            char* boot_file = disc_get_boot_path(iris->ps2->cdvd->disc);
+            char* boot_file = iop::disc::get_boot_path(iris->ps2->cdvd->disc);
 
             if (!boot_file)
                 return false;
 
-            ps2_set_system(iris->ps2, iris->system);
-            ps2_load_bios(iris->ps2, iris->bios_path.c_str());
-            ps2_boot_file(iris->ps2, boot_file);
+            ps2::set_system(iris->ps2, iris->system);
+            ps2::load_bios(iris->ps2, iris->bios_path.c_str());
+            ps2::boot_file(iris->ps2, boot_file);
 
             iris->pause = false;
         }
@@ -566,7 +566,7 @@ bool init(iris::instance* iris, int argc, const char* argv[]) {
     return true;
 }
 
-void close(iris::instance* iris) {
+void close(instance* iris) {
     if (!iris->dump_to_file)
         return;
 

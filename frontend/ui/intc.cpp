@@ -68,10 +68,10 @@ const char* iop_irq_sources[] = {
     "FDMA"
 };
 
-void show_ee_intc_interrupts(iris::instance* iris) {
+void show_ee_intc_interrupts(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_intc* intc = iris->ps2->ee_intc;
+    ee::intc::Intc* intc = iris->ps2->ee_intc;
 
     if (BeginTable("##eeintc", 3, ImGuiTableFlags_RowBg)) {
         PushFont(iris->font_small_code);
@@ -114,10 +114,10 @@ void show_ee_intc_interrupts(iris::instance* iris) {
     }
 }
 
-void show_ee_dmac_interrupts(iris::instance* iris) {
+void show_ee_dmac_interrupts(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_dmac* dmac = iris->ps2->ee_dma;
+    ee::dmac::Dmac* dmac = iris->ps2->ee_dma;
 
     if (BeginTable("##eedmac", 3, ImGuiTableFlags_RowBg)) {
         PushFont(iris->font_small_code);
@@ -160,10 +160,10 @@ void show_ee_dmac_interrupts(iris::instance* iris) {
     }
 }
 
-void show_ee_interrupts(iris::instance* iris) {
+void show_ee_interrupts(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_intc* intc = iris->ps2->ee_intc;
+    ee::intc::Intc* intc = iris->ps2->ee_intc;
 
     if (imgui::BeginEx("EE Interrupts", &iris->show_ee_interrupts)) {
         if (Button(ICON_MS_REMOVE_SELECTION)) {
@@ -198,10 +198,10 @@ void show_ee_interrupts(iris::instance* iris) {
     } End();
 }
 
-void show_iop_intc_interrupts(iris::instance* iris) {
+void show_iop_intc_interrupts(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_iop_intc* intc = iris->ps2->iop_intc;
+    iop::intc::Intc* intc = iris->ps2->iop_intc;
 
     if (BeginTable("##iopintc", 3, ImGuiTableFlags_RowBg)) {
         PushFont(iris->font_small_code);
@@ -244,10 +244,10 @@ void show_iop_intc_interrupts(iris::instance* iris) {
     }
 }
 
-void show_iop_interrupts(iris::instance* iris) {
+void show_iop_interrupts(instance* iris) {
     using namespace ImGui;
 
-    struct ps2_iop_intc* intc = iris->ps2->iop_intc;
+    iop::intc::Intc* intc = iris->ps2->iop_intc;
 
     if (imgui::BeginEx("IOP Interrupts", &iris->show_iop_interrupts)) {
         if (Button(ICON_MS_REMOVE_SELECTION)) {

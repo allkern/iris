@@ -1,6 +1,7 @@
-#ifndef LUMTABLE_HPP
-#define LUMTABLE_HPP
+#pragma once
 #include "vlc_table.hpp"
+
+namespace iris::ipu {
 
 class LumTable : public VLC_Table
 {
@@ -13,4 +14,4 @@ class LumTable : public VLC_Table
         LumTable();
 };
 
-#endif // LUMTABLE_HPP
+}

@@ -4,20 +4,20 @@
 
 #include "iris.hpp"
 
-#include "gs/gs_dump.h"
+#include "gs/gs_dump.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 
 namespace iris {
 
-static std::string gsdump_detect_serial(iris::instance* iris) {
+static std::string gsdump_detect_serial(instance* iris) {
     if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc)
         return "";
 
     char buf[128];
 
-    if (!disc_get_serial(iris->ps2->cdvd->disc, buf))
+    if (!iop::disc::get_serial(iris->ps2->cdvd->disc, buf))
         return "";
 
     std::string serial = buf;
@@ -28,7 +28,7 @@ static std::string gsdump_detect_serial(iris::instance* iris) {
     return serial;
 }
 
-void show_gs_dump_tool(iris::instance* iris) {
+void show_gs_dump_tool(instance* iris) {
     using namespace ImGui;
 
     static char filename[1024] = "";
@@ -48,9 +48,9 @@ void show_gs_dump_tool(iris::instance* iris) {
         }
 
         bool capturing = iris->gsdump_armed ||
-            (iris->gsdump && gs_dump_is_active(iris->gsdump));
+            (iris->gsdump && gs::dump::is_active(iris->gsdump));
 
-        if (iris->renderer_backend != RENDERER_BACKEND_HARDWARE) {
+        if (iris->renderer_backend != gs::renderer::BACKEND_HARDWARE) {
             TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f),
                 ICON_MS_WARNING " GS dumps require the hardware (Vulkan) renderer.");
             Spacing();
@@ -117,7 +117,7 @@ void show_gs_dump_tool(iris::instance* iris) {
             }
         } else {
             BeginDisabled(filename[0] == '\0' ||
-                iris->renderer_backend != RENDERER_BACKEND_HARDWARE);
+                iris->renderer_backend != gs::renderer::BACKEND_HARDWARE);
 
             if (Button(ICON_MS_MOVIE " Start capture")) {
                 iris->pause = false;

@@ -1,0 +1,107 @@
+#include <cstdio>
+
+#include "bios.hpp"
+
+namespace iris::bios {
+
+inline constexpr size_t DUMMY_SIZE = 0x400000;
+
+static size_t get_file_size(FILE* file) {
+    fseek(file, 0, SEEK_END);
+
+    size_t size = ftell(file);
+
+    fseek(file, 0, SEEK_SET);
+
+    return size;
+}
+
+Bios* create(logger::Logger* logger) {
+    Bios* bios = new Bios();
+
+    bios->logger = logger;
+    bios->logger_id = logger::register_source(logger, "bios");
+    bios->buf = new uint8_t[DUMMY_SIZE]();
+    bios->size = DUMMY_SIZE - 1;
+
+    // b 0x00000000, so a BIOS-less boot spins instead of running garbage
+    *(uint32_t*)bios->buf = 0x1000fffe;
+
+    return bios;
+}
+
+bool load(Bios* bios, const char* path) {
+    if (!path)
+        return false;
+
+    FILE* file = fopen(path, "rb");
+
+    if (!file) {
+        iris_error(bios, "Couldn't open '{}'", path);
+
+        return false;
+    }
+
+    size_t size = get_file_size(file);
+
+    delete[] bios->buf;
+
+    bios->buf = new uint8_t[size]();
+    bios->size = size - 1;
+
+    bool ok = fread(bios->buf, 1, size, file) == size;
+
+    if (!ok)
+        iris_error(bios, "Couldn't read binary from '{}'", path);
+
+    fclose(file);
+
+    return ok;
+}
+
+void destroy(Bios* bios) {
+    delete[] bios->buf;
+    delete bios;
+}
+
+uint64_t read8(Bios* bios, uint32_t addr) {
+    return *(uint8_t*)(bios->buf + (addr & bios->size));
+}
+
+uint64_t read16(Bios* bios, uint32_t addr) {
+    return *(uint16_t*)(bios->buf + (addr & bios->size));
+}
+
+uint64_t read32(Bios* bios, uint32_t addr) {
+    return *(uint32_t*)(bios->buf + (addr & bios->size));
+}
+
+uint64_t read64(Bios* bios, uint32_t addr) {
+    return *(uint64_t*)(bios->buf + (addr & bios->size));
+}
+
+uint128_t read128(Bios* bios, uint32_t addr) {
+    return *(uint128_t*)(bios->buf + (addr & bios->size));
+}
+
+void write8(Bios* bios, uint32_t addr, uint64_t data) {
+    *(uint8_t*)(bios->buf + (addr & bios->size)) = data;
+}
+
+void write16(Bios* bios, uint32_t addr, uint64_t data) {
+    *(uint16_t*)(bios->buf + (addr & bios->size)) = data;
+}
+
+void write32(Bios* bios, uint32_t addr, uint64_t data) {
+    *(uint32_t*)(bios->buf + (addr & bios->size)) = data;
+}
+
+void write64(Bios* bios, uint32_t addr, uint64_t data) {
+    *(uint64_t*)(bios->buf + (addr & bios->size)) = data;
+}
+
+void write128(Bios* bios, uint32_t addr, uint128_t data) {
+    *(uint128_t*)(bios->buf + (addr & bios->size)) = data;
+}
+
+}

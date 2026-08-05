@@ -5,13 +5,13 @@
 
 namespace iris::platform {
 
-bool init(iris::instance* iris) {
+bool init(instance* iris) {
     apply_settings(iris);
 
     return true;
 }
 
-bool apply_settings(iris::instance* iris) {
+bool apply_settings(instance* iris) {
     SDL_PropertiesID props = SDL_GetWindowProperties(iris->window);
 
     HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
@@ -80,6 +80,6 @@ bool apply_settings(iris::instance* iris) {
     return result;
 }
 
-void destroy(iris::instance* iris) {}
+void destroy(instance* iris) {}
 
 }

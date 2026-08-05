@@ -1,13 +1,15 @@
 #include "hardware.hpp"
 
-void* hardware_create() {
-    return new hardware_state();
+namespace iris::gs::renderer::hardware {
+
+void* create() {
+    return new state();
 }
 
-bool hardware_init(void* udata, const renderer_create_info& info) {
-    hardware_state* ctx = static_cast<hardware_state*>(udata);
+bool init(void* udata, const CreateInfo& info) {
+    state* ctx = static_cast<state*>(udata);
 
-    if (!Context::init_loader(nullptr))
+    if (!Vulkan::Context::init_loader(nullptr))
         return false;
 
     ctx->gs = info.gs;
@@ -24,13 +26,13 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
     // We don't need to pass any extensions or layers because the
     // VkInstance is managed/created externally.
     if (!ctx->granite_ctx.init_instance(nullptr, 0)) {
-        fprintf(stderr, "renderer: Failed to initialize Granite instance\n");
+        iris_error(info.gs, "Failed to initialize the Granite instance");
 
         return false;
     }
 
     if (!ctx->granite_ctx.init_device(info.physical_device, VK_NULL_HANDLE, nullptr, 0)) {
-        fprintf(stderr, "renderer: Failed to initialize Granite device\n");
+        iris_error(info.gs, "Failed to initialize the Granite device");
 
         return false;
     }
@@ -52,7 +54,7 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
     ctx->iface.reset_context_state();
     ctx->iface.set_signal_interface(ctx->signal_handler);
 
-    ctx->config = *(hardware_config*)info.config;
+    ctx->config = *(HardwareConfig*)info.config;
 
     Hacks hacks = {};
     hacks.allow_blend_demote = ctx->config.allow_blend_demote;
@@ -91,8 +93,8 @@ bool hardware_init(void* udata, const renderer_create_info& info) {
     return true;
 }
 
-void hardware_reset(void* udata) {
-    hardware_state* ctx = static_cast<hardware_state*>(udata);
+void reset(void* udata) {
+    state* ctx = static_cast<state*>(udata);
 
     // ctx->iface.flush();
     ctx->iface.reset_context_state();
@@ -105,8 +107,8 @@ void hardware_reset(void* udata) {
     ctx->iface.end_vram_write(0, 0x400000);
 }
 
-void hardware_destroy(void* udata) {
-    hardware_state* ctx = static_cast<hardware_state*>(udata);
+void destroy(void* udata) {
+    state* ctx = static_cast<state*>(udata);
 
     delete ctx->instance;
     delete ctx->device;
@@ -115,16 +117,16 @@ void hardware_destroy(void* udata) {
     delete ctx;
 }
 
-renderer_image hardware_get_frame(void* udata) {
-    hardware_state* ctx = static_cast<hardware_state*>(udata);
+Image get_frame(void* udata) {
+    state* ctx = static_cast<state*>(udata);
 
-    struct gs_privileged_state state;
+    gs::PrivilegedState state;
 
-    gs_get_privileged_state(ctx->gs, &state);
+    gs::get_privileged_state(ctx->gs, &state);
 
     if (!state.pmode) {
         // No display enabled.
-        renderer_image image = {};
+        Image image = {};
         image.image = VK_NULL_HANDLE;
         image.view = VK_NULL_HANDLE;
 
@@ -185,9 +187,9 @@ renderer_image hardware_get_frame(void* udata) {
 
     ctx->current_scanout = scanout.image;
 
-    Image* granite_image = scanout.image.get();
+    Vulkan::Image* granite_image = scanout.image.get();
 
-    renderer_image image;
+    Image image;
 
     image.image = granite_image->get_image();
     image.width = granite_image->get_width();
@@ -220,20 +222,20 @@ renderer_image hardware_get_frame(void* udata) {
     return image;
 }
 
-extern "C" void hardware_transfer(void* udata, int path, const void* data, size_t size) {
-    hardware_state* ctx = static_cast<hardware_state*>(udata);
+void transfer(void* udata, int path, const void* data, size_t size) {
+    state* ctx = static_cast<state*>(udata);
 
     ctx->iface.gif_transfer(path, data, size);
 }
 
-void hardware_readback(void* udata, void* data, size_t size) {
-    hardware_state* ctx = static_cast<hardware_state*>(udata);
+void readback(void* udata, void* data, size_t size) {
+    state* ctx = static_cast<state*>(udata);
 
     ctx->iface.read_transfer_fifo((void*)data, size / 16);
 }
 
-extern "C" void hardware_read_vram(void* udata, void* dst, size_t size) {
-    hardware_state* ctx = static_cast<hardware_state*>(udata);
+void read_vram(void* udata, void* dst, size_t size) {
+    state* ctx = static_cast<state*>(udata);
 
     // Flush pending GS work so local memory reflects everything submitted so far
     ctx->iface.flush();
@@ -243,10 +245,10 @@ extern "C" void hardware_read_vram(void* udata, void* dst, size_t size) {
     memcpy(dst, src, size);
 }
 
-void hardware_set_config(void* udata, void* config) {
-    hardware_state* ctx = (hardware_state*)udata;
+void set_config(void* udata, void* config) {
+    state* ctx = (state*)udata;
 
-    ctx->config = *(hardware_config*)config;
+    ctx->config = *(HardwareConfig*)config;
 
     Hacks hacks = {};
     hacks.allow_blend_demote = ctx->config.allow_blend_demote;
@@ -281,4 +283,6 @@ void hardware_set_config(void* udata, void* config) {
         ctx->analog_video_filter.init(ctx->granite_device, analog_video_filter_opts);
         ctx->crt_filter.init(ctx->granite_device);
     }
+}
+
 }

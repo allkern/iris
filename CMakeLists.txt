@@ -65,7 +65,21 @@ add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
-target_compile_options(iris PUBLIC "-fno-exceptions" "-Wno-c++11-narrowing")
+target_compile_options(iris PUBLIC "-Wno-c++11-narrowing" "-Wno-invalid-offsetof")
+
+if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
+    target_compile_definitions(iris PUBLIC _CRT_NONSTDC_NO_DEPRECATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_compile_options(iris PUBLIC "-fno-exceptions")
+endif()
+
+set_source_files_properties(
+    frontend/imgui.cpp
+    frontend/input.cpp
+    frontend/render.cpp
+    frontend/shaders.cpp
+    PROPERTIES COMPILE_OPTIONS "-Wno-c23-extensions"
+)
 # target_compile_definitions(iris PUBLIC _DEBUG)
 
 set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>DLL")
@@ -93,6 +107,10 @@ endif()
 
 add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
+add_subdirectory(deps/fmt EXCLUDE_FROM_ALL)
+
+target_compile_definitions(fmt PUBLIC FMT_EXCEPTIONS=0)
+
 add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
 add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
@@ -149,8 +167,9 @@ elseif (APPLE)
     target_link_libraries(slirp PUBLIC resolv)
 endif()
 
-if (CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64")
-    target_compile_options(iris PRIVATE -D_EE_USE_INTRINSICS -mssse3 -msse4.1)
+if (NOT APPLE AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(AMD64|amd64|x86_64)$")
+    target_compile_definitions(iris PRIVATE _EE_USE_INTRINSICS)
+    target_compile_options(iris PRIVATE -mssse3 -msse4.1)
 endif()
 
 if (X11_API)
@@ -214,6 +233,7 @@ target_sources(iris PRIVATE
     frontend/ui/compat_report.cpp
     frontend/ui/control.cpp
     frontend/ui/dma.cpp
+    frontend/ui/fatal_error.cpp
     frontend/ui/gamelist.cpp
     frontend/ui/gs.cpp
     frontend/ui/gs_dump.cpp
@@ -235,59 +255,57 @@ target_sources(iris PRIVATE
     frontend/ui/threads.cpp
     frontend/ui/timers.cpp
     frontend/ui/vu_disassembly.cpp
-    src/arena.c
-    src/ps2.c
-    src/ps2_elf.c
-    src/ps2_iso9660.c
-    src/queue.c
-    src/rom.c
-    src/md5.c
-    src/list.c
-    src/scheduler.c
-    src/dev/ds.c
-    src/dev/guncon.c
-    src/dev/mcd.c
-    src/dev/mtap.c
-    src/dev/ps1_mcd.c
-    src/dev/ps1_mcd.c
+    src/arena.cpp
+    src/ps2.cpp
+    src/ps2_elf.cpp
+    src/queue.cpp
+    src/rom.cpp
+    src/md5.cpp
+    src/logger.cpp
+    src/scheduler.cpp
+    src/dev/ds.cpp
+    src/dev/guncon.cpp
+    src/dev/mcd.cpp
+    src/dev/mtap.cpp
+    src/dev/ps1_mcd.cpp
     src/ee/ee_jit.cpp
-    src/ee/bus.c
-    src/ee/dmac.c
-    src/ee/ee_dis.c
-    src/ee/gif.c
-    src/ee/intc.c
-    src/ee/timers.c
-    src/ee/vif.c
+    src/ee/bus.cpp
+    src/ee/dmac.cpp
+    src/ee/ee_dis.cpp
+    src/ee/gif.cpp
+    src/ee/intc.cpp
+    src/ee/timers.cpp
+    src/ee/vif.cpp
     src/ee/vu_cached.cpp
-    src/ee/vu_dis.c
-    src/gs/gs.c
-    src/gs/gs_dump.c
+    src/ee/vu_dis.cpp
+    src/gs/gs.cpp
+    src/gs/gs_dump.cpp
     src/gs/renderer/null.cpp
     src/gs/renderer/renderer.cpp
     src/gs/renderer/hardware.cpp
-    src/iop/bus.c
-    src/iop/cdvd.c
-    src/iop/disc.c
-    src/iop/dma.c
-    src/iop/fw.c
-    src/iop/intc.c
+    src/iop/bus.cpp
+    src/iop/cdvd.cpp
+    src/iop/disc.cpp
+    src/iop/dma.cpp
+    src/iop/fw.cpp
+    src/iop/intc.cpp
     src/iop/iop_jit.cpp
     src/iop/iop_export.cpp
-    src/iop/iop_dis.c
-    src/iop/rpc.c
-    src/iop/sio2.c
-    src/iop/spu2.c
-    src/iop/timers.c
-    src/iop/usb.c
-    src/iop/usb/device.c
-    src/iop/usb/kbd.c
-    src/iop/usb/mouse.c
-    src/iop/usb/msd.c
-    src/iop/disc/bin.c
-    src/iop/disc/cue.c
-    src/iop/disc/chd.c
-    src/iop/disc/ciso.c
-    src/iop/disc/iso.c
+    src/iop/iop_dis.cpp
+    src/iop/rpc.cpp
+    src/iop/sio2.cpp
+    src/iop/spu2.cpp
+    src/iop/timers.cpp
+    src/iop/usb.cpp
+    src/iop/usb/device.cpp
+    src/iop/usb/kbd.cpp
+    src/iop/usb/mouse.cpp
+    src/iop/usb/msd.cpp
+    src/iop/disc/bin.cpp
+    src/iop/disc/cue.cpp
+    src/iop/disc/chd.cpp
+    src/iop/disc/ciso.cpp
+    src/iop/disc/iso.cpp
     src/iop/hle/ioman.cpp
     src/iop/hle/loadcore.cpp
     src/iop/hle/sysmem.cpp
@@ -305,27 +323,27 @@ target_sources(iris PRIVATE
     src/ipu/mac_p_pic.cpp
     src/ipu/motioncode.cpp
     src/ipu/vlc_table.cpp
-    src/shared/bios.c
-    src/shared/dev9.c
-    src/shared/ram.c
-    src/shared/sbus.c
-    src/shared/sif.c
-    src/shared/speed.c
-    src/shared/speed/ata.c
-    src/shared/speed/dvrp.c
-    src/shared/speed/eeprom.c
-    src/shared/speed/flash.c
-    src/shared/speed/smap.c
-    src/shared/ata/raw.c
-    src/shared/ata/isif.c
-    src/s14x/nand.c
-    src/s14x/syscon.c
-    src/s14x/sram.c
-    src/s14x/link.c
-    src/s14x/ioboard.c
-    src/s14x/aiboard.c
-    src/s2x6/acata.c
-    src/s2x6/acjv.c
+    src/shared/bios.cpp
+    src/shared/dev9.cpp
+    src/shared/ram.cpp
+    src/shared/sbus.cpp
+    src/shared/sif.cpp
+    src/shared/speed.cpp
+    src/shared/speed/ata.cpp
+    src/shared/speed/dvrp.cpp
+    src/shared/speed/eeprom.cpp
+    src/shared/speed/flash.cpp
+    src/shared/speed/smap.cpp
+    src/shared/ata/raw.cpp
+    src/shared/ata/isif.cpp
+    src/s14x/nand.cpp
+    src/s14x/syscon.cpp
+    src/s14x/sram.cpp
+    src/s14x/link.cpp
+    src/s14x/ioboard.cpp
+    src/s14x/aiboard.cpp
+    src/s2x6/acata.cpp
+    src/s2x6/acjv.cpp
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp
@@ -340,7 +358,7 @@ target_sources(iris PRIVATE
     deps/lz4/lib/lz4.c
 )
 
-target_include_directories(iris PRIVATE
+target_include_directories(iris SYSTEM PRIVATE
     deps/asmjit
     deps/curl/include
     deps/miniz
@@ -369,6 +387,7 @@ target_link_libraries(iris PUBLIC
     libcurl
     miniz
     slirp
+    fmt::fmt
 )
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
@@ -389,7 +408,6 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 endif()
 
 if (WIN32)
-    add_compile_definitions(_CRT_SECURE_NO_WARNINGS)
     target_link_libraries(iris PRIVATE dwmapi)
     target_sources(iris PRIVATE frontend/platform/windows.cpp)
 else()

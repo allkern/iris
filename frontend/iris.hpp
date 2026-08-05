@@ -19,11 +19,11 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
-#include "ps2.h"
+#include "ps2.hpp"
 #include "config.hpp"
 #include "slirp.hpp"
 
-struct gs_dump;
+namespace iris::gs::dump { struct Dump; }
 
 namespace iris {
 
@@ -77,8 +77,8 @@ struct instance;
 
 // class widget {
 // public:
-//     virtual bool init(iris::instance* iris) = 0;
-//     virtual void render(iris::instance* iris) = 0;
+//     virtual bool init(instance* iris) = 0;
+//     virtual void render(instance* iris) = 0;
 //     virtual ~widget() = default;
 // };
 
@@ -155,8 +155,10 @@ struct input_device {
         return this->m_slot;
     }
 
+    virtual ~input_device() = default;
+
     virtual int get_type() = 0;
-    virtual void handle_event(iris::instance* iris, SDL_Event* event) = 0;
+    virtual void handle_event(instance* iris, SDL_Event* event) = 0;
 };
 
 class keyboard_device : public input_device {
@@ -165,7 +167,7 @@ public:
         return 0;
     }
 
-    void handle_event(iris::instance* iris, SDL_Event* event) override;
+    void handle_event(instance* iris, SDL_Event* event) override;
 };
 
 class gamepad_device : public input_device {
@@ -182,7 +184,7 @@ public:
         return id;
     }
 
-    void handle_event(iris::instance* iris, SDL_Event* event) override;
+    void handle_event(instance* iris, SDL_Event* event) override;
 };
 
 union input_event {
@@ -421,8 +423,8 @@ struct instance {
     VkDeviceMemory index_buffer_memory = VK_NULL_HANDLE;
     std::array <vertex, 4> vertices = {};
     std::array <uint16_t, 6> indices = {};
-    renderer_image image = {};
-    renderer_image output_image = {};
+    gs::renderer::Image image = {};
+    gs::renderer::Image output_image = {};
 
     // Multipass shader stuff
     std::vector <std::string> shader_passes_pending;
@@ -440,15 +442,21 @@ struct instance {
 
     std::vector <std::array <VkFramebuffer, 2>> shader_pass_framebuffers = {};
 
-    struct ps2_state* ps2 = nullptr;
+    ps2::Ps2* ps2 = nullptr;
+    logger::Logger* logger = nullptr;
+
+    // Set when a module logs at FATAL_ERROR. Emulation halts and the message
+    // is shown rather than the process being torn down under the user.
+    bool fatal_error = false;
+    std::string fatal_error_text;
 
     unsigned int window_width = 960;
     unsigned int window_height = 720;
     unsigned int render_width = 640;
     unsigned int render_height = 480;
 
-    unsigned int renderer_backend = RENDERER_BACKEND_HARDWARE;
-    renderer_state* renderer = nullptr;
+    unsigned int renderer_backend = gs::renderer::BACKEND_HARDWARE;
+    gs::renderer::Renderer* renderer = nullptr;
 
     texture ps2_memory_card_icon = {};
     texture ps1_memory_card_icon = {};
@@ -552,7 +560,7 @@ struct instance {
     uint32_t ee_control_address = 0;
     uint32_t iop_control_address = 0;
     bool skip_fmv = false;
-    int system = PS2_SYSTEM_AUTO;
+    int system = ps2::AUTO;
     int theme = IRIS_THEME_GRANITE;
     bool enable_shaders = false;
     int vulkan_physical_device = -1;
@@ -607,7 +615,7 @@ struct instance {
     std::unordered_map <SDL_JoystickID, SDL_Gamepad*> gamepads;
     std::vector <mapping> input_maps = {};
     int input_map[2] = { -1, -1 };
-    int usb_devices[2] = { USB_DEVICE_NONE, USB_DEVICE_NONE };
+    int usb_devices[2] = { usb::USB_DEVICE_NONE, usb::USB_DEVICE_NONE };
     std::string usb_msd_paths[2] = { "", "" };
     input_event last_input_event = {};
     bool last_input_event_read = true;
@@ -624,11 +632,11 @@ struct instance {
     std::vector <std::string> iop_log = { "" };
     std::vector <std::string> sysmem_log = { "" };
 
-    std::vector <iris::breakpoint> breakpoints = {};
-    std::deque <iris::notification> notifications = {};
+    std::vector <breakpoint> breakpoints = {};
+    std::deque <notification> notifications = {};
 
-    struct ds_state* ds[2] = { nullptr };
-    struct mcd_state* mcd[2] = { nullptr };
+    dev::ds::Ds* ds[2] = { nullptr };
+    dev::mcd::Mcd* mcd[2] = { nullptr };
     int mcd_slot_type[2] = { 0 };
 
     // input_device* device[2];
@@ -655,14 +663,14 @@ struct instance {
     std::vector <elf_symbol> symbols;
     std::vector <uint8_t> strtab;
 
-    std::vector <spu2_sample> audio_buf;
+    std::vector <spu2::Sample> audio_buf;
 
     float avg_fps;
     float avg_frames;
     int screenshot_counter = 0;
 
     // GS dump stuff
-    struct gs_dump* gsdump = nullptr;
+    gs::dump::Dump* gsdump = nullptr;
     bool gsdump_armed = false;
     int gsdump_delay_remaining = 0;
     int gsdump_frames_remaining = 0;
@@ -671,7 +679,7 @@ struct instance {
     bool gsdump_prev_pause = false;
 
     // Renderer configs
-    hardware_config hardware_backend_config;
+    gs::renderer::HardwareConfig hardware_backend_config;
 
     // Windows-specific settings
 #ifdef _WIN32
@@ -687,18 +695,18 @@ struct push_constants {
 };
 
 namespace audio {
-    bool init(iris::instance* iris);
-    void close(iris::instance* iris);
+    bool init(instance* iris);
+    void close(instance* iris);
     void update(void* udata, SDL_AudioStream* stream, int additional_amount, int total_amount);
-    bool mute(iris::instance* iris);
-    void unmute(iris::instance* iris);
+    bool mute(instance* iris);
+    void unmute(instance* iris);
 }
 
 namespace settings {
-    bool init(iris::instance* iris, int argc, const char* argv[]);
+    bool init(instance* iris, int argc, const char* argv[]);
     bool check_for_quick_exit(int argc, const char* argv[]);
-    void close(iris::instance* iris);
-    void apply_device_maps(iris::instance* iris);
+    void close(instance* iris);
+    void apply_device_maps(instance* iris);
 }
 
 namespace shaders {
@@ -709,12 +717,12 @@ namespace shaders {
         VkImageView m_input = VK_NULL_HANDLE;
         VkShaderModule m_vert_shader = VK_NULL_HANDLE;
         VkShaderModule m_frag_shader = VK_NULL_HANDLE;
-        iris::instance* m_iris = nullptr;
+        instance* m_iris = nullptr;
         std::string m_id;
 
     public:
         void destroy();
-        bool init(iris::instance* iris, const void* data, size_t size, std::string id);
+        bool init(instance* iris, const void* data, size_t size, std::string id);
 
         void swap(pass& rhs) {
             VkPipelineLayout pipeline_layout = m_pipeline_layout;
@@ -723,7 +731,7 @@ namespace shaders {
             VkImageView input = m_input;
             VkShaderModule vert_shader = m_vert_shader;
             VkShaderModule frag_shader = m_frag_shader;
-            iris::instance* iris = m_iris;
+            instance* iris = m_iris;
             std::string id = m_id;
 
             m_pipeline_layout = rhs.m_pipeline_layout;
@@ -745,7 +753,7 @@ namespace shaders {
             rhs.m_id = id;
         }
 
-        pass(iris::instance* iris, const void* data, size_t size, std::string id);
+        pass(instance* iris, const void* data, size_t size, std::string id);
         pass(pass&& other);
         pass() = default;
         ~pass();
@@ -765,160 +773,162 @@ namespace shaders {
         bool rebuild();
     };
 
-    void push(iris::instance* iris, void* data, size_t size, std::string id);
-    void push(iris::instance* iris, std::string id);
-    void pop(iris::instance* iris);
-    void insert(iris::instance* iris, int i, void* data, size_t size, std::string id);
-    void insert(iris::instance* iris, std::string id);
-    void erase(iris::instance* iris, int i);
-    pass* at(iris::instance* iris, int i);
-    void swap(iris::instance* iris, int i1, int i2);
-    pass* front(iris::instance* iris);
-    pass* back(iris::instance* iris);
-    size_t count(iris::instance* iris);
-    void clear(iris::instance* iris);
-    std::vector <shaders::pass*>& vector(iris::instance* iris);
+    void push(instance* iris, void* data, size_t size, std::string id);
+    void push(instance* iris, std::string id);
+    void pop(instance* iris);
+    void insert(instance* iris, int i, void* data, size_t size, std::string id);
+    void insert(instance* iris, std::string id);
+    void erase(instance* iris, int i);
+    pass* at(instance* iris, int i);
+    void swap(instance* iris, int i1, int i2);
+    pass* front(instance* iris);
+    pass* back(instance* iris);
+    size_t count(instance* iris);
+    void clear(instance* iris);
+    std::vector <shaders::pass*>& vector(instance* iris);
 }
 
 namespace imgui {
-    bool init(iris::instance* iris);
-    void set_theme(iris::instance* iris, int theme, bool set_bg_color = true);
-    void set_codeview_scheme(iris::instance* iris, int scheme);
-    bool render_frame(iris::instance* iris, ImDrawData* draw_data);
-    void cleanup(iris::instance* iris);
-    void set_vsync(iris::instance* iris, bool vsync);
-    void start_dim(iris::instance* iris, float alpha, size_t ms);
-    void end_dim(iris::instance* iris);
-    void render_dim(iris::instance* iris);
+    bool init(instance* iris);
+    void set_theme(instance* iris, int theme, bool set_bg_color = true);
+    void set_codeview_scheme(instance* iris, int scheme);
+    bool render_frame(instance* iris, ImDrawData* draw_data);
+    void cleanup(instance* iris);
+    void set_vsync(instance* iris, bool vsync);
+    void start_dim(instance* iris, float alpha, size_t ms);
+    void end_dim(instance* iris);
+    void render_dim(instance* iris);
 
     // Wrapper for ImGui::Begin that sets a default size
     bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);
 }
 
 namespace vulkan {
-    bool init(iris::instance* iris, bool enable_validation = false);
-    void cleanup(iris::instance* iris);
-    texture upload_texture(iris::instance* iris, void* pixels, int width, int height, int stride);
-    void free_texture(iris::instance* iris, texture& tex);
-    void* read_image(iris::instance* iris, VkImage image, VkFormat format, int width, int height);
-    void wait_idle(iris::instance* iris);
-    void dump_device_fault(iris::instance* iris);
-    texture load_texture_from_memory(iris::instance* iris, const void* data, size_t size);
-    texture load_texture_from_file(iris::instance* iris, std::string path);
+    bool init(instance* iris, bool enable_validation = false);
+    void cleanup(instance* iris);
+    texture upload_texture(instance* iris, void* pixels, int width, int height, int stride);
+    void free_texture(instance* iris, texture& tex);
+    void* read_image(instance* iris, VkImage image, VkFormat format, int width, int height);
+    void wait_idle(instance* iris);
+    void dump_device_fault(instance* iris);
+    texture load_texture_from_memory(instance* iris, const void* data, size_t size);
+    texture load_texture_from_file(instance* iris, std::string path);
 }
 
 namespace platform {
-    bool init(iris::instance* iris);
-    bool apply_settings(iris::instance* iris);
-    void destroy(iris::instance* iris);
+    bool init(instance* iris);
+    bool apply_settings(instance* iris);
+    void destroy(instance* iris);
 }
 
 namespace elf {
-    bool load_symbols_from_disc(iris::instance* iris);
-    bool load_symbols_from_file(iris::instance* iris, std::string path);
+    bool load_symbols_from_disc(instance* iris);
+    bool load_symbols_from_file(instance* iris, std::string path);
 }
 
 namespace emu {
-    bool init(iris::instance* iris);
-    void destroy(iris::instance* iris);
-    int open_file(iris::instance* iris, std::string path);
-    void start_pending_load(iris::instance* iris);
-    void finalize_load(iris::instance* iris);
-    bool load_arcade(iris::instance* iris, std::string path);
-    int attach_memory_card(iris::instance* iris, int slot, const char* path);
-    void detach_memory_card(iris::instance* iris, int slot);
-    const char* get_system_name(iris::instance* iris, int system);
-    const char* get_current_system_name(iris::instance* iris);
-    int get_system_count(iris::instance* iris);
-    bool load_rom_files(iris::instance* iris);
+    bool init(instance* iris);
+    void destroy(instance* iris);
+    int open_file(instance* iris, std::string path);
+    void start_pending_load(instance* iris);
+    void finalize_load(instance* iris);
+    bool load_arcade(instance* iris, std::string path);
+    int attach_memory_card(instance* iris, int slot, const char* path);
+    void detach_memory_card(instance* iris, int slot);
+    const char* get_system_name(instance* iris, int system);
+    const char* get_current_system_name(instance* iris);
+    int get_system_count(instance* iris);
+    bool load_rom_files(instance* iris);
 }
 
 namespace render {
-    bool init(iris::instance* iris);
-    void destroy(iris::instance* iris);
-    bool render_frame(iris::instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer);
-    bool save_screenshot(iris::instance* iris, std::string path);
-    void switch_backend(iris::instance* iris, int backend);
-    void refresh(iris::instance* iris);
-    void gs_dump_start(iris::instance* iris, std::string path, int frames, int delay, std::string serial);
-    void gs_dump_tick(iris::instance* iris);
+    bool init(instance* iris);
+    void destroy(instance* iris);
+    bool render_frame(instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer);
+    bool save_screenshot(instance* iris, std::string path);
+    void switch_backend(instance* iris, int backend);
+    void refresh(instance* iris);
+    void gs_dump_start(instance* iris, std::string path, int frames, int delay, std::string serial);
+    void gs_dump_tick(instance* iris);
 }
 
 namespace input {
-    bool init(iris::instance* iris);
-    void init_default_mapping(iris::instance* iris, int id);
-    void load_db_default(iris::instance* iris);
-    bool load_db_from_file(iris::instance* iris, const char* path);
-    input_action* get_input_action(iris::instance* iris, int slot, uint64_t input);
+    bool init(instance* iris);
+    void init_default_mapping(instance* iris, int id);
+    void load_db_default(instance* iris);
+    bool load_db_from_file(instance* iris, const char* path);
+    input_action* get_input_action(instance* iris, int slot, uint64_t input);
     input_event sdl_event_to_input_event(SDL_Event* event);
-    std::string get_default_screenshot_filename(iris::instance* iris);
-    void execute_action(iris::instance* iris, input_action action, int slot, float value);
-    bool save_screenshot(iris::instance* iris, std::string path = "");
-    void handle_keydown_event(iris::instance* iris, SDL_Event* event);
-    void handle_keyup_event(iris::instance* iris, SDL_Event* event);
+    std::string get_default_screenshot_filename(instance* iris);
+    void execute_action(instance* iris, input_action action, int slot, float value);
+    bool save_screenshot(instance* iris, std::string path = "");
+    void handle_keydown_event(instance* iris, SDL_Event* event);
+    void handle_keyup_event(instance* iris, SDL_Event* event);
 }
 
 namespace gamelist {
-    bool init(iris::instance* iris);
-    void destroy(iris::instance* iris);
+    bool init(instance* iris);
+    void destroy(instance* iris);
 }
 
-iris::instance* create();
-bool init(iris::instance* iris, int argc, const char* argv[]);
-void destroy(iris::instance* iris);
-SDL_AppResult handle_events(iris::instance* iris, SDL_Event* event);
-SDL_AppResult update(iris::instance* iris);
-void update_window(iris::instance* iris);
-int get_menubar_height(iris::instance* iris);
+instance* create();
+bool init(instance* iris, int argc, const char* argv[]);
+void destroy(instance* iris);
+SDL_AppResult handle_events(instance* iris, SDL_Event* event);
+SDL_AppResult update(instance* iris);
+void update_window(instance* iris);
+int get_menubar_height(instance* iris);
 
-void show_main_menubar(iris::instance* iris);
-void show_ee_control(iris::instance* iris);
-void show_ee_state(iris::instance* iris);
-void show_ee_logs(iris::instance* iris);
-void show_ee_interrupts(iris::instance* iris);
-void show_ee_dmac(iris::instance* iris);
-void show_iop_control(iris::instance* iris);
-void show_iop_state(iris::instance* iris);
-void show_iop_logs(iris::instance* iris);
-void show_iop_interrupts(iris::instance* iris);
-void show_iop_modules(iris::instance* iris);
-void show_iop_dma(iris::instance* iris);
-void show_sysmem_logs(iris::instance* iris);
-void show_gs_debugger(iris::instance* iris);
-void show_spu2_debugger(iris::instance* iris);
-void show_memory_viewer(iris::instance* iris);
-void show_vu_disassembler(iris::instance* iris);
-void show_status_bar(iris::instance* iris);
-void show_breakpoints(iris::instance* iris);
-void show_about_window(iris::instance* iris);
-void show_compat_report(iris::instance* iris);
-void show_settings(iris::instance* iris);
-void show_pad_debugger(iris::instance* iris);
-void show_symbols(iris::instance* iris);
-void show_ee_threads(iris::instance* iris);
-void show_iop_threads(iris::instance* iris);
-void show_overlay(iris::instance* iris);
-void show_memory_card_tool(iris::instance* iris);
-void show_hdd_tool(iris::instance* iris);
-void show_gs_dump_tool(iris::instance* iris);
-void show_bios_setting_window(iris::instance* iris);
-void show_memory_search(iris::instance* iris);
-void show_timers(iris::instance* iris);
-void show_gamelist(iris::instance* iris);
+void show_main_menubar(instance* iris);
+void show_ee_control(instance* iris);
+void show_ee_state(instance* iris);
+void show_ee_logs(instance* iris);
+void show_ee_interrupts(instance* iris);
+void show_ee_dmac(instance* iris);
+void show_iop_control(instance* iris);
+void show_iop_state(instance* iris);
+void show_iop_logs(instance* iris);
+void show_iop_interrupts(instance* iris);
+void show_iop_modules(instance* iris);
+void show_iop_dma(instance* iris);
+void show_sysmem_logs(instance* iris);
+void show_gs_debugger(instance* iris);
+void show_spu2_debugger(instance* iris);
+void show_memory_viewer(instance* iris);
+void show_vu_disassembler(instance* iris);
+void show_status_bar(instance* iris);
+void show_breakpoints(instance* iris);
+void show_about_window(instance* iris);
+void show_fatal_error(instance* iris);
+void show_compat_report(instance* iris);
+void show_settings(instance* iris);
+void show_pad_debugger(instance* iris);
+void show_symbols(instance* iris);
+void show_ee_threads(instance* iris);
+void show_iop_threads(instance* iris);
+void show_overlay(instance* iris);
+void show_memory_card_tool(instance* iris);
+void show_hdd_tool(instance* iris);
+void show_gs_dump_tool(instance* iris);
+void show_bios_setting_window(instance* iris);
+void show_memory_search(instance* iris);
+void show_timers(instance* iris);
+void show_gamelist(instance* iris);
 
-void handle_keydown_event(iris::instance* iris, SDL_Event* event);
-void handle_keyup_event(iris::instance* iris, SDL_Event* event);
+void handle_keydown_event(instance* iris, SDL_Event* event);
+void handle_keyup_event(instance* iris, SDL_Event* event);
 void handle_scissor_event(void* udata);
 void handle_drag_and_drop_event(void* udata, const char* path);
 void handle_ee_tty_event(void* udata, char c);
 void handle_iop_tty_event(void* udata, char c);
 void handle_sysmem_tty_event(void* udata, char c);
+void handle_log_event(void* udata, logger::Level level, const logger::Source& source, const std::string& text);
 
-void handle_animations(iris::instance* iris);
+void handle_animations(instance* iris);
 
-void push_info(iris::instance* iris, std::string text);
+void push_info(instance* iris, std::string text);
 
-void add_recent(iris::instance* iris, std::string file, int type);
-int open_file(iris::instance* iris, std::string file);
+void add_recent(instance* iris, std::string file, int type);
+int open_file(instance* iris, std::string file);
 
 }

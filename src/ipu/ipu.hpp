@@ -1,9 +1,10 @@
-#ifndef IPU_HPP
-#define IPU_HPP
+#pragma once
+
 #include <cstdint>
 #include <queue>
 
 #include "u128.h"
+#include "logger.hpp"
 #include "chromtable.hpp"
 #include "codedblockpattern.hpp"
 #include "dct_coeff_table0.hpp"
@@ -15,9 +16,10 @@
 #include "mac_b_pic.hpp"
 #include "motioncode.hpp"
 
-// eegs includes
-#include "ee/dmac.h"
-#include "ee/intc.h"
+namespace iris::ee::dmac { struct Dmac; }
+namespace iris::ee::intc { struct Intc; }
+
+namespace iris::ipu {
 
 constexpr int RAW_BLOCK_SIZE = 0x180;
 constexpr int RGB_BLOCK_SIZE = 0x100;
@@ -169,11 +171,11 @@ struct PACK_Command
     int block_index;
 };
 
-struct ImageProcessingUnit
+struct Ipu
 {
     private:
-        struct ps2_intc* intc;
-        struct ps2_dmac* dmac;
+        ee::intc::Intc* intc;
+        ee::dmac::Dmac* dmac;
         DCT_Coeff_Table0 dct_coeff0;
         DCT_Coeff_Table1 dct_coeff1;
         DCT_Coeff* dct_coeff;
@@ -242,7 +244,10 @@ struct ImageProcessingUnit
     public:
         IPU_CTRL ctrl;
 
-        ImageProcessingUnit(struct ps2_intc* intc, struct ps2_dmac* dmac);
+        logger::Logger* logger = nullptr;
+        size_t logger_id = 0;
+
+        Ipu(ee::intc::Intc* intc, ee::dmac::Dmac* dmac);
 
         void reset();
         void run();
@@ -262,4 +267,16 @@ struct ImageProcessingUnit
         void write_FIFO(uint128_t quad);
 };
 
-#endif // IPU_HPP
+Ipu* create(logger::Logger* logger, ee::dmac::Dmac* dmac, ee::intc::Intc* intc);
+void reset(Ipu* ipu);
+void destroy(Ipu* ipu);
+bool is_busy(Ipu* ipu);
+void run(Ipu* ipu);
+uint64_t read64(Ipu* ipu, uint32_t addr);
+void write64(Ipu* ipu, uint32_t addr, uint64_t data);
+uint128_t read128(Ipu* ipu, uint32_t addr);
+void write128(Ipu* ipu, uint32_t addr, uint128_t data);
+uint128_t fifo_read(Ipu* ipu);
+void fifo_write(Ipu* ipu, uint128_t data);
+
+}

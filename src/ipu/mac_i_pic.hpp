@@ -1,6 +1,7 @@
-#ifndef MAC_I_PIC_HPP
-#define MAC_I_PIC_HPP
+#pragma once
 #include "vlc_table.hpp"
+
+namespace iris::ipu {
 
 class Macroblock_IPic : public VLC_Table
 {
@@ -13,4 +14,4 @@ class Macroblock_IPic : public VLC_Table
         Macroblock_IPic();
 };
 
-#endif // MAC_I_PIC_HPP
+}

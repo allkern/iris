@@ -21,7 +21,7 @@
 
 #include "slirp.hpp"
 
-#include "shared/speed/smap.h"
+#include "shared/speed/smap.hpp"
 
 namespace iris::slirp {
 
@@ -39,7 +39,7 @@ struct poll_entry {
 
 struct state {
     Slirp* slirp = nullptr;
-    ps2_smap* smap = nullptr;
+    speed::smap::Smap* smap = nullptr;
 
     SlirpCb cb;
 
@@ -255,7 +255,7 @@ void smap_tx(void* udata, const uint8_t* buf, int len) {
     slirp_input(g->slirp, buf, len);
 }
 
-bool start(struct ps2_smap* smap, const config& cfg) {
+bool start(speed::smap::Smap* smap, const config& cfg) {
     if (getenv("IRIS_NO_NET")) {
         printf("slirp: disabled via IRIS_NO_NET\n");
 
@@ -323,7 +323,7 @@ bool start(struct ps2_smap* smap, const config& cfg) {
         return false;
     }
 
-    ps2_smap_set_backend(smap, smap_tx, g);
+    speed::smap::set_backend(smap, smap_tx, g);
 
     g->running.store(true);
     g->thread = std::thread(poll_loop);
@@ -341,7 +341,7 @@ void stop() {
         g->thread.join();
 
     if (g->smap)
-        ps2_smap_set_backend(g->smap, nullptr, nullptr);
+        speed::smap::set_backend(g->smap, nullptr, nullptr);
 
     {
         std::lock_guard <std::mutex> lk(g->slirp_mtx);
@@ -361,7 +361,7 @@ void stop() {
 #endif
 }
 
-void restart(struct ps2_smap* smap, const config& cfg) {
+void restart(speed::smap::Smap* smap, const config& cfg) {
     stop();
     start(smap, cfg);
 }
@@ -370,7 +370,7 @@ bool running() {
     return g != nullptr;
 }
 
-void pump(struct ps2_smap* smap) {
+void pump(speed::smap::Smap* smap) {
     if (!g)
         return;
 
@@ -387,7 +387,7 @@ void pump(struct ps2_smap* smap) {
             g->rxq.pop_front();
         }
 
-        if (!ps2_smap_receive(smap, frame.data(), (int)frame.size())) {
+        if (!speed::smap::receive(smap, frame.data(), (int)frame.size())) {
             std::lock_guard <std::mutex> lk(g->rxq_mtx);
 
             g->rxq.push_front(std::move(frame));

@@ -1,5 +1,7 @@
 #include "mac_addr_inc.hpp"
 
+namespace iris::ipu {
+
 VLC_Entry MacroblockAddrInc::table[] =
 {
     {0x1, 0x10001, 1},
@@ -68,5 +70,7 @@ unsigned int MacroblockAddrInc::index_table[11] =
 
 MacroblockAddrInc::MacroblockAddrInc() : VLC_Table(table, SIZE, 11, index_table)
 {
+
+}
 
 }

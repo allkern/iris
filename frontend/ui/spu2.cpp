@@ -26,10 +26,10 @@ const char* get_adsr_stage_name(int s) {
     return "None";
 }
 
-void show_spu2_core(iris::instance* iris, int c) {
+void show_spu2_core(instance* iris, int c) {
     using namespace ImGui;
 
-    const struct spu2_core* core = &iris->ps2->spu2->c[c];
+    const spu2::Core* core = &iris->ps2->spu2->c[c];
 
     bool* mute = c ? iris->core1_mute : iris->core0_mute;
     int* solo = c ? &iris->core1_solo : &iris->core0_solo;
@@ -97,10 +97,10 @@ void show_spu2_core(iris::instance* iris, int c) {
     }
 }
 
-void show_spu2_tab(iris::instance* iris, int c) {
+void show_spu2_tab(instance* iris, int c) {
     using namespace ImGui;
 
-    const struct spu2_core* core = &iris->ps2->spu2->c[c];
+    const spu2::Core* core = &iris->ps2->spu2->c[c];
 
     show_spu2_core(iris, c);
 
@@ -126,10 +126,10 @@ void show_spu2_tab(iris::instance* iris, int c) {
     PlotLines("ADSR", selected_adsr, IM_ARRAYSIZE(selected_adsr), 0, NULL, 0.0f, 1.0f, { 250.0, 80.0 });
 }
 
-void show_spu2_debugger(iris::instance* iris) {
+void show_spu2_debugger(instance* iris) {
     using namespace ImGui;
 
-    const struct ps2_spu2* spu2 = iris->ps2->spu2;
+    const spu2::Spu2* spu2 = iris->ps2->spu2;
 
     if (imgui::BeginEx("SPU2", &iris->show_spu2_debugger)) {
         if (BeginTabBar("##spu2tabbar")) {

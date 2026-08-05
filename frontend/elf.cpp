@@ -12,7 +12,7 @@
 
 namespace iris::elf {
 
-void load_symbols_from_memory(iris::instance* iris, char* buf) {
+void load_symbols_from_memory(instance* iris, char* buf) {
     if (!buf)
         return;
 
@@ -72,7 +72,7 @@ void load_symbols_from_memory(iris::instance* iris, char* buf) {
 
     size_t symbol_count = symtab->sh_size / symtab->sh_entsize;
 
-    printf("elf: Found symbol table with %d symbols\n", symbol_count);
+    printf("elf: Found symbol table with %zu symbols\n", symbol_count);
 
     // Read symbol table
     Elf32_Sym* sym;
@@ -95,14 +95,14 @@ void load_symbols_from_memory(iris::instance* iris, char* buf) {
     }
 }
 
-bool load_symbols_from_disc(iris::instance* iris) {
+bool load_symbols_from_disc(instance* iris) {
     if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc) {
         printf("elf: No disc loaded\n");
 
         return false;
     }
 
-    char* elf = disc_read_boot_elf(iris->ps2->cdvd->disc, 0);
+    char* elf = iop::disc::read_boot_elf(iris->ps2->cdvd->disc, 0);
 
     load_symbols_from_memory(iris, elf);
 
@@ -111,7 +111,7 @@ bool load_symbols_from_disc(iris::instance* iris) {
     return true;
 }
 
-bool load_symbols_from_file(iris::instance* iris, std::string path) {
+bool load_symbols_from_file(instance* iris, std::string path) {
     if (path.empty()) {
         printf("elf: No file path provided\n");
 

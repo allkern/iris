@@ -3,7 +3,9 @@
 #include <cstdint>
 #include <asmjit/ujit.h>
 
-namespace ee_lsw {
+namespace iris::ee {
+
+namespace lsw {
 
 using asmjit::ujit::UniCompiler;
 using asmjit::ujit::Gp;
@@ -110,6 +112,8 @@ static inline Gp swr(UniCompiler& uc, const Gp& rt, const Gp& mem, const Gp& shi
     uc.shl(rs, rt.r32(), b);
     uc.or_(out, rs, mm);
     return out;
+}
+
 }
 
 }

@@ -8,7 +8,7 @@
 #include "portable-file-dialogs.h"
 #include "res/IconsMaterialSymbols.h"
 
-#include "ee/vu_dis.h"
+#include "ee/vu_dis.hpp"
 #include "ee/vu_def.hpp"
 
 #include <algorithm> 
@@ -57,7 +57,7 @@ inline std::string trim(std::string s) {
 
 namespace iris {
 
-struct vu_dis_state g_vu_dis_state = { 0 };
+vu::dis::Dis g_vu_dis_state = { 0 };
 
 uint32_t addr = 0;
 bool stop_at_e_bit = false;
@@ -66,7 +66,7 @@ bool add_padding = true;
 bool compact_view = false;
 bool show_address_opcode = true;
 
-void print_highlighted_vu1(iris::instance* iris, const char* buf) {
+void print_highlighted_vu1(instance* iris, const char* buf) {
     using namespace ImGui;
 
     std::vector <std::string> tokens;
@@ -176,7 +176,7 @@ void print_highlighted_vu1(iris::instance* iris, const char* buf) {
     NewLine();
 }
 
-static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t size) {
+static void show_vu_disassembly_view(instance* iris, uint64_t* mem, size_t size) {
     using namespace ImGui;
 
     float font_scale = GetStyle().FontScaleMain;
@@ -237,9 +237,9 @@ static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t
             uint64_t l = mem[row] & 0xffffffff;
 
             if (!compact_view) {
-                TextDisabled("%04x: %08x %08x", row, u, l); SameLine();
+                TextDisabled("%04x: %08x %08x", (uint32_t)row, (uint32_t)u, (uint32_t)l); SameLine();
             } else {
-                TextDisabled("%04x: %08x", row, u); SameLine();
+                TextDisabled("%04x: %08x", (uint32_t)row, (uint32_t)u); SameLine();
             }
 
             TableSetColumnIndex(1);
@@ -248,8 +248,8 @@ static void show_vu_disassembly_view(iris::instance* iris, uint64_t* mem, size_t
 
             g_vu_dis_state.addr = row;
 
-            vu_disassemble_upper(upper, u, &g_vu_dis_state);
-            vu_disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
+            vu::dis::disassemble_upper(upper, u, &g_vu_dis_state);
+            vu::dis::disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
 
             if (add_padding && !compact_view) {
 #ifdef _WIN32
@@ -299,8 +299,8 @@ void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
 
         g_vu_dis_state.addr = row;
 
-        vu_disassemble_upper(upper, u, &g_vu_dis_state);
-        vu_disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
+        vu::dis::disassemble_upper(upper, u, &g_vu_dis_state);
+        vu::dis::disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
 
         if (add_padding && !compact_view) {
 #ifdef _WIN32
@@ -313,10 +313,10 @@ void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
         }
 
         if (compact_view) {
-            fprintf(file, "%04x: %08x %s\n", row, u, upper);
-            fprintf(file, "      %08x %s\n", l, lower);
+            fprintf(file, "%04x: %08x %s\n", (uint32_t)row, (uint32_t)u, upper);
+            fprintf(file, "      %08x %s\n", (uint32_t)l, lower);
         } else {
-            fprintf(file, "%04x: %08x %08x %s %s\n", row, u, l, upper, lower);
+            fprintf(file, "%04x: %08x %08x %s %s\n", (uint32_t)row, (uint32_t)u, (uint32_t)l, upper, lower);
         }
 
         if (e_bit && stop_at_e_bit && !disassemble_all) break;
@@ -325,7 +325,7 @@ void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
     }
 }
 
-void show_vu_disassembler(iris::instance* iris) {
+void show_vu_disassembler(instance* iris) {
     using namespace ImGui;
 
     PushFont(iris->font_icons);
@@ -377,7 +377,7 @@ void show_vu_disassembler(iris::instance* iris) {
                         FILE* f = fopen(file.result().c_str(), "w");
 
                         if (f) {
-                            uint64_t* ptr = vu_get_micro_mem_ptr(iris->ps2->vu0, 0);
+                            uint64_t* ptr = vu::get_micro_mem_ptr(iris->ps2->vu0, 0);
 
                             save_disassembly(f, ptr, 512);
 
@@ -395,7 +395,7 @@ void show_vu_disassembler(iris::instance* iris) {
                     addr = 0;
 
                     for (int i = prev; i < 512; i++) {
-                        uint32_t upper = *vu_get_micro_mem_ptr(iris->ps2->vu0, i) >> 32;
+                        uint32_t upper = *vu::get_micro_mem_ptr(iris->ps2->vu0, i) >> 32;
 
                         if (upper & 0x40000000) {
                             addr = i + 2;
@@ -409,7 +409,7 @@ void show_vu_disassembler(iris::instance* iris) {
                 SeparatorText("Disassembly");
 
                 if (BeginChild("vu0##disassembly")) {
-                    uint64_t* ptr = vu_get_micro_mem_ptr(iris->ps2->vu0, 0);
+                    uint64_t* ptr = vu::get_micro_mem_ptr(iris->ps2->vu0, 0);
 
                     show_vu_disassembly_view(iris, ptr, 512);
                 } EndChild();
