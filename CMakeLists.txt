@@ -487,9 +487,19 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+        set(IRIS_APPIMAGE_ARCH "aarch64")
+    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+        set(IRIS_APPIMAGE_ARCH "x86_64")
+    else()
+        message(FATAL_ERROR
+            "No appimagetool for CMAKE_SYSTEM_PROCESSOR='${CMAKE_SYSTEM_PROCESSOR}'")
+    endif()
+
     install(CODE
         "include(${CMAKE_CURRENT_SOURCE_DIR}/AppImage.cmake)
         make_appimage(
+            ARCH \"${IRIS_APPIMAGE_ARCH}\"
             EXE \"${CMAKE_CURRENT_SOURCE_DIR}/build/iris\"
             NAME \"Iris\"
             ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"

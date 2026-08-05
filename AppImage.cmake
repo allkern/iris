@@ -1,6 +1,6 @@
 function(make_appimage)
 	set(optional)
-	set(args EXE NAME DIR_ICON ICON OUTPUT_NAME)
+	set(args ARCH EXE NAME DIR_ICON ICON OUTPUT_NAME)
 	set(list_args ASSETS)
 	cmake_parse_arguments(
 		PARSE_ARGV 0
@@ -15,14 +15,19 @@ function(make_appimage)
 	endif()
 
 
-    # AppImageKit ships one tool per architecture, so pick the one that can
-    # actually run on this machine.
-    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
-        set(AIT_ARCH "aarch64")
-    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
-        set(AIT_ARCH "x86_64")
-    else()
-        message(FATAL_ERROR "make_appimage: no appimagetool for '${CMAKE_SYSTEM_PROCESSOR}'")
+    set(AIT_ARCH "${ARGS_ARCH}")
+    if (AIT_ARCH STREQUAL "")
+        cmake_host_system_information(RESULT AIT_HOST QUERY OS_PLATFORM)
+        if (AIT_HOST MATCHES "^(aarch64|arm64|ARM64)$")
+            set(AIT_ARCH "aarch64")
+        elseif (AIT_HOST MATCHES "^(x86_64|amd64|AMD64)$")
+            set(AIT_ARCH "x86_64")
+        endif()
+    endif()
+
+    if (NOT AIT_ARCH MATCHES "^(aarch64|x86_64)$")
+        message(FATAL_ERROR
+            "make_appimage: no appimagetool for ARCH='${ARGS_ARCH}' (host '${AIT_HOST}')")
     endif()
 
     # download AppImageTool if needed
