@@ -2244,34 +2244,15 @@ void compile_block(Iop* iop, Block* block) {
 
     Error err = uc.finalize();
 
-    // if (err != Error::kOk) {
-    //     char buf[512];
-
-    //     iop::dis::Dis dis;
-
-    //     dis.hex_memory_offset = 1;
-    //     dis.print_address = 1;
-    //     dis.print_opcode = 1;
-
-    //     dis.addr = block->start_pc;
-
-    //     for (const Instruction& ins : block->instructions) {
-    //         iris_debug(iop, "{}", iop::dis::disassemble(buf, ins.opcode, &dis));
-    //         dis.addr += 4;
-    //     }
-
-    //     iris_debug(iop, "ee: Failed to finalize JIT compilation {}", err);
-
-    //     exit(1);
-    // }
+    if (err != Error::kOk) {
+        iris_fatal_error(iop, "Failed to finalize JIT compilation ({})", DebugUtils::error_as_string(err));
+    }
 
     Error err1 = iop->rt.add(&block->func, &code);
 
-    // if (err1 != Error::kOk) {
-    //     iris_debug(iop, "ee: Failed to add JIT code to runtime {}", err1);
-
-    //     exit(1);
-    // }
+    if (err1 != Error::kOk) {
+        iris_fatal_error(iop, "Failed to add JIT code to runtime ({})", DebugUtils::error_as_string(err1));
+    }
 
     // if (code.logger()) {
     //     char buf[512];

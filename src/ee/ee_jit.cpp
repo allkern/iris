@@ -7763,13 +7763,29 @@ void compile_block(Ee* ee, Block* block) {
     Error err = uc.finalize();
 
     if (err != Error::kOk) {
-        iris_fatal_error(ee, "Failed to finalize JIT compilation ({})", (uint32_t)err);
+        iris_error(ee, "JIT compilation error!");
+        iris_error(ee, "Guest block at PC=0x{:08x}:", block->start_pc);
+
+        char buf[128];
+
+        dis::Dis ds;
+        ds.print_opcode = true;
+        ds.print_address = true;
+        ds.pc = block->start_pc;
+
+        for (const auto& i : block->instructions) {
+            iris_error(ee, "  {:08x}: {:08x}  {}", ds.pc, i.opcode, dis::disassemble(buf, i.opcode, &ds));
+
+            ds.pc += 4;
+        }
+
+        iris_fatal_error(ee, "Failed to finalize JIT compilation ({})", DebugUtils::error_as_string(err));
     }
 
     Error err1 = ee->rt.add(&block->func, &code);
 
     if (err1 != Error::kOk) {
-        iris_fatal_error(ee, "Failed to add JIT code to runtime ({})", (uint32_t)err1);
+        iris_fatal_error(ee, "Failed to add JIT code to runtime ({})", DebugUtils::error_as_string(err1));
     }
 
     // if (code.logger()) {

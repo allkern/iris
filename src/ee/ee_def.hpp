@@ -7,6 +7,7 @@
 
 #include "u128.h"
 
+#include "ee.hpp"
 #include "vu.hpp"
 #include "vu_def.hpp"
 
@@ -597,6 +598,22 @@ struct Ee {
 
     uint32_t fcr;
 
+    int32_t cycles_left;
+    int32_t exit_req;
+
+    int fmv_skip;
+    uint32_t prev_pc;
+    uint32_t pc;
+    uint32_t next_pc;
+    uint32_t opcode;
+    uint64_t sa;
+    int branch, branch_taken, delay_slot;
+
+    int cpcond0;
+
+    vu::Vu* vu0;
+    vu::Vu* vu1;
+
     BusInterface bus;
 
     Page pagetable[VIRT_SIZE / MIN_PAGESIZE];
@@ -609,8 +626,6 @@ struct Ee {
     std::vector <SubBlock> sub_blocks;
 
     // JIT stuff
-    int32_t cycles_left;
-    int32_t exit_req;
     uint32_t last_block_lookup_pc;
     Block* last_block_ptr;
     BlockLutEntry block_lut[BLOCK_LUT_SIZE];
@@ -632,20 +647,7 @@ struct Ee {
 
     int exception;
 
-    int fmv_skip;
-    uint32_t prev_pc;
-    uint32_t pc;
-    uint32_t next_pc;
-    uint32_t opcode;
-    uint64_t sa;
-    int branch, branch_taken, delay_slot;
-
     ram::Ram* spr;
-
-    int cpcond0;
-
-    vu::Vu* vu0;
-    vu::Vu* vu1;
 
     VtlbEntry vtlb[48];
     OsdConfig osd_config;
