@@ -133,42 +133,7 @@ add_subdirectory(deps/fmt EXCLUDE_FROM_ALL)
 target_compile_definitions(fmt PUBLIC FMT_EXCEPTIONS=0)
 
 add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
-
-set(GRANITE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/parallel-gs/Granite")
-set(GRANITE_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/deps/patches/granite-arm64-simd-headers.patch")
-
-if (GIT_FOUND AND EXISTS "${GRANITE_PATCH}")
-    execute_process(
-        COMMAND ${GIT_EXECUTABLE} apply --reverse --check "${GRANITE_PATCH}"
-        WORKING_DIRECTORY "${GRANITE_DIR}"
-        RESULT_VARIABLE GRANITE_PATCH_PRESENT
-        OUTPUT_QUIET ERROR_QUIET
-    )
-
-    if (GRANITE_PATCH_PRESENT EQUAL 0)
-        message(STATUS "Granite ARM64 SIMD patch: already present")
-    else()
-        execute_process(
-            COMMAND ${GIT_EXECUTABLE} apply "${GRANITE_PATCH}"
-            WORKING_DIRECTORY "${GRANITE_DIR}"
-            RESULT_VARIABLE GRANITE_PATCH_RESULT
-            ERROR_VARIABLE GRANITE_PATCH_ERROR
-        )
-        if (GRANITE_PATCH_RESULT EQUAL 0)
-            message(STATUS "Granite ARM64 SIMD patch: applied")
-        else()
-            message(FATAL_ERROR
-                "Failed to apply ${GRANITE_PATCH}\n"
-                "in ${GRANITE_DIR}:\n${GRANITE_PATCH_ERROR}")
-        endif()
-    endif()
-elseif (NOT GIT_FOUND)
-    message(WARNING "git not found: skipping the Granite ARM64 SIMD patch. "
-                    "ARM64 builds will fail to compile muglm.cpp.")
-endif()
-
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
-
 add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 

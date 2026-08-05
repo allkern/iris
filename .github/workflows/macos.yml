@@ -14,9 +14,6 @@ jobs:
         submodules: 'recursive'
         fetch-depth: 0
 
-    - name: Apply dependency patches
-      run: git -C deps/parallel-gs/Granite apply "${{ github.workspace }}/deps/patches/granite-arm64-simd-headers.patch"
-
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1
       with:
