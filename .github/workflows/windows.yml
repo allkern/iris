@@ -6,7 +6,17 @@ on:
 
 jobs:
   build:
-    runs-on: windows-2025-vs2026
+    name: ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-2025-vs2026
+          - arch: arm64
+            runner: windows-11-arm
 
     steps:
     - uses: actions/checkout@v6
@@ -14,10 +24,10 @@ jobs:
         submodules: 'recursive'
         fetch-depth: 0
 
-    - name: Configure build for amd64
+    - name: Configure build for ${{ matrix.arch }}
       uses: ilammy/msvc-dev-cmd@v1
       with:
-        arch: amd64
+        arch: ${{ matrix.arch }}
 
     - name: Build and pack Iris
       run: |
@@ -29,5 +39,5 @@ jobs:
 
     - uses: actions/upload-artifact@v7
       with:
-        name: iris-latest-windows
+        name: iris-latest-windows-${{ matrix.arch }}
         path: dist/

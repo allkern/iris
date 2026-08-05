@@ -15,10 +15,23 @@ function(make_appimage)
 	endif()
 
 
-    # download AppImageTool if needed (TODO: non-x86 build machine?)
+    # AppImageKit ships one tool per architecture, so pick the one that can
+    # actually run on this machine.
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
+        set(AIT_ARCH "aarch64")
+    elseif (CMAKE_SYSTEM_PROCESSOR MATCHES "^(x86_64|amd64|AMD64)$")
+        set(AIT_ARCH "x86_64")
+    else()
+        message(FATAL_ERROR "make_appimage: no appimagetool for '${CMAKE_SYSTEM_PROCESSOR}'")
+    endif()
+
+    # download AppImageTool if needed
     SET(AIT_PATH "${CMAKE_BINARY_DIR}/AppImageTool.AppImage" CACHE INTERNAL "")
     if (NOT EXISTS "${AIT_PATH}")
-        file(DOWNLOAD https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage "${AIT_PATH}")
+        file(DOWNLOAD
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-${AIT_ARCH}.AppImage"
+            "${AIT_PATH}"
+        )
         execute_process(COMMAND chmod +x ${AIT_PATH})
     endif()
 
@@ -62,8 +75,12 @@ Icon=${ARGS_NAME}
 Categories=X-None;"    
     )
 
-    # Invoke AppImageTool
-    execute_process(COMMAND ${AIT_PATH} ${APPDIR} ${ARGS_OUTPUT_NAME})
+    # Invoke AppImageTool. ARCH picks the runtime it embeds; without it the tool
+    # guesses from the host and refuses to build when it guesses wrong.
+    execute_process(
+        COMMAND ${CMAKE_COMMAND} -E env ARCH=${AIT_ARCH}
+                ${AIT_PATH} ${APPDIR} ${ARGS_OUTPUT_NAME}
+    )
     
     file(REMOVE_RECURSE "${APPDIR}")
 endfunction()

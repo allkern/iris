@@ -7,7 +7,17 @@ on:
 
 jobs:
   windows-build:
-    runs-on: windows-2025-vs2026
+    name: windows-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-2025-vs2026
+          - arch: arm64
+            runner: windows-11-arm
 
     steps:
     - uses: actions/checkout@v6
@@ -15,10 +25,10 @@ jobs:
         submodules: 'recursive'
         fetch-depth: 0
 
-    - name: Configure build for amd64
+    - name: Configure build for ${{ matrix.arch }}
       uses: ilammy/msvc-dev-cmd@v1
       with:
-        arch: amd64
+        arch: ${{ matrix.arch }}
 
     - name: Build and pack Iris
       run: |
@@ -31,7 +41,7 @@ jobs:
     - name: Generate artifact name
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-windows"
+        "artifact=iris-${{ github.ref_name }}-windows-${{ matrix.arch }}" >> $env:GITHUB_OUTPUT
 
     - name: Zip artifact
       run: |
@@ -45,7 +55,20 @@ jobs:
           ${{ steps.generate-name.outputs.artifact }}.zip
 
   linux-build:
-    runs-on: ubuntu-latest
+    name: linux-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+
+    env:
+      CLANG_VERSION: 20
 
     steps:
     - uses: actions/checkout@v6
@@ -55,13 +78,26 @@ jobs:
 
     - name: Install deps
       run: |
-        sudo add-apt-repository universe
-        sudo apt-get install clang-20 git make \
+        sudo add-apt-repository -y universe
+        sudo apt-get install -y git make \
         pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
         libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev \
         libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
         libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
         libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libfuse2t64
+
+    # The runner images ship clang 16-18 and #embed needs 19 or newer. Ubuntu's
+    # own archive carries clang-20 on x86_64; fall back to apt.llvm.org when the
+    # package is missing so the arm64 runner does not depend on that.
+    - name: Install clang ${{ env.CLANG_VERSION }}
+      run: |
+        if ! apt-cache show "clang-${CLANG_VERSION}" > /dev/null 2>&1; then
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "${CLANG_VERSION}"
+        fi
+        sudo apt-get install -y "clang-${CLANG_VERSION}"
+        clang-${CLANG_VERSION} --version
 
     - uses: actions/setup-python@v5
       with:
@@ -73,7 +109,9 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-20 -DCMAKE_CXX_COMPILER=clang++-20
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+          -DCMAKE_C_COMPILER=clang-${CLANG_VERSION} \
+          -DCMAKE_CXX_COMPILER=clang++-${CLANG_VERSION}
         cmake --build build
         sudo cmake --install build
         mkdir dist
@@ -81,37 +119,26 @@ jobs:
         mkdir appimage
         mv ./build/*.AppImage ./appimage
 
-    - name: Generate artifact name
+    - name: Generate artifact names
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-linux"
+        echo "artifact=iris-${{ github.ref_name }}-linux-${{ matrix.arch }}" >> "$GITHUB_OUTPUT"
+        echo "appimage=iris-${{ github.ref_name }}-linux-${{ matrix.arch }}-appimage" >> "$GITHUB_OUTPUT"
 
-    - name: Generate AppImage artifact name
-      id: generate-name-appimage
-      run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-linux-appimage"
-
-    - name: Zip artifact
+    - name: Zip artifacts
       run: |
         zip -rj ${{ steps.generate-name.outputs.artifact }}.zip dist
+        zip -rj ${{ steps.generate-name.outputs.appimage }}.zip appimage
 
-    - name: Zip AppImage
-      run: |
-        zip -rj ${{ steps.generate-name-appimage.outputs.artifact }}.zip appimage
-
-    - name: Upload normal binary to release
+    - name: Upload to release
       uses: softprops/action-gh-release@v3
       with:
         files: |
           ${{ steps.generate-name.outputs.artifact }}.zip
-
-    - name: Upload AppImage to release
-      uses: softprops/action-gh-release@v3
-      with:
-        files: |
-          ${{ steps.generate-name-appimage.outputs.artifact }}.zip
+          ${{ steps.generate-name.outputs.appimage }}.zip
 
   macos-universal-build:
+    name: macos-universal
     runs-on: macos-latest
 
     steps:
@@ -145,7 +172,7 @@ jobs:
     - name: Generate artifact name
       id: generate-name
       run: |
-        echo "::set-output name=artifact::iris-${{ github.ref_name }}-macos-universal"
+        echo "artifact=iris-${{ github.ref_name }}-macos-universal" >> "$GITHUB_OUTPUT"
 
     - name: Zip artifact
       run: |
