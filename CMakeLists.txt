@@ -126,11 +126,6 @@ int main() { return 0; }
 message(STATUS "Target arch: reported '${CMAKE_SYSTEM_PROCESSOR}', "
                "probed x86=${IRIS_TARGET_X86} arm64=${IRIS_TARGET_ARM64}")
 
-if (IRIS_TARGET_ARM64 AND NOT CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64|ARM64)$")
-    message(STATUS "Correcting CMAKE_SYSTEM_PROCESSOR to ARM64")
-    set(CMAKE_SYSTEM_PROCESSOR "ARM64")
-endif()
-
 add_subdirectory(deps/asmjit EXCLUDE_FROM_ALL)
 add_subdirectory(deps/tomlplusplus EXCLUDE_FROM_ALL)
 add_subdirectory(deps/fmt EXCLUDE_FROM_ALL)
@@ -138,31 +133,42 @@ add_subdirectory(deps/fmt EXCLUDE_FROM_ALL)
 target_compile_definitions(fmt PUBLIC FMT_EXCEPTIONS=0)
 
 add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
+
+set(GRANITE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/deps/parallel-gs/Granite")
+set(GRANITE_PATCH "${CMAKE_CURRENT_SOURCE_DIR}/deps/patches/granite-arm64-simd-headers.patch")
+
+if (GIT_FOUND AND EXISTS "${GRANITE_PATCH}")
+    execute_process(
+        COMMAND ${GIT_EXECUTABLE} apply --reverse --check "${GRANITE_PATCH}"
+        WORKING_DIRECTORY "${GRANITE_DIR}"
+        RESULT_VARIABLE GRANITE_PATCH_PRESENT
+        OUTPUT_QUIET ERROR_QUIET
+    )
+
+    if (GRANITE_PATCH_PRESENT EQUAL 0)
+        message(STATUS "Granite ARM64 SIMD patch: already present")
+    else()
+        execute_process(
+            COMMAND ${GIT_EXECUTABLE} apply "${GRANITE_PATCH}"
+            WORKING_DIRECTORY "${GRANITE_DIR}"
+            RESULT_VARIABLE GRANITE_PATCH_RESULT
+            ERROR_VARIABLE GRANITE_PATCH_ERROR
+        )
+        if (GRANITE_PATCH_RESULT EQUAL 0)
+            message(STATUS "Granite ARM64 SIMD patch: applied")
+        else()
+            message(FATAL_ERROR
+                "Failed to apply ${GRANITE_PATCH}\n"
+                "in ${GRANITE_DIR}:\n${GRANITE_PATCH_ERROR}")
+        endif()
+    endif()
+elseif (NOT GIT_FOUND)
+    message(WARNING "git not found: skipping the Granite ARM64 SIMD patch. "
+                    "ARM64 builds will fail to compile muglm.cpp.")
+endif()
+
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
 
-function(iris_strip_x86_flags dir)
-    get_property(_targets DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
-    foreach(_tgt IN LISTS _targets)
-        get_target_property(_opts ${_tgt} COMPILE_OPTIONS)
-        if (_opts)
-            set(_kept "${_opts}")
-            list(FILTER _kept EXCLUDE REGEX "^-m(sse|avx|popcnt|fma|f16c)")
-            if (NOT "${_kept}" STREQUAL "${_opts}")
-                set_target_properties(${_tgt} PROPERTIES COMPILE_OPTIONS "${_kept}")
-                message(STATUS "Dropped x86 SIMD flags from target ${_tgt}")
-            endif()
-        endif()
-    endforeach()
-
-    get_property(_subdirs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
-    foreach(_sub IN LISTS _subdirs)
-        iris_strip_x86_flags("${_sub}")
-    endforeach()
-endfunction()
-
-if (NOT IRIS_TARGET_X86)
-    iris_strip_x86_flags("${CMAKE_CURRENT_SOURCE_DIR}/deps/parallel-gs")
-endif()
 add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
