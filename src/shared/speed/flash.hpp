@@ -1,5 +1,6 @@
 #pragma once
 #include "logger.hpp"
+#include <string>
 
 // speed.hpp includes this header, so the parent stays a forward
 // declaration here and is included for real in the .cpp
@@ -89,6 +90,7 @@ struct Flash {
     int address;
     uint8_t data[PAGE_SIZE_ECC];
     uint8_t file[CARD_SIZE_ECC];
+    std::string path;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
