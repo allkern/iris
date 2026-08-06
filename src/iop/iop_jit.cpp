@@ -187,6 +187,8 @@ Iop* create(logger::Logger* logger) {
     iop->jit_logger = new asmjit::FileLogger(stdout);
     iop->block_arena = arena::create(1024 * 1024 * 32);
 
+    iop->instruction_buf.resize(512);
+
     reset(iop);
 
     return iop;
