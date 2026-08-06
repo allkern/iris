@@ -23,16 +23,16 @@ void init(Ps2* ps2) {
 
     // Components take their dependencies in create(), so this list is ordered:
     // everything a component needs must already exist above it.
-    ps2->ee = ee::create(ps2->logger, ram::SIZE_32MB);
+    ps2->ee = ee::create(ps2->logger, (int)ram::Size::_32MB);
     ps2->vu0 = vu::create(ps2->logger, 0);
     ps2->vu1 = vu::create(ps2->logger, 1);
     ps2->iop = iop::create(ps2->logger);
     ps2->ee_bus = ee::bus::create(ps2->logger);
     ps2->iop_bus = iop::bus::create(ps2->logger);
 
-    ps2->ee_ram = ram::create(ps2->logger, ram::SIZE_32MB);
-    ps2->iop_ram = ram::create(ps2->logger, ram::SIZE_2MB);
-    ps2->iop_spr = ram::create(ps2->logger, ram::SIZE_1KB);
+    ps2->ee_ram = ram::create(ps2->logger, ram::Size::_32MB);
+    ps2->iop_ram = ram::create(ps2->logger, ram::Size::_2MB);
+    ps2->iop_spr = ram::create(ps2->logger, ram::Size::_1KB);
     ps2->bios = bios::create(ps2->logger);
     ps2->rom1 = bios::create(ps2->logger);
     ps2->rom2 = bios::create(ps2->logger);
@@ -147,7 +147,7 @@ void init(Ps2* ps2) {
     ps2->ee_bus->ee_ram = ps2->ee_ram;
     ps2->ee_bus->iop = ps2->iop;
 
-    iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_ATA);
+    iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_RETAIL);
 
     ipu::reset(ps2->ipu);
 
@@ -219,7 +219,7 @@ void boot_file(Ps2* ps2, const char* path) {
     uint32_t i;
 
     // Find rom0:OSDSYS string
-    for (i = 0; i < ram::SIZE_32MB; i += 0x10) {
+    for (i = 0; i < (uint32_t)ram::Size::_32MB; i += 0x10) {
         char* ptr = (char*)&ps2->ee_ram->buf[i];
 
         if (!strncmp(ptr, "rom0:OSDSYS", 12)) {
@@ -426,9 +426,10 @@ void destroy(Ps2* ps2) {
 }
 
 void set_system(Ps2* ps2, int system) {
-    int ee_ram_size, iop_ram_size, mechacon_model;
+    int mechacon_model;
+    ram::Size ee_ram_size, iop_ram_size;
 
-    iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_ATA);
+    iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_RETAIL);
     speed::set_dvrp_enabled(ps2->speed, 0);
     iop::bus::set_usb_disabled(ps2->iop_bus, 0);
 
@@ -454,22 +455,22 @@ void set_system(Ps2* ps2, int system) {
             return;
         } break;
         case RETAIL: {
-            ee_ram_size = ram::SIZE_32MB;
-            iop_ram_size = ram::SIZE_2MB;
+            ee_ram_size = ram::Size::_32MB;
+            iop_ram_size = ram::Size::_2MB;
             mechacon_model = cdvd::MECHACON_SPC970;
         } break;
 
         case RETAIL_DRAGON: {
-            ee_ram_size = ram::SIZE_32MB;
-            iop_ram_size = ram::SIZE_2MB;
+            ee_ram_size = ram::Size::_32MB;
+            iop_ram_size = ram::Size::_2MB;
             mechacon_model = cdvd::MECHACON_DRAGON;
 
             speed::set_smap_enabled(ps2->speed, 1);
         } break;
 
         case PSX_DESR: {
-            ee_ram_size = ram::SIZE_64MB;
-            iop_ram_size = ram::SIZE_8MB;
+            ee_ram_size = ram::Size::_64MB;
+            iop_ram_size = ram::Size::_8MB;
             mechacon_model = cdvd::MECHACON_DRAGON;
 
             speed::set_dvrp_enabled(ps2->speed, 1);
@@ -478,29 +479,29 @@ void set_system(Ps2* ps2, int system) {
 
         case TEST:
         case TOOL: {
-            ee_ram_size = ram::SIZE_128MB;
-            iop_ram_size = ram::SIZE_8MB;
+            ee_ram_size = ram::Size::_128MB;
+            iop_ram_size = ram::Size::_8MB;
 
             // To-do: Separate mechacon model for TOOL/TEST
             mechacon_model = cdvd::MECHACON_DRAGON;
         } break;
 
         case KONAMI_PYTHON: {
-            ee_ram_size = ram::SIZE_32MB;
-            iop_ram_size = ram::SIZE_2MB;
+            ee_ram_size = ram::Size::_32MB;
+            iop_ram_size = ram::Size::_2MB;
             mechacon_model = cdvd::MECHACON_SPC970;
         } break;
 
         case KONAMI_PYTHON2: {
-            ee_ram_size = ram::SIZE_32MB;
-            iop_ram_size = ram::SIZE_2MB;
+            ee_ram_size = ram::Size::_32MB;
+            iop_ram_size = ram::Size::_2MB;
             mechacon_model = cdvd::MECHACON_DRAGON;
         } break;
 
         case NAMCO_SYSTEM_147:
         case NAMCO_SYSTEM_148: {
-            ee_ram_size = system == NAMCO_SYSTEM_148 ? ram::SIZE_64MB : ram::SIZE_32MB;
-            iop_ram_size = ram::SIZE_2MB;
+            ee_ram_size = system == NAMCO_SYSTEM_148 ? ram::Size::_64MB : ram::Size::_32MB;
+            iop_ram_size = ram::Size::_2MB;
 
             // This board actually has no MechaCon
             mechacon_model = cdvd::MECHACON_DRAGON;
@@ -525,13 +526,13 @@ void set_system(Ps2* ps2, int system) {
             s14x::link::register_node(ps2->s14x_link, 2, s14x::ioboard::handle_packet, ps2->s14x_ioboard);
             s14x::link::register_node(ps2->s14x_link, 3, s14x::aiboard::handle_packet, ps2->s14x_aiboard);
 
-            iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_NAND);
+            iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_NAND);
         } break;
 
         case NAMCO_SYSTEM_246:
         case NAMCO_SYSTEM_256: {
-            ee_ram_size = system == NAMCO_SYSTEM_246 ? ram::SIZE_32MB : ram::SIZE_64MB;
-            iop_ram_size = system == NAMCO_SYSTEM_246 ? ram::SIZE_2MB : ram::SIZE_4MB;
+            ee_ram_size = system == NAMCO_SYSTEM_246 ? ram::Size::_32MB : ram::Size::_64MB;
+            iop_ram_size = system == NAMCO_SYSTEM_246 ? ram::Size::_2MB : ram::Size::_4MB;
             mechacon_model = cdvd::MECHACON_DRAGON;
 
             ps2->s2x6_acata = s2x6::acata::create(ps2->logger, ps2->iop_intc, ps2->sched);
@@ -543,14 +544,14 @@ void set_system(Ps2* ps2, int system) {
             iop::dma::connect(ps2->iop_dma, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->s2x6_acata);
             ps2->iop_bus->s2x6_acjv = ps2->s2x6_acjv;
 
-            iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_ACATA);
+            iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_ACATA);
         } break;
 
         default: {
             iris_error(ps2, "Unknown system {}", system);
 
-            ee_ram_size = ram::SIZE_32MB;
-            iop_ram_size = ram::SIZE_2MB;
+            ee_ram_size = ram::Size::_32MB;
+            iop_ram_size = ram::Size::_2MB;
             mechacon_model = cdvd::MECHACON_DRAGON;
         } break;
     }
@@ -578,7 +579,7 @@ void set_system(Ps2* ps2, int system) {
     bus_data.write128 = ee::bus::write128;
     bus_data.udata = ps2->ee_bus;
 
-    ee::set_ram_size(ps2->ee, ee_ram_size);
+    ee::set_ram_size(ps2->ee, (int)ee_ram_size);
 
     ps2->ee_bus->ee_ram = ps2->ee_ram;
     ps2->ee_bus->iop_ram = ps2->iop_ram;

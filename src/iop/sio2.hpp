@@ -22,7 +22,6 @@ struct Device {
 };
 
 struct Sio2 {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         iop::dma::Dma* dma;
         iop::intc::Intc* intc;

@@ -13,14 +13,14 @@ const char* cpu_names[] = {
     "IOP"
 };
 
-static breakpoint* selected = nullptr;
-static breakpoint editable;
+static Breakpoint* selected = nullptr;
+static Breakpoint editable;
 
-void show_breakpoints_table(instance* iris) {
+void show_breakpoints_table(Instance* iris) {
     using namespace ImGui;
 
     if (BeginTable("##breakpoints", 5, ImGuiTableFlags_RowBg | ImGuiTableFlags_Sortable)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Address");
         TableSetupColumn("CPU");
         TableSetupColumn("Flags");
@@ -33,7 +33,7 @@ void show_breakpoints_table(instance* iris) {
 
         int i = 0;
 
-        for (breakpoint& b : iris->breakpoints) {
+        for (Breakpoint& b : iris->debug.breakpoints) {
             TableSetColumnIndex(0);
 
             char buf[16]; sprintf(buf, "##d%x", i);
@@ -42,7 +42,7 @@ void show_breakpoints_table(instance* iris) {
                 selected = &b;
             } SameLine(0.0, 0.0);
 
-            PushFont(iris->font_code);
+            PushFont(iris->ui.font_code);
 
             if (b.symbol) {
                 Text("%s", b.symbol);
@@ -54,11 +54,11 @@ void show_breakpoints_table(instance* iris) {
 
             TableSetColumnIndex(1);
 
-            Text(b.cpu == BKPT_CPU_EE ? "EE" : "IOP");
+            Text(b.cpu == BreakpointCpu::EE ? "EE" : "IOP");
 
             TableSetColumnIndex(2);
 
-            PushFont(iris->font_code);
+            PushFont(iris->ui.font_code);
 
             Text("%c%c%c",
                 b.cond_r ? 'R' : '.',
@@ -85,7 +85,7 @@ void show_breakpoints_table(instance* iris) {
             if (Selectable(buf, false, 0, ImVec2(20, 0))) {
                 selected = nullptr;
 
-                iris->breakpoints.erase(iris->breakpoints.begin() + i);
+                iris->debug.breakpoints.erase(iris->debug.breakpoints.begin() + i);
             }
 
             i++;
@@ -97,12 +97,12 @@ void show_breakpoints_table(instance* iris) {
     }
 }
 
-uint32_t parse_address(instance* iris, const char* buf, const char** name) {
+uint32_t parse_address(Instance* iris, const char* buf, const char** name) {
     if (!buf || !buf[0])
         return 0;
 
     if (isalpha(buf[0]) || buf[0] == '_') {
-        for (elf_symbol& sym : iris->symbols) {
+        for (elf::Symbol& sym : iris->debug.symbols) {
             if (strcmp(sym.name, buf) == 0) {
                 *name = sym.name;
 
@@ -118,13 +118,13 @@ uint32_t parse_address(instance* iris, const char* buf, const char** name) {
     return 0;
 }
 
-void show_breakpoint_editor(instance* iris) {
+void show_breakpoint_editor(Instance* iris) {
     using namespace ImGui;
 
-    if (BeginCombo("CPU", cpu_names[editable.cpu], ImGuiComboFlags_HeightSmall)) {
+    if (BeginCombo("CPU", cpu_names[(int)editable.cpu], ImGuiComboFlags_HeightSmall)) {
         for (int i = 0; i < 2; i++) {
-            if (Selectable(cpu_names[i], editable.cpu == i)) {
-                editable.cpu = i;
+            if (Selectable(cpu_names[i], editable.cpu == (BreakpointCpu)i)) {
+                editable.cpu = (BreakpointCpu)i;
             }
         }
 
@@ -133,7 +133,7 @@ void show_breakpoint_editor(instance* iris) {
 
     static char buf[512];
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (InputText("##address", buf, 512, ImGuiInputTextFlags_EnterReturnsTrue)) {
         editable.addr = parse_address(iris, buf, &editable.symbol);
@@ -161,16 +161,16 @@ void show_breakpoint_editor(instance* iris) {
     if (Button("New breakpoint")) {
         editable.addr = parse_address(iris, buf, &editable.symbol);
 
-        iris->breakpoints.push_back(editable);
+        iris->debug.breakpoints.push_back(editable);
 
-        selected = &iris->breakpoints.back();
+        selected = &iris->debug.breakpoints.back();
     }
 }
 
-void show_breakpoints(instance* iris) {
+void show_breakpoints(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("Breakpoints", &iris->show_breakpoints, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("Breakpoints", &iris->ui.show_breakpoints, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             MenuItem("Settings");
 
@@ -180,7 +180,7 @@ void show_breakpoints(instance* iris) {
         if (Button(ICON_MS_DELETE, ImVec2(50, 0))) {
             selected = nullptr;
 
-            iris->breakpoints.clear();
+            iris->debug.breakpoints.clear();
         } SameLine();
 
         if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
@@ -188,7 +188,7 @@ void show_breakpoints(instance* iris) {
         }
 
         if (Button(ICON_MS_REMOVE_SELECTION)) {
-            for (breakpoint& b : iris->breakpoints) {
+            for (Breakpoint& b : iris->debug.breakpoints) {
                 b.enabled = false;
             }
         } SameLine();
@@ -198,7 +198,7 @@ void show_breakpoints(instance* iris) {
         }
 
         if (Button(ICON_MS_SELECT)) {
-            for (breakpoint& b : iris->breakpoints) {
+            for (Breakpoint& b : iris->debug.breakpoints) {
                 b.enabled = true;
             }
         }

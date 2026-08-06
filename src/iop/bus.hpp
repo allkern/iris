@@ -32,7 +32,7 @@
 namespace iris::iop::bus {
 
 inline constexpr auto FASTMEM_BLKSIZE = 0x2000;
-#define FASTMEM_TBLSIZE (0x20000000 / FASTMEM_BLKSIZE)
+inline constexpr auto FASTMEM_TBLSIZE = (0x20000000 / FASTMEM_BLKSIZE);
 
 struct Bus {
     bios::Bios* bios;

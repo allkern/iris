@@ -744,8 +744,6 @@ void send_gif_irq(void* udata, int overshoot) {
 void handle_gif_transfer(Dmac* dmac) {
     scheduler::Event event;
 
-    assert(((dmac->channels[GIF].chcr >> 6) & 1) == 0);
-
     int mode = (dmac->channels[GIF].chcr >> 2) & 3;
 
     // iris_debug(dmac, "GIF DMA dir={} mode={} tte={} tie={} qwc={} madr={:08x} tadr={:08x}", //     dmac->channels[GIF].chcr & 1,

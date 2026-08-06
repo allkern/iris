@@ -3,6 +3,7 @@
 #include "slirp.hpp"
 
 #include "miniz.h"
+#include "ps2.hpp"
 
 #include <filesystem>
 #include <algorithm>
@@ -12,12 +13,8 @@
 
 namespace iris::emu {
 
-bool init(instance* iris) {
+bool init(Instance* iris) {
     // Initialize our emulator state
-    iris->logger = logger::create();
-
-    logger::register_callback(iris->logger, handle_log_event, iris);
-
     iris->ps2 = ps2::create(iris->logger);
 
     ps2::init(iris->ps2);
@@ -25,16 +22,15 @@ bool init(instance* iris) {
     ps2::init_tty_handler(iris->ps2, ps2::IOP, handle_iop_tty_event, iris);
     ps2::init_tty_handler(iris->ps2, ps2::SYSMEM, handle_sysmem_tty_event, iris);
 
-    iris->ds[0] = dev::ds::attach(iris->logger, iris->ps2->sio2, 0);
+    iris->input.ds[0] = dev::ds::attach(iris->logger, iris->ps2->sio2, 0);
 
     return true;
 }
 
-void destroy(instance* iris) {
+void destroy(Instance* iris) {
     slirp::stop();
 
     if (iris->ps2) ps2::destroy(iris->ps2);
-    if (iris->logger) logger::destroy(iris->logger);
 }
 
 const char* get_extension(const char* path) {
@@ -46,48 +42,48 @@ const char* get_extension(const char* path) {
     return dot + 1;
 }
 
-static void finish_load(instance* iris, int result, std::string name = "") {
+static void finish_load(Instance* iris, int result, std::string name = "") {
     iris->load_result = result;
     iris->load_pending_name = std::move(name);
     iris->load_ready.store(true, std::memory_order_release);
 }
 
-void finalize_load(instance* iris) {
+void finalize_load(Instance* iris) {
     vulkan::wait_idle(iris);
 
     gs::renderer::hotswap(iris->renderer, iris->renderer_backend);
 
-    iris->loading_file_active = false;
-    iris->loading_target = "";
-    iris->show_gamelist = false;
+    iris->ui.loading_file_active = false;
+    iris->ui.loading_target = "";
+    iris->ui.show_gamelist = false;
 
     imgui::end_dim(iris);
 
     if (iris->load_result == 0) {
         gs::renderer::reset(iris->renderer);
 
-        iris->image = {};
+        iris->vk.image = {};
 
         iris->loaded = iris->load_pending_name;
 
         if (iris->autostart)
-            iris->pause = false;
+            iris->debug.pause = false;
     }
 }
 
-int open_archive(instance* iris, std::string path) {
+int open_archive(Instance* iris, std::string path) {
     mz_zip_archive zip;
 
     mz_zip_zero_struct(&zip);
 
     if (!mz_zip_reader_init_file(&zip, path.c_str(), 0)) {
-        printf("emu: Couldn't open archive \"%s\"\n", path.c_str());
+        iris_error(&iris->log.emu, "Couldn't open archive \"{}\"", path.c_str());
 
         return 1;
     }
 
     // Decompress everything into pref_path/tmp/
-    std::filesystem::path tmp_path = std::filesystem::path(iris->pref_path) / "tmp";
+    std::filesystem::path tmp_path = std::filesystem::path(iris->paths.pref_path) / "tmp";
 
     std::error_code ec;
     std::filesystem::create_directories(tmp_path, ec);
@@ -112,7 +108,7 @@ int open_archive(instance* iris, std::string path) {
         std::filesystem::create_directories(dst.parent_path(), ec);
 
         if (!mz_zip_reader_extract_to_file(&zip, i, dst.string().c_str(), 0)) {
-            printf("emu: Failed to extract \"%s\" from archive\n", stat.m_filename);
+            iris_error(&iris->log.emu, "Failed to extract \"{}\" from archive", stat.m_filename);
         }
     }
 
@@ -121,7 +117,7 @@ int open_archive(instance* iris, std::string path) {
     return 0;
 }
 
-int open_file_thread(instance* iris, std::string file) {
+int open_file_thread(Instance* iris, std::string file) {
     std::filesystem::path path(file);
     std::string ext = path.extension().string();
 
@@ -166,9 +162,9 @@ int open_file_thread(instance* iris, std::string file) {
 
     elf::load_symbols_from_file(iris, file);
 
-    iris->host_elf_dir = std::filesystem::path(file).parent_path().string();
+    iris->paths.host_elf_dir = std::filesystem::path(file).parent_path().string();
 
-    if (iris->host_from_elf)
+    if (iris->paths.host_from_elf)
         settings::apply_device_maps(iris);
 
     // Note: We need the trailing whitespaces here because of IOMAN HLE
@@ -184,13 +180,13 @@ int open_file_thread(instance* iris, std::string file) {
     return 0;
 }
 
-int open_file(instance* iris, std::string file) {
+int open_file(Instance* iris, std::string file) {
     std::filesystem::path path(file);
 
-    iris->loading_target = path.filename().string();
-    iris->loading_file_active = true;
+    iris->ui.loading_target = path.filename().string();
+    iris->ui.loading_file_active = true;
     iris->load_ready = false;
-    iris->pause = true;
+    iris->debug.pause = true;
 
     gs::renderer::hotswap(iris->renderer, gs::renderer::BACKEND_NULL);
 
@@ -202,7 +198,7 @@ int open_file(instance* iris, std::string file) {
     return 0;
 }
 
-void start_pending_load(instance* iris) {
+void start_pending_load(Instance* iris) {
     if (!iris->load_start_pending)
         return;
 
@@ -243,7 +239,7 @@ template <typename T> std::optional<T> query_arcade_value(std::string arcade_nam
     return {};
 }
 
-bool load_arcade(instance* iris, std::string path) {
+bool load_arcade(Instance* iris, std::string path) {
     std::filesystem::path base_path(path);
 
     std::string id = base_path.stem().string();
@@ -253,7 +249,7 @@ bool load_arcade(instance* iris, std::string path) {
         return false;
     }
 
-    printf("emu: Loading arcade game \"%s\" (%s)...\n", name.c_str(), id.c_str());
+    iris_info(&iris->log.emu, "Loading arcade game \"{}\" ({})...", name.c_str(), id.c_str());
 
     int system = query_arcade_value<int>(id, "system").value_or(ps2::AUTO);
 
@@ -270,7 +266,7 @@ bool load_arcade(instance* iris, std::string path) {
             std::filesystem::path sram_path = base_path / "sram.bin";
 
             if (!std::filesystem::exists(bios_path)) {
-                printf("emu: Couldn't find bootrom file \"%s\"\n", bios_path.string().c_str());
+                iris_error(&iris->log.emu, "Couldn't find bootrom file \"{}\"", bios_path.string().c_str());
 
                 push_info(iris, "Couldn't start arcade game (Missing bootrom)");
 
@@ -278,7 +274,7 @@ bool load_arcade(instance* iris, std::string path) {
             }
 
             if (!std::filesystem::exists(nand_path)) {
-                printf("emu: Couldn't find NAND file \"%s\"\n", nand_path.string().c_str());
+                iris_error(&iris->log.emu, "Couldn't find NAND file \"{}\"", nand_path.string().c_str());
 
                 push_info(iris, "Couldn't start arcade game (Missing NAND)");
 
@@ -299,7 +295,7 @@ bool load_arcade(instance* iris, std::string path) {
             iris->loaded = name + " (" + id + ")";
 
             if (iris->autostart) {
-                iris->pause = false;
+                iris->debug.pause = false;
             }
 
             return true;
@@ -321,14 +317,14 @@ bool load_arcade(instance* iris, std::string path) {
                 "Namco System 256"
             };
 
-            printf("emu: %s isn't supported yet\n", names[system]);
+            iris_error(&iris->log.emu, "{} isn't supported yet", names[system]);
         } break;
     }
 
     return false;
 }
 
-int attach_memory_card(instance* iris, int slot, const char* path) {
+int attach_memory_card(Instance* iris, int slot, const char* path) {
     detach_memory_card(iris, slot);
 
     FILE* file = fopen(path, "rb");
@@ -349,11 +345,11 @@ int attach_memory_card(instance* iris, int slot, const char* path) {
         if (ext == "psm" || ext == "pocket") {
             dev::ps1_mcd::set_type(mcd, 1);
 
-            iris->mcd_slot_type[slot] = 3;
+            iris->input.mcd_slot_type[slot] = 3;
         } else {
             dev::ps1_mcd::set_type(mcd, 0);
 
-            iris->mcd_slot_type[slot] = 2;
+            iris->input.mcd_slot_type[slot] = 2;
         }
 
         return 1;
@@ -361,13 +357,13 @@ int attach_memory_card(instance* iris, int slot, const char* path) {
 
     dev::mcd::attach(iris->logger, iris->ps2->sio2, slot+2, path);
 
-    iris->mcd_slot_type[slot] = 1;
+    iris->input.mcd_slot_type[slot] = 1;
 
     return 1;
 }
 
-void detach_memory_card(instance* iris, int slot) {
-    iris->mcd_slot_type[slot] = 0;
+void detach_memory_card(Instance* iris, int slot) {
+    iris->input.mcd_slot_type[slot] = 0;
 
     sio2::detach_device(iris->ps2->sio2, slot+2);
 }
@@ -387,11 +383,11 @@ const char* g_system_names[] = {
     "Namco System 256"
 };
 
-const char* get_system_name(instance* iris, int system) {
+const char* get_system_name(Instance* iris, int system) {
     return g_system_names[system];
 }
 
-const char* get_current_system_name(instance* iris) {
+const char* get_current_system_name(Instance* iris) {
     switch (iris->system) {
         case ps2::AUTO: return get_system_name(iris, iris->ps2->detected_system);
         case ps2::RETAIL:
@@ -410,7 +406,7 @@ const char* get_current_system_name(instance* iris) {
     }
 }
 
-int get_system_count(instance* iris) {
+int get_system_count(Instance* iris) {
     return sizeof(g_system_names) / sizeof(const char*);
 }
 
@@ -442,11 +438,11 @@ std::filesystem::path get_rom_path(std::filesystem::path filename, std::string e
     return "";
 }
 
-bool load_rom_files(instance* iris) {
-    ps2::load_bios(iris->ps2, iris->bios_path.c_str());
+bool load_rom_files(Instance* iris) {
+    ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
 
-    if (iris->auto_paths) {
-        std::filesystem::path bios_path(iris->bios_path);
+    if (iris->paths.auto_paths) {
+        std::filesystem::path bios_path(iris->paths.bios_path);
 
         // Get full path without extension
         bios_path = bios_path.parent_path() / bios_path.stem();
@@ -470,16 +466,16 @@ bool load_rom_files(instance* iris) {
         return true;
     }
 
-    if (iris->rom1_path.size()) {
-        ps2::load_rom1(iris->ps2, iris->rom1_path.c_str());
+    if (iris->paths.rom1_path.size()) {
+        ps2::load_rom1(iris->ps2, iris->paths.rom1_path.c_str());
     }
 
-    if (iris->rom2_path.size()) {
-        ps2::load_rom2(iris->ps2, iris->rom2_path.c_str());
+    if (iris->paths.rom2_path.size()) {
+        ps2::load_rom2(iris->ps2, iris->paths.rom2_path.c_str());
     }
 
-    if (iris->nvram_path.size()) {
-        cdvd::load_nvram(iris->ps2->cdvd, iris->nvram_path.c_str());
+    if (iris->paths.nvram_path.size()) {
+        cdvd::load_nvram(iris->ps2->cdvd, iris->paths.nvram_path.c_str());
     }
 
     return true;

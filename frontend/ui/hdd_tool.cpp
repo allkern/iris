@@ -63,14 +63,14 @@ std::string get_file_size_string(int format, uint64_t size) {
     return std::string(buf);
 }
 
-void show_hdd_tool(instance* iris) {
+void show_hdd_tool(Instance* iris) {
     using namespace ImGui;
 
     static int image_format = IMAGE_FMT_ISIF;
     static int size_add = 0;
     static bool assign = true;
 
-    if (imgui::BeginEx("HDD Tool", &iris->show_hdd_tool)) {
+    if (imgui::BeginEx("HDD Tool", &iris->ui.show_hdd_tool)) {
         if (BeginTabBar("##hddtooltabs")) {
             if (BeginTabItem("Create")) {
                 Text("Image format");
@@ -108,7 +108,7 @@ void show_hdd_tool(instance* iris) {
                 PopStyleVar();
 
                 if (Button("Create")) {
-                    std::string default_path = iris->pref_path;
+                    std::string default_path = iris->paths.pref_path;
                     
                     if (image_format == IMAGE_FMT_RAW) {
                         default_path += "hdd.raw";
@@ -135,7 +135,7 @@ void show_hdd_tool(instance* iris) {
                     }
 
                     if (assign) {
-                        iris->hdd_path = f.result();
+                        iris->paths.hdd_path = f.result();
                     }
                 }
 

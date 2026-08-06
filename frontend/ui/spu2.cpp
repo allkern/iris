@@ -5,6 +5,7 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace iris {
 
@@ -26,13 +27,13 @@ const char* get_adsr_stage_name(int s) {
     return "None";
 }
 
-void show_spu2_core(instance* iris, int c) {
+void show_spu2_core(Instance* iris, int c) {
     using namespace ImGui;
 
     const spu2::Core* core = &iris->ps2->spu2->c[c];
 
-    bool* mute = c ? iris->core1_mute : iris->core0_mute;
-    int* solo = c ? &iris->core1_solo : &iris->core0_solo;
+    bool* mute = c ? iris->audio.core1_mute : iris->audio.core0_mute;
+    int* solo = c ? &iris->audio.core1_solo : &iris->audio.core0_solo;
     int* selected = c ? &core1_selected : &core0_selected;
 
     Text("IRQ address: %08x", core->irqa);
@@ -42,7 +43,7 @@ void show_spu2_core(instance* iris, int c) {
     id[10] = '0' + c;
 
     if (BeginTable(id, 7, ImGuiTableFlags_RowBg)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Voice");
         TableSetupColumn("ENVX");
         TableSetupColumn("NAX");
@@ -70,7 +71,7 @@ void show_spu2_core(instance* iris, int c) {
 
             TableSetColumnIndex(1);
 
-            PushFont(iris->font_code);
+            PushFont(iris->ui.font_code);
             Text("%04x", core->v[i].envx);
 
             TableSetColumnIndex(2);
@@ -97,7 +98,7 @@ void show_spu2_core(instance* iris, int c) {
     }
 }
 
-void show_spu2_tab(instance* iris, int c) {
+void show_spu2_tab(Instance* iris, int c) {
     using namespace ImGui;
 
     const spu2::Core* core = &iris->ps2->spu2->c[c];
@@ -126,12 +127,12 @@ void show_spu2_tab(instance* iris, int c) {
     PlotLines("ADSR", selected_adsr, IM_ARRAYSIZE(selected_adsr), 0, NULL, 0.0f, 1.0f, { 250.0, 80.0 });
 }
 
-void show_spu2_debugger(instance* iris) {
+void show_spu2_debugger(Instance* iris) {
     using namespace ImGui;
 
     const spu2::Spu2* spu2 = iris->ps2->spu2;
 
-    if (imgui::BeginEx("SPU2", &iris->show_spu2_debugger)) {
+    if (imgui::BeginEx("SPU2", &iris->ui.show_spu2_debugger)) {
         if (BeginTabBar("##spu2tabbar")) {
             if (BeginTabItem("CORE0")) {
                 show_spu2_tab(iris, 0);

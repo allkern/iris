@@ -79,8 +79,8 @@ static constexpr uint32_t DESCRIPTOR_SET_RING_SIZE = 8;
 
 static const ImWchar g_icon_range[] = { ICON_MIN_MS, ICON_MAX_16_MS, 0 };
 
-static bool setup_vulkan_window(instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
-    wd->Surface = iris->surface;
+static bool setup_vulkan_window(Instance* iris, ImGui_ImplVulkanH_Window* wd, int width, int height, bool vsync) {
+    wd->Surface = iris->vk.surface;
 
     VkAttachmentDescription attachment = {};
     attachment.format = wd->SurfaceFormat.format;
@@ -97,10 +97,10 @@ static bool setup_vulkan_window(instance* iris, ImGui_ImplVulkanH_Window* wd, in
     // Check for WSI support
     VkBool32 res;
 
-    vkGetPhysicalDeviceSurfaceSupportKHR(iris->physical_device, iris->queue_family, wd->Surface, &res);
+    vkGetPhysicalDeviceSurfaceSupportKHR(iris->vk.physical_device, iris->vk.queue_family, wd->Surface, &res);
 
     if (!res) {
-        fprintf(stderr, "imgui: No WSI support on physical device\n");
+        iris_error(&iris->log.imgui, "No WSI support on physical device");
         
         return false;
     }
@@ -116,7 +116,7 @@ static bool setup_vulkan_window(instance* iris, ImGui_ImplVulkanH_Window* wd, in
     const VkColorSpaceKHR requestSurfaceColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR;
 
     wd->SurfaceFormat = ImGui_ImplVulkanH_SelectSurfaceFormat(
-        iris->physical_device,
+        iris->vk.physical_device,
         wd->Surface,
         requestSurfaceImageFormat,
         (size_t)IM_ARRAYSIZE(requestSurfaceImageFormat),
@@ -135,31 +135,31 @@ static bool setup_vulkan_window(instance* iris, ImGui_ImplVulkanH_Window* wd, in
     }
  
     wd->PresentMode = ImGui_ImplVulkanH_SelectPresentMode(
-        iris->physical_device,
+        iris->vk.physical_device,
         wd->Surface,
         present_modes.data(),
         present_modes.size()
     );
 
     // Create SwapChain, RenderPass, Framebuffer, etc.
-    IM_ASSERT(iris->min_image_count >= 2);
+    IM_ASSERT(iris->vk.min_image_count >= 2);
 
     ImGui_ImplVulkanH_CreateOrResizeWindow(
-        iris->instance,
-        iris->physical_device,
-        iris->device,
+        iris->vk.instance,
+        iris->vk.physical_device,
+        iris->vk.device,
         wd,
-        iris->queue_family,
+        iris->vk.queue_family,
         VK_NULL_HANDLE,
         width, height,
-        iris->min_image_count,
+        iris->vk.min_image_count,
         0
     );
 
     return true;
 }
 
-void set_vsync(instance* iris, bool vsync) {
+void set_vsync(Instance* iris, bool vsync) {
     std::vector <VkPresentModeKHR> present_modes;
 
     if (vsync) {
@@ -170,9 +170,9 @@ void set_vsync(instance* iris, bool vsync) {
         present_modes.push_back(VK_PRESENT_MODE_FIFO_KHR);
     }
  
-    iris->main_window_data.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(
-        iris->physical_device,
-        iris->main_window_data.Surface,
+    iris->vk.main_window_data.PresentMode = ImGui_ImplVulkanH_SelectPresentMode(
+        iris->vk.physical_device,
+        iris->vk.main_window_data.Surface,
         present_modes.data(),
         present_modes.size()
     );
@@ -180,44 +180,44 @@ void set_vsync(instance* iris, bool vsync) {
     render::refresh(iris);
 }
 
-bool setup_fonts(instance* iris, ImGuiIO& io) {
+bool setup_fonts(Instance* iris, ImGuiIO& io) {
     io.Fonts->AddFontDefault();
 
-    ImFontConfig config;
-    config.MergeMode = true;
-    config.GlyphMinAdvanceX = 13.0f;
-    config.GlyphOffset = ImVec2(0.0f, 4.0f);
-    config.FontDataOwnedByAtlas = false;
+    ImFontConfig font_config;
+    font_config.MergeMode = true;
+    font_config.GlyphMinAdvanceX = 13.0f;
+    font_config.GlyphOffset = ImVec2(0.0f, 4.0f);
+    font_config.FontDataOwnedByAtlas = false;
 
     ImFontConfig config_no_own;
     config_no_own.FontDataOwnedByAtlas = false;
 
-    iris->font_small_code = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 12.0F, &config_no_own);
-    iris->font_code       = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 16.0F, &config_no_own);
-    iris->font_small      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 12.0F, &config_no_own);
-    iris->font_heading    = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 20.0F, &config_no_own);
-    iris->font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 16.0F, &config_no_own);
-    iris->font_icons      = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 20.0F, &config, g_icon_range);
-    iris->font_icons_big  = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 50.0F, &config_no_own, g_icon_range);
-    iris->font_black      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_black_data, g_roboto_black_size, 30.0F, &config_no_own);
+    iris->ui.font_small_code = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 12.0F, &config_no_own);
+    iris->ui.font_code       = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 16.0F, &config_no_own);
+    iris->ui.font_small      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 12.0F, &config_no_own);
+    iris->ui.font_heading    = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 20.0F, &config_no_own);
+    iris->ui.font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 16.0F, &config_no_own);
+    iris->ui.font_icons      = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 20.0F, &font_config, g_icon_range);
+    iris->ui.font_icons_big  = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 50.0F, &config_no_own, g_icon_range);
+    iris->ui.font_black      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_black_data, g_roboto_black_size, 30.0F, &config_no_own);
 
-    if (!iris->font_small_code ||
-        !iris->font_code ||
-        !iris->font_small ||
-        !iris->font_heading ||
-        !iris->font_body ||
-        !iris->font_icons ||
-        !iris->font_icons_big ||
-        !iris->font_black) {
+    if (!iris->ui.font_small_code ||
+        !iris->ui.font_code ||
+        !iris->ui.font_small ||
+        !iris->ui.font_heading ||
+        !iris->ui.font_body ||
+        !iris->ui.font_icons ||
+        !iris->ui.font_icons_big ||
+        !iris->ui.font_black) {
         return false;
     }
 
-    io.FontDefault = iris->font_icons;
+    io.FontDefault = iris->ui.font_icons;
 
     return true;
 }
 
-void set_theme(instance* iris, int theme, bool set_bg_color) {
+void set_theme(Instance* iris, int theme, bool set_bg_color) {
     // Init 'Granite' theme
     ImGuiStyle& style = ImGui::GetStyle();
     style.WindowPadding           = ImVec2(8.0, 8.0);
@@ -310,10 +310,10 @@ void set_theme(instance* iris, int theme, bool set_bg_color) {
 
             if (!set_bg_color) break;
 
-            iris->clear_value.color.float32[0] = 0.11f;
-            iris->clear_value.color.float32[1] = 0.11f;
-            iris->clear_value.color.float32[2] = 0.11f;
-            iris->clear_value.color.float32[3] = 1.00f;
+            iris->vk.clear_value.color.float32[0] = 0.11f;
+            iris->vk.clear_value.color.float32[1] = 0.11f;
+            iris->vk.clear_value.color.float32[2] = 0.11f;
+            iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_IMGUI_DARK: {
@@ -321,10 +321,10 @@ void set_theme(instance* iris, int theme, bool set_bg_color) {
 
             if (!set_bg_color) break;
 
-            iris->clear_value.color.float32[0] = 0.11f;
-            iris->clear_value.color.float32[1] = 0.11f;
-            iris->clear_value.color.float32[2] = 0.11f;
-            iris->clear_value.color.float32[3] = 1.00f;
+            iris->vk.clear_value.color.float32[0] = 0.11f;
+            iris->vk.clear_value.color.float32[1] = 0.11f;
+            iris->vk.clear_value.color.float32[2] = 0.11f;
+            iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_IMGUI_LIGHT: {
@@ -332,10 +332,10 @@ void set_theme(instance* iris, int theme, bool set_bg_color) {
 
             if (!set_bg_color) break;
 
-            iris->clear_value.color.float32[0] = 0.89f;
-            iris->clear_value.color.float32[1] = 0.89f;
-            iris->clear_value.color.float32[2] = 0.89f;
-            iris->clear_value.color.float32[3] = 1.00f;
+            iris->vk.clear_value.color.float32[0] = 0.89f;
+            iris->vk.clear_value.color.float32[1] = 0.89f;
+            iris->vk.clear_value.color.float32[2] = 0.89f;
+            iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_IMGUI_CLASSIC: {
@@ -343,10 +343,10 @@ void set_theme(instance* iris, int theme, bool set_bg_color) {
 
             if (!set_bg_color) break;
 
-            iris->clear_value.color.float32[0] = 0.11f;
-            iris->clear_value.color.float32[1] = 0.11f;
-            iris->clear_value.color.float32[2] = 0.11f;
-            iris->clear_value.color.float32[3] = 1.00f;
+            iris->vk.clear_value.color.float32[0] = 0.11f;
+            iris->vk.clear_value.color.float32[1] = 0.11f;
+            iris->vk.clear_value.color.float32[2] = 0.11f;
+            iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_CHERRY: {
@@ -405,10 +405,10 @@ void set_theme(instance* iris, int theme, bool set_bg_color) {
 
             if (!set_bg_color) break;
 
-            iris->clear_value.color.float32[0] = 0.20f * 0.5f;
-            iris->clear_value.color.float32[1] = 0.22f * 0.5f;
-            iris->clear_value.color.float32[2] = 0.27f * 0.5f;
-            iris->clear_value.color.float32[3] = 1.00f;
+            iris->vk.clear_value.color.float32[0] = 0.20f * 0.5f;
+            iris->vk.clear_value.color.float32[1] = 0.22f * 0.5f;
+            iris->vk.clear_value.color.float32[2] = 0.27f * 0.5f;
+            iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
         case IRIS_THEME_SOURCE: {
@@ -467,10 +467,10 @@ void set_theme(instance* iris, int theme, bool set_bg_color) {
 
             if (!set_bg_color) break;
 
-            iris->clear_value.color.float32[0] = 0.13f;
-            iris->clear_value.color.float32[1] = 0.15f;
-            iris->clear_value.color.float32[2] = 0.11f;
-            iris->clear_value.color.float32[3] = 1.00f;
+            iris->vk.clear_value.color.float32[0] = 0.13f;
+            iris->vk.clear_value.color.float32[1] = 0.15f;
+            iris->vk.clear_value.color.float32[2] = 0.11f;
+            iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
     }
 
@@ -491,88 +491,88 @@ void set_theme(instance* iris, int theme, bool set_bg_color) {
     pstyle.Colors[ImPlotCol_PlotBg]     = ImVec4(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
-void set_codeview_scheme(instance* iris, int scheme) {
+void set_codeview_scheme(Instance* iris, int scheme) {
     switch (scheme) {
         default: case IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK: {
-            iris->codeview_color_text = IM_COL32(131, 148, 150, 255);
-            iris->codeview_color_comment = IM_COL32(88, 110, 117, 255);
-            iris->codeview_color_mnemonic = IM_COL32(211, 167, 30, 255);
-            iris->codeview_color_number = IM_COL32(138, 143, 226, 255);
-            iris->codeview_color_register = IM_COL32(68, 169, 240, 255);
-            iris->codeview_color_other = IM_COL32(89, 89, 89, 255);
-            iris->codeview_color_background = IM_COL32(0, 43, 54, 255);
-            iris->codeview_color_highlight = IM_COL32(7, 54, 66, 255);
+            iris->ui.codeview_color_text = IM_COL32(131, 148, 150, 255);
+            iris->ui.codeview_color_comment = IM_COL32(88, 110, 117, 255);
+            iris->ui.codeview_color_mnemonic = IM_COL32(211, 167, 30, 255);
+            iris->ui.codeview_color_number = IM_COL32(138, 143, 226, 255);
+            iris->ui.codeview_color_register = IM_COL32(68, 169, 240, 255);
+            iris->ui.codeview_color_other = IM_COL32(89, 89, 89, 255);
+            iris->ui.codeview_color_background = IM_COL32(0, 43, 54, 255);
+            iris->ui.codeview_color_highlight = IM_COL32(7, 54, 66, 255);
         } break;
 
         case IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT: {
-            iris->codeview_color_text = IM_COL32(101, 123, 131, 255);
-            iris->codeview_color_comment = IM_COL32(147, 161, 161, 255);
-            iris->codeview_color_mnemonic = IM_COL32(147, 101, 21, 255);
-            iris->codeview_color_number = IM_COL32(101, 123, 179, 255);
-            iris->codeview_color_register = IM_COL32(38, 139, 210, 255);
-            iris->codeview_color_other = IM_COL32(88, 110, 117, 255);
-            iris->codeview_color_background = IM_COL32(253, 246, 227, 255);
-            iris->codeview_color_highlight = IM_COL32(238, 232, 213, 255);
+            iris->ui.codeview_color_text = IM_COL32(101, 123, 131, 255);
+            iris->ui.codeview_color_comment = IM_COL32(147, 161, 161, 255);
+            iris->ui.codeview_color_mnemonic = IM_COL32(147, 101, 21, 255);
+            iris->ui.codeview_color_number = IM_COL32(101, 123, 179, 255);
+            iris->ui.codeview_color_register = IM_COL32(38, 139, 210, 255);
+            iris->ui.codeview_color_other = IM_COL32(88, 110, 117, 255);
+            iris->ui.codeview_color_background = IM_COL32(253, 246, 227, 255);
+            iris->ui.codeview_color_highlight = IM_COL32(238, 232, 213, 255);
         } break;
 
         case IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO: {
-            iris->codeview_color_text = IM_COL32(171, 178, 191, 255);
-            iris->codeview_color_comment = IM_COL32(92, 99, 112, 255);
-            iris->codeview_color_mnemonic = IM_COL32(198, 120, 221, 255);
-            iris->codeview_color_number = IM_COL32(209, 154, 102, 255);
-            iris->codeview_color_register = IM_COL32(97, 175, 239, 255);
-            iris->codeview_color_other = IM_COL32(171, 178, 191, 255);
-            iris->codeview_color_background = IM_COL32(40, 44, 52, 255);
-            iris->codeview_color_highlight = IM_COL32(60, 64, 72, 255);
+            iris->ui.codeview_color_text = IM_COL32(171, 178, 191, 255);
+            iris->ui.codeview_color_comment = IM_COL32(92, 99, 112, 255);
+            iris->ui.codeview_color_mnemonic = IM_COL32(198, 120, 221, 255);
+            iris->ui.codeview_color_number = IM_COL32(209, 154, 102, 255);
+            iris->ui.codeview_color_register = IM_COL32(97, 175, 239, 255);
+            iris->ui.codeview_color_other = IM_COL32(171, 178, 191, 255);
+            iris->ui.codeview_color_background = IM_COL32(40, 44, 52, 255);
+            iris->ui.codeview_color_highlight = IM_COL32(60, 64, 72, 255);
         } break;
 
         case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE: {
-            iris->codeview_color_text = IM_COL32(76, 79, 105, 255);
-            iris->codeview_color_comment = IM_COL32(124, 127, 147, 255);
-            iris->codeview_color_mnemonic = IM_COL32(136, 57, 239, 255);
-            iris->codeview_color_number = IM_COL32(254, 100, 11, 255);
-            iris->codeview_color_register = IM_COL32(4, 165, 229, 255);
-            iris->codeview_color_other = IM_COL32(114, 135, 253, 255);
-            iris->codeview_color_background = IM_COL32(239, 241, 245, 255);
-            iris->codeview_color_highlight = IM_COL32(204, 208, 218, 255);
+            iris->ui.codeview_color_text = IM_COL32(76, 79, 105, 255);
+            iris->ui.codeview_color_comment = IM_COL32(124, 127, 147, 255);
+            iris->ui.codeview_color_mnemonic = IM_COL32(136, 57, 239, 255);
+            iris->ui.codeview_color_number = IM_COL32(254, 100, 11, 255);
+            iris->ui.codeview_color_register = IM_COL32(4, 165, 229, 255);
+            iris->ui.codeview_color_other = IM_COL32(114, 135, 253, 255);
+            iris->ui.codeview_color_background = IM_COL32(239, 241, 245, 255);
+            iris->ui.codeview_color_highlight = IM_COL32(204, 208, 218, 255);
         } break;
 
         case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE: {
-            iris->codeview_color_text = IM_COL32(198, 208, 245, 255);
-            iris->codeview_color_comment = IM_COL32(148, 156, 187, 255);
-            iris->codeview_color_mnemonic = IM_COL32(202, 158, 230, 255);
-            iris->codeview_color_number = IM_COL32(239, 159, 118, 255);
-            iris->codeview_color_register = IM_COL32(153, 209, 219, 255);
-            iris->codeview_color_other = IM_COL32(186, 187, 241, 255);
-            iris->codeview_color_background = IM_COL32(48, 52, 70, 255);
-            iris->codeview_color_highlight = IM_COL32(81, 87, 109, 255);
+            iris->ui.codeview_color_text = IM_COL32(198, 208, 245, 255);
+            iris->ui.codeview_color_comment = IM_COL32(148, 156, 187, 255);
+            iris->ui.codeview_color_mnemonic = IM_COL32(202, 158, 230, 255);
+            iris->ui.codeview_color_number = IM_COL32(239, 159, 118, 255);
+            iris->ui.codeview_color_register = IM_COL32(153, 209, 219, 255);
+            iris->ui.codeview_color_other = IM_COL32(186, 187, 241, 255);
+            iris->ui.codeview_color_background = IM_COL32(48, 52, 70, 255);
+            iris->ui.codeview_color_highlight = IM_COL32(81, 87, 109, 255);
         } break;
 
         case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO: {
-            iris->codeview_color_text = IM_COL32(174, 178, 208, 255);
-            iris->codeview_color_comment = IM_COL32(134, 138, 162, 255);
-            iris->codeview_color_mnemonic = IM_COL32(190, 132, 255, 255);
-            iris->codeview_color_number = IM_COL32(245, 142, 110, 255);
-            iris->codeview_color_register = IM_COL32(125, 182, 191, 255);
-            iris->codeview_color_other = IM_COL32(166, 167, 222, 255);
-            iris->codeview_color_background = IM_COL32(58, 60, 79, 255);
-            iris->codeview_color_highlight = IM_COL32(97, 100, 120, 255);
+            iris->ui.codeview_color_text = IM_COL32(174, 178, 208, 255);
+            iris->ui.codeview_color_comment = IM_COL32(134, 138, 162, 255);
+            iris->ui.codeview_color_mnemonic = IM_COL32(190, 132, 255, 255);
+            iris->ui.codeview_color_number = IM_COL32(245, 142, 110, 255);
+            iris->ui.codeview_color_register = IM_COL32(125, 182, 191, 255);
+            iris->ui.codeview_color_other = IM_COL32(166, 167, 222, 255);
+            iris->ui.codeview_color_background = IM_COL32(58, 60, 79, 255);
+            iris->ui.codeview_color_highlight = IM_COL32(97, 100, 120, 255);
         } break;
 
         case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA: {
-            iris->codeview_color_text = IM_COL32(205, 214, 244, 255);
-            iris->codeview_color_comment = IM_COL32(145, 151, 181, 255);
-            iris->codeview_color_mnemonic = IM_COL32(220, 162, 255, 255);
-            iris->codeview_color_number = IM_COL32(248, 159, 128, 255);
-            iris->codeview_color_register = IM_COL32(159, 226, 235, 255);
-            iris->codeview_color_other = IM_COL32(189, 191, 248, 255);
-            iris->codeview_color_background = IM_COL32(46, 49, 64, 255);
-            iris->codeview_color_highlight = IM_COL32(76, 80, 100, 255);
+            iris->ui.codeview_color_text = IM_COL32(205, 214, 244, 255);
+            iris->ui.codeview_color_comment = IM_COL32(145, 151, 181, 255);
+            iris->ui.codeview_color_mnemonic = IM_COL32(220, 162, 255, 255);
+            iris->ui.codeview_color_number = IM_COL32(248, 159, 128, 255);
+            iris->ui.codeview_color_register = IM_COL32(159, 226, 235, 255);
+            iris->ui.codeview_color_other = IM_COL32(189, 191, 248, 255);
+            iris->ui.codeview_color_background = IM_COL32(46, 49, 64, 255);
+            iris->ui.codeview_color_highlight = IM_COL32(76, 80, 100, 255);
         } break;
     }
 }
 
-VkShaderModule create_shader(instance* iris, uint32_t* code, size_t size) {
+VkShaderModule create_shader(Instance* iris, uint32_t* code, size_t size) {
     VkShaderModuleCreateInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     info.pCode = code;
@@ -580,33 +580,33 @@ VkShaderModule create_shader(instance* iris, uint32_t* code, size_t size) {
 
     VkShaderModule shader;
 
-    if (vkCreateShaderModule(iris->device, &info, nullptr, &shader) != VK_SUCCESS) {
+    if (vkCreateShaderModule(iris->vk.device, &info, nullptr, &shader) != VK_SUCCESS) {
         return VK_NULL_HANDLE;
     }
 
     return shader;
 }
 
-VkPipeline create_pipeline(instance* iris, VkShaderModule vert_shader, VkShaderModule frag_shader) {
+VkPipeline create_pipeline(Instance* iris, VkShaderModule vert_shader, VkShaderModule frag_shader) {
     // Create pipeline layout
     VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipeline_layout_info.setLayoutCount = 1;
-    pipeline_layout_info.pSetLayouts = &iris->descriptor_set_layout;
+    pipeline_layout_info.pSetLayouts = &iris->vk.descriptor_set_layout;
     pipeline_layout_info.pushConstantRangeCount = 0;
     pipeline_layout_info.pPushConstantRanges = VK_NULL_HANDLE;
 
-    if (vkCreatePipelineLayout(iris->device, &pipeline_layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
-        fprintf(stderr, "vulkan: Failed to create pipeline layout\n");
+    if (vkCreatePipelineLayout(iris->vk.device, &pipeline_layout_info, nullptr, &pipeline_layout) != VK_SUCCESS) {
+        iris_error(&iris->log.imgui, "Failed to create pipeline layout");
 
         return VK_NULL_HANDLE;
     }
 
-    iris->pipeline_layout = pipeline_layout;
+    iris->vk.pipeline_layout = pipeline_layout;
 
-    VkRenderPass render_pass = iris->main_window_data.RenderPass;
+    VkRenderPass render_pass = iris->vk.main_window_data.RenderPass;
 
     // Create graphics pipeline
     VkPipelineShaderStageCreateInfo shader_stages[2] = {};
@@ -631,8 +631,8 @@ VkPipeline create_pipeline(instance* iris, VkShaderModule vert_shader, VkShaderM
     dynamic_state_info.dynamicStateCount = 2;
     dynamic_state_info.pDynamicStates = dynamic_states;
 
-    const auto binding_description = vertex::get_binding_description();
-    const auto attribute_descriptions = vertex::get_attribute_descriptions();
+    const auto binding_description = Vertex::get_binding_description();
+    const auto attribute_descriptions = Vertex::get_attribute_descriptions();
 
     VkPipelineVertexInputStateCreateInfo vertex_input_info = {};
     vertex_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -649,14 +649,14 @@ VkPipeline create_pipeline(instance* iris, VkShaderModule vert_shader, VkShaderM
     VkViewport viewport = {};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = (float)iris->main_window_data.Width;
-    viewport.height = (float)iris->main_window_data.Height;
+    viewport.width = (float)iris->vk.main_window_data.Width;
+    viewport.height = (float)iris->vk.main_window_data.Height;
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkExtent2D extent = {};
-    extent.width = iris->main_window_data.Width;
-    extent.height = iris->main_window_data.Height;
+    extent.width = iris->vk.main_window_data.Width;
+    extent.height = iris->vk.main_window_data.Height;
 
     VkRect2D scissor = {};
     scissor.offset = {0, 0};
@@ -715,17 +715,17 @@ VkPipeline create_pipeline(instance* iris, VkShaderModule vert_shader, VkShaderM
 
     VkPipeline pipeline = VK_NULL_HANDLE;
 
-    if (vkCreateGraphicsPipelines(iris->device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline) != VK_SUCCESS) {
+    if (vkCreateGraphicsPipelines(iris->vk.device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &pipeline) != VK_SUCCESS) {
         return VK_NULL_HANDLE;
     }
 
-    vkDestroyShaderModule(iris->device, frag_shader, nullptr);
-    vkDestroyShaderModule(iris->device, vert_shader, nullptr);
+    vkDestroyShaderModule(iris->vk.device, frag_shader, nullptr);
+    vkDestroyShaderModule(iris->vk.device, vert_shader, nullptr);
 
     return pipeline;
 }
 
-bool init(instance* iris) {
+bool init(Instance* iris) {
     VkDescriptorSetLayoutBinding sampler_layout_binding = {};
     sampler_layout_binding.binding = 0;
     sampler_layout_binding.descriptorCount = 1;
@@ -749,43 +749,43 @@ bool init(instance* iris) {
     // layout_info.flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT;
     // layout_info.pNext = &binding_flags;
 
-    if (vkCreateDescriptorSetLayout(iris->device, &layout_info, nullptr, &iris->descriptor_set_layout) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to create descriptor set layout\n");
+    if (vkCreateDescriptorSetLayout(iris->vk.device, &layout_info, nullptr, &iris->vk.descriptor_set_layout) != VK_SUCCESS) {
+        iris_error(&iris->log.imgui, "Failed to create descriptor set layout");
 
         return false;
     }
 
-    std::vector <VkDescriptorSetLayout> layouts(DESCRIPTOR_SET_RING_SIZE, iris->descriptor_set_layout);
+    std::vector <VkDescriptorSetLayout> layouts(DESCRIPTOR_SET_RING_SIZE, iris->vk.descriptor_set_layout);
 
-    iris->descriptor_sets.resize(DESCRIPTOR_SET_RING_SIZE, VK_NULL_HANDLE);
+    iris->vk.descriptor_sets.resize(DESCRIPTOR_SET_RING_SIZE, VK_NULL_HANDLE);
 
     VkDescriptorSetAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool = iris->descriptor_pool;
+    alloc_info.descriptorPool = iris->vk.descriptor_pool;
     alloc_info.descriptorSetCount = DESCRIPTOR_SET_RING_SIZE;
     alloc_info.pSetLayouts = layouts.data();
 
-    if (vkAllocateDescriptorSets(iris->device, &alloc_info, iris->descriptor_sets.data()) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to allocate descriptor sets\n");
+    if (vkAllocateDescriptorSets(iris->vk.device, &alloc_info, iris->vk.descriptor_sets.data()) != VK_SUCCESS) {
+        iris_error(&iris->log.imgui, "Failed to allocate descriptor sets");
 
         return false;
     }
 
-    iris->descriptor_set = iris->descriptor_sets[0];
+    iris->vk.descriptor_set = iris->vk.descriptor_sets[0];
 
-    if (!SDL_Vulkan_CreateSurface(iris->window, iris->instance, VK_NULL_HANDLE, &iris->surface)) {
-        printf("imgui: Failed to create Vulkan surface\n");
-
-        return false;
-    }
-
-    if (!setup_vulkan_window(iris, &iris->main_window_data, iris->window_width, iris->window_height, iris->present_mode == IRIS_PRESENT_MODE_VSYNC)) {
-        printf("imgui: Failed to setup Vulkan window\n");
+    if (!SDL_Vulkan_CreateSurface(iris->window, iris->vk.instance, VK_NULL_HANDLE, &iris->vk.surface)) {
+        iris_error(&iris->log.imgui, "Failed to create Vulkan surface");
 
         return false;
     }
 
-    iris->ini_path = iris->pref_path + "imgui.ini";
+    if (!setup_vulkan_window(iris, &iris->vk.main_window_data, iris->window_width, iris->window_height, iris->present_mode == render::VSYNC)) {
+        iris_error(&iris->log.imgui, "Failed to setup Vulkan window");
+
+        return false;
+    }
+
+    iris->paths.ini_path = iris->paths.pref_path + "imgui.ini";
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -794,121 +794,152 @@ bool init(instance* iris) {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;         // Enable Docking
 
-    if (iris->imgui_enable_viewports) {
+    if (iris->ui.imgui_enable_viewports) {
         io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
         io.ConfigViewportsNoDecoration = false;
         io.ConfigViewportsNoAutoMerge = true;
     }
 
-    io.IniFilename = iris->ini_path.c_str();
+    io.IniFilename = iris->paths.ini_path.c_str();
 
     // Setup scaling
     ImGuiStyle& style = ImGui::GetStyle();
-    style.ScaleAllSizes(iris->main_scale);
-    style.FontScaleDpi = iris->main_scale;
-    style.FontScaleMain = iris->ui_scale;
+    style.ScaleAllSizes(iris->vk.main_scale);
+    style.FontScaleDpi = iris->vk.main_scale;
+    style.FontScaleMain = iris->ui.ui_scale;
 
     io.ConfigDpiScaleFonts = true;
     io.ConfigDpiScaleViewports = true;
 
     // Setup Platform/Renderer backends
     if (!ImGui_ImplSDL3_InitForVulkan(iris->window)) {
-        fprintf(stderr, "imgui: Failed to initialize SDL3/Vulkan backend\n");
+        iris_error(&iris->log.imgui, "Failed to initialize SDL3/Vulkan backend");
 
         return false;
     }
 
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.ApiVersion = IRIS_VULKAN_API_VERSION;
-    init_info.Instance = iris->instance;
-    init_info.PhysicalDevice = iris->physical_device;
-    init_info.Device = iris->device;
-    init_info.QueueFamily = iris->queue_family;
-    init_info.Queue = iris->queue;
+    init_info.Instance = iris->vk.instance;
+    init_info.PhysicalDevice = iris->vk.physical_device;
+    init_info.Device = iris->vk.device;
+    init_info.QueueFamily = iris->vk.queue_family;
+    init_info.Queue = iris->vk.queue;
     init_info.PipelineCache = VK_NULL_HANDLE;
-    init_info.DescriptorPool = iris->descriptor_pool;
-    init_info.MinImageCount = iris->min_image_count;
-    init_info.ImageCount = iris->main_window_data.ImageCount;
+    init_info.DescriptorPool = iris->vk.descriptor_pool;
+    init_info.MinImageCount = iris->vk.min_image_count;
+    init_info.ImageCount = iris->vk.main_window_data.ImageCount;
     init_info.Allocator = VK_NULL_HANDLE;
-    init_info.PipelineInfoMain.RenderPass = iris->main_window_data.RenderPass;
+    init_info.PipelineInfoMain.RenderPass = iris->vk.main_window_data.RenderPass;
     init_info.PipelineInfoMain.Subpass = 0;
     init_info.PipelineInfoMain.MSAASamples = VK_SAMPLE_COUNT_1_BIT;
     init_info.CheckVkResultFn = VK_NULL_HANDLE;
 
     if (!ImGui_ImplVulkan_Init(&init_info)) {
-        fprintf(stderr, "imgui: Failed to initialize Vulkan backend\n");
+        iris_error(&iris->log.imgui, "Failed to initialize Vulkan backend");
 
         return false;
     }
 
     if (!setup_fonts(iris, io)) {
-        fprintf(stderr, "imgui: Failed to setup fonts\n");
+        iris_error(&iris->log.imgui, "Failed to setup fonts");
 
         return false;
     }
 
-    set_theme(iris, iris->theme, false);
-    set_codeview_scheme(iris, iris->codeview_color_scheme);
+    set_theme(iris, iris->ui.theme, false);
+    set_codeview_scheme(iris, iris->ui.codeview_color_scheme);
 
     // Initialize our pipeline
     VkShaderModule vert_shader = create_shader(iris, (uint32_t*)g_vertex_shader_data, g_vertex_shader_size);
     VkShaderModule frag_shader = create_shader(iris, (uint32_t*)g_fragment_shader_data, g_fragment_shader_size);
 
     if (!vert_shader || !frag_shader) {
-        fprintf(stderr, "vulkan: Failed to create shader modules\n");
+        iris_error(&iris->log.imgui, "Failed to create shader modules");
 
         return false;
     }
 
-    iris->pipeline = create_pipeline(iris, vert_shader, frag_shader);
+    iris->vk.pipeline = create_pipeline(iris, vert_shader, frag_shader);
 
-    if (!iris->pipeline) {
-        fprintf(stderr, "imgui: Failed to create graphics pipeline\n");
+    if (!iris->vk.pipeline) {
+        iris_error(&iris->log.imgui, "Failed to create graphics pipeline");
 
         return false;
     }
 
-    iris->ps1_memory_card_icon = vulkan::load_texture_from_memory(iris, g_ps1_memory_card_icon_data, g_ps1_memory_card_icon_size);
-    iris->ps2_memory_card_icon = vulkan::load_texture_from_memory(iris, g_ps2_memory_card_icon_data, g_ps2_memory_card_icon_size);
-    iris->pocketstation_icon = vulkan::load_texture_from_memory(iris, g_pocketstation_icon_data, g_pocketstation_icon_size);
-    iris->dualshock2_icon = vulkan::load_texture_from_memory(iris, g_dualshock2_icon_data, g_dualshock2_icon_size);
-    iris->iris_icon = vulkan::load_texture_from_memory(iris, g_iris_icon_data, g_iris_icon_size);
+    iris->ui.ps1_memory_card_icon = vulkan::load_texture_from_memory(iris, g_ps1_memory_card_icon_data, g_ps1_memory_card_icon_size);
+    iris->ui.ps2_memory_card_icon = vulkan::load_texture_from_memory(iris, g_ps2_memory_card_icon_data, g_ps2_memory_card_icon_size);
+    iris->ui.pocketstation_icon = vulkan::load_texture_from_memory(iris, g_pocketstation_icon_data, g_pocketstation_icon_size);
+    iris->ui.dualshock2_icon = vulkan::load_texture_from_memory(iris, g_dualshock2_icon_data, g_dualshock2_icon_size);
+    iris->ui.iris_icon = vulkan::load_texture_from_memory(iris, g_iris_icon_data, g_iris_icon_size);
 
     return true;
 }
 
-void cleanup(instance* iris) {
+void cleanup(Instance* iris) {
     vulkan::wait_idle(iris);
 
-    vulkan::free_texture(iris, iris->ps1_memory_card_icon);
-    vulkan::free_texture(iris, iris->ps2_memory_card_icon);
-    vulkan::free_texture(iris, iris->pocketstation_icon);
-    vulkan::free_texture(iris, iris->dualshock2_icon);
-    vulkan::free_texture(iris, iris->iris_icon);
+    vulkan::free_texture(iris, iris->ui.ps1_memory_card_icon);
+    vulkan::free_texture(iris, iris->ui.ps2_memory_card_icon);
+    vulkan::free_texture(iris, iris->ui.pocketstation_icon);
+    vulkan::free_texture(iris, iris->ui.dualshock2_icon);
+    vulkan::free_texture(iris, iris->ui.iris_icon);
 
     ImGui_ImplVulkan_Shutdown();
     ImGui_ImplSDL3_Shutdown();
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
 
-    ImGui_ImplVulkanH_DestroyWindow(iris->instance, iris->device, &iris->main_window_data, VK_NULL_HANDLE);
+    ImGui_ImplVulkanH_DestroyWindow(iris->vk.instance, iris->vk.device, &iris->vk.main_window_data, VK_NULL_HANDLE);
 
-    iris->instance = NULL;
+    iris->vk.instance = NULL;
 }
 
-bool render_frame(instance* iris, ImDrawData* draw_data) {
-    if (iris->swapchain_rebuild)
+// Between a successful acquire and a successful present there is no way to undo
+// a failure in place: the image stays acquired and the acquire semaphore may be
+// left signalled with nothing to wait on it. Re-entering the loop in that state
+// is what turns one transient failure into an endless stream of
+// VUID-vkAcquireNextImageKHR-{semaphore-01779,surface-07783}. Forcing a rebuild
+// is the only recovery, since CreateOrResizeWindow recreates the semaphores
+// along with the swapchain.
+static bool abort_frame(Instance* iris, const char* what, VkResult err) {
+    iris_error(&iris->log.imgui, "{} ({})", what, (int)err);
+
+    if (err == VK_ERROR_DEVICE_LOST) {
+        vulkan::dump_device_fault(iris);
+
+        // Every subsequent call on this device would fail the same way, so stop
+        // rendering rather than rebuilding into the same error.
+        iris->vk.device_lost = true;
+
+        if (!iris->fatal_error) {
+            iris->fatal_error = true;
+            iris->fatal_error_text = fmt::format(
+                "The GPU device was lost during {}. The emulator cannot keep rendering; "
+                "please restart it.", what
+            );
+        }
+    } else {
+        iris->vk.swapchain_rebuild = true;
+    }
+
+    return false;
+}
+
+bool render_frame(Instance* iris, ImDrawData* draw_data) {
+    if (iris->vk.swapchain_rebuild || iris->vk.device_lost)
         return true;
 
-    ImGui_ImplVulkanH_Window* wd = &iris->main_window_data;
+    ImGui_ImplVulkanH_Window* wd = &iris->vk.main_window_data;
     VkSemaphore acquire_semaphore = wd->FrameSemaphores[wd->SemaphoreIndex].ImageAcquiredSemaphore;
 
-    uint32_t image_index;
+    uint32_t image_index = 0;
 
     VkResult err;
 
     err = vkAcquireNextImageKHR(
-        iris->device,
+        iris->vk.device,
         wd->Swapchain,
         UINT64_MAX,
         acquire_semaphore,
@@ -916,56 +947,44 @@ bool render_frame(instance* iris, ImDrawData* draw_data) {
         &image_index
     );
 
-    VkSemaphore submit_semaphore = wd->FrameSemaphores[image_index].RenderCompleteSemaphore;
-
     if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
-        iris->swapchain_rebuild = true;
+        iris->vk.swapchain_rebuild = true;
 
         return true;
     } else if (err != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to acquire next image\n");
-
+        // Nothing was acquired, so there is no swapchain state to unwind
         if (err == VK_ERROR_DEVICE_LOST)
-            vulkan::dump_device_fault(iris);
+            return abort_frame(iris, "Failed to acquire next image", err);
+
+        iris_error(&iris->log.imgui, "Failed to acquire next image ({})", (int)err);
 
         return false;
     }
+
+    // image_index is only meaningful once the acquire succeeded
+    VkSemaphore submit_semaphore = wd->FrameSemaphores[image_index].RenderCompleteSemaphore;
 
     wd->FrameIndex = image_index;
 
     ImGui_ImplVulkanH_Frame* fd = &wd->Frames[wd->FrameIndex];
 
-    if (vkWaitForFences(iris->device, 1, &fd->Fence, VK_TRUE, UINT64_MAX) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to wait for fence\n");
+    if ((err = vkWaitForFences(iris->vk.device, 1, &fd->Fence, VK_TRUE, UINT64_MAX)) != VK_SUCCESS)
+        return abort_frame(iris, "Failed to wait for fence", err);
 
-        vulkan::dump_device_fault(iris);
+    if ((err = vkResetFences(iris->vk.device, 1, &fd->Fence)) != VK_SUCCESS)
+        return abort_frame(iris, "Failed to reset fence", err);
 
-        return false;
-    }
-
-    if (vkResetFences(iris->device, 1, &fd->Fence) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to reset fence\n");
-
-        return false;
-    }
-
-    if (vkResetCommandPool(iris->device, fd->CommandPool, 0) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to reset command pool\n");
-
-        return false;
-    }
+    if ((err = vkResetCommandPool(iris->vk.device, fd->CommandPool, 0)) != VK_SUCCESS)
+        return abort_frame(iris, "Failed to reset command pool", err);
 
     VkCommandBufferBeginInfo begin_info = {};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
-    if (vkBeginCommandBuffer(fd->CommandBuffer, &begin_info) != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to begin command buffer\n");
-        
-        return false;
-    }
+    if ((err = vkBeginCommandBuffer(fd->CommandBuffer, &begin_info)) != VK_SUCCESS)
+        return abort_frame(iris, "Failed to begin command buffer", err);
 
-    if (iris->instance && (iris->headless || !iris->show_gamelist)) {
+    if (iris->vk.instance && (iris->headless || !iris->ui.show_gamelist)) {
         render::render_frame(iris, fd->CommandBuffer, fd->Framebuffer);
     }
 
@@ -977,7 +996,7 @@ bool render_frame(instance* iris, ImDrawData* draw_data) {
         render_pass_info.renderArea.extent.width = wd->Width;
         render_pass_info.renderArea.extent.height = wd->Height;
         render_pass_info.clearValueCount = 1;
-        render_pass_info.pClearValues = &iris->clear_value;
+        render_pass_info.pClearValues = &iris->vk.clear_value;
 
         vkCmdBeginRenderPass(fd->CommandBuffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
     }
@@ -1000,19 +1019,11 @@ bool render_frame(instance* iris, ImDrawData* draw_data) {
         submit_info.signalSemaphoreCount = 1;
         submit_info.pSignalSemaphores = &submit_semaphore;
 
-        if (vkEndCommandBuffer(fd->CommandBuffer) != VK_SUCCESS) {
-            fprintf(stderr, "imgui: Failed to end command buffer\n");
-        
-            return false;
-        }
+        if ((err = vkEndCommandBuffer(fd->CommandBuffer)) != VK_SUCCESS)
+            return abort_frame(iris, "Failed to end command buffer", err);
 
-        if (vkQueueSubmit(iris->queue, 1, &submit_info, fd->Fence) != VK_SUCCESS) {
-            fprintf(stderr, "imgui: Failed to submit queue\n");
-
-            vulkan::dump_device_fault(iris);
-
-            return false;
-        }
+        if ((err = vkQueueSubmit(iris->vk.queue, 1, &submit_info, fd->Fence)) != VK_SUCCESS)
+            return abort_frame(iris, "Failed to submit queue", err);
     }
 
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
@@ -1028,19 +1039,14 @@ bool render_frame(instance* iris, ImDrawData* draw_data) {
     present_info.pSwapchains = &wd->Swapchain;
     present_info.pImageIndices = &image_index;
 
-    err = vkQueuePresentKHR(iris->queue, &present_info);
+    err = vkQueuePresentKHR(iris->vk.queue, &present_info);
 
     if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
-        iris->swapchain_rebuild = true;
+        iris->vk.swapchain_rebuild = true;
 
         return true;
     } else if (err != VK_SUCCESS) {
-        fprintf(stderr, "imgui: Failed to present image\n");
-
-        if (err == VK_ERROR_DEVICE_LOST)
-            vulkan::dump_device_fault(iris);
-
-        return false;
+        return abort_frame(iris, "Failed to present image", err);
     }
 
     wd->SemaphoreIndex = (wd->SemaphoreIndex + 1) % wd->SemaphoreCount;
@@ -1059,49 +1065,49 @@ bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags) {
     return ImGui::Begin(name, p_open, flags);
 }
 
-void start_dim(instance* iris, float alpha, size_t ms) {
-    if (iris->dim_active) {
+void start_dim(Instance* iris, float alpha, size_t ms) {
+    if (iris->ui.dim_active) {
         return;
     }
 
-    iris->dim_target_alpha = alpha;
-    iris->dim_current_alpha = 0.0f;
-    iris->dim_ms = ms;
-    iris->dim_start = SDL_GetTicks();
-    iris->dim_active = true;
-    iris->dim_end = false;
+    iris->ui.dim_target_alpha = alpha;
+    iris->ui.dim_current_alpha = 0.0f;
+    iris->ui.dim_ms = ms;
+    iris->ui.dim_start = SDL_GetTicks();
+    iris->ui.dim_active = true;
+    iris->ui.dim_end = false;
 }
 
-void end_dim(instance* iris) {
-    iris->dim_current_alpha = 1.0f;
-    iris->dim_active = true;
-    iris->dim_end = true;
-    iris->dim_start = SDL_GetTicks();
+void end_dim(Instance* iris) {
+    iris->ui.dim_current_alpha = 1.0f;
+    iris->ui.dim_active = true;
+    iris->ui.dim_end = true;
+    iris->ui.dim_start = SDL_GetTicks();
 }
 
-void render_dim(instance* iris) {
+void render_dim(Instance* iris) {
     using namespace ImGui;
 
     ImDrawList* draw_list = GetForegroundDrawList(GetMainViewport());
 
     size_t ticks = SDL_GetTicks();
-    size_t diff = ticks - iris->dim_start;
+    size_t diff = ticks - iris->ui.dim_start;
     
-    iris->dim_current_alpha = (float)diff / (float)iris->dim_ms;
+    iris->ui.dim_current_alpha = (float)diff / (float)iris->ui.dim_ms;
 
-    if (iris->dim_end) {
-        iris->dim_current_alpha = 1.0f - iris->dim_current_alpha;
+    if (iris->ui.dim_end) {
+        iris->ui.dim_current_alpha = 1.0f - iris->ui.dim_current_alpha;
 
-        if (iris->dim_current_alpha <= 0.0f) {
-            iris->dim_active = false;
-            iris->dim_end = false;
-            iris->dim_current_alpha = 0.0f;
+        if (iris->ui.dim_current_alpha <= 0.0f) {
+            iris->ui.dim_active = false;
+            iris->ui.dim_end = false;
+            iris->ui.dim_current_alpha = 0.0f;
 
             return;
         }
     } else {
-        if (iris->dim_current_alpha >= 1.0f) {
-            iris->dim_current_alpha = 1.0f;
+        if (iris->ui.dim_current_alpha >= 1.0f) {
+            iris->ui.dim_current_alpha = 1.0f;
         }
     }
 
@@ -1111,7 +1117,7 @@ void render_dim(instance* iris) {
     draw_list->AddRectFilled(
         pos,
         ImVec2(pos.x + size.x, pos.y + size.y),
-        ImColor(0.0f, 0.0f, 0.0f, iris->dim_target_alpha * iris->dim_current_alpha)
+        ImColor(0.0f, 0.0f, 0.0f, iris->ui.dim_target_alpha * iris->ui.dim_current_alpha)
     );
 }
 

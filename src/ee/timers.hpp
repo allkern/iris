@@ -40,7 +40,6 @@ struct Timer {
 };
 
 struct Timers {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         ee::intc::Intc* intc;
         scheduler::Scheduler* sched;

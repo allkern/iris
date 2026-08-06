@@ -11,6 +11,7 @@
 #include "ee/vu_def.hpp"
 #include "iop/iop_def.hpp"
 #include "iop/iop_dis.hpp"
+#include "ps2.hpp"
 
 #define IM_RGB(r, g, b) ImVec4(((float)r / 255.0f), ((float)g / 255.0f), ((float)b / 255.0f), 1.0)
 
@@ -111,7 +112,7 @@ bool vu0f_float;
 static ImGuiTableFlags ee_table_sizing = ImGuiTableFlags_SizingStretchSame;
 static ImGuiTableFlags iop_table_sizing = ImGuiTableFlags_SizingStretchProp;
 
-static inline void show_ee_main_registers(instance* iris) {
+static inline void show_ee_main_registers(Instance* iris) {
     using namespace ImGui;
 
     ee::Ee* ee = iris->ps2->ee;
@@ -125,10 +126,10 @@ static inline void show_ee_main_registers(instance* iris) {
         ee_prev[i] = ee->r[i];
     }
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (BeginTable("ee#registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("96-127");
         TableSetupColumn("64-95");
@@ -158,7 +159,7 @@ static inline void show_ee_main_registers(instance* iris) {
                 if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                     static char new_value[9];
 
-                    PushFont(iris->font_small_code);
+                    PushFont(iris->ui.font_small_code);
                     TextDisabled("Edit "); SameLine(0.0, 0.0);
                     Text("%s", mips_cc_r[i]); SameLine(0.0, 0.0);
                     TextDisabled(" (bits %d-%d)", j*32, ((j+1)*32)-1);
@@ -167,14 +168,14 @@ static inline void show_ee_main_registers(instance* iris) {
                     PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                    PushFont(iris->font_body);
+                    PushFont(iris->ui.font_body);
                     PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                     AlignTextToFramePadding();
                     Text(ICON_MS_EDIT); SameLine();
 
                     SetNextItemWidth(100);
-                    PushFont(iris->font_code);
+                    PushFont(iris->ui.font_code);
 
                     if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                         if (new_value[0])
@@ -212,7 +213,7 @@ static inline void show_ee_main_registers(instance* iris) {
     PopFont();
 }
 
-static inline void show_ee_cop0_registers(instance* iris) {
+static inline void show_ee_cop0_registers(Instance* iris) {
     using namespace ImGui;
 
     ee::Ee* ee = iris->ps2->ee;
@@ -224,10 +225,10 @@ static inline void show_ee_cop0_registers(instance* iris) {
         ee_cop0_prev[i] = ee->cop0_r[i];
     }
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (BeginTable("ee#cop0registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("96-127");
         TableSetupColumn("64-95");
@@ -256,7 +257,7 @@ static inline void show_ee_cop0_registers(instance* iris) {
             if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                 static char new_value[9];
 
-                PushFont(iris->font_small_code);
+                PushFont(iris->ui.font_small_code);
                 TextDisabled("Edit "); SameLine(0.0, 0.0);
                 Text("%s", ee_cop0_r[i]);
                 PopFont();
@@ -264,14 +265,14 @@ static inline void show_ee_cop0_registers(instance* iris) {
                 PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                 PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                PushFont(iris->font_body);
+                PushFont(iris->ui.font_body);
                 PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                 AlignTextToFramePadding();
                 Text(ICON_MS_EDIT); SameLine();
 
                 SetNextItemWidth(100);
-                PushFont(iris->font_code);
+                PushFont(iris->ui.font_code);
 
                 if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (new_value[0])
@@ -308,7 +309,7 @@ static inline void show_ee_cop0_registers(instance* iris) {
     PopFont();
 }
 
-static inline void show_ee_fpu_registers(instance* iris) {
+static inline void show_ee_fpu_registers(Instance* iris) {
 using namespace ImGui;
 
     ee::Ee* ee = iris->ps2->ee;
@@ -320,10 +321,10 @@ using namespace ImGui;
         ee_fpu_prev[i] = ee->f[i].u32;
     }
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (BeginTable("ee#fpuregisters", 3, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("u32");
         TableSetupColumn("float");
@@ -350,7 +351,7 @@ using namespace ImGui;
             if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                 static char new_value[9];
 
-                PushFont(iris->font_small_code);
+                PushFont(iris->ui.font_small_code);
                 TextDisabled("Edit "); SameLine(0.0, 0.0);
                 Text("f%d ", i); SameLine(0.0, 0.0);
                 TextDisabled("(as u32)");
@@ -359,14 +360,14 @@ using namespace ImGui;
                 PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                 PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                PushFont(iris->font_body);
+                PushFont(iris->ui.font_body);
                 PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                 AlignTextToFramePadding();
                 Text(ICON_MS_EDIT); SameLine();
 
                 SetNextItemWidth(100);
-                PushFont(iris->font_code);
+                PushFont(iris->ui.font_code);
 
                 if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (new_value[0])
@@ -407,7 +408,7 @@ using namespace ImGui;
             if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                 static char new_value[9];
 
-                PushFont(iris->font_small_code);
+                PushFont(iris->ui.font_small_code);
                 TextDisabled("Edit "); SameLine(0.0, 0.0);
                 Text("f%d ", i); SameLine(0.0, 0.0);
                 TextDisabled("(as float)");
@@ -416,14 +417,14 @@ using namespace ImGui;
                 PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                 PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                PushFont(iris->font_body);
+                PushFont(iris->ui.font_body);
                 PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                 AlignTextToFramePadding();
                 Text(ICON_MS_EDIT); SameLine();
 
                 SetNextItemWidth(100);
-                PushFont(iris->font_code);
+                PushFont(iris->ui.font_code);
 
                 if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsScientific | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (new_value[0])
@@ -460,7 +461,7 @@ using namespace ImGui;
     PopFont();
 }
 
-static inline void show_vu0_float(instance* iris) {
+static inline void show_vu0_float(Instance* iris) {
     using namespace ImGui;
 
     vu::Vu* vu0 = iris->ps2->ee->vu0;
@@ -474,10 +475,10 @@ static inline void show_vu0_float(instance* iris) {
         vu0f_prev[i] = vu0->vf[i];
     }
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (BeginTable("ee#registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("W");
         TableSetupColumn("Z");
@@ -507,7 +508,7 @@ static inline void show_vu0_float(instance* iris) {
                 if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                     static char new_value[9];
 
-                    PushFont(iris->font_small_code);
+                    PushFont(iris->ui.font_small_code);
                     TextDisabled("Edit "); SameLine(0.0, 0.0);
                     Text("vf%02d", i); SameLine(0.0, 0.0);
                     TextDisabled(" (%c field)", "XYZW"[j]);
@@ -516,14 +517,14 @@ static inline void show_vu0_float(instance* iris) {
                     PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                    PushFont(iris->font_body);
+                    PushFont(iris->ui.font_body);
                     PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                     AlignTextToFramePadding();
                     Text(ICON_MS_EDIT); SameLine();
 
                     SetNextItemWidth(100);
-                    PushFont(iris->font_code);
+                    PushFont(iris->ui.font_code);
 
                     if (vu0f_float) {
                         if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsScientific | ImGuiInputTextFlags_EnterReturnsTrue)) {
@@ -578,7 +579,7 @@ static inline void show_vu0_float(instance* iris) {
     PopFont();
 }
 
-static inline void show_vu0_integer(instance* iris) {
+static inline void show_vu0_integer(Instance* iris) {
     using namespace ImGui;
 
     vu::Vu* vu0 = iris->ps2->ee->vu0;
@@ -590,10 +591,10 @@ static inline void show_vu0_integer(instance* iris) {
         vu0i_prev[i] = i < 16 ? vu0->vi[i] : vu0->cr[i-16];
     }
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (BeginTable("ee#cop0registers", 5, ImGuiTableFlags_RowBg | ee_table_sizing)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Reg");
         TableSetupColumn("96-127");
         TableSetupColumn("64-95");
@@ -622,7 +623,7 @@ static inline void show_vu0_integer(instance* iris) {
             if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                 static char new_value[9];
 
-                PushFont(iris->font_small_code);
+                PushFont(iris->ui.font_small_code);
                 TextDisabled("Edit "); SameLine(0.0, 0.0);
                 Text("%s", vu0i_regs[i]);
                 PopFont();
@@ -630,14 +631,14 @@ static inline void show_vu0_integer(instance* iris) {
                 PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                 PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                PushFont(iris->font_body);
+                PushFont(iris->ui.font_body);
                 PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                 AlignTextToFramePadding();
                 Text(ICON_MS_EDIT); SameLine();
 
                 SetNextItemWidth(100);
-                PushFont(iris->font_code);
+                PushFont(iris->ui.font_code);
 
                 if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                     if (new_value[0]) {
@@ -682,10 +683,10 @@ static inline void show_vu0_integer(instance* iris) {
     PopFont();
 }
 
-static inline void show_iop_main_registers(instance* iris) {
+static inline void show_iop_main_registers(Instance* iris) {
     using namespace ImGui;
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     iop::Iop* iop = iris->ps2->iop;
 
@@ -714,21 +715,21 @@ static inline void show_iop_main_registers(instance* iris) {
                 if (BeginPopupContextItem(NULL, ImGuiPopupFlags_MouseButtonLeft)) {
                     static char new_value[9];
 
-                    PushFont(iris->font_small_code);
+                    PushFont(iris->ui.font_small_code);
                     TextDisabled("Edit %s", mips_cc_r[i]);
                     PopFont();
 
                     PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
                     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-                    PushFont(iris->font_body);
+                    PushFont(iris->ui.font_body);
                     PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
                     AlignTextToFramePadding();
                     Text(ICON_MS_EDIT); SameLine();
 
                     SetNextItemWidth(100);
-                    PushFont(iris->font_code);
+                    PushFont(iris->ui.font_code);
 
                     if (InputText("##", new_value, 9, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EnterReturnsTrue)) {
                         if (new_value[0])
@@ -771,7 +772,7 @@ static inline void show_iop_main_registers(instance* iris) {
     PopFont();
 }
 
-static inline void show_work_in_progress(instance* iris) {
+static inline void show_work_in_progress(Instance* iris) {
     using namespace ImGui;
 
     Text("Work-in-progress!");
@@ -804,10 +805,10 @@ static const char* ee_reg_group_names[] = {
 
 static int ee_reg_group = 0;
 
-void show_ee_state(instance* iris) {
+void show_ee_state(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("EE state", &iris->show_ee_state, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("EE state", &iris->ui.show_ee_state, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {
@@ -890,10 +891,10 @@ void show_ee_state(instance* iris) {
     }
 }
 
-void show_iop_state(instance* iris) {
+void show_iop_state(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("IOP state", &iris->show_iop_state, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("IOP state", &iris->ui.show_iop_state, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {

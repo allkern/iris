@@ -4,6 +4,7 @@
 #include "iris.hpp"
 
 #include "gs/gs_dump.hpp"
+#include "ps2.hpp"
 
 #define RENDER_MAX_SHADER_PASSES 16
 
@@ -17,7 +18,7 @@ namespace iris::render {
 static int frame = 0;
 static constexpr uint32_t DESCRIPTOR_SET_RING_SIZE = 8;
 
-bool create_image(instance* iris, uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkImage& image, VkImageView& view, VkDeviceMemory& memory) {
+bool create_image(Instance* iris, uint32_t width, uint32_t height, VkFormat format, VkImageUsageFlags usage, VkImage& image, VkImageView& view, VkDeviceMemory& memory) {
     VkImageCreateInfo image_info = {};
     image_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -33,19 +34,19 @@ bool create_image(instance* iris, uint32_t width, uint32_t height, VkFormat form
     image_info.samples = VK_SAMPLE_COUNT_1_BIT;
     image_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
 
-    if (vkCreateImage(iris->device, &image_info, nullptr, &image) != VK_SUCCESS) {
+    if (vkCreateImage(iris->vk.device, &image_info, nullptr, &image) != VK_SUCCESS) {
         return false;
     }
 
     VkMemoryRequirements memory_requirements;
-    vkGetImageMemoryRequirements(iris->device, image, &memory_requirements);
+    vkGetImageMemoryRequirements(iris->vk.device, image, &memory_requirements);
 
     VkMemoryAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     alloc_info.allocationSize = memory_requirements.size;
 
     VkPhysicalDeviceMemoryProperties memory_properties;
-    vkGetPhysicalDeviceMemoryProperties(iris->physical_device, &memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(iris->vk.physical_device, &memory_properties);
 
     for (uint32_t i = 0; i < memory_properties.memoryTypeCount; i++) {
         if ((memory_requirements.memoryTypeBits & (1 << i)) &&
@@ -55,15 +56,15 @@ bool create_image(instance* iris, uint32_t width, uint32_t height, VkFormat form
         }
     }
 
-    if (vkAllocateMemory(iris->device, &alloc_info, nullptr, &memory) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to allocate image memory\n");
+    if (vkAllocateMemory(iris->vk.device, &alloc_info, nullptr, &memory) != VK_SUCCESS) {
+        iris_error(&iris->log.render, "Failed to allocate image memory");
 
-        vkDestroyImage(iris->device, image, nullptr);
+        vkDestroyImage(iris->vk.device, image, nullptr);
 
         return false;
     }
 
-    vkBindImageMemory(iris->device, image, memory, 0);
+    vkBindImageMemory(iris->vk.device, image, memory, 0);
 
     VkImageViewCreateInfo image_view_info = {};
     image_view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -80,39 +81,39 @@ bool create_image(instance* iris, uint32_t width, uint32_t height, VkFormat form
     image_view_info.subresourceRange.baseArrayLayer = 0;
     image_view_info.subresourceRange.layerCount = 1;
 
-    if (vkCreateImageView(iris->device, &image_view_info, nullptr, &view) != VK_SUCCESS) {
+    if (vkCreateImageView(iris->vk.device, &image_view_info, nullptr, &view) != VK_SUCCESS) {
         return false;
     }
 
     return true;
 }
 
-bool rebuild_framebuffers(instance* iris) {
+bool rebuild_framebuffers(Instance* iris) {
     if (!shaders::count(iris))
         return true;
 
     vulkan::wait_idle(iris);
 
-    for (auto& pass_framebuffers : iris->shader_pass_framebuffers) {
+    for (auto& pass_framebuffers : iris->vk.shader_pass_framebuffers) {
         for (VkFramebuffer& framebuffer : pass_framebuffers) {
             if (framebuffer) {
-                vkDestroyFramebuffer(iris->device, framebuffer, nullptr);
+                vkDestroyFramebuffer(iris->vk.device, framebuffer, nullptr);
                 framebuffer = VK_NULL_HANDLE;
             }
         }
     }
 
-    iris->shader_pass_framebuffers.clear();
+    iris->vk.shader_pass_framebuffers.clear();
 
-    for (auto& fb : iris->shader_framebuffers) {
-        if (fb.view) vkDestroyImageView(iris->device, fb.view, nullptr);
-        if (fb.image) vkDestroyImage(iris->device, fb.image, nullptr);
-        if (fb.memory) vkFreeMemory(iris->device, fb.memory, nullptr);
+    for (auto& fb : iris->vk.shader_framebuffers) {
+        if (fb.view) vkDestroyImageView(iris->vk.device, fb.view, nullptr);
+        if (fb.image) vkDestroyImage(iris->vk.device, fb.image, nullptr);
+        if (fb.memory) vkFreeMemory(iris->vk.device, fb.memory, nullptr);
 
         bool res = create_image(iris,
-            iris->image.width,
-            iris->image.height,
-            iris->image.format,
+            iris->vk.image.width,
+            iris->vk.image.height,
+            iris->vk.image.format,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             fb.image,
             fb.view,
@@ -120,7 +121,7 @@ bool rebuild_framebuffers(instance* iris) {
         );
 
         if (!res) {
-            fprintf(stderr, "render: Failed to create shader pass framebuffer image\n");
+            iris_error(&iris->log.render, "Failed to create shader pass framebuffer image");
 
             return false;
         }
@@ -128,13 +129,13 @@ bool rebuild_framebuffers(instance* iris) {
 
     const size_t pass_count = shaders::count(iris);
 
-    iris->shader_pass_framebuffers.resize(pass_count);
+    iris->vk.shader_pass_framebuffers.resize(pass_count);
 
     for (size_t pass_index = 0; pass_index < pass_count; pass_index++) {
         auto* pass = shaders::at(iris, (int)pass_index);
 
         if (!pass || !pass->ready()) {
-            iris->shader_pass_framebuffers[pass_index] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
+            iris->vk.shader_pass_framebuffers[pass_index] = { VK_NULL_HANDLE, VK_NULL_HANDLE };
 
             continue;
         }
@@ -144,13 +145,13 @@ bool rebuild_framebuffers(instance* iris) {
             framebuffer_info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
             framebuffer_info.renderPass = pass->get_render_pass();
             framebuffer_info.attachmentCount = 1;
-            framebuffer_info.pAttachments = &iris->shader_framebuffers[framebuffer_index].view;
-            framebuffer_info.width = iris->image.width;
-            framebuffer_info.height = iris->image.height;
+            framebuffer_info.pAttachments = &iris->vk.shader_framebuffers[framebuffer_index].view;
+            framebuffer_info.width = iris->vk.image.width;
+            framebuffer_info.height = iris->vk.image.height;
             framebuffer_info.layers = 1;
 
-            if (vkCreateFramebuffer(iris->device, &framebuffer_info, nullptr, &iris->shader_pass_framebuffers[pass_index][framebuffer_index]) != VK_SUCCESS) {
-                fprintf(stderr, "render: Failed to create shader pass framebuffer\n");
+            if (vkCreateFramebuffer(iris->vk.device, &framebuffer_info, nullptr, &iris->vk.shader_pass_framebuffers[pass_index][framebuffer_index]) != VK_SUCCESS) {
+                iris_error(&iris->log.render, "Failed to create shader pass framebuffer");
 
                 return false;
             }
@@ -160,7 +161,7 @@ bool rebuild_framebuffers(instance* iris) {
     return true;
 }
 
-bool init(instance* iris) {
+bool init(Instance* iris) {
     // Initialize our renderer
     iris->renderer = gs::renderer::create();
 
@@ -169,11 +170,11 @@ bool init(instance* iris) {
     info.backend = iris->renderer_backend;
     info.gif = iris->ps2->gif;
     info.gs = iris->ps2->gs;
-    info.instance = iris->instance;
-    info.device = iris->device;
-    info.physical_device = iris->physical_device;
-    info.instance_create_info = iris->instance_create_info;
-    info.device_create_info = iris->device_create_info;
+    info.instance = iris->vk.instance;
+    info.device = iris->vk.device;
+    info.physical_device = iris->vk.physical_device;
+    info.instance_create_info = iris->vk.instance_create_info;
+    info.device_create_info = iris->vk.device_create_info;
 
     switch (info.backend) {
         case gs::renderer::BACKEND_HARDWARE: {
@@ -182,7 +183,7 @@ bool init(instance* iris) {
     }
 
     if (!gs::renderer::init(iris->renderer, info)) {
-        fprintf(stderr, "render: Failed to initialize renderer backend\n");
+        iris_error(&iris->log.render, "Failed to initialize renderer backend");
 
         return false;
     }
@@ -199,8 +200,8 @@ bool init(instance* iris) {
     nearest_sampler_info.maxLod = 1000;
     nearest_sampler_info.maxAnisotropy = 1.0f;
 
-    if (vkCreateSampler(iris->device, &nearest_sampler_info, VK_NULL_HANDLE, &iris->sampler[0]) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create nearest texture sampler\n");
+    if (vkCreateSampler(iris->vk.device, &nearest_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[0]) != VK_SUCCESS) {
+        iris_error(&iris->log.render, "Failed to create nearest texture sampler");
 
         return false;
     }
@@ -217,13 +218,13 @@ bool init(instance* iris) {
     bilinear_sampler_info.maxLod = 1000;
     bilinear_sampler_info.maxAnisotropy = 1.0f;
 
-    if (vkCreateSampler(iris->device, &bilinear_sampler_info, VK_NULL_HANDLE, &iris->sampler[1]) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create bilinear texture sampler\n");
+    if (vkCreateSampler(iris->vk.device, &bilinear_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[1]) != VK_SUCCESS) {
+        iris_error(&iris->log.render, "Failed to create bilinear texture sampler");
 
         return false;
     }
 
-    if (iris->cubic_supported) {
+    if (iris->vk.cubic_supported) {
         VkSamplerCreateInfo cubic_sampler_info = {};
         cubic_sampler_info.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
         cubic_sampler_info.magFilter = VK_FILTER_LINEAR;
@@ -236,8 +237,8 @@ bool init(instance* iris) {
         cubic_sampler_info.maxLod = 1000;
         cubic_sampler_info.maxAnisotropy = 1.0f;
 
-        if (vkCreateSampler(iris->device, &cubic_sampler_info, VK_NULL_HANDLE, &iris->sampler[2]) != VK_SUCCESS) {
-            fprintf(stderr, "render: Failed to create cubic texture sampler\n");
+        if (vkCreateSampler(iris->vk.device, &cubic_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[2]) != VK_SUCCESS) {
+            iris_error(&iris->log.render, "Failed to create cubic texture sampler");
 
             return false;
         }
@@ -248,8 +249,8 @@ bool init(instance* iris) {
     vert_shader_create_info.pCode = (const uint32_t*)g_default_vertex_shader_data;
     vert_shader_create_info.codeSize = g_default_vertex_shader_size;
 
-    if (vkCreateShaderModule(iris->device, &vert_shader_create_info, nullptr, &iris->default_vert_shader) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create default vertex shader module\n");
+    if (vkCreateShaderModule(iris->vk.device, &vert_shader_create_info, nullptr, &iris->vk.default_vert_shader) != VK_SUCCESS) {
+        iris_error(&iris->log.render, "Failed to create default vertex shader module");
 
         return false;
     }
@@ -267,57 +268,57 @@ bool init(instance* iris) {
     layout_info.bindingCount = 1;
     layout_info.pBindings = &sampler_layout_binding;
 
-    if (vkCreateDescriptorSetLayout(iris->device, &layout_info, nullptr, &iris->shader_descriptor_set_layout) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create descriptor set layout\n");
+    if (vkCreateDescriptorSetLayout(iris->vk.device, &layout_info, nullptr, &iris->vk.shader_descriptor_set_layout) != VK_SUCCESS) {
+        iris_error(&iris->log.render, "Failed to create descriptor set layout");
 
         return false;
     }
 
     const uint32_t shader_descriptor_set_count = DESCRIPTOR_SET_RING_SIZE * RENDER_MAX_SHADER_PASSES;
 
-    std::vector <VkDescriptorSetLayout> shader_layouts(shader_descriptor_set_count, iris->shader_descriptor_set_layout);
+    std::vector <VkDescriptorSetLayout> shader_layouts(shader_descriptor_set_count, iris->vk.shader_descriptor_set_layout);
 
-    iris->shader_descriptor_sets.resize(shader_descriptor_set_count, VK_NULL_HANDLE);
+    iris->vk.shader_descriptor_sets.resize(shader_descriptor_set_count, VK_NULL_HANDLE);
 
     VkDescriptorSetAllocateInfo alloc_info = {};
     alloc_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    alloc_info.descriptorPool = iris->descriptor_pool;
+    alloc_info.descriptorPool = iris->vk.descriptor_pool;
     alloc_info.descriptorSetCount = shader_descriptor_set_count;
     alloc_info.pSetLayouts = shader_layouts.data();
 
-    if (vkAllocateDescriptorSets(iris->device, &alloc_info, iris->shader_descriptor_sets.data()) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to allocate descriptor sets\n");
+    if (vkAllocateDescriptorSets(iris->vk.device, &alloc_info, iris->vk.shader_descriptor_sets.data()) != VK_SUCCESS) {
+        iris_error(&iris->log.render, "Failed to allocate descriptor sets");
 
         return false;
     }
 
-    iris->shader_descriptor_set = iris->shader_descriptor_sets[0];
+    iris->vk.shader_descriptor_set = iris->vk.shader_descriptor_sets[0];
 
     return true;
 }
 
-static inline VkDescriptorSet get_frame_descriptor_set(instance* iris) {
-    if (!iris->descriptor_sets.size()) {
-        return iris->descriptor_set;
+static inline VkDescriptorSet get_frame_descriptor_set(Instance* iris) {
+    if (!iris->vk.descriptor_sets.size()) {
+        return iris->vk.descriptor_set;
     }
 
-    const uint32_t frame_index = iris->main_window_data.FrameIndex;
+    const uint32_t frame_index = iris->vk.main_window_data.FrameIndex;
 
-    return iris->descriptor_sets[frame_index % iris->descriptor_sets.size()];
+    return iris->vk.descriptor_sets[frame_index % iris->vk.descriptor_sets.size()];
 }
 
-static inline VkDescriptorSet get_frame_shader_descriptor_set(instance* iris, uint32_t pass_index) {
-    if (!iris->shader_descriptor_sets.size()) {
-        return iris->shader_descriptor_set;
+static inline VkDescriptorSet get_frame_shader_descriptor_set(Instance* iris, uint32_t pass_index) {
+    if (!iris->vk.shader_descriptor_sets.size()) {
+        return iris->vk.shader_descriptor_set;
     }
 
-    const uint32_t frame_index = iris->main_window_data.FrameIndex % DESCRIPTOR_SET_RING_SIZE;
+    const uint32_t frame_index = iris->vk.main_window_data.FrameIndex % DESCRIPTOR_SET_RING_SIZE;
     const uint32_t slot = (frame_index * RENDER_MAX_SHADER_PASSES) + (pass_index % RENDER_MAX_SHADER_PASSES);
 
-    return iris->shader_descriptor_sets[slot % iris->shader_descriptor_sets.size()];
+    return iris->vk.shader_descriptor_sets[slot % iris->vk.shader_descriptor_sets.size()];
 }
 
-static inline void update_vertex_buffer(instance* iris, VkCommandBuffer command_buffer) {
+static inline void update_vertex_buffer(Instance* iris, VkCommandBuffer command_buffer) {
     SDL_Rect size, rect, display;
 
     const int normalized_angle = ((iris->angle % 360) + 360) % 360;
@@ -339,47 +340,47 @@ static inline void update_vertex_buffer(instance* iris, VkCommandBuffer command_
     display.y = 0;
     
     if (!iris->fullscreen) {
-        display.h -= iris->menubar_height;
-        display.y += iris->menubar_height;
+        display.h -= iris->ui.menubar_height;
+        display.y += iris->ui.menubar_height;
 
-        if (iris->show_status_bar) {
-            display.h -= iris->menubar_height;
+        if (iris->ui.show_status_bar) {
+            display.h -= iris->ui.menubar_height;
         }
     }
 
-    rect.w = iris->image.width;
-    rect.h = iris->image.height;
+    rect.w = iris->vk.image.width;
+    rect.h = iris->vk.image.height;
 
     float scale = iris->integer_scaling ? floorf(iris->scale) : iris->scale;
 
     switch (iris->aspect_mode) {
-        case RENDER_ASPECT_NATIVE: {
+        case render::NATIVE: {
             rect.w *= scale;
             rect.h *= scale;
         } break;
 
-        case RENDER_ASPECT_4_3: {
+        case render::FORCE_4_3: {
             rect.w *= scale;
             rect.h = (float)rect.w * (3.0f / 4.0f);
         } break;
 
-        case RENDER_ASPECT_16_9: {
+        case render::FORCE_16_9: {
             rect.w *= scale;
             rect.h = (float)rect.w * (9.0f / 16.0f);
         } break;
 
-        case RENDER_ASPECT_5_4: {
+        case render::FORCE_5_4: {
             rect.w *= scale;
             rect.h = (float)rect.w * (4.0f / 5.0f);
         } break;
 
-        case RENDER_ASPECT_STRETCH: {
+        case render::STRETCH: {
             rect.w = display.w;
             rect.h = display.h;
         } break;
 
-        case RENDER_ASPECT_AUTO:
-        case RENDER_ASPECT_STRETCH_KEEP: {
+        case render::AUTO:
+        case render::STRETCH_KEEP: {
             if (swap_axes) {
                 std::swap(rect.w, rect.h);
             }
@@ -396,7 +397,7 @@ static inline void update_vertex_buffer(instance* iris, VkCommandBuffer command_
         } break;
     }
 
-    if (iris->aspect_mode != RENDER_ASPECT_AUTO && iris->aspect_mode != RENDER_ASPECT_STRETCH_KEEP) {
+    if (iris->aspect_mode != render::AUTO && iris->aspect_mode != render::STRETCH_KEEP) {
         if (swap_axes) {
             std::swap(rect.w, rect.h);
         }
@@ -457,34 +458,34 @@ static inline void update_vertex_buffer(instance* iris, VkCommandBuffer command_
         uvs[i][1] = v;
     }
 
-    iris->vertices[0] = vertex{ { x0, y0 }, {uvs[0][0], uvs[0][1]} };
-    iris->vertices[1] = vertex{ { x1, y0 }, {uvs[1][0], uvs[1][1]} };
-    iris->vertices[2] = vertex{ { x1, y1 }, {uvs[2][0], uvs[2][1]} };
-    iris->vertices[3] = vertex{ { x0, y1 }, {uvs[3][0], uvs[3][1]} };
+    iris->vk.vertices[0] = Vertex{ { x0, y0 }, {uvs[0][0], uvs[0][1]} };
+    iris->vk.vertices[1] = Vertex{ { x1, y0 }, {uvs[1][0], uvs[1][1]} };
+    iris->vk.vertices[2] = Vertex{ { x1, y1 }, {uvs[2][0], uvs[2][1]} };
+    iris->vk.vertices[3] = Vertex{ { x0, y1 }, {uvs[3][0], uvs[3][1]} };
 
     void* ptr;
 
-    vkMapMemory(iris->device, iris->vertex_staging_buffer_memory, 0, iris->vertex_buffer_size, 0, &ptr);
-    memcpy(ptr, iris->vertices.data(), (size_t)iris->vertex_buffer_size);
-    vkUnmapMemory(iris->device, iris->vertex_staging_buffer_memory);
+    vkMapMemory(iris->vk.device, iris->vk.vertex_staging_buffer_memory, 0, iris->vk.vertex_buffer_size, 0, &ptr);
+    memcpy(ptr, iris->vk.vertices.data(), (size_t)iris->vk.vertex_buffer_size);
+    vkUnmapMemory(iris->vk.device, iris->vk.vertex_staging_buffer_memory);
 
     static VkBufferCopy region = {};
     region.srcOffset = 0;
     region.dstOffset = 0;
-    region.size = iris->vertex_buffer_size;
+    region.size = iris->vk.vertex_buffer_size;
 
     vkCmdCopyBuffer(
         command_buffer,
-        iris->vertex_staging_buffer,
-        iris->vertex_buffer,
+        iris->vk.vertex_staging_buffer,
+        iris->vk.vertex_buffer,
         1,
         &region
     );
 }
 
-static inline void update_descriptor_set(instance* iris, VkDescriptorSet set, VkImageView view, VkSampler sampler) {
+static inline void update_descriptor_set(Instance* iris, VkDescriptorSet set, VkImageView view, VkSampler sampler) {
     VkDescriptorImageInfo image_info = {};
-    image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    image_info.imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
     image_info.imageView = view;
     image_info.sampler = sampler;
 
@@ -497,16 +498,16 @@ static inline void update_descriptor_set(instance* iris, VkDescriptorSet set, Vk
     descriptor_write.descriptorCount = 1;
     descriptor_write.pImageInfo = &image_info;
 
-    vkUpdateDescriptorSets(iris->device, 1, &descriptor_write, 0, nullptr);
+    vkUpdateDescriptorSets(iris->vk.device, 1, &descriptor_write, 0, nullptr);
 }
 
-void render_shader_passes(instance* iris, VkCommandBuffer command_buffer, VkImageView& output_view, VkImage& output_image) {
+void render_shader_passes(Instance* iris, VkCommandBuffer command_buffer, VkImageView& output_view, VkImage& output_image) {
     if (!shaders::count(iris))
         return;
 
-    if (iris->shader_pass_framebuffers.size() != shaders::count(iris)) {
+    if (iris->vk.shader_pass_framebuffers.size() != shaders::count(iris)) {
         if (!rebuild_framebuffers(iris)) {
-            fprintf(stderr, "render: Failed to rebuild shader framebuffers\n");
+            iris_error(&iris->log.render, "Failed to rebuild shader framebuffers");
 
             return;
         }
@@ -521,41 +522,41 @@ void render_shader_passes(instance* iris, VkCommandBuffer command_buffer, VkImag
             continue;
 
         const int fb = i & 1;
-        const VkImageView input_view = i == 0 ? iris->image.view : iris->shader_framebuffers[fb ^ 1].view;
-        VkFramebuffer framebuffer = iris->shader_pass_framebuffers[pass_index][fb];
+        const VkImageView input_view = i == 0 ? iris->vk.image.view : iris->vk.shader_framebuffers[fb ^ 1].view;
+        VkFramebuffer framebuffer = iris->vk.shader_pass_framebuffers[pass_index][fb];
 
         if (framebuffer == VK_NULL_HANDLE) {
             if (!rebuild_framebuffers(iris)) {
-                fprintf(stderr, "render: Failed to rebuild shader framebuffers\n");
+                iris_error(&iris->log.render, "Failed to rebuild shader framebuffers");
 
                 return;
             }
 
-            framebuffer = iris->shader_pass_framebuffers[pass_index][fb];
+            framebuffer = iris->vk.shader_pass_framebuffers[pass_index][fb];
 
             if (framebuffer == VK_NULL_HANDLE) {
-                fprintf(stderr, "render: Shader framebuffer is null after rebuild\n");
+                iris_error(&iris->log.render, "Shader framebuffer is null after rebuild");
 
                 return;
             }
         }
 
-        output_view = iris->shader_framebuffers[fb].view;
-        output_image = iris->shader_framebuffers[fb].image;
+        output_view = iris->vk.shader_framebuffers[fb].view;
+        output_image = iris->vk.shader_framebuffers[fb].image;
 
         VkRenderPassBeginInfo info = {};
         info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         info.renderPass = pass->get_render_pass();
         info.framebuffer = framebuffer;
-        info.renderArea.extent.width = iris->image.width;
-        info.renderArea.extent.height = iris->image.height;
+        info.renderArea.extent.width = iris->vk.image.width;
+        info.renderArea.extent.height = iris->vk.image.height;
         info.clearValueCount = 1;
-        info.pClearValues = &iris->clear_value;
+        info.pClearValues = &iris->vk.clear_value;
 
         VkDescriptorImageInfo image_info = {};
-        image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        image_info.imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
         image_info.imageView = input_view;
-        image_info.sampler = iris->sampler[iris->filter];
+        image_info.sampler = iris->vk.sampler[iris->filter];
 
         VkWriteDescriptorSet descriptor_write = {};
         descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -567,35 +568,35 @@ void render_shader_passes(instance* iris, VkCommandBuffer command_buffer, VkImag
         descriptor_write.descriptorCount = 1;
         descriptor_write.pImageInfo = &image_info;
 
-        vkUpdateDescriptorSets(iris->device, 1, &descriptor_write, 0, nullptr);
+        vkUpdateDescriptorSets(iris->vk.device, 1, &descriptor_write, 0, nullptr);
 
         vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
 
         vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->get_pipeline());
 
-        vkCmdBindIndexBuffer(command_buffer, iris->index_buffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindIndexBuffer(command_buffer, iris->vk.index_buffer, 0, VK_INDEX_TYPE_UINT16);
         vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->get_pipeline_layout(), 0, 1, &shader_descriptor_set, 0, nullptr);
 
         VkViewport viewport = {};
         viewport.x = 0.0f;
         viewport.y = 0.0f;
-        viewport.width = iris->image.width;
-        viewport.height = iris->image.height;
+        viewport.width = iris->vk.image.width;
+        viewport.height = iris->vk.image.height;
         viewport.minDepth = 0.0f;
         viewport.maxDepth = 1.0f;
         vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
         VkRect2D scissor = {};
         scissor.offset = {0, 0};
-        scissor.extent = { (uint32_t)iris->image.width, (uint32_t)iris->image.height };
+        scissor.extent = { (uint32_t)iris->vk.image.width, (uint32_t)iris->vk.image.height };
         vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-        push_constants constants = {
-            .resolution = { (float)iris->image.width, (float)iris->image.height },
+        PushConstants constants = {
+            .resolution = { (float)iris->vk.image.width, (float)iris->vk.image.height },
             .frame = frame
         };
 
-        vkCmdPushConstants(command_buffer, pass->get_pipeline_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(push_constants), &constants);
+        vkCmdPushConstants(command_buffer, pass->get_pipeline_layout(), VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &constants);
 
         vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
 
@@ -605,60 +606,60 @@ void render_shader_passes(instance* iris, VkCommandBuffer command_buffer, VkImag
     }
 }
 
-bool render_frame(instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer) {
+bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer) {
     gs::renderer::Image image;
 
-    if (iris->pause) {
-        image = iris->image;
+    if (iris->debug.pause) {
+        image = iris->vk.image;
     } else {
         image = gs::renderer::get_frame(iris->renderer);
     }
 
-    bool need_rebuild = image.width != iris->image.width ||
-                        image.height != iris->image.height ||
-                        image.format != iris->image.format;
+    bool need_rebuild = image.width != iris->vk.image.width ||
+                        image.height != iris->vk.image.height ||
+                        image.format != iris->vk.image.format;
 
-    iris->image = image;
+    iris->vk.image = image;
 
     if (need_rebuild && image.view != VK_NULL_HANDLE) {
         vulkan::wait_idle(iris);
 
         for (auto& pass : shaders::vector(iris)) {
             if (!pass->rebuild()) {
-                fprintf(stderr, "render: Failed to rebuild shader pass\n");
+                iris_error(&iris->log.render, "Failed to rebuild shader pass");
 
                 return false;
             }
         }
 
         if (!rebuild_framebuffers(iris)) {
-            fprintf(stderr, "render: Failed to rebuild shader pass framebuffers\n");
+            iris_error(&iris->log.render, "Failed to rebuild shader pass framebuffers");
 
             return false;
         }
     }
 
     // Process shader passes here
-    iris->output_image = iris->image;
+    iris->vk.output_image = iris->vk.image;
 
-    if (iris->enable_shaders && iris->output_image.view != VK_NULL_HANDLE) {
-        render_shader_passes(iris, command_buffer, iris->output_image.view, iris->output_image.image);
+    if (iris->enable_shaders && iris->vk.output_image.view != VK_NULL_HANDLE) {
+        render_shader_passes(iris, command_buffer, iris->vk.output_image.view, iris->vk.output_image.image);
     }
 
     VkRenderPassBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    info.renderPass = iris->main_window_data.RenderPass;
+    info.renderPass = iris->vk.main_window_data.RenderPass;
     info.framebuffer = framebuffer;
-    info.renderArea.extent.width = iris->main_window_data.Width;
-    info.renderArea.extent.height = iris->main_window_data.Height;
+    info.renderArea.extent.width = iris->vk.main_window_data.Width;
+    info.renderArea.extent.height = iris->vk.main_window_data.Height;
     info.clearValueCount = 1;
-    info.pClearValues = &iris->clear_value;
+    info.pClearValues = &iris->vk.clear_value;
 
-    if (iris->output_image.view != VK_NULL_HANDLE) {
+    if (iris->vk.output_image.view != VK_NULL_HANDLE) {
         const VkDescriptorSet descriptor_set = get_frame_descriptor_set(iris);
 
         update_vertex_buffer(iris, command_buffer);
-        update_descriptor_set(iris, descriptor_set, iris->output_image.view, iris->sampler[iris->filter]);
+        update_descriptor_set(iris, descriptor_set, iris->vk.output_image.view, iris->vk.sampler[iris->filter]);
     }
 
     vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
@@ -666,54 +667,54 @@ bool render_frame(instance* iris, VkCommandBuffer command_buffer, VkFramebuffer 
     VkClearAttachment clear_attachment = {};
     clear_attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     clear_attachment.colorAttachment = 0;
-    clear_attachment.clearValue = iris->clear_value;
+    clear_attachment.clearValue = iris->vk.clear_value;
 
     VkClearRect clear_rect = {};
     clear_rect.rect.offset = { 0, 0 };
-    clear_rect.rect.extent = { (uint32_t)iris->main_window_data.Width, (uint32_t)iris->main_window_data.Height };
+    clear_rect.rect.extent = { (uint32_t)iris->vk.main_window_data.Width, (uint32_t)iris->vk.main_window_data.Height };
     clear_rect.baseArrayLayer = 0;
     clear_rect.layerCount = 1;
 
     vkCmdClearAttachments(command_buffer, 1, &clear_attachment, 1, &clear_rect);
 
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->pipeline);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->vk.pipeline);
 
-    if (iris->output_image.view != VK_NULL_HANDLE) {
+    if (iris->vk.output_image.view != VK_NULL_HANDLE) {
         VkDeviceSize offsets[] = { 0 };
         const VkDescriptorSet descriptor_set = get_frame_descriptor_set(iris);
 
-        vkCmdBindVertexBuffers(command_buffer, 0, 1, &iris->vertex_buffer, offsets);
-        vkCmdBindIndexBuffer(command_buffer, iris->index_buffer, 0, VK_INDEX_TYPE_UINT16);
-        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
+        vkCmdBindVertexBuffers(command_buffer, 0, 1, &iris->vk.vertex_buffer, offsets);
+        vkCmdBindIndexBuffer(command_buffer, iris->vk.index_buffer, 0, VK_INDEX_TYPE_UINT16);
+        vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, iris->vk.pipeline_layout, 0, 1, &descriptor_set, 0, nullptr);
     }
 
     VkViewport viewport = {};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = iris->main_window_data.Width;
-    viewport.height = iris->main_window_data.Height;
+    viewport.width = iris->vk.main_window_data.Width;
+    viewport.height = iris->vk.main_window_data.Height;
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
     vkCmdSetViewport(command_buffer, 0, 1, &viewport);
 
     VkRect2D scissor = {};
     scissor.offset = {0, 0};
-    scissor.extent = { (uint32_t)iris->main_window_data.Width, (uint32_t)iris->main_window_data.Height };
+    scissor.extent = { (uint32_t)iris->vk.main_window_data.Width, (uint32_t)iris->vk.main_window_data.Height };
     vkCmdSetScissor(command_buffer, 0, 1, &scissor);
 
-    if (iris->output_image.view != VK_NULL_HANDLE) {
+    if (iris->vk.output_image.view != VK_NULL_HANDLE) {
         vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
     }
 
     vkCmdEndRenderPass(command_buffer);
 
-    if (!iris->pause)
+    if (!iris->debug.pause)
         frame++;
 
     return true;
 }
 
-void switch_backend(instance* iris, int backend) {
+void switch_backend(Instance* iris, int backend) {
     if (iris->renderer_backend == backend)
         return;
 
@@ -728,11 +729,11 @@ void switch_backend(instance* iris, int backend) {
     info.backend = backend;
     info.gif = iris->ps2->gif;
     info.gs = iris->ps2->gs;
-    info.instance = iris->instance;
-    info.device = iris->device;
-    info.physical_device = iris->physical_device;
-    info.instance_create_info = iris->instance_create_info;
-    info.device_create_info = iris->device_create_info;
+    info.instance = iris->vk.instance;
+    info.device = iris->vk.device;
+    info.physical_device = iris->vk.physical_device;
+    info.instance_create_info = iris->vk.instance_create_info;
+    info.device_create_info = iris->vk.device_create_info;
 
     switch (info.backend) {
         case gs::renderer::BACKEND_HARDWARE: {
@@ -741,7 +742,7 @@ void switch_backend(instance* iris, int backend) {
     }
 
     if (!gs::renderer::init(iris->renderer, info)) {
-        fprintf(stderr, "render: Failed to initialize renderer backend\n");
+        iris_error(&iris->log.render, "Failed to initialize renderer backend");
     } else {
         iris->renderer_backend = backend;
     }
@@ -751,71 +752,71 @@ static void gsdump_tap(void* udata, int path, const void* data, size_t size) {
     gs::dump::transfer((gs::dump::Dump*)udata, path, data, size);
 }
 
-void gs_dump_start(instance* iris, std::string path, int frames, int delay, std::string serial) {
-    if (!iris->gsdump)
-        iris->gsdump = gs::dump::create();
+void gs_dump_start(Instance* iris, std::string path, int frames, int delay, std::string serial) {
+    if (!iris->debug.gsdump)
+        iris->debug.gsdump = gs::dump::create();
 
-    iris->gsdump_path = path;
-    iris->gsdump_serial = serial;
-    iris->gsdump_delay_remaining = delay < 0 ? 0 : delay;
-    iris->gsdump_frames_remaining = frames < 1 ? 1 : frames;
-    iris->gsdump_armed = true;
+    iris->debug.gsdump_path = path;
+    iris->debug.gsdump_serial = serial;
+    iris->debug.gsdump_delay_remaining = delay < 0 ? 0 : delay;
+    iris->debug.gsdump_frames_remaining = frames < 1 ? 1 : frames;
+    iris->debug.gsdump_armed = true;
 }
 
-void gs_dump_tick(instance* iris) {
-    if (!iris->gsdump)
+void gs_dump_tick(Instance* iris) {
+    if (!iris->debug.gsdump)
         return;
 
-    if (iris->gsdump_armed) {
-        if (iris->gsdump_delay_remaining > 0) {
-            iris->gsdump_delay_remaining--;
+    if (iris->debug.gsdump_armed) {
+        if (iris->debug.gsdump_delay_remaining > 0) {
+            iris->debug.gsdump_delay_remaining--;
 
             return;
         }
 
-        iris->gsdump_armed = false;
+        iris->debug.gsdump_armed = false;
 
         std::vector<uint8_t> vram(0x400000);
 
         gs::renderer::read_vram(iris->renderer, vram.data(), vram.size());
 
-        gif::set_dump_tap(iris->ps2->gif, iris->gsdump, gsdump_tap);
+        gif::set_dump_tap(iris->ps2->gif, iris->debug.gsdump, gsdump_tap);
 
-        const char* serial = iris->gsdump_serial.empty() ? nullptr : iris->gsdump_serial.c_str();
+        const char* serial = iris->debug.gsdump_serial.empty() ? nullptr : iris->debug.gsdump_serial.c_str();
 
-        if (!gs::dump::begin(iris->gsdump, iris->gsdump_path.c_str(),
+        if (!gs::dump::begin(iris->debug.gsdump, iris->debug.gsdump_path.c_str(),
                 iris->ps2->gs, iris->ps2->gif,
                 vram.data(), (uint32_t)vram.size(), serial, 0)) {
             gif::set_dump_tap(iris->ps2->gif, nullptr, nullptr);
-            iris->gsdump_frames_remaining = 0;
+            iris->debug.gsdump_frames_remaining = 0;
 
-            fprintf(stderr, "render: Failed to open GS dump '%s'\n", iris->gsdump_path.c_str());
+            iris_error(&iris->log.render, "Failed to open GS dump '{}'", iris->debug.gsdump_path.c_str());
         }
 
         return;
     }
 
-    if (gs::dump::is_active(iris->gsdump)) {
-        gs::dump::vsync(iris->gsdump, iris->ps2->gs);
+    if (gs::dump::is_active(iris->debug.gsdump)) {
+        gs::dump::vsync(iris->debug.gsdump, iris->ps2->gs);
 
-        if (--iris->gsdump_frames_remaining <= 0) {
-            gs::dump::end(iris->gsdump);
+        if (--iris->debug.gsdump_frames_remaining <= 0) {
+            gs::dump::end(iris->debug.gsdump);
 
             gif::set_dump_tap(iris->ps2->gif, nullptr, nullptr);
         }
     }
 }
 
-void refresh(instance* iris) {
+void refresh(Instance* iris) {
     switch (iris->renderer_backend) {
         case gs::renderer::BACKEND_HARDWARE: {
             gs::renderer::set_config(iris->renderer, &iris->hardware_backend_config);
         } break;
     }
 
-    iris->image = gs::renderer::get_frame(iris->renderer);
+    iris->vk.image = gs::renderer::get_frame(iris->renderer);
 
-    if (iris->image.view == VK_NULL_HANDLE)
+    if (iris->vk.image.view == VK_NULL_HANDLE)
         return;
 
     if (shaders::count(iris) == 0)
@@ -830,44 +831,44 @@ void refresh(instance* iris) {
     rebuild_framebuffers(iris);
 }
 
-void destroy(instance* iris) {
+void destroy(Instance* iris) {
     if (!iris->window)
         return;
 
     vulkan::wait_idle(iris);
 
-    for (auto& pass_framebuffers : iris->shader_pass_framebuffers) {
+    for (auto& pass_framebuffers : iris->vk.shader_pass_framebuffers) {
         for (VkFramebuffer& framebuffer : pass_framebuffers) {
             if (framebuffer) {
-                vkDestroyFramebuffer(iris->device, framebuffer, nullptr);
+                vkDestroyFramebuffer(iris->vk.device, framebuffer, nullptr);
             }
         }
     }
 
-    iris->shader_pass_framebuffers.clear();
+    iris->vk.shader_pass_framebuffers.clear();
 
-    for (auto& fb : iris->shader_framebuffers) {
-        if (fb.view) vkDestroyImageView(iris->device, fb.view, nullptr);
-        if (fb.image) vkDestroyImage(iris->device, fb.image, nullptr);
-        if (fb.memory) vkFreeMemory(iris->device, fb.memory, nullptr);
+    for (auto& fb : iris->vk.shader_framebuffers) {
+        if (fb.view) vkDestroyImageView(iris->vk.device, fb.view, nullptr);
+        if (fb.image) vkDestroyImage(iris->vk.device, fb.image, nullptr);
+        if (fb.memory) vkFreeMemory(iris->vk.device, fb.memory, nullptr);
     }
 
-    if (iris->shader_descriptor_set_layout) {
-        vkDestroyDescriptorSetLayout(iris->device, iris->shader_descriptor_set_layout, nullptr);
+    if (iris->vk.shader_descriptor_set_layout) {
+        vkDestroyDescriptorSetLayout(iris->vk.device, iris->vk.shader_descriptor_set_layout, nullptr);
     }
 
-    if (iris->default_vert_shader) {
-        vkDestroyShaderModule(iris->device, iris->default_vert_shader, nullptr);
+    if (iris->vk.default_vert_shader) {
+        vkDestroyShaderModule(iris->vk.device, iris->vk.default_vert_shader, nullptr);
     }
 
     shaders::clear(iris);
 
     if (iris->renderer) gs::renderer::destroy(iris->renderer);
 
-    if (iris->gsdump) {
-        gs::dump::destroy(iris->gsdump);
+    if (iris->debug.gsdump) {
+        gs::dump::destroy(iris->debug.gsdump);
 
-        iris->gsdump = nullptr;
+        iris->debug.gsdump = nullptr;
     }
 }
 

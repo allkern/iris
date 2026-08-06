@@ -5,13 +5,14 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace iris {
 
-void show_pad_debugger(instance* iris) {
+void show_pad_debugger(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("DualShock 2", &iris->show_pad_debugger)) {
+    if (imgui::BeginEx("DualShock 2", &iris->ui.show_pad_debugger)) {
         if (BeginTabBar("##padtabbar")) {
             if (BeginTabItem("Slot 1")) {
                 dev::ds::Ds* ds = (dev::ds::Ds*)iris->ps2->sio2->port[0].udata;

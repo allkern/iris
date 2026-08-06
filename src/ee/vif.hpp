@@ -57,7 +57,6 @@ inline constexpr auto UNPACK_V4_8 = 14;
 inline constexpr auto UNPACK_V4_5 = 15;
 
 struct Vif {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         vu::Vu* vu;
         scheduler::Scheduler* sched;

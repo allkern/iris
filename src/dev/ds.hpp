@@ -8,28 +8,32 @@
 
 namespace iris::dev::ds {
 
-inline constexpr uint32_t BT_SELECT   = 0x0001;
-inline constexpr uint32_t BT_L3       = 0x0002;
-inline constexpr uint32_t BT_R3       = 0x0004;
-inline constexpr uint32_t BT_START    = 0x0008;
-inline constexpr uint32_t BT_UP       = 0x0010;
-inline constexpr uint32_t BT_RIGHT    = 0x0020;
-inline constexpr uint32_t BT_DOWN     = 0x0040;
-inline constexpr uint32_t BT_LEFT     = 0x0080;
-inline constexpr uint32_t BT_L2       = 0x0100;
-inline constexpr uint32_t BT_R2       = 0x0200;
-inline constexpr uint32_t BT_L1       = 0x0400;
-inline constexpr uint32_t BT_R1       = 0x0800;
-inline constexpr uint32_t BT_TRIANGLE = 0x1000;
-inline constexpr uint32_t BT_CIRCLE   = 0x2000;
-inline constexpr uint32_t BT_CROSS    = 0x4000;
-inline constexpr uint32_t BT_SQUARE   = 0x8000;
-inline constexpr uint32_t BT_ANALOG   = 0x10000;
+enum Button : uint32_t {
+    SELECT   = 0x0001,
+    L3       = 0x0002,
+    R3       = 0x0004,
+    START    = 0x0008,
+    UP       = 0x0010,
+    RIGHT    = 0x0020,
+    DOWN     = 0x0040,
+    LEFT     = 0x0080,
+    L2       = 0x0100,
+    R2       = 0x0200,
+    L1       = 0x0400,
+    R1       = 0x0800,
+    TRIANGLE = 0x1000,
+    CIRCLE   = 0x2000,
+    CROSS    = 0x4000,
+    SQUARE   = 0x8000,
+    ANALOG   = 0x10000
+};
 
-inline constexpr int AX_RIGHT_V = 0;
-inline constexpr int AX_RIGHT_H = 1;
-inline constexpr int AX_LEFT_V  = 2;
-inline constexpr int AX_LEFT_H  = 3;
+enum Axis : int {
+    RIGHT_V,
+    RIGHT_H,
+    LEFT_V,
+    LEFT_H
+};
 
 struct Ds {
     int port = 0;

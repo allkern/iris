@@ -2,11 +2,13 @@
 
 #include <string>
 
+#include "log.hpp"
+
 namespace iris::speed::smap { struct Smap; }
 
 namespace iris::slirp {
 
-struct config {
+struct Config {
     bool enabled = true;
     std::string network    = "10.0.2.0";
     std::string netmask    = "255.255.255.0";
@@ -16,10 +18,9 @@ struct config {
 };
 
 bool valid_ipv4(const std::string& s);
-
-bool start(speed::smap::Smap* smap, const config& cfg);
+bool start(speed::smap::Smap* smap, const Config& cfg, LogSource* log);
 void stop();
-void restart(speed::smap::Smap* smap, const config& cfg);
+void restart(speed::smap::Smap* smap, const Config& cfg, LogSource* log);
 bool running();
 void pump(speed::smap::Smap* smap);
 

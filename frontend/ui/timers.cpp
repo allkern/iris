@@ -7,10 +7,11 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace iris {
 
-void show_ee_timers(instance* iris) {
+void show_ee_timers(Instance* iris) {
     using namespace ImGui;
 
     for (int i = 0; i < 4; i++) {
@@ -27,7 +28,7 @@ void show_ee_timers(instance* iris) {
     }
 }
 
-void show_iop_timers(instance* iris) {
+void show_iop_timers(Instance* iris) {
     using namespace ImGui;
 
     for (int i = 0; i < 6; i++) {
@@ -42,15 +43,15 @@ void show_iop_timers(instance* iris) {
     }
 }
 
-void show_scheduler(instance* iris) {
+void show_scheduler(Instance* iris) {
     using namespace ImGui;
 
 }
 
-void show_timers(instance* iris) {
+void show_timers(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("Timers", &iris->show_timers)) {
+    if (imgui::BeginEx("Timers", &iris->ui.show_timers)) {
         if (BeginTabBar("##timers_tab_bar")) {
             if (BeginTabItem("EE timers")) {
                 show_ee_timers(iris);

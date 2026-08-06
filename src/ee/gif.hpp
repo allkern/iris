@@ -17,9 +17,11 @@ enum State {
     PROCESSING
 };
 
-inline constexpr auto PATH1 = 0;
-inline constexpr auto PATH2 = 1;
-inline constexpr auto PATH3 = 2;
+enum PathId : int {
+    PATH1,
+    PATH2,
+    PATH3
+};
 
 struct Tag {
     uint64_t nloop;
@@ -36,7 +38,6 @@ struct Tag {
 };
 
 struct Gif {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         ee::dmac::Dmac* dmac;
         gs::Gs* gs;

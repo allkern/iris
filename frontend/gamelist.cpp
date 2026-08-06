@@ -38,11 +38,11 @@ namespace iris::gamelist {
 //     }
 // }
 
-bool init(instance* iris) {
+bool init(Instance* iris) {
     return true;
 }
 
-void destroy(instance* iris) {
+void destroy(Instance* iris) {
 }
 
 }

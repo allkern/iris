@@ -27,24 +27,24 @@ static ImGuiTableFlags symbols_table_sizing_flags[] = {
 static int symbols_table_sizing_combo = 0;
 static int symbols_table_sizing = ImGuiTableFlags_SizingStretchProp;
 
-std::vector <elf_symbol> symbols_list;
+std::vector <elf::Symbol> symbols_list;
 
 bool regex = false;
 bool case_sensitive = false;
 bool autosearch = true;
 
-void filter_symbols(instance* iris, const char* filter, bool regex, bool case_sensitive) {
+void filter_symbols(Instance* iris, const char* filter, bool regex, bool case_sensitive) {
     symbols_list.clear();
 
     if (filter[0] == '\0') {
-        symbols_list = iris->symbols;
+        symbols_list = iris->debug.symbols;
 
         return;
     }
 
     std::string filter_str(filter);
 
-    for (const elf_symbol& sym : iris->symbols) {
+    for (const elf::Symbol& sym : iris->debug.symbols) {
         if (regex) {
             std::regex r(filter_str, std::regex::ECMAScript | (case_sensitive ? std::regex_constants::syntax_option_type(0) : std::regex::icase));
 
@@ -69,17 +69,17 @@ void filter_symbols(instance* iris, const char* filter, bool regex, bool case_se
 }
 
 int edit_callback(ImGuiInputTextCallbackData* data) {
-    instance* iris = (instance*)data->UserData;
+    Instance* iris = (Instance*)data->UserData;
 
     filter_symbols(iris, data->Buf, regex, case_sensitive);
 
     return 0;
 }
 
-void show_symbols(instance* iris) {
+void show_symbols(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("Symbols", &iris->show_symbols, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("Symbols", &iris->ui.show_symbols, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {
@@ -146,26 +146,26 @@ void show_symbols(instance* iris) {
             if (ImGuiTableSortSpecs* sort_specs = ImGui::TableGetSortSpecs()) {
                 if (sort_specs->SpecsDirty) {
                     if (buf[0] == '\0') {
-                        symbols_list = iris->symbols;
+                        symbols_list = iris->debug.symbols;
                     }
 
                     // Sort by symbol
                     if (sort_specs->Specs->ColumnIndex == 0) {
-                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf_symbol& a, const elf_symbol& b) {
+                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf::Symbol& a, const elf::Symbol& b) {
                             return sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending ? std::string(a.name) < std::string(b.name) : std::string(a.name) > std::string(b.name);
                         });
                     }
 
                     // Sort by address
                     if (sort_specs->Specs->ColumnIndex == 1) {
-                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf_symbol& a, const elf_symbol& b) {
+                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf::Symbol& a, const elf::Symbol& b) {
                             return sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending ? a.addr < b.addr : a.addr > b.addr;
                         });
                     }
 
                     // Sort by size
                     if (sort_specs->Specs->ColumnIndex == 2) {
-                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf_symbol& a, const elf_symbol& b) {
+                        std::sort(symbols_list.begin(), symbols_list.end(), [=](const elf::Symbol& a, const elf::Symbol& b) {
                             return sort_specs->Specs->SortDirection == ImGuiSortDirection_Ascending ? a.size < b.size : a.size > b.size;
                         });
                     }
@@ -178,15 +178,15 @@ void show_symbols(instance* iris) {
             TableSetupColumn("Symbol");
             TableSetupColumn("Address");
             TableSetupColumn("Size");
-            PushFont(iris->font_small_code);
+            PushFont(iris->ui.font_small_code);
             TableHeadersRow();
             PopFont();
 
-            PushFont(iris->font_code);
+            PushFont(iris->ui.font_code);
 
             int index = 0;
 
-            for (const elf_symbol& symbol : symbols_list) {
+            for (const elf::Symbol& symbol : symbols_list) {
                 TableNextRow();
 
                 TableSetColumnIndex(0);
@@ -201,37 +201,37 @@ void show_symbols(instance* iris) {
 
                 if (Selectable(label, false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)) {
                     if (IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                        iris->show_ee_control = true;
-                        iris->ee_control_follow_pc = false;
-                        iris->ee_control_address = symbol.addr;
+                        iris->ui.show_ee_control = true;
+                        iris->debug.ee_control_follow_pc = false;
+                        iris->debug.ee_control_address = symbol.addr;
                     }
                 }
 
                 if (BeginPopupContextItem()) {
-                    PushFont(iris->font_small_code);
+                    PushFont(iris->ui.font_small_code);
                     TextDisabled("%s", symbol.name);
                     PopFont();
 
-                    PushFont(iris->font_body);
+                    PushFont(iris->ui.font_body);
 
                     if (Selectable(ICON_MS_ARROW_FORWARD " Go to this address")) {
-                        iris->show_ee_control = true;
-                        iris->ee_control_follow_pc = false;
-                        iris->ee_control_address = symbol.addr;
+                        iris->ui.show_ee_control = true;
+                        iris->debug.ee_control_follow_pc = false;
+                        iris->debug.ee_control_address = symbol.addr;
                     }
 
                     if (Selectable(ICON_MS_ADD_CIRCLE " Set a breakpoint here")) {
-                        breakpoint b;
+                        Breakpoint b;
 
                         b.addr = symbol.addr;
                         b.cond_r = false;
                         b.cond_w = false;
                         b.cond_x = true;
-                        b.cpu = BKPT_CPU_EE;
+                        b.cpu = BreakpointCpu::EE;
                         b.size = 4;
                         b.enabled = true;
 
-                        iris->breakpoints.push_back(b);
+                        iris->debug.breakpoints.push_back(b);
                     }
 
                     PopFont();

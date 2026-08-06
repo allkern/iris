@@ -43,32 +43,36 @@
 
 namespace iris::s14x::ioboard {
 
-inline constexpr auto SW_DOWN = 0x0001;
-inline constexpr auto SW_UP = 0x0002;
-inline constexpr auto SW_ENTER = 0x0004;
-inline constexpr auto SW_TEST = 0x0008;
-inline constexpr auto SW_SERVICE = 0x0020;
-inline constexpr auto SW_P4_START = 0x0100;
-inline constexpr auto SW_P3_START = 0x0200;
-inline constexpr auto SW_P2_START = 0x0400;
-inline constexpr auto SW_P1_START = 0x0800;
+enum Switch : uint16_t {
+    DOWN = 0x0001,
+    UP = 0x0002,
+    ENTER = 0x0004,
+    TEST = 0x0008,
+    SERVICE = 0x0020,
+    P4_START = 0x0100,
+    P3_START = 0x0200,
+    P2_START = 0x0400,
+    P1_START = 0x0800
+};
 
-inline constexpr auto BT_P4_UP = 0x0001;
-inline constexpr auto BT_P4_DOWN = 0x0002;
-inline constexpr auto BT_P4_RIGHT = 0x0004;
-inline constexpr auto BT_P4_LEFT = 0x0008;
-inline constexpr auto BT_P2_UP = 0x0010;
-inline constexpr auto BT_P2_DOWN = 0x0020;
-inline constexpr auto BT_P2_RIGHT = 0x0040;
-inline constexpr auto BT_P2_LEFT = 0x0080;
-inline constexpr auto BT_P3_UP = 0x0100;
-inline constexpr auto BT_P3_DOWN = 0x0200;
-inline constexpr auto BT_P3_RIGHT = 0x0400;
-inline constexpr auto BT_P3_LEFT = 0x0800;
-inline constexpr auto BT_P1_UP = 0x1000;
-inline constexpr auto BT_P1_DOWN = 0x2000;
-inline constexpr auto BT_P1_RIGHT = 0x4000;
-inline constexpr auto BT_P1_LEFT = 0x8000;
+enum Button : uint16_t {
+    P4_UP = 0x0001,
+    P4_DOWN = 0x0002,
+    P4_RIGHT = 0x0004,
+    P4_LEFT = 0x0008,
+    P2_UP = 0x0010,
+    P2_DOWN = 0x0020,
+    P2_RIGHT = 0x0040,
+    P2_LEFT = 0x0080,
+    P3_UP = 0x0100,
+    P3_DOWN = 0x0200,
+    P3_RIGHT = 0x0400,
+    P3_LEFT = 0x0800,
+    P1_UP = 0x1000,
+    P1_DOWN = 0x2000,
+    P1_RIGHT = 0x4000,
+    P1_LEFT = 0x8000
+};
 
 struct Ioboard {
     uint16_t version;

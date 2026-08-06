@@ -48,7 +48,6 @@ enum {
 inline constexpr auto USB_MSD_PATH_MAX = 512;
 
 struct Usb {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         iop::intc::Intc* intc;
         iop::bus::Bus* bus;

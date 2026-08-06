@@ -35,10 +35,10 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
         return SDL_APP_SUCCESS;
     }
 
-    iris::instance* iris = iris::create();
+    iris::Instance* iris = iris::create();
 
     if (!iris::init(iris, argc, (const char**)argv)) {
-        fprintf(stderr, "iris: Failed to initialize instance\n");
+        iris_error(&iris->log.iris, "Failed to initialize instance");
 
         return SDL_APP_FAILURE;
     }
@@ -50,19 +50,19 @@ SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
 }
 
 SDL_AppResult SDL_AppIterate(void* appstate) {
-    iris::instance* iris = (iris::instance*)appstate;
+    iris::Instance* iris = (iris::Instance*)appstate;
 
     return iris::update(iris);
 }
 
 SDL_AppResult SDL_AppEvent(void* appstate, SDL_Event* event) {
-    iris::instance* iris = (iris::instance*)appstate;
+    iris::Instance* iris = (iris::Instance*)appstate;
 
     return iris::handle_events(iris, event);
 }
 
 void SDL_AppQuit(void* appstate, SDL_AppResult result) {
-    iris::instance* iris = (iris::instance*)appstate;
+    iris::Instance* iris = (iris::Instance*)appstate;
 
     iris::destroy(iris);
 }

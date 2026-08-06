@@ -12,10 +12,10 @@ bool ee_follow = true;
 bool iop_follow = true;
 bool sysmem_follow = true;
 
-void show_logs(instance* iris, const std::vector <std::string>& logs, bool follow) {
+void show_logs(Instance* iris, const std::vector <std::string>& logs, bool follow) {
     using namespace ImGui;
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (BeginTable("##logstable", 2, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit)) {
         for (unsigned int i = 0; i < logs.size(); i++) {
@@ -46,18 +46,18 @@ void show_logs(instance* iris, const std::vector <std::string>& logs, bool follo
     PopFont();
 }
 
-void show_ee_logs(instance* iris) {
+void show_ee_logs(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("EE logs", &iris->show_ee_logs)) {
+    if (imgui::BeginEx("EE logs", &iris->ui.show_ee_logs)) {
         if (Button(ICON_MS_DELETE)) {
-            iris->ee_log.clear();
+            iris->debug.ee_log.clear();
         } SameLine();
 
         if (Button(ICON_MS_CONTENT_COPY)) {
             std::string buf;
 
-            for (const std::string& s : iris->ee_log) {
+            for (const std::string& s : iris->debug.ee_log) {
                 buf.append(s);
                 buf.push_back('\n');
             }
@@ -66,15 +66,15 @@ void show_ee_logs(instance* iris) {
         }
 
         if (BeginChild("##eelog")) {
-            show_logs(iris, iris->ee_log, ee_follow);
+            show_logs(iris, iris->debug.ee_log, ee_follow);
         } EndChild();
     } End();
 }
 
-void show_iop_logs(instance* iris) {
+void show_iop_logs(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("IOP logs", &iris->show_iop_logs, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("IOP logs", &iris->ui.show_iop_logs, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (MenuItem(iop_follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
@@ -88,13 +88,13 @@ void show_iop_logs(instance* iris) {
         }
 
         if (Button(ICON_MS_DELETE)) {
-            iris->iop_log.clear();
+            iris->debug.iop_log.clear();
         } SameLine();
 
         if (Button(ICON_MS_CONTENT_COPY)) {
             std::string buf;
 
-            for (const std::string& s : iris->iop_log) {
+            for (const std::string& s : iris->debug.iop_log) {
                 buf.append(s);
                 buf.push_back('\n');
             }
@@ -103,15 +103,15 @@ void show_iop_logs(instance* iris) {
         }
 
         if (BeginChild("##ioplog")) {
-            show_logs(iris, iris->iop_log, iop_follow);
+            show_logs(iris, iris->debug.iop_log, iop_follow);
         } EndChild();
     } End();
 }
 
-void show_sysmem_logs(instance* iris) {
+void show_sysmem_logs(Instance* iris) {
     using namespace ImGui;
 
-    if (imgui::BeginEx("SYSMEM logs", &iris->show_sysmem_logs, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("SYSMEM logs", &iris->ui.show_sysmem_logs, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (MenuItem(sysmem_follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
@@ -125,13 +125,13 @@ void show_sysmem_logs(instance* iris) {
         }
 
         if (Button(ICON_MS_DELETE)) {
-            iris->sysmem_log.clear();
+            iris->debug.sysmem_log.clear();
         } SameLine();
 
         if (Button(ICON_MS_CONTENT_COPY)) {
             std::string buf;
 
-            for (const std::string& s : iris->sysmem_log) {
+            for (const std::string& s : iris->debug.sysmem_log) {
                 buf.append(s);
                 buf.push_back('\n');
             }
@@ -140,7 +140,7 @@ void show_sysmem_logs(instance* iris) {
         }
 
         if (BeginChild("##sysmemlog")) {
-            show_logs(iris, iris->sysmem_log, sysmem_follow);
+            show_logs(iris, iris->debug.sysmem_log, sysmem_follow);
         } EndChild();
     } End();
 }

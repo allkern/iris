@@ -5,6 +5,7 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace iris {
 
@@ -68,13 +69,13 @@ const char* iop_irq_sources[] = {
     "FDMA"
 };
 
-void show_ee_intc_interrupts(instance* iris) {
+void show_ee_intc_interrupts(Instance* iris) {
     using namespace ImGui;
 
     ee::intc::Intc* intc = iris->ps2->ee_intc;
 
     if (BeginTable("##eeintc", 3, ImGuiTableFlags_RowBg)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Source");
         TableSetupColumn("Status");
         TableSetupColumn("Mask");
@@ -114,13 +115,13 @@ void show_ee_intc_interrupts(instance* iris) {
     }
 }
 
-void show_ee_dmac_interrupts(instance* iris) {
+void show_ee_dmac_interrupts(Instance* iris) {
     using namespace ImGui;
 
     ee::dmac::Dmac* dmac = iris->ps2->ee_dma;
 
     if (BeginTable("##eedmac", 3, ImGuiTableFlags_RowBg)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Source");
         TableSetupColumn("Status");
         TableSetupColumn("Mask");
@@ -160,12 +161,12 @@ void show_ee_dmac_interrupts(instance* iris) {
     }
 }
 
-void show_ee_interrupts(instance* iris) {
+void show_ee_interrupts(Instance* iris) {
     using namespace ImGui;
 
     ee::intc::Intc* intc = iris->ps2->ee_intc;
 
-    if (imgui::BeginEx("EE Interrupts", &iris->show_ee_interrupts)) {
+    if (imgui::BeginEx("EE Interrupts", &iris->ui.show_ee_interrupts)) {
         if (Button(ICON_MS_REMOVE_SELECTION)) {
             intc->mask = 0;
         } SameLine();
@@ -198,13 +199,13 @@ void show_ee_interrupts(instance* iris) {
     } End();
 }
 
-void show_iop_intc_interrupts(instance* iris) {
+void show_iop_intc_interrupts(Instance* iris) {
     using namespace ImGui;
 
     iop::intc::Intc* intc = iris->ps2->iop_intc;
 
     if (BeginTable("##iopintc", 3, ImGuiTableFlags_RowBg)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Source");
         TableSetupColumn("Status");
         TableSetupColumn("Mask");
@@ -244,12 +245,12 @@ void show_iop_intc_interrupts(instance* iris) {
     }
 }
 
-void show_iop_interrupts(instance* iris) {
+void show_iop_interrupts(Instance* iris) {
     using namespace ImGui;
 
     iop::intc::Intc* intc = iris->ps2->iop_intc;
 
-    if (imgui::BeginEx("IOP Interrupts", &iris->show_iop_interrupts)) {
+    if (imgui::BeginEx("IOP Interrupts", &iris->ui.show_iop_interrupts)) {
         if (Button(ICON_MS_REMOVE_SELECTION)) {
             intc->mask = 0;
         } SameLine();

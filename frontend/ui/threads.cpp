@@ -9,17 +9,18 @@
 #include "iop/iop_def.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace iris {
 
 static inline const char* get_status_string(int status) {
     switch (status) {
-        case ee::THS_RUN: return "RUN";
-        case ee::THS_READY: return "READY";
-        case ee::THS_WAIT: return "WAIT";
-        case ee::THS_SUSPEND: return "SUSPEND";
-        case ee::THS_WAITSUSPEND: return "WAIT/SUSPEND";
-        case ee::THS_DORMANT: return "DORMANT";
+        case ee::RUN: return "RUN";
+        case ee::READY: return "READY";
+        case ee::WAIT: return "WAIT";
+        case ee::SUSPEND: return "SUSPEND";
+        case ee::WAITSUSPEND: return "WAIT/SUSPEND";
+        case ee::DORMANT: return "DORMANT";
     }
 
     return "<unknown>";
@@ -27,19 +28,19 @@ static inline const char* get_status_string(int status) {
 
 static inline const char* get_ee_wait_string(int wait) {
     switch (wait) {
-        case ee::TSW_EE_NONE: return "NONE";
-        case ee::TSW_EE_SLEEP: return "SLEEP";
-        case ee::TSW_EE_SEMA: return "SEMA";
+        case ee::NONE: return "NONE";
+        case ee::SLEEP: return "SLEEP";
+        case ee::SEMA: return "SEMA";
     }
 
     return "<unknown>";
 }
 
-static const char* get_entry_symbol(instance* iris, uint32_t addr) {
+static const char* get_entry_symbol(Instance* iris, uint32_t addr) {
     // Look up the address in the symbol table
     if (addr == 0x81fc0) return "EE Idle Thread";
 
-    for (const elf_symbol& sym : iris->symbols) {
+    for (const elf::Symbol& sym : iris->debug.symbols) {
         if ((sym.addr >= addr) && (sym.addr < (addr + sym.size))) {
             return sym.name;
         }
@@ -48,7 +49,7 @@ static const char* get_entry_symbol(instance* iris, uint32_t addr) {
     return nullptr;
 }
 
-void show_ee_thread_list(instance* iris) {
+void show_ee_thread_list(Instance* iris) {
     using namespace ImGui;
 
     ee::Ee* ee = iris->ps2->ee;
@@ -64,7 +65,7 @@ void show_ee_thread_list(instance* iris) {
         TableSetupColumn("Argv");
         TableSetupColumn("Status");
         TableSetupColumn("WaitType");
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableHeadersRow();
         PopFont();
 
@@ -89,7 +90,7 @@ void show_ee_thread_list(instance* iris) {
             }
 
             TableSetColumnIndex(3);
-            if (thr->status == ee::THS_RUN) {
+            if (thr->status == ee::RUN) {
                 Text("0x%08x", ee->pc);
             } else {
                 Text("0x%08x", thr->resume_addr);
@@ -110,10 +111,10 @@ void show_ee_thread_list(instance* iris) {
     }
 }
 
-void show_ee_threads(instance* iris) {
+void show_ee_threads(Instance* iris) {
     using namespace ImGui;
     
-    if (imgui::BeginEx("EE Threads", &iris->show_ee_threads)) {
+    if (imgui::BeginEx("EE Threads", &iris->ui.show_ee_threads)) {
         if (!iris->ps2->ee->thread_list_base) {
             ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
             ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);
@@ -146,7 +147,7 @@ static inline const char* get_iop_wait_string(int wait) {
     return "<unknown>";
 }
 
-void show_iop_thread_list(instance* iris) {
+void show_iop_thread_list(Instance* iris) {
     using namespace ImGui;
 
     iop::Iop* iop = iris->ps2->iop;
@@ -161,7 +162,7 @@ void show_iop_thread_list(instance* iris) {
         TableSetupColumn("PC");
         TableSetupColumn("Status");
         TableSetupColumn("WaitType");
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableHeadersRow();
         PopFont();
 
@@ -186,7 +187,7 @@ void show_iop_thread_list(instance* iris) {
 			Text("0x%08X", thr->entry_point);
 
             TableSetColumnIndex(3);
-            if (thr->status == ee::THS_RUN) {
+            if (thr->status == ee::RUN) {
                 Text("0x%08x", iop->pc);
             } else {
                 Text("0x%08x", ctx->pc);
@@ -205,10 +206,10 @@ void show_iop_thread_list(instance* iris) {
     }
 }
 
-void show_iop_threads(instance* iris) {
+void show_iop_threads(Instance* iris) {
     using namespace ImGui;
     
-    if (imgui::BeginEx("IOP Threads", &iris->show_iop_threads)) {
+    if (imgui::BeginEx("IOP Threads", &iris->ui.show_iop_threads)) {
         if (!iris->ps2->iop->thread_list_addr) {
             ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
             ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);

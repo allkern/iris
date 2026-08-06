@@ -3,6 +3,7 @@
 
 #include "ps2_elf.hpp"
 #include "ps2_iso9660.hpp"
+#include "ps2.hpp"
 
 #define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
@@ -48,10 +49,10 @@ void print_help() {
     );
 }
 
-bool parse_mappings_file(instance* iris) {
-    iris->mappings_path = iris->pref_path + "mappings.toml";
+bool parse_mappings_file(Instance* iris) {
+    iris->paths.mappings_path = iris->paths.pref_path + "mappings.toml";
 
-    std::ifstream mappings_file(iris->mappings_path);
+    std::ifstream mappings_file(iris->paths.mappings_path);
 
     if (!mappings_file.is_open())
         return false;
@@ -61,7 +62,7 @@ bool parse_mappings_file(instance* iris) {
     if (!result) {
         std::string desc(result.error().description());
 
-        printf("iris: Couldn't parse mappings file: %s\n", desc.c_str());
+        iris_error(&iris->log.settings, "Couldn't parse mappings file: {}", desc.c_str());
 
         return false;
     }
@@ -69,40 +70,40 @@ bool parse_mappings_file(instance* iris) {
     toml::table& tbl = result.table();
 
     for (auto& map : tbl) {
-        printf("input: Parsing input map \"%s\"...\n", map.first.data());
+        iris_info(&iris->log.settings, "Parsing input map \"{}\"...", map.first.data());
 
-        mapping input_mapping {};
+        Mapping input_mapping {};
 
         input_mapping.name = map.first.data();
-        input_mapping.map = bidirectional_map<uint64_t, input_action>();
+        input_mapping.map = bidirectional_map<uint64_t, InputAction>();
 
         for (auto& input_map : *map.second.as_table()) {
             uint64_t key = std::stoull(input_map.first.data());
             uint64_t value = input_map.second.as_integer()->get();
 
-            input_mapping.map.insert(key, static_cast<input_action>(value));
+            input_mapping.map.insert(key, static_cast<InputAction>(value));
 
             // printf("entry: %d -> %d\n", std::stoull(input_map.first.data()), input_map.second.as_integer()->get());
         }
 
-        iris->input_maps.push_back(input_mapping);
+        iris->input.input_maps.push_back(input_mapping);
     }
 
     return true;
 }
 
-bool parse_toml_settings(instance* iris, bool reset) {
-    iris->settings_path = iris->pref_path + "settings.toml";
+bool parse_toml_settings(Instance* iris, bool reset) {
+    iris->paths.settings_path = iris->paths.pref_path + "settings.toml";
 
     toml::table tbl;
 
     if (!reset) {
-        toml::parse_result result = toml::parse_file(iris->settings_path);
+        toml::parse_result result = toml::parse_file(iris->paths.settings_path);
 
         if (!result) {
             std::string desc(result.error().description());
 
-            printf("iris: Couldn't parse settings file: %s\n", desc.c_str());
+            iris_error(&iris->log.settings, "Couldn't parse settings file: {}", desc.c_str());
 
             return false;
         }
@@ -111,23 +112,23 @@ bool parse_toml_settings(instance* iris, bool reset) {
     }
 
     auto paths = tbl["paths"];
-    iris->bios_path = paths["bios_path"].value_or("");
-    iris->rom1_path = paths["rom1_path"].value_or("");
-    iris->rom2_path = paths["rom2_path"].value_or("");
-    iris->nvram_path = paths["nvram_path"].value_or("");
-    iris->mcd0_path = paths["mcd0_path"].value_or("");
-    iris->mcd1_path = paths["mcd1_path"].value_or("");
-    iris->snap_path = paths["snap_path"].value_or("snap");
-    iris->flash_path = paths["flash_path"].value_or("");
-    iris->gcdb_path = paths["gcdb_path"].value_or("");
-    iris->hdd_path = paths["hdd_path"].value_or("");
-    iris->auto_paths = paths["auto"].value_or(true);
+    iris->paths.bios_path = paths["bios_path"].value_or("");
+    iris->paths.rom1_path = paths["rom1_path"].value_or("");
+    iris->paths.rom2_path = paths["rom2_path"].value_or("");
+    iris->paths.nvram_path = paths["nvram_path"].value_or("");
+    iris->paths.mcd0_path = paths["mcd0_path"].value_or("");
+    iris->paths.mcd1_path = paths["mcd1_path"].value_or("");
+    iris->paths.snap_path = paths["snap_path"].value_or("snap");
+    iris->paths.flash_path = paths["flash_path"].value_or("");
+    iris->paths.gcdb_path = paths["gcdb_path"].value_or("");
+    iris->paths.hdd_path = paths["hdd_path"].value_or("");
+    iris->paths.auto_paths = paths["auto"].value_or(true);
 
     auto host = tbl["host"];
-    iris->host_path = host["path"].value_or("");
-    iris->host_from_elf = host["from_elf"].value_or(false);
+    iris->paths.host_path = host["path"].value_or("");
+    iris->paths.host_from_elf = host["from_elf"].value_or(false);
 
-    iris->device_maps.clear();
+    iris->paths.device_maps.clear();
 
     if (auto devices = tbl["devices"].as_table()) {
         for (auto&& [key, value] : *devices) {
@@ -139,13 +140,13 @@ bool parse_toml_settings(instance* iris, bool reset) {
                 continue;
 
             if (device == "host") {
-                if (iris->host_path.empty())
-                    iris->host_path = *path;
+                if (iris->paths.host_path.empty())
+                    iris->paths.host_path = *path;
 
                 continue;
             }
 
-            iris->device_maps.emplace_back(device, *path);
+            iris->paths.device_maps.emplace_back(device, *path);
         }
     }
 
@@ -155,60 +156,60 @@ bool parse_toml_settings(instance* iris, bool reset) {
     iris->fullscreen = window["fullscreen"].value_or(0);
 
     auto display = tbl["display"];
-    iris->aspect_mode = display["aspect_mode"].value_or(RENDER_ASPECT_AUTO);
+    iris->aspect_mode = display["aspect_mode"].value_or(render::AUTO);
     iris->filter = display["filter"].value_or(true);
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);
     iris->renderer_backend = display["renderer"].value_or(gs::renderer::BACKEND_HARDWARE);
     iris->window_width = display["window_width"].value_or(960);
     iris->window_height = display["window_height"].value_or(720);
-    iris->menubar_height = display["menubar_height"].value_or(0);
+    iris->ui.menubar_height = display["menubar_height"].value_or(0);
     iris->angle = display["angle"].value_or(0);
     iris->flip_x = display["flip_x"].value_or(false);
     iris->flip_y = display["flip_y"].value_or(false);
-    iris->present_mode = display["present_mode"].value_or(IRIS_PRESENT_MODE_60FPS);
+    iris->present_mode = display["present_mode"].value_or(render::FPS_60);
 
     auto audio = tbl["audio"];
-    iris->mute = audio["mute"].value_or(false);
-    iris->volume = audio["volume"].value_or(1.0);
-    iris->mute_adma = audio["mute_adma"].value_or(true);
+    iris->audio.mute = audio["mute"].value_or(false);
+    iris->audio.volume = audio["volume"].value_or(1.0);
+    iris->audio.mute_adma = audio["mute_adma"].value_or(true);
 
     auto debugger = tbl["debugger"];
-    iris->show_ee_control = debugger["show_ee_control"].value_or(false);
-    iris->show_ee_state = debugger["show_ee_state"].value_or(false);
-    iris->show_ee_logs = debugger["show_ee_logs"].value_or(false);
-    iris->show_ee_interrupts = debugger["show_ee_interrupts"].value_or(false);
-    iris->show_ee_dmac = debugger["show_ee_dmac"].value_or(false);
-    iris->show_iop_control = debugger["show_iop_control"].value_or(false);
-    iris->show_iop_state = debugger["show_iop_state"].value_or(false);
-    iris->show_iop_logs = debugger["show_iop_logs"].value_or(false);
-    iris->show_iop_interrupts = debugger["show_iop_interrupts"].value_or(false);
-    iris->show_iop_modules = debugger["show_iop_modules"].value_or(false);
-    iris->show_iop_dma = debugger["show_iop_dma"].value_or(false);
-    iris->show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
-    iris->show_spu2_debugger = debugger["show_spu2_debugger"].value_or(false);
-    iris->show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
-    iris->show_memory_search = debugger["show_memory_search"].value_or(false);
-    iris->show_vu_disassembler = debugger["show_vu_disassembler"].value_or(false);
-    iris->show_status_bar = debugger["show_status_bar"].value_or(true);
-    iris->show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
-    iris->show_ee_threads = debugger["show_ee_threads"].value_or(false);
-    iris->show_iop_threads = debugger["show_iop_threads"].value_or(false);
-    iris->show_timers = debugger["show_timers"].value_or(false);
-    iris->show_sysmem_logs = debugger["show_sysmem_logs"].value_or(false);
-    iris->show_overlay = debugger["show_overlay"].value_or(false);
+    iris->ui.show_ee_control = debugger["show_ee_control"].value_or(false);
+    iris->ui.show_ee_state = debugger["show_ee_state"].value_or(false);
+    iris->ui.show_ee_logs = debugger["show_ee_logs"].value_or(false);
+    iris->ui.show_ee_interrupts = debugger["show_ee_interrupts"].value_or(false);
+    iris->ui.show_ee_dmac = debugger["show_ee_dmac"].value_or(false);
+    iris->ui.show_iop_control = debugger["show_iop_control"].value_or(false);
+    iris->ui.show_iop_state = debugger["show_iop_state"].value_or(false);
+    iris->ui.show_iop_logs = debugger["show_iop_logs"].value_or(false);
+    iris->ui.show_iop_interrupts = debugger["show_iop_interrupts"].value_or(false);
+    iris->ui.show_iop_modules = debugger["show_iop_modules"].value_or(false);
+    iris->ui.show_iop_dma = debugger["show_iop_dma"].value_or(false);
+    iris->ui.show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
+    iris->ui.show_spu2_debugger = debugger["show_spu2_debugger"].value_or(false);
+    iris->ui.show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
+    iris->ui.show_memory_search = debugger["show_memory_search"].value_or(false);
+    iris->ui.show_vu_disassembler = debugger["show_vu_disassembler"].value_or(false);
+    iris->ui.show_status_bar = debugger["show_status_bar"].value_or(true);
+    iris->ui.show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
+    iris->ui.show_ee_threads = debugger["show_ee_threads"].value_or(false);
+    iris->ui.show_iop_threads = debugger["show_iop_threads"].value_or(false);
+    iris->ui.show_timers = debugger["show_timers"].value_or(false);
+    iris->ui.show_sysmem_logs = debugger["show_sysmem_logs"].value_or(false);
+    iris->ui.show_overlay = debugger["show_overlay"].value_or(false);
 
-    // iris->show_symbols = debugger["show_symbols"].value_or(false);
-    iris->show_breakpoints = debugger["show_breakpoints"].value_or(false);
-    iris->show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
+    // iris->ui.show_symbols = debugger["show_symbols"].value_or(false);
+    iris->ui.show_breakpoints = debugger["show_breakpoints"].value_or(false);
+    iris->ui.show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
     iris->timescale = debugger["timescale"].value_or(2);
 
     auto usb = tbl["usb"];
-    iris->usb_devices[0] = usb["port1_device"].value_or(usb::USB_DEVICE_NONE);
-    iris->usb_devices[1] = usb["port2_device"].value_or(usb::USB_DEVICE_NONE);
-    iris->usb_msd_paths[0] = usb["port1_msd_image"].value_or("");
-    iris->usb_msd_paths[1] = usb["port2_msd_image"].value_or("");
+    iris->input.usb_devices[0] = usb["port1_device"].value_or(usb::USB_DEVICE_NONE);
+    iris->input.usb_devices[1] = usb["port2_device"].value_or(usb::USB_DEVICE_NONE);
+    iris->input.usb_msd_paths[0] = usb["port1_msd_image"].value_or("");
+    iris->input.usb_msd_paths[1] = usb["port2_msd_image"].value_or("");
 
     auto system = tbl["system"];
     iris->system = system["model"].value_or(ps2::AUTO);
@@ -239,10 +240,10 @@ bool parse_toml_settings(instance* iris, bool reset) {
     iris->slirp_config.nameserver = network["nameserver"].value_or("10.0.2.3");
 
     auto screenshots = tbl["screenshots"];
-    iris->screenshot_format = screenshots["format"].value_or(IRIS_SCREENSHOT_FORMAT_PNG);
-    iris->screenshot_jpg_quality_mode = screenshots["jpg_quality_mode"].value_or(IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM);
+    iris->screenshot_format = screenshots["format"].value_or(render::PNG);
+    iris->screenshot_jpg_quality_mode = screenshots["jpg_quality_mode"].value_or(render::MAXIMUM);
     iris->screenshot_jpg_quality = screenshots["jpg_quality"].value_or(50);
-    iris->screenshot_mode = screenshots["mode"].value_or(IRIS_SCREENSHOT_MODE_INTERNAL);
+    iris->screenshot_mode = screenshots["mode"].value_or(render::INTERNAL);
     iris->screenshot_shader_processing = screenshots["shader_processing"].value_or(false);
 
     auto hardware = tbl["hardware"];
@@ -263,27 +264,27 @@ bool parse_toml_settings(instance* iris, bool reset) {
     iris->hardware_backend_config.invert_fields = hardware["invert_fields"].value_or(false);
 
     auto vulkan = tbl["vulkan"];
-    iris->vulkan_physical_device = vulkan["physical_device"].value_or(-1);
-    iris->vulkan_enable_validation_layers = vulkan["enable_validation_layers"].value_or(false);
+    iris->vk.vulkan_physical_device = vulkan["physical_device"].value_or(-1);
+    iris->vk.vulkan_enable_validation_layers = vulkan["enable_validation_layers"].value_or(false);
 
     auto ui = tbl["ui"];
-    iris->theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
-    iris->codeview_font_scale = ui["codeview_font_scale"].value_or(1.0f);
-    iris->codeview_color_scheme = ui["codeview_color_scheme"].value_or(IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK);
-    iris->codeview_use_theme_background = ui["codeview_use_theme_background"].value_or(true);
-    iris->ui_scale = ui["scale"].value_or(1.0f);
-    iris->imgui_enable_viewports = ui["enable_viewports"].value_or(false);
+    iris->ui.theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
+    iris->ui.codeview_font_scale = ui["codeview_font_scale"].value_or(1.0f);
+    iris->ui.codeview_color_scheme = ui["codeview_color_scheme"].value_or(IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK);
+    iris->ui.codeview_use_theme_background = ui["codeview_use_theme_background"].value_or(true);
+    iris->ui.ui_scale = ui["scale"].value_or(1.0f);
+    iris->ui.imgui_enable_viewports = ui["enable_viewports"].value_or(false);
 
     toml::array* bgcolor = tbl["ui"]["bgcolor"].as_array();
 
     if (bgcolor && bgcolor->size() == 3) {
-        iris->clear_value.color.float32[0] = (float)bgcolor->at(0).as_floating_point()->get();
-        iris->clear_value.color.float32[1] = (float)bgcolor->at(1).as_floating_point()->get();
-        iris->clear_value.color.float32[2] = (float)bgcolor->at(2).as_floating_point()->get();
+        iris->vk.clear_value.color.float32[0] = (float)bgcolor->at(0).as_floating_point()->get();
+        iris->vk.clear_value.color.float32[1] = (float)bgcolor->at(1).as_floating_point()->get();
+        iris->vk.clear_value.color.float32[2] = (float)bgcolor->at(2).as_floating_point()->get();
     } else {
-        iris->clear_value.color.float32[0] = 0.11f;
-        iris->clear_value.color.float32[1] = 0.11f;
-        iris->clear_value.color.float32[2] = 0.11f;
+        iris->vk.clear_value.color.float32[0] = 0.11f;
+        iris->vk.clear_value.color.float32[1] = 0.11f;
+        iris->vk.clear_value.color.float32[2] = 0.11f;
     }
 
 #ifdef _WIN32
@@ -302,14 +303,14 @@ bool parse_toml_settings(instance* iris, bool reset) {
                 // Provided for backcompat with older settings files
                 std::string str = recents->at(i).as_string()->get();
 
-                iris->recents.push_back({ str, 0 });
+                iris->recents.push_back({ str, RecentType::PS2 });
 
                 continue;
             }
 
-            recent r = {
+            Recent r = {
                 entry->operator[]("path").value_or(std::string()),
-                entry->operator[]("type").value_or(0)
+                (RecentType)entry->operator[]("type").value_or(0)
             };
 
             iris->recents.push_back(r);
@@ -321,7 +322,7 @@ bool parse_toml_settings(instance* iris, bool reset) {
 
     if (shaders) {
         for (int i = 0; i < shaders->size(); i++)
-            iris->shader_passes_pending.push_back(shaders->at(i).as_string()->get());
+            iris->vk.shader_passes_pending.push_back(shaders->at(i).as_string()->get());
     }
 
     return parse_mappings_file(iris);
@@ -340,14 +341,14 @@ bool check_for_quick_exit(int argc, const char* argv[]) {
 
             return true;
         } else if (a == "--reset-settings") {
-            instance* tmp = create();
+            Instance* tmp = create();
 
             if (std::filesystem::exists("portable") || std::filesystem::exists("portable.txt")) {
-                tmp->pref_path = "./";
+                tmp->paths.pref_path = "./";
             } else {
                 char* pref = SDL_GetPrefPath("Allkern", "Iris");
 
-                tmp->pref_path = pref ? std::string(pref) : "./";
+                tmp->paths.pref_path = pref ? std::string(pref) : "./";
 
                 if (pref)
                     SDL_free(pref);
@@ -366,7 +367,7 @@ bool check_for_quick_exit(int argc, const char* argv[]) {
     return false;
 }
 
-void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
+void parse_cli_settings(Instance* iris, int argc, const char* argv[]) {
     std::string bios_path;
     std::string rom1_path;
     std::string rom2_path;
@@ -375,11 +376,11 @@ void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
         std::string a(argv[i]);
 
         if (a == "-x" || a == "--executable") {
-            iris->elf_path = argv[i+1];
+            iris->paths.elf_path = argv[i+1];
 
             ++i;
         } else if (a == "-d" || a == "--boot") {
-            iris->boot_path = argv[i+1];
+            iris->paths.boot_path = argv[i+1];
 
             ++i;
         } else if (a == "-b" || a == "--bios") {
@@ -395,15 +396,15 @@ void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
 
             ++i;
         } else if (a == "-i" || a == "--disc") {
-            iris->disc_path = argv[i+1];
+            iris->paths.disc_path = argv[i+1];
 
             ++i;
         } else if (a == "--slot1") {
-            iris->mcd0_path = argv[i+1];
+            iris->paths.mcd0_path = argv[i+1];
 
             ++i;
         } else if (a == "--slot2") {
-            iris->mcd1_path = argv[i+1];
+            iris->paths.mcd1_path = argv[i+1];
 
             ++i;
         } else if (a == "-H" || a == "--headless") {
@@ -411,7 +412,7 @@ void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
         } else if (a == "-S" || a == "--snap-on-exit") {
             iris->snap_on_exit = true;
         } else {
-            iris->disc_path = argv[i];
+            iris->paths.disc_path = argv[i];
         }
     }
 
@@ -419,17 +420,17 @@ void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
         if (!ps2::load_bios(iris->ps2, bios_path.c_str())) {
             // push_info(iris, "Couldn't load BIOS");
 
-            iris->show_bios_setting_window = true;
+            iris->ui.show_bios_setting_window = true;
         }
     } else {
-        if (iris->bios_path.size()) {
-            if (!ps2::load_bios(iris->ps2, iris->bios_path.c_str())) {
+        if (iris->paths.bios_path.size()) {
+            if (!ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str())) {
                 // push_info(iris, "Couldn't load BIOS");
 
-                iris->show_bios_setting_window = true;
+                iris->ui.show_bios_setting_window = true;
             }
         } else {
-            iris->show_bios_setting_window = true;
+            iris->ui.show_bios_setting_window = true;
         }
     }
 
@@ -438,8 +439,8 @@ void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
             // push_info(iris, "Couldn't load ROM1");
         }
     } else {
-        if (iris->rom1_path.size()) {
-            if (!ps2::load_rom1(iris->ps2, iris->rom1_path.c_str())) {
+        if (iris->paths.rom1_path.size()) {
+            if (!ps2::load_rom1(iris->ps2, iris->paths.rom1_path.c_str())) {
                 // push_info(iris, "Couldn't load ROM1");
             }
         }
@@ -450,31 +451,31 @@ void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
             // push_info(iris, "Couldn't load ROM2");
         }
     } else {
-        if (iris->rom2_path.size()) {
-            if (!ps2::load_rom2(iris->ps2, iris->rom2_path.c_str())) {
+        if (iris->paths.rom2_path.size()) {
+            if (!ps2::load_rom2(iris->ps2, iris->paths.rom2_path.c_str())) {
                 // push_info(iris, "Couldn't load ROM2");
             }
         }
     }
 
-    if (iris->elf_path.size()) {
+    if (iris->paths.elf_path.size()) {
         ps2::set_system(iris->ps2, iris->system);
-        ps2::load_bios(iris->ps2, iris->bios_path.c_str());
-        elf::load(iris->ps2, iris->elf_path.c_str());
+        ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
+        elf::load(iris->ps2, iris->paths.elf_path.c_str());
 
-        iris->loaded = iris->elf_path;
+        iris->loaded = iris->paths.elf_path;
     }
 
-    if (iris->boot_path.size()) {
+    if (iris->paths.boot_path.size()) {
         ps2::set_system(iris->ps2, iris->system);
-        ps2::load_bios(iris->ps2, iris->bios_path.c_str());
-        ps2::boot_file(iris->ps2, iris->boot_path.c_str());
+        ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
+        ps2::boot_file(iris->ps2, iris->paths.boot_path.c_str());
 
-        iris->loaded = iris->boot_path;
+        iris->loaded = iris->paths.boot_path;
     }
 
-    if (iris->disc_path.size()) {
-        if (cdvd::open(iris->ps2->cdvd, iris->disc_path.c_str(), 0))
+    if (iris->paths.disc_path.size()) {
+        if (cdvd::open(iris->ps2->cdvd, iris->paths.disc_path.c_str(), 0))
             return;
 
         char* boot_file = iop::disc::get_boot_path(iris->ps2->cdvd->disc);
@@ -483,21 +484,21 @@ void parse_cli_settings(instance* iris, int argc, const char* argv[]) {
             return;
 
         ps2::set_system(iris->ps2, iris->system);
-        ps2::load_bios(iris->ps2, iris->bios_path.c_str());
+        ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
         ps2::boot_file(iris->ps2, boot_file);
 
-        iris->loaded = iris->disc_path;
+        iris->loaded = iris->paths.disc_path;
     }
 }
 
-void apply_device_maps(instance* iris) {
+void apply_device_maps(Instance* iris) {
     ps2::iop_clear_device_maps(iris->ps2);
 
-    const std::string& host = iris->host_from_elf ? iris->host_elf_dir : iris->host_path;
+    const std::string& host = iris->paths.host_from_elf ? iris->paths.host_elf_dir : iris->paths.host_path;
 
     ps2::iop_map_device(iris->ps2, "host", host.c_str());
 
-    for (const auto& p : iris->device_maps) {
+    for (const auto& p : iris->paths.device_maps) {
         const std::string& device = p.first;
         const std::string& path = p.second;
 
@@ -507,18 +508,18 @@ void apply_device_maps(instance* iris) {
     }
 }
 
-bool init(instance* iris, int argc, const char* argv[]) {
+bool init(Instance* iris, int argc, const char* argv[]) {
     parse_toml_settings(iris, false);
 
     parse_cli_settings(iris, argc, argv);
 
     emu::load_rom_files(iris);
 
-    if (iris->mcd0_path.size())
-        emu::attach_memory_card(iris, 0, iris->mcd0_path.c_str());
+    if (iris->paths.mcd0_path.size())
+        emu::attach_memory_card(iris, 0, iris->paths.mcd0_path.c_str());
 
-    if (iris->mcd1_path.size())
-        emu::attach_memory_card(iris, 1, iris->mcd1_path.c_str());
+    if (iris->paths.mcd1_path.size())
+        emu::attach_memory_card(iris, 1, iris->paths.mcd1_path.c_str());
 
     // Apply settings loaded from file/CLI
     ps2::set_timescale(iris->ps2, iris->timescale);
@@ -528,17 +529,17 @@ bool init(instance* iris, int argc, const char* argv[]) {
     ee::set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
 
     ps2::set_system(iris->ps2, iris->system);
-    speed::load_flash(iris->ps2->speed, iris->flash_path.c_str());
-    speed::load_hdd(iris->ps2->speed, iris->hdd_path.c_str());
+    speed::load_flash(iris->ps2->speed, iris->paths.flash_path.c_str());
+    speed::load_hdd(iris->ps2->speed, iris->paths.hdd_path.c_str());
     speed::set_mac_address(iris->ps2->speed, iris->mac_address);
 
-    slirp::start(iris->ps2->speed->smap, iris->slirp_config);
+    slirp::start(iris->ps2->speed->smap, iris->slirp_config, &iris->log.slirp);
 
     for (int i = 0; i < 2; i++) {
-        if (iris->usb_msd_paths[i].size())
-            usb::msd_set_image(iris->ps2->usb, i, iris->usb_msd_paths[i].c_str());
+        if (iris->input.usb_msd_paths[i].size())
+            usb::msd_set_image(iris->ps2->usb, i, iris->input.usb_msd_paths[i].c_str());
 
-        usb::set_port_device(iris->ps2->usb, i, iris->usb_devices[i]);
+        usb::set_port_device(iris->ps2->usb, i, iris->input.usb_devices[i]);
     }
 
     for (int i = 1; i < argc; i++) {
@@ -556,22 +557,22 @@ bool init(instance* iris, int argc, const char* argv[]) {
                 return false;
 
             ps2::set_system(iris->ps2, iris->system);
-            ps2::load_bios(iris->ps2, iris->bios_path.c_str());
+            ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
             ps2::boot_file(iris->ps2, boot_file);
 
-            iris->pause = false;
+            iris->debug.pause = false;
         }
     }
 
     return true;
 }
 
-void close(instance* iris) {
+void close(Instance* iris) {
     if (!iris->dump_to_file)
         return;
 
-    std::ofstream file(iris->settings_path);
-    std::ofstream mappings_file(iris->pref_path + "mappings.toml");
+    std::ofstream file(iris->paths.settings_path);
+    std::ofstream mappings_file(iris->paths.pref_path + "mappings.toml");
 
     file << "# File auto-generated by " IRIS_TITLE "\n\n";
 
@@ -597,16 +598,16 @@ void close(instance* iris) {
             { "nameserver", iris->slirp_config.nameserver }
         } },
         { "input", toml::table {
-            { "slot1_device", iris->input_devices[0] ? iris->input_devices[0]->get_type() : 0 },
-            { "slot2_device", iris->input_devices[1] ? iris->input_devices[1]->get_type() : 0 },
-            { "slot1_mapping", iris->input_map[0] },
-            { "slot2_mapping", iris->input_map[1] }
+            { "slot1_device", iris->input.input_devices[0] ? iris->input.input_devices[0]->get_type() : 0 },
+            { "slot2_device", iris->input.input_devices[1] ? iris->input.input_devices[1]->get_type() : 0 },
+            { "slot1_mapping", iris->input.input_map[0] },
+            { "slot2_mapping", iris->input.input_map[1] }
         } },
         { "usb", toml::table {
-            { "port1_device", iris->usb_devices[0] },
-            { "port2_device", iris->usb_devices[1] },
-            { "port1_msd_image", iris->usb_msd_paths[0] },
-            { "port2_msd_image", iris->usb_msd_paths[1] }
+            { "port1_device", iris->input.usb_devices[0] },
+            { "port2_device", iris->input.usb_devices[1] },
+            { "port1_msd_image", iris->input.usb_msd_paths[0] },
+            { "port2_msd_image", iris->input.usb_msd_paths[1] }
         } },
         { "screenshots", toml::table {
             { "format", iris->screenshot_format },
@@ -639,35 +640,35 @@ void close(instance* iris) {
             { "invert_fields", iris->hardware_backend_config.invert_fields }
         } },
         { "vulkan", toml::table {
-            { "physical_device", iris->vulkan_physical_device },
-            { "enable_validation_layers", iris->vulkan_enable_validation_layers }
+            { "physical_device", iris->vk.vulkan_physical_device },
+            { "enable_validation_layers", iris->vk.vulkan_enable_validation_layers }
         } },
         { "debugger", toml::table {
-            { "show_ee_control", iris->show_ee_control },
-            { "show_ee_state", iris->show_ee_state },
-            { "show_ee_logs", iris->show_ee_logs },
-            { "show_ee_interrupts", iris->show_ee_interrupts },
-            { "show_ee_dmac", iris->show_ee_dmac },
-            { "show_iop_control", iris->show_iop_control },
-            { "show_iop_state", iris->show_iop_state },
-            { "show_iop_logs", iris->show_iop_logs },
-            { "show_iop_interrupts", iris->show_iop_interrupts },
-            { "show_iop_modules", iris->show_iop_modules},
-            { "show_iop_dma", iris->show_iop_dma },
-            { "show_gs_debugger", iris->show_gs_debugger },
-            { "show_spu2_debugger", iris->show_spu2_debugger },
-            { "show_memory_viewer", iris->show_memory_viewer },
-            { "show_memory_search", iris->show_memory_search },
-            { "show_vu_disassembler", iris->show_vu_disassembler },
-            { "show_status_bar", iris->show_status_bar },
-            { "show_pad_debugger", iris->show_pad_debugger },
-            { "show_breakpoints", iris->show_breakpoints },
-            { "show_ee_threads", iris->show_ee_threads },
-            { "show_iop_threads", iris->show_iop_threads },
-            { "show_timers", iris->show_timers },
-            { "show_sysmem_logs", iris->show_sysmem_logs },
-            { "show_imgui_demo", iris->show_imgui_demo },
-            { "show_overlay", iris->show_overlay },
+            { "show_ee_control", iris->ui.show_ee_control },
+            { "show_ee_state", iris->ui.show_ee_state },
+            { "show_ee_logs", iris->ui.show_ee_logs },
+            { "show_ee_interrupts", iris->ui.show_ee_interrupts },
+            { "show_ee_dmac", iris->ui.show_ee_dmac },
+            { "show_iop_control", iris->ui.show_iop_control },
+            { "show_iop_state", iris->ui.show_iop_state },
+            { "show_iop_logs", iris->ui.show_iop_logs },
+            { "show_iop_interrupts", iris->ui.show_iop_interrupts },
+            { "show_iop_modules", iris->ui.show_iop_modules},
+            { "show_iop_dma", iris->ui.show_iop_dma },
+            { "show_gs_debugger", iris->ui.show_gs_debugger },
+            { "show_spu2_debugger", iris->ui.show_spu2_debugger },
+            { "show_memory_viewer", iris->ui.show_memory_viewer },
+            { "show_memory_search", iris->ui.show_memory_search },
+            { "show_vu_disassembler", iris->ui.show_vu_disassembler },
+            { "show_status_bar", iris->ui.show_status_bar },
+            { "show_pad_debugger", iris->ui.show_pad_debugger },
+            { "show_breakpoints", iris->ui.show_breakpoints },
+            { "show_ee_threads", iris->ui.show_ee_threads },
+            { "show_iop_threads", iris->ui.show_iop_threads },
+            { "show_timers", iris->ui.show_timers },
+            { "show_sysmem_logs", iris->ui.show_sysmem_logs },
+            { "show_imgui_demo", iris->ui.show_imgui_demo },
+            { "show_overlay", iris->ui.show_overlay },
             { "skip_fmv", iris->skip_fmv },
             { "timescale", iris->timescale }
         } },
@@ -680,24 +681,24 @@ void close(instance* iris) {
             { "renderer", iris->renderer_backend },
             { "window_width", iris->window_width },
             { "window_height", iris->window_height },
-            { "menubar_height", iris->menubar_height },
+            { "menubar_height", iris->ui.menubar_height },
             { "angle", iris->angle },
             { "flip_x", iris->flip_x },
             { "flip_y", iris->flip_y },
             { "present_mode", iris->present_mode }
         } },
         { "ui", toml::table {
-            { "theme", iris->theme },
-            { "codeview_color_scheme", iris->codeview_color_scheme },
-            { "codeview_font_scale", iris->codeview_font_scale },
-            { "codeview_use_theme_background", iris->codeview_use_theme_background },
-            { "scale", iris->ui_scale },
+            { "theme", iris->ui.theme },
+            { "codeview_color_scheme", iris->ui.codeview_color_scheme },
+            { "codeview_font_scale", iris->ui.codeview_font_scale },
+            { "codeview_use_theme_background", iris->ui.codeview_use_theme_background },
+            { "scale", iris->ui.ui_scale },
             { "bgcolor", toml::array {
-                iris->clear_value.color.float32[0],
-                iris->clear_value.color.float32[1],
-                iris->clear_value.color.float32[2]
+                iris->vk.clear_value.color.float32[0],
+                iris->vk.clear_value.color.float32[1],
+                iris->vk.clear_value.color.float32[2]
             } },
-            { "enable_viewports", iris->imgui_enable_viewports },
+            { "enable_viewports", iris->ui.imgui_enable_viewports },
 #ifdef _WIN32
             { "windows_titlebar_style", iris->windows_titlebar_style },
             { "windows_enable_borders", iris->windows_enable_borders },
@@ -705,26 +706,26 @@ void close(instance* iris) {
 #endif
         } },
         { "audio", toml::table {
-            { "mute", iris->mute },
-            { "mute_adma", iris->mute_adma },
-            { "volume", iris->volume }
+            { "mute", iris->audio.mute },
+            { "mute_adma", iris->audio.mute_adma },
+            { "volume", iris->audio.volume }
         } },
         { "paths", toml::table {
-            { "bios_path", iris->bios_path },
-            { "rom1_path", iris->rom1_path },
-            { "rom2_path", iris->rom2_path },
-            { "nvram_path", iris->nvram_path },
-            { "mcd0_path", iris->mcd0_path },
-            { "mcd1_path", iris->mcd1_path },
-            { "snap_path", iris->snap_path },
-            { "flash_path", iris->flash_path },
-            { "gcdb_path", iris->gcdb_path },
-            { "hdd_path", iris->hdd_path },
-            { "auto", iris->auto_paths }
+            { "bios_path", iris->paths.bios_path },
+            { "rom1_path", iris->paths.rom1_path },
+            { "rom2_path", iris->paths.rom2_path },
+            { "nvram_path", iris->paths.nvram_path },
+            { "mcd0_path", iris->paths.mcd0_path },
+            { "mcd1_path", iris->paths.mcd1_path },
+            { "snap_path", iris->paths.snap_path },
+            { "flash_path", iris->paths.flash_path },
+            { "gcdb_path", iris->paths.gcdb_path },
+            { "hdd_path", iris->paths.hdd_path },
+            { "auto", iris->paths.auto_paths }
         } },
         { "host", toml::table {
-            { "path", iris->host_path },
-            { "from_elf", iris->host_from_elf }
+            { "path", iris->paths.host_path },
+            { "from_elf", iris->paths.host_from_elf }
         } },
         { "devices", toml::table {} },
         { "recents", toml::table {
@@ -738,7 +739,7 @@ void close(instance* iris) {
 
     toml::table* devices = tbl["devices"].as_table();
 
-    for (const auto& p : iris->device_maps) {
+    for (const auto& p : iris->paths.device_maps) {
         const std::string& dev = p.first;
         const std::string& host = p.second;
 
@@ -750,7 +751,7 @@ void close(instance* iris) {
     toml::array* recents = tbl["recents"]["array"].as_array();
 
     for (const auto& s : iris->recents)
-        recents->push_back(toml::table { { "type", s.type }, { "path", s.path } });
+        recents->push_back(toml::table { { "type", (int)s.type }, { "path", s.path } });
 
     toml::array* shaders = tbl["shaders"]["array"].as_array();
 
@@ -762,7 +763,7 @@ void close(instance* iris) {
 
     toml::table mappings_tbl {};
 
-    for (auto& map : iris->input_maps) {
+    for (auto& map : iris->input.input_maps) {
         toml::table map_tbl { { map.name, toml::table {} } };
 
         for (auto& entry : map.map.forward_map()) {

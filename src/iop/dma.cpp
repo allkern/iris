@@ -629,9 +629,9 @@ void handle_dev9_transfer(Dma* dma) {
         return;
     }
 
-    if (dma->dev9_mode == DEV9_ATA) {
+    if (dma->dev9_mode == DEV9_MODE_RETAIL) {
         handle_dev9_ata_transfer(dma);
-    } else if (dma->dev9_mode == DEV9_ACATA) {
+    } else if (dma->dev9_mode == DEV9_MODE_ACATA) {
         handle_dev9_acata_transfer(dma);
     } else {
         handle_dev9_nand_transfer(dma);

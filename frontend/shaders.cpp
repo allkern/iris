@@ -31,8 +31,8 @@ constexpr unsigned int g_noise_frag_shader_size = sizeof(g_noise_frag_shader_dat
 
 namespace iris::shaders {
 
-bool pass::init(instance* iris, const void* data, size_t size, std::string id) {
-    m_vert_shader = iris->default_vert_shader;
+bool Pass::init(Instance* iris, const void* data, size_t size, std::string id) {
+    m_vert_shader = iris->vk.default_vert_shader;
     m_iris = iris;
     m_id = id;
 
@@ -41,8 +41,8 @@ bool pass::init(instance* iris, const void* data, size_t size, std::string id) {
     create_info.pCode = (const uint32_t*)data;
     create_info.codeSize = size;
 
-    if (vkCreateShaderModule(m_iris->device, &create_info, nullptr, &m_frag_shader) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create fragment shader module\n");
+    if (vkCreateShaderModule(m_iris->vk.device, &create_info, nullptr, &m_frag_shader) != VK_SUCCESS) {
+        iris_error(&iris->log.shaders, "Failed to create fragment shader module");
 
         return false;
     }
@@ -50,11 +50,11 @@ bool pass::init(instance* iris, const void* data, size_t size, std::string id) {
     return rebuild();
 }
 
-pass::pass(instance* iris, const void* data, size_t size, std::string id) {
+Pass::Pass(Instance* iris, const void* data, size_t size, std::string id) {
     init(iris, data, size, id);
 }
 
-pass::pass(pass&& other) {
+Pass::Pass(Pass&& other) {
     m_pipeline_layout = other.m_pipeline_layout;
     m_pipeline = other.m_pipeline;
     m_render_pass = other.m_render_pass;
@@ -76,7 +76,7 @@ pass::pass(pass&& other) {
     other.bypass = false;
 }
 
-pass& pass::operator=(pass&& other) {
+Pass& Pass::operator=(Pass&& other) {
     if (this != &other) {
         m_pipeline_layout = other.m_pipeline_layout;
         m_pipeline = other.m_pipeline;
@@ -102,46 +102,46 @@ pass& pass::operator=(pass&& other) {
     return *this;
 }
 
-void pass::destroy() {
+void Pass::destroy() {
     if (!m_iris)
         return;
 
     vulkan::wait_idle(m_iris);
 
-    if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->device, m_pipeline_layout, nullptr);
-    if (m_pipeline) vkDestroyPipeline(m_iris->device, m_pipeline, nullptr);
-    if (m_render_pass) vkDestroyRenderPass(m_iris->device, m_render_pass, nullptr);
-    if (m_frag_shader) vkDestroyShaderModule(m_iris->device, m_frag_shader, nullptr);
+    if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->vk.device, m_pipeline_layout, nullptr);
+    if (m_pipeline) vkDestroyPipeline(m_iris->vk.device, m_pipeline, nullptr);
+    if (m_render_pass) vkDestroyRenderPass(m_iris->vk.device, m_render_pass, nullptr);
+    if (m_frag_shader) vkDestroyShaderModule(m_iris->vk.device, m_frag_shader, nullptr);
 
-    if (m_vert_shader != m_iris->default_vert_shader)
-        if (m_vert_shader) vkDestroyShaderModule(m_iris->device, m_vert_shader, nullptr);
+    if (m_vert_shader != m_iris->vk.default_vert_shader)
+        if (m_vert_shader) vkDestroyShaderModule(m_iris->vk.device, m_vert_shader, nullptr);
 }
 
-pass::~pass() {
+Pass::~Pass() {
     destroy();
 }
 
-bool pass::rebuild() {
+bool Pass::rebuild() {
     vulkan::wait_idle(m_iris);
 
-    if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->device, m_pipeline_layout, nullptr);
-    if (m_pipeline) vkDestroyPipeline(m_iris->device, m_pipeline, nullptr);
-    if (m_render_pass) vkDestroyRenderPass(m_iris->device, m_render_pass, nullptr);
+    if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->vk.device, m_pipeline_layout, nullptr);
+    if (m_pipeline) vkDestroyPipeline(m_iris->vk.device, m_pipeline, nullptr);
+    if (m_render_pass) vkDestroyRenderPass(m_iris->vk.device, m_render_pass, nullptr);
 
     VkPushConstantRange push_constant_range = {};
     push_constant_range.offset = 0;
-    push_constant_range.size = sizeof(push_constants);
+    push_constant_range.size = sizeof(PushConstants);
     push_constant_range.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkPipelineLayoutCreateInfo pipeline_layout_info = {};
     pipeline_layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     pipeline_layout_info.setLayoutCount = 1;
-    pipeline_layout_info.pSetLayouts = &m_iris->shader_descriptor_set_layout;
+    pipeline_layout_info.pSetLayouts = &m_iris->vk.shader_descriptor_set_layout;
     pipeline_layout_info.pushConstantRangeCount = 1;
     pipeline_layout_info.pPushConstantRanges = &push_constant_range;
 
-    if (vkCreatePipelineLayout(m_iris->device, &pipeline_layout_info, nullptr, &m_pipeline_layout) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create shader pipeline layout\n");
+    if (vkCreatePipelineLayout(m_iris->vk.device, &pipeline_layout_info, nullptr, &m_pipeline_layout) != VK_SUCCESS) {
+        iris_error(&m_iris->log.shaders, "Failed to create shader pipeline layout");
 
         destroy();
 
@@ -150,14 +150,14 @@ bool pass::rebuild() {
 
     // Create render pass
     VkAttachmentDescription color_attachment = {};
-    color_attachment.format = m_iris->image.format;
+    color_attachment.format = m_iris->vk.image.format;
     color_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
     color_attachment.loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     color_attachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     color_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     color_attachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    color_attachment.finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    color_attachment.finalLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
 
     VkAttachmentReference color_attachment_ref = {};
     color_attachment_ref.attachment = 0;
@@ -185,8 +185,8 @@ bool pass::rebuild() {
     render_pass_info.dependencyCount = 1;
     render_pass_info.pDependencies = &dependency;
 
-    if (vkCreateRenderPass(m_iris->device, &render_pass_info, nullptr, &m_render_pass) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create shader render pass\n");
+    if (vkCreateRenderPass(m_iris->vk.device, &render_pass_info, nullptr, &m_render_pass) != VK_SUCCESS) {
+        iris_error(&m_iris->log.shaders, "Failed to create shader render pass");
 
         destroy();
 
@@ -197,7 +197,7 @@ bool pass::rebuild() {
     VkPipelineShaderStageCreateInfo shader_stages[2] = {};
     shader_stages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shader_stages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-    shader_stages[0].module = m_iris->default_vert_shader;
+    shader_stages[0].module = m_iris->vk.default_vert_shader;
     shader_stages[0].pName = "main";
     shader_stages[0].pNext = VK_NULL_HANDLE;
     shader_stages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -231,14 +231,14 @@ bool pass::rebuild() {
     VkViewport viewport = {};
     viewport.x = 0.0f;
     viewport.y = 0.0f;
-    viewport.width = (float)m_iris->image.width;
-    viewport.height = (float)m_iris->image.height;
+    viewport.width = (float)m_iris->vk.image.width;
+    viewport.height = (float)m_iris->vk.image.height;
     viewport.minDepth = 0.0f;
     viewport.maxDepth = 1.0f;
 
     VkExtent2D extent = {};
-    extent.width = m_iris->image.width;
-    extent.height = m_iris->image.height;
+    extent.width = m_iris->vk.image.width;
+    extent.height = m_iris->vk.image.height;
 
     VkRect2D scissor = {};
     scissor.offset = {0, 0};
@@ -295,8 +295,8 @@ bool pass::rebuild() {
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE; // Optional
     pipeline_info.basePipelineIndex = -1; // Optional
 
-    if (vkCreateGraphicsPipelines(m_iris->device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_pipeline) != VK_SUCCESS) {
-        fprintf(stderr, "render: Failed to create shader pipeline\n");
+    if (vkCreateGraphicsPipelines(m_iris->vk.device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr, &m_pipeline) != VK_SUCCESS) {
+        iris_error(&m_iris->log.shaders, "Failed to create shader pipeline");
 
         destroy();
 
@@ -306,7 +306,7 @@ bool pass::rebuild() {
     return true;
 }
 
-bool pass::ready() {
+bool Pass::ready() {
     return m_pipeline_layout &&
            m_pipeline &&
            m_render_pass &&
@@ -315,31 +315,31 @@ bool pass::ready() {
            m_iris;
 }
 
-VkPipelineLayout& pass::get_pipeline_layout() {
+VkPipelineLayout& Pass::get_pipeline_layout() {
     return m_pipeline_layout;
 }
 
-VkPipeline& pass::get_pipeline() {
+VkPipeline& Pass::get_pipeline() {
     return m_pipeline;
 }
 
-VkRenderPass& pass::get_render_pass() {
+VkRenderPass& Pass::get_render_pass() {
     return m_render_pass;
 }
 
-VkImageView& pass::get_input() {
+VkImageView& Pass::get_input() {
     return m_input;
 }
 
-VkShaderModule& pass::get_vert_shader() {
+VkShaderModule& Pass::get_vert_shader() {
     return m_vert_shader;
 }
 
-VkShaderModule& pass::get_frag_shader() {
+VkShaderModule& Pass::get_frag_shader() {
     return m_frag_shader;
 }
 
-std::string pass::get_id() const {
+std::string Pass::get_id() const {
     return m_id;
 }
 
@@ -351,11 +351,11 @@ std::unordered_map <std::string, std::pair <void*, size_t>> g_builtin_shaders = 
     { "iris-ntsc-noise", { (void*)g_noise_frag_shader_data, (size_t)g_noise_frag_shader_size } }
 };
 
-void push(instance* iris, void* data, size_t size, std::string id) {
-    iris->shader_passes.push_back(new pass(iris, data, size, id));
+void push(Instance* iris, void* data, size_t size, std::string id) {
+    iris->vk.shader_passes.push_back(new Pass(iris, data, size, id));
 }
 
-void push(instance* iris, std::string id) {
+void push(Instance* iris, std::string id) {
     auto s = g_builtin_shaders.find(id);
 
     if (s != g_builtin_shaders.end()) {
@@ -363,58 +363,58 @@ void push(instance* iris, std::string id) {
     }
 }
 
-void pop(instance* iris) {
-    delete iris->shader_passes.back();
+void pop(Instance* iris) {
+    delete iris->vk.shader_passes.back();
 
-    iris->shader_passes.pop_back();
+    iris->vk.shader_passes.pop_back();
 }
 
-void insert(instance* iris, int i, void* data, size_t size, std::string id) {
-    iris->shader_passes.insert(
-        iris->shader_passes.begin() + i,
-        new pass(iris, data, size, id)
+void insert(Instance* iris, int i, void* data, size_t size, std::string id) {
+    iris->vk.shader_passes.insert(
+        iris->vk.shader_passes.begin() + i,
+        new Pass(iris, data, size, id)
     );
 }
 
-void erase(instance* iris, int i) {
-    delete iris->shader_passes.at(i);
+void erase(Instance* iris, int i) {
+    delete iris->vk.shader_passes.at(i);
 
-    iris->shader_passes.erase(iris->shader_passes.begin() + i);
+    iris->vk.shader_passes.erase(iris->vk.shader_passes.begin() + i);
 }
 
-pass* at(instance* iris, int i) {
-    return iris->shader_passes.at(i);
+Pass* at(Instance* iris, int i) {
+    return iris->vk.shader_passes.at(i);
 }
 
-void swap(instance* iris, int a, int b) {
-    pass* t = iris->shader_passes.at(a);
+void swap(Instance* iris, int a, int b) {
+    Pass* t = iris->vk.shader_passes.at(a);
 
-    iris->shader_passes[a] = iris->shader_passes[b];
-    iris->shader_passes[b] = t;
+    iris->vk.shader_passes[a] = iris->vk.shader_passes[b];
+    iris->vk.shader_passes[b] = t;
 }
 
-pass* front(instance* iris) {
-    return iris->shader_passes.front();
+Pass* front(Instance* iris) {
+    return iris->vk.shader_passes.front();
 }
 
-pass* back(instance* iris) {
-    return iris->shader_passes.back();
+Pass* back(Instance* iris) {
+    return iris->vk.shader_passes.back();
 }
 
-size_t count(instance* iris) {
-    return iris->shader_passes.size();
+size_t count(Instance* iris) {
+    return iris->vk.shader_passes.size();
 }
 
-void clear(instance* iris) {
-    for (auto& pass : iris->shader_passes) {
+void clear(Instance* iris) {
+    for (auto& pass : iris->vk.shader_passes) {
         delete pass;
     }
 
-    iris->shader_passes.clear();
+    iris->vk.shader_passes.clear();
 }
 
-std::vector <shaders::pass*>& vector(instance* iris) {
-    return iris->shader_passes;
+std::vector <shaders::Pass*>& vector(Instance* iris) {
+    return iris->vk.shader_passes;
 }
 
 }

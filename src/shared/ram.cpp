@@ -15,6 +15,10 @@ Ram* create(logger::Logger* logger, size_t size) {
     return ram;
 }
 
+Ram* create(logger::Logger* logger, Size size) {
+    return create(logger, (size_t)size);
+}
+
 void reset(Ram* ram) {
     std::fill_n(ram->buf, ram->size, 0);
 }

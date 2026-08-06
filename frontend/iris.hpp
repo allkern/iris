@@ -19,904 +19,406 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 
-#include "ps2.hpp"
+#include "ps2_decl.hpp"
+#include "iop/spu2_decl.hpp"
+#include "iop/usb.hpp"
 #include "config.hpp"
 #include "slirp.hpp"
 
+#include "log.hpp"
+#include "bidirectional_map.hpp"
+#include "debug.hpp"
+#include "notifications.hpp"
+#include "elf.hpp"
+#include "emu.hpp"
+#include "input.hpp"
+#include "vulkan.hpp"
+#include "shaders.hpp"
+#include "imgui.hpp"
+#include "render.hpp"
+#include "platform.hpp"
+#include "audio.hpp"
+#include "settings.hpp"
+#include "gamelist.hpp"
+
 namespace iris::gs::dump { struct Dump; }
+namespace iris::dev::ds { struct Ds; }
+namespace iris::dev::mcd { struct Mcd; }
 
 namespace iris {
 
-#define RENDER_ASPECT_NATIVE 0
-#define RENDER_ASPECT_STRETCH 1
-#define RENDER_ASPECT_STRETCH_KEEP 2
-#define RENDER_ASPECT_4_3 3
-#define RENDER_ASPECT_16_9 4
-#define RENDER_ASPECT_5_4 5
-#define RENDER_ASPECT_AUTO 6
+struct Instance;
 
-#define IRIS_THEME_GRANITE 0
-#define IRIS_THEME_IMGUI_DARK 1
-#define IRIS_THEME_IMGUI_LIGHT 2
-#define IRIS_THEME_IMGUI_CLASSIC 3
-#define IRIS_THEME_CHERRY 4
-#define IRIS_THEME_SOURCE 5
-
-#define IRIS_SCREENSHOT_FORMAT_PNG 0
-#define IRIS_SCREENSHOT_FORMAT_BMP 1
-#define IRIS_SCREENSHOT_FORMAT_JPG 2
-#define IRIS_SCREENSHOT_FORMAT_TGA 3
-
-#define IRIS_SCREENSHOT_MODE_INTERNAL 0
-#define IRIS_SCREENSHOT_MODE_DISPLAY 1
-
-#define IRIS_SCREENSHOT_JPG_QUALITY_MINIMUM 0
-#define IRIS_SCREENSHOT_JPG_QUALITY_LOW 1
-#define IRIS_SCREENSHOT_JPG_QUALITY_MEDIUM 2
-#define IRIS_SCREENSHOT_JPG_QUALITY_HIGH 3
-#define IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM 4
-#define IRIS_SCREENSHOT_JPG_QUALITY_CUSTOM 5 
-
-#define IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK 0
-#define IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT 1
-#define IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO 2
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE 3
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE 4
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO 5
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA 6
-
-#define IRIS_TITLEBAR_DEFAULT 0
-#define IRIS_TITLEBAR_SEAMLESS 1
-
-#define IRIS_PRESENT_MODE_30FPS 0
-#define IRIS_PRESENT_MODE_60FPS 1
-#define IRIS_PRESENT_MODE_VSYNC 2
-#define IRIS_PRESENT_MODE_UNCAPPED 3
-
-struct instance;
-
-// class widget {
-// public:
-//     virtual bool init(instance* iris) = 0;
-//     virtual void render(instance* iris) = 0;
-//     virtual ~widget() = default;
-// };
-
-enum : int {
-    BKPT_CPU_EE,
-    BKPT_CPU_IOP
-};
-
-struct breakpoint {
-    uint32_t addr;
-    const char* symbol = nullptr;
-    int cpu;
-    bool cond_r, cond_w, cond_x;
-    int size;
-    bool enabled;
-};
-
-struct move_animation {
-    int frames;
-    int frames_remaining;
-    float source_x, source_y;
-    float target_x, target_y;
-    float x, y;
-};
-
-struct fade_animation {
-    int frames;
-    int frames_remaining;
-    int source_alpha, target_alpha;
-    int alpha;
-};
-
-struct notification {
-    int type;
-    int state;
-    int frames;
-    int frames_remaining;
-    float width, height;
-    float text_width, text_height;
-    bool end;
-    move_animation move;
-    fade_animation fade;
-    std::string text;
-};
-
-struct elf_symbol {
-    char* name;
-    uint32_t addr;
-    uint32_t size;
-};
-
-enum {
-    RECENT_TYPE_PS2,
-    RECENT_TYPE_ARCADE
-};
-
-enum {
-    INPUT_CONTROLLER_DUALSHOCK2
-
-    // Large To-do list here, we're missing the Namco GunCon
-    // controllers, JogCon, NegCon, Buzz! Buzzer, the Train
-    // controllers, Taiko Drum Master controller, the Dance Dance
-    // Revolution mat, Guitar Hero controllers, etc.
-};
-
-struct input_device {
-    int m_slot;
-
-    void set_slot(int slot) {
-        this->m_slot = slot;
-    }
-
-    int get_slot() {
-        return this->m_slot;
-    }
-
-    virtual ~input_device() = default;
-
-    virtual int get_type() = 0;
-    virtual void handle_event(instance* iris, SDL_Event* event) = 0;
-};
-
-class keyboard_device : public input_device {
-public:
-    int get_type() override {
-        return 0;
-    }
-
-    void handle_event(instance* iris, SDL_Event* event) override;
-};
-
-class gamepad_device : public input_device {
-    SDL_JoystickID id;
-
-public:
-    gamepad_device(SDL_JoystickID id) : id(id) {}
-
-    int get_type() override {
-        return 1;
-    }
-
-    SDL_JoystickID get_id() {
-        return id;
-    }
-
-    void handle_event(instance* iris, SDL_Event* event) override;
-};
-
-union input_event {
+struct Instance {
+    // Vulkan device, swapchain and the multipass shader plumbing
     struct {
-        uint32_t id;
-        uint32_t type;
-    };
+        std::vector <VkExtensionProperties> instance_extensions;
+        std::vector <VkLayerProperties> instance_layers;
+        std::vector <VkExtensionProperties> device_extensions;
+        std::vector <VkLayerProperties> device_layers;
+        std::vector <const char*> enabled_instance_extensions;
+        std::vector <const char*> enabled_instance_layers;
+        std::vector <const char*> enabled_device_extensions;
+        std::vector <const char*> enabled_device_layers;
+        std::vector <VulkanGpu> vulkan_gpus;
+        VkApplicationInfo app_info = {};
+        VkInstanceCreateInfo instance_create_info = {};
+        VkDeviceCreateInfo device_create_info = {};
+        VkInstance instance = VK_NULL_HANDLE;
+        VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+        VkPhysicalDeviceFeatures2 device_features = {};
+        VkDeviceQueueCreateInfo queue_create_info = {};
+        uint32_t queue_family = (uint32_t)-1;
+        VkQueue queue = VK_NULL_HANDLE;
+        VkDevice device = VK_NULL_HANDLE;
+        VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
+        ImGui_ImplVulkanH_Window main_window_data = {};
+        uint32_t min_image_count = 2;
+        bool swapchain_rebuild = false;
+        bool device_lost = false;
+        VkSurfaceKHR surface = VK_NULL_HANDLE;
+        float main_scale = 1;
+        VkPhysicalDeviceVulkan11Features vulkan_11_features = {};
+        VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
+        VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
+        VkPhysicalDeviceSynchronization2Features synchronization2_features = {};
+        VkPhysicalDeviceFaultFeaturesEXT fault_features = {};
+        bool device_fault_supported = false;
+        bool device_fault_dumped = false;
+        VkSampler sampler[3] = { VK_NULL_HANDLE };
+        bool cubic_supported = false;
+        VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
+        VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
+        std::vector <VkDescriptorSet> descriptor_sets = {};
+        VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
+        VkRenderPass render_pass = VK_NULL_HANDLE;
+        VkPipeline pipeline = VK_NULL_HANDLE;
+        VkClearValue clear_value = { 0.11, 0.11, 0.11, 1.0 };
+        VkBuffer vertex_buffer = VK_NULL_HANDLE;
+        VkDeviceMemory vertex_buffer_memory = VK_NULL_HANDLE;
+        VkBuffer vertex_staging_buffer = VK_NULL_HANDLE;
+        VkDeviceMemory vertex_staging_buffer_memory = VK_NULL_HANDLE;
+        VkDeviceSize vertex_buffer_size = 0;
+        VkBuffer index_buffer = VK_NULL_HANDLE;
+        VkDeviceMemory index_buffer_memory = VK_NULL_HANDLE;
+        std::array <Vertex, 4> vertices = {};
+        std::array <uint16_t, 6> indices = {};
+        gs::renderer::Image image = {};
+        gs::renderer::Image output_image = {};
+        std::vector <std::string> shader_passes_pending;
+        std::vector <shaders::Pass*> shader_passes = {};
+        VkDescriptorSetLayout shader_descriptor_set_layout = VK_NULL_HANDLE;
+        VkDescriptorSet shader_descriptor_set = VK_NULL_HANDLE;
+        std::vector <VkDescriptorSet> shader_descriptor_sets = {};
+        VkShaderModule default_vert_shader = VK_NULL_HANDLE;
+        struct {
+            VkImage image = VK_NULL_HANDLE;
+            VkDeviceMemory memory = VK_NULL_HANDLE;
+            VkImageView view = VK_NULL_HANDLE;
+        } shader_framebuffers[2];
+        std::vector <std::array <VkFramebuffer, 2>> shader_pass_framebuffers = {};
+        int vulkan_physical_device = -1;
+        int vulkan_selected_device_index = 0;
+        bool vulkan_enable_validation_layers = false;
+    } vk;
 
-    uint64_t u64;
-};
-
-enum event {
-    IRIS_EVENT_KEYBOARD,
-    IRIS_EVENT_GAMEPAD_BUTTON,
-    IRIS_EVENT_GAMEPAD_AXIS_POS,
-    IRIS_EVENT_GAMEPAD_AXIS_NEG
-};
-
-enum input_action : uint32_t {
-    IRIS_DS_BT_CROSS,
-    IRIS_DS_BT_CIRCLE,
-    IRIS_DS_BT_SQUARE,
-    IRIS_DS_BT_TRIANGLE,
-    IRIS_DS_BT_START,
-    IRIS_DS_BT_SELECT,
-    IRIS_DS_BT_ANALOG,
-    IRIS_DS_BT_UP,
-    IRIS_DS_BT_DOWN,
-    IRIS_DS_BT_LEFT,
-    IRIS_DS_BT_RIGHT,
-    IRIS_DS_BT_L1,
-    IRIS_DS_BT_R1,
-    IRIS_DS_BT_L2,
-    IRIS_DS_BT_R2,
-    IRIS_DS_BT_L3,
-    IRIS_DS_BT_R3,
-    IRIS_DS_AX_RIGHTV_POS,
-    IRIS_DS_AX_RIGHTV_NEG,
-    IRIS_DS_AX_RIGHTH_POS,
-    IRIS_DS_AX_RIGHTH_NEG,
-    IRIS_DS_AX_LEFTV_POS,
-    IRIS_DS_AX_LEFTV_NEG,
-    IRIS_DS_AX_LEFTH_POS,
-    IRIS_DS_AX_LEFTH_NEG,
-
-    IRIS_S14X_SW_DOWN,
-    IRIS_S14X_SW_UP,
-    IRIS_S14X_SW_ENTER,
-    IRIS_S14X_SW_TEST,
-    IRIS_S14X_SW_SERVICE,
-    IRIS_S14X_SW_P1_START,
-    IRIS_S14X_SW_P2_START,
-    IRIS_S14X_SW_P3_START,
-    IRIS_S14X_SW_P4_START,
-    IRIS_INPUT_ACTION_MAX
-};
-
-struct vertex {
+    // ImGui fonts, colours, textures and window visibility
     struct {
-        float x, y;
-    } pos, uv;
+        Texture ps2_memory_card_icon = {};
+        Texture ps1_memory_card_icon = {};
+        Texture pocketstation_icon = {};
+        Texture dualshock2_icon = {};
+        Texture iris_icon = {};
+        ImFont* font_small_code = nullptr;
+        ImFont* font_code = nullptr;
+        ImFont* font_small = nullptr;
+        ImFont* font_heading = nullptr;
+        ImFont* font_body = nullptr;
+        ImFont* font_icons = nullptr;
+        ImFont* font_icons_big = nullptr;
+        ImFont* font_black = nullptr;
+        bool show_ee_control = false;
+        bool show_ee_state = false;
+        bool show_ee_logs = false;
+        bool show_ee_interrupts = false;
+        bool show_ee_dmac = false;
+        bool show_iop_control = false;
+        bool show_iop_state = false;
+        bool show_iop_logs = false;
+        bool show_iop_interrupts = false;
+        bool show_iop_modules = false;
+        bool show_iop_dma = false;
+        bool show_sysmem_logs = false;
+        bool show_gs_debugger = false;
+        bool show_spu2_debugger = false;
+        bool show_memory_viewer = false;
+        bool show_status_bar = true;
+        bool show_breakpoints = false;
+        bool show_settings = false;
+        bool show_pad_debugger = false;
+        bool show_symbols = false;
+        bool show_ee_threads = false;
+        bool show_iop_threads = false;
+        bool show_memory_card_tool = false;
+        bool show_hdd_tool = false;
+        bool show_gs_dump_tool = false;
+        bool show_imgui_demo = false;
+        bool show_vu_disassembler = false;
+        bool show_overlay = false;
+        bool show_memory_search = false;
+        bool show_timers = false;
+        bool show_gamelist = true;
+        bool show_bios_setting_window = false;
+        bool show_about_window = false;
+        bool show_compat_report = false;
+        int theme = IRIS_THEME_GRANITE;
+        bool imgui_enable_viewports = true;
+        int codeview_color_scheme = 0;
+        ImColor codeview_color_text = IM_COL32(131, 148, 150, 255);
+        ImColor codeview_color_comment = IM_COL32(88, 110, 117, 255);
+        ImColor codeview_color_mnemonic = IM_COL32(211, 167, 30, 255);
+        ImColor codeview_color_number = IM_COL32(138, 143, 226, 255);
+        ImColor codeview_color_register = IM_COL32(68, 169, 240, 255);
+        ImColor codeview_color_other = IM_COL32(89, 89, 89, 255);
+        ImColor codeview_color_background = IM_COL32(30, 30, 30, 255);
+        ImColor codeview_color_highlight = IM_COL32(75, 75, 75, 255);
+        float codeview_font_scale = 1.0f;
+        bool codeview_use_theme_background = true;
+        std::unordered_map <std::string, Texture> covers = {};
+        int menubar_height = 0;
+        float ui_scale = 1.0f;
+        int docking_mode = 0;
+        std::deque <Notification> notifications = {};
+        float dim_target_alpha = 0.0f;
+        float dim_current_alpha = 0.0f;
+        size_t dim_start = 0;
+        size_t dim_ms = 0;
+        bool dim_end = false;
+        bool dim_active = false;
+        bool drop_file_active = false;
+        bool loading_file_active = false;
+        std::string loading_target = "";
+    } ui;
 
-    static constexpr const VkVertexInputBindingDescription get_binding_description() {
-        VkVertexInputBindingDescription binding_description = {};
+    // Gamepads, keyboard mappings and the emulated pads/cards
+    struct {
+        uint64_t double_click_interval = 500;
+        uint64_t double_click_counter = 0;
+        InputDevice* input_devices[2] = { nullptr };
+        std::unordered_map <SDL_JoystickID, SDL_Gamepad*> gamepads;
+        std::vector <Mapping> input_maps = {};
+        int input_map[2] = { -1, -1 };
+        int usb_devices[2] = { usb::USB_DEVICE_NONE, usb::USB_DEVICE_NONE };
+        std::string usb_msd_paths[2] = { "", "" };
+        InputEvent last_input_event = {};
+        bool last_input_event_read = true;
+        float last_input_event_value = 0.0f;
+        dev::ds::Ds* ds[2] = { nullptr };
+        dev::mcd::Mcd* mcd[2] = { nullptr };
+        int mcd_slot_type[2] = { 0 };
+    } input;
 
-        binding_description.binding = 0;
-        binding_description.stride = sizeof(vertex);
-        binding_description.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+    // Host audio streams and per-core mixing
+    struct {
+        SDL_AudioStream* streams[2] = { nullptr };
+        SDL_AudioDeviceID audio_device;
+        bool core0_mute[24] = { false };
+        bool core1_mute[24] = { false };
+        int core0_solo = -1;
+        int core1_solo = -1;
+        bool mute = false;
+        bool prev_mute = false;
+        float volume = 1.0f;
+        bool mute_adma = true;
+        std::vector <spu2::Sample> audio_buf;
+    } audio;
 
-        return binding_description;
-    }
+    // Debugger state: stepping, breakpoints, logs, symbols, GS dumps
+    struct {
+        bool pause = true;
+        bool step = false;
+        bool step_over = false;
+        bool step_out = false;
+        uint32_t step_over_addr = 0;
+        bool ee_control_follow_pc = true;
+        bool iop_control_follow_pc = true;
+        uint32_t ee_control_address = 0;
+        uint32_t iop_control_address = 0;
+        std::vector <std::string> ee_log = { "" };
+        std::vector <std::string> iop_log = { "" };
+        std::vector <std::string> sysmem_log = { "" };
+        std::vector <Breakpoint> breakpoints = {};
+        std::vector <elf::Symbol> symbols;
+        std::vector <uint8_t> strtab;
+        gs::dump::Dump* gsdump = nullptr;
+        bool gsdump_armed = false;
+        int gsdump_delay_remaining = 0;
+        int gsdump_frames_remaining = 0;
+        std::string gsdump_path = "";
+        std::string gsdump_serial = "";
+        bool gsdump_prev_pause = false;
+    } debug;
 
-    static constexpr const std::array<VkVertexInputAttributeDescription, 2> get_attribute_descriptions() {
-        std::array<VkVertexInputAttributeDescription, 2> attribute_descriptions = {};
+    // Filesystem locations
+    struct {
+        std::string elf_path = "";
+        std::string boot_path = "";
+        std::string bios_path = "";
+        std::string rom1_path = "";
+        std::string rom2_path = "";
+        std::string nvram_path = "";
+        std::string disc_path = "";
+        std::string pref_path = "";
+        std::string mcd0_path = "";
+        std::string mcd1_path = "";
+        std::string snap_path = "";
+        std::string flash_path = "";
+        std::string ini_path = "";
+        std::string gcdb_path = "";
+        std::string hdd_path = "";
+        bool auto_paths = true;
+        std::string host_path = "";
+        bool host_from_elf = false;
+        std::string host_elf_dir = "";
+        std::vector <std::pair <std::string, std::string>> device_maps;
+        std::string settings_path = "";
+        std::string mappings_path = "";
+    } paths;
 
-        attribute_descriptions[0].binding = 0;
-        attribute_descriptions[0].location = 0;
-        attribute_descriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-        attribute_descriptions[0].offset = offsetof(vertex, pos);
-
-        attribute_descriptions[1].binding = 0;
-        attribute_descriptions[1].location = 1;
-        attribute_descriptions[1].format = VK_FORMAT_R32G32_SFLOAT;
-        attribute_descriptions[1].offset = offsetof(vertex, uv);
-
-        return attribute_descriptions;
-    }
-};
-
-struct texture {
-    int width = 0, height = 0, stride = 0;
-    VkDeviceSize image_size = 0;
-    VkImage image = VK_NULL_HANDLE;
-    VkImageView image_view = VK_NULL_HANDLE;
-    VkSampler sampler = VK_NULL_HANDLE;
-    VkDeviceMemory image_memory = VK_NULL_HANDLE;
-    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
-};
-
-namespace shaders {
-    class pass;
-}
-
-struct vulkan_gpu {
-    VkPhysicalDeviceType type = VK_PHYSICAL_DEVICE_TYPE_OTHER;
-    VkPhysicalDevice device = VK_NULL_HANDLE;
-    std::string name = "";
-    uint32_t api_version = 0;
-};
-
-template <typename Key, typename Value> class bidirectional_map {
-    std::unordered_map <Key, Value> m_forward_map;
-    std::unordered_map <Value, Key> m_reverse_map;
-
-public:
-    void insert(const Key& key, const Value& value) {
-        m_forward_map[key] = value;
-        m_reverse_map[value] = key;
-    }
-
-    std::unordered_map <Key, Value>& forward_map() {
-        return m_forward_map;
-    }
-
-    std::unordered_map <Value, Key>& reverse_map() {
-        return m_reverse_map;
-    }
-
-    bool erase_by_key(const Key& key) {
-        auto it = m_forward_map.find(key);
-        if (it != m_forward_map.end()) {
-            Value value = it->second;
-            m_forward_map.erase(it);
-            m_reverse_map.erase(value);
-            return true;
-        }
-        return false;
-    }
-
-    bool erase_by_value(const Value& value) {
-        auto it = m_reverse_map.find(value);
-        if (it != m_reverse_map.end()) {
-            Key key = it->second;
-            m_reverse_map.erase(it);
-            m_forward_map.erase(key);
-            return true;
-        }
-        return false;
-    }
-
-    void clear() {
-        m_forward_map.clear();
-        m_reverse_map.clear();
-    }
-
-    Value* get_value(const Key& key) {
-        auto it = m_forward_map.find(key);
-        if (it != m_forward_map.end()) {
-            return &it->second;
-        }
-        return nullptr;
-    }
-
-    Key* get_key(const Value& value) {
-        auto it = m_reverse_map.find(value);
-        if (it != m_reverse_map.end()) {
-            return &it->second;
-        }
-        return nullptr;
-    }
-};
-
-struct mapping {
-    std::string name;
-    bidirectional_map <uint64_t, input_action> map;
-};
-
-struct recent {
-    std::string path;
-    int type;
-};
-
-struct instance {
     SDL_Window* window = nullptr;
-    SDL_AudioStream* streams[2] = { nullptr };
-    SDL_AudioDeviceID audio_device;
-
-    // Vulkan state
-    std::vector <VkExtensionProperties> instance_extensions;
-    std::vector <VkLayerProperties> instance_layers;
-    std::vector <VkExtensionProperties> device_extensions;
-    std::vector <VkLayerProperties> device_layers;
-    std::vector <const char*> enabled_instance_extensions;
-    std::vector <const char*> enabled_instance_layers;
-    std::vector <const char*> enabled_device_extensions;
-    std::vector <const char*> enabled_device_layers;
-    std::vector <vulkan_gpu> vulkan_gpus;
-    VkApplicationInfo app_info = {};
-    VkInstanceCreateInfo instance_create_info = {};
-    VkDeviceCreateInfo device_create_info = {};
-    VkInstance instance = VK_NULL_HANDLE;
-    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
-    VkPhysicalDeviceFeatures2 device_features = {};
-    VkDeviceQueueCreateInfo queue_create_info = {};
-    uint32_t queue_family = (uint32_t)-1;
-    VkQueue queue = VK_NULL_HANDLE;
-    VkDevice device = VK_NULL_HANDLE;
-    VkDescriptorPool descriptor_pool = VK_NULL_HANDLE;
-    ImGui_ImplVulkanH_Window main_window_data = {};
-    uint32_t min_image_count = 2;
-    bool swapchain_rebuild = false;
-    VkSurfaceKHR surface = VK_NULL_HANDLE;
-    float main_scale = 1;
-    VkPhysicalDeviceVulkan11Features vulkan_11_features = {};
-    VkPhysicalDeviceVulkan12Features vulkan_12_features = {};
-    VkPhysicalDeviceSubgroupSizeControlFeatures subgroup_size_control_features = {};
-    VkPhysicalDeviceSynchronization2Features synchronization2_features = {};
-    VkPhysicalDeviceFaultFeaturesEXT fault_features = {};
-    bool device_fault_supported = false;
-    bool device_fault_dumped = false;
-    VkSampler sampler[3] = { VK_NULL_HANDLE };
-    bool cubic_supported = false;
-    VkDescriptorSetLayout descriptor_set_layout = VK_NULL_HANDLE;
-    VkDescriptorSet descriptor_set = VK_NULL_HANDLE;
-    std::vector <VkDescriptorSet> descriptor_sets = {};
-    VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
-    VkRenderPass render_pass = VK_NULL_HANDLE;
-    VkPipeline pipeline = VK_NULL_HANDLE;
-    VkClearValue clear_value = { 0.11, 0.11, 0.11, 1.0 };
-    VkBuffer vertex_buffer = VK_NULL_HANDLE;
-    VkDeviceMemory vertex_buffer_memory = VK_NULL_HANDLE;
-    VkBuffer vertex_staging_buffer = VK_NULL_HANDLE;
-    VkDeviceMemory vertex_staging_buffer_memory = VK_NULL_HANDLE;
-    VkDeviceSize vertex_buffer_size = 0;
-    VkBuffer index_buffer = VK_NULL_HANDLE;
-    VkDeviceMemory index_buffer_memory = VK_NULL_HANDLE;
-    std::array <vertex, 4> vertices = {};
-    std::array <uint16_t, 6> indices = {};
-    gs::renderer::Image image = {};
-    gs::renderer::Image output_image = {};
-
-    // Multipass shader stuff
-    std::vector <std::string> shader_passes_pending;
-    std::vector <shaders::pass*> shader_passes = {};
-    VkDescriptorSetLayout shader_descriptor_set_layout = VK_NULL_HANDLE;
-    VkDescriptorSet shader_descriptor_set = VK_NULL_HANDLE;
-    std::vector <VkDescriptorSet> shader_descriptor_sets = {};
-    VkShaderModule default_vert_shader = VK_NULL_HANDLE;
-
-    struct {
-        VkImage image = VK_NULL_HANDLE;
-        VkDeviceMemory memory = VK_NULL_HANDLE;
-        VkImageView view = VK_NULL_HANDLE;
-    } shader_framebuffers[2];
-
-    std::vector <std::array <VkFramebuffer, 2>> shader_pass_framebuffers = {};
 
     ps2::Ps2* ps2 = nullptr;
     logger::Logger* logger = nullptr;
 
-    // Set when a module logs at FATAL_ERROR. Emulation halts and the message
-    // is shown rather than the process being torn down under the user.
+    // Logger sources
+    struct {
+        LogSource iris;
+        LogSource vulkan;
+        LogSource render;
+        LogSource shaders;
+        LogSource imgui;
+        LogSource elf;
+        LogSource settings;
+        LogSource emu;
+        LogSource input;
+        LogSource audio;
+        LogSource slirp;
+        LogSource net;
+        LogSource gamelist;
+        LogSource platform;
+        LogSource ui;
+    } log;
+
     bool fatal_error = false;
     std::string fatal_error_text;
-
     unsigned int window_width = 960;
     unsigned int window_height = 720;
     unsigned int render_width = 640;
     unsigned int render_height = 480;
-
     unsigned int renderer_backend = gs::renderer::BACKEND_HARDWARE;
     gs::renderer::Renderer* renderer = nullptr;
-
-    texture ps2_memory_card_icon = {};
-    texture ps1_memory_card_icon = {};
-    texture pocketstation_icon = {};
-    texture dualshock2_icon = {};
-    texture iris_icon = {};
-
-    ImFont* font_small_code = nullptr;
-    ImFont* font_code = nullptr;
-    ImFont* font_small = nullptr;
-    ImFont* font_heading = nullptr;
-    ImFont* font_body = nullptr;
-    ImFont* font_icons = nullptr;
-    ImFont* font_icons_big = nullptr;
-    ImFont* font_black = nullptr;
-
-    std::string elf_path = "";
-    std::string boot_path = "";
-    std::string bios_path = "";
-    std::string rom1_path = "";
-    std::string rom2_path = "";
-    std::string nvram_path = "";
-    std::string disc_path = "";
-    std::string pref_path = "";
-    std::string mcd0_path = "";
-    std::string mcd1_path = "";
-    std::string snap_path = "";
-    std::string flash_path = "";
-    std::string ini_path = "";
-    std::string gcdb_path = "";
-    std::string hdd_path = "";
-    bool auto_paths = true;
-
-    std::string host_path = "";
-    bool host_from_elf = false;
-    std::string host_elf_dir = "";
-
-    std::vector <std::pair <std::string, std::string>> device_maps;
-
     uint8_t mac_address[6] = { 0 };
-
-    slirp::config slirp_config;
-
-    bool core0_mute[24] = { false };
-    bool core1_mute[24] = { false };
-    int core0_solo = -1;
-    int core1_solo = -1;
-
+    slirp::Config slirp_config;
     bool open = false;
-    bool pause = true;
-    bool step = false;
-    bool step_over = false;
-    bool step_out = false;
-    uint32_t step_over_addr = 0;
-
-    bool show_ee_control = false;
-    bool show_ee_state = false;
-    bool show_ee_logs = false;
-    bool show_ee_interrupts = false;
-    bool show_ee_dmac = false;
-    bool show_iop_control = false;
-    bool show_iop_state = false;
-    bool show_iop_logs = false;
-    bool show_iop_interrupts = false;
-    bool show_iop_modules = false;
-    bool show_iop_dma = false;
-    bool show_sysmem_logs = false;
-    bool show_gs_debugger = false;
-    bool show_spu2_debugger = false;
-    bool show_memory_viewer = false;
-    bool show_status_bar = true;
-    bool show_breakpoints = false;
-    bool show_settings = false;
-    bool show_pad_debugger = false;
-    bool show_symbols = false;
-    bool show_ee_threads = false;
-    bool show_iop_threads = false;
-    bool show_memory_card_tool = false;
-    bool show_hdd_tool = false;
-    bool show_gs_dump_tool = false;
-    bool show_imgui_demo = false;
-    bool show_vu_disassembler = false;
-    bool show_overlay = false;
-    bool show_memory_search = false;
-    bool show_timers = false;
-    bool show_gamelist = true;
-
-    // Special windows
-    bool show_bios_setting_window = false;
-    bool show_about_window = false;
-    bool show_compat_report = false;
 
     bool fullscreen = false;
-    int aspect_mode = RENDER_ASPECT_AUTO;
+    int aspect_mode = render::AUTO;
     int filter = 1;
     bool integer_scaling = false;
     float scale = 1.5f;
     int window_mode = 0;
-    bool ee_control_follow_pc = true;
-    bool iop_control_follow_pc = true;
-    uint32_t ee_control_address = 0;
-    uint32_t iop_control_address = 0;
     bool skip_fmv = false;
     int system = ps2::AUTO;
-    int theme = IRIS_THEME_GRANITE;
     bool enable_shaders = false;
-    int vulkan_physical_device = -1;
-    int vulkan_selected_device_index = 0;
-    bool vulkan_enable_validation_layers = false;
-    bool imgui_enable_viewports = true;
-    int codeview_color_scheme = 0;
-    ImColor codeview_color_text = IM_COL32(131, 148, 150, 255);
-    ImColor codeview_color_comment = IM_COL32(88, 110, 117, 255);
-    ImColor codeview_color_mnemonic = IM_COL32(211, 167, 30, 255);
-    ImColor codeview_color_number = IM_COL32(138, 143, 226, 255);
-    ImColor codeview_color_register = IM_COL32(68, 169, 240, 255);
-    ImColor codeview_color_other = IM_COL32(89, 89, 89, 255);
-    ImColor codeview_color_background = IM_COL32(30, 30, 30, 255);
-    ImColor codeview_color_highlight = IM_COL32(75, 75, 75, 255);
-    float codeview_font_scale = 1.0f;
-    bool codeview_use_theme_background = true;
     bool autostart = true;
     int angle = 0;
     bool flip_x = false;
     bool flip_y = false;
-    uint64_t double_click_interval = 500;
-    uint64_t double_click_counter = 0;
-    std::unordered_map <std::string, texture> covers = {};
-
-    std::deque <recent> recents;
-
+    std::deque <Recent> recents;
     bool dump_to_file = true;
-    std::string settings_path = "";
-    std::string mappings_path = "";
-
     bool headless = false;
     bool snap_on_exit = false;
     int frames = 0;
     float fps = 0.0f;
     unsigned int ticks = 0;
-    int menubar_height = 0;
-    bool mute = false;
-    bool prev_mute = false;
-    float volume = 1.0f;
     int timescale = 1;
-    bool mute_adma = true;
-    int present_mode = IRIS_PRESENT_MODE_60FPS;
-    float ui_scale = 1.0f;
-    int screenshot_format = IRIS_SCREENSHOT_FORMAT_PNG;
-    int screenshot_jpg_quality_mode = IRIS_SCREENSHOT_JPG_QUALITY_MAXIMUM;
+    int present_mode = render::FPS_60;
+    int screenshot_format = render::PNG;
+    int screenshot_jpg_quality_mode = render::MAXIMUM;
     int screenshot_jpg_quality = 50;
-    int screenshot_mode = IRIS_SCREENSHOT_MODE_INTERNAL;
-    int docking_mode = 0;
+    int screenshot_mode = render::INTERNAL;
     bool screenshot_shader_processing = false;
-    input_device* input_devices[2] = { nullptr };
-    std::unordered_map <SDL_JoystickID, SDL_Gamepad*> gamepads;
-    std::vector <mapping> input_maps = {};
-    int input_map[2] = { -1, -1 };
-    int usb_devices[2] = { usb::USB_DEVICE_NONE, usb::USB_DEVICE_NONE };
-    std::string usb_msd_paths[2] = { "", "" };
-    input_event last_input_event = {};
-    bool last_input_event_read = true;
-    float last_input_event_value = 0.0f;
-
     bool limit_fps = true;
     float fps_cap = 60.0f;
-
     std::chrono::high_resolution_clock::time_point frame_deadline;
-
     std::string loaded = "";
-
-    std::vector <std::string> ee_log = { "" };
-    std::vector <std::string> iop_log = { "" };
-    std::vector <std::string> sysmem_log = { "" };
-
-    std::vector <breakpoint> breakpoints = {};
-    std::deque <notification> notifications = {};
-
-    dev::ds::Ds* ds[2] = { nullptr };
-    dev::mcd::Mcd* mcd[2] = { nullptr };
-    int mcd_slot_type[2] = { 0 };
-
-    // input_device* device[2];
-
-    float dim_target_alpha = 0.0f;
-    float dim_current_alpha = 0.0f;
-    size_t dim_start = 0;
-    size_t dim_ms = 0;
-    bool dim_end = false;
-    bool dim_active = false;
-
-    bool drop_file_active = false;
-    bool loading_file_active = false;
-    std::string loading_target = "";
 
     std::atomic <bool> load_ready = false;
     int load_result = 0;
     std::string load_pending_name = "";
-
     bool load_start_pending = false;
     std::string load_pending_file = "";
-
-    // Debug
-    std::vector <elf_symbol> symbols;
-    std::vector <uint8_t> strtab;
-
-    std::vector <spu2::Sample> audio_buf;
 
     float avg_fps;
     float avg_frames;
     int screenshot_counter = 0;
 
-    // GS dump stuff
-    gs::dump::Dump* gsdump = nullptr;
-    bool gsdump_armed = false;
-    int gsdump_delay_remaining = 0;
-    int gsdump_frames_remaining = 0;
-    std::string gsdump_path = "";
-    std::string gsdump_serial = "";
-    bool gsdump_prev_pause = false;
-
-    // Renderer configs
     gs::renderer::HardwareConfig hardware_backend_config;
 
-    // Windows-specific settings
 #ifdef _WIN32
     int windows_titlebar_style = IRIS_TITLEBAR_DEFAULT;
     bool windows_enable_borders = true;
     bool windows_dark_mode = true;
 #endif
+
 };
 
-struct push_constants {
-    float resolution[2];
-    int frame;
-};
+Instance* create();
+bool init(Instance* iris, int argc, const char* argv[]);
+void destroy(Instance* iris);
+SDL_AppResult handle_events(Instance* iris, SDL_Event* event);
+SDL_AppResult update(Instance* iris);
+void update_window(Instance* iris);
+int get_menubar_height(Instance* iris);
 
-namespace audio {
-    bool init(instance* iris);
-    void close(instance* iris);
-    void update(void* udata, SDL_AudioStream* stream, int additional_amount, int total_amount);
-    bool mute(instance* iris);
-    void unmute(instance* iris);
-}
+void show_main_menubar(Instance* iris);
+void show_ee_control(Instance* iris);
+void show_ee_state(Instance* iris);
+void show_ee_logs(Instance* iris);
+void show_ee_interrupts(Instance* iris);
+void show_ee_dmac(Instance* iris);
+void show_iop_control(Instance* iris);
+void show_iop_state(Instance* iris);
+void show_iop_logs(Instance* iris);
+void show_iop_interrupts(Instance* iris);
+void show_iop_modules(Instance* iris);
+void show_iop_dma(Instance* iris);
+void show_sysmem_logs(Instance* iris);
+void show_gs_debugger(Instance* iris);
+void show_spu2_debugger(Instance* iris);
+void show_memory_viewer(Instance* iris);
+void show_vu_disassembler(Instance* iris);
+void show_status_bar(Instance* iris);
+void show_breakpoints(Instance* iris);
+void show_about_window(Instance* iris);
+void show_fatal_error(Instance* iris);
+void show_compat_report(Instance* iris);
+void show_settings(Instance* iris);
+void show_pad_debugger(Instance* iris);
+void show_symbols(Instance* iris);
+void show_ee_threads(Instance* iris);
+void show_iop_threads(Instance* iris);
+void show_overlay(Instance* iris);
+void show_memory_card_tool(Instance* iris);
+void show_hdd_tool(Instance* iris);
+void show_gs_dump_tool(Instance* iris);
+void show_bios_setting_window(Instance* iris);
+void show_memory_search(Instance* iris);
+void show_timers(Instance* iris);
+void show_gamelist(Instance* iris);
 
-namespace settings {
-    bool init(instance* iris, int argc, const char* argv[]);
-    bool check_for_quick_exit(int argc, const char* argv[]);
-    void close(instance* iris);
-    void apply_device_maps(instance* iris);
-}
-
-namespace shaders {
-    class pass {
-        VkPipelineLayout m_pipeline_layout = VK_NULL_HANDLE;
-        VkPipeline m_pipeline = VK_NULL_HANDLE;
-        VkRenderPass m_render_pass = VK_NULL_HANDLE;
-        VkImageView m_input = VK_NULL_HANDLE;
-        VkShaderModule m_vert_shader = VK_NULL_HANDLE;
-        VkShaderModule m_frag_shader = VK_NULL_HANDLE;
-        instance* m_iris = nullptr;
-        std::string m_id;
-
-    public:
-        void destroy();
-        bool init(instance* iris, const void* data, size_t size, std::string id);
-
-        void swap(pass& rhs) {
-            VkPipelineLayout pipeline_layout = m_pipeline_layout;
-            VkPipeline pipeline = m_pipeline;
-            VkRenderPass render_pass = m_render_pass;
-            VkImageView input = m_input;
-            VkShaderModule vert_shader = m_vert_shader;
-            VkShaderModule frag_shader = m_frag_shader;
-            instance* iris = m_iris;
-            std::string id = m_id;
-
-            m_pipeline_layout = rhs.m_pipeline_layout;
-            m_pipeline = rhs.m_pipeline;
-            m_render_pass = rhs.m_render_pass;
-            m_input = rhs.m_input;
-            m_vert_shader = rhs.m_vert_shader;
-            m_frag_shader = rhs.m_frag_shader;
-            m_iris = rhs.m_iris;
-            m_id = rhs.m_id;
-
-            rhs.m_pipeline_layout = pipeline_layout;
-            rhs.m_pipeline = pipeline;
-            rhs.m_render_pass = render_pass;
-            rhs.m_input = input;
-            rhs.m_vert_shader = vert_shader;
-            rhs.m_frag_shader = frag_shader;
-            rhs.m_iris = iris;
-            rhs.m_id = id;
-        }
-
-        pass(instance* iris, const void* data, size_t size, std::string id);
-        pass(pass&& other);
-        pass() = default;
-        ~pass();
-
-        pass& operator=(pass&& other);
-
-        VkPipelineLayout& get_pipeline_layout();
-        VkPipeline& get_pipeline();
-        VkRenderPass& get_render_pass();
-        VkImageView& get_input();
-        VkShaderModule& get_vert_shader();
-        VkShaderModule& get_frag_shader();
-        std::string get_id() const;
-
-        bool bypass = false;
-        bool ready();
-        bool rebuild();
-    };
-
-    void push(instance* iris, void* data, size_t size, std::string id);
-    void push(instance* iris, std::string id);
-    void pop(instance* iris);
-    void insert(instance* iris, int i, void* data, size_t size, std::string id);
-    void insert(instance* iris, std::string id);
-    void erase(instance* iris, int i);
-    pass* at(instance* iris, int i);
-    void swap(instance* iris, int i1, int i2);
-    pass* front(instance* iris);
-    pass* back(instance* iris);
-    size_t count(instance* iris);
-    void clear(instance* iris);
-    std::vector <shaders::pass*>& vector(instance* iris);
-}
-
-namespace imgui {
-    bool init(instance* iris);
-    void set_theme(instance* iris, int theme, bool set_bg_color = true);
-    void set_codeview_scheme(instance* iris, int scheme);
-    bool render_frame(instance* iris, ImDrawData* draw_data);
-    void cleanup(instance* iris);
-    void set_vsync(instance* iris, bool vsync);
-    void start_dim(instance* iris, float alpha, size_t ms);
-    void end_dim(instance* iris);
-    void render_dim(instance* iris);
-
-    // Wrapper for ImGui::Begin that sets a default size
-    bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);
-}
-
-namespace vulkan {
-    bool init(instance* iris, bool enable_validation = false);
-    void cleanup(instance* iris);
-    texture upload_texture(instance* iris, void* pixels, int width, int height, int stride);
-    void free_texture(instance* iris, texture& tex);
-    void* read_image(instance* iris, VkImage image, VkFormat format, int width, int height);
-    void wait_idle(instance* iris);
-    void dump_device_fault(instance* iris);
-    texture load_texture_from_memory(instance* iris, const void* data, size_t size);
-    texture load_texture_from_file(instance* iris, std::string path);
-}
-
-namespace platform {
-    bool init(instance* iris);
-    bool apply_settings(instance* iris);
-    void destroy(instance* iris);
-}
-
-namespace elf {
-    bool load_symbols_from_disc(instance* iris);
-    bool load_symbols_from_file(instance* iris, std::string path);
-}
-
-namespace emu {
-    bool init(instance* iris);
-    void destroy(instance* iris);
-    int open_file(instance* iris, std::string path);
-    void start_pending_load(instance* iris);
-    void finalize_load(instance* iris);
-    bool load_arcade(instance* iris, std::string path);
-    int attach_memory_card(instance* iris, int slot, const char* path);
-    void detach_memory_card(instance* iris, int slot);
-    const char* get_system_name(instance* iris, int system);
-    const char* get_current_system_name(instance* iris);
-    int get_system_count(instance* iris);
-    bool load_rom_files(instance* iris);
-}
-
-namespace render {
-    bool init(instance* iris);
-    void destroy(instance* iris);
-    bool render_frame(instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer);
-    bool save_screenshot(instance* iris, std::string path);
-    void switch_backend(instance* iris, int backend);
-    void refresh(instance* iris);
-    void gs_dump_start(instance* iris, std::string path, int frames, int delay, std::string serial);
-    void gs_dump_tick(instance* iris);
-}
-
-namespace input {
-    bool init(instance* iris);
-    void init_default_mapping(instance* iris, int id);
-    void load_db_default(instance* iris);
-    bool load_db_from_file(instance* iris, const char* path);
-    input_action* get_input_action(instance* iris, int slot, uint64_t input);
-    input_event sdl_event_to_input_event(SDL_Event* event);
-    std::string get_default_screenshot_filename(instance* iris);
-    void execute_action(instance* iris, input_action action, int slot, float value);
-    bool save_screenshot(instance* iris, std::string path = "");
-    void handle_keydown_event(instance* iris, SDL_Event* event);
-    void handle_keyup_event(instance* iris, SDL_Event* event);
-}
-
-namespace gamelist {
-    bool init(instance* iris);
-    void destroy(instance* iris);
-}
-
-instance* create();
-bool init(instance* iris, int argc, const char* argv[]);
-void destroy(instance* iris);
-SDL_AppResult handle_events(instance* iris, SDL_Event* event);
-SDL_AppResult update(instance* iris);
-void update_window(instance* iris);
-int get_menubar_height(instance* iris);
-
-void show_main_menubar(instance* iris);
-void show_ee_control(instance* iris);
-void show_ee_state(instance* iris);
-void show_ee_logs(instance* iris);
-void show_ee_interrupts(instance* iris);
-void show_ee_dmac(instance* iris);
-void show_iop_control(instance* iris);
-void show_iop_state(instance* iris);
-void show_iop_logs(instance* iris);
-void show_iop_interrupts(instance* iris);
-void show_iop_modules(instance* iris);
-void show_iop_dma(instance* iris);
-void show_sysmem_logs(instance* iris);
-void show_gs_debugger(instance* iris);
-void show_spu2_debugger(instance* iris);
-void show_memory_viewer(instance* iris);
-void show_vu_disassembler(instance* iris);
-void show_status_bar(instance* iris);
-void show_breakpoints(instance* iris);
-void show_about_window(instance* iris);
-void show_fatal_error(instance* iris);
-void show_compat_report(instance* iris);
-void show_settings(instance* iris);
-void show_pad_debugger(instance* iris);
-void show_symbols(instance* iris);
-void show_ee_threads(instance* iris);
-void show_iop_threads(instance* iris);
-void show_overlay(instance* iris);
-void show_memory_card_tool(instance* iris);
-void show_hdd_tool(instance* iris);
-void show_gs_dump_tool(instance* iris);
-void show_bios_setting_window(instance* iris);
-void show_memory_search(instance* iris);
-void show_timers(instance* iris);
-void show_gamelist(instance* iris);
-
-void handle_keydown_event(instance* iris, SDL_Event* event);
-void handle_keyup_event(instance* iris, SDL_Event* event);
+void handle_keydown_event(Instance* iris, SDL_Event* event);
+void handle_keyup_event(Instance* iris, SDL_Event* event);
 void handle_scissor_event(void* udata);
 void handle_drag_and_drop_event(void* udata, const char* path);
 void handle_ee_tty_event(void* udata, char c);
@@ -924,11 +426,13 @@ void handle_iop_tty_event(void* udata, char c);
 void handle_sysmem_tty_event(void* udata, char c);
 void handle_log_event(void* udata, logger::Level level, const logger::Source& source, const std::string& text);
 
-void handle_animations(instance* iris);
+void init_logger(Instance* iris);
 
-void push_info(instance* iris, std::string text);
+void handle_animations(Instance* iris);
 
-void add_recent(instance* iris, std::string file, int type);
-int open_file(instance* iris, std::string file);
+void push_info(Instance* iris, std::string text);
+
+void add_recent(Instance* iris, std::string file, RecentType type);
+int open_file(Instance* iris, std::string file);
 
 }

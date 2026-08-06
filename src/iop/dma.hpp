@@ -22,28 +22,32 @@ namespace iris::ee::dmac { struct Dmac; }
 
 namespace iris::iop::dma {
 
-inline constexpr auto MDEC_IN = 0;
-inline constexpr auto MDEC_OUT = 1;
-inline constexpr auto SIF2 = 2;
-inline constexpr auto CDVD = 3;
-inline constexpr auto SPU1 = 4;
-inline constexpr auto PIO = 5;
-inline constexpr auto OTC = 6;
-inline constexpr auto SPU2 = 7;
-inline constexpr auto DEV9 = 8;
-inline constexpr auto SIF0 = 9;
-inline constexpr auto SIF1 = 10;
-inline constexpr auto SIO2_IN = 11;
-inline constexpr auto SIO2_OUT = 12;
+enum ChannelId : int {
+    MDEC_IN,
+    MDEC_OUT,
+    SIF2,
+    CDVD,
+    SPU1,
+    PIO,
+    OTC,
+    SPU2,
+    DEV9,
+    SIF0,
+    SIF1,
+    SIO2_IN,
+    SIO2_OUT
+};
 
-// Retail behavior
-inline constexpr auto DEV9_ATA = 0;
+enum Dev9Mode : int {
+    // Retail behavior
+    DEV9_MODE_RETAIL,
 
-// System 147/148 NAND chip
-inline constexpr auto DEV9_NAND = 1;
+    // System 147/148 NAND chip
+    DEV9_MODE_NAND,
 
-// System 246/256 ACATA
-inline constexpr auto DEV9_ACATA = 2;
+    // System 246/256 ACATA
+    DEV9_MODE_ACATA
+};
 
 struct Channel {
     uint32_t madr;
@@ -66,7 +70,6 @@ struct Channel {
 };
 
 struct Dma {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         bus::Bus* bus;
         iop::intc::Intc* intc;

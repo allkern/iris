@@ -307,7 +307,7 @@ Ds* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
 }
 
 void button_press(Ds* ds, uint32_t mask) {
-    if (mask == BT_ANALOG) {
+    if (mask == ANALOG) {
         if (!ds->lock)
             ds->mode = ds->mode ? 0 : 1;
 

@@ -21,7 +21,7 @@ const float opacity = 0.75f;
 
 float max = 0.0;
 
-void update_overlay(instance* iris) {
+void update_overlay(Instance* iris) {
     // if (fps_history.size() == MAX_SAMPLES) {
     //     if (fps_history.front() >= max) {
     //         max = 0.0;
@@ -38,7 +38,7 @@ void update_overlay(instance* iris) {
 
     float sample = 1.0 / ImGui::GetIO().DeltaTime;
 
-    if (!iris->pause) {
+    if (!iris->debug.pause) {
         if (fps_history.size() == MAX_SAMPLES)
             fps_history.erase(fps_history.begin());
 
@@ -51,13 +51,13 @@ void update_overlay(instance* iris) {
     }
 }
 
-void show_overlay(instance* iris) {
+void show_overlay(Instance* iris) {
     using namespace ImGui;
     using namespace ImPlot;
 
     SetNextWindowBgAlpha(0.5f);
 
-    ImVec2 pos = ImVec2(10.0f, 10.0f + iris->menubar_height);
+    ImVec2 pos = ImVec2(10.0f, 10.0f + iris->ui.menubar_height);
 
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         pos.x = GetMainViewport()->Pos.x + GetMainViewport()->Size.x + 10.0f;
@@ -100,7 +100,7 @@ void show_overlay(instance* iris) {
 
         gs::renderer::Stats* stats; // = renderer_get_debug_stats(iris->ctx);
 
-        PushFont(iris->font_black);
+        PushFont(iris->ui.font_black);
         Text("%d fps", (int)std::roundf(1.0 / ImGui::GetIO().DeltaTime));
         PopFont();
         // Text("Primitives: %d", stats->primitives);

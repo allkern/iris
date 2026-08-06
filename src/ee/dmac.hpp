@@ -28,17 +28,19 @@ inline uint32_t tag_irq(uint128_t d)  { return (d.u64[0] >> 31) & 1; }
 inline uint32_t tag_addr(uint128_t d) { return (d.u64[0] >> 32) & 0xfffffff0; }
 inline uint64_t tag_data(uint128_t d) { return d.u64[1]; }
 
-inline constexpr auto VIF0 = 0;
-inline constexpr auto VIF1 = 1;
-inline constexpr auto GIF = 2;
-inline constexpr auto IPU_FROM = 3;
-inline constexpr auto IPU_TO = 4;
-inline constexpr auto SIF0 = 5;
-inline constexpr auto SIF1 = 6;
-inline constexpr auto SIF2 = 7;
-inline constexpr auto SPR_FROM = 8;
-inline constexpr auto SPR_TO = 9;
-inline constexpr auto MEIS = 14;
+enum ChannelId : int {
+    VIF0,
+    VIF1,
+    GIF,
+    IPU_FROM,
+    IPU_TO,
+    SIF0,
+    SIF1,
+    SIF2,
+    SPR_FROM,
+    SPR_TO,
+    MEIS = 14
+};
 
 struct Tag {
     uint64_t qwc;
@@ -70,7 +72,6 @@ struct Channel {
 };
 
 struct Dmac {
-    // Wiring. Set once by create/connect and preserved across reset.
     struct {
         ee::bus::Bus* bus;
         scheduler::Scheduler* sched;

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "spu2_decl.hpp"
 #include "scheduler.hpp"
 #include "intc.hpp"
 #include "dma.hpp"
@@ -70,14 +71,6 @@ inline constexpr auto ADMA_RING_FRAMES = 32768;
     1f900788-1f9007af CORE1 Volume/Reverb settings
     1f9007c0-1f9007cf S/PDIF settings
 */
-
-struct Sample {
-    union {
-        uint32_t u32;
-        uint16_t u16[2];
-        int16_t s16[2];
-    };
-};
 
 struct Volume {
     uint16_t reg;       // Raw register value (for read-back)
@@ -231,7 +224,6 @@ struct Core {
 };
 
 struct Spu2 {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         iop::dma::Dma* dma;
         iop::intc::Intc* intc;

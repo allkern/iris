@@ -4,6 +4,7 @@
 #include "iop/hle/loadcore.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace iris {
 
@@ -24,13 +25,13 @@ static ImGuiTableFlags table_sizing_flags[] = {
 static int table_sizing_combo = 0;
 static int table_sizing = ImGuiTableFlags_SizingStretchProp;
 
-static inline void show_modules_table(instance* iris) {
+static inline void show_modules_table(Instance* iris) {
     using namespace ImGui;
 
     iop::Iop* iop = iris->ps2->iop;
 
     if (BeginTable("##iopmodules", 4, ImGuiTableFlags_RowBg | table_sizing)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
         TableSetupColumn("Name");
         TableSetupColumn("Text Start");
         TableSetupColumn("Data Start");
@@ -49,7 +50,7 @@ static inline void show_modules_table(instance* iris) {
             // text section
             TableSetColumnIndex(1);
             
-            PushFont(iris->font_code);
+            PushFont(iris->ui.font_code);
 
             uint32_t addr = mod->text_addr;
             Text("0x%08x", addr);
@@ -71,7 +72,7 @@ static inline void show_modules_table(instance* iris) {
     }
 }
 
-static inline iop::hle::loadcore::Module* find_iop_module(instance* iris, uint32_t addr) {
+static inline iop::hle::loadcore::Module* find_iop_module(Instance* iris, uint32_t addr) {
     iop::Iop* iop = iris->ps2->iop;
 
     for (int i = 0; i < iop->module_count; i++) {
@@ -84,12 +85,12 @@ static inline iop::hle::loadcore::Module* find_iop_module(instance* iris, uint32
     return NULL;
 }
 
-void show_iop_modules(instance* iris) {
+void show_iop_modules(Instance* iris) {
     using namespace ImGui;
 
     iop::Iop* iop = iris->ps2->iop;
 
-    if (imgui::BeginEx("IOP Modules", &iris->show_iop_modules, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("IOP Modules", &iris->ui.show_iop_modules, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("Settings")) {
                 if (BeginMenu(ICON_MS_CROP " Sizing")) {

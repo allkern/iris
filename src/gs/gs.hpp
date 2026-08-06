@@ -251,7 +251,6 @@ inline constexpr auto EVENT_VBLANK = 0;
 inline constexpr auto EVENT_SCISSOR = 1;
 
 struct Gs {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         scheduler::Scheduler* sched;
         ee::intc::Intc* ee_intc;

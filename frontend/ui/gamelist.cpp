@@ -47,7 +47,7 @@ struct gamelist_entry {
     std::string region;
     std::string serial;
     std::string cover;
-    texture* cover_texture = nullptr;
+    Texture* cover_texture = nullptr;
 };
 
 std::vector <gamelist_entry> gamelist_cache = {};
@@ -104,7 +104,7 @@ void parse_disc(iop::disc::Disc* disc, gamelist_entry* entry) {
     }
 }
 
-void make_gamelist_cache(instance* iris, std::string path) {
+void make_gamelist_cache(Instance* iris, std::string path) {
     gamelist_cache_status = GAMELIST_CACHE_PARSING;
 
     for (const auto& entry : std::filesystem::directory_iterator(path)) {
@@ -147,9 +147,9 @@ void make_gamelist_cache(instance* iris, std::string path) {
 
     if (gamelist_cache.size() < thread_pool_size) {
         for (gamelist_entry& entry : gamelist_cache) {
-            net::download_result region = net::download(gamedb_url + entry.serial + "/region.txt");
-            net::download_result title = net::download(gamedb_url + entry.serial + "/title.txt");
-            net::download_result cover = net::download(game_covers_url + entry.serial + ".jpg");
+            net::DownloadResult region = net::download(gamedb_url + entry.serial + "/region.txt");
+            net::DownloadResult title = net::download(gamedb_url + entry.serial + "/title.txt");
+            net::DownloadResult cover = net::download(game_covers_url + entry.serial + ".jpg");
 
             if (region.status == 200) {
                 entry.region = region.body;
@@ -160,7 +160,7 @@ void make_gamelist_cache(instance* iris, std::string path) {
             }
 
             if (cover.status != 200) {
-                printf("Failed to download cover for %s (%s)\n", entry.name.c_str(), entry.serial.c_str());
+                iris_error(&iris->log.gamelist, "Failed to download cover for {} ({})", entry.name.c_str(), entry.serial.c_str());
                 // entry.cover = cover.body;
             }
 
@@ -196,15 +196,15 @@ void make_gamelist_cache(instance* iris, std::string path) {
 
             thread_free[r] = false;
 
-            thread_pool[r] = std::thread([&thread_free](int id, int index){
+            thread_pool[r] = std::thread([&thread_free, iris](int id, int index){
                 const std::string gamedb_url = "https://raw.githubusercontent.com/niemasd/GameDB-PS2/refs/heads/main/games/";
                 const std::string game_covers_url = "https://raw.githubusercontent.com/xlenore/ps2-covers/refs/heads/main/covers/default/";
 
                 std::string serial = gamelist_cache[index].serial;
 
-                net::download_result region = net::download(gamedb_url + serial + "/region.txt");
-                net::download_result title = net::download(gamedb_url + serial + "/title.txt");
-                net::download_result cover = net::download(game_covers_url + serial + ".jpg");
+                net::DownloadResult region = net::download(gamedb_url + serial + "/region.txt");
+                net::DownloadResult title = net::download(gamedb_url + serial + "/title.txt");
+                net::DownloadResult cover = net::download(game_covers_url + serial + ".jpg");
 
                 if (region.status == 200) gamelist_cache[index].region = region.body;
                 if (title.status == 200) gamelist_cache[index].name = title.body;
@@ -212,7 +212,9 @@ void make_gamelist_cache(instance* iris, std::string path) {
                 if (cover.status == 200) {
                     gamelist_cache[index].cover = cover.body;
                 } else {
-                    printf("Failed to download cover for %s (%s)\n", gamelist_cache[index].name.c_str(), serial.c_str());
+                    iris_error(&iris->log.gamelist, "Failed to download cover for {} ({})",
+                        gamelist_cache[index].name.c_str(), serial.c_str()
+                    );
                 }
 
                 gamelist_cache_progress++;
@@ -231,7 +233,7 @@ void make_gamelist_cache(instance* iris, std::string path) {
     }
 
     // if (gamelist_cache.size()) {
-    //     FILE* cache_file = fopen((iris->pref_path + "gamelist_cache.txt").c_str(), "w");
+    //     FILE* cache_file = fopen((iris->paths.pref_path + "gamelist_cache.txt").c_str(), "w");
 
     //     for (const auto& entry : gamelist_cache) {
     //         fprintf(cache_file, "%s|%s|%s|%s|%s|%s\n", entry.name.c_str(), entry.path.c_str(), entry.format.c_str(), entry.type.c_str(), entry.region.c_str(), entry.serial.c_str());
@@ -242,7 +244,7 @@ void make_gamelist_cache(instance* iris, std::string path) {
 
     // for (const auto& entry : gamelist_cache) {
     //     if (!entry.cover.empty()) {
-    //         FILE* f = fopen((iris->pref_path + "covers/" + entry.serial + ".jpg").c_str(), "wb");
+    //         FILE* f = fopen((iris->paths.pref_path + "covers/" + entry.serial + ".jpg").c_str(), "wb");
 
     //         if (f) {
     //             fwrite(entry.cover.data(), 1, entry.cover.size(), f);
@@ -283,7 +285,7 @@ void draw_badge(const char* text, ImU32 color, float bg_alpha = 0.5f, float roun
     TextColored(text_color, "%s", text);
 }
 
-void draw_table(instance* iris) {
+void draw_table(Instance* iris) {
     using namespace ImGui;
 
     if (BeginTable("##gamelist_tabs", 4, ImGuiTableFlags_Sortable | ImGuiTableFlags_NoBordersInBody)) {
@@ -299,7 +301,7 @@ void draw_table(instance* iris) {
         int height2 = height / 2;
         int padding = 1;
 
-        PushFont(iris->font_heading);
+        PushFont(iris->ui.font_heading);
         int title_height = CalcTextSize("Aa").y;
         PopFont();
 
@@ -315,15 +317,15 @@ void draw_table(instance* iris) {
             float cursor_pos_y = GetCursorPosY();
 
             if (Selectable(std::string("##" + std::to_string(i)).c_str(), false, ImGuiSelectableFlags_SpanAllColumns, ImVec2(0, height))) {
-                add_recent(iris, entry.path, 0);
+                add_recent(iris, entry.path, RecentType::PS2);
                 emu::open_file(iris, entry.path);
             }
 
             SetCursorPosY(cursor_pos_y);
 
             if (BeginChild(("icon" + std::to_string(i)).c_str(), ImVec2(0, height), 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs)) {
-                if (iris->covers.contains(entry.serial)) {
-                    texture& cover = iris->covers[entry.serial];
+                if (iris->ui.covers.contains(entry.serial)) {
+                    Texture& cover = iris->ui.covers[entry.serial];
 
                     float width = ((float)cover.width / (float)cover.height) * (float)height;
 
@@ -345,11 +347,11 @@ void draw_table(instance* iris) {
 
             if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
                 if (BeginTooltip()) {
-                    if (!iris->covers.contains(entry.serial)) {
+                    if (!iris->ui.covers.contains(entry.serial)) {
                         Text("%s", entry.name.c_str());
                         TextDisabled("%s", entry.path.c_str());
                     } else {
-                        texture& cover = iris->covers[entry.serial];
+                        Texture& cover = iris->ui.covers[entry.serial];
 
                         float max_height = 300.0f;
                         float width = ((float)cover.width / (float)cover.height) * max_height;
@@ -369,7 +371,7 @@ void draw_table(instance* iris) {
 
             if (BeginChild(("title" + std::to_string(i)).c_str(), ImVec2(0, height), 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs)) {
                 SetCursorPosY(height2 - title_height);
-                PushFont(iris->font_heading);
+                PushFont(iris->ui.font_heading);
                 Text("%s", entry.name.c_str());
                 PopFont();
                 SetCursorPosY(height2 + padding * 2);
@@ -399,7 +401,7 @@ void draw_table(instance* iris) {
     }
 }
 
-void gamelib_filter_symbols(instance* iris, const std::string& filter, bool regex, bool case_sensitive) {
+void gamelib_filter_symbols(Instance* iris, const std::string& filter, bool regex, bool case_sensitive) {
     gamelist_cache.clear();
 
     if (filter[0] == '\0') {
@@ -435,14 +437,14 @@ void gamelib_filter_symbols(instance* iris, const std::string& filter, bool rege
 }
 
 int gamelib_edit_callback(ImGuiInputTextCallbackData* data) {
-    instance* iris = (instance*)data->UserData;
+    Instance* iris = (Instance*)data->UserData;
 
     gamelib_filter_symbols(iris, data->Buf, gamelib_regex, gamelib_case_sensitive);
 
     return 0;
 }
 
-void show_gamelist(instance* iris) {
+void show_gamelist(Instance* iris) {
     using namespace ImGui;
 
     if (!gamelist_cache_thread_started) {
@@ -452,15 +454,15 @@ void show_gamelist(instance* iris) {
     }
 
     if (gamelist_cache_status == GAMELIST_CACHE_READY) {
-        printf("Loading covers into GPU...\n");
+        iris_info(&iris->log.gamelist, "Loading covers into GPU...");
 
         for (auto& entry : gamelist_cache) {
             if (entry.cover.empty())
                 continue;
 
-            texture tex = vulkan::load_texture_from_memory(iris, entry.cover.data(), entry.cover.size());
+            Texture tex = vulkan::load_texture_from_memory(iris, entry.cover.data(), entry.cover.size());
 
-            iris->covers[entry.serial] = tex;
+            iris->ui.covers[entry.serial] = tex;
         }
 
         gamelist_cache_status = GAMELIST_CACHE_LOADED_COVERS;

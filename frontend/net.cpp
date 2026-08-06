@@ -2,11 +2,11 @@
 
 namespace iris::net {
 
-bool init() {
+bool init(LogSource* log) {
     CURLcode res = curl_global_init(CURL_GLOBAL_DEFAULT);
 
     if (res != CURLE_OK) {
-        fprintf(stderr, "curl_global_init() failed: %s\n", curl_easy_strerror(res));
+        iris_error(log, "curl_global_init() failed: {}", curl_easy_strerror(res));
 
         return false;
     }
@@ -59,7 +59,7 @@ size_t curl_write_callback(void *ptr, size_t size, size_t nmemb, std::string* da
     return size * nmemb;
 }
 
-download_result download(std::string url) {
+DownloadResult download(std::string url) {
     auto parsed_url = parse_url(url);
 
     std::string reconstructed_url = parsed_url.scheme + "://" + parsed_url.host;

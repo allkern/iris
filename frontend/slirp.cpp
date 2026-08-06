@@ -52,6 +52,8 @@ struct state {
 
     std::vector <slirp_timer*> timers;
 
+    LogSource* log = nullptr;
+
     std::vector <poll_entry> poll_entries;
     fd_set rfds, wfds, efds;
 };
@@ -103,7 +105,7 @@ slirp_ssize_t cb_send_packet(const void* buf, size_t len, void* opaque) {
 void cb_guest_error(const char* msg, void* opaque) {
     (void)opaque;
 
-    fprintf(stderr, "slirp: guest error: %s\n", msg);
+    iris_error(g->log, "guest error: {}", msg);
 }
 
 int64_t cb_clock_get_ns(void* opaque) {
@@ -255,15 +257,15 @@ void smap_tx(void* udata, const uint8_t* buf, int len) {
     slirp_input(g->slirp, buf, len);
 }
 
-bool start(speed::smap::Smap* smap, const config& cfg) {
+bool start(speed::smap::Smap* smap, const Config& cfg, LogSource* log) {
     if (getenv("IRIS_NO_NET")) {
-        printf("slirp: disabled via IRIS_NO_NET\n");
+        iris_info(log, "Disabled via IRIS_NO_NET");
 
         return false;
     }
 
     if (!cfg.enabled) {
-        printf("slirp: networking disabled\n");
+        iris_info(log, "Networking disabled");
 
         return false;
     }
@@ -277,6 +279,8 @@ bool start(speed::smap::Smap* smap, const config& cfg) {
 #endif
 
     g = new state();
+
+    g->log = log;
     g->smap = smap;
 
     uint32_t network, netmask, gateway, dhcp, nameserver;
@@ -361,9 +365,9 @@ void stop() {
 #endif
 }
 
-void restart(speed::smap::Smap* smap, const config& cfg) {
+void restart(speed::smap::Smap* smap, const Config& cfg, LogSource* log) {
     stop();
-    start(smap, cfg);
+    start(smap, cfg, log);
 }
 
 bool running() {

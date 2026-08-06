@@ -24,18 +24,20 @@ namespace iris::ee {
 #define EE_ALIGNED16
 #endif
 
-inline constexpr auto CYC_DEFAULT = 9;
-inline constexpr auto CYC_BRANCH = 11;
-inline constexpr auto CYC_COP_DEFAULT = 7;
-inline constexpr auto CYC_MULT = 2*8;
-inline constexpr auto CYC_DIV = 14*8;
-inline constexpr auto CYC_MMI_MULT = 3*8;
-inline constexpr auto CYC_MMI_DIV = 22*8;
-inline constexpr auto CYC_MMI_DEFAULT = 14;
-inline constexpr auto CYC_FPU_MULT = 4*8;
-inline constexpr auto CYC_FPU_DIV = 6*8;
-inline constexpr auto CYC_STORE = 14;
-inline constexpr auto CYC_LOAD = 14;
+enum Timing : int {
+    CYC_DEFAULT = 9,
+    CYC_BRANCH = 11,
+    CYC_COP_DEFAULT = 7,
+    CYC_MULT = 2*8,
+    CYC_DIV = 14*8,
+    CYC_MMI_MULT = 3*8,
+    CYC_MMI_DIV = 22*8,
+    CYC_MMI_DEFAULT = 14,
+    CYC_FPU_MULT = 4*8,
+    CYC_FPU_DIV = 6*8,
+    CYC_STORE = 14,
+    CYC_LOAD = 14
+};
 
 enum : int {
     I_SLL,
@@ -668,16 +670,20 @@ struct Ee {
     size_t logger_id = 0;
 };
 
-inline constexpr auto THS_RUN = 0x01;
-inline constexpr auto THS_READY = 0x02;
-inline constexpr auto THS_WAIT = 0x04;
-inline constexpr auto THS_SUSPEND = 0x08;
-inline constexpr auto THS_WAITSUSPEND = 0x0C;// THS_WAIT | THS_SUSPEND
-inline constexpr auto THS_DORMANT = 0x10;
+enum ThreadStatus : int {
+    RUN = 0x01,
+    READY = 0x02,
+    WAIT = 0x04,
+    SUSPEND = 0x08,
+    WAITSUSPEND = 0x0C, // THS_WAIT | THS_SUSPEND
+    DORMANT = 0x10
+};
 
-inline constexpr auto TSW_EE_NONE = 0x0;
-inline constexpr auto TSW_EE_SLEEP = 0x1;
-inline constexpr auto TSW_EE_SEMA = 0x2;
+enum ThreadWaitType : int {
+    NONE = 0,
+    SLEEP = 1,
+    SEMA = 2
+};
 
 struct ThreadCtx {
     uint32_t sa;

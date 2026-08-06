@@ -10,6 +10,7 @@
 
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
+#include "ps2.hpp"
 
 namespace iris {
 
@@ -363,16 +364,16 @@ void sprintf_match(const value& v, char* buf, size_t size, int type, int hex) {
     }
 }
 
-void show_match_change_dialog(instance* iris, match& m, char* label, int search_type, int search_cpu) {
+void show_match_change_dialog(Instance* iris, match& m, char* label, int search_type, int search_cpu) {
     using namespace ImGui;
 
     ps2::Ps2* ps2 = iris->ps2;
 
     static char new_value[32];
 
-    PushFont(iris->font_small);
+    PushFont(iris->ui.font_small);
     TextDisabled("Edit "); SameLine(0.0, 0.0);
-    PushFont(iris->font_small_code);
+    PushFont(iris->ui.font_small_code);
     Text("%s", label);
     PopFont();
     PopFont();
@@ -380,14 +381,14 @@ void show_match_change_dialog(instance* iris, match& m, char* label, int search_
     PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-    PushFont(iris->font_body);
+    PushFont(iris->ui.font_body);
     PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
     AlignTextToFramePadding();
     Text(ICON_MS_EDIT); SameLine();
 
     SetNextItemWidth(100);
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
     if (InputText("##", new_value, 32, ImGuiInputTextFlags_EnterReturnsTrue)) {
         if (new_value[0]) {
@@ -436,21 +437,21 @@ void show_match_change_dialog(instance* iris, match& m, char* label, int search_
     PopFont();
 }
 
-void show_description_change_dialog(instance* iris, match& m) {
+void show_description_change_dialog(Instance* iris, match& m) {
     using namespace ImGui;
 
     ps2::Ps2* ps2 = iris->ps2;
 
     static char new_value[32];
 
-    PushFont(iris->font_small);
+    PushFont(iris->ui.font_small);
     TextDisabled("Edit description");
     PopFont();
 
     PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(6.0, 2.0));
     PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(8.0, 8.0));
 
-    PushFont(iris->font_body);
+    PushFont(iris->ui.font_body);
     PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.35, 0.35, 0.35, 0.35));
 
     AlignTextToFramePadding();
@@ -489,7 +490,7 @@ void show_description_change_dialog(instance* iris, match& m) {
 
 int frame = 0;
 
-void show_search_table(instance* iris, ps2::Ps2* ps2, int type, int cpu) {
+void show_search_table(Instance* iris, ps2::Ps2* ps2, int type, int cpu) {
     using namespace ImGui;
 
     static uint32_t selected_address = 0;
@@ -527,7 +528,7 @@ void show_search_table(instance* iris, ps2::Ps2* ps2, int type, int cpu) {
             sprintf_match(m.prev_value, prev_value_label, sizeof(prev_value_label), type, display_hex);
             sprintf_match(m.curr_value, curr_value_label, sizeof(curr_value_label), type, display_hex);
 
-            PushFont(iris->font_code);
+            PushFont(iris->ui.font_code);
 
             Selectable(addr_label, false, ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_SpanAllColumns);
 
@@ -544,11 +545,11 @@ void show_search_table(instance* iris, ps2::Ps2* ps2, int type, int cpu) {
             }
 
             if (selected_address == m.address) if (BeginPopup("context_menu")) {
-                PushFont(iris->font_small_code);
+                PushFont(iris->ui.font_small_code);
                 TextDisabled("0x%08x", m.address);
                 PopFont();
 
-                PushFont(iris->font_body);
+                PushFont(iris->ui.font_body);
                 if (BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
                     if (Selectable("Address")) {
                         ImGui::SetClipboardText(addr_label);
@@ -620,7 +621,7 @@ void show_search_table(instance* iris, ps2::Ps2* ps2, int type, int cpu) {
     }
 }
 
-void show_address_list(instance* iris) {
+void show_address_list(Instance* iris) {
     using namespace ImGui;
 
     ps2::Ps2* ps2 = iris->ps2;
@@ -648,7 +649,7 @@ void show_address_list(instance* iris) {
             sprintf_match(m.prev_value, prev_value_label, sizeof(prev_value_label), m.type, display_hex);
             sprintf_match(m.curr_value, curr_value_label, sizeof(curr_value_label), m.type, display_hex);
 
-            PushFont(iris->font_code);
+            PushFont(iris->ui.font_code);
 
             Selectable(addr_label, false, ImGuiSelectableFlags_AllowOverlap | ImGuiSelectableFlags_SpanAllColumns);
 
@@ -665,11 +666,11 @@ void show_address_list(instance* iris) {
             }
 
             if (selected_address == m.address) if (BeginPopup("context_menu_al")) {
-                PushFont(iris->font_small_code);
+                PushFont(iris->ui.font_small_code);
                 TextDisabled("0x%08x", m.address);
                 PopFont();
 
-                PushFont(iris->font_body);
+                PushFont(iris->ui.font_body);
                 if (BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
                     if (Selectable("Address")) {
                         ImGui::SetClipboardText(addr_label);
@@ -735,7 +736,7 @@ void show_address_list(instance* iris) {
 
             TableSetColumnIndex(3);
 
-            PushFont(iris->font_body);
+            PushFont(iris->ui.font_body);
             Text("%s", m.description.c_str());
             PopFont();
 
@@ -754,7 +755,7 @@ void show_address_list(instance* iris) {
     EndTable();
 }
 
-void show_search_options(instance* iris) {
+void show_search_options(Instance* iris) {
     using namespace ImGui;
 
     ps2::Ps2* ps2 = iris->ps2;
@@ -891,7 +892,7 @@ void import_address_list_from_stream(std::istream& stream) {
     }
 }
 
-void show_memory_search(instance* iris) {
+void show_memory_search(Instance* iris) {
     using namespace ImGui;
 
     ps2::Ps2* ps2 = iris->ps2;
@@ -902,7 +903,7 @@ void show_memory_search(instance* iris) {
 
     int top_shelf_height = GetContentRegionAvail().y - 220;
 
-    if (imgui::BeginEx("Memory search", &iris->show_memory_search, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("Memory search", &iris->ui.show_memory_search, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("File")) {
                 if (BeginMenu("Address list")) {

@@ -10,24 +10,25 @@ namespace iris::ee { struct Ee; }
 
 namespace iris::ee::intc {
 
-inline constexpr auto GS = 0;
-inline constexpr auto SBUS = 1;
-inline constexpr auto VBLANK_IN = 2;
-inline constexpr auto VBLANK_OUT = 3;
-inline constexpr auto VIF0 = 4;
-inline constexpr auto VIF1 = 5;
-inline constexpr auto VU0 = 6;
-inline constexpr auto VU1 = 7;
-inline constexpr auto IPU = 8;
-inline constexpr auto TIMER0 = 9;
-inline constexpr auto TIMER1 = 10;
-inline constexpr auto TIMER2 = 11;
-inline constexpr auto TIMER3 = 12;
-inline constexpr auto SFIFO = 13;
-inline constexpr auto VU0_WD = 14;
+enum Source {
+    GS,
+    SBUS,
+    VBLANK_IN,
+    VBLANK_OUT,
+    VIF0,
+    VIF1,
+    VU0,
+    VU1,
+    IPU,
+    TIMER0,
+    TIMER1,
+    TIMER2,
+    TIMER3,
+    SFIFO,
+    VU0_WD
+};
 
 struct Intc {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         ee::Ee* ee;
         scheduler::Scheduler* sched;

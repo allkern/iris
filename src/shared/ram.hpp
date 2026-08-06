@@ -8,15 +8,17 @@
 
 namespace iris::ram {
 
-inline constexpr size_t SIZE_1KB = 0x400;
-inline constexpr size_t SIZE_2MB = 0x200000;
-inline constexpr size_t SIZE_4MB = 0x400000;
-inline constexpr size_t SIZE_8MB = 0x800000;
-inline constexpr size_t SIZE_16MB = 0x1000000;
-inline constexpr size_t SIZE_32MB = 0x2000000;
-inline constexpr size_t SIZE_64MB = 0x4000000;
-inline constexpr size_t SIZE_128MB = 0x8000000;
-inline constexpr size_t SIZE_256MB = 0x10000000;
+enum class Size : size_t {
+    _1KB = 0x400,
+    _2MB = 0x200000,
+    _4MB = 0x400000,
+    _8MB = 0x800000,
+    _16MB = 0x1000000,
+    _32MB = 0x2000000,
+    _64MB = 0x4000000,
+    _128MB = 0x8000000,
+    _256MB = 0x10000000
+};
 
 struct Ram {
     uint8_t* buf = nullptr;
@@ -27,6 +29,7 @@ struct Ram {
 };
 
 Ram* create(logger::Logger* logger, size_t size);
+Ram* create(logger::Logger* logger, Size size);
 void reset(Ram* ram);
 void destroy(Ram* ram);
 

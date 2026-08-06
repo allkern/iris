@@ -3,6 +3,7 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace ImGui {
 
@@ -59,7 +60,7 @@ int get_format_bpp(int psm) {
     return 0;
 }
 
-void show_status_bar(instance* iris) {
+void show_status_bar(Instance* iris) {
     using namespace ImGui;
 
     if (BeginMainStatusBar()) {
@@ -93,7 +94,7 @@ void show_status_bar(instance* iris) {
 
         SetCursorPosX(5.0);
 
-        if (!iris->image.image) {
+        if (!iris->vk.image.image) {
             Text("%s", renderers[iris->renderer_backend]);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
             Text("No image");
@@ -108,7 +109,7 @@ void show_status_bar(instance* iris) {
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
             Text("%dx%d", iris->render_width, iris->render_height);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
-            Text("%dx%d", iris->image.width, iris->image.height);
+            Text("%dx%d", iris->vk.image.width, iris->vk.image.height);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
             Text("%s", modes[iris->ps2->gs->smode2 & 3]);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);

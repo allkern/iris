@@ -9,7 +9,7 @@
 
 namespace iris {
 
-void show_about_window(instance* iris) {
+void show_about_window(Instance* iris) {
     using namespace ImGui;
 
     static ImGuiWindowFlags flags =
@@ -21,13 +21,13 @@ void show_about_window(instance* iris) {
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
         flags |= ImGuiWindowFlags_NoTitleBar;
 
-    if (Begin("About", &iris->show_about_window, flags)) {
+    if (Begin("About", &iris->ui.show_about_window, flags)) {
         if (BeginChild("##iconchild", ImVec2(100.0, 250.0), ImGuiChildFlags_AutoResizeY)) {
-            Image((ImTextureID)(intptr_t)iris->iris_icon.descriptor_set, ImVec2(100.0, 100.0));
+            Image((ImTextureID)(intptr_t)iris->ui.iris_icon.descriptor_set, ImVec2(100.0, 100.0));
         } EndChild(); SameLine(0.0, 10.0);
 
         if (BeginChild("##textchild", ImVec2(350.0, 0.0))) {
-            PushFont(iris->font_heading);
+            PushFont(iris->ui.font_heading);
             Text(IRIS_TITLE);
             PopFont();
 

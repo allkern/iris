@@ -8,10 +8,11 @@
 
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
+#include "ps2.hpp"
 
 namespace iris {
 
-static std::string gsdump_detect_serial(instance* iris) {
+static std::string gsdump_detect_serial(Instance* iris) {
     if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc)
         return "";
 
@@ -28,7 +29,7 @@ static std::string gsdump_detect_serial(instance* iris) {
     return serial;
 }
 
-void show_gs_dump_tool(instance* iris) {
+void show_gs_dump_tool(Instance* iris) {
     using namespace ImGui;
 
     static char filename[1024] = "";
@@ -36,7 +37,7 @@ void show_gs_dump_tool(instance* iris) {
     static int delay = 0;
     static std::string serial;
 
-    if (imgui::BeginEx("Capture GS dump", &iris->show_gs_dump_tool, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (imgui::BeginEx("Capture GS dump", &iris->ui.show_gs_dump_tool, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (IsWindowAppearing()) {
             serial = gsdump_detect_serial(iris);
             frames = 1;
@@ -47,8 +48,8 @@ void show_gs_dump_tool(instance* iris) {
             filename[sizeof(filename) - 1] = '\0';
         }
 
-        bool capturing = iris->gsdump_armed ||
-            (iris->gsdump && gs::dump::is_active(iris->gsdump));
+        bool capturing = iris->debug.gsdump_armed ||
+            (iris->debug.gsdump && gs::dump::is_active(iris->debug.gsdump));
 
         if (iris->renderer_backend != gs::renderer::BACKEND_HARDWARE) {
             TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f),
@@ -104,27 +105,27 @@ void show_gs_dump_tool(instance* iris) {
         Spacing();
 
         if (capturing) {
-            if (iris->gsdump_armed) {
+            if (iris->debug.gsdump_armed) {
                 Text(ICON_MS_HOURGLASS_TOP " Waiting %d frame(s) before capture...",
-                    iris->gsdump_delay_remaining);
+                    iris->debug.gsdump_delay_remaining);
             } else {
                 Text(ICON_MS_FIBER_MANUAL_RECORD " Capturing... %d frame(s) left",
-                    iris->gsdump_frames_remaining);
+                    iris->debug.gsdump_frames_remaining);
             }
 
             if (Button(ICON_MS_CLOSE " Close")) {
-                iris->show_gs_dump_tool = false;
+                iris->ui.show_gs_dump_tool = false;
             }
         } else {
             BeginDisabled(filename[0] == '\0' ||
                 iris->renderer_backend != gs::renderer::BACKEND_HARDWARE);
 
             if (Button(ICON_MS_MOVIE " Start capture")) {
-                iris->pause = false;
+                iris->debug.pause = false;
 
                 render::gs_dump_start(iris, filename, frames, delay, serial);
 
-                iris->show_gs_dump_tool = false;
+                iris->ui.show_gs_dump_tool = false;
             }
 
             EndDisabled();
@@ -132,9 +133,9 @@ void show_gs_dump_tool(instance* iris) {
             SameLine();
 
             if (Button(ICON_MS_CLOSE " Cancel")) {
-                iris->pause = iris->gsdump_prev_pause;
+                iris->debug.pause = iris->debug.gsdump_prev_pause;
 
-                iris->show_gs_dump_tool = false;
+                iris->ui.show_gs_dump_tool = false;
             }
         }
     } End();

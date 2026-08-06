@@ -5,10 +5,11 @@
 
 namespace iris::usb::mouse {
 
-// HID boot-protocol mouse button indices (match the report bitmap)
-inline constexpr auto USB_MOUSE_BUTTON_LEFT = 0;
-inline constexpr auto USB_MOUSE_BUTTON_RIGHT = 1;
-inline constexpr auto USB_MOUSE_BUTTON_MIDDLE = 2;
+enum Button : int {
+    LEFT,
+    RIGHT,
+    MIDDLE
+};
 
 void create(device::Device* dev);
 

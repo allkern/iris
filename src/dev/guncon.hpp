@@ -8,12 +8,16 @@
 
 namespace iris::dev::guncon {
 
-inline constexpr uint16_t BT_START  = 0x0008;
-inline constexpr uint16_t BT_CIRCLE = 0x2000;
-inline constexpr uint16_t BT_CROSS  = 0x4000;
+enum Button : uint32_t {
+    START  = 0x0008,
+    CIRCLE = 0x2000,
+    CROSS  = 0x4000
+};
 
-inline constexpr int AX_X = 0;
-inline constexpr int AX_Y = 1;
+enum Axis : int {
+    X,
+    Y
+};
 
 struct Guncon {
     int port = 0;

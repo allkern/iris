@@ -6,7 +6,7 @@
 
 namespace iris {
 
-void show_fatal_error(instance* iris) {
+void show_fatal_error(Instance* iris) {
     using namespace ImGui;
 
     static ImGuiWindowFlags flags =

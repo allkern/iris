@@ -5,13 +5,13 @@
 
 namespace iris::platform {
 
-bool init(instance* iris) {
+bool init(Instance* iris) {
     apply_settings(iris);
 
     return true;
 }
 
-bool apply_settings(instance* iris) {
+bool apply_settings(Instance* iris) {
     SDL_PropertiesID props = SDL_GetWindowProperties(iris->window);
 
     HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
@@ -36,7 +36,7 @@ bool apply_settings(instance* iris) {
             &dark_mode,
             sizeof(BOOL)
         ))) {
-            printf("iris: Failed to set immersive dark mode\n");
+            iris_error(&iris->log.platform, "Failed to set immersive dark mode");
 
             return false;
         }
@@ -80,6 +80,6 @@ bool apply_settings(instance* iris) {
     return result;
 }
 
-void destroy(instance* iris) {}
+void destroy(Instance* iris) {}
 
 }

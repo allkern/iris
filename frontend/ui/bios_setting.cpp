@@ -37,15 +37,15 @@ int is_valid(const char* path) {
     return valid ? 2 : 1;
 }
 
-void show_memory_card_stage(instance* iris) {
+void show_memory_card_stage(Instance* iris) {
     using namespace ImGui;
 
     if (BeginChild("##iconchild", ImVec2(100.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
-        Image((ImTextureID)(intptr_t)iris->iris_icon.descriptor_set, ImVec2(100.0, 100.0));
+        Image((ImTextureID)(intptr_t)iris->ui.iris_icon.descriptor_set, ImVec2(100.0, 100.0));
     } EndChild(); SameLine(0.0, 10.0);
 
     if (BeginChild("##textchild", ImVec2(360.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
-        PushFont(iris->font_heading);
+        PushFont(iris->ui.font_heading);
         Text("Done!");
         PopFont();
 
@@ -74,10 +74,10 @@ void show_memory_card_stage(instance* iris) {
         if (Button("Done")) {
             CloseCurrentPopup();
 
-            iris->show_bios_setting_window = false;
+            iris->ui.show_bios_setting_window = false;
 
             if (open_settings) {
-                iris->show_settings = true;
+                iris->ui.show_settings = true;
             }
         } SameLine();
 
@@ -85,12 +85,12 @@ void show_memory_card_stage(instance* iris) {
     } EndChild();
 }
 
-void show_bios_stage(instance* iris) {
+void show_bios_stage(Instance* iris) {
     using namespace ImGui;
 
     static char buf[512];
 
-    PushFont(iris->font_heading);
+    PushFont(iris->ui.font_heading);
     Text("Welcome to Iris!");
     PopFont();
     Separator();
@@ -158,10 +158,10 @@ void show_bios_stage(instance* iris) {
     BeginDisabled(!bios_valid || !buf[0]);
 
     if (Button("Next")) {
-        iris->bios_path = buf;
+        iris->paths.bios_path = buf;
         iris->dump_to_file = true;
 
-        if (!ps2::load_bios(iris->ps2, iris->bios_path.c_str())) {
+        if (!ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str())) {
             push_info(iris, "Couldn't load BIOS");
 
             stage = 0;
@@ -175,7 +175,7 @@ void show_bios_stage(instance* iris) {
     EndDisabled();
 }
 
-void show_bios_setting_window(instance* iris) {
+void show_bios_setting_window(Instance* iris) {
     using namespace ImGui;
 
     OpenPopup("Welcome");

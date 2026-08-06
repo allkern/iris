@@ -27,12 +27,12 @@ int type = MEMCARD_TYPE_PS2;
 int slot = 0;
 std::string fpath;
 
-void show_memory_card_tool(instance* iris) {
+void show_memory_card_tool(Instance* iris) {
     using namespace ImGui;
 
     SetNextWindowSizeConstraints(ImVec2(350, 320), ImVec2(FLT_MAX, FLT_MAX));
 
-    if (imgui::BeginEx("Create memory card", &iris->show_memory_card_tool, ImGuiWindowFlags_NoCollapse)) {
+    if (imgui::BeginEx("Create memory card", &iris->ui.show_memory_card_tool, ImGuiWindowFlags_NoCollapse)) {
         Text("Type");
 
         if (BeginCombo("##type", type_names[type])) {
@@ -98,10 +98,10 @@ void show_memory_card_tool(instance* iris) {
 
             audio::mute(iris);
 
-            std::string default_path = iris->pref_path + "image.mcd";
+            std::string default_path = iris->paths.pref_path + "image.mcd";
 
             if (type == MEMCARD_TYPE_POCKETSTATION) {
-                default_path = iris->pref_path + "image.psm";
+                default_path = iris->paths.pref_path + "image.psm";
             }
 
             auto f = pfd::save_file("Save Memory Card image", default_path, {
@@ -141,7 +141,7 @@ void show_memory_card_tool(instance* iris) {
                 free(buf);
 
                 if (slot != -1) {
-                    if (iris->mcd_slot_type[slot]) {
+                    if (iris->input.mcd_slot_type[slot]) {
                         fpath = f.result();
 
                         OpenPopup("Confirm detach");
@@ -151,9 +151,9 @@ void show_memory_card_tool(instance* iris) {
                             push_info(iris, "Memory card attached successfully.");
 
                             if (slot == 0) {
-                                iris->mcd0_path = f.result();
+                                iris->paths.mcd0_path = f.result();
                             } else {
-                                iris->mcd1_path = f.result();
+                                iris->paths.mcd1_path = f.result();
                             }
                         } else {
                             push_info(iris, "Failed to attach memory card.");
@@ -169,9 +169,9 @@ void show_memory_card_tool(instance* iris) {
             if (Button("Yes")) {
                 if (emu::attach_memory_card(iris, slot, fpath.c_str())) {
                     if (slot == 0) {
-                        iris->mcd0_path = fpath;
+                        iris->paths.mcd0_path = fpath;
                     } else {
-                        iris->mcd1_path = fpath;
+                        iris->paths.mcd1_path = fpath;
                     }
 
                     push_info(iris, "Memory card attached successfully.");

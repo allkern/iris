@@ -385,6 +385,7 @@ target_include_directories(iris SYSTEM PRIVATE
     deps/miniz
     deps/imgui
     deps/imgui/backends
+    deps/imgui_club
     deps/implot
     deps/SDL/include
     deps/parallel-gs

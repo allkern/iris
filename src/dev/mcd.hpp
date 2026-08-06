@@ -9,10 +9,13 @@
 
 namespace iris::dev::mcd {
 
-inline constexpr uint32_t SIZE_8MB  = 0x4000;
-inline constexpr uint32_t SIZE_16MB = 0x8000;
-inline constexpr uint32_t SIZE_32MB = 0x10000;
-inline constexpr uint32_t SIZE_64MB = 0x20000;
+enum Size : uint32_t {
+    _8MB = 0x4000,
+    _16MB = 0x8000,
+    _32MB = 0x10000,
+    _64MB = 0x20000
+};
+
 
 inline constexpr uint32_t SECTOR_SIZE = 512 + 16;
 

@@ -6,7 +6,6 @@
 namespace iris::fw {
 
 struct Fw {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         iop::intc::Intc* intc;
     } hw;

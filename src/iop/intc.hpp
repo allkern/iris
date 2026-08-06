@@ -34,39 +34,40 @@ namespace iris::iop::intc {
   25    IRQ25  FDMA? (FireWire DMA?)
 */
 
-inline constexpr auto VBLANK_IN = 0x00000001;
+enum Source : uint32_t {
+    VBLANK_IN = 0x00000001,
 
-// Bit 1 in PS2 mode is mapped to the SBUS IRQ, in PS1 mode
-// it's mapped to the PS1 GPU
-inline constexpr auto SBUS = 0x00000002;
-inline constexpr auto GPU = 0x00000002;
-inline constexpr auto CDVD = 0x00000004;
-inline constexpr auto DMA = 0x00000008;
-inline constexpr auto TIMER0 = 0x00000010;
-inline constexpr auto TIMER1 = 0x00000020;
-inline constexpr auto TIMER2 = 0x00000040;
-inline constexpr auto SIO0 = 0x00000080;
-inline constexpr auto SIO1 = 0x00000100;
-inline constexpr auto SPU2 = 0x00000200;
-inline constexpr auto PIO = 0x00000400;
-inline constexpr auto VBLANK_OUT = 0x00000800;
-inline constexpr auto DVD = 0x00001000;
-inline constexpr auto DEV9 = 0x00002000;
-inline constexpr auto TIMER3 = 0x00004000;
-inline constexpr auto TIMER4 = 0x00008000;
-inline constexpr auto TIMER5 = 0x00010000;
-inline constexpr auto SIO2 = 0x00020000;
-inline constexpr auto HTR0 = 0x00040000;
-inline constexpr auto HTR1 = 0x00080000;
-inline constexpr auto HTR2 = 0x00100000;
-inline constexpr auto HTR3 = 0x00200000;
-inline constexpr auto USB = 0x00400000;
-inline constexpr auto EXTR = 0x00800000;
-inline constexpr auto FWRE = 0x01000000;
-inline constexpr auto FDMA = 0x02000000;
+    // Bit 1 in PS2 mode is mapped to the SBUS IRQ, in PS1 mode
+    // it's mapped to the PS1 GPU
+    SBUS = 0x00000002,
+    GPU = 0x00000002,
+    CDVD = 0x00000004,
+    DMA = 0x00000008,
+    TIMER0 = 0x00000010,
+    TIMER1 = 0x00000020,
+    TIMER2 = 0x00000040,
+    SIO0 = 0x00000080,
+    SIO1 = 0x00000100,
+    SPU2 = 0x00000200,
+    PIO = 0x00000400,
+    VBLANK_OUT = 0x00000800,
+    DVD = 0x00001000,
+    DEV9 = 0x00002000,
+    TIMER3 = 0x00004000,
+    TIMER4 = 0x00008000,
+    TIMER5 = 0x00010000,
+    SIO2 = 0x00020000,
+    HTR0 = 0x00040000,
+    HTR1 = 0x00080000,
+    HTR2 = 0x00100000,
+    HTR3 = 0x00200000,
+    USB = 0x00400000,
+    EXTR = 0x00800000,
+    FWRE = 0x01000000,
+    FDMA = 0x02000000
+};
 
 struct Intc {
-    // Wiring. Set by create/connect, preserved across reset.
     struct {
         iop::Iop* iop;
     } hw;

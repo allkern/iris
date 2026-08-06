@@ -180,7 +180,11 @@ Image get_frame(void* udata) {
     info.crtc_offsets = ctx->config.crtc_offsets;
     info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
     info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    info.dst_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    // Granite is synchronization2-native and asserts on the legacy layouts.
+    // READ_ONLY_OPTIMAL is also the combination parallel-gs fast-paths: with
+    // FRAGMENT_SHADER/SHADER_SAMPLED_READ it can skip its exit barrier because
+    // the scanout barrier already established that dependency.
+    info.dst_layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
     info.adapt_to_internal_horizontal_resolution = true;
 
     ScanoutResult scanout = ctx->iface.vsync(info);

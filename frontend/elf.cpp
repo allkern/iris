@@ -8,23 +8,24 @@
 #include <elf.h>
 #else
 #include "elf.h"
+#include "ps2.hpp"
 #endif
 
 namespace iris::elf {
 
-void load_symbols_from_memory(instance* iris, char* buf) {
+void load_symbols_from_memory(Instance* iris, char* buf) {
     if (!buf)
         return;
 
     // Clear previous symbols
-    iris->symbols.clear();
-    iris->strtab.clear();
+    iris->debug.symbols.clear();
+    iris->debug.strtab.clear();
 
     Elf32_Ehdr* ehdr = (Elf32_Ehdr*)buf;
 
     // Parse ELF header
     if (strncmp((char*)ehdr->e_ident, "\x7f" "ELF", 4) != 0) {
-        printf("elf: Invalid ELF magic number\n");
+        iris_error(&iris->log.elf, "Invalid ELF magic number");
 
         return;
     }
@@ -36,43 +37,43 @@ void load_symbols_from_memory(instance* iris, char* buf) {
         Elf32_Shdr* shdr = (Elf32_Shdr*)(buf + ehdr->e_shoff + (i * ehdr->e_shentsize));
 
         if ((shdr->sh_type == SHT_STRTAB) && (i != ehdr->e_shstrndx)) {
-            printf("elf: Loading string table size=%x offset=%x\n", shdr->sh_size, shdr->sh_offset);
+            iris_info(&iris->log.elf, "Loading string table size={:x} offset={:x}", shdr->sh_size, shdr->sh_offset);
 
             // Get string table
-            iris->strtab.resize(shdr->sh_size);
+            iris->debug.strtab.resize(shdr->sh_size);
 
-            memcpy(iris->strtab.data(), buf + shdr->sh_offset, shdr->sh_size);
+            memcpy(iris->debug.strtab.data(), buf + shdr->sh_offset, shdr->sh_size);
         }
 
         if (shdr->sh_type == SHT_SYMTAB) {
             symtab = shdr;
 
-            printf("elf: Found symbol table size=%x offset=%x\n", symtab->sh_size, symtab->sh_offset);
+            iris_info(&iris->log.elf, "Found symbol table size={:x} offset={:x}", symtab->sh_size, symtab->sh_offset);
         }
     }
 
     // No symbol table present
     if (!symtab) {
-        printf("elf: No symbol table found\n");
+        iris_warning(&iris->log.elf, "No symbol table found");
 
         return;
     }
 
     if (!symtab->sh_entsize) {
-        printf("elf: Invalid symbol table entry size\n");
+        iris_error(&iris->log.elf, "Invalid symbol table entry size");
 
         return;
     }
 
     if (!symtab->sh_size) {
-        printf("elf: Symbol table is empty\n");
+        iris_warning(&iris->log.elf, "Symbol table is empty");
 
         return;
     }
 
     size_t symbol_count = symtab->sh_size / symtab->sh_entsize;
 
-    printf("elf: Found symbol table with %zu symbols\n", symbol_count);
+    iris_info(&iris->log.elf, "Found symbol table with {} symbols", symbol_count);
 
     // Read symbol table
     Elf32_Sym* sym;
@@ -83,21 +84,21 @@ void load_symbols_from_memory(instance* iris, char* buf) {
         if (ELF32_ST_TYPE(sym->st_info) != STT_FUNC)
             continue;
 
-        elf_symbol symbol;
+        Symbol symbol;
 
-        symbol.name = (char*)(iris->strtab.data() + sym->st_name);
+        symbol.name = (char*)(iris->debug.strtab.data() + sym->st_name);
         symbol.addr = sym->st_value;
         symbol.size = sym->st_size;
 
         // printf("symbol: %s at 0x%08x\n", symbol.name, symbol.addr);
 
-        iris->symbols.push_back(symbol);
+        iris->debug.symbols.push_back(symbol);
     }
 }
 
-bool load_symbols_from_disc(instance* iris) {
+bool load_symbols_from_disc(Instance* iris) {
     if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc) {
-        printf("elf: No disc loaded\n");
+        iris_error(&iris->log.elf, "No disc loaded");
 
         return false;
     }
@@ -111,9 +112,9 @@ bool load_symbols_from_disc(instance* iris) {
     return true;
 }
 
-bool load_symbols_from_file(instance* iris, std::string path) {
+bool load_symbols_from_file(Instance* iris, std::string path) {
     if (path.empty()) {
-        printf("elf: No file path provided\n");
+        iris_error(&iris->log.elf, "No file path provided");
 
         return false;
     }
@@ -121,7 +122,7 @@ bool load_symbols_from_file(instance* iris, std::string path) {
     FILE* file = fopen(path.c_str(), "rb");
 
     if (!file) {
-        printf("elf: Failed to open file %s\n", path.c_str());
+        iris_error(&iris->log.elf, "Failed to open file {}", path.c_str());
 
         return false;
     }

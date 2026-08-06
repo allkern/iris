@@ -10,15 +10,17 @@
 
 #include <curl/curl.h>
 
+#include "log.hpp"
+
 namespace iris::net {
 
-struct download_result {
+struct DownloadResult {
     int status;
     std::string body;
 };
 
-bool init();
+bool init(LogSource* log);
 void cleanup();
-download_result download(std::string url);
+DownloadResult download(std::string url);
 
 }

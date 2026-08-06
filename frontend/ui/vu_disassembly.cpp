@@ -10,6 +10,7 @@
 
 #include "ee/vu_dis.hpp"
 #include "ee/vu_def.hpp"
+#include "ps2.hpp"
 
 #include <algorithm> 
 #include <cctype>
@@ -66,7 +67,7 @@ bool add_padding = true;
 bool compact_view = false;
 bool show_address_opcode = true;
 
-void print_highlighted_vu1(instance* iris, const char* buf) {
+void print_highlighted_vu1(Instance* iris, const char* buf) {
     using namespace ImGui;
 
     std::vector <std::string> tokens;
@@ -108,7 +109,7 @@ void print_highlighted_vu1(instance* iris, const char* buf) {
         } else if (*buf == '-') {
             text.push_back(*buf++);
         } else {
-            printf("unhandled char %c (%d) \"%s\"\n", *buf, *buf, buf);
+            iris_warning(&iris->log.ui, "Unhandled char {} ({}) \"{}\"", *buf, (int)*buf, buf);
 
             exit(1);
         }
@@ -121,10 +122,10 @@ void print_highlighted_vu1(instance* iris, const char* buf) {
 
     for (const std::string& t : tokens) {
         ImVec4 col = ImVec4(
-            iris->codeview_color_register.Value.x,
-            iris->codeview_color_register.Value.y,
-            iris->codeview_color_register.Value.z,
-            iris->codeview_color_register.Value.w
+            iris->ui.codeview_color_register.Value.x,
+            iris->ui.codeview_color_register.Value.y,
+            iris->ui.codeview_color_register.Value.z,
+            iris->ui.codeview_color_register.Value.w
         );
 
         if (t[0] == 'v' && (t[1] == 'f' || t[1] == 'i')) {
@@ -141,28 +142,28 @@ void print_highlighted_vu1(instance* iris, const char* buf) {
             TextColored(col, "%s", t.c_str());
         } else if (isalpha(t[0])) {
             col = ImVec4(
-                iris->codeview_color_mnemonic.Value.x,
-                iris->codeview_color_mnemonic.Value.y,
-                iris->codeview_color_mnemonic.Value.z,
-                iris->codeview_color_mnemonic.Value.w
+                iris->ui.codeview_color_mnemonic.Value.x,
+                iris->ui.codeview_color_mnemonic.Value.y,
+                iris->ui.codeview_color_mnemonic.Value.z,
+                iris->ui.codeview_color_mnemonic.Value.w
             );
 
             TextColored(col, "%s", t.c_str());
         } else if (isdigit(t[0]) || t[0] == '-') {
             col = ImVec4(
-                iris->codeview_color_number.Value.x,
-                iris->codeview_color_number.Value.y,
-                iris->codeview_color_number.Value.z,
-                iris->codeview_color_number.Value.w
+                iris->ui.codeview_color_number.Value.x,
+                iris->ui.codeview_color_number.Value.y,
+                iris->ui.codeview_color_number.Value.z,
+                iris->ui.codeview_color_number.Value.w
             );
 
             TextColored(col, "%s", t.c_str());
         } else if (t[0] == '<') {
             col = ImVec4(
-                iris->codeview_color_other.Value.x,
-                iris->codeview_color_other.Value.y,
-                iris->codeview_color_other.Value.z,
-                iris->codeview_color_other.Value.w
+                iris->ui.codeview_color_other.Value.x,
+                iris->ui.codeview_color_other.Value.y,
+                iris->ui.codeview_color_other.Value.z,
+                iris->ui.codeview_color_other.Value.w
             );
 
             TextColored(col, "%s", t.c_str());
@@ -176,44 +177,44 @@ void print_highlighted_vu1(instance* iris, const char* buf) {
     NewLine();
 }
 
-static void show_vu_disassembly_view(instance* iris, uint64_t* mem, size_t size) {
+static void show_vu_disassembly_view(Instance* iris, uint64_t* mem, size_t size) {
     using namespace ImGui;
 
     float font_scale = GetStyle().FontScaleMain;
 
-    GetStyle().FontScaleMain = iris->codeview_font_scale;
+    GetStyle().FontScaleMain = iris->ui.codeview_font_scale;
 
-    PushFont(iris->font_code);
+    PushFont(iris->ui.font_code);
 
-    if (!iris->codeview_use_theme_background) {
+    if (!iris->ui.codeview_use_theme_background) {
         PushStyleColor(ImGuiCol_TableRowBg, ImVec4(
-            iris->codeview_color_background.Value.x,
-            iris->codeview_color_background.Value.y,
-            iris->codeview_color_background.Value.z,
-            iris->codeview_color_background.Value.w
+            iris->ui.codeview_color_background.Value.x,
+            iris->ui.codeview_color_background.Value.y,
+            iris->ui.codeview_color_background.Value.z,
+            iris->ui.codeview_color_background.Value.w
         ));
         PushStyleColor(ImGuiCol_TableRowBgAlt, ImVec4(
-            iris->codeview_color_background.Value.x,
-            iris->codeview_color_background.Value.y,
-            iris->codeview_color_background.Value.z,
-            iris->codeview_color_background.Value.w
+            iris->ui.codeview_color_background.Value.x,
+            iris->ui.codeview_color_background.Value.y,
+            iris->ui.codeview_color_background.Value.z,
+            iris->ui.codeview_color_background.Value.w
         ));
         PushStyleColor(ImGuiCol_Text, ImVec4(
-            iris->codeview_color_text.Value.x,
-            iris->codeview_color_text.Value.y,
-            iris->codeview_color_text.Value.z,
-            iris->codeview_color_text.Value.w
+            iris->ui.codeview_color_text.Value.x,
+            iris->ui.codeview_color_text.Value.y,
+            iris->ui.codeview_color_text.Value.z,
+            iris->ui.codeview_color_text.Value.w
         ));
         PushStyleColor(ImGuiCol_TextDisabled, ImVec4(
-            iris->codeview_color_comment.Value.x,
-            iris->codeview_color_comment.Value.y,
-            iris->codeview_color_comment.Value.z,
-            iris->codeview_color_comment.Value.w
+            iris->ui.codeview_color_comment.Value.x,
+            iris->ui.codeview_color_comment.Value.y,
+            iris->ui.codeview_color_comment.Value.z,
+            iris->ui.codeview_color_comment.Value.w
         ));
     }
 
     if (BeginTable("table1", compact_view ? 2 : 3, ImGuiTableFlags_RowBg | ImGuiTableFlags_SizingFixedFit | ImGuiTableFlags_Hideable)) {
-        PushFont(iris->font_small_code);
+        PushFont(iris->ui.font_small_code);
 
         TableSetupColumn(" Address/Opcode");
         TableSetupColumn(compact_view ? "Upper/Lower" : "Upper");
@@ -279,7 +280,7 @@ static void show_vu_disassembly_view(instance* iris, uint64_t* mem, size_t size)
 
     PopFont();
 
-    if (!iris->codeview_use_theme_background) {
+    if (!iris->ui.codeview_use_theme_background) {
         PopStyleColor(4);
     }
 
@@ -325,12 +326,12 @@ void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
     }
 }
 
-void show_vu_disassembler(instance* iris) {
+void show_vu_disassembler(Instance* iris) {
     using namespace ImGui;
 
-    PushFont(iris->font_icons);
+    PushFont(iris->ui.font_icons);
 
-    if (imgui::BeginEx("VU disassembler", &iris->show_vu_disassembler, ImGuiWindowFlags_MenuBar)) {
+    if (imgui::BeginEx("VU disassembler", &iris->ui.show_vu_disassembler, ImGuiWindowFlags_MenuBar)) {
         if (BeginMenuBar()) {
             if (BeginMenu("File")) {
                 if (MenuItem(ICON_MS_FILE_SAVE " Save disassembly as...", NULL)) {
@@ -357,7 +358,7 @@ void show_vu_disassembler(instance* iris) {
                 Text("Address"); SameLine();
                 
                 SetNextItemWidth(100.0f);
-                PushFont(iris->font_code);
+                PushFont(iris->ui.font_code);
 
                 InputInt("##address", (int*)&addr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EscapeClearsAll);
 
@@ -423,7 +424,7 @@ void show_vu_disassembler(instance* iris) {
                 Text("Address"); SameLine();
 
                 SetNextItemWidth(100.0f);
-                PushFont(iris->font_code);
+                PushFont(iris->ui.font_code);
 
                 InputInt("##address", (int*)&addr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EscapeClearsAll);
 

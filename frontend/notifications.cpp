@@ -26,7 +26,7 @@ float ease_in_out(float t) {
     return 2.0f * t * (1.0f - t) + 0.5f;
 }
 
-void handle_move(notification* notif) {
+void handle_move(Notification* notif) {
     float f = (float)notif->move.frames_remaining / (float)notif->move.frames;
 
     f = ease_in_out(f);
@@ -44,7 +44,7 @@ void handle_move(notification* notif) {
     }
 }
 
-void handle_fade(notification* notif) {
+void handle_fade(Notification* notif) {
     float f = (float)notif->fade.frames_remaining / (float)notif->fade.frames;
 
     f = ease_in_out(f);
@@ -61,7 +61,7 @@ void handle_fade(notification* notif) {
     }
 }
 
-void render_notification(instance* iris, notification* notif) {
+void render_notification(Instance* iris, Notification* notif) {
     using namespace ImGui;
 
     ImGuiStyle& style = ImGui::GetStyle();
@@ -101,7 +101,7 @@ void render_notification(instance* iris, notification* notif) {
 
     ImVec2 pos = ImVec2(x, y);
 
-    if (iris->imgui_enable_viewports) {
+    if (iris->ui.imgui_enable_viewports) {
         pos = ImGui::GetMainViewport()->Pos;
 
         pos.x += x;
@@ -131,11 +131,11 @@ void render_notification(instance* iris, notification* notif) {
     );
 }
 
-void remove_notification(instance* iris, int i) {
-    notification& n = iris->notifications.at(i);
+void remove_notification(Instance* iris, int i) {
+    Notification& n = iris->ui.notifications.at(i);
 
-    for (unsigned int j = i + 1; j < iris->notifications.size(); j++) {
-        notification& n1 = iris->notifications.at(j);
+    for (unsigned int j = i + 1; j < iris->ui.notifications.size(); j++) {
+        Notification& n1 = iris->ui.notifications.at(j);
 
         int target_x = n1.state & STATE_MOVING ? n1.move.target_x : n1.move.x;
         int target_y = n1.state & STATE_MOVING ? n1.move.target_y : n1.move.y;
@@ -149,12 +149,12 @@ void remove_notification(instance* iris, int i) {
         n1.state |= STATE_MOVING;
     }
 
-    iris->notifications.erase(std::begin(iris->notifications) + i);
+    iris->ui.notifications.erase(std::begin(iris->ui.notifications) + i);
 }
 
-void handle_animations(instance* iris) {
-    for (unsigned int i = 0; i < iris->notifications.size(); i++) {
-        notification& n = iris->notifications.at(i);
+void handle_animations(Instance* iris) {
+    for (unsigned int i = 0; i < iris->ui.notifications.size(); i++) {
+        Notification& n = iris->ui.notifications.at(i);
 
         render_notification(iris, &n);
 
@@ -184,8 +184,8 @@ void handle_animations(instance* iris) {
     }
 }
 
-void push_notification(instance* iris, notification notif) {
-    for (notification& n : iris->notifications) {
+void push_notification(Instance* iris, Notification notif) {
+    for (Notification& n : iris->ui.notifications) {
         int target_x = n.state & STATE_MOVING ? n.move.target_x : n.move.x;
         int target_y = n.state & STATE_MOVING ? n.move.target_y : n.move.y;
 
@@ -198,16 +198,16 @@ void push_notification(instance* iris, notification notif) {
         n.state |= STATE_MOVING;
     }
 
-    iris->notifications.push_front(notif);
+    iris->ui.notifications.push_front(notif);
 }
 
-void push_info(instance* iris, std::string text) {
+void push_info(Instance* iris, std::string text) {
     using namespace ImGui;
 
-    notification notif;
+    Notification notif;
 
     int window_width, window_height;
-    int statusbar_offset = iris->show_status_bar ? iris->menubar_height : 0;
+    int statusbar_offset = iris->ui.show_status_bar ? iris->ui.menubar_height : 0;
 
     SDL_GetWindowSizeInPixels(iris->window, &window_width, &window_height);
 

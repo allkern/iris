@@ -6,6 +6,7 @@
 #include "config.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "ps2.hpp"
 
 namespace iris {
 
@@ -18,7 +19,6 @@ const char* compat_rating_names[] = {
     "5 - Perfect"
 };
 
-// Percent-encode a string per RFC 3986 (unreserved characters are kept as-is).
 static std::string url_encode(const std::string& str) {
     static const char hex[] = "0123456789ABCDEF";
 
@@ -38,9 +38,7 @@ static std::string url_encode(const std::string& str) {
     return out;
 }
 
-// Serial of the currently loaded disc, normalized to the canonical form used by
-// the game database (e.g. "SLUS_201.23" -> "SLUS-20123"). Empty if no disc.
-static std::string get_disc_serial(instance* iris) {
+static std::string get_disc_serial(Instance* iris) {
     if (!iris->ps2 || !iris->ps2->cdvd || !iris->ps2->cdvd->disc)
         return "";
 
@@ -57,15 +55,14 @@ static std::string get_disc_serial(instance* iris) {
     return serial;
 }
 
-void show_compat_report(instance* iris) {
+void show_compat_report(Instance* iris) {
     using namespace ImGui;
 
     static int rating = 3;
     static char comment[1024] = "";
     static std::string serial;
 
-    if (imgui::BeginEx("Report compatibility", &iris->show_compat_report, ImGuiWindowFlags_AlwaysAutoResize)) {
-        // Refresh the detected serial and reset the form whenever the window opens
+    if (imgui::BeginEx("Report compatibility", &iris->ui.show_compat_report, ImGuiWindowFlags_AlwaysAutoResize)) {
         if (IsWindowAppearing()) {
             serial = get_disc_serial(iris);
             rating = 3;
@@ -104,7 +101,7 @@ void show_compat_report(instance* iris) {
 
             SDL_OpenURL(url.c_str());
 
-            iris->show_compat_report = false;
+            iris->ui.show_compat_report = false;
         }
 
         EndDisabled();
@@ -112,7 +109,7 @@ void show_compat_report(instance* iris) {
         SameLine();
 
         if (Button(ICON_MS_CLOSE " Cancel")) {
-            iris->show_compat_report = false;
+            iris->ui.show_compat_report = false;
         }
     } End();
 }

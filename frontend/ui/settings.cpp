@@ -10,6 +10,7 @@
 #include "misc/cpp/imgui_stdlib.h"
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
+#include "ps2.hpp"
 
 namespace iris {
 
@@ -18,14 +19,14 @@ std::string tooltip = "";
 int selected_settings = 0;
 int saved = 0;
 
-mapping* get_input_mapping(instance* iris, int slot) {
-    if (iris->input_map[slot] == -1)
+Mapping* get_input_mapping(Instance* iris, int slot) {
+    if (iris->input.input_map[slot] == -1)
         return nullptr;
 
-    return &iris->input_maps[iris->input_map[slot]];
+    return &iris->input.input_maps[iris->input.input_map[slot]];
 }
 
-const char* get_input_name(input_action action) {
+const char* get_input_name(InputAction action) {
     switch (action) {
         case IRIS_DS_BT_SELECT: return "Select";
         case IRIS_DS_BT_L3: return "L3";
@@ -68,11 +69,11 @@ const char* get_input_name(input_action action) {
     return "";
 }
 
-std::string get_event_name(const input_event& event) {
+std::string get_event_name(const InputEvent& event) {
     std::string name;
 
     switch (event.type) {
-        case IRIS_EVENT_KEYBOARD: {
+        case EventType::KEYBOARD: {
             SDL_Keycode keycode = static_cast<SDL_Keycode>(event.id);
 
             name = SDL_GetKeyName(keycode & 0xf0000fff);
@@ -86,19 +87,19 @@ std::string get_event_name(const input_event& event) {
             if ((keycode >> 12) & SDL_KMOD_RALT) name = "Right Alt + " + name;
         } break;
 
-        case IRIS_EVENT_GAMEPAD_BUTTON: {
+        case EventType::GAMEPAD_BUTTON: {
             SDL_GamepadButton button = static_cast<SDL_GamepadButton>(event.id);
 
             name = SDL_GetGamepadStringForButton(button);
         } break;
 
-        case IRIS_EVENT_GAMEPAD_AXIS_POS: {
+        case EventType::GAMEPAD_AXIS_POS: {
             SDL_GamepadAxis axis = static_cast<SDL_GamepadAxis>(event.id);
 
             name = SDL_GetGamepadStringForAxis(axis) + std::string("+");
         } break;
 
-        case IRIS_EVENT_GAMEPAD_AXIS_NEG: {
+        case EventType::GAMEPAD_AXIS_NEG: {
             SDL_GamepadAxis axis = static_cast<SDL_GamepadAxis>(event.id);
 
             name = SDL_GetGamepadStringForAxis(axis) + std::string("-");
@@ -236,7 +237,7 @@ static int mac_address_callback(ImGuiInputTextCallbackData* data) {
     return 0;
 }
 
-void show_system_settings(instance* iris) {
+void show_system_settings(Instance* iris) {
     using namespace ImGui;
 
     Text("Model");
@@ -334,7 +335,7 @@ void show_system_settings(instance* iris) {
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
     if (Checkbox("Enable networking", &iris->slirp_config.enabled))
-        slirp::restart(iris->ps2->speed->smap, iris->slirp_config);
+        slirp::restart(iris->ps2->speed->smap, iris->slirp_config, &iris->log.slirp);
 
     PopStyleVar();
 
@@ -358,7 +359,7 @@ void show_system_settings(instance* iris) {
         AlignTextToFramePadding();
         Text("%s", label);
 
-        PushFont(iris->font_code);
+        PushFont(iris->ui.font_code);
         SetNextItemWidth((CalcTextSize("000.000.000.000").x + GetStyle().FramePadding.x) * 2.0f);
 
         if (!ok) {
@@ -392,7 +393,7 @@ void show_system_settings(instance* iris) {
 
         TableSetColumnIndex(1);
 
-        PushFont(iris->font_code);
+        PushFont(iris->ui.font_code);
         SetNextItemWidth((CalcTextSize("000.000.000.000").x + GetStyle().FramePadding.x) * 2.0f);
 
         if (InputTextWithHint("##macaddress", "00:00:00:00:00:00", mac_address, IM_ARRAYSIZE(mac_address), ImGuiInputTextFlags_CallbackEdit, mac_address_callback)) {
@@ -435,7 +436,7 @@ void show_system_settings(instance* iris) {
     BeginDisabled(!valid);
 
     if (Button("Apply##slirp")) {
-        slirp::restart(iris->ps2->speed->smap, iris->slirp_config);
+        slirp::restart(iris->ps2->speed->smap, iris->slirp_config, &iris->log.slirp);
     } SameLine();
 
     EndDisabled();
@@ -447,7 +448,7 @@ void show_system_settings(instance* iris) {
         iris->slirp_config.dhcp_start = "10.0.2.15";
         iris->slirp_config.nameserver = "10.0.2.3";
 
-        slirp::restart(iris->ps2->speed->smap, iris->slirp_config);
+        slirp::restart(iris->ps2->speed->smap, iris->slirp_config, &iris->log.slirp);
     }
     
     EndDisabled();
@@ -468,7 +469,7 @@ const char* ssaa_names[] = {
     "16x"
 };
 
-void show_hardware_renderer_settings(instance* iris) {
+void show_hardware_renderer_settings(Instance* iris) {
     using namespace ImGui;
 
     Text("SSAA");
@@ -633,7 +634,7 @@ void show_hardware_renderer_settings(instance* iris) {
     PopStyleVar();
 }
 
-void show_graphics_settings(instance* iris) {
+void show_graphics_settings(Instance* iris) {
     using namespace ImGui;
 
     static const char* settings_renderer_names[] = {
@@ -671,9 +672,9 @@ void show_graphics_settings(instance* iris) {
     }
 
     BeginDisabled(
-        iris->aspect_mode == RENDER_ASPECT_AUTO ||
-        iris->aspect_mode == RENDER_ASPECT_STRETCH ||
-        iris->aspect_mode == RENDER_ASPECT_STRETCH_KEEP
+        iris->aspect_mode == render::AUTO ||
+        iris->aspect_mode == render::STRETCH ||
+        iris->aspect_mode == render::STRETCH_KEEP
     );
 
     Text("Scale");
@@ -704,7 +705,7 @@ void show_graphics_settings(instance* iris) {
 
     if (BeginCombo("##scalingfilter", filter_names[iris->filter])) {
         for (int i = 0; i < 3; i++) {
-            BeginDisabled(i == 2 && !iris->cubic_supported);
+            BeginDisabled(i == 2 && !iris->vk.cubic_supported);
             if (Selectable(filter_names[i], iris->filter == i)) {
                 iris->filter = i;
             }
@@ -775,12 +776,12 @@ void show_graphics_settings(instance* iris) {
 
     static bool changed = false;
     const char* hint;
-    const auto& selected_device = iris->vulkan_gpus[iris->vulkan_selected_device_index];
+    const auto& selected_device = iris->vk.vulkan_gpus[iris->vk.vulkan_selected_device_index];
 
-    if (iris->vulkan_physical_device < 0) {
+    if (iris->vk.vulkan_physical_device < 0) {
         hint = "Auto";
     } else {
-        hint = iris->vulkan_gpus[iris->vulkan_physical_device].name.c_str();
+        hint = iris->vk.vulkan_gpus[iris->vk.vulkan_physical_device].name.c_str();
     }
 
     if (changed) {
@@ -791,12 +792,12 @@ void show_graphics_settings(instance* iris) {
     PushStyleVarY(ImGuiStyleVar_ItemSpacing, 5.0F);
 
     if (BeginCombo("##gpu", hint)) {
-        if (Selectable("Auto", iris->vulkan_physical_device < 0)) {
-            iris->vulkan_physical_device = -1;
+        if (Selectable("Auto", iris->vk.vulkan_physical_device < 0)) {
+            iris->vk.vulkan_physical_device = -1;
         }
 
-        for (int i = 0; i < iris->vulkan_gpus.size(); i++) {
-            const auto& device = iris->vulkan_gpus[i];
+        for (int i = 0; i < iris->vk.vulkan_gpus.size(); i++) {
+            const auto& device = iris->vk.vulkan_gpus[i];
 
             std::string name = device.name;
 
@@ -805,9 +806,9 @@ void show_graphics_settings(instance* iris) {
             }
 
             if (Selectable(name.c_str(), device.device == selected_device.device)) {
-                changed = iris->vulkan_physical_device != i;
+                changed = iris->vk.vulkan_physical_device != i;
 
-                iris->vulkan_physical_device = i;
+                iris->vk.vulkan_physical_device = i;
             }
         }
 
@@ -815,29 +816,29 @@ void show_graphics_settings(instance* iris) {
     }
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    if (Checkbox(" Enable validation layers", &iris->vulkan_enable_validation_layers)) {
+    if (Checkbox(" Enable validation layers", &iris->vk.vulkan_enable_validation_layers)) {
         changed = true;
     }
     PopStyleVar(2);
 }
 
-void show_controller_slot(instance* iris, int slot) {
+void show_controller_slot(Instance* iris, int slot) {
     using namespace ImGui;
 
     char label[9] = "Slot #";
 
     label[5] = '1' + slot;
 
-    ImVec4 col = GetStyleColorVec4(iris->ds[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+    ImVec4 col = GetStyleColorVec4(iris->input.ds[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
     col.w = 1.0;
 
-    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / 2.0 - 10.0, 50 * iris->ui_scale))) {
+    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / 2.0 - 10.0, 50 * iris->ui.ui_scale))) {
         Text("Controller");
 
         std::string controller_name = "None";
 
-        if (iris->ds[slot]) {
+        if (iris->input.ds[slot]) {
             controller_name = "DualShock 2";
         }
 
@@ -847,16 +848,16 @@ void show_controller_slot(instance* iris, int slot) {
 
         if (BeginCombo("##controller", controller_name.c_str())) {
             if (Selectable("None")) {
-                if (iris->ds[slot]) {
+                if (iris->input.ds[slot]) {
                     sio2::detach_device(iris->ps2->sio2, slot);
 
-                    iris->ds[slot] = nullptr;
+                    iris->input.ds[slot] = nullptr;
                 }
             }
 
             if (Selectable("DualShock 2")) {
-                if (!iris->ds[slot]) {
-                    iris->ds[slot] = dev::ds::attach(iris->logger, iris->ps2->sio2, slot);
+                if (!iris->input.ds[slot]) {
+                    iris->input.ds[slot] = dev::ds::attach(iris->logger, iris->ps2->sio2, slot);
                 }
             }
 
@@ -864,8 +865,8 @@ void show_controller_slot(instance* iris, int slot) {
         }
     } EndChild(); SameLine(0.0, 10.0);
 
-    if (BeginChild((std::string(label) + "##icon").c_str(), ImVec2(0, 50 * iris->ui_scale))) {
-        BeginDisabled(!iris->ds[slot]);
+    if (BeginChild((std::string(label) + "##icon").c_str(), ImVec2(0, 50 * iris->ui.ui_scale))) {
+        BeginDisabled(!iris->input.ds[slot]);
 
         float avail_width = GetContentRegionAvail().x;
 
@@ -873,12 +874,12 @@ void show_controller_slot(instance* iris, int slot) {
 
         std::string name = "None";
 
-        if (!iris->input_devices[slot]) {
+        if (!iris->input.input_devices[slot]) {
             name = "None";
-        } else if (iris->input_devices[slot]->get_type() == 0) {
+        } else if (iris->input.input_devices[slot]->get_type() == 0) {
             name = "Keyboard";
-        } else if (iris->input_devices[slot]->get_type() == 1) {
-            gamepad_device* gp = static_cast<gamepad_device*>(iris->input_devices[slot]);
+        } else if (iris->input.input_devices[slot]->get_type() == 1) {
+            GamepadDevice* gp = static_cast<GamepadDevice*>(iris->input.input_devices[slot]);
 
             name = SDL_GetGamepadNameForID(gp->get_id());
         }
@@ -887,41 +888,41 @@ void show_controller_slot(instance* iris, int slot) {
 
         if (BeginCombo("##devicetype", name.c_str())) {
             if (Selectable("None")) {
-                if (iris->input_devices[slot]) {
-                    delete iris->input_devices[slot];
+                if (iris->input.input_devices[slot]) {
+                    delete iris->input.input_devices[slot];
 
-                    iris->input_devices[slot] = nullptr;
+                    iris->input.input_devices[slot] = nullptr;
                 }
             }
 
             if (Selectable("Keyboard")) {
-                if (iris->input_devices[slot]) {
-                    delete iris->input_devices[slot];
+                if (iris->input.input_devices[slot]) {
+                    delete iris->input.input_devices[slot];
 
-                    iris->input_devices[slot] = nullptr;
+                    iris->input.input_devices[slot] = nullptr;
                 }
 
-                iris->input_devices[slot] = new keyboard_device();
-                iris->input_devices[slot]->set_slot(slot);
+                iris->input.input_devices[slot] = new KeyboardDevice();
+                iris->input.input_devices[slot]->set_slot(slot);
 
-                if (iris->input_map[slot] <= 1) {
-                    iris->input_map[slot] = 0;
+                if (iris->input.input_map[slot] <= 1) {
+                    iris->input.input_map[slot] = 0;
                 }
             }
 
-            for (auto gamepad : iris->gamepads) {
+            for (auto gamepad : iris->input.gamepads) {
                 if (Selectable(SDL_GetGamepadNameForID(gamepad.first))) {
-                    if (iris->input_devices[slot]) {
-                        delete iris->input_devices[slot];
+                    if (iris->input.input_devices[slot]) {
+                        delete iris->input.input_devices[slot];
 
-                        iris->input_devices[slot] = nullptr;
+                        iris->input.input_devices[slot] = nullptr;
                     }
 
-                    iris->input_devices[slot] = new gamepad_device(gamepad.first);
-                    iris->input_devices[slot]->set_slot(slot);
+                    iris->input.input_devices[slot] = new GamepadDevice(gamepad.first);
+                    iris->input.input_devices[slot]->set_slot(slot);
 
-                    if (iris->input_map[slot] <= 1) {
-                        iris->input_map[slot] = 1;
+                    if (iris->input.input_map[slot] <= 1) {
+                        iris->input.input_map[slot] = 1;
                     }
                 }
             }
@@ -934,7 +935,7 @@ void show_controller_slot(instance* iris, int slot) {
 
     InvisibleButton("##slot0", ImVec2(10, 10));
 
-    texture* tex = &iris->dualshock2_icon;
+    Texture* tex = &iris->ui.dualshock2_icon;
 
     float width = 250.0f;
     float height = (tex->height * width) / tex->width;
@@ -955,18 +956,18 @@ void show_controller_slot(instance* iris, int slot) {
 
     SetNextItemWidth(GetContentRegionAvail().x / 2.0 - 10.0);
 
-    mapping* mapping = get_input_mapping(iris, slot);
+    Mapping* selected = get_input_mapping(iris, slot);
 
-    if (BeginCombo("##mapping", mapping ? mapping->name.c_str() : "None")) {
-        if (Selectable("None", mapping == nullptr)) {
-            iris->input_map[slot] = -1;
+    if (BeginCombo("##mapping", selected ? selected->name.c_str() : "None")) {
+        if (Selectable("None", selected == nullptr)) {
+            iris->input.input_map[slot] = -1;
         }
 
         int i = 0;
 
-        for (auto& map : iris->input_maps) {
-            if (Selectable(map.name.c_str(), mapping == &map)) {
-                iris->input_map[slot] = i;
+        for (auto& map : iris->input.input_maps) {
+            if (Selectable(map.name.c_str(), selected == &map)) {
+                iris->input.input_map[slot] = i;
             }
 
             i++;
@@ -976,8 +977,8 @@ void show_controller_slot(instance* iris, int slot) {
     }
 }
 
-bool event_is_mod_key(const input_event& event) {
-    if (event.type != IRIS_EVENT_KEYBOARD) {
+bool event_is_mod_key(const InputEvent& event) {
+    if (event.type != EventType::KEYBOARD) {
         return false;
     }
 
@@ -995,21 +996,21 @@ int selected_mapping = 0;
 bool waiting_for_input = false;
 uint64_t mapping_editing = 0;
 
-void show_mappings_editor(instance* iris) {
+void show_mappings_editor(Instance* iris) {
     using namespace ImGui;
 
     static char buf[1024] = { 0 };
-    const char* hint = iris->gcdb_path.size() ? iris->gcdb_path.c_str() : "Not configured (using default)";
+    const char* hint = iris->paths.gcdb_path.size() ? iris->paths.gcdb_path.c_str() : "Not configured (using default)";
 
     Text("Game controller DB");
 
     SetNextItemWidth(300);
 
     if (InputTextWithHint("##gcdbinput", hint, buf, 1024, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
-        iris->gcdb_path = std::string(buf);
+        iris->paths.gcdb_path = std::string(buf);
 
         // To-do: Check return value
-        input::load_db_from_file(iris, iris->gcdb_path.c_str());
+        input::load_db_from_file(iris, iris->paths.gcdb_path.c_str());
     }
 
     SameLine();
@@ -1029,15 +1030,15 @@ void show_mappings_editor(instance* iris) {
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 1024);
 
-            iris->gcdb_path = std::string(buf);
+            iris->paths.gcdb_path = std::string(buf);
 
             // To-do: Check return value
-            input::load_db_from_file(iris, iris->gcdb_path.c_str());
+            input::load_db_from_file(iris, iris->paths.gcdb_path.c_str());
         }
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##gcdbclear")) {
-        iris->gcdb_path = "";
+        iris->paths.gcdb_path = "";
 
         memset(buf, 0, 1024);
 
@@ -1046,10 +1047,10 @@ void show_mappings_editor(instance* iris) {
 
     Text("Mapping");
 
-    if (BeginCombo("##mapping", iris->input_maps[selected_mapping].name.c_str())) {
+    if (BeginCombo("##mapping", iris->input.input_maps[selected_mapping].name.c_str())) {
         int i = 0;
 
-        for (auto& map : iris->input_maps) {
+        for (auto& map : iris->input.input_maps) {
             if (Selectable(map.name.c_str(), selected_mapping == i)) {
                 selected_mapping = i;
             }
@@ -1072,18 +1073,18 @@ void show_mappings_editor(instance* iris) {
         TableSetupColumn("Input");
         TableSetupColumn("Mapping");
 
-        std::vector<std::pair<uint64_t, input_action>> elems(
-            iris->input_maps[selected_mapping].map.forward_map().begin(),
-            iris->input_maps[selected_mapping].map.forward_map().end());
+        std::vector<std::pair<uint64_t, InputAction>> elems(
+            iris->input.input_maps[selected_mapping].map.forward_map().begin(),
+            iris->input.input_maps[selected_mapping].map.forward_map().end());
 
-        std::sort(elems.begin(), elems.end(), [](const std::pair<uint64_t, input_action>& a, const std::pair<uint64_t, input_action>& b) {
+        std::sort(elems.begin(), elems.end(), [](const std::pair<uint64_t, InputAction>& a, const std::pair<uint64_t, InputAction>& b) {
             return a.second < b.second;
         });
 
         for (auto& entry : elems) {
             TableNextRow();
 
-            std::string key_name = get_input_name(static_cast<input_action>(entry.second));
+            std::string key_name = get_input_name(static_cast<InputAction>(entry.second));
 
             TableSetColumnIndex(0);
             AlignTextToFramePadding();
@@ -1091,7 +1092,7 @@ void show_mappings_editor(instance* iris) {
 
             TableSetColumnIndex(1);
 
-            input_event event;
+            InputEvent event;
             event.u64 = entry.first;
 
             std::string value_name = get_event_name(event) + "##" + key_name;
@@ -1105,28 +1106,28 @@ void show_mappings_editor(instance* iris) {
 
                 PopStyleColor();
 
-                if (iris->last_input_event_read == false && iris->last_input_event_value > 0.5f && !event_is_mod_key(iris->last_input_event)) {
-                    iris->last_input_event_read = true;
+                if (iris->input.last_input_event_read == false && iris->input.last_input_event_value > 0.5f && !event_is_mod_key(iris->input.last_input_event)) {
+                    iris->input.last_input_event_read = true;
 
                     waiting_for_input = false;
                     mapping_editing = 0;
 
-                    auto event = iris->last_input_event;
+                    auto event = iris->input.last_input_event;
                     auto action = entry.second;
 
                     // printf("Mapping input event %s (%llu) to action %s (%llu)\n",
-                    //     get_event_name(iris->last_input_event).c_str(),
-                    //     iris->last_input_event.u64,
+                    //     get_event_name(iris->input.last_input_event).c_str(),
+                    //     iris->input.last_input_event.u64,
                     //     get_input_name(action),
                     //     static_cast<uint64_t>(entry.second)
                     // );
 
-                    auto* value_ptr = iris->input_maps[selected_mapping].map.get_value(event.u64);
+                    auto* value_ptr = iris->input.input_maps[selected_mapping].map.get_value(event.u64);
 
                     if (value_ptr != nullptr) {
                         // Remove previous mapping for this input event
                         auto value = *value_ptr;
-                        auto key = *iris->input_maps[selected_mapping].map.get_key(action);
+                        auto key = *iris->input.input_maps[selected_mapping].map.get_key(action);
 
                         // printf("Removing previous mapping of event %s (%llu) to action %s (%llu)\n",
                         //     get_event_name(event).c_str(),
@@ -1135,25 +1136,25 @@ void show_mappings_editor(instance* iris) {
                         //     static_cast<uint64_t>(value)
                         // );
 
-                        iris->input_maps[selected_mapping].map.erase_by_key(event.u64);
-                        iris->input_maps[selected_mapping].map.erase_by_value(action);
-                        iris->input_maps[selected_mapping].map.insert(event.u64, action);
-                        iris->input_maps[selected_mapping].map.insert(key, value);
+                        iris->input.input_maps[selected_mapping].map.erase_by_key(event.u64);
+                        iris->input.input_maps[selected_mapping].map.erase_by_value(action);
+                        iris->input.input_maps[selected_mapping].map.insert(event.u64, action);
+                        iris->input.input_maps[selected_mapping].map.insert(key, value);
                     } else {
-                        iris->input_maps[selected_mapping].map.erase_by_value(action);
-                        iris->input_maps[selected_mapping].map.insert(event.u64, action);
+                        iris->input.input_maps[selected_mapping].map.erase_by_value(action);
+                        iris->input.input_maps[selected_mapping].map.insert(event.u64, action);
                     }
                 }
             } else {
                 if (Button(value_name.c_str(), ImVec2(GetContentRegionAvail().x, 0))) {
-                    iris->last_input_event_read = true;
+                    iris->input.last_input_event_read = true;
                     waiting_for_input = true;
                     mapping_editing = entry.first;
                 }
             }
 
             // if (IsMouseDoubleClicked(ImGuiMouseButton_Left) && IsItemHovered()) {
-            //     iris->last_input_event_read = true;
+            //     iris->input.last_input_event_read = true;
             //     waiting_for_input = true;
             //     mapping_editing = entry.first;
             // }
@@ -1163,7 +1164,7 @@ void show_mappings_editor(instance* iris) {
     }
 }
 
-void show_input_settings(instance* iris) {
+void show_input_settings(Instance* iris) {
     using namespace ImGui;
 
     if (BeginTabBar("##inputtabs")) {
@@ -1189,10 +1190,10 @@ void show_input_settings(instance* iris) {
     }
 }
 
-void show_usb_port(instance* iris, int port) {
+void show_usb_port(Instance* iris, int port) {
     using namespace ImGui;
 
-    int current = iris->usb_devices[port];
+    int current = iris->input.usb_devices[port];
     const char* current_name = usb::device_type_name(current);
 
     Text("Device");
@@ -1204,7 +1205,7 @@ void show_usb_port(instance* iris, int port) {
             const char* name = usb::device_type_name(i);
 
             if (Selectable(name, i == current)) {
-                iris->usb_devices[port] = i;
+                iris->input.usb_devices[port] = i;
 
                 usb::set_port_device(iris->ps2->usb, port, i);
             }
@@ -1213,10 +1214,10 @@ void show_usb_port(instance* iris, int port) {
         EndCombo();
     }
 
-    if (iris->usb_devices[port] == usb::USB_DEVICE_MSD) {
+    if (iris->input.usb_devices[port] == usb::USB_DEVICE_MSD) {
         static char msd_buf[2][512];
 
-        std::string& path = iris->usb_msd_paths[port];
+        std::string& path = iris->input.usb_msd_paths[port];
 
         Separator();
         Text("Image");
@@ -1269,7 +1270,7 @@ void show_usb_port(instance* iris, int port) {
     }
 }
 
-void show_usb_settings(instance* iris) {
+void show_usb_settings(Instance* iris) {
     using namespace ImGui;
 
     if (BeginTabBar("##usbtabs")) {
@@ -1289,7 +1290,7 @@ void show_usb_settings(instance* iris) {
     }
 }
 
-void show_paths_settings(instance* iris) {
+void show_paths_settings(Instance* iris) {
     using namespace ImGui;
 
     static char buf[512];
@@ -1307,12 +1308,12 @@ void show_paths_settings(instance* iris) {
         tooltip = ICON_MS_INFO " Select a BIOS file, this is required for the emulator to function properly";
     }
 
-    const char* bios_hint = iris->bios_path.size() ? iris->bios_path.c_str() : "e.g. scph10000.bin";
-    const char* rom1_hint = iris->rom1_path.size() ? iris->rom1_path.c_str() : "Not configured";
-    const char* rom2_hint = iris->rom2_path.size() ? iris->rom2_path.c_str() : "Not configured";
-    const char* nvram_hint = iris->nvram_path.size() ? iris->nvram_path.c_str() : "Not configured";
-    const char* hdd_hint = iris->hdd_path.size() ? iris->hdd_path.c_str() : "Not configured";
-    const char* flash_hint = iris->flash_path.size() ? iris->flash_path.c_str() : "Not configured";
+    const char* bios_hint = iris->paths.bios_path.size() ? iris->paths.bios_path.c_str() : "e.g. scph10000.bin";
+    const char* rom1_hint = iris->paths.rom1_path.size() ? iris->paths.rom1_path.c_str() : "Not configured";
+    const char* rom2_hint = iris->paths.rom2_path.size() ? iris->paths.rom2_path.c_str() : "Not configured";
+    const char* nvram_hint = iris->paths.nvram_path.size() ? iris->paths.nvram_path.c_str() : "Not configured";
+    const char* hdd_hint = iris->paths.hdd_path.size() ? iris->paths.hdd_path.c_str() : "Not configured";
+    const char* flash_hint = iris->paths.flash_path.size() ? iris->paths.flash_path.c_str() : "Not configured";
 
     SetNextItemWidth(300);
 
@@ -1372,10 +1373,10 @@ void show_paths_settings(instance* iris) {
     Separator();
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    Checkbox("Auto-detect", &iris->auto_paths);
+    Checkbox("Auto-detect", &iris->paths.auto_paths);
     PopStyleVar();
 
-    BeginDisabled(iris->auto_paths);
+    BeginDisabled(iris->paths.auto_paths);
 
     Text("DVD Player (rom1)");
 
@@ -1404,12 +1405,12 @@ void show_paths_settings(instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##rom1")) {
-        iris->rom1_path = "";
+        iris->paths.rom1_path = "";
 
         memset(dvd_buf, 0, 512);
     }
 
-    if (iris->rom1_path.size()) {
+    if (iris->paths.rom1_path.size()) {
         if (BeginTable("##rom1-info", 2, ImGuiTableFlags_SizingFixedFit)) {
             TableNextRow();
             TableSetColumnIndex(0);
@@ -1457,7 +1458,7 @@ void show_paths_settings(instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##rom2")) {
-        iris->rom2_path = "";
+        iris->paths.rom2_path = "";
 
         memset(rom2_buf, 0, 512);
     } 
@@ -1487,7 +1488,7 @@ void show_paths_settings(instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##nvram")) {
-        iris->nvram_path = "";
+        iris->paths.nvram_path = "";
 
         memset(nvram_buf, 0, 512);
     }
@@ -1520,7 +1521,7 @@ void show_paths_settings(instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##hdd")) {
-        iris->hdd_path = "";
+        iris->paths.hdd_path = "";
 
         memset(hdd_buf, 0, 512);
     }
@@ -1550,7 +1551,7 @@ void show_paths_settings(instance* iris) {
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##xfrom")) {
-        iris->flash_path = "";
+        iris->paths.flash_path = "";
 
         memset(flash_buf, 0, 512);
     } 
@@ -1563,12 +1564,12 @@ void show_paths_settings(instance* iris) {
         std::string nvram_path = nvram_buf;
         std::string hdd_path = hdd_buf;
 
-        if (bios_path.size()) iris->bios_path = bios_path;
-        if (rom1_path.size()) iris->rom1_path = rom1_path;
-        if (rom2_path.size()) iris->rom2_path = rom2_path;
-        if (flash_path.size()) iris->flash_path = flash_path;
-        if (nvram_path.size()) iris->nvram_path = nvram_path;
-        if (hdd_path.size()) iris->hdd_path = hdd_path;
+        if (bios_path.size()) iris->paths.bios_path = bios_path;
+        if (rom1_path.size()) iris->paths.rom1_path = rom1_path;
+        if (rom2_path.size()) iris->paths.rom2_path = rom2_path;
+        if (flash_path.size()) iris->paths.flash_path = flash_path;
+        if (nvram_path.size()) iris->paths.nvram_path = nvram_path;
+        if (hdd_path.size()) iris->paths.hdd_path = hdd_path;
 
         saved = 1;
     } SameLine();
@@ -1581,7 +1582,7 @@ void show_paths_settings(instance* iris) {
 static char slot0_buf[1024];
 static char slot1_buf[1024];
 
-void show_memory_card(instance* iris, int slot) {
+void show_memory_card(Instance* iris, int slot) {
     using namespace ImGui;
 
     char label[9] = "##mcard0";
@@ -1589,20 +1590,20 @@ void show_memory_card(instance* iris, int slot) {
     label[7] = '0' + slot;
 
     if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0) - 10.0, 0))) {
-        std::string& path = slot ? iris->mcd1_path : iris->mcd0_path;
+        std::string& path = slot ? iris->paths.mcd1_path : iris->paths.mcd0_path;
 
-        ImVec4 col = GetStyleColorVec4(iris->mcd_slot_type[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+        ImVec4 col = GetStyleColorVec4(iris->input.mcd_slot_type[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
 
         col.w = 1.0;
 
         InvisibleButton("##pad0", ImVec2(10, 10));
 
-        texture* tex = &iris->ps2_memory_card_icon;
+        Texture* tex = &iris->ui.ps2_memory_card_icon;
 
-        if (iris->mcd_slot_type[slot] == 2) {
-            tex = &iris->ps1_memory_card_icon;
-        } else if (iris->mcd_slot_type[slot] == 3) {
-            tex = &iris->pocketstation_icon;
+        if (iris->input.mcd_slot_type[slot] == 2) {
+            tex = &iris->ui.ps1_memory_card_icon;
+        } else if (iris->input.mcd_slot_type[slot] == 3) {
+            tex = &iris->ui.pocketstation_icon;
         }
 
         SetCursorPosX((GetContentRegionAvail().x / 2.0) - (tex->width / 2.0));
@@ -1617,7 +1618,7 @@ void show_memory_card(instance* iris, int slot) {
 
         InvisibleButton("##pad1", ImVec2(10, 10));
 
-        if (path.size() && !iris->mcd_slot_type[slot]) {
+        if (path.size() && !iris->input.mcd_slot_type[slot]) {
             TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Check file");
 
             if (IsItemHovered(ImGuiHoveredFlags_DelayNormal)) {
@@ -1629,7 +1630,7 @@ void show_memory_card(instance* iris, int slot) {
             }
         }
 
-        PushFont(iris->font_heading);
+        PushFont(iris->ui.font_heading);
         Text("Slot %d", slot+1);
         PopFont();
 
@@ -1640,7 +1641,7 @@ void show_memory_card(instance* iris, int slot) {
         char bt_label[10] = ICON_MS_FOLDER "##mcd0";
         char ed_label[10];
 
-        snprintf(ed_label, 10, "%s##mcd0", iris->mcd_slot_type[slot] ? ICON_MS_ARROW_DOWNWARD : ICON_MS_ARROW_UPWARD);
+        snprintf(ed_label, 10, "%s##mcd0", iris->input.mcd_slot_type[slot] ? ICON_MS_ARROW_DOWNWARD : ICON_MS_ARROW_UPWARD);
 
         it_label[5] = '0' + slot;
         bt_label[8] = '0' + slot;
@@ -1652,7 +1653,7 @@ void show_memory_card(instance* iris, int slot) {
         if (Button(bt_label)) {
             audio::mute(iris);
 
-            auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->pref_path, {
+            auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->paths.pref_path, {
                 "Memory Card files (*.ps2; *.mcd; *.bin; *.psm; *.pocket)", "*.ps2 *.mcd *.bin *.psm *.pocket",
                 "All Files (*.*)", "*"
             });
@@ -1672,10 +1673,10 @@ void show_memory_card(instance* iris, int slot) {
 
         SameLine();
 
-        BeginDisabled((!iris->mcd_slot_type[slot]) && (!path.size()));
+        BeginDisabled((!iris->input.mcd_slot_type[slot]) && (!path.size()));
 
         if (Button(ed_label)) {
-            if (iris->mcd_slot_type[slot]) {
+            if (iris->input.mcd_slot_type[slot]) {
                 emu::detach_memory_card(iris, slot);
             } else {
                 emu::attach_memory_card(iris, slot, path.c_str());
@@ -1686,12 +1687,12 @@ void show_memory_card(instance* iris, int slot) {
     } EndChild();
 }
 
-void show_memory_card_settings(instance* iris) {
+void show_memory_card_settings(Instance* iris) {
     using namespace ImGui;
 
     if (Button(ICON_MS_EDIT " Create memory cards...")) {
         // Launch memory card utility
-        iris->show_memory_card_tool = true;
+        iris->ui.show_memory_card_tool = true;
     }
 
     Separator();
@@ -1726,17 +1727,17 @@ static const char* titlebar_style_names[] = {
 };
 #endif
 
-void show_misc_settings(instance* iris) {
+void show_misc_settings(Instance* iris) {
     using namespace ImGui;
 
     SeparatorText("Style");
 
     Text("Theme");
 
-    if (BeginCombo("##theme", theme_names[iris->theme])) {
+    if (BeginCombo("##theme", theme_names[iris->ui.theme])) {
         for (int i = 0; i < IM_ARRAYSIZE(theme_names); i++) {
-            if (Selectable(theme_names[i], iris->theme == i)) {
-                iris->theme = i;
+            if (Selectable(theme_names[i], iris->ui.theme == i)) {
+                iris->ui.theme = i;
 
                 imgui::set_theme(iris, i);
                 platform::apply_settings(iris);
@@ -1748,16 +1749,16 @@ void show_misc_settings(instance* iris) {
 
     Text("Background color");
 
-    ColorEdit3("##bgcolor", (float*)&iris->clear_value.color);
+    ColorEdit3("##bgcolor", (float*)&iris->vk.clear_value.color);
 
     Text("UI scale");
 
-    DragFloat("##uiscale", &iris->ui_scale, 0.05f, 0.5f, 1.5f, "%.1f");
+    DragFloat("##uiscale", &iris->ui.ui_scale, 0.05f, 0.5f, 1.5f, "%.1f");
 
-    GetStyle().FontScaleMain = iris->ui_scale;
+    GetStyle().FontScaleMain = iris->ui.ui_scale;
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    Checkbox("Enable viewports", &iris->imgui_enable_viewports); SameLine();
+    Checkbox("Enable viewports", &iris->ui.imgui_enable_viewports); SameLine();
     PopStyleVar();
 
     TextDisabled(ICON_MS_WARNING " Experimental feature, requires restart");
@@ -1795,15 +1796,15 @@ void show_misc_settings(instance* iris) {
     SeparatorText("Codeview");
 
 #define SCHEME(str, id) \
-    if (Selectable(str, iris->codeview_color_scheme == id)) { \
-        iris->codeview_color_scheme = id; \
+    if (Selectable(str, iris->ui.codeview_color_scheme == id)) { \
+        iris->ui.codeview_color_scheme = id; \
         imgui::set_codeview_scheme(iris, id); \
     }
 
     Text("Color scheme");
 
-    if (BeginCombo("##codeview_color_scheme", codeview_color_scheme_names[iris->codeview_color_scheme])) {
-        PushFont(iris->font_small);
+    if (BeginCombo("##codeview_color_scheme", codeview_color_scheme_names[iris->ui.codeview_color_scheme])) {
+        PushFont(iris->ui.font_small);
         TextDisabled("Dark");
         PopFont();
 
@@ -1813,7 +1814,7 @@ void show_misc_settings(instance* iris) {
         SCHEME("Catppuccin Macchiato", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO);
         SCHEME("Catppuccin Frappé", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE);
 
-        PushFont(iris->font_small);
+        PushFont(iris->ui.font_small);
         TextDisabled("Light");
         PopFont();
 
@@ -1825,19 +1826,19 @@ void show_misc_settings(instance* iris) {
 
 #undef SCHEME
 
-    static bool use_theme_background = !iris->codeview_use_theme_background;
+    static bool use_theme_background = !iris->ui.codeview_use_theme_background;
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
     if (Checkbox("Use scheme background", &use_theme_background))  {
-        iris->codeview_use_theme_background = !use_theme_background;
+        iris->ui.codeview_use_theme_background = !use_theme_background;
     }
 
     PopStyleVar();
 
     Text("Font scale");
 
-    DragFloat("##codeview_font_scale", &iris->codeview_font_scale, 0.05f, 0.75f, 1.5f, "%.1f");
+    DragFloat("##codeview_font_scale", &iris->ui.codeview_font_scale, 0.05f, 0.75f, 1.5f, "%.1f");
 
     SeparatorText("Screenshots");
 
@@ -1886,7 +1887,7 @@ void show_misc_settings(instance* iris) {
         EndCombo();
     }
 
-    if (iris->screenshot_format == IRIS_SCREENSHOT_FORMAT_JPG) {
+    if (iris->screenshot_format == render::JPG) {
         Text("JPG Quality");
 
         if (BeginCombo("##jpgquality", jpg_quality_names[iris->screenshot_jpg_quality_mode])) {
@@ -1899,7 +1900,7 @@ void show_misc_settings(instance* iris) {
             EndCombo();
         }
 
-        if (iris->screenshot_jpg_quality_mode == IRIS_SCREENSHOT_JPG_QUALITY_CUSTOM) {
+        if (iris->screenshot_jpg_quality_mode == render::CUSTOM) {
             SliderInt("Quality##jpgqualitycustom", &iris->screenshot_jpg_quality, 1, 100, "%d", ImGuiSliderFlags_AlwaysClamp);
         }
     }
@@ -1922,7 +1923,7 @@ const char* presets[] = {
     0
 };
 
-void show_shader_settings(instance* iris) {
+void show_shader_settings(Instance* iris) {
     using namespace ImGui;
 
     static const char* selected_shader = "";
@@ -1982,7 +1983,7 @@ void show_shader_settings(instance* iris) {
 
             TableSetColumnIndex(0);
             if (SmallButton(del)) {
-                iris->shader_passes.erase(iris->shader_passes.begin() + i);
+                iris->vk.shader_passes.erase(iris->vk.shader_passes.begin() + i);
 
                 break;
             } SameLine();
@@ -2014,7 +2015,7 @@ void show_shader_settings(instance* iris) {
     }
 }
 
-void show_device_settings(instance* iris) {
+void show_device_settings(Instance* iris) {
     using namespace ImGui;
 
     bool changed = false;
@@ -2023,7 +2024,7 @@ void show_device_settings(instance* iris) {
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
-    if (Checkbox("Use ELF directory as host", &iris->host_from_elf)) {
+    if (Checkbox("Use ELF directory as host", &iris->paths.host_from_elf)) {
         changed = true;
     }
 
@@ -2033,13 +2034,13 @@ void show_device_settings(instance* iris) {
         SetTooltip("Point host: at the folder of the loaded ELF, so relative file accesses resolve next to it");
     }
 
-    BeginDisabled(iris->host_from_elf);
+    BeginDisabled(iris->paths.host_from_elf);
 
     const char* host_hint = "Working directory";
 
-    if (iris->host_from_elf) {
-        if (iris->host_elf_dir.size()) {
-            host_hint = iris->host_elf_dir.c_str();
+    if (iris->paths.host_from_elf) {
+        if (iris->paths.host_elf_dir.size()) {
+            host_hint = iris->paths.host_elf_dir.c_str();
         } else {
             host_hint = "ELF folder";
         }
@@ -2047,7 +2048,7 @@ void show_device_settings(instance* iris) {
 
     SetNextItemWidth(300);
 
-    if (InputTextWithHint("##host-path", host_hint, &iris->host_path))
+    if (InputTextWithHint("##host-path", host_hint, &iris->paths.host_path))
         changed = true;
 
     SameLine();
@@ -2064,7 +2065,7 @@ void show_device_settings(instance* iris) {
         std::string result = f.result();
 
         if (result.size()) {
-            iris->host_path = result;
+            iris->paths.host_path = result;
 
             changed = true;
         }
@@ -2084,14 +2085,14 @@ void show_device_settings(instance* iris) {
         TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed);
         TableHeadersRow();
 
-        for (int i = 0; i < (int)iris->device_maps.size(); i++) {
+        for (int i = 0; i < (int)iris->paths.device_maps.size(); i++) {
             PushID(i);
 
             TableNextRow();
 
             TableSetColumnIndex(0);
             SetNextItemWidth(-1);
-            if (InputTextWithHint("##device", "mass0", &iris->device_maps[i].first))
+            if (InputTextWithHint("##device", "mass0", &iris->paths.device_maps[i].first))
                 changed = true;
 
             TableSetColumnIndex(1);
@@ -2104,7 +2105,7 @@ void show_device_settings(instance* iris) {
 #else
             path_hint = "/home/user/foo/usb";
 #endif
-            if (InputTextWithHint("##host", path_hint, &iris->device_maps[i].second))
+            if (InputTextWithHint("##host", path_hint, &iris->paths.device_maps[i].second))
                 changed = true;
 
             TableSetColumnIndex(2);
@@ -2121,7 +2122,7 @@ void show_device_settings(instance* iris) {
                 std::string result = f.result();
 
                 if (result.size()) {
-                    iris->device_maps[i].second = result;
+                    iris->paths.device_maps[i].second = result;
 
                     changed = true;
                 }
@@ -2139,7 +2140,7 @@ void show_device_settings(instance* iris) {
     }
 
     if (remove_index >= 0) {
-        iris->device_maps.erase(iris->device_maps.begin() + remove_index);
+        iris->paths.device_maps.erase(iris->paths.device_maps.begin() + remove_index);
 
         changed = true;
     }
@@ -2147,7 +2148,7 @@ void show_device_settings(instance* iris) {
     Spacing();
 
     if (Button(ICON_MS_ADD " Add mapping")) {
-        iris->device_maps.emplace_back("", "");
+        iris->paths.device_maps.emplace_back("", "");
 
         changed = true;
     }
@@ -2156,7 +2157,7 @@ void show_device_settings(instance* iris) {
         settings::apply_device_maps(iris);
 }
 
-void show_settings(instance* iris) {
+void show_settings(Instance* iris) {
     using namespace ImGui;
 
     hovered = false;
@@ -2171,7 +2172,7 @@ void show_settings(instance* iris) {
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
         flags |= ImGuiWindowFlags_NoTitleBar;
 
-    if (Begin("Settings", &iris->show_settings, flags)) {
+    if (Begin("Settings", &iris->ui.show_settings, flags)) {
         PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
         PushStyleVarY(ImGuiStyleVar_ItemSpacing, 6.0);
 
