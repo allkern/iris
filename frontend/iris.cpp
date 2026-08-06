@@ -332,22 +332,21 @@ void update_window(Instance* iris) {
     if (iris->ui.show_status_bar && !iris->fullscreen) show_status_bar(iris);
     if (iris->ui.show_breakpoints) show_breakpoints(iris);
     if (iris->ui.show_about_window) show_about_window(iris);
-    if (iris->ui.show_compat_report) show_compat_report(iris);
     if (iris->ui.show_settings) show_settings(iris);
     if (iris->ui.show_pad_debugger) show_pad_debugger(iris);
-    if (iris->ui.show_symbols) show_symbols(iris);
     if (iris->ui.show_ee_threads) show_ee_threads(iris);
     if (iris->ui.show_iop_threads) show_iop_threads(iris);
     if (iris->ui.show_timers) show_timers(iris);
     if (iris->ui.show_sysmem_logs) show_sysmem_logs(iris);
     if (iris->ui.show_memory_card_tool) show_memory_card_tool(iris);
-    if (iris->ui.show_memory_search) show_memory_search(iris);
     if (iris->ui.show_hdd_tool) show_hdd_tool(iris);
     if (iris->ui.show_gs_dump_tool) show_gs_dump_tool(iris);
     if (iris->ui.show_imgui_demo) ShowDemoWindow(&iris->ui.show_imgui_demo);
     if (iris->ui.show_bios_setting_window) show_bios_setting_window(iris);
     if (iris->ui.show_overlay) show_overlay(iris);
     if (iris->fatal_error) show_fatal_error(iris);
+
+    applets::render(iris);
 
     iris->ui.show_gamelist = false;
 
@@ -474,6 +473,8 @@ bool init(Instance* iris, int argc, const char* argv[]) {
         return false;
     }
 
+    applets::create(iris);
+
     if (!settings::init(iris, argc, argv)) {
         iris_error(&iris->log.iris, "Failed to initialize settings");
 
@@ -539,6 +540,8 @@ bool init(Instance* iris, int argc, const char* argv[]) {
         shaders::push(iris, s);
 
     iris->vk.shader_passes_pending.clear();
+
+    applets::init(iris);
 
     // Sadly we need to start a frame here to measure menubar height
     ImGui_ImplVulkan_NewFrame();
@@ -915,7 +918,7 @@ void destroy(Instance* iris) {
         iris->ui.show_gs_debugger = false;
         iris->ui.show_spu2_debugger = false;
         iris->ui.show_memory_viewer = false;
-        iris->ui.show_memory_search = false;
+        iris->applets.memory_search.open = false;
         iris->ui.show_vu_disassembler = false;
         iris->ui.show_breakpoints = false;
         iris->ui.show_ee_threads = false;

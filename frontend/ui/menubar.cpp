@@ -412,7 +412,7 @@ static void show_tools_menu(Instance* iris) {
 
     if (BeginMenu("Tools")) {
         MenuItem(ICON_MS_BUILD " ImGui Demo", NULL, &iris->ui.show_imgui_demo);
-        MenuItem(ICON_MS_SEARCH " Memory search", NULL, &iris->ui.show_memory_search);
+        MenuItem(ICON_MS_SEARCH " Memory search", NULL, &iris->applets.memory_search.open);
         if (MenuItem(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
             audio::mute(iris);
 
@@ -483,7 +483,7 @@ static void show_debug_menu(Instance* iris) {
             MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->ui.show_ee_interrupts);
 
             BeginDisabled(iris->debug.symbols.empty());
-            MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->ui.show_symbols);
+            MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->applets.symbols.open);
             EndDisabled();
 
             MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->ui.show_ee_threads);
@@ -539,7 +539,7 @@ static void show_debug_menu(Instance* iris) {
             iris->ui.show_gs_debugger = false;
             iris->ui.show_spu2_debugger = false;
             iris->ui.show_memory_viewer = false;
-            iris->ui.show_memory_search = false;
+            iris->applets.memory_search.open = false;
             iris->ui.show_vu_disassembler = false;
             iris->ui.show_status_bar = false;
             iris->ui.show_breakpoints = false;
@@ -574,7 +574,7 @@ static void show_help_menu(Instance* iris) {
 
         BeginDisabled(!disc_loaded);
         if (MenuItem(ICON_MS_FACT_CHECK " Report compatibility")) {
-            iris->ui.show_compat_report = true;
+            iris->applets.compat_report.open = true;
             iris->debug.pause = true;
         }
         EndDisabled();

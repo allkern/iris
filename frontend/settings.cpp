@@ -189,7 +189,6 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->ui.show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
     iris->ui.show_spu2_debugger = debugger["show_spu2_debugger"].value_or(false);
     iris->ui.show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
-    iris->ui.show_memory_search = debugger["show_memory_search"].value_or(false);
     iris->ui.show_vu_disassembler = debugger["show_vu_disassembler"].value_or(false);
     iris->ui.show_status_bar = debugger["show_status_bar"].value_or(true);
     iris->ui.show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
@@ -199,11 +198,15 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->ui.show_sysmem_logs = debugger["show_sysmem_logs"].value_or(false);
     iris->ui.show_overlay = debugger["show_overlay"].value_or(false);
 
-    // iris->ui.show_symbols = debugger["show_symbols"].value_or(false);
     iris->ui.show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->ui.show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
     iris->timescale = debugger["timescale"].value_or(2);
+
+    for (Applet* a : iris->applets.all) {
+        if (a->persist)
+            a->open = debugger[std::string("show_") + a->id].value_or(a->open);
+    }
 
     auto usb = tbl["usb"];
     iris->input.usb_devices[0] = usb["port1_device"].value_or(usb::USB_DEVICE_NONE);
@@ -658,7 +661,6 @@ void close(Instance* iris) {
             { "show_gs_debugger", iris->ui.show_gs_debugger },
             { "show_spu2_debugger", iris->ui.show_spu2_debugger },
             { "show_memory_viewer", iris->ui.show_memory_viewer },
-            { "show_memory_search", iris->ui.show_memory_search },
             { "show_vu_disassembler", iris->ui.show_vu_disassembler },
             { "show_status_bar", iris->ui.show_status_bar },
             { "show_pad_debugger", iris->ui.show_pad_debugger },
@@ -777,6 +779,13 @@ void close(Instance* iris) {
         }
 
         mappings_tbl.insert(map.name, map_tbl[map.name]);
+    }
+
+    if (toml::table* debugger_tbl = tbl["debugger"].as_table()) {
+        for (Applet* a : iris->applets.all) {
+            if (a->persist)
+                debugger_tbl->insert_or_assign(std::string("show_") + a->id, a->open);
+        }
     }
 
     file << tbl;

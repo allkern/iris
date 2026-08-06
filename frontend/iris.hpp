@@ -40,6 +40,7 @@
 #include "audio.hpp"
 #include "settings.hpp"
 #include "gamelist.hpp"
+#include "applets.hpp"
 
 namespace iris::gs::dump { struct Dump; }
 namespace iris::dev::ds { struct Ds; }
@@ -156,7 +157,6 @@ struct Instance {
         bool show_breakpoints = false;
         bool show_settings = false;
         bool show_pad_debugger = false;
-        bool show_symbols = false;
         bool show_ee_threads = false;
         bool show_iop_threads = false;
         bool show_memory_card_tool = false;
@@ -165,12 +165,10 @@ struct Instance {
         bool show_imgui_demo = false;
         bool show_vu_disassembler = false;
         bool show_overlay = false;
-        bool show_memory_search = false;
         bool show_timers = false;
         bool show_gamelist = true;
         bool show_bios_setting_window = false;
         bool show_about_window = false;
-        bool show_compat_report = false;
         int theme = IRIS_THEME_GRANITE;
         bool imgui_enable_viewports = true;
         int codeview_color_scheme = 0;
@@ -284,6 +282,8 @@ struct Instance {
         std::string settings_path = "";
         std::string mappings_path = "";
     } paths;
+
+    Applets applets;
 
     SDL_Window* window = nullptr;
 
@@ -402,10 +402,8 @@ void show_status_bar(Instance* iris);
 void show_breakpoints(Instance* iris);
 void show_about_window(Instance* iris);
 void show_fatal_error(Instance* iris);
-void show_compat_report(Instance* iris);
 void show_settings(Instance* iris);
 void show_pad_debugger(Instance* iris);
-void show_symbols(Instance* iris);
 void show_ee_threads(Instance* iris);
 void show_iop_threads(Instance* iris);
 void show_overlay(Instance* iris);
@@ -413,7 +411,6 @@ void show_memory_card_tool(Instance* iris);
 void show_hdd_tool(Instance* iris);
 void show_gs_dump_tool(Instance* iris);
 void show_bios_setting_window(Instance* iris);
-void show_memory_search(Instance* iris);
 void show_timers(Instance* iris);
 void show_gamelist(Instance* iris);
 
