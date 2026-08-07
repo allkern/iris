@@ -175,30 +175,8 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->audio.mute_adma = audio["mute_adma"].value_or(true);
 
     auto debugger = tbl["debugger"];
-    iris->ui.show_ee_control = debugger["show_ee_control"].value_or(false);
-    iris->ui.show_ee_state = debugger["show_ee_state"].value_or(false);
-    iris->ui.show_ee_logs = debugger["show_ee_logs"].value_or(false);
-    iris->ui.show_ee_interrupts = debugger["show_ee_interrupts"].value_or(false);
-    iris->ui.show_ee_dmac = debugger["show_ee_dmac"].value_or(false);
-    iris->ui.show_iop_control = debugger["show_iop_control"].value_or(false);
-    iris->ui.show_iop_state = debugger["show_iop_state"].value_or(false);
-    iris->ui.show_iop_logs = debugger["show_iop_logs"].value_or(false);
-    iris->ui.show_iop_interrupts = debugger["show_iop_interrupts"].value_or(false);
-    iris->ui.show_iop_modules = debugger["show_iop_modules"].value_or(false);
-    iris->ui.show_iop_dma = debugger["show_iop_dma"].value_or(false);
-    iris->ui.show_gs_debugger = debugger["show_gs_debugger"].value_or(false);
-    iris->ui.show_spu2_debugger = debugger["show_spu2_debugger"].value_or(false);
-    iris->ui.show_memory_viewer = debugger["show_memory_viewer"].value_or(false);
-    iris->ui.show_vu_disassembler = debugger["show_vu_disassembler"].value_or(false);
     iris->ui.show_status_bar = debugger["show_status_bar"].value_or(true);
-    iris->ui.show_pad_debugger = debugger["show_pad_debugger"].value_or(false);
-    iris->ui.show_ee_threads = debugger["show_ee_threads"].value_or(false);
-    iris->ui.show_iop_threads = debugger["show_iop_threads"].value_or(false);
-    iris->ui.show_timers = debugger["show_timers"].value_or(false);
-    iris->ui.show_sysmem_logs = debugger["show_sysmem_logs"].value_or(false);
     iris->ui.show_overlay = debugger["show_overlay"].value_or(false);
-
-    iris->ui.show_breakpoints = debugger["show_breakpoints"].value_or(false);
     iris->ui.show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
     iris->timescale = debugger["timescale"].value_or(2);
@@ -423,17 +401,17 @@ void parse_cli_settings(Instance* iris, int argc, const char* argv[]) {
         if (!ps2::load_bios(iris->ps2, bios_path.c_str())) {
             // push_info(iris, "Couldn't load BIOS");
 
-            iris->ui.show_bios_setting_window = true;
+            iris->applets.bios_setting.open = true;
         }
     } else {
         if (iris->paths.bios_path.size()) {
             if (!ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str())) {
                 // push_info(iris, "Couldn't load BIOS");
 
-                iris->ui.show_bios_setting_window = true;
+                iris->applets.bios_setting.open = true;
             }
         } else {
-            iris->ui.show_bios_setting_window = true;
+            iris->applets.bios_setting.open = true;
         }
     }
 
@@ -647,28 +625,7 @@ void close(Instance* iris) {
             { "enable_validation_layers", iris->vk.vulkan_enable_validation_layers }
         } },
         { "debugger", toml::table {
-            { "show_ee_control", iris->ui.show_ee_control },
-            { "show_ee_state", iris->ui.show_ee_state },
-            { "show_ee_logs", iris->ui.show_ee_logs },
-            { "show_ee_interrupts", iris->ui.show_ee_interrupts },
-            { "show_ee_dmac", iris->ui.show_ee_dmac },
-            { "show_iop_control", iris->ui.show_iop_control },
-            { "show_iop_state", iris->ui.show_iop_state },
-            { "show_iop_logs", iris->ui.show_iop_logs },
-            { "show_iop_interrupts", iris->ui.show_iop_interrupts },
-            { "show_iop_modules", iris->ui.show_iop_modules},
-            { "show_iop_dma", iris->ui.show_iop_dma },
-            { "show_gs_debugger", iris->ui.show_gs_debugger },
-            { "show_spu2_debugger", iris->ui.show_spu2_debugger },
-            { "show_memory_viewer", iris->ui.show_memory_viewer },
-            { "show_vu_disassembler", iris->ui.show_vu_disassembler },
             { "show_status_bar", iris->ui.show_status_bar },
-            { "show_pad_debugger", iris->ui.show_pad_debugger },
-            { "show_breakpoints", iris->ui.show_breakpoints },
-            { "show_ee_threads", iris->ui.show_ee_threads },
-            { "show_iop_threads", iris->ui.show_iop_threads },
-            { "show_timers", iris->ui.show_timers },
-            { "show_sysmem_logs", iris->ui.show_sysmem_logs },
             { "show_imgui_demo", iris->ui.show_imgui_demo },
             { "show_overlay", iris->ui.show_overlay },
             { "skip_fmv", iris->skip_fmv },

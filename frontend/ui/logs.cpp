@@ -8,11 +8,7 @@
 
 namespace iris {
 
-bool ee_follow = true;
-bool iop_follow = true;
-bool sysmem_follow = true;
-
-void show_logs(Instance* iris, const std::vector <std::string>& logs, bool follow) {
+static void show_logs(Instance* iris, const std::vector <std::string>& logs, bool follow) {
     using namespace ImGui;
 
     PushFont(iris->ui.font_code);
@@ -46,103 +42,87 @@ void show_logs(Instance* iris, const std::vector <std::string>& logs, bool follo
     PopFont();
 }
 
-void show_ee_logs(Instance* iris) {
-    using namespace ImGui;
+static void copy_log(const std::vector <std::string>& log) {
+    std::string buf;
 
-    if (imgui::BeginEx("EE logs", &iris->ui.show_ee_logs)) {
-        if (Button(ICON_MS_DELETE)) {
-            iris->debug.ee_log.clear();
-        } SameLine();
+    for (const std::string& s : log) {
+        buf.append(s);
+        buf.push_back('\n');
+    }
 
-        if (Button(ICON_MS_CONTENT_COPY)) {
-            std::string buf;
-
-            for (const std::string& s : iris->debug.ee_log) {
-                buf.append(s);
-                buf.push_back('\n');
-            }
-
-            SDL_SetClipboardText(buf.c_str());
-        }
-
-        if (BeginChild("##eelog")) {
-            show_logs(iris, iris->debug.ee_log, ee_follow);
-        } EndChild();
-    } End();
+    SDL_SetClipboardText(buf.c_str());
 }
 
-void show_iop_logs(Instance* iris) {
+void EeLogs::on_render() {
     using namespace ImGui;
 
-    if (imgui::BeginEx("IOP logs", &iris->ui.show_iop_logs, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            if (BeginMenu("Settings")) {
-                if (MenuItem(iop_follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
-                    iop_follow = !iop_follow;
-                }
+    if (Button(ICON_MS_DELETE)) {
+        iris->debug.ee_log.clear();
+    } SameLine();
 
-                ImGui::EndMenu();
-            }
+    if (Button(ICON_MS_CONTENT_COPY)) {
+        copy_log(iris->debug.ee_log);
+    }
 
-            EndMenuBar();
-        }
-
-        if (Button(ICON_MS_DELETE)) {
-            iris->debug.iop_log.clear();
-        } SameLine();
-
-        if (Button(ICON_MS_CONTENT_COPY)) {
-            std::string buf;
-
-            for (const std::string& s : iris->debug.iop_log) {
-                buf.append(s);
-                buf.push_back('\n');
-            }
-
-            SDL_SetClipboardText(buf.c_str());
-        }
-
-        if (BeginChild("##ioplog")) {
-            show_logs(iris, iris->debug.iop_log, iop_follow);
-        } EndChild();
-    } End();
+    if (BeginChild("##eelog")) {
+        show_logs(iris, iris->debug.ee_log, follow);
+    } EndChild();
 }
 
-void show_sysmem_logs(Instance* iris) {
+void IopLogs::on_render() {
     using namespace ImGui;
 
-    if (imgui::BeginEx("SYSMEM logs", &iris->ui.show_sysmem_logs, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            if (BeginMenu("Settings")) {
-                if (MenuItem(sysmem_follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
-                    sysmem_follow = !sysmem_follow;
-                }
-
-                ImGui::EndMenu();
+    if (BeginMenuBar()) {
+        if (BeginMenu("Settings")) {
+            if (MenuItem(follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
+                follow = !follow;
             }
 
-            EndMenuBar();
+            ImGui::EndMenu();
         }
 
-        if (Button(ICON_MS_DELETE)) {
-            iris->debug.sysmem_log.clear();
-        } SameLine();
+        EndMenuBar();
+    }
 
-        if (Button(ICON_MS_CONTENT_COPY)) {
-            std::string buf;
+    if (Button(ICON_MS_DELETE)) {
+        iris->debug.iop_log.clear();
+    } SameLine();
 
-            for (const std::string& s : iris->debug.sysmem_log) {
-                buf.append(s);
-                buf.push_back('\n');
+    if (Button(ICON_MS_CONTENT_COPY)) {
+        copy_log(iris->debug.iop_log);
+    }
+
+    if (BeginChild("##ioplog")) {
+        show_logs(iris, iris->debug.iop_log, follow);
+    } EndChild();
+}
+
+void SysmemLogs::on_render() {
+    using namespace ImGui;
+
+    if (BeginMenuBar()) {
+        if (BeginMenu("Settings")) {
+            if (MenuItem(follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
+                follow = !follow;
             }
 
-            SDL_SetClipboardText(buf.c_str());
+            ImGui::EndMenu();
         }
 
-        if (BeginChild("##sysmemlog")) {
-            show_logs(iris, iris->debug.sysmem_log, sysmem_follow);
-        } EndChild();
-    } End();
+        EndMenuBar();
+    }
+
+    if (Button(ICON_MS_DELETE)) {
+        iris->debug.sysmem_log.clear();
+    } SameLine();
+
+    if (Button(ICON_MS_CONTENT_COPY)) {
+        copy_log(iris->debug.sysmem_log);
+    }
+
+    if (BeginChild("##sysmemlog")) {
+        show_logs(iris, iris->debug.sysmem_log, follow);
+    } EndChild();
 }
 
 }

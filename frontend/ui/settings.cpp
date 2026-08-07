@@ -14,10 +14,9 @@
 
 namespace iris {
 
-bool hovered = false;
-std::string tooltip = "";
-int selected_settings = 0;
-int saved = 0;
+static bool hovered = false;
+static std::string tooltip = "";
+static int saved = 0;
 
 Mapping* get_input_mapping(Instance* iris, int slot) {
     if (iris->input.input_map[slot] == -1)
@@ -118,13 +117,13 @@ std::string get_event_name(const InputEvent& event) {
     return name;
 }
 
-const char* settings_renderer_names[] = {
+static const char* settings_renderer_names[] = {
     "Null",
     "Software",
     "Software (Threaded)"
 };
 
-const char* settings_aspect_mode_names[] = {
+static const char* settings_aspect_mode_names[] = {
     "Native",
     "Stretch",
     "Stretch (Keep aspect ratio)",
@@ -134,31 +133,31 @@ const char* settings_aspect_mode_names[] = {
     "Auto"
 };
 
-const char* settings_fullscreen_names[] = {
+static const char* settings_fullscreen_names[] = {
     "Windowed",
     "Fullscreen (Desktop)",
 };
 
-const char* settings_present_mode_names[] = {
+static const char* settings_present_mode_names[] = {
     "Limit to 30 FPS",
     "Limit to 60 FPS",
     "VSync",
     "Uncapped"
 };
 
-const char* settings_rotation_names[] = {
+static const char* settings_rotation_names[] = {
     "0 degrees",
     "90 degrees",
     "180 degrees",
     "270 degrees"
 };
 
-int settings_fullscreen_flags[] = {
+static int settings_fullscreen_flags[] = {
     0,
     SDL_WINDOW_FULLSCREEN
 };
 
-const char* settings_buttons[] = {
+static const char* settings_buttons[] = {
     " " ICON_MS_DEPLOYED_CODE "  System",
     " " ICON_MS_FOLDER "  Paths",
     " " ICON_MS_MONITOR "  Graphics",
@@ -171,7 +170,7 @@ const char* settings_buttons[] = {
     nullptr
 };
 
-const char* system_names[] = {
+static const char* system_names[] = {
     "Auto",
     "Retail (Fat)",
     "Retail (Slim)",
@@ -186,7 +185,7 @@ const char* system_names[] = {
     "Namco System 256"
 };
 
-const char* mechacon_model_names[] = {
+static const char* mechacon_model_names[] = {
     "SPC970",
     "Dragon"
 };
@@ -461,7 +460,7 @@ void show_system_settings(Instance* iris) {
     PopStyleVar();
 }
 
-const char* ssaa_names[] = {
+static const char* ssaa_names[] = {
     "Disabled",
     "2x",
     "4x",
@@ -992,9 +991,9 @@ bool event_is_mod_key(const InputEvent& event) {
            (keycode & 0xf0000fff) == SDLK_RALT;
 }
 
-int selected_mapping = 0;
-bool waiting_for_input = false;
-uint64_t mapping_editing = 0;
+static int selected_mapping = 0;
+static bool waiting_for_input = false;
+static uint64_t mapping_editing = 0;
 
 void show_mappings_editor(Instance* iris) {
     using namespace ImGui;
@@ -1692,7 +1691,7 @@ void show_memory_card_settings(Instance* iris) {
 
     if (Button(ICON_MS_EDIT " Create memory cards...")) {
         // Launch memory card utility
-        iris->ui.show_memory_card_tool = true;
+        iris->applets.memory_card_tool.open = true;
     }
 
     Separator();
@@ -1910,7 +1909,7 @@ void show_misc_settings(Instance* iris) {
     PopStyleVar();
 }
 
-const char* builtin_shader_names[] = {
+static const char* builtin_shader_names[] = {
     "iris-ntsc-encoder",
     "iris-ntsc-decoder",
     "iris-ntsc-curvature",
@@ -1918,7 +1917,7 @@ const char* builtin_shader_names[] = {
     "iris-ntsc-noise",
 };
 
-const char* presets[] = {
+static const char* presets[] = {
     "NTSC codec",
     0
 };
@@ -2157,14 +2156,10 @@ void show_device_settings(Instance* iris) {
         settings::apply_device_maps(iris);
 }
 
-void show_settings(Instance* iris) {
+bool SettingsWindow::begin() {
     using namespace ImGui;
 
     hovered = false;
-
-    static ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoDocking;
 
     SetNextWindowSize(ImVec2(675, 500), ImGuiCond_FirstUseEver);
     PushStyleVar(ImGuiStyleVar_WindowMinSize, ImVec2(675, 500));
@@ -2172,50 +2167,57 @@ void show_settings(Instance* iris) {
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
         flags |= ImGuiWindowFlags_NoTitleBar;
 
-    if (Begin("Settings", &iris->ui.show_settings, flags)) {
-        PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
-        PushStyleVarY(ImGuiStyleVar_ItemSpacing, 6.0);
+    return Begin(title, &open, flags);
+}
 
-        if (BeginChild("##sidebar", ImVec2(175, GetContentRegionAvail().y), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
-            for (int i = 0; settings_buttons[i]; i++) {
-                if (selected_settings == i) PushStyleColor(ImGuiCol_Button, GetStyle().Colors[ImGuiCol_ButtonHovered]);
+void SettingsWindow::end() {
+    ImGui::End();
+    ImGui::PopStyleVar();
+}
 
-                bool pressed = Button(settings_buttons[i], ImVec2(175, 35));
-                
-                if (selected_settings == i) PopStyleColor();
+void SettingsWindow::on_render() {
+    using namespace ImGui;
 
-                if (pressed) {
-                    selected_settings = i;
-                }
+    PushStyleVarX(ImGuiStyleVar_ButtonTextAlign, 0.0);
+    PushStyleVarY(ImGuiStyleVar_ItemSpacing, 6.0);
+
+    if (BeginChild("##sidebar", ImVec2(175, GetContentRegionAvail().y), ImGuiChildFlags_AutoResizeY | ImGuiChildFlags_Borders)) {
+        for (int i = 0; settings_buttons[i]; i++) {
+            if (selected == i) PushStyleColor(ImGuiCol_Button, GetStyle().Colors[ImGuiCol_ButtonHovered]);
+
+            bool pressed = Button(settings_buttons[i], ImVec2(175, 35));
+            
+            if (selected == i) PopStyleColor();
+
+            if (pressed) {
+                selected = i;
             }
-        } EndChild(); SameLine(0.0, 10.0);
+        }
+    } EndChild(); SameLine(0.0, 10.0);
 
-        PopStyleVar(2);
+    PopStyleVar(2);
 
-        if (BeginChild("##content", ImVec2(0, GetContentRegionAvail().y), ImGuiChildFlags_AutoResizeY)) {
-            switch (selected_settings) {
-                case 0: show_system_settings(iris); break;
-                case 1: show_paths_settings(iris); break;
-                case 2: show_graphics_settings(iris); break;
-                case 3: show_shader_settings(iris); break;
-                case 4: show_input_settings(iris); break;
-                case 5: show_memory_card_settings(iris); break;
-                case 6: show_usb_settings(iris); break;
-                case 7: show_device_settings(iris); break;
-                case 8: show_misc_settings(iris); break;
-            }
-        } EndChild();
+    if (BeginChild("##content", ImVec2(0, GetContentRegionAvail().y), ImGuiChildFlags_AutoResizeY)) {
+        switch (selected) {
+            case 0: show_system_settings(iris); break;
+            case 1: show_paths_settings(iris); break;
+            case 2: show_graphics_settings(iris); break;
+            case 3: show_shader_settings(iris); break;
+            case 4: show_input_settings(iris); break;
+            case 5: show_memory_card_settings(iris); break;
+            case 6: show_usb_settings(iris); break;
+            case 7: show_device_settings(iris); break;
+            case 8: show_misc_settings(iris); break;
+        }
+    } EndChild();
 
-        // Separator();
+    // Separator();
 
-        // if (hovered) {
-        //     TextWrapped(tooltip.c_str());
-        // } else {
-        //     Text("Hover over an item to get more information");
-        // }
-    } End();
-
-    PopStyleVar();
+    // if (hovered) {
+    //     TextWrapped(tooltip.c_str());
+    // } else {
+    //     Text("Hover over an item to get more information");
+    // }
 }
 
 }

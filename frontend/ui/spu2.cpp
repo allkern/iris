@@ -9,11 +9,11 @@
 
 namespace iris {
 
-int core0_selected = -1;
-int core1_selected = -1;
+static int core0_selected = -1;
+static int core1_selected = -1;
 
-float selected_adsr[120];
-int adsr_index;
+static float selected_adsr[120];
+static int adsr_index;
 
 const char* get_adsr_stage_name(int s) {
     switch (s) {
@@ -127,28 +127,26 @@ void show_spu2_tab(Instance* iris, int c) {
     PlotLines("ADSR", selected_adsr, IM_ARRAYSIZE(selected_adsr), 0, NULL, 0.0f, 1.0f, { 250.0, 80.0 });
 }
 
-void show_spu2_debugger(Instance* iris) {
+void Spu2Debugger::on_render() {
     using namespace ImGui;
 
     const spu2::Spu2* spu2 = iris->ps2->spu2;
 
-    if (imgui::BeginEx("SPU2", &iris->ui.show_spu2_debugger)) {
-        if (BeginTabBar("##spu2tabbar")) {
-            if (BeginTabItem("CORE0")) {
-                show_spu2_tab(iris, 0);
+    if (BeginTabBar("##spu2tabbar")) {
+        if (BeginTabItem("CORE0")) {
+            show_spu2_tab(iris, 0);
 
-                EndTabItem();
-            }
-
-            if (BeginTabItem("CORE1")) {
-                show_spu2_tab(iris, 1);
-
-                EndTabItem();
-            }
-
-            EndTabBar();
+            EndTabItem();
         }
-    } End();
+
+        if (BeginTabItem("CORE1")) {
+            show_spu2_tab(iris, 1);
+
+            EndTabItem();
+        }
+
+        EndTabBar();
+    }
 }
 
 }

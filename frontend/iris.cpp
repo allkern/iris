@@ -314,39 +314,12 @@ void update_window(Instance* iris) {
         PopFont();
     }
 
-    if (iris->ui.show_ee_control) show_ee_control(iris);
-    if (iris->ui.show_ee_state) show_ee_state(iris);
-    if (iris->ui.show_ee_logs) show_ee_logs(iris);
-    if (iris->ui.show_ee_interrupts) show_ee_interrupts(iris);
-    if (iris->ui.show_ee_dmac) show_ee_dmac(iris);
-    if (iris->ui.show_iop_control) show_iop_control(iris);
-    if (iris->ui.show_iop_state) show_iop_state(iris);
-    if (iris->ui.show_iop_logs) show_iop_logs(iris);
-    if (iris->ui.show_iop_interrupts) show_iop_interrupts(iris);
-    if (iris->ui.show_iop_modules) show_iop_modules(iris);
-    if (iris->ui.show_iop_dma) show_iop_dma(iris);
-    if (iris->ui.show_gs_debugger) show_gs_debugger(iris);
-    if (iris->ui.show_spu2_debugger) show_spu2_debugger(iris);
-    if (iris->ui.show_memory_viewer) show_memory_viewer(iris);
-    if (iris->ui.show_vu_disassembler) show_vu_disassembler(iris);
+    applets::render(iris);
+
     if (iris->ui.show_status_bar && !iris->fullscreen) show_status_bar(iris);
-    if (iris->ui.show_breakpoints) show_breakpoints(iris);
-    if (iris->ui.show_about_window) show_about_window(iris);
-    if (iris->ui.show_settings) show_settings(iris);
-    if (iris->ui.show_pad_debugger) show_pad_debugger(iris);
-    if (iris->ui.show_ee_threads) show_ee_threads(iris);
-    if (iris->ui.show_iop_threads) show_iop_threads(iris);
-    if (iris->ui.show_timers) show_timers(iris);
-    if (iris->ui.show_sysmem_logs) show_sysmem_logs(iris);
-    if (iris->ui.show_memory_card_tool) show_memory_card_tool(iris);
-    if (iris->ui.show_hdd_tool) show_hdd_tool(iris);
-    if (iris->ui.show_gs_dump_tool) show_gs_dump_tool(iris);
     if (iris->ui.show_imgui_demo) ShowDemoWindow(&iris->ui.show_imgui_demo);
-    if (iris->ui.show_bios_setting_window) show_bios_setting_window(iris);
     if (iris->ui.show_overlay) show_overlay(iris);
     if (iris->fatal_error) show_fatal_error(iris);
-
-    applets::render(iris);
 
     iris->ui.show_gamelist = false;
 
@@ -904,27 +877,27 @@ void destroy(Instance* iris) {
     }
 
     if (iris->ui.imgui_enable_viewports) {
-        iris->ui.show_ee_control = false;
-        iris->ui.show_ee_state = false;
-        iris->ui.show_ee_logs = false;
-        iris->ui.show_ee_interrupts = false;
-        iris->ui.show_ee_dmac = false;
-        iris->ui.show_iop_control = false;
-        iris->ui.show_iop_state = false;
-        iris->ui.show_iop_logs = false;
-        iris->ui.show_iop_interrupts = false;
-        iris->ui.show_iop_modules = false;
-        iris->ui.show_iop_dma = false;
-        iris->ui.show_gs_debugger = false;
-        iris->ui.show_spu2_debugger = false;
-        iris->ui.show_memory_viewer = false;
+        iris->applets.ee_control.open = false;
+        iris->applets.ee_state.open = false;
+        iris->applets.ee_logs.open = false;
+        iris->applets.ee_interrupts.open = false;
+        iris->applets.ee_dmac.open = false;
+        iris->applets.iop_control.open = false;
+        iris->applets.iop_state.open = false;
+        iris->applets.iop_logs.open = false;
+        iris->applets.iop_interrupts.open = false;
+        iris->applets.iop_modules.open = false;
+        iris->applets.iop_dma.open = false;
+        iris->applets.gs_debugger.open = false;
+        iris->applets.spu2_debugger.open = false;
+        iris->applets.memory_viewer.open = false;
         iris->applets.memory_search.open = false;
-        iris->ui.show_vu_disassembler = false;
-        iris->ui.show_breakpoints = false;
-        iris->ui.show_ee_threads = false;
-        iris->ui.show_iop_threads = false;
-        iris->ui.show_timers = false;
-        iris->ui.show_sysmem_logs = false;
+        iris->applets.vu_disassembler.open = false;
+        iris->applets.breakpoints.open = false;
+        iris->applets.ee_threads.open = false;
+        iris->applets.iop_threads.open = false;
+        iris->applets.timers.open = false;
+        iris->applets.sysmem_logs.open = false;
         iris->ui.show_imgui_demo = false;
         iris->ui.show_overlay = false;
     }

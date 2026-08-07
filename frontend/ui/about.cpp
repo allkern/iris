@@ -9,49 +9,47 @@
 
 namespace iris {
 
-void show_about_window(Instance* iris) {
+bool About::begin() {
     using namespace ImGui;
-
-    static ImGuiWindowFlags flags =
-        ImGuiWindowFlags_NoResize |
-        ImGuiWindowFlags_NoCollapse |
-        ImGuiWindowFlags_NoDocking |
-        ImGuiWindowFlags_AlwaysAutoResize;
 
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
         flags |= ImGuiWindowFlags_NoTitleBar;
 
-    if (Begin("About", &iris->ui.show_about_window, flags)) {
-        if (BeginChild("##iconchild", ImVec2(100.0, 250.0), ImGuiChildFlags_AutoResizeY)) {
-            Image((ImTextureID)(intptr_t)iris->ui.iris_icon.descriptor_set, ImVec2(100.0, 100.0));
-        } EndChild(); SameLine(0.0, 10.0);
+    return Begin(title, &open, flags);
+}
 
-        if (BeginChild("##textchild", ImVec2(350.0, 0.0))) {
-            PushFont(iris->ui.font_heading);
-            Text(IRIS_TITLE);
-            PopFont();
+void About::on_render() {
+    using namespace ImGui;
 
-            Separator();
+    if (BeginChild("##iconchild", ImVec2(100.0, 250.0), ImGuiChildFlags_AutoResizeY)) {
+        Image((ImTextureID)(intptr_t)iris->ui.iris_icon.descriptor_set, ImVec2(100.0, 100.0));
+    } EndChild(); SameLine(0.0, 10.0);
 
-            Text("Experimental PlayStation 2 emulator");
-            Text("");
-            Text("Available at "); SameLine(0.0, 0.0);
-            TextLinkOpenURL("https://github.com/allkern/iris", "https://github.com/allkern/iris");
-            Text("");
-            TextWrapped(
-                "Special thanks to: The emudev Discord server, Ziemas, "
-                "refraction, ncarrillo, cakehonolulu, Layle, and "
-                "the PCSX2 team for their kind support."
-            );
-            Text("");
-            Text("Please file any issues to "); SameLine(0.0, 0.0);
-            TextLinkOpenURL("our GitHub issues page", "https://github.com/allkern/iris/issues"); SameLine(0.0, 0.0);
-            Text(".");
+    if (BeginChild("##textchild", ImVec2(350.0, 0.0))) {
+        PushFont(iris->ui.font_heading);
+        Text(IRIS_TITLE);
+        PopFont();
 
-            Separator();
-            Text("Built with " IRIS_COMPILER_NAME "-" IRIS_COMPILER_VERSION " on " STR(_IRIS_OSVERSION) " (" STR(_IRIS_PROCESSOR) ")");
-        } EndChild();
-    } End();
+        Separator();
+
+        Text("Experimental PlayStation 2 emulator");
+        Text("");
+        Text("Available at "); SameLine(0.0, 0.0);
+        TextLinkOpenURL("https://github.com/allkern/iris", "https://github.com/allkern/iris");
+        Text("");
+        TextWrapped(
+            "Special thanks to: The emudev Discord server, Ziemas, "
+            "refraction, ncarrillo, cakehonolulu, Layle, and "
+            "the PCSX2 team for their kind support."
+        );
+        Text("");
+        Text("Please file any issues to "); SameLine(0.0, 0.0);
+        TextLinkOpenURL("our GitHub issues page", "https://github.com/allkern/iris/issues"); SameLine(0.0, 0.0);
+        Text(".");
+
+        Separator();
+        Text("Built with " IRIS_COMPILER_NAME "-" IRIS_COMPILER_VERSION " on " STR(_IRIS_OSVERSION) " (" STR(_IRIS_PROCESSOR) ")");
+    } EndChild();
 }
 
 }

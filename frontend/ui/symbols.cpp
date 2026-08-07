@@ -189,7 +189,7 @@ void Symbols::on_render() {
 
             if (Selectable(label, false, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowDoubleClick)) {
                 if (IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
-                    iris->ui.show_ee_control = true;
+                    iris->applets.ee_control.open = true;
                     iris->debug.ee_control_follow_pc = false;
                     iris->debug.ee_control_address = symbol.addr;
                 }
@@ -203,7 +203,7 @@ void Symbols::on_render() {
                 PushFont(iris->ui.font_body);
 
                 if (Selectable(ICON_MS_ARROW_FORWARD " Go to this address")) {
-                    iris->ui.show_ee_control = true;
+                    iris->applets.ee_control.open = true;
                     iris->debug.ee_control_follow_pc = false;
                     iris->debug.ee_control_address = symbol.addr;
                 }

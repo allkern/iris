@@ -94,20 +94,20 @@ static const char* vu0i_regs[] = {
     "CMSAR1"
 };
 
-uint128_t ee_prev[32];
-uint128_t ee_frames[32];
-uint32_t ee_cop0_prev[32];
-uint32_t ee_cop0_frames[32];
-uint32_t vu0i_prev[32];
-uint32_t vu0i_frames[32];
-uint32_t ee_fpu_prev[32];
-uint32_t ee_fpu_frames[32];
-vu::Reg128 vu0f_prev[32];
-uint128_t vu0f_frames[32];
-uint32_t iop_prev[32];
-uint32_t iop_frames[32];
+static uint128_t ee_prev[32];
+static uint128_t ee_frames[32];
+static uint32_t ee_cop0_prev[32];
+static uint32_t ee_cop0_frames[32];
+static uint32_t vu0i_prev[32];
+static uint32_t vu0i_frames[32];
+static uint32_t ee_fpu_prev[32];
+static uint32_t ee_fpu_frames[32];
+static vu::Reg128 vu0f_prev[32];
+static uint128_t vu0f_frames[32];
+static uint32_t iop_prev[32];
+static uint32_t iop_frames[32];
 
-bool vu0f_float;
+static bool vu0f_float;
 
 static ImGuiTableFlags ee_table_sizing = ImGuiTableFlags_SizingStretchSame;
 static ImGuiTableFlags iop_table_sizing = ImGuiTableFlags_SizingStretchProp;
@@ -805,74 +805,11 @@ static const char* ee_reg_group_names[] = {
 
 static int ee_reg_group = 0;
 
-void show_ee_state(Instance* iris) {
-    using namespace ImGui;
-
-    if (imgui::BeginEx("EE state", &iris->ui.show_ee_state, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            if (BeginMenu("Settings")) {
-                if (BeginMenu(ICON_MS_CROP " Sizing")) {
-                    for (int i = 0; i < 4; i++) {
-                        if (Selectable(sizing_combo_items[i], i == ee_sizing_combo)) {
-                            ee_table_sizing = table_sizing_flags[i];
-                            ee_sizing_combo = i;
-                        }
-                    }
-
-                    ImGui::EndMenu();
-                }
-
-                MenuItem("Display VU0f as floats", nullptr, &vu0f_float);
-
-                ImGui::EndMenu();
-            }
-
-            EndMenuBar();
-        }
-
-        if (BeginTable("table4", 5, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
-            TableNextRow();
-
-            for (int i = 0; i < 5; i++) {
-                TableSetColumnIndex(i);
-
-                if (Selectable(ee_reg_group_names[i], ee_reg_group == i)) {
-                    ee_reg_group = i;
-                }
-            }
-
-            EndTable();
-        }
-
-        if (BeginChild("ee#child")) {
-            switch (ee_reg_group) {
-                case 0: {
-                    show_ee_main_registers(iris);
-                } break;
-
-                case 1: {
-                    show_ee_cop0_registers(iris);
-                } break;
-
-                case 2: {
-                    show_ee_fpu_registers(iris);
-                } break;
-
-                case 3: {
-                    show_vu0_float(iris);
-                } break;
-
-                case 4: {
-                    show_vu0_integer(iris);
-                } break;
-            }
-
-            EndChild();
-        }
-    } End();
+void EeState::end() {
+    ImGui::End();
 
     for (int i = 0; i < 32; i++) {
-        if (ee_fpu_frames[i]) 
+        if (ee_fpu_frames[i])
             ee_fpu_frames[i]--;
 
         if (ee_cop0_frames[i])
@@ -891,38 +828,105 @@ void show_ee_state(Instance* iris) {
     }
 }
 
-void show_iop_state(Instance* iris) {
+void EeState::on_render() {
     using namespace ImGui;
 
-    if (imgui::BeginEx("IOP state", &iris->ui.show_iop_state, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            if (BeginMenu("Settings")) {
-                if (BeginMenu(ICON_MS_CROP " Sizing")) {
-                    for (int i = 0; i < 4; i++) {
-                        if (Selectable(sizing_combo_items[i], i == iop_sizing_combo)) {
-                            iop_table_sizing = table_sizing_flags[i];
-                            iop_sizing_combo = i;
-                        }
+    if (BeginMenuBar()) {
+        if (BeginMenu("Settings")) {
+            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+                for (int i = 0; i < 4; i++) {
+                    if (Selectable(sizing_combo_items[i], i == ee_sizing_combo)) {
+                        ee_table_sizing = table_sizing_flags[i];
+                        ee_sizing_combo = i;
                     }
-
-                    ImGui::EndMenu();
                 }
 
                 ImGui::EndMenu();
             }
 
-            EndMenuBar();
-        }
-        if (BeginChild("iop#child")) {
-            show_iop_main_registers(iris);
+            MenuItem("Display VU0f as floats", nullptr, &vu0f_float);
 
-            EndChild();
+            ImGui::EndMenu();
         }
-    } End();
+
+        EndMenuBar();
+    }
+
+    if (BeginTable("table4", 5, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
+        TableNextRow();
+
+        for (int i = 0; i < 5; i++) {
+            TableSetColumnIndex(i);
+
+            if (Selectable(ee_reg_group_names[i], ee_reg_group == i)) {
+                ee_reg_group = i;
+            }
+        }
+
+        EndTable();
+    }
+
+    if (BeginChild("ee#child")) {
+        switch (ee_reg_group) {
+            case 0: {
+                show_ee_main_registers(iris);
+            } break;
+
+            case 1: {
+                show_ee_cop0_registers(iris);
+            } break;
+
+            case 2: {
+                show_ee_fpu_registers(iris);
+            } break;
+
+            case 3: {
+                show_vu0_float(iris);
+            } break;
+
+            case 4: {
+                show_vu0_integer(iris);
+            } break;
+        }
+
+        EndChild();
+    }
+}
+
+void IopState::end() {
+    ImGui::End();
 
     for (int i = 0; i < 32; i++)
         if (iop_frames[i])
             iop_frames[i]--;
+}
+
+void IopState::on_render() {
+    using namespace ImGui;
+
+    if (BeginMenuBar()) {
+        if (BeginMenu("Settings")) {
+            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+                for (int i = 0; i < 4; i++) {
+                    if (Selectable(sizing_combo_items[i], i == iop_sizing_combo)) {
+                        iop_table_sizing = table_sizing_flags[i];
+                        iop_sizing_combo = i;
+                    }
+                }
+
+                ImGui::EndMenu();
+            }
+
+            ImGui::EndMenu();
+        }
+
+        EndMenuBar();
+    }
+    if (BeginChild("iop#child")) {
+        show_iop_main_registers(iris);
+
+        EndChild();
+    }
 }
 
 }

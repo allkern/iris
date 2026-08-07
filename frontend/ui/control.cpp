@@ -18,8 +18,8 @@
 
 namespace iris {
 
-ee::dis::Dis g_ee_dis_state;
-iop::dis::Dis g_iop_dis_state;
+static ee::dis::Dis g_ee_dis_state;
+static iop::dis::Dis g_iop_dis_state;
 
 void print_highlighted(Instance* iris, const char* buf) {
     using namespace ImGui;
@@ -505,106 +505,116 @@ static void show_iop_disassembly_view(Instance* iris) {
     GetStyle().FontScaleMain = font_scale;
 }
 
-void show_ee_control(Instance* iris) {
-    using namespace ImGui;
+bool EeControl::begin() {
+    ImGui::PushFont(iris->ui.font_icons);
 
-    PushFont(iris->ui.font_icons);
-
-    if (imgui::BeginEx("EE (R5900)", &iris->ui.show_ee_control)) {
-        if (Button(iris->debug.pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE, ImVec2(50, 0))) {
-            iris->debug.pause = !iris->debug.pause;
-        } SameLine();
-
-        if (Button(ICON_MS_STEP_INTO)) {
-            iris->debug.pause = true;
-            iris->debug.step = true;
-        } SameLine();
-
-        if (Button(ICON_MS_STEP_OVER)) {
-            iris->debug.step_over = true;
-            iris->debug.step_over_addr = iris->ps2->ee->pc + 4;
-            iris->debug.pause = false;
-        } SameLine();
-
-        if (Button(ICON_MS_STEP_OUT)) {
-            iris->debug.step_out = true;
-            iris->debug.pause = false;
-        } SameLine();
-
-        if (Button(ICON_MS_MOVE_DOWN)) {
-            iris->debug.ee_control_follow_pc = true;
-        } SameLine();
-
-        if (Button(ICON_MS_AUTORENEW)) {
-            ee::flush_cache(iris->ps2->ee);
-        }
-
-        InputInt("Address", (int32_t*)&iris->debug.ee_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
-
-        if (IsItemDeactivatedAfterEdit()) {
-            iris->debug.ee_control_follow_pc = false;
-        }
-
-        if (iris->debug.symbols.size()) {
-            TextDisabled("Current function:"); SameLine();
-
-            const char* func = "<unknown>";
-
-            for (elf::Symbol& sym : iris->debug.symbols) {
-                if (iris->ps2->ee->pc >= sym.addr && iris->ps2->ee->pc < (sym.addr + sym.size)) {
-                    func = sym.name;
-
-                    break;
-                }
-            }
-
-            Text("%s", func);
-        }
-
-        SeparatorText("Disassembly");
-
-        if (BeginChild("ee##disassembly")) {
-            show_ee_disassembly_view(iris);
-        } EndChild();
-    } End();
-
-    PopFont();
+    return Applet::begin();
 }
 
-void show_iop_control(Instance* iris) {
+void EeControl::end() {
+    ImGui::End();
+    ImGui::PopFont();
+}
+
+void EeControl::on_render() {
     using namespace ImGui;
 
-    PushFont(iris->ui.font_icons);
+    if (Button(iris->debug.pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE, ImVec2(50, 0))) {
+        iris->debug.pause = !iris->debug.pause;
+    } SameLine();
 
-    if (imgui::BeginEx("IOP (R3000)", &iris->ui.show_iop_control)) {
-        if (Button(iris->debug.pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE, ImVec2(50, 0))) {
-            iris->debug.pause = !iris->debug.pause;
-        } SameLine();
+    if (Button(ICON_MS_STEP_INTO)) {
+        iris->debug.pause = true;
+        iris->debug.step = true;
+    } SameLine();
 
-        if (Button(ICON_MS_STEP)) {
-            iris->debug.pause = true;
+    if (Button(ICON_MS_STEP_OVER)) {
+        iris->debug.step_over = true;
+        iris->debug.step_over_addr = iris->ps2->ee->pc + 4;
+        iris->debug.pause = false;
+    } SameLine();
 
-            ps2::step_iop(iris->ps2);
-        } SameLine();
+    if (Button(ICON_MS_STEP_OUT)) {
+        iris->debug.step_out = true;
+        iris->debug.pause = false;
+    } SameLine();
 
-        if (Button(ICON_MS_MOVE_DOWN)) {
-            iris->debug.iop_control_follow_pc = true;
+    if (Button(ICON_MS_MOVE_DOWN)) {
+        iris->debug.ee_control_follow_pc = true;
+    } SameLine();
+
+    if (Button(ICON_MS_AUTORENEW)) {
+        ee::flush_cache(iris->ps2->ee);
+    }
+
+    InputInt("Address", (int32_t*)&iris->debug.ee_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+
+    if (IsItemDeactivatedAfterEdit()) {
+        iris->debug.ee_control_follow_pc = false;
+    }
+
+    if (iris->debug.symbols.size()) {
+        TextDisabled("Current function:"); SameLine();
+
+        const char* func = "<unknown>";
+
+        for (elf::Symbol& sym : iris->debug.symbols) {
+            if (iris->ps2->ee->pc >= sym.addr && iris->ps2->ee->pc < (sym.addr + sym.size)) {
+                func = sym.name;
+
+                break;
+            }
         }
 
-        InputInt("Address", (int32_t*)&iris->debug.iop_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+        Text("%s", func);
+    }
 
-        if (IsItemDeactivatedAfterEdit()) {
-            iris->debug.iop_control_follow_pc = false;
-        }
+    SeparatorText("Disassembly");
 
-        SeparatorText("Disassembly");
+    if (BeginChild("ee##disassembly")) {
+        show_ee_disassembly_view(iris);
+    } EndChild();
+}
 
-        if (BeginChild("iop##disassembly")) {
-            show_iop_disassembly_view(iris);
-        } EndChild();
-    } End();
+bool IopControl::begin() {
+    ImGui::PushFont(iris->ui.font_icons);
 
-    PopFont();
+    return Applet::begin();
+}
+
+void IopControl::end() {
+    ImGui::End();
+    ImGui::PopFont();
+}
+
+void IopControl::on_render() {
+    using namespace ImGui;
+
+    if (Button(iris->debug.pause ? ICON_MS_PLAY_ARROW : ICON_MS_PAUSE, ImVec2(50, 0))) {
+        iris->debug.pause = !iris->debug.pause;
+    } SameLine();
+
+    if (Button(ICON_MS_STEP)) {
+        iris->debug.pause = true;
+
+        ps2::step_iop(iris->ps2);
+    } SameLine();
+
+    if (Button(ICON_MS_MOVE_DOWN)) {
+        iris->debug.iop_control_follow_pc = true;
+    }
+
+    InputInt("Address", (int32_t*)&iris->debug.iop_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+
+    if (IsItemDeactivatedAfterEdit()) {
+        iris->debug.iop_control_follow_pc = false;
+    }
+
+    SeparatorText("Disassembly");
+
+    if (BeginChild("iop##disassembly")) {
+        show_iop_disassembly_view(iris);
+    } EndChild();
 }
 
 }

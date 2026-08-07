@@ -48,32 +48,30 @@ void show_scheduler(Instance* iris) {
 
 }
 
-void show_timers(Instance* iris) {
+void Timers::on_render() {
     using namespace ImGui;
 
-    if (imgui::BeginEx("Timers", &iris->ui.show_timers)) {
-        if (BeginTabBar("##timers_tab_bar")) {
-            if (BeginTabItem("EE timers")) {
-                show_ee_timers(iris);
+    if (BeginTabBar("##timers_tab_bar")) {
+        if (BeginTabItem("EE timers")) {
+            show_ee_timers(iris);
 
-                EndTabItem();
-            }
-
-            if (BeginTabItem("IOP timers")) {
-                show_iop_timers(iris);
-
-                EndTabItem();
-            }
-
-            if (BeginTabItem("Scheduler")) {
-                show_scheduler(iris);
-
-                EndTabItem();
-            }
+            EndTabItem();
         }
 
-        EndTabBar();
-    } End();
+        if (BeginTabItem("IOP timers")) {
+            show_iop_timers(iris);
+
+            EndTabItem();
+        }
+
+        if (BeginTabItem("Scheduler")) {
+            show_scheduler(iris);
+
+            EndTabItem();
+        }
+    }
+
+    EndTabBar();
 }
 
 }

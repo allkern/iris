@@ -111,25 +111,23 @@ void show_ee_thread_list(Instance* iris) {
     }
 }
 
-void show_ee_threads(Instance* iris) {
+void EeThreads::on_render() {
     using namespace ImGui;
-    
-    if (imgui::BeginEx("EE Threads", &iris->ui.show_ee_threads)) {
-        if (!iris->ps2->ee->thread_list_base) {
-            ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
-            ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);
-            ImVec4 col = GetStyle().Colors[ImGuiCol_Text];
 
-            SetCursorPos(pos);
-            TextDisabled(ICON_MS_WARNING " Thread list hasn't been initialized yet");
+    if (!iris->ps2->ee->thread_list_base) {
+        ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
+        ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);
+        ImVec4 col = GetStyle().Colors[ImGuiCol_Text];
 
-            End();
+        SetCursorPos(pos);
+        TextDisabled(ICON_MS_WARNING " Thread list hasn't been initialized yet");
 
-            return;
-        }
+        End();
 
-        show_ee_thread_list(iris);
-    } End();
+        return;
+    }
+
+    show_ee_thread_list(iris);
 }
 
 static inline const char* get_iop_wait_string(int wait) {
@@ -206,25 +204,23 @@ void show_iop_thread_list(Instance* iris) {
     }
 }
 
-void show_iop_threads(Instance* iris) {
+void IopThreads::on_render() {
     using namespace ImGui;
-    
-    if (imgui::BeginEx("IOP Threads", &iris->ui.show_iop_threads)) {
-        if (!iris->ps2->iop->thread_list_addr) {
-            ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
-            ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);
-            ImVec4 col = GetStyle().Colors[ImGuiCol_Text];
 
-            SetCursorPos(pos);
-            TextDisabled(ICON_MS_WARNING " Thread list hasn't been initialized yet");
+    if (!iris->ps2->iop->thread_list_addr) {
+        ImVec2 size = CalcTextSize(ICON_MS_WARNING " Thread list hasn't been initialized yet");
+        ImVec2 pos = ImVec2(GetContentRegionAvail().x / 2 - size.x / 2, GetContentRegionAvail().y / 2 - size.y / 2);
+        ImVec4 col = GetStyle().Colors[ImGuiCol_Text];
 
-            End();
+        SetCursorPos(pos);
+        TextDisabled(ICON_MS_WARNING " Thread list hasn't been initialized yet");
 
-            return;
-        }
+        End();
 
-        show_iop_thread_list(iris);
-    } End();
+        return;
+    }
+
+    show_iop_thread_list(iris);
 }
 
 }

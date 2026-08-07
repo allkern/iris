@@ -400,7 +400,7 @@ static void show_settings_menu(Instance* iris) {
         Separator();
 
         if (MenuItem(ICON_MS_MANUFACTURING " Settings...")) {
-            iris->ui.show_settings = true;
+            iris->applets.settings.open = true;
         }
 
         ImGui::EndMenu();
@@ -438,15 +438,15 @@ static void show_tools_menu(Instance* iris) {
         if (MenuItem(ICON_MS_MOVIE " Dump GS frames...")) {
             iris->debug.gsdump_prev_pause = iris->debug.pause;
             iris->debug.pause = true;
-            iris->ui.show_gs_dump_tool = true;
+            iris->applets.gs_dump_tool.open = true;
         }
 
         if (MenuItem(ICON_MS_SD_CARD " Memory Card tool")) {
-            iris->ui.show_memory_card_tool = true;
+            iris->applets.memory_card_tool.open = true;
         }
 
         if (MenuItem(ICON_MS_HARD_DRIVE " HDD tool")) {
-            iris->ui.show_hdd_tool = true;
+            iris->applets.hdd_tool.open = true;
         }
 
         ImGui::EndMenu();
@@ -477,43 +477,43 @@ static void show_debug_menu(Instance* iris) {
     if (BeginMenu("Debug")) {
         SeparatorText("EE");
         // if (BeginMenu(ICON_MS_BUG_REPORT " EE")) {
-            MenuItem(ICON_MS_SETTINGS " Control##ee", NULL, &iris->ui.show_ee_control);
-            MenuItem(ICON_MS_EDIT_NOTE " State##ee", NULL, &iris->ui.show_ee_state);
-            MenuItem(ICON_MS_TERMINAL " Logs##ee", NULL, &iris->ui.show_ee_logs);
-            MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->ui.show_ee_interrupts);
+            MenuItem(ICON_MS_SETTINGS " Control##ee", NULL, &iris->applets.ee_control.open);
+            MenuItem(ICON_MS_EDIT_NOTE " State##ee", NULL, &iris->applets.ee_state.open);
+            MenuItem(ICON_MS_TERMINAL " Logs##ee", NULL, &iris->applets.ee_logs.open);
+            MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->applets.ee_interrupts.open);
 
             BeginDisabled(iris->debug.symbols.empty());
             MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->applets.symbols.open);
             EndDisabled();
 
-            MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->ui.show_ee_threads);
+            MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->applets.ee_threads.open);
 
             // ImGui::EndMenu();
         // }
 
         SeparatorText("IOP");
         // if (BeginMenu(ICON_MS_BUG_REPORT " IOP")) {
-            MenuItem(ICON_MS_SETTINGS " Control##iop", NULL, &iris->ui.show_iop_control);
-            MenuItem(ICON_MS_EDIT_NOTE " State##iop", NULL, &iris->ui.show_iop_state);
-            MenuItem(ICON_MS_TERMINAL " Logs##iop", NULL, &iris->ui.show_iop_logs);
-            MenuItem(ICON_MS_BOLT " Interrupts##iop", NULL, &iris->ui.show_iop_interrupts);
-            MenuItem(ICON_MS_EXTENSION " Modules##iop", NULL, &iris->ui.show_iop_modules);
-            MenuItem(ICON_MS_ACCOUNT_TREE " Threads##iop", NULL, &iris->ui.show_iop_threads);
+            MenuItem(ICON_MS_SETTINGS " Control##iop", NULL, &iris->applets.iop_control.open);
+            MenuItem(ICON_MS_EDIT_NOTE " State##iop", NULL, &iris->applets.iop_state.open);
+            MenuItem(ICON_MS_TERMINAL " Logs##iop", NULL, &iris->applets.iop_logs.open);
+            MenuItem(ICON_MS_BOLT " Interrupts##iop", NULL, &iris->applets.iop_interrupts.open);
+            MenuItem(ICON_MS_EXTENSION " Modules##iop", NULL, &iris->applets.iop_modules.open);
+            MenuItem(ICON_MS_ACCOUNT_TREE " Threads##iop", NULL, &iris->applets.iop_threads.open);
 
         //     ImGui::EndMenu();
         // }
 
         Separator();
 
-        MenuItem(ICON_MS_BUG_REPORT " Breakpoints", NULL, &iris->ui.show_breakpoints);
-        MenuItem(ICON_MS_BRUSH " GS debugger", NULL, &iris->ui.show_gs_debugger);
-        MenuItem(ICON_MS_MUSIC_NOTE " SPU2 debugger", NULL, &iris->ui.show_spu2_debugger);
-        MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->ui.show_memory_viewer);
-        MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->ui.show_vu_disassembler);
-        MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->ui.show_pad_debugger);
-        MenuItem(ICON_MS_TIMER " Timers", NULL, &iris->ui.show_timers);
+        MenuItem(ICON_MS_BUG_REPORT " Breakpoints", NULL, &iris->applets.breakpoints.open);
+        MenuItem(ICON_MS_BRUSH " GS debugger", NULL, &iris->applets.gs_debugger.open);
+        MenuItem(ICON_MS_MUSIC_NOTE " SPU2 debugger", NULL, &iris->applets.spu2_debugger.open);
+        MenuItem(ICON_MS_MEMORY " Memory viewer", NULL, &iris->applets.memory_viewer.open);
+        MenuItem(ICON_MS_VIEW_IN_AR " VU disassembler", NULL, &iris->applets.vu_disassembler.open);
+        MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->applets.pad_debugger.open);
+        MenuItem(ICON_MS_TIMER " Timers", NULL, &iris->applets.timers.open);
         MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->ui.show_overlay);
-        MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->ui.show_sysmem_logs);
+        MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->applets.sysmem_logs.open);
 
         Separator();
 
@@ -525,27 +525,27 @@ static void show_debug_menu(Instance* iris) {
         }
 
         if (MenuItem(ICON_MS_CLOSE " Close all")) {
-            iris->ui.show_ee_control = false;
-            iris->ui.show_ee_state = false;
-            iris->ui.show_ee_logs = false;
-            iris->ui.show_ee_interrupts = false;
-            iris->ui.show_ee_dmac = false;
-            iris->ui.show_iop_control = false;
-            iris->ui.show_iop_state = false;
-            iris->ui.show_iop_logs = false;
-            iris->ui.show_iop_interrupts = false;
-            iris->ui.show_iop_modules = false;
-            iris->ui.show_iop_dma = false;
-            iris->ui.show_gs_debugger = false;
-            iris->ui.show_spu2_debugger = false;
-            iris->ui.show_memory_viewer = false;
+            iris->applets.ee_control.open = false;
+            iris->applets.ee_state.open = false;
+            iris->applets.ee_logs.open = false;
+            iris->applets.ee_interrupts.open = false;
+            iris->applets.ee_dmac.open = false;
+            iris->applets.iop_control.open = false;
+            iris->applets.iop_state.open = false;
+            iris->applets.iop_logs.open = false;
+            iris->applets.iop_interrupts.open = false;
+            iris->applets.iop_modules.open = false;
+            iris->applets.iop_dma.open = false;
+            iris->applets.gs_debugger.open = false;
+            iris->applets.spu2_debugger.open = false;
+            iris->applets.memory_viewer.open = false;
             iris->applets.memory_search.open = false;
-            iris->ui.show_vu_disassembler = false;
+            iris->applets.vu_disassembler.open = false;
             iris->ui.show_status_bar = false;
-            iris->ui.show_breakpoints = false;
-            iris->ui.show_ee_threads = false;
-            iris->ui.show_iop_threads = false;
-            iris->ui.show_sysmem_logs = false;
+            iris->applets.breakpoints.open = false;
+            iris->applets.ee_threads.open = false;
+            iris->applets.iop_threads.open = false;
+            iris->applets.sysmem_logs.open = false;
             iris->ui.show_imgui_demo = false;
             iris->ui.show_overlay = false;
         }
@@ -563,7 +563,7 @@ static void show_help_menu(Instance* iris) {
 
     if (BeginMenu("Help")) {
         if (MenuItem(ICON_MS_INFO " About")) {
-            iris->ui.show_about_window = true;
+            iris->applets.about.open = true;
         }
 
         if (MenuItem(ICON_MS_EXCLAMATION " Report an issue")) {

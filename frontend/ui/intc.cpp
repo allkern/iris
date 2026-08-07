@@ -9,7 +9,7 @@
 
 namespace iris {
 
-const char* ee_irq_sources[] = {
+static const char* ee_irq_sources[] = {
     "GS",
     "SBUS",
     "Vblank In",
@@ -27,7 +27,7 @@ const char* ee_irq_sources[] = {
     "VU0 Watchdog"
 };
 
-const char* ee_dmac_irq_sources[] = {
+static const char* ee_dmac_irq_sources[] = {
     "VIF0",
     "VIF1",
     "GIF",
@@ -40,7 +40,7 @@ const char* ee_dmac_irq_sources[] = {
     "SPR_TO"
 };
 
-const char* iop_irq_sources[] = {
+static const char* iop_irq_sources[] = {
     "Vblank In",
     "GPU",
     "CDVD",
@@ -161,42 +161,40 @@ void show_ee_dmac_interrupts(Instance* iris) {
     }
 }
 
-void show_ee_interrupts(Instance* iris) {
+void EeInterrupts::on_render() {
     using namespace ImGui;
 
     ee::intc::Intc* intc = iris->ps2->ee_intc;
 
-    if (imgui::BeginEx("EE Interrupts", &iris->ui.show_ee_interrupts)) {
-        if (Button(ICON_MS_REMOVE_SELECTION)) {
-            intc->mask = 0;
-        } SameLine();
+    if (Button(ICON_MS_REMOVE_SELECTION)) {
+        intc->mask = 0;
+    } SameLine();
 
-        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            SetTooltip("Disable all");
+    if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+        SetTooltip("Disable all");
+    }
+
+    if (Button(ICON_MS_SELECT)) {
+        intc->mask |= 0xffff;
+    }
+
+    if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+        SetTooltip("Enable all");
+    }
+
+    if (BeginChild("##eeintcchild")) {
+        if (TreeNode("INTC")) {
+            show_ee_intc_interrupts(iris);
+
+            TreePop();
         }
 
-        if (Button(ICON_MS_SELECT)) {
-            intc->mask |= 0xffff;
+        if (TreeNode("DMAC")) {
+            show_ee_dmac_interrupts(iris);
+
+            TreePop();
         }
-
-        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            SetTooltip("Enable all");
-        }
-
-        if (BeginChild("##eeintcchild")) {
-            if (TreeNode("INTC")) {
-                show_ee_intc_interrupts(iris);
-
-                TreePop();
-            }
-
-            if (TreeNode("DMAC")) {
-                show_ee_dmac_interrupts(iris);
-
-                TreePop();
-            }
-        } EndChild();
-    } End();
+    } EndChild();
 }
 
 void show_iop_intc_interrupts(Instance* iris) {
@@ -245,32 +243,30 @@ void show_iop_intc_interrupts(Instance* iris) {
     }
 }
 
-void show_iop_interrupts(Instance* iris) {
+void IopInterrupts::on_render() {
     using namespace ImGui;
 
     iop::intc::Intc* intc = iris->ps2->iop_intc;
 
-    if (imgui::BeginEx("IOP Interrupts", &iris->ui.show_iop_interrupts)) {
-        if (Button(ICON_MS_REMOVE_SELECTION)) {
-            intc->mask = 0;
-        } SameLine();
+    if (Button(ICON_MS_REMOVE_SELECTION)) {
+        intc->mask = 0;
+    } SameLine();
 
-        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            SetTooltip("Disable all");
-        }
+    if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+        SetTooltip("Disable all");
+    }
 
-        if (Button(ICON_MS_SELECT)) {
-            intc->mask |= 0xffff;
-        }
+    if (Button(ICON_MS_SELECT)) {
+        intc->mask |= 0xffff;
+    }
 
-        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            SetTooltip("Enable all");
-        }
+    if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+        SetTooltip("Enable all");
+    }
 
-        if (BeginChild("##iopintcchild")) {
-            show_iop_intc_interrupts(iris);
-        } EndChild();
-    } End();
+    if (BeginChild("##iopintcchild")) {
+        show_iop_intc_interrupts(iris);
+    } EndChild();
 }
 
 }

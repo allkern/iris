@@ -15,12 +15,7 @@
 
 namespace iris {
 
-enum : int {
-    IMAGE_FMT_RAW,
-    IMAGE_FMT_ISIF
-};
-
-const char* image_format_names[] = {
+static const char* image_format_names[] = {
     "RAW",
     "ISIF"
 };
@@ -63,93 +58,87 @@ std::string get_file_size_string(int format, uint64_t size) {
     return std::string(buf);
 }
 
-void show_hdd_tool(Instance* iris) {
+void HddTool::on_render() {
     using namespace ImGui;
 
-    static int image_format = IMAGE_FMT_ISIF;
-    static int size_add = 0;
-    static bool assign = true;
+    if (BeginTabBar("##hddtooltabs")) {
+        if (BeginTabItem("Create")) {
+            Text("Image format");
+            Combo("##image_format", &image_format, image_format_names, IM_ARRAYSIZE(image_format_names));
 
-    if (imgui::BeginEx("HDD Tool", &iris->ui.show_hdd_tool)) {
-        if (BeginTabBar("##hddtooltabs")) {
-            if (BeginTabItem("Create")) {
-                Text("Image format");
-                Combo("##image_format", &image_format, image_format_names, IM_ARRAYSIZE(image_format_names));
+            Text("Size (GiB)");
 
-                Text("Size (GiB)");
+            std::string size_hint = std::to_string((MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 0x40000000ull);
 
-                std::string size_hint = std::to_string((MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 0x40000000ull);
+            if (BeginCombo("##sizepreset", size_hint.c_str(), 0)) {
+                for (int i = 0; i < 4; i++) {
+                    std::string str = std::to_string((MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * i)) / 0x40000000ull);
 
-                if (BeginCombo("##sizepreset", size_hint.c_str(), 0)) {
-                    for (int i = 0; i < 4; i++) {
-                        std::string str = std::to_string((MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * i)) / 0x40000000ull);
-
-                        if (Selectable(str.c_str())) {
-                            size_add = i;
-                        }
+                    if (Selectable(str.c_str())) {
+                        size_add = i;
                     }
-
-                    EndCombo();
                 }
 
-                if (BeginTable("##effective-clock", 2, ImGuiTableFlags_SizingFixedSame)) {
-                    TableNextRow();
+                EndCombo();
+            }
 
-                    TableSetColumnIndex(0);
-                    TextDisabled("Estimated size");
-                    TableSetColumnIndex(1);
-                    Text("%s", get_file_size_string(image_format, MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)).c_str());
+            if (BeginTable("##effective-clock", 2, ImGuiTableFlags_SizingFixedSame)) {
+                TableNextRow();
 
-                    EndTable();
+                TableSetColumnIndex(0);
+                TextDisabled("Estimated size");
+                TableSetColumnIndex(1);
+                Text("%s", get_file_size_string(image_format, MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)).c_str());
+
+                EndTable();
+            }
+
+            PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+            Checkbox("Attach to PS2", &assign);
+            PopStyleVar();
+
+            if (Button("Create")) {
+                std::string default_path = iris->paths.pref_path;
+                
+                if (image_format == IMAGE_FMT_RAW) {
+                    default_path += "hdd.raw";
+                } else {
+                    default_path += "hdd.isif";
                 }
 
-                PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-                Checkbox("Attach to PS2", &assign);
-                PopStyleVar();
+                auto f = pfd::save_file("Save HDD image", default_path, {
+                    "ISIF Image (*.isif)", "*.isif",
+                    "RAW Image (*.raw *.bin)", "*.raw *.bin",
+                    "All Files (*.*)", "*"
+                });
 
-                if (Button("Create")) {
-                    std::string default_path = iris->paths.pref_path;
-                    
+                while (!f.ready());
+
+                if (f.result().size()) {
                     if (image_format == IMAGE_FMT_RAW) {
-                        default_path += "hdd.raw";
+                        create_raw_image(f.result().c_str(), MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add));
                     } else {
-                        default_path += "hdd.isif";
-                    }
+                        uint64_t block_count = (MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 512;
 
-                    auto f = pfd::save_file("Save HDD image", default_path, {
-                        "ISIF Image (*.isif)", "*.isif",
-                        "RAW Image (*.raw *.bin)", "*.raw *.bin",
-                        "All Files (*.*)", "*"
-                    });
-
-                    while (!f.ready());
-
-                    if (f.result().size()) {
-                        if (image_format == IMAGE_FMT_RAW) {
-                            create_raw_image(f.result().c_str(), MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add));
-                        } else {
-                            uint64_t block_count = (MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 512;
-
-                            ata::isif::create_image(iris->logger, f.result().c_str(), block_count, 512, 1, 0, nullptr, 0);
-                        }
-                    }
-
-                    if (assign) {
-                        iris->paths.hdd_path = f.result();
+                        ata::isif::create_image(iris->logger, f.result().c_str(), block_count, 512, 1, 0, nullptr, 0);
                     }
                 }
 
-                EndTabItem();
+                if (assign) {
+                    iris->paths.hdd_path = f.result();
+                }
             }
 
-            if (BeginTabItem("Convert")) {
-                Text("This tool is a work in progress and doesn't do anything yet.");
-                EndTabItem();
-            }
-
-            EndTabBar();
+            EndTabItem();
         }
-    } End();
+
+        if (BeginTabItem("Convert")) {
+            Text("This tool is a work in progress and doesn't do anything yet.");
+            EndTabItem();
+        }
+
+        EndTabBar();
+    }
 }
 
 }

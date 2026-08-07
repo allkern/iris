@@ -8,7 +8,7 @@
 
 namespace iris {
 
-const char* cpu_names[] = {
+static const char* cpu_names[] = {
     "EE",
     "IOP"
 };
@@ -167,58 +167,56 @@ void show_breakpoint_editor(Instance* iris) {
     }
 }
 
-void show_breakpoints(Instance* iris) {
+void Breakpoints::on_render() {
     using namespace ImGui;
 
-    if (imgui::BeginEx("Breakpoints", &iris->ui.show_breakpoints, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            MenuItem("Settings");
+    if (BeginMenuBar()) {
+        MenuItem("Settings");
 
-            EndMenuBar();
+        EndMenuBar();
+    }
+
+    if (Button(ICON_MS_DELETE, ImVec2(50, 0))) {
+        selected = nullptr;
+
+        iris->debug.breakpoints.clear();
+    } SameLine();
+
+    if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+        SetTooltip("Clear all");
+    }
+
+    if (Button(ICON_MS_REMOVE_SELECTION)) {
+        for (Breakpoint& b : iris->debug.breakpoints) {
+            b.enabled = false;
         }
+    } SameLine();
 
-        if (Button(ICON_MS_DELETE, ImVec2(50, 0))) {
-            selected = nullptr;
+    if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+        SetTooltip("Disable all");
+    }
 
-            iris->debug.breakpoints.clear();
-        } SameLine();
-
-        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            SetTooltip("Clear all");
+    if (Button(ICON_MS_SELECT)) {
+        for (Breakpoint& b : iris->debug.breakpoints) {
+            b.enabled = true;
         }
+    }
 
-        if (Button(ICON_MS_REMOVE_SELECTION)) {
-            for (Breakpoint& b : iris->debug.breakpoints) {
-                b.enabled = false;
-            }
-        } SameLine();
+    if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
+        SetTooltip("Enable all");
+    }
 
-        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            SetTooltip("Disable all");
-        }
+    Separator();
 
-        if (Button(ICON_MS_SELECT)) {
-            for (Breakpoint& b : iris->debug.breakpoints) {
-                b.enabled = true;
-            }
-        }
+    if (BeginChild("##tablechild", ImVec2(0, GetContentRegionAvail().y / 2.0f))) {
+        show_breakpoints_table(iris);
+    } EndChild();
 
-        if (IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled | ImGuiHoveredFlags_DelayNormal)) {
-            SetTooltip("Enable all");
-        }
+    SeparatorText("Add breakpoint");
 
-        Separator();
-
-        if (BeginChild("##tablechild", ImVec2(0, GetContentRegionAvail().y / 2.0f))) {
-            show_breakpoints_table(iris);
-        } EndChild();
-
-        SeparatorText("Add breakpoint");
-
-        if (BeginChild("##tablechild2")) {
-            show_breakpoint_editor(iris);
-        } EndChild();
-    } End();
+    if (BeginChild("##tablechild2")) {
+        show_breakpoint_editor(iris);
+    } EndChild();
 }
 
 }

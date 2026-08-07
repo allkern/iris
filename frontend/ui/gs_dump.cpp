@@ -29,116 +29,110 @@ static std::string gsdump_detect_serial(Instance* iris) {
     return serial;
 }
 
-void show_gs_dump_tool(Instance* iris) {
+void GsDumpTool::on_open() {
+    serial = gsdump_detect_serial(iris);
+    frames = 1;
+    delay = 0;
+
+    std::string def = (serial.empty() ? std::string("dump") : serial) + ".gs";
+
+    strncpy(filename, def.c_str(), sizeof(filename) - 1);
+    filename[sizeof(filename) - 1] = '\0';
+}
+
+void GsDumpTool::on_render() {
     using namespace ImGui;
 
-    static char filename[1024] = "";
-    static int frames = 1;
-    static int delay = 0;
-    static std::string serial;
+    bool capturing = iris->debug.gsdump_armed ||
+        (iris->debug.gsdump && gs::dump::is_active(iris->debug.gsdump));
 
-    if (imgui::BeginEx("Capture GS dump", &iris->ui.show_gs_dump_tool, ImGuiWindowFlags_AlwaysAutoResize)) {
-        if (IsWindowAppearing()) {
-            serial = gsdump_detect_serial(iris);
-            frames = 1;
-            delay = 0;
+    if (iris->renderer_backend != gs::renderer::BACKEND_HARDWARE) {
+        TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f),
+            ICON_MS_WARNING " GS dumps require the hardware (Vulkan) renderer.");
+        Spacing();
+    }
 
-            std::string def = (serial.empty() ? std::string("dump") : serial) + ".gs";
-            strncpy(filename, def.c_str(), sizeof(filename) - 1);
+    TextDisabled("Serial");
+    if (serial.empty()) {
+        TextDisabled("No serial detected");
+    } else {
+        Text("%s", serial.c_str());
+    }
+
+    Spacing();
+
+    TextDisabled("Output file");
+    SetNextItemWidth(360.0f);
+    InputText("##gsdump_file", filename, sizeof(filename));
+    SameLine();
+    if (Button(ICON_MS_FOLDER_OPEN "##gsdump_browse")) {
+        audio::mute(iris);
+
+        auto f = pfd::save_file("Save GS dump", filename, {
+            "GS dump (*.gs)", "*.gs",
+            "All Files (*.*)", "*"
+        });
+
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        if (f.result().size()) {
+            strncpy(filename, f.result().c_str(), sizeof(filename) - 1);
             filename[sizeof(filename) - 1] = '\0';
         }
+    }
 
-        bool capturing = iris->debug.gsdump_armed ||
-            (iris->debug.gsdump && gs::dump::is_active(iris->debug.gsdump));
+    Spacing();
 
-        if (iris->renderer_backend != gs::renderer::BACKEND_HARDWARE) {
-            TextColored(ImVec4(1.0f, 0.6f, 0.2f, 1.0f),
-                ICON_MS_WARNING " GS dumps require the hardware (Vulkan) renderer.");
-            Spacing();
-        }
+    SetNextItemWidth(140.0f);
+    if (InputInt("Frames to capture", &frames)) {
+        if (frames < 1) frames = 1;
+    }
 
-        TextDisabled("Serial");
-        if (serial.empty()) {
-            TextDisabled("No serial detected");
+    SetNextItemWidth(140.0f);
+    if (InputInt("Frames to wait first", &delay)) {
+        if (delay < 0) delay = 0;
+    }
+
+    Spacing();
+    Separator();
+    Spacing();
+
+    if (capturing) {
+        if (iris->debug.gsdump_armed) {
+            Text(ICON_MS_HOURGLASS_TOP " Waiting %d frame(s) before capture...",
+                iris->debug.gsdump_delay_remaining);
         } else {
-            Text("%s", serial.c_str());
+            Text(ICON_MS_FIBER_MANUAL_RECORD " Capturing... %d frame(s) left",
+                iris->debug.gsdump_frames_remaining);
         }
 
-        Spacing();
+        if (Button(ICON_MS_CLOSE " Close")) {
+            iris->applets.gs_dump_tool.open = false;
+        }
+    } else {
+        BeginDisabled(filename[0] == '\0' ||
+            iris->renderer_backend != gs::renderer::BACKEND_HARDWARE);
 
-        TextDisabled("Output file");
-        SetNextItemWidth(360.0f);
-        InputText("##gsdump_file", filename, sizeof(filename));
+        if (Button(ICON_MS_MOVIE " Start capture")) {
+            iris->debug.pause = false;
+
+            render::gs_dump_start(iris, filename, frames, delay, serial);
+
+            iris->applets.gs_dump_tool.open = false;
+        }
+
+        EndDisabled();
+
         SameLine();
-        if (Button(ICON_MS_FOLDER_OPEN "##gsdump_browse")) {
-            audio::mute(iris);
 
-            auto f = pfd::save_file("Save GS dump", filename, {
-                "GS dump (*.gs)", "*.gs",
-                "All Files (*.*)", "*"
-            });
+        if (Button(ICON_MS_CLOSE " Cancel")) {
+            iris->debug.pause = iris->debug.gsdump_prev_pause;
 
-            while (!f.ready());
-
-            audio::unmute(iris);
-
-            if (f.result().size()) {
-                strncpy(filename, f.result().c_str(), sizeof(filename) - 1);
-                filename[sizeof(filename) - 1] = '\0';
-            }
+            iris->applets.gs_dump_tool.open = false;
         }
-
-        Spacing();
-
-        SetNextItemWidth(140.0f);
-        if (InputInt("Frames to capture", &frames)) {
-            if (frames < 1) frames = 1;
-        }
-
-        SetNextItemWidth(140.0f);
-        if (InputInt("Frames to wait first", &delay)) {
-            if (delay < 0) delay = 0;
-        }
-
-        Spacing();
-        Separator();
-        Spacing();
-
-        if (capturing) {
-            if (iris->debug.gsdump_armed) {
-                Text(ICON_MS_HOURGLASS_TOP " Waiting %d frame(s) before capture...",
-                    iris->debug.gsdump_delay_remaining);
-            } else {
-                Text(ICON_MS_FIBER_MANUAL_RECORD " Capturing... %d frame(s) left",
-                    iris->debug.gsdump_frames_remaining);
-            }
-
-            if (Button(ICON_MS_CLOSE " Close")) {
-                iris->ui.show_gs_dump_tool = false;
-            }
-        } else {
-            BeginDisabled(filename[0] == '\0' ||
-                iris->renderer_backend != gs::renderer::BACKEND_HARDWARE);
-
-            if (Button(ICON_MS_MOVIE " Start capture")) {
-                iris->debug.pause = false;
-
-                render::gs_dump_start(iris, filename, frames, delay, serial);
-
-                iris->ui.show_gs_dump_tool = false;
-            }
-
-            EndDisabled();
-
-            SameLine();
-
-            if (Button(ICON_MS_CLOSE " Cancel")) {
-                iris->debug.pause = iris->debug.gsdump_prev_pause;
-
-                iris->ui.show_gs_dump_tool = false;
-            }
-        }
-    } End();
+    }
 }
 
 }

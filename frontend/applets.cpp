@@ -9,9 +9,36 @@ void create(Instance* iris) {
     Applets& applets = iris->applets;
 
     applets.all = {
+        &applets.ee_control,
+        &applets.ee_state,
+        &applets.ee_logs,
+        &applets.ee_interrupts,
+        &applets.ee_dmac,
+        &applets.iop_control,
+        &applets.iop_state,
+        &applets.iop_logs,
+        &applets.iop_interrupts,
+        &applets.iop_modules,
+        &applets.iop_dma,
+        &applets.gs_debugger,
+        &applets.spu2_debugger,
+        &applets.memory_viewer,
+        &applets.vu_disassembler,
+        &applets.breakpoints,
+        &applets.about,
         &applets.compat_report,
+        &applets.settings,
+        &applets.pad_debugger,
+        &applets.symbols,
+        &applets.ee_threads,
+        &applets.iop_threads,
+        &applets.timers,
+        &applets.sysmem_logs,
+        &applets.memory_card_tool,
         &applets.memory_search,
-        &applets.symbols
+        &applets.hdd_tool,
+        &applets.gs_dump_tool,
+        &applets.bios_setting
     };
 
     for (Applet* a : applets.all)

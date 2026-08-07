@@ -22,148 +22,152 @@ static const char* const type_names[] = {
     "PocketStation"
 };
 
-int size = 0;
-int type = MEMCARD_TYPE_PS2;
-int slot = 0;
-std::string fpath;
+static int size = 0;
+static int type = MEMCARD_TYPE_PS2;
+static int slot = 0;
+static std::string fpath;
 
-void show_memory_card_tool(Instance* iris) {
+bool MemoryCardTool::begin() {
+    ImGui::SetNextWindowSizeConstraints(ImVec2(350, 320), ImVec2(FLT_MAX, FLT_MAX));
+
+    return Applet::begin();
+}
+
+void MemoryCardTool::on_render() {
     using namespace ImGui;
 
-    SetNextWindowSizeConstraints(ImVec2(350, 320), ImVec2(FLT_MAX, FLT_MAX));
+    Text("Type");
 
-    if (imgui::BeginEx("Create memory card", &iris->ui.show_memory_card_tool, ImGuiWindowFlags_NoCollapse)) {
-        Text("Type");
+    if (BeginCombo("##type", type_names[type])) {
+        for (int i = 0; i < 3; i++) {
+            if (Selectable(type_names[i], i == type)) {
+                type = i;
+            }
+        }
 
-        if (BeginCombo("##type", type_names[type])) {
-            for (int i = 0; i < 3; i++) {
-                if (Selectable(type_names[i], i == type)) {
-                    type = i;
+        EndCombo();
+    }
+
+    Text("Size");
+
+    if (type == MEMCARD_TYPE_PS2) {
+        char buf[16]; sprintf(buf, "%d MB", 8 << size);
+
+        if (BeginCombo("##size", buf)) {
+            for (int i = 0; i < 5; i++) {
+                sprintf(buf, "%d MB", 8 << i);
+
+                if (Selectable(buf, i == size)) {
+                    size = i;
                 }
             }
 
             EndCombo();
         }
+    } else {
+        BeginDisabled(true);
+        BeginCombo("##size", "128 KiB");
+        EndDisabled();
+    }
 
-        Text("Size");
+    Text("Attach to");
+
+    if (BeginCombo("##slot", slot == -1 ? "None" : slot == 0 ? "Slot 1" : "Slot 2")) {
+        if (Selectable("None", slot == -1)) {
+            slot = -1;
+        }
+
+        if (Selectable("Slot 1", slot == 0)) {
+            slot = 0;
+        }
+
+        if (Selectable("Slot 2", slot == 1)) {
+            slot = 1;
+        }
+
+        EndCombo();
+    }
+
+    if (Button("Create")) {
+        // Create memory card file
+        int size_in_bytes;
 
         if (type == MEMCARD_TYPE_PS2) {
-            char buf[16]; sprintf(buf, "%d MB", 8 << size);
-
-            if (BeginCombo("##size", buf)) {
-                for (int i = 0; i < 5; i++) {
-                    sprintf(buf, "%d MB", 8 << i);
-
-                    if (Selectable(buf, i == size)) {
-                        size = i;
-                    }
-                }
-
-                EndCombo();
-            }
+            // Calculate data + ECC area (nsects*512 + nsects*16)
+            size_in_bytes = 0x840000 << size;
         } else {
-            BeginDisabled(true);
-            BeginCombo("##size", "128 KiB");
-            EndDisabled();
+            size_in_bytes = 128 * 1024;
         }
 
-        Text("Attach to");
+        audio::mute(iris);
 
-        if (BeginCombo("##slot", slot == -1 ? "None" : slot == 0 ? "Slot 1" : "Slot 2")) {
-            if (Selectable("None", slot == -1)) {
-                slot = -1;
-            }
+        std::string default_path = iris->paths.pref_path + "image.mcd";
 
-            if (Selectable("Slot 1", slot == 0)) {
-                slot = 0;
-            }
-
-            if (Selectable("Slot 2", slot == 1)) {
-                slot = 1;
-            }
-
-            EndCombo();
+        if (type == MEMCARD_TYPE_POCKETSTATION) {
+            default_path = iris->paths.pref_path + "image.psm";
         }
 
-        if (Button("Create")) {
-            // Create memory card file
-            int size_in_bytes;
+        auto f = pfd::save_file("Save Memory Card image", default_path, {
+            "Iris Memory Card Image (*.mcd)", "*.mcd",
+            "PCSX2 Memory Card Image (*.ps2)", "*.ps2",
+            "PocketStation Image (*.psm; *.pocket)", "*.psm *.pocket",
+            "All Files (*.*)", "*"
+        });
 
-            if (type == MEMCARD_TYPE_PS2) {
-                // Calculate data + ECC area (nsects*512 + nsects*16)
-                size_in_bytes = 0x840000 << size;
-            } else {
-                size_in_bytes = 128 * 1024;
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        if (f.result().size()) {
+            FILE* file = fopen(f.result().c_str(), "wb");
+
+            const int shift = 4;
+
+            void* buf = malloc(size_in_bytes >> shift);
+
+            memset(buf, 0xff, size_in_bytes >> shift);
+
+            fseek(file, 0, SEEK_SET);
+
+            for (int i = 0; i < 1 << shift; i++) {
+                fwrite(buf, size_in_bytes >> shift, 1, file);
             }
 
-            audio::mute(iris);
+            fclose(file);
 
-            std::string default_path = iris->paths.pref_path + "image.mcd";
+            char msg[1024];
 
-            if (type == MEMCARD_TYPE_POCKETSTATION) {
-                default_path = iris->paths.pref_path + "image.psm";
-            }
+            sprintf(msg, "Created memory card image: \"%s\"", f.result().c_str());
 
-            auto f = pfd::save_file("Save Memory Card image", default_path, {
-                "Iris Memory Card Image (*.mcd)", "*.mcd",
-                "PCSX2 Memory Card Image (*.ps2)", "*.ps2",
-                "PocketStation Image (*.psm; *.pocket)", "*.psm *.pocket",
-                "All Files (*.*)", "*"
-            });
+            push_info(iris, std::string(msg));
 
-            while (!f.ready());
+            free(buf);
 
-            audio::unmute(iris);
+            if (slot != -1) {
+                if (iris->input.mcd_slot_type[slot]) {
+                    fpath = f.result();
 
-            if (f.result().size()) {
-                FILE* file = fopen(f.result().c_str(), "wb");
+                    OpenPopup("Confirm detach");
+                } else {
+                    // Attach memory card to slot
+                    if (emu::attach_memory_card(iris, slot, f.result().c_str())) {
+                        push_info(iris, "Memory card attached successfully.");
 
-                const int shift = 4;
-
-                void* buf = malloc(size_in_bytes >> shift);
-
-                memset(buf, 0xff, size_in_bytes >> shift);
-
-                fseek(file, 0, SEEK_SET);
-
-                for (int i = 0; i < 1 << shift; i++) {
-                    fwrite(buf, size_in_bytes >> shift, 1, file);
-                }
-
-                fclose(file);
-
-                char msg[1024];
-
-                sprintf(msg, "Created memory card image: \"%s\"", f.result().c_str());
-
-                push_info(iris, std::string(msg));
-
-                free(buf);
-
-                if (slot != -1) {
-                    if (iris->input.mcd_slot_type[slot]) {
-                        fpath = f.result();
-
-                        OpenPopup("Confirm detach");
-                    } else {
-                        // Attach memory card to slot
-                        if (emu::attach_memory_card(iris, slot, f.result().c_str())) {
-                            push_info(iris, "Memory card attached successfully.");
-
-                            if (slot == 0) {
-                                iris->paths.mcd0_path = f.result();
-                            } else {
-                                iris->paths.mcd1_path = f.result();
-                            }
+                        if (slot == 0) {
+                            iris->paths.mcd0_path = f.result();
                         } else {
-                            push_info(iris, "Failed to attach memory card.");
+                            iris->paths.mcd1_path = f.result();
                         }
+                    } else {
+                        push_info(iris, "Failed to attach memory card.");
                     }
                 }
             }
         }
+    }
 
-        if (!fpath.empty() && imgui::BeginEx("Confirm detach", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
+    if (!fpath.empty()) {
+        if (imgui::BeginEx("Confirm detach", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
             Text("A memory card is already attached to this slot. Do you want to detach it?");
 
             if (Button("Yes")) {
@@ -187,10 +191,10 @@ void show_memory_card_tool(Instance* iris) {
             if (Button("No")) {
                 fpath.clear();
             }
-
-            End();
         }
-    } End();
+
+        End();
+    }
 }
 
 }

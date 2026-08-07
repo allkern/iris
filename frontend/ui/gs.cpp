@@ -445,12 +445,12 @@ static uint32_t addr = 0, width = 0, height = 0;
 static bool unswizzle = false;
 static float scale = 1.0f;
 
-const char* format_names[] = {
+static const char* format_names[] = {
     "32-bit/24-bit",
     "16-bit"
 };
 
-int format = 0;
+static int format = 0;
 static SDL_GPUTexture* tex = nullptr;
 
 void show_gs_memory(Instance* iris) {
@@ -619,59 +619,57 @@ void show_gs_memory(Instance* iris) {
     // ImageWithBg((ImTextureID)(intptr_t)tex, ImVec2(width*scale, height*scale), ImVec2(0, 0), ImVec2(1, 1), ImVec4(0, 0, 0, 1), ImVec4(1, 1, 1, 1));
 }
 
-void show_gs_debugger(Instance* iris) {
+void GsDebugger::on_render() {
     using namespace ImGui;
 
-    if (imgui::BeginEx("GS", &iris->ui.show_gs_debugger, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            if (BeginMenu("Settings")) {
-                if (BeginMenu(ICON_MS_CROP " Sizing")) {
-                    for (int i = 0; i < 4; i++) {
-                        if (Selectable(sizing_combo_items[i], i == gs_sizing_index)) {
-                            gs_table_sizing = table_sizing_flags[i];
-                            gs_sizing_index = i;
-                        }
+    if (BeginMenuBar()) {
+        if (BeginMenu("Settings")) {
+            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+                for (int i = 0; i < 4; i++) {
+                    if (Selectable(sizing_combo_items[i], i == gs_sizing_index)) {
+                        gs_table_sizing = table_sizing_flags[i];
+                        gs_sizing_index = i;
                     }
-
-                    ImGui::EndMenu();
                 }
 
                 ImGui::EndMenu();
             }
 
-            EndMenuBar();
+            ImGui::EndMenu();
         }
 
-        if (BeginTable("table5", 5, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
-            TableNextRow();
+        EndMenuBar();
+    }
 
-            for (int i = 0; i < 5; i++) {
-                TableSetColumnIndex(i);
+    if (BeginTable("table5", 5, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
+        TableNextRow();
 
-                if (Selectable(gs_debug_names[i], gs_debug_index == i)) {
-                    gs_debug_index = i;
-                }
+        for (int i = 0; i < 5; i++) {
+            TableSetColumnIndex(i);
+
+            if (Selectable(gs_debug_names[i], gs_debug_index == i)) {
+                gs_debug_index = i;
             }
-
-            EndTable();
         }
 
-        if (BeginChild("##gschild")) {
-            switch (gs_debug_index) {
-                case 0: {
-                    show_gs_registers(iris);
-                } break;
+        EndTable();
+    }
 
-                case 3: {
-                    show_gs_queue(iris);
-                } break;
+    if (BeginChild("##gschild")) {
+        switch (gs_debug_index) {
+            case 0: {
+                show_gs_registers(iris);
+            } break;
 
-                case 4: {
-                    show_gs_memory(iris);
-                } break;
-            }
-        } EndChild();
-    } End();
+            case 3: {
+                show_gs_queue(iris);
+            } break;
+
+            case 4: {
+                show_gs_memory(iris);
+            } break;
+        }
+    } EndChild();
 }
 
 }

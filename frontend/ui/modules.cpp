@@ -85,55 +85,51 @@ static inline iop::hle::loadcore::Module* find_iop_module(Instance* iris, uint32
     return NULL;
 }
 
-void show_iop_modules(Instance* iris) {
+void IopModules::on_render() {
     using namespace ImGui;
 
     iop::Iop* iop = iris->ps2->iop;
 
-    if (imgui::BeginEx("IOP Modules", &iris->ui.show_iop_modules, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            if (BeginMenu("Settings")) {
-                if (BeginMenu(ICON_MS_CROP " Sizing")) {
-                    for (int i = 0; i < 4; i++) {
-                        if (Selectable(sizing_combo_items[i], i == table_sizing_combo)) {
-                            table_sizing = table_sizing_flags[i];
-                            table_sizing_combo = i;
-                        }
+    if (BeginMenuBar()) {
+        if (BeginMenu("Settings")) {
+            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+                for (int i = 0; i < 4; i++) {
+                    if (Selectable(sizing_combo_items[i], i == table_sizing_combo)) {
+                        table_sizing = table_sizing_flags[i];
+                        table_sizing_combo = i;
                     }
-
-                    ImGui::EndMenu();
                 }
 
                 ImGui::EndMenu();
             }
 
-            EndMenuBar();
+            ImGui::EndMenu();
         }
 
-        if (Button(ICON_MS_REFRESH)) {
-            iop::hle::loadcore::refresh_module_list(iris->ps2->iop);
-        }
-
-        Separator();
-
-        if (BeginChild("##tablechild", ImVec2(0, GetContentRegionAvail().y * 0.9))) {
-            show_modules_table(iris);
-
-            EndChild();
-        }
-
-        Separator();
-
-        const iop::hle::loadcore::Module* mod = find_iop_module(iris, iop->pc);
-
-        if (!mod) {
-            Text("Current module: <unknown>\n");
-        } else {
-            Text("Current module: %s (%08x-%08x)\n", mod->name, mod->text_addr, mod->text_addr + mod->text_size);
-        }
+        EndMenuBar();
     }
 
-    End();
+    if (Button(ICON_MS_REFRESH)) {
+        iop::hle::loadcore::refresh_module_list(iris->ps2->iop);
+    }
+
+    Separator();
+
+    if (BeginChild("##tablechild", ImVec2(0, GetContentRegionAvail().y * 0.9))) {
+        show_modules_table(iris);
+
+        EndChild();
+    }
+
+    Separator();
+
+    const iop::hle::loadcore::Module* mod = find_iop_module(iris, iop->pc);
+
+    if (!mod) {
+        Text("Current module: <unknown>\n");
+    } else {
+        Text("Current module: %s (%08x-%08x)\n", mod->name, mod->text_addr, mod->text_addr + mod->text_size);
+    }
 }
 
 }

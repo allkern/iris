@@ -58,14 +58,14 @@ inline std::string trim(std::string s) {
 
 namespace iris {
 
-vu::dis::Dis g_vu_dis_state = { 0 };
+static vu::dis::Dis g_vu_dis_state = { 0 };
 
-uint32_t addr = 0;
-bool stop_at_e_bit = false;
-bool disassemble_all = false;
-bool add_padding = true;
-bool compact_view = false;
-bool show_address_opcode = true;
+static uint32_t addr = 0;
+static bool stop_at_e_bit = false;
+static bool disassemble_all = false;
+static bool add_padding = true;
+static bool compact_view = false;
+static bool show_address_opcode = true;
 
 void print_highlighted_vu1(Instance* iris, const char* buf) {
     using namespace ImGui;
@@ -326,164 +326,169 @@ void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
     }
 }
 
-void show_vu_disassembler(Instance* iris) {
+bool VuDisassembler::begin() {
+    ImGui::PushFont(iris->ui.font_icons);
+
+    return Applet::begin();
+}
+
+void VuDisassembler::end() {
+    ImGui::End();
+    ImGui::PopFont();
+}
+
+void VuDisassembler::on_render() {
     using namespace ImGui;
 
-    PushFont(iris->ui.font_icons);
-
-    if (imgui::BeginEx("VU disassembler", &iris->ui.show_vu_disassembler, ImGuiWindowFlags_MenuBar)) {
-        if (BeginMenuBar()) {
-            if (BeginMenu("File")) {
-                if (MenuItem(ICON_MS_FILE_SAVE " Save disassembly as...", NULL)) {
-                    
-                }
-
-                ImGui::EndMenu();
-            }
-
-            if (BeginMenu("Settings")) {
-                MenuItem(ICON_MS_FORMAT_LETTER_SPACING_WIDER " Add padding", NULL, &add_padding);
-                MenuItem(ICON_MS_COLLAPSE_ALL " Compact view", NULL, &compact_view);
-
-                ImGui::EndMenu();
-            }
-
-            EndMenuBar();
-        }
-
-        if (BeginTabBar("##vudistabbar", ImGuiTabBarFlags_Reorderable)) {
-            if (BeginTabItem("VU0")) {
-                BeginDisabled(disassemble_all);
-                AlignTextToFramePadding();
-                Text("Address"); SameLine();
+    if (BeginMenuBar()) {
+        if (BeginMenu("File")) {
+            if (MenuItem(ICON_MS_FILE_SAVE " Save disassembly as...", NULL)) {
                 
-                SetNextItemWidth(100.0f);
-                PushFont(iris->ui.font_code);
-
-                InputInt("##address", (int*)&addr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EscapeClearsAll);
-
-                PopFont();
-
-                SameLine();
-                Checkbox("Stop at E bit", &stop_at_e_bit);
-
-                EndDisabled();
-
-                SameLine();
-                Checkbox("Disassemble all", &disassemble_all); SameLine();
-                if (Button(ICON_MS_SAVE)) {
-                    pfd::save_file file("Save VU0 disassembly", "vu0.s", { "Text files", "*.txt" });
-
-                    if (!file.result().empty()) {
-                        FILE* f = fopen(file.result().c_str(), "w");
-
-                        if (f) {
-                            uint64_t* ptr = vu::get_micro_mem_ptr(iris->ps2->vu0, 0);
-
-                            save_disassembly(f, ptr, 512);
-
-                            fclose(f);
-                        } else {
-                            pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
-                        }
-                    }
-                } SameLine();
-
-                BeginDisabled(!stop_at_e_bit);
-                if (Button(ICON_MS_ARROW_RIGHT_ALT " Next program")) {
-                    int prev = addr;
-
-                    addr = 0;
-
-                    for (int i = prev; i < 512; i++) {
-                        uint32_t upper = *vu::get_micro_mem_ptr(iris->ps2->vu0, i) >> 32;
-
-                        if (upper & 0x40000000) {
-                            addr = i + 2;
-
-                            break;
-                        }
-                    }
-                }
-                EndDisabled();
-
-                SeparatorText("Disassembly");
-
-                if (BeginChild("vu0##disassembly")) {
-                    uint64_t* ptr = vu::get_micro_mem_ptr(iris->ps2->vu0, 0);
-
-                    show_vu_disassembly_view(iris, ptr, 512);
-                } EndChild();
-            
-                EndTabItem();
             }
 
-            if (BeginTabItem("VU1")) {
-                BeginDisabled(disassemble_all);
-                AlignTextToFramePadding();
-                Text("Address"); SameLine();
-
-                SetNextItemWidth(100.0f);
-                PushFont(iris->ui.font_code);
-
-                InputInt("##address", (int*)&addr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EscapeClearsAll);
-
-                PopFont();
-
-                SameLine();
-                Checkbox("Stop at E bit", &stop_at_e_bit);
-
-                EndDisabled();
-
-                SameLine();
-                Checkbox("Disassemble all", &disassemble_all); SameLine();
-                if (Button(ICON_MS_SAVE)) {
-                    pfd::save_file file("Save VU1 disassembly", "vu1.s", { "Text files", "*.txt" });
-
-                    if (!file.result().empty()) {
-                        FILE* f = fopen(file.result().c_str(), "w");
-
-                        if (f) {
-                            save_disassembly(f, iris->ps2->vu1->micro_mem, 2048);
-                            fclose(f);
-                        } else {
-                            pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
-                        }
-                    }
-                } SameLine();
-
-                BeginDisabled(!stop_at_e_bit);
-                if (Button(ICON_MS_ARROW_RIGHT_ALT " Next program")) {
-                    int prev = addr;
-
-                    addr = 0;
-
-                    for (int i = prev; i < 2048; i++) {
-                        uint32_t upper = iris->ps2->vu1->micro_mem[i] >> 32;
-
-                        if (upper & 0x40000000) {
-                            addr = i + 2;
-
-                            break;
-                        }
-                    }
-                }
-                EndDisabled();
-
-                SeparatorText("Disassembly");
-
-                if (BeginChild("vu1##disassembly")) {
-                    show_vu_disassembly_view(iris, iris->ps2->vu1->micro_mem, 2048);
-                } EndChild();
-
-                EndTabItem();
-            }
-
-            EndTabBar();
+            ImGui::EndMenu();
         }
-    } End();
 
-    PopFont();
+        if (BeginMenu("Settings")) {
+            MenuItem(ICON_MS_FORMAT_LETTER_SPACING_WIDER " Add padding", NULL, &add_padding);
+            MenuItem(ICON_MS_COLLAPSE_ALL " Compact view", NULL, &compact_view);
+
+            ImGui::EndMenu();
+        }
+
+        EndMenuBar();
+    }
+
+    if (BeginTabBar("##vudistabbar", ImGuiTabBarFlags_Reorderable)) {
+        if (BeginTabItem("VU0")) {
+            BeginDisabled(disassemble_all);
+            AlignTextToFramePadding();
+            Text("Address"); SameLine();
+            
+            SetNextItemWidth(100.0f);
+            PushFont(iris->ui.font_code);
+
+            InputInt("##address", (int*)&addr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EscapeClearsAll);
+
+            PopFont();
+
+            SameLine();
+            Checkbox("Stop at E bit", &stop_at_e_bit);
+
+            EndDisabled();
+
+            SameLine();
+            Checkbox("Disassemble all", &disassemble_all); SameLine();
+            if (Button(ICON_MS_SAVE)) {
+                pfd::save_file file("Save VU0 disassembly", "vu0.s", { "Text files", "*.txt" });
+
+                if (!file.result().empty()) {
+                    FILE* f = fopen(file.result().c_str(), "w");
+
+                    if (f) {
+                        uint64_t* ptr = vu::get_micro_mem_ptr(iris->ps2->vu0, 0);
+
+                        save_disassembly(f, ptr, 512);
+
+                        fclose(f);
+                    } else {
+                        pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
+                    }
+                }
+            } SameLine();
+
+            BeginDisabled(!stop_at_e_bit);
+            if (Button(ICON_MS_ARROW_RIGHT_ALT " Next program")) {
+                int prev = addr;
+
+                addr = 0;
+
+                for (int i = prev; i < 512; i++) {
+                    uint32_t upper = *vu::get_micro_mem_ptr(iris->ps2->vu0, i) >> 32;
+
+                    if (upper & 0x40000000) {
+                        addr = i + 2;
+
+                        break;
+                    }
+                }
+            }
+            EndDisabled();
+
+            SeparatorText("Disassembly");
+
+            if (BeginChild("vu0##disassembly")) {
+                uint64_t* ptr = vu::get_micro_mem_ptr(iris->ps2->vu0, 0);
+
+                show_vu_disassembly_view(iris, ptr, 512);
+            } EndChild();
+        
+            EndTabItem();
+        }
+
+        if (BeginTabItem("VU1")) {
+            BeginDisabled(disassemble_all);
+            AlignTextToFramePadding();
+            Text("Address"); SameLine();
+
+            SetNextItemWidth(100.0f);
+            PushFont(iris->ui.font_code);
+
+            InputInt("##address", (int*)&addr, 0, 0, ImGuiInputTextFlags_CharsHexadecimal | ImGuiInputTextFlags_EscapeClearsAll);
+
+            PopFont();
+
+            SameLine();
+            Checkbox("Stop at E bit", &stop_at_e_bit);
+
+            EndDisabled();
+
+            SameLine();
+            Checkbox("Disassemble all", &disassemble_all); SameLine();
+            if (Button(ICON_MS_SAVE)) {
+                pfd::save_file file("Save VU1 disassembly", "vu1.s", { "Text files", "*.txt" });
+
+                if (!file.result().empty()) {
+                    FILE* f = fopen(file.result().c_str(), "w");
+
+                    if (f) {
+                        save_disassembly(f, iris->ps2->vu1->micro_mem, 2048);
+                        fclose(f);
+                    } else {
+                        pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
+                    }
+                }
+            } SameLine();
+
+            BeginDisabled(!stop_at_e_bit);
+            if (Button(ICON_MS_ARROW_RIGHT_ALT " Next program")) {
+                int prev = addr;
+
+                addr = 0;
+
+                for (int i = prev; i < 2048; i++) {
+                    uint32_t upper = iris->ps2->vu1->micro_mem[i] >> 32;
+
+                    if (upper & 0x40000000) {
+                        addr = i + 2;
+
+                        break;
+                    }
+                }
+            }
+            EndDisabled();
+
+            SeparatorText("Disassembly");
+
+            if (BeginChild("vu1##disassembly")) {
+                show_vu_disassembly_view(iris, iris->ps2->vu1->micro_mem, 2048);
+            } EndChild();
+
+            EndTabItem();
+        }
+
+        EndTabBar();
+    }
 }
 
 }

@@ -7,12 +7,7 @@
 
 namespace iris {
 
-int stage = 0;
-
-bool bios_checked = false;
-int bios_valid = false;
-
-int is_valid(const char* path) {
+static int is_valid(const char* path) {
     FILE* f = fopen(path, "rb");
 
     if (!f)
@@ -37,7 +32,7 @@ int is_valid(const char* path) {
     return valid ? 2 : 1;
 }
 
-void show_memory_card_stage(Instance* iris) {
+void BiosSetting::show_memory_card_stage() {
     using namespace ImGui;
 
     if (BeginChild("##iconchild", ImVec2(100.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
@@ -69,15 +64,13 @@ void show_memory_card_stage(Instance* iris) {
 
         Separator();
 
-        static bool open_settings = true;
-
         if (Button("Done")) {
             CloseCurrentPopup();
 
-            iris->ui.show_bios_setting_window = false;
+            open = false;
 
             if (open_settings) {
-                iris->ui.show_settings = true;
+                iris->applets.settings.open = true;
             }
         } SameLine();
 
@@ -85,10 +78,8 @@ void show_memory_card_stage(Instance* iris) {
     } EndChild();
 }
 
-void show_bios_stage(Instance* iris) {
+void BiosSetting::show_bios_stage() {
     using namespace ImGui;
-
-    static char buf[512];
 
     PushFont(iris->ui.font_heading);
     Text("Welcome to Iris!");
@@ -100,7 +91,7 @@ void show_bios_stage(Instance* iris) {
         "command line arguments."
     );
 
-    if (InputTextWithHint("##BIOS", "e.g. scph10000.bin", buf, 512, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
+    if (InputTextWithHint("##BIOS", "e.g. scph10000.bin", buf, sizeof(buf), ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
         bios_checked = true;
         bios_valid = is_valid(buf);
     }
@@ -120,7 +111,7 @@ void show_bios_stage(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(buf, f.result().at(0).c_str(), 512);
+            strncpy(buf, f.result().at(0).c_str(), sizeof(buf));
 
             bios_checked = true;
             bios_valid = is_valid(buf);
@@ -175,23 +166,27 @@ void show_bios_stage(Instance* iris) {
     EndDisabled();
 }
 
-void show_bios_setting_window(Instance* iris) {
+bool BiosSetting::begin() {
     using namespace ImGui;
 
-    OpenPopup("Welcome");
+    OpenPopup(title);
 
-    // Always center this window when appearing
-    ImVec2 center = GetMainViewport()->GetCenter();
+    SetNextWindowPos(GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
 
-    SetNextWindowPos(center, ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    begun = BeginPopupModal(title, NULL, ImGuiWindowFlags_AlwaysAutoResize);
 
-    if (BeginPopupModal("Welcome", NULL, ImGuiWindowFlags_AlwaysAutoResize)) {
-        switch (stage) {
-            case 0: show_bios_stage(iris); break;
-            case 1: show_memory_card_stage(iris); break;
-        }
+    return begun;
+}
 
-        EndPopup();
+void BiosSetting::end() {
+    if (begun)
+        ImGui::EndPopup();
+}
+
+void BiosSetting::on_render() {
+    switch (stage) {
+        case 0: show_bios_stage(); break;
+        case 1: show_memory_card_stage(); break;
     }
 }
 
