@@ -212,7 +212,7 @@ void Breakpoints::on_render() {
         show_breakpoints_table(iris);
     } EndChild();
 
-    SeparatorText("Add breakpoint");
+    imgui::section(iris, "Add breakpoint");
 
     if (BeginChild("##tablechild2")) {
         show_breakpoint_editor(iris);

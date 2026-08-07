@@ -249,9 +249,9 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->vk.vulkan_enable_validation_layers = vulkan["enable_validation_layers"].value_or(false);
 
     auto ui = tbl["ui"];
-    iris->ui.theme = ui["theme"].value_or(IRIS_THEME_GRANITE);
+    iris->ui.theme = ui["theme"].value_or(imgui::GRANITE_NEO);
     iris->ui.codeview_font_scale = ui["codeview_font_scale"].value_or(1.0f);
-    iris->ui.codeview_color_scheme = ui["codeview_color_scheme"].value_or(IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK);
+    iris->ui.codeview_color_scheme = ui["codeview_color_scheme"].value_or(imgui::CodeviewColorScheme::SOLARIZED_DARK);
     iris->ui.codeview_use_theme_background = ui["codeview_use_theme_background"].value_or(true);
     iris->ui.ui_scale = ui["scale"].value_or(1.0f);
     iris->ui.imgui_enable_viewports = ui["enable_viewports"].value_or(false);

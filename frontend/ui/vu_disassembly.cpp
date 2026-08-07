@@ -415,7 +415,7 @@ void VuDisassembler::on_render() {
             }
             EndDisabled();
 
-            SeparatorText("Disassembly");
+            imgui::section(iris, "Disassembly");
 
             if (BeginChild("vu0##disassembly")) {
                 uint64_t* ptr = vu::get_micro_mem_ptr(iris->ps2->vu0, 0);
@@ -478,7 +478,7 @@ void VuDisassembler::on_render() {
             }
             EndDisabled();
 
-            SeparatorText("Disassembly");
+            imgui::section(iris, "Disassembly");
 
             if (BeginChild("vu1##disassembly")) {
                 show_vu_disassembly_view(iris, iris->ps2->vu1->micro_mem, 2048);

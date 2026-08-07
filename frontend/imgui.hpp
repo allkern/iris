@@ -6,22 +6,31 @@ namespace iris {
 
 struct Instance;
 
-#define IRIS_THEME_GRANITE 0
-#define IRIS_THEME_IMGUI_DARK 1
-#define IRIS_THEME_IMGUI_LIGHT 2
-#define IRIS_THEME_IMGUI_CLASSIC 3
-#define IRIS_THEME_CHERRY 4
-#define IRIS_THEME_SOURCE 5
-
-#define IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK 0
-#define IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT 1
-#define IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO 2
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE 3
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE 4
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO 5
-#define IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA 6
-
 namespace imgui {
+
+// Values are persisted to settings.toml, so new themes get appended rather
+// than slotted in
+enum Theme {
+    GRANITE_NEO,
+    IMGUI_DARK,
+    IMGUI_LIGHT,
+    IMGUI_CLASSIC,
+    CHERRY,
+    SOURCE,
+    GRANITE_NEO_LIGHT,
+    GRANITE,
+    THEME_COUNT
+};
+
+enum CodeviewColorScheme {
+    SOLARIZED_DARK,
+    SOLARIZED_LIGHT,
+    ONE_DARK_PRO,
+    CATPPUCCIN_LATTE,
+    CATPPUCCIN_FRAPPE,
+    CATPPUCCIN_MACCHIATO,
+    CATPPUCCIN_MOCHA
+};
 
 bool init(Instance* iris);
 void set_theme(Instance* iris, int theme, bool set_bg_color = true);
@@ -35,6 +44,9 @@ void render_dim(Instance* iris);
 
 // Wrapper for ImGui::Begin that sets a default size
 bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);
+
+// Uppercase tracked-out section label, replaces ImGui::SeparatorText
+void section(Instance* iris, const char* label);
 
 }
 

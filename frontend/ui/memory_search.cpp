@@ -435,7 +435,7 @@ void MemorySearch::show_search_table() {
     using namespace ImGui;
 
     if (matches.empty()) {
-        SeparatorText("Search results");
+        imgui::section(iris, "Search results");
     } else {
         char buf[256];
 
@@ -445,7 +445,7 @@ void MemorySearch::show_search_table() {
             snprintf(buf, sizeof(buf), "Search results (%zu matches)", matches.size());
         }
 
-        SeparatorText(buf);
+        imgui::section(iris, buf);
     }
 
     if (BeginTable("Matches", 3, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY | ImGuiTableFlags_SizingStretchProp)) {
@@ -694,7 +694,7 @@ void MemorySearch::show_address_list() {
 void MemorySearch::show_search_options() {
     using namespace ImGui;
 
-    SeparatorText("Search options");
+    imgui::section(iris, "Search options");
 
     PushItemWidth(-FLT_MIN);
 
@@ -890,7 +890,7 @@ void MemorySearch::on_render() {
         show_search_options();
     } EndChild();
 
-    SeparatorText("Address list");
+    imgui::section(iris, "Address list");
 
     if (BeginChild("##address_list")) {
         show_address_list();

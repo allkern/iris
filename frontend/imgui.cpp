@@ -13,25 +13,30 @@
 // External includes
 #include "res/IconsMaterialSymbols.h"
 
-constexpr unsigned char g_roboto_data[] = {
-#embed "../res/Roboto-Regular.ttf"
+constexpr unsigned char g_inter_data[] = {
+#embed "../res/Inter-Regular.ttf"
 };
-constexpr unsigned int g_roboto_size = sizeof(g_roboto_data);
+constexpr unsigned int g_inter_size = sizeof(g_inter_data);
 
-constexpr unsigned char g_roboto_black_data[] = {
-#embed "../res/Roboto-Black.ttf"
+constexpr unsigned char g_inter_semibold_data[] = {
+#embed "../res/Inter-SemiBold.ttf"
 };
-constexpr unsigned int g_roboto_black_size = sizeof(g_roboto_black_data);
+constexpr unsigned int g_inter_semibold_size = sizeof(g_inter_semibold_data);
+
+constexpr unsigned char g_inter_black_data[] = {
+#embed "../res/Inter-Black.ttf"
+};
+constexpr unsigned int g_inter_black_size = sizeof(g_inter_black_data);
 
 constexpr unsigned char g_symbols_data[] = {
 #embed "../res/MaterialSymbolsRounded.ttf"
 };
 constexpr unsigned int g_symbols_size = sizeof(g_symbols_data);
 
-constexpr unsigned char g_firacode_data[] = {
+constexpr unsigned char g_mono_data[] = {
 #embed "../res/JetBrainsMono.ttf"
 };
-constexpr unsigned int g_firacode_size = sizeof(g_firacode_data);
+constexpr unsigned int g_mono_size = sizeof(g_mono_data);
 
 constexpr unsigned char g_ps1_memory_card_icon_data[] = {
 #embed "../res/ps1_mcd.png"
@@ -192,18 +197,23 @@ bool setup_fonts(Instance* iris, ImGuiIO& io) {
     ImFontConfig config_no_own;
     config_no_own.FontDataOwnedByAtlas = false;
 
-    iris->ui.font_small_code = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 12.0F, &config_no_own);
-    iris->ui.font_code       = io.Fonts->AddFontFromMemoryTTF((void*)g_firacode_data, g_firacode_size, 16.0F, &config_no_own);
-    iris->ui.font_small      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 12.0F, &config_no_own);
-    iris->ui.font_heading    = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 20.0F, &config_no_own);
-    iris->ui.font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_data, g_roboto_size, 16.0F, &config_no_own);
+    ImFontConfig config_ui = config_no_own;
+    config_ui.GlyphExcludeRanges = g_icon_range;
+
+    iris->ui.font_small_code = io.Fonts->AddFontFromMemoryTTF((void*)g_mono_data, g_mono_size, 12.0F, &config_no_own);
+    iris->ui.font_code       = io.Fonts->AddFontFromMemoryTTF((void*)g_mono_data, g_mono_size, 16.0F, &config_no_own);
+    iris->ui.font_small      = io.Fonts->AddFontFromMemoryTTF((void*)g_inter_data, g_inter_size, 12.0F, &config_ui);
+    iris->ui.font_label      = io.Fonts->AddFontFromMemoryTTF((void*)g_inter_semibold_data, g_inter_semibold_size, 11.0F, &config_ui);
+    iris->ui.font_heading    = io.Fonts->AddFontFromMemoryTTF((void*)g_inter_semibold_data, g_inter_semibold_size, 20.0F, &config_ui);
+    iris->ui.font_body       = io.Fonts->AddFontFromMemoryTTF((void*)g_inter_data, g_inter_size, 16.0F, &config_ui);
     iris->ui.font_icons      = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 20.0F, &font_config, g_icon_range);
     iris->ui.font_icons_big  = io.Fonts->AddFontFromMemoryTTF((void*)g_symbols_data, g_symbols_size, 50.0F, &config_no_own, g_icon_range);
-    iris->ui.font_black      = io.Fonts->AddFontFromMemoryTTF((void*)g_roboto_black_data, g_roboto_black_size, 30.0F, &config_no_own);
+    iris->ui.font_black      = io.Fonts->AddFontFromMemoryTTF((void*)g_inter_black_data, g_inter_black_size, 30.0F, &config_ui);
 
     if (!iris->ui.font_small_code ||
         !iris->ui.font_code ||
         !iris->ui.font_small ||
+        !iris->ui.font_label ||
         !iris->ui.font_heading ||
         !iris->ui.font_body ||
         !iris->ui.font_icons ||
@@ -217,18 +227,205 @@ bool setup_fonts(Instance* iris, ImGuiIO& io) {
     return true;
 }
 
-void set_theme(Instance* iris, int theme, bool set_bg_color) {
-    // Init 'Granite' theme
-    ImGuiStyle& style = ImGui::GetStyle();
+void section(Instance* iris, const char* label) {
+    using namespace ImGui;
+
+    constexpr float size = 11.0f;
+    constexpr float tracking = 1.4f;
+
+    ImFont* font = iris->ui.font_label;
+    ImFontBaked* baked = font->GetFontBaked(size);
+    ImDrawList* dl = GetWindowDrawList();
+
+    ImVec2 pos = GetCursorScreenPos();
+
+    pos.y += GetStyle().ItemSpacing.y;
+
+    ImU32 text_col = GetColorU32(ImGuiCol_TextDisabled);
+    float x = pos.x;
+
+    for (const char* p = label; *p; p++) {
+        unsigned int c = (unsigned char)*p;
+
+        if (c >= 'a' && c <= 'z')
+            c -= 32;
+
+        ImFontGlyph* glyph = baked->FindGlyph((ImWchar)c);
+
+        if (!glyph)
+            continue;
+
+        font->RenderChar(dl, size, ImVec2(x, pos.y), text_col, (ImWchar)c);
+
+        x += glyph->AdvanceX + tracking;
+    }
+
+    float avail = GetContentRegionAvail().x;
+    float rule_x = x + 8.0f;
+    float rule_end = pos.x + avail;
+
+    if (rule_end > rule_x) {
+        dl->AddLine(
+            ImVec2(rule_x, pos.y + size * 0.5f),
+            ImVec2(rule_end, pos.y + size * 0.5f),
+            GetColorU32(ImGuiCol_Separator)
+        );
+    }
+
+    Dummy(ImVec2(0.0f, size + GetStyle().ItemSpacing.y));
+}
+
+namespace granite {
+
+constexpr ImVec4 rgb(int hex, float a = 1.0f) {
+    return ImVec4(
+        ((hex >> 16) & 0xff) / 255.0f,
+        ((hex >>  8) & 0xff) / 255.0f,
+        ( hex        & 0xff) / 255.0f,
+        a
+    );
+}
+
+constexpr ImVec4 alpha(ImVec4 c, float a) {
+    return ImVec4(c.x, c.y, c.z, a);
+}
+
+struct Palette {
+    ImVec4 app, window, popup, frame, hover, active, border;
+    ImVec4 text, text_dim;
+    ImVec4 accent, accent_hi, link;
+    ImVec4 scroll, scroll_hover, scroll_active;
+    ImVec4 alt_row, grip, table_line;
+};
+
+constexpr Palette dark = {
+    .app          = rgb(0x0b0b0d),
+    .window       = rgb(0x131316),
+    .popup        = rgb(0x19191d),
+    .frame        = rgb(0x202025),
+    .hover        = rgb(0x2b2b32),
+    .active       = rgb(0x373740),
+    .border       = rgb(0x28282e),
+    .text         = rgb(0xe6e6ec),
+    .text_dim     = rgb(0x8b8b96),
+    .accent       = rgb(0x8b5cf6),
+    .accent_hi    = rgb(0x9d75f8),
+    .link         = rgb(0x60a5fa),
+    .scroll       = rgb(0xffffff, 0.10f),
+    .scroll_hover = rgb(0xffffff, 0.18f),
+    .scroll_active= rgb(0xffffff, 0.26f),
+    .alt_row      = rgb(0xffffff, 0.022f),
+    .grip         = rgb(0xffffff, 0.06f),
+    .table_line   = rgb(0xffffff, 0.04f)
+};
+
+// Surfaces invert but the ramp direction does too: on light, hovering a
+// control darkens it. The accent drops two steps so it still carries
+// contrast against a near-white background.
+constexpr Palette light = {
+    .app          = rgb(0xe8e8ea),
+    .window       = rgb(0xf7f7f8),
+    .popup        = rgb(0xffffff),
+    .frame        = rgb(0xecedef),
+    .hover        = rgb(0xe0e0e5),
+    .active       = rgb(0xd2d2d9),
+    .border       = rgb(0xdcdce1),
+    .text         = rgb(0x1c1c21),
+    .text_dim     = rgb(0x6b6b75),
+    .accent       = rgb(0x7c3aed),
+    .accent_hi    = rgb(0x6d28d9),
+    .link         = rgb(0x2563eb),
+    .scroll       = rgb(0x000000, 0.16f),
+    .scroll_hover = rgb(0x000000, 0.26f),
+    .scroll_active= rgb(0x000000, 0.36f),
+    .alt_row      = rgb(0x000000, 0.028f),
+    .grip         = rgb(0x000000, 0.10f),
+    .table_line   = rgb(0x000000, 0.06f)
+};
+
+}
+
+static void apply_granite(ImGuiStyle& style, const granite::Palette& p) {
+    using granite::alpha;
+
+    ImVec4* colors = style.Colors;
+
+    colors[ImGuiCol_Text]                   = p.text;
+    colors[ImGuiCol_TextDisabled]           = p.text_dim;
+    colors[ImGuiCol_WindowBg]               = p.window;
+    colors[ImGuiCol_ChildBg]                = alpha(p.window, 0.00f);
+    colors[ImGuiCol_PopupBg]                = p.popup;
+    colors[ImGuiCol_Border]                 = p.border;
+    colors[ImGuiCol_BorderShadow]           = alpha(p.window, 0.00f);
+    colors[ImGuiCol_FrameBg]                = p.frame;
+    colors[ImGuiCol_FrameBgHovered]         = p.hover;
+    colors[ImGuiCol_FrameBgActive]          = p.active;
+    colors[ImGuiCol_TitleBg]                = p.window;
+    colors[ImGuiCol_TitleBgActive]          = p.window;
+    colors[ImGuiCol_TitleBgCollapsed]       = p.app;
+    colors[ImGuiCol_MenuBarBg]              = p.window;
+    colors[ImGuiCol_ScrollbarBg]            = alpha(p.window, 0.00f);
+    colors[ImGuiCol_ScrollbarGrab]          = p.scroll;
+    colors[ImGuiCol_ScrollbarGrabHovered]   = p.scroll_hover;
+    colors[ImGuiCol_ScrollbarGrabActive]    = p.scroll_active;
+    colors[ImGuiCol_CheckMark]              = p.accent;
+    colors[ImGuiCol_SliderGrab]             = p.accent;
+    colors[ImGuiCol_SliderGrabActive]       = p.accent_hi;
+    colors[ImGuiCol_Button]                 = p.frame;
+    colors[ImGuiCol_ButtonHovered]          = p.hover;
+    colors[ImGuiCol_ButtonActive]           = p.active;
+    colors[ImGuiCol_Header]                 = alpha(p.accent, 0.20f);
+    colors[ImGuiCol_HeaderHovered]          = alpha(p.accent, 0.28f);
+    colors[ImGuiCol_HeaderActive]           = alpha(p.accent, 0.38f);
+    colors[ImGuiCol_Separator]              = p.border;
+    colors[ImGuiCol_SeparatorHovered]       = p.accent;
+    colors[ImGuiCol_SeparatorActive]        = p.accent_hi;
+    colors[ImGuiCol_ResizeGrip]             = p.grip;
+    colors[ImGuiCol_ResizeGripHovered]      = alpha(p.accent, 0.50f);
+    colors[ImGuiCol_ResizeGripActive]       = p.accent;
+    colors[ImGuiCol_InputTextCursor]        = p.accent;
+    colors[ImGuiCol_Tab]                    = alpha(p.window, 0.00f);
+    colors[ImGuiCol_TabHovered]             = p.hover;
+    colors[ImGuiCol_TabSelected]            = alpha(p.accent, 0.16f);
+    colors[ImGuiCol_TabSelectedOverline]    = p.accent;
+    colors[ImGuiCol_TabDimmed]              = alpha(p.window, 0.00f);
+    colors[ImGuiCol_TabDimmedSelected]      = p.popup;
+    colors[ImGuiCol_TabDimmedSelectedOverline] = alpha(p.accent, 0.00f);
+    colors[ImGuiCol_DockingPreview]         = alpha(p.accent, 0.30f);
+    colors[ImGuiCol_DockingEmptyBg]         = p.app;
+    colors[ImGuiCol_PlotLines]              = p.accent;
+    colors[ImGuiCol_PlotLinesHovered]       = p.accent_hi;
+    colors[ImGuiCol_PlotHistogram]          = p.accent;
+    colors[ImGuiCol_PlotHistogramHovered]   = p.accent_hi;
+    colors[ImGuiCol_TableHeaderBg]          = p.popup;
+    colors[ImGuiCol_TableBorderStrong]      = p.border;
+    colors[ImGuiCol_TableBorderLight]       = p.table_line;
+    colors[ImGuiCol_TableRowBg]             = alpha(p.window, 0.00f);
+    colors[ImGuiCol_TableRowBgAlt]          = p.alt_row;
+    colors[ImGuiCol_TextLink]               = p.link;
+    colors[ImGuiCol_TextSelectedBg]         = alpha(p.accent, 0.35f);
+    colors[ImGuiCol_DragDropTarget]         = p.accent;
+    colors[ImGuiCol_NavCursor]              = p.accent;
+    colors[ImGuiCol_NavWindowingHighlight]  = alpha(p.text, 0.70f);
+    colors[ImGuiCol_NavWindowingDimBg]      = granite::rgb(0x000000, 0.45f);
+    colors[ImGuiCol_ModalWindowDimBg]       = granite::rgb(0x000000, 0.55f);
+}
+
+static void set_clear_color(Instance* iris, const ImVec4& c) {
+    iris->vk.clear_value.color.float32[0] = c.x;
+    iris->vk.clear_value.color.float32[1] = c.y;
+    iris->vk.clear_value.color.float32[2] = c.z;
+    iris->vk.clear_value.color.float32[3] = 1.00f;
+}
+
+// Granite's original geometry: tighter, flatter, no window borders
+static void set_classic_geometry(ImGuiStyle& style) {
     style.WindowPadding           = ImVec2(8.0, 8.0);
     style.FramePadding            = ImVec2(5.0, 5.0);
     style.ItemSpacing             = ImVec2(8.0, 6.0);
     style.WindowBorderSize        = 0;
     style.ChildBorderSize         = 0;
-    style.FrameBorderSize         = 1;
     style.PopupBorderSize         = 0;
-    style.TabBorderSize           = 0;
-    style.TabBarBorderSize        = 0;
     style.WindowRounding          = 6;
     style.ChildRounding           = 4;
     style.FrameRounding           = 4;
@@ -238,14 +435,66 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
     style.TabRounding             = 4;
     style.WindowTitleAlign        = ImVec2(0.5, 0.5);
     style.DockingSeparatorSize    = 0;
-    style.SeparatorTextBorderSize = 1;
     style.SeparatorTextPadding    = ImVec2(20, 0);
+}
+
+void set_theme(Instance* iris, int theme, bool set_bg_color) {
+    // Init 'Granite' theme
+    ImGuiStyle& style = ImGui::GetStyle();
+    style.WindowPadding           = ImVec2(12.0, 10.0);
+    style.FramePadding            = ImVec2(9.0, 6.0);
+    style.ItemSpacing             = ImVec2(8.0, 8.0);
+    style.ItemInnerSpacing        = ImVec2(8.0, 6.0);
+    style.CellPadding             = ImVec2(8.0, 5.0);
+    style.TouchExtraPadding       = ImVec2(0.0, 0.0);
+    style.IndentSpacing           = 20.0;
+    style.ScrollbarSize           = 11.0;
+    style.GrabMinSize             = 9.0;
+    style.WindowBorderSize        = 1;
+    style.ChildBorderSize         = 1;
+    style.FrameBorderSize         = 1;
+    style.PopupBorderSize         = 1;
+    style.TabBorderSize           = 0;
+    style.TabBarBorderSize        = 0;
+    style.WindowRounding          = 8;
+    style.ChildRounding           = 8;
+    style.FrameRounding           = 6;
+    style.PopupRounding           = 8;
+    style.ScrollbarRounding       = 6;
+    style.GrabRounding            = 6;
+    style.TabRounding             = 6;
+    style.WindowTitleAlign        = ImVec2(0.0, 0.5);
+    style.DockingSeparatorSize    = 2;
+    style.SeparatorTextBorderSize = 1;
+    style.SeparatorTextAlign      = ImVec2(0.0, 0.5);
+    style.SeparatorTextPadding    = ImVec2(16, 8);
 
     // Use ImGui's default dark style as a base for our own style
     ImGui::StyleColorsDark();
 
     switch (theme) {
-        case IRIS_THEME_GRANITE: {
+        case Theme::GRANITE_NEO: {
+            apply_granite(style, granite::dark);
+
+            if (!set_bg_color) break;
+
+            set_clear_color(iris, granite::dark.app);
+        } break;
+
+        case Theme::GRANITE_NEO_LIGHT: {
+            // Light base so anything ImGui adds later doesn't come through dark
+            ImGui::StyleColorsLight();
+
+            apply_granite(style, granite::light);
+
+            if (!set_bg_color) break;
+
+            set_clear_color(iris, granite::light.app);
+        } break;
+
+        case Theme::GRANITE: {
+            set_classic_geometry(style);
+
             ImVec4* colors = style.Colors;
 
             colors[ImGuiCol_Text]                   = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
@@ -316,7 +565,7 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
             iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
-        case IRIS_THEME_IMGUI_DARK: {
+        case Theme::IMGUI_DARK: {
             ImGui::StyleColorsDark();
 
             if (!set_bg_color) break;
@@ -327,7 +576,7 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
             iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
-        case IRIS_THEME_IMGUI_LIGHT: {
+        case Theme::IMGUI_LIGHT: {
             ImGui::StyleColorsLight();
 
             if (!set_bg_color) break;
@@ -338,7 +587,7 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
             iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
-        case IRIS_THEME_IMGUI_CLASSIC: {
+        case Theme::IMGUI_CLASSIC: {
             ImGui::StyleColorsClassic();
 
             if (!set_bg_color) break;
@@ -349,7 +598,7 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
             iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
-        case IRIS_THEME_CHERRY: {
+        case Theme::CHERRY: {
             // cherry colors, 3 intensities
             #define COL_HI(v)   ImVec4(0.502f, 0.075f, 0.256f, v)
             #define COL_MED(v)  ImVec4(0.455f, 0.198f, 0.301f, v)
@@ -411,7 +660,7 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
             iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
 
-        case IRIS_THEME_SOURCE: {
+        case Theme::SOURCE: {
             ImVec4* colors = ImGui::GetStyle().Colors;
 
             colors[ImGuiCol_Text]                  = ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
@@ -493,7 +742,7 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
 
 void set_codeview_scheme(Instance* iris, int scheme) {
     switch (scheme) {
-        default: case IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK: {
+        default: case CodeviewColorScheme::SOLARIZED_DARK: {
             iris->ui.codeview_color_text = IM_COL32(131, 148, 150, 255);
             iris->ui.codeview_color_comment = IM_COL32(88, 110, 117, 255);
             iris->ui.codeview_color_mnemonic = IM_COL32(211, 167, 30, 255);
@@ -504,7 +753,7 @@ void set_codeview_scheme(Instance* iris, int scheme) {
             iris->ui.codeview_color_highlight = IM_COL32(7, 54, 66, 255);
         } break;
 
-        case IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT: {
+        case CodeviewColorScheme::SOLARIZED_LIGHT: {
             iris->ui.codeview_color_text = IM_COL32(101, 123, 131, 255);
             iris->ui.codeview_color_comment = IM_COL32(147, 161, 161, 255);
             iris->ui.codeview_color_mnemonic = IM_COL32(147, 101, 21, 255);
@@ -515,7 +764,7 @@ void set_codeview_scheme(Instance* iris, int scheme) {
             iris->ui.codeview_color_highlight = IM_COL32(238, 232, 213, 255);
         } break;
 
-        case IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO: {
+        case CodeviewColorScheme::ONE_DARK_PRO: {
             iris->ui.codeview_color_text = IM_COL32(171, 178, 191, 255);
             iris->ui.codeview_color_comment = IM_COL32(92, 99, 112, 255);
             iris->ui.codeview_color_mnemonic = IM_COL32(198, 120, 221, 255);
@@ -526,7 +775,7 @@ void set_codeview_scheme(Instance* iris, int scheme) {
             iris->ui.codeview_color_highlight = IM_COL32(60, 64, 72, 255);
         } break;
 
-        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE: {
+        case CodeviewColorScheme::CATPPUCCIN_LATTE: {
             iris->ui.codeview_color_text = IM_COL32(76, 79, 105, 255);
             iris->ui.codeview_color_comment = IM_COL32(124, 127, 147, 255);
             iris->ui.codeview_color_mnemonic = IM_COL32(136, 57, 239, 255);
@@ -537,7 +786,7 @@ void set_codeview_scheme(Instance* iris, int scheme) {
             iris->ui.codeview_color_highlight = IM_COL32(204, 208, 218, 255);
         } break;
 
-        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE: {
+        case CodeviewColorScheme::CATPPUCCIN_FRAPPE: {
             iris->ui.codeview_color_text = IM_COL32(198, 208, 245, 255);
             iris->ui.codeview_color_comment = IM_COL32(148, 156, 187, 255);
             iris->ui.codeview_color_mnemonic = IM_COL32(202, 158, 230, 255);
@@ -548,7 +797,7 @@ void set_codeview_scheme(Instance* iris, int scheme) {
             iris->ui.codeview_color_highlight = IM_COL32(81, 87, 109, 255);
         } break;
 
-        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO: {
+        case CodeviewColorScheme::CATPPUCCIN_MACCHIATO: {
             iris->ui.codeview_color_text = IM_COL32(174, 178, 208, 255);
             iris->ui.codeview_color_comment = IM_COL32(134, 138, 162, 255);
             iris->ui.codeview_color_mnemonic = IM_COL32(190, 132, 255, 255);
@@ -559,7 +808,7 @@ void set_codeview_scheme(Instance* iris, int scheme) {
             iris->ui.codeview_color_highlight = IM_COL32(97, 100, 120, 255);
         } break;
 
-        case IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA: {
+        case CodeviewColorScheme::CATPPUCCIN_MOCHA: {
             iris->ui.codeview_color_text = IM_COL32(205, 214, 244, 255);
             iris->ui.codeview_color_comment = IM_COL32(145, 151, 181, 255);
             iris->ui.codeview_color_mnemonic = IM_COL32(220, 162, 255, 255);

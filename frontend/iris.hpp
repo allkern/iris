@@ -133,6 +133,7 @@ struct Instance {
         ImFont* font_small_code = nullptr;
         ImFont* font_code = nullptr;
         ImFont* font_small = nullptr;
+        ImFont* font_label = nullptr;
         ImFont* font_heading = nullptr;
         ImFont* font_body = nullptr;
         ImFont* font_icons = nullptr;
@@ -142,7 +143,7 @@ struct Instance {
         bool show_imgui_demo = false;
         bool show_overlay = false;
         bool show_gamelist = true;
-        int theme = IRIS_THEME_GRANITE;
+        int theme = imgui::GRANITE_NEO;
         bool imgui_enable_viewports = true;
         int codeview_color_scheme = 0;
         ImColor codeview_color_text = IM_COL32(131, 148, 150, 255);

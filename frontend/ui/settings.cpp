@@ -329,7 +329,7 @@ void show_system_settings(Instance* iris) {
         EndTable();
     }
 
-    SeparatorText("Network");
+    imgui::section(iris, "Network");
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
@@ -452,7 +452,7 @@ void show_system_settings(Instance* iris) {
     
     EndDisabled();
 
-    SeparatorText("Misc.");
+    imgui::section(iris, "Misc.");
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     Checkbox("Start games automatically", &iris->autostart);
@@ -515,7 +515,7 @@ void show_hardware_renderer_settings(Instance* iris) {
     }
     PopStyleVar();
 
-    SeparatorText("Analog Video");
+    imgui::section(iris, "Analog Video");
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     if (Checkbox(" Enable", &iris->hardware_backend_config.enable_analog_video)) {
         render::refresh(iris);
@@ -604,7 +604,7 @@ void show_hardware_renderer_settings(Instance* iris) {
         EndCombo();
     }
 
-    SeparatorText("Advanced");
+    imgui::section(iris, "Advanced");
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     if (Checkbox(" CRTC Offsets", &iris->hardware_backend_config.crtc_offsets)) {
@@ -743,7 +743,7 @@ void show_graphics_settings(Instance* iris) {
         EndCombo();
     }
 
-    SeparatorText("Misc.");
+    imgui::section(iris, "Misc.");
 
     Text("Present mode");
 
@@ -764,12 +764,12 @@ void show_graphics_settings(Instance* iris) {
     PopStyleVar();
 
     if (iris->renderer_backend == gs::renderer::BACKEND_HARDWARE) {
-        SeparatorText("Renderer settings");
+        imgui::section(iris, "Renderer settings");
 
         show_hardware_renderer_settings(iris);
     }
 
-    SeparatorText("Vulkan settings");
+    imgui::section(iris, "Vulkan settings");
 
     Text("GPU");
 
@@ -832,7 +832,7 @@ void show_controller_slot(Instance* iris, int slot) {
 
     col.w = 1.0;
 
-    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / 2.0 - 10.0, 50 * iris->ui.ui_scale))) {
+    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / 2.0 - 10.0, 0), ImGuiChildFlags_AutoResizeY)) {
         Text("Controller");
 
         std::string controller_name = "None";
@@ -864,7 +864,7 @@ void show_controller_slot(Instance* iris, int slot) {
         }
     } EndChild(); SameLine(0.0, 10.0);
 
-    if (BeginChild((std::string(label) + "##icon").c_str(), ImVec2(0, 50 * iris->ui.ui_scale))) {
+    if (BeginChild((std::string(label) + "##icon").c_str(), ImVec2(0, 0), ImGuiChildFlags_AutoResizeY)) {
         BeginDisabled(!iris->input.ds[slot]);
 
         float avail_width = GetContentRegionAvail().x;
@@ -1700,14 +1700,31 @@ void show_memory_card_settings(Instance* iris) {
     show_memory_card(iris, 1);
 }
 
+// Indexed by imgui::Theme, so this follows the enum, not the menu
 static const char* const theme_names[] = {
-    "Granite",
+    "Granite Neo",
     "ImGui Dark",
     "ImGui Light",
     "ImGui Classic",
     "Cherry",
-    "Source"
+    "Source",
+    "Granite Neo Light",
+    "Granite"
 };
+
+static const int theme_order[] = {
+    imgui::GRANITE_NEO,
+    imgui::GRANITE_NEO_LIGHT,
+    imgui::GRANITE,
+    imgui::IMGUI_DARK,
+    imgui::IMGUI_LIGHT,
+    imgui::IMGUI_CLASSIC,
+    imgui::CHERRY,
+    imgui::SOURCE
+};
+
+static_assert(IM_ARRAYSIZE(theme_names) == imgui::THEME_COUNT);
+static_assert(IM_ARRAYSIZE(theme_order) == imgui::THEME_COUNT);
 
 static const char* const codeview_color_scheme_names[] = {
     "Solarized Dark",
@@ -1729,16 +1746,18 @@ static const char* titlebar_style_names[] = {
 void show_misc_settings(Instance* iris) {
     using namespace ImGui;
 
-    SeparatorText("Style");
+    imgui::section(iris, "Style");
 
     Text("Theme");
 
     if (BeginCombo("##theme", theme_names[iris->ui.theme])) {
-        for (int i = 0; i < IM_ARRAYSIZE(theme_names); i++) {
-            if (Selectable(theme_names[i], iris->ui.theme == i)) {
-                iris->ui.theme = i;
+        for (int i = 0; i < IM_ARRAYSIZE(theme_order); i++) {
+            int theme = theme_order[i];
 
-                imgui::set_theme(iris, i);
+            if (Selectable(theme_names[theme], iris->ui.theme == theme)) {
+                iris->ui.theme = theme;
+
+                imgui::set_theme(iris, theme);
                 platform::apply_settings(iris);
             }
         }
@@ -1792,7 +1811,7 @@ void show_misc_settings(Instance* iris) {
     PopStyleVar();
 #endif
 
-    SeparatorText("Codeview");
+    imgui::section(iris, "Codeview");
 
 #define SCHEME(str, id) \
     if (Selectable(str, iris->ui.codeview_color_scheme == id)) { \
@@ -1807,18 +1826,18 @@ void show_misc_settings(Instance* iris) {
         TextDisabled("Dark");
         PopFont();
 
-        SCHEME("Solarized Dark", IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_DARK);
-        SCHEME("One Dark Pro", IRIS_CODEVIEW_COLOR_SCHEME_ONE_DARK_PRO);
-        SCHEME("Catppuccin Mocha", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MOCHA);
-        SCHEME("Catppuccin Macchiato", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_MACCHIATO);
-        SCHEME("Catppuccin Frappé", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_FRAPPE);
+        SCHEME("Solarized Dark", imgui::CodeviewColorScheme::SOLARIZED_DARK);
+        SCHEME("One Dark Pro", imgui::CodeviewColorScheme::ONE_DARK_PRO);
+        SCHEME("Catppuccin Mocha", imgui::CodeviewColorScheme::CATPPUCCIN_MOCHA);
+        SCHEME("Catppuccin Macchiato", imgui::CodeviewColorScheme::CATPPUCCIN_MACCHIATO);
+        SCHEME("Catppuccin Frappé", imgui::CodeviewColorScheme::CATPPUCCIN_FRAPPE);
 
         PushFont(iris->ui.font_small);
         TextDisabled("Light");
         PopFont();
 
-        SCHEME("Solarized Light", IRIS_CODEVIEW_COLOR_SCHEME_SOLARIZED_LIGHT);
-        SCHEME("Catppuccin Latte", IRIS_CODEVIEW_COLOR_SCHEME_CATPPUCCIN_LATTE);
+        SCHEME("Solarized Light", imgui::CodeviewColorScheme::SOLARIZED_LIGHT);
+        SCHEME("Catppuccin Latte", imgui::CodeviewColorScheme::CATPPUCCIN_LATTE);
 
         EndCombo();
     }
@@ -1839,7 +1858,7 @@ void show_misc_settings(Instance* iris) {
 
     DragFloat("##codeview_font_scale", &iris->ui.codeview_font_scale, 0.05f, 0.75f, 1.5f, "%.1f");
 
-    SeparatorText("Screenshots");
+    imgui::section(iris, "Screenshots");
 
     const char* format_names[] = {
         "PNG",
@@ -2019,7 +2038,7 @@ void show_device_settings(Instance* iris) {
 
     bool changed = false;
 
-    SeparatorText("host");
+    imgui::section(iris, "host");
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
@@ -2074,7 +2093,7 @@ void show_device_settings(Instance* iris) {
 
     Spacing();
 
-    SeparatorText("Additional devices");
+    imgui::section(iris, "Additional devices");
 
     int remove_index = -1;
 

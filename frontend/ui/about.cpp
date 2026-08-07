@@ -25,7 +25,7 @@ void About::on_render() {
         Image((ImTextureID)(intptr_t)iris->ui.iris_icon.descriptor_set, ImVec2(100.0, 100.0));
     } EndChild(); SameLine(0.0, 10.0);
 
-    if (BeginChild("##textchild", ImVec2(350.0, 0.0))) {
+    if (BeginChild("##textchild", ImVec2(420.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
         PushFont(iris->ui.font_heading);
         Text(IRIS_TITLE);
         PopFont();

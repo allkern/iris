@@ -569,7 +569,7 @@ void EeControl::on_render() {
         Text("%s", func);
     }
 
-    SeparatorText("Disassembly");
+    imgui::section(iris, "Disassembly");
 
     if (BeginChild("ee##disassembly")) {
         show_ee_disassembly_view(iris);
@@ -610,7 +610,7 @@ void IopControl::on_render() {
         iris->debug.iop_control_follow_pc = false;
     }
 
-    SeparatorText("Disassembly");
+    imgui::section(iris, "Disassembly");
 
     if (BeginChild("iop##disassembly")) {
         show_iop_disassembly_view(iris);
