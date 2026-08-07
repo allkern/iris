@@ -61,13 +61,26 @@ void render(Instance* iris) {
 
         if (a->open) {
             if (a->focus) {
-                a->focus = false;
-
                 ImGui::SetNextWindowFocus();
             }
 
-            if (a->begin())
+            bool visible = a->begin();
+
+            if (a->focus) {
+                ImGuiViewport* viewport = ImGui::GetWindowViewport();
+
+                if (viewport == ImGui::GetMainViewport()) {
+                    a->focus = false;
+                } else if (viewport && viewport->PlatformUserData && ImGui::GetPlatformIO().Platform_SetWindowFocus) {
+                    ImGui::GetPlatformIO().Platform_SetWindowFocus(viewport);
+
+                    a->focus = false;
+                }
+            }
+
+            if (visible) {
                 a->on_render();
+            }
 
             a->end();
         }
