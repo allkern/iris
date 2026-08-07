@@ -123,6 +123,10 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->paths.gcdb_path = paths["gcdb_path"].value_or("");
     iris->paths.hdd_path = paths["hdd_path"].value_or("");
     iris->paths.auto_paths = paths["auto"].value_or(true);
+    iris->paths.log_path = paths["log_path"].value_or("");
+
+    if (iris->paths.log_path.empty())
+        iris->paths.log_path = iris->paths.pref_path + "iris.log";
 
     auto host = tbl["host"];
     iris->paths.host_path = host["path"].value_or("");
@@ -180,6 +184,8 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->ui.show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
     iris->timescale = debugger["timescale"].value_or(2);
+    iris->log_to_console = debugger["log_to_console"].value_or(true);
+    iris->log_to_file = debugger["log_to_file"].value_or(true);
 
     for (Applet* a : iris->applets.all) {
         if (a->persist)
@@ -401,17 +407,17 @@ void parse_cli_settings(Instance* iris, int argc, const char* argv[]) {
         if (!ps2::load_bios(iris->ps2, bios_path.c_str())) {
             // push_info(iris, "Couldn't load BIOS");
 
-            iris->applets.bios_setting.open = true;
+            iris->applets.bios_setting.show();
         }
     } else {
         if (iris->paths.bios_path.size()) {
             if (!ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str())) {
                 // push_info(iris, "Couldn't load BIOS");
 
-                iris->applets.bios_setting.open = true;
+                iris->applets.bios_setting.show();
             }
         } else {
-            iris->applets.bios_setting.open = true;
+            iris->applets.bios_setting.show();
         }
     }
 
@@ -629,7 +635,9 @@ void close(Instance* iris) {
             { "show_imgui_demo", iris->ui.show_imgui_demo },
             { "show_overlay", iris->ui.show_overlay },
             { "skip_fmv", iris->skip_fmv },
-            { "timescale", iris->timescale }
+            { "timescale", iris->timescale },
+            { "log_to_console", iris->log_to_console },
+            { "log_to_file", iris->log_to_file }
         } },
         { "display", toml::table {
             { "scale", iris->scale },
@@ -680,6 +688,7 @@ void close(Instance* iris) {
             { "flash_path", iris->paths.flash_path },
             { "gcdb_path", iris->paths.gcdb_path },
             { "hdd_path", iris->paths.hdd_path },
+            { "log_path", iris->paths.log_path },
             { "auto", iris->paths.auto_paths }
         } },
         { "host", toml::table {

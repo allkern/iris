@@ -18,6 +18,11 @@ struct Applet {
     virtual bool begin() { return imgui::BeginEx(title, &open, flags); }
     virtual void end() { ImGui::End(); }
 
+    void show() {
+        open = true;
+        focus = true;
+    }
+
     Instance* iris = nullptr;
 
     const char* id = "";
@@ -26,6 +31,7 @@ struct Applet {
 
     bool open = false;
     bool was_open = false;
+    bool focus = false;
     bool persist = true;
 };
 

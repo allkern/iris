@@ -5,6 +5,8 @@
 
 namespace iris::platform {
 
+void init_console() {}
+
 bool init(Instance* iris) {
     return true;
 }

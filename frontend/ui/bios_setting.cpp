@@ -70,7 +70,7 @@ void BiosSetting::show_memory_card_stage() {
             open = false;
 
             if (open_settings) {
-                iris->applets.settings.open = true;
+                iris->applets.settings.show();
             }
         } SameLine();
 

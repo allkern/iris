@@ -8,6 +8,7 @@
 #include <array>
 #include <deque>
 #include <atomic>
+#include <mutex>
 
 #include "gs/renderer/renderer.hpp"
 #include "gs/renderer/config.hpp"
@@ -255,6 +256,7 @@ struct Instance {
         std::vector <std::pair <std::string, std::string>> device_maps;
         std::string settings_path = "";
         std::string mappings_path = "";
+        std::string log_path = "";
     } paths;
 
     Applets applets;
@@ -282,6 +284,14 @@ struct Instance {
         LogSource platform;
         LogSource ui;
     } log;
+
+    std::deque <LogEntry> log_history;
+    std::mutex log_mutex;
+    bool log_to_console = true;
+    bool log_to_file = true;
+    FILE* log_file = nullptr;
+    std::string log_file_path = "";
+    std::vector <size_t> frontend_log_sources;
 
     bool fatal_error = false;
     std::string fatal_error_text;

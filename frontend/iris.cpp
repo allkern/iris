@@ -454,6 +454,8 @@ bool init(Instance* iris, int argc, const char* argv[]) {
         return false;
     }
 
+    log_apply_settings(iris);
+
     iris->window = SDL_CreateWindow(
         IRIS_TITLE,
         iris->window_width, iris->window_height,
@@ -864,6 +866,8 @@ int get_menubar_height(Instance* iris) {
 void destroy(Instance* iris) {
     if (!iris)
         return;
+
+    log_close_file(iris);
 
     if (iris->snap_on_exit) {
         input::save_screenshot(iris);

@@ -400,7 +400,7 @@ static void show_settings_menu(Instance* iris) {
         Separator();
 
         if (MenuItem(ICON_MS_MANUFACTURING " Settings...")) {
-            iris->applets.settings.open = true;
+            iris->applets.settings.show();
         }
 
         ImGui::EndMenu();
@@ -438,15 +438,15 @@ static void show_tools_menu(Instance* iris) {
         if (MenuItem(ICON_MS_MOVIE " Dump GS frames...")) {
             iris->debug.gsdump_prev_pause = iris->debug.pause;
             iris->debug.pause = true;
-            iris->applets.gs_dump_tool.open = true;
+            iris->applets.gs_dump_tool.show();
         }
 
         if (MenuItem(ICON_MS_SD_CARD " Memory Card tool")) {
-            iris->applets.memory_card_tool.open = true;
+            iris->applets.memory_card_tool.show();
         }
 
         if (MenuItem(ICON_MS_HARD_DRIVE " HDD tool")) {
-            iris->applets.hdd_tool.open = true;
+            iris->applets.hdd_tool.show();
         }
 
         ImGui::EndMenu();
@@ -514,6 +514,7 @@ static void show_debug_menu(Instance* iris) {
         MenuItem(ICON_MS_TIMER " Timers", NULL, &iris->applets.timers.open);
         MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->ui.show_overlay);
         MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->applets.sysmem_logs.open);
+        MenuItem(ICON_MS_LIST_ALT " Console", NULL, &iris->applets.console.open);
 
         Separator();
 
@@ -563,7 +564,7 @@ static void show_help_menu(Instance* iris) {
 
     if (BeginMenu("Help")) {
         if (MenuItem(ICON_MS_INFO " About")) {
-            iris->applets.about.open = true;
+            iris->applets.about.show();
         }
 
         if (MenuItem(ICON_MS_EXCLAMATION " Report an issue")) {
@@ -574,7 +575,7 @@ static void show_help_menu(Instance* iris) {
 
         BeginDisabled(!disc_loaded);
         if (MenuItem(ICON_MS_FACT_CHECK " Report compatibility")) {
-            iris->applets.compat_report.open = true;
+            iris->applets.compat_report.show();
             iris->debug.pause = true;
         }
         EndDisabled();

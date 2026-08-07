@@ -34,6 +34,7 @@ void create(Instance* iris) {
         &applets.iop_threads,
         &applets.timers,
         &applets.sysmem_logs,
+        &applets.console,
         &applets.memory_card_tool,
         &applets.memory_search,
         &applets.hdd_tool,
@@ -59,6 +60,12 @@ void render(Instance* iris) {
         }
 
         if (a->open) {
+            if (a->focus) {
+                a->focus = false;
+
+                ImGui::SetNextWindowFocus();
+            }
+
             if (a->begin())
                 a->on_render();
 

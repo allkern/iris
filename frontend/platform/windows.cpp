@@ -5,6 +5,39 @@
 
 namespace iris::platform {
 
+void init_console() {
+    static bool done = false;
+
+    if (done)
+        return;
+
+    done = true;
+
+    if (AttachConsole(ATTACH_PARENT_PROCESS)) {
+        FILE* f = nullptr;
+
+        freopen_s(&f, "CONOUT$", "w", stdout);
+        freopen_s(&f, "CONOUT$", "w", stderr);
+    }
+
+    HANDLE handles[] = {
+        GetStdHandle(STD_OUTPUT_HANDLE),
+        GetStdHandle(STD_ERROR_HANDLE)
+    };
+
+    for (HANDLE handle : handles) {
+        DWORD mode = 0;
+
+        if (!handle || handle == INVALID_HANDLE_VALUE)
+            continue;
+
+        if (!GetConsoleMode(handle, &mode))
+            continue;
+
+        SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    }
+}
+
 bool init(Instance* iris) {
     apply_settings(iris);
 

@@ -61,7 +61,7 @@ check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
 set(BUILD_SHARED_LIBS OFF)
 
 # And this part tells CMake where to find and install the file itself
-add_executable(iris MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
+add_executable(iris WIN32 MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_NO_PROTOTYPES)
 target_compile_definitions(iris PUBLIC IMGUI_IMPL_VULKAN_USE_VOLK)
@@ -235,6 +235,7 @@ target_sources(iris PRIVATE
     main.cpp
     frontend/applets.cpp
     frontend/audio.cpp
+    frontend/log.cpp
     frontend/gamelist.cpp
     frontend/handlers.cpp
     frontend/vulkan.cpp
@@ -253,6 +254,7 @@ target_sources(iris PRIVATE
     frontend/ui/bios_setting.cpp
     frontend/ui/breakpoints.cpp
     frontend/ui/compat_report.cpp
+    frontend/ui/console.cpp
     frontend/ui/control.cpp
     frontend/ui/dma.cpp
     frontend/ui/fatal_error.cpp

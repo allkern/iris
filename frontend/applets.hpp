@@ -8,6 +8,7 @@
 #include "ui/bios_setting.hpp"
 #include "ui/breakpoints.hpp"
 #include "ui/compat_report.hpp"
+#include "ui/console.hpp"
 #include "ui/control.hpp"
 #include "ui/dma.hpp"
 #include "ui/gs.hpp"
@@ -45,6 +46,7 @@ struct Applets {
     IopDma iop_dma;
     IopThreads iop_threads;
     SysmemLogs sysmem_logs;
+    Console console;
     GsDebugger gs_debugger;
     Spu2Debugger spu2_debugger;
     MemoryViewer memory_viewer;

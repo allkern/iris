@@ -452,6 +452,48 @@ void show_system_settings(Instance* iris) {
     
     EndDisabled();
 
+    imgui::section(iris, "Logging");
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox("Log to system console", &iris->log_to_console);
+
+    if (Checkbox("Log to file", &iris->log_to_file))
+        log_apply_settings(iris);
+
+    PopStyleVar();
+
+    BeginDisabled(!iris->log_to_file);
+
+    Text("Log file");
+
+    SetNextItemWidth(400.0);
+
+    if (InputText("##logpath", &iris->paths.log_path, ImGuiInputTextFlags_EnterReturnsTrue))
+        log_apply_settings(iris);
+
+    SameLine();
+
+    if (Button(ICON_MS_MORE_HORIZ "##logpath")) {
+        audio::mute(iris);
+
+        auto f = pfd::save_file("Select log file", iris->paths.log_path, {
+            "Log files (*.log)", "*.log",
+            "All Files (*.*)", "*"
+        });
+
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        if (!f.result().empty()) {
+            iris->paths.log_path = f.result();
+
+            log_apply_settings(iris);
+        }
+    }
+
+    EndDisabled();
+
     imgui::section(iris, "Misc.");
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
@@ -1691,7 +1733,7 @@ void show_memory_card_settings(Instance* iris) {
 
     if (Button(ICON_MS_EDIT " Create memory cards...")) {
         // Launch memory card utility
-        iris->applets.memory_card_tool.open = true;
+        iris->applets.memory_card_tool.show();
     }
 
     Separator();
