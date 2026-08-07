@@ -169,6 +169,12 @@ struct Instance {
         bool dim_end = false;
         bool dim_active = false;
         bool drop_file_active = false;
+
+        // Window-relative. drop_pos comes from SDL during the drag, the rect
+        // is published by the overlay each frame for the drop handler to test
+        ImVec2 drop_pos = ImVec2(-1.0f, -1.0f);
+        ImVec2 drop_insert_min = ImVec2(0.0f, 0.0f);
+        ImVec2 drop_insert_max = ImVec2(0.0f, 0.0f);
         bool loading_file_active = false;
         std::string loading_target = "";
     } ui;

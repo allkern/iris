@@ -21,6 +21,12 @@ namespace emu {
 bool init(Instance* iris);
 void destroy(Instance* iris);
 int open_file(Instance* iris, std::string path);
+
+bool is_disc_image(const std::string& path);
+
+// Swaps the image in the drive without rebooting, cycling the tray so the
+// running game notices. Only valid for disc images
+int insert_disc(Instance* iris, std::string path);
 void start_pending_load(Instance* iris);
 void finalize_load(Instance* iris);
 bool load_arcade(Instance* iris, std::string path);

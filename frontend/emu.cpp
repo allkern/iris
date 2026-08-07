@@ -117,6 +117,26 @@ int open_archive(Instance* iris, std::string path) {
     return 0;
 }
 
+bool is_disc_image(const std::string& file) {
+    std::string ext = std::filesystem::path(file).extension().string();
+
+    for (char& c : ext)
+        c = tolower(c);
+
+    return ext == ".iso" || ext == ".bin" || ext == ".cue" ||
+           ext == ".chd" || ext == ".cso" || ext == ".zso";
+}
+
+int insert_disc(Instance* iris, std::string file) {
+    // 2-second delay to allow the disc to spin up
+    if (cdvd::open(iris->ps2->cdvd, file.c_str(), 38860800 * 2))
+        return 1;
+
+    iris->loaded = file;
+
+    return 0;
+}
+
 int open_file_thread(Instance* iris, std::string file) {
     std::filesystem::path path(file);
     std::string ext = path.extension().string();
@@ -133,8 +153,7 @@ int open_file_thread(Instance* iris, std::string file) {
     }
 
     // Load disc image
-    if (ext == ".iso" || ext == ".bin" || ext == ".cue" ||
-        ext == ".chd" || ext == ".cso" || ext == ".zso") {
+    if (is_disc_image(file)) {
         if (cdvd::open(iris->ps2->cdvd, file.c_str(), 0)) {
             finish_load(iris, 1);
 

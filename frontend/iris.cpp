@@ -195,63 +195,79 @@ void update_window(Instance* iris) {
 
     if (iris->ui.drop_file_active) {
         ImDrawList* draw_list = GetForegroundDrawList(GetMainViewport());
-        ImVec2 pos = GetMainViewport()->Pos;
+        ImVec2 origin = GetMainViewport()->Pos;
 
-        ImVec2 text_size = CalcTextSize("Drop file here to launch");
+        constexpr float panel_w = 400.0f;
+        constexpr float panel_h = 112.0f;
+        constexpr float rounding = 12.0f;
 
-        PushFont(iris->ui.font_icons_big);
+        ImVec2 local_min = ImVec2(width * 0.5f - panel_w * 0.5f, height * 0.5f - panel_h * 0.5f);
+        ImVec2 local_max = ImVec2(local_min.x + panel_w, local_min.y + panel_h);
 
-        ImVec2 icon_size = CalcTextSize(ICON_MS_DOWNLOAD);
+        float split = local_min.x + panel_w * 0.5f;
 
-        ImVec2 total_size = ImVec2(
-            std::max(icon_size.x, text_size.x),
-            icon_size.y + text_size.y
-        );
+        iris->ui.drop_insert_min = ImVec2(split, local_min.y);
+        iris->ui.drop_insert_max = local_max;
 
-        ImVec2 text_pos = ImVec2(
-            pos.x + width / 2 - text_size.x / 2,
-            pos.y + height / 2
-        );
+        bool over_insert =
+            iris->ui.drop_pos.x >= split && iris->ui.drop_pos.x <= local_max.x &&
+            iris->ui.drop_pos.y >= local_min.y && iris->ui.drop_pos.y <= local_max.y;
 
-        ImVec2 icon_pos = ImVec2(
-            pos.x + width / 2 - icon_size.x / 2,
-            pos.y + height / 2 - icon_size.y
-        );
+        float alpha = iris->ui.dim_current_alpha;
 
-        ImVec2 rect_pos1 = ImVec2(
-            std::min(icon_pos.x, text_pos.x) - 10,
-            std::min(icon_pos.y, text_pos.y) - 10
-        );
-
-        ImVec2 rect_pos2 = ImVec2(
-            std::max(icon_pos.x + icon_size.x, text_pos.x + text_size.x) + 10,
-            std::max(icon_pos.y + icon_size.y, text_pos.y + text_size.y) + 10
-        );
-
-        ImVec4 rect_col = GetStyleColorVec4(ImGuiCol_MenuBarBg);
+        ImVec4 panel_col = GetStyleColorVec4(ImGuiCol_MenuBarBg);
         ImVec4 text_col = GetStyleColorVec4(ImGuiCol_Text);
+        ImVec4 dim_col = GetStyleColorVec4(ImGuiCol_TextDisabled);
+        ImVec4 hi_col = GetStyleColorVec4(ImGuiCol_HeaderHovered);
 
-        rect_col.w = iris->ui.dim_current_alpha;
-        text_col.w = iris->ui.dim_current_alpha;
+        panel_col.w = alpha;
+        text_col.w = alpha;
+        dim_col.w = alpha;
+        hi_col.w = alpha;
+
+        ImVec2 p0 = ImVec2(origin.x + local_min.x, origin.y + local_min.y);
+        ImVec2 p1 = ImVec2(origin.x + local_max.x, origin.y + local_max.y);
+        float sx = origin.x + split;
+
+        draw_list->AddRectFilled(p0, p1, GetColorU32(panel_col), rounding);
 
         draw_list->AddRectFilled(
-            rect_pos1,
-            rect_pos2,
-            GetColorU32(rect_col), 10.0f
+            over_insert ? ImVec2(sx, p0.y) : p0,
+            over_insert ? p1 : ImVec2(sx, p1.y),
+            GetColorU32(hi_col), rounding,
+            over_insert ? ImDrawFlags_RoundCornersRight : ImDrawFlags_RoundCornersLeft
         );
 
-        draw_list->AddText(
-            icon_pos,
-            GetColorU32(text_col),
-            ICON_MS_DOWNLOAD
-        );
+        draw_list->AddLine(ImVec2(sx, p0.y + rounding), ImVec2(sx, p1.y - rounding), GetColorU32(dim_col));
 
-        PopFont();
+        auto draw_zone = [&](float cx, const char* icon, const char* label, bool active) {
+            ImU32 col = GetColorU32(active ? text_col : dim_col);
+            float cy = (p0.y + p1.y) * 0.5f;
+
+            PushFont(iris->ui.font_icons_big);
+
+            ImVec2 icon_size = CalcTextSize(icon);
+
+            draw_list->AddText(ImVec2(cx - icon_size.x * 0.5f, cy - icon_size.y * 0.6f), col, icon);
+
+            PopFont();
+
+            ImVec2 text_size = CalcTextSize(label);
+
+            draw_list->AddText(ImVec2(cx - text_size.x * 0.5f, cy + icon_size.y * 0.4f), col, label);
+        };
+
+        draw_zone((p0.x + sx) * 0.5f, ICON_MS_ROCKET_LAUNCH, "Boot", !over_insert);
+        draw_zone((sx + p1.x) * 0.5f, ICON_MS_ALBUM, "Insert disc", over_insert);
+
+        const char* hint = "Drop anywhere to boot";
+
+        ImVec2 hint_size = CalcTextSize(hint);
 
         draw_list->AddText(
-            text_pos,
-            GetColorU32(text_col),
-            "Drop file here to launch"
+            ImVec2((p0.x + p1.x) * 0.5f - hint_size.x * 0.5f, p1.y + 12.0f),
+            GetColorU32(dim_col),
+            hint
         );
     }
 
@@ -813,12 +829,21 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
                 break;
 
             iris->ui.drop_file_active = true;
+            iris->ui.drop_pos = ImVec2(-1.0f, -1.0f);
 
             imgui::start_dim(iris, 0.35f, 100);
+        } break;
+
+        case SDL_EVENT_DROP_POSITION: {
+            if (event->drop.windowID != SDL_GetWindowID(iris->window))
+                break;
+
+            iris->ui.drop_pos = ImVec2(event->drop.x, event->drop.y);
         } break;
         
         case SDL_EVENT_DROP_COMPLETE: {
             iris->ui.drop_file_active = false;
+            iris->ui.drop_pos = ImVec2(-1.0f, -1.0f);
 
             if (!iris->ui.loading_file_active) {
                 imgui::end_dim(iris);
@@ -832,6 +857,30 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
             std::string path(event->drop.data);
 
             std::filesystem::path p(path);
+
+            float dx = event->drop.x;
+            float dy = event->drop.y;
+
+            bool on_insert =
+                event->drop.windowID == SDL_GetWindowID(iris->window) &&
+                dx >= iris->ui.drop_insert_min.x && dx <= iris->ui.drop_insert_max.x &&
+                dy >= iris->ui.drop_insert_min.y && dy <= iris->ui.drop_insert_max.y;
+
+            if (on_insert) {
+                if (!emu::is_disc_image(path)) {
+                    push_info(iris, "Only disc images can be inserted");
+
+                    break;
+                }
+
+                if (emu::insert_disc(iris, path)) {
+                    push_info(iris, "Failed to insert disc: " + path);
+                } else {
+                    add_recent(iris, path, RecentType::PS2);
+                }
+
+                break;
+            }
 
             if (std::filesystem::is_regular_file(p)) {
                 if (emu::open_file(iris, path)) {
