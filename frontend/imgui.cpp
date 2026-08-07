@@ -275,6 +275,91 @@ void section(Instance* iris, const char* label) {
     Dummy(ImVec2(0.0f, size + GetStyle().ItemSpacing.y));
 }
 
+constexpr float menu_rounding = 5.0f;
+
+static ImDrawListSplitter menu_splitter;
+
+static ImDrawList* begin_menu_highlight() {
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    menu_splitter.Split(draw_list, 2);
+    menu_splitter.SetCurrentChannel(draw_list, 1);
+
+    ImGui::PushStyleColor(ImGuiCol_Header, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderHovered, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_HeaderActive, IM_COL32(0, 0, 0, 0));
+
+    return draw_list;
+}
+
+static void end_menu_highlight(ImDrawList* draw_list, bool selected) {
+    ImGui::PopStyleColor(3);
+
+    bool hovered = ImGui::IsItemHovered();
+
+    if (hovered || selected) {
+        menu_splitter.SetCurrentChannel(draw_list, 0);
+
+        draw_list->AddRectFilled(
+            ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+            ImGui::GetColorU32(hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header),
+            menu_rounding
+        );
+    }
+
+    menu_splitter.Merge(draw_list);
+}
+
+static bool menu_item_rounded(const char* label, const char* shortcut, bool selected, bool* p_selected, bool enabled) {
+    ImDrawList* draw_list = begin_menu_highlight();
+
+    bool pressed = p_selected
+        ? ImGui::MenuItem(label, shortcut, p_selected, enabled)
+        : ImGui::MenuItem(label, shortcut, selected, enabled);
+
+    end_menu_highlight(draw_list, p_selected ? *p_selected : selected);
+
+    return pressed;
+}
+
+bool MenuItem(const char* label, const char* shortcut, bool selected, bool enabled) {
+    return menu_item_rounded(label, shortcut, selected, nullptr, enabled);
+}
+
+bool MenuItem(const char* label, const char* shortcut, bool* p_selected, bool enabled) {
+    return menu_item_rounded(label, shortcut, false, p_selected, enabled);
+}
+
+static bool selectable_rounded(const char* label, bool selected, bool* p_selected, ImGuiSelectableFlags flags, const ImVec2& size) {
+    ImDrawList* draw_list = begin_menu_highlight();
+
+    bool pressed = p_selected
+        ? ImGui::Selectable(label, p_selected, flags, size)
+        : ImGui::Selectable(label, selected, flags, size);
+
+    end_menu_highlight(draw_list, p_selected ? *p_selected : selected);
+
+    return pressed;
+}
+
+bool Selectable(const char* label, bool selected, ImGuiSelectableFlags flags, const ImVec2& size) {
+    return selectable_rounded(label, selected, nullptr, flags, size);
+}
+
+bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags, const ImVec2& size) {
+    return selectable_rounded(label, false, p_selected, flags, size);
+}
+
+bool BeginMenu(const char* label, bool enabled) {
+    ImDrawList* draw_list = begin_menu_highlight();
+
+    bool open = ImGui::BeginMenu(label, enabled);
+
+    end_menu_highlight(draw_list, open);
+
+    return open;
+}
+
 namespace granite {
 
 constexpr ImVec4 rgb(int hex, float a = 1.0f) {

@@ -71,10 +71,10 @@ void Symbols::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("Settings")) {
-            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+        if (imgui::BeginMenu("Settings")) {
+            if (imgui::BeginMenu(ICON_MS_CROP " Sizing")) {
                 for (int i = 0; i < 4; i++) {
-                    if (Selectable(symbols_sizing_combo_items[i], i == table_sizing_combo)) {
+                    if (imgui::Selectable(symbols_sizing_combo_items[i], i == table_sizing_combo)) {
                         table_sizing = symbols_table_sizing_flags[i];
                         table_sizing_combo = i;
                     }
@@ -83,7 +83,7 @@ void Symbols::on_render() {
                 ImGui::EndMenu();
             }
 
-            MenuItem(ICON_MS_SEARCH_CHECK " Auto search", NULL, &autosearch);
+            imgui::MenuItem(ICON_MS_SEARCH_CHECK " Auto search", NULL, &autosearch);
 
             ImGui::EndMenu();
         }
@@ -108,11 +108,11 @@ void Symbols::on_render() {
     } SameLine();
 
     if (BeginPopupContextItem("symbols_settings")) {
-        if (MenuItem(ICON_MS_REGULAR_EXPRESSION " Regex mode", NULL, &use_regex)) {
+        if (imgui::MenuItem(ICON_MS_REGULAR_EXPRESSION " Regex mode", NULL, &use_regex)) {
             filter(search);
         }
 
-        if (MenuItem(ICON_MS_MATCH_CASE " Case-sensitive", NULL, &case_sensitive)) {
+        if (imgui::MenuItem(ICON_MS_MATCH_CASE " Case-sensitive", NULL, &case_sensitive)) {
             filter(search);
         }
 
@@ -202,13 +202,13 @@ void Symbols::on_render() {
 
                 PushFont(iris->ui.font_body);
 
-                if (Selectable(ICON_MS_ARROW_FORWARD " Go to this address")) {
+                if (imgui::Selectable(ICON_MS_ARROW_FORWARD " Go to this address")) {
                     iris->applets.ee_control.show();
                     iris->debug.ee_control_follow_pc = false;
                     iris->debug.ee_control_address = symbol.addr;
                 }
 
-                if (Selectable(ICON_MS_ADD_CIRCLE " Set a breakpoint here")) {
+                if (imgui::Selectable(ICON_MS_ADD_CIRCLE " Set a breakpoint here")) {
                     Breakpoint b;
 
                     b.addr = symbol.addr;

@@ -91,10 +91,10 @@ void IopModules::on_render() {
     iop::Iop* iop = iris->ps2->iop;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("Settings")) {
-            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+        if (imgui::BeginMenu("Settings")) {
+            if (imgui::BeginMenu(ICON_MS_CROP " Sizing")) {
                 for (int i = 0; i < 4; i++) {
-                    if (Selectable(sizing_combo_items[i], i == table_sizing_combo)) {
+                    if (imgui::Selectable(sizing_combo_items[i], i == table_sizing_combo)) {
                         table_sizing = table_sizing_flags[i];
                         table_sizing_combo = i;
                     }

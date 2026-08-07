@@ -40,7 +40,7 @@ void MemoryCardTool::on_render() {
 
     if (BeginCombo("##type", type_names[type])) {
         for (int i = 0; i < 3; i++) {
-            if (Selectable(type_names[i], i == type)) {
+            if (imgui::Selectable(type_names[i], i == type)) {
                 type = i;
             }
         }
@@ -57,7 +57,7 @@ void MemoryCardTool::on_render() {
             for (int i = 0; i < 5; i++) {
                 sprintf(buf, "%d MB", 8 << i);
 
-                if (Selectable(buf, i == size)) {
+                if (imgui::Selectable(buf, i == size)) {
                     size = i;
                 }
             }
@@ -73,15 +73,15 @@ void MemoryCardTool::on_render() {
     Text("Attach to");
 
     if (BeginCombo("##slot", slot == -1 ? "None" : slot == 0 ? "Slot 1" : "Slot 2")) {
-        if (Selectable("None", slot == -1)) {
+        if (imgui::Selectable("None", slot == -1)) {
             slot = -1;
         }
 
-        if (Selectable("Slot 1", slot == 0)) {
+        if (imgui::Selectable("Slot 1", slot == 0)) {
             slot = 0;
         }
 
-        if (Selectable("Slot 2", slot == 1)) {
+        if (imgui::Selectable("Slot 2", slot == 1)) {
             slot = 1;
         }
 

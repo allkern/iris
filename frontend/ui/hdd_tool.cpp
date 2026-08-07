@@ -74,7 +74,7 @@ void HddTool::on_render() {
                 for (int i = 0; i < 4; i++) {
                     std::string str = std::to_string((MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * i)) / 0x40000000ull);
 
-                    if (Selectable(str.c_str())) {
+                    if (imgui::Selectable(str.c_str())) {
                         size_add = i;
                     }
                 }

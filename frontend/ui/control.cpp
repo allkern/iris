@@ -6,6 +6,7 @@
 #include "iris.hpp"
 
 #include "res/IconsMaterialSymbols.h"
+#include "imgui_internal.h"
 
 #include "ee/ee_dis.hpp"
 #include "ee/ee_def.hpp"
@@ -246,16 +247,16 @@ static void show_ee_disassembly_view(Instance* iris) {
 
                 PushFont(iris->ui.font_body);
 
-                if (BeginMenu(ICON_MS_CONTENT_COPY "  Copy")) {
-                    if (Selectable(ICON_MS_SORT "  Address")) {
+                if (imgui::BeginMenu(ICON_MS_CONTENT_COPY "  Copy")) {
+                    if (imgui::Selectable(ICON_MS_SORT "  Address")) {
                         SDL_SetClipboardText(addr_str);
                     }
 
-                    if (Selectable(ICON_MS_SORT "  Opcode")) {
+                    if (imgui::Selectable(ICON_MS_SORT "  Opcode")) {
                         SDL_SetClipboardText(opcode_str);
                     }
 
-                    if (Selectable(ICON_MS_SORT "  Disassembly")) {
+                    if (imgui::Selectable(ICON_MS_SORT "  Disassembly")) {
                         SDL_SetClipboardText(disassembly);
                     }
 
@@ -267,11 +268,11 @@ static void show_ee_disassembly_view(Instance* iris) {
                 });
 
                 if (addr != iris->debug.breakpoints.end()) {
-                    if (MenuItem(ICON_MS_CANCEL "  Remove this breakpoint")) {
+                    if (imgui::MenuItem(ICON_MS_CANCEL "  Remove this breakpoint")) {
                         iris->debug.breakpoints.erase(addr);
                     }
                 } else {
-                    if (MenuItem(ICON_MS_ADD_CIRCLE "  Add breakpoint here")) {
+                    if (imgui::MenuItem(ICON_MS_ADD_CIRCLE "  Add breakpoint here")) {
                         Breakpoint b;
 
                         b.addr = g_ee_dis_state.pc;
@@ -436,16 +437,16 @@ static void show_iop_disassembly_view(Instance* iris) {
 
                 PushFont(iris->ui.font_body);
 
-                if (BeginMenu(ICON_MS_CONTENT_COPY "  Copy")) {
-                    if (Selectable(ICON_MS_SORT "  Address")) {
+                if (imgui::BeginMenu(ICON_MS_CONTENT_COPY "  Copy")) {
+                    if (imgui::Selectable(ICON_MS_SORT "  Address")) {
                         SDL_SetClipboardText(addr_str);
                     }
 
-                    if (Selectable(ICON_MS_SORT "  Opcode")) {
+                    if (imgui::Selectable(ICON_MS_SORT "  Opcode")) {
                         SDL_SetClipboardText(opcode_str);
                     }
 
-                    if (Selectable(ICON_MS_SORT "  Disassembly")) {
+                    if (imgui::Selectable(ICON_MS_SORT "  Disassembly")) {
                         SDL_SetClipboardText(disassembly);
                     }
 
@@ -457,11 +458,11 @@ static void show_iop_disassembly_view(Instance* iris) {
                 });
 
                 if (addr != iris->debug.breakpoints.end()) {
-                    if (MenuItem(ICON_MS_CANCEL "  Remove this breakpoint")) {
+                    if (imgui::MenuItem(ICON_MS_CANCEL "  Remove this breakpoint")) {
                         iris->debug.breakpoints.erase(addr);
                     }
                 } else {
-                    if (MenuItem(ICON_MS_ADD_CIRCLE "  Add breakpoint here")) {
+                    if (imgui::MenuItem(ICON_MS_ADD_CIRCLE "  Add breakpoint here")) {
                         Breakpoint b;
 
                         b.addr = g_iop_dis_state.addr;
@@ -545,9 +546,15 @@ void EeControl::on_render() {
 
     if (Button(ICON_MS_AUTORENEW)) {
         ee::flush_cache(iris->ps2->ee);
-    }
+    } SameLine();
 
-    InputInt("Address", (int32_t*)&iris->debug.ee_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+    SeparatorEx(ImGuiSeparatorFlags_Vertical); SameLine();
+    AlignTextToFramePadding();
+    Text("Go to"); SameLine();
+    PushFont(iris->ui.font_code);
+    SetNextItemWidth(CalcTextSize("00000000   ").x);
+    InputInt("##address", (int32_t*)&iris->debug.ee_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+    PopFont();
 
     if (IsItemDeactivatedAfterEdit()) {
         iris->debug.ee_control_follow_pc = false;
@@ -602,9 +609,15 @@ void IopControl::on_render() {
 
     if (Button(ICON_MS_MOVE_DOWN)) {
         iris->debug.iop_control_follow_pc = true;
-    }
+    } SameLine();
 
-    InputInt("Address", (int32_t*)&iris->debug.iop_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+    SeparatorEx(ImGuiSeparatorFlags_Vertical); SameLine();
+    AlignTextToFramePadding();
+    Text("Go to"); SameLine();
+    PushFont(iris->ui.font_code);
+    SetNextItemWidth(CalcTextSize("00000000   ").x);
+    InputInt("##address", (int32_t*)&iris->debug.iop_control_address, 0, 0, ImGuiInputTextFlags_CharsHexadecimal);
+    PopFont();
 
     if (IsItemDeactivatedAfterEdit()) {
         iris->debug.iop_control_follow_pc = false;

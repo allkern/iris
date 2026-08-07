@@ -42,11 +42,15 @@ void start_dim(Instance* iris, float alpha, size_t ms);
 void end_dim(Instance* iris);
 void render_dim(Instance* iris);
 
-// Wrapper for ImGui::Begin that sets a default size
 bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);
 
-// Uppercase tracked-out section label, replaces ImGui::SeparatorText
 void section(Instance* iris, const char* label);
+
+bool MenuItem(const char* label, const char* shortcut = nullptr, bool selected = false, bool enabled = true);
+bool MenuItem(const char* label, const char* shortcut, bool* p_selected, bool enabled = true);
+bool BeginMenu(const char* label, bool enabled = true);
+bool Selectable(const char* label, bool selected = false, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
+bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
 
 }
 

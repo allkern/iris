@@ -123,7 +123,7 @@ void show_breakpoint_editor(Instance* iris) {
 
     if (BeginCombo("CPU", cpu_names[(int)editable.cpu], ImGuiComboFlags_HeightSmall)) {
         for (int i = 0; i < 2; i++) {
-            if (Selectable(cpu_names[i], editable.cpu == (BreakpointCpu)i)) {
+            if (imgui::Selectable(cpu_names[i], editable.cpu == (BreakpointCpu)i)) {
                 editable.cpu = (BreakpointCpu)i;
             }
         }
@@ -171,7 +171,7 @@ void Breakpoints::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        MenuItem("Settings");
+        imgui::MenuItem("Settings");
 
         EndMenuBar();
     }

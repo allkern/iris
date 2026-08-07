@@ -12,6 +12,7 @@ struct Console : Applet {
         id = "console";
         title = "Console";
         flags = ImGuiWindowFlags_MenuBar;
+        persist = false;
     }
 
     void on_render() override;

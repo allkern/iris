@@ -73,8 +73,8 @@ void IopLogs::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("Settings")) {
-            if (MenuItem(follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
+        if (imgui::BeginMenu("Settings")) {
+            if (imgui::MenuItem(follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
                 follow = !follow;
             }
 
@@ -101,8 +101,8 @@ void SysmemLogs::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("Settings")) {
-            if (MenuItem(follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
+        if (imgui::BeginMenu("Settings")) {
+            if (imgui::MenuItem(follow ? ICON_MS_CHECK_BOX " Follow" : ICON_MS_CHECK_BOX_OUTLINE_BLANK " Follow", nullptr)) {
                 follow = !follow;
             }
 

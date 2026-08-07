@@ -3,6 +3,7 @@
 #include <string>
 #include <cctype>
 #include <cstring>
+#include <functional>
 #include <random>
 
 #include "iris.hpp"
@@ -16,7 +17,94 @@ namespace iris {
 
 static bool hovered = false;
 static std::string tooltip = "";
-static int saved = 0;
+
+struct ResetPrompt {
+    const char* setting = "";
+    std::string detail = "";
+
+    std::function<void()> commit;
+    std::function<void()> apply;
+    std::function<void()> cancel;
+
+    bool pending = false;
+    bool deferred = false;
+};
+
+static ResetPrompt reset_prompt;
+
+static void request_reset(const char* setting, std::string detail, std::function<void()> commit, std::function<void()> apply, std::function<void()> cancel) {
+    reset_prompt.setting = setting;
+    reset_prompt.detail = std::move(detail);
+    reset_prompt.commit = std::move(commit);
+    reset_prompt.apply = std::move(apply);
+    reset_prompt.cancel = std::move(cancel);
+    reset_prompt.pending = true;
+}
+
+static void draw_reset_prompt(Instance* iris) {
+    using namespace ImGui;
+
+    if (reset_prompt.pending) {
+        OpenPopup("###resetprompt");
+
+        reset_prompt.pending = false;
+    }
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+
+    if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
+        flags |= ImGuiWindowFlags_NoTitleBar;
+
+    ImGuiWindowClass window_class;
+
+    window_class.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoAutoMerge;
+
+    SetNextWindowClass(&window_class);
+    SetNextWindowPos(GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (!BeginPopupModal("Reset required###resetprompt", nullptr, flags))
+        return;
+
+    PushFont(iris->ui.font_heading);
+    Text("%s", reset_prompt.setting);
+    PopFont();
+
+    Spacing();
+
+    TextUnformatted(reset_prompt.detail.c_str());
+
+    Spacing();
+    TextDisabled(ICON_MS_WARNING " Resetting now will lose any unsaved progress.");
+    Spacing();
+    Separator();
+    Spacing();
+
+    if (Button("Reset")) {
+        reset_prompt.commit();
+        reset_prompt.apply();
+
+        ps2::reset(iris->ps2);
+
+        CloseCurrentPopup();
+    } SameLine();
+
+    if (Button("Apply at next start")) {
+        reset_prompt.commit();
+
+        reset_prompt.deferred = true;
+
+        CloseCurrentPopup();
+    } SameLine();
+
+    if (Button("Cancel")) {
+        if (reset_prompt.cancel)
+            reset_prompt.cancel();
+
+        CloseCurrentPopup();
+    }
+
+    EndPopup();
+}
 
 Mapping* get_input_mapping(Instance* iris, int slot) {
     if (iris->input.input_map[slot] == -1)
@@ -182,7 +270,8 @@ static const char* system_names[] = {
     "Namco System 147",
     "Namco System 148",
     "Namco System 246",
-    "Namco System 256"
+    "Namco System 256",
+    "WEGA HVX"
 };
 
 static const char* mechacon_model_names[] = {
@@ -243,7 +332,7 @@ void show_system_settings(Instance* iris) {
 
     if (BeginCombo("##combo", system_names[iris->system])) {
         for (int i = 0; i < IM_ARRAYSIZE(system_names); i++) {
-            if (Selectable(system_names[i], i == iris->system)) {
+            if (imgui::Selectable(system_names[i], i == iris->system)) {
                 iris->system = i;
 
                 ps2::set_system(iris->ps2, i);
@@ -294,7 +383,7 @@ void show_system_settings(Instance* iris) {
         for (int i = 0; i < 9; i++) {
             char buf[16]; snprintf(buf, 16, "%dx", 1 << i);
 
-            if (Selectable(buf, iris->timescale == (1 << i))) {
+            if (imgui::Selectable(buf, iris->timescale == (1 << i))) {
                 iris->timescale = (1 << i);
 
                 ps2::set_timescale(iris->ps2, iris->timescale);
@@ -517,7 +606,7 @@ void show_hardware_renderer_settings(Instance* iris) {
 
     if (BeginCombo("##ssaa", ssaa_names[iris->hardware_backend_config.super_sampling])) {
         for (int i = 0; i < IM_ARRAYSIZE(ssaa_names); i++) {
-            if (Selectable(ssaa_names[i], iris->hardware_backend_config.super_sampling == i)) {
+            if (imgui::Selectable(ssaa_names[i], iris->hardware_backend_config.super_sampling == i)) {
                 iris->hardware_backend_config.super_sampling = i;
 
                 if (i != 0) {
@@ -573,7 +662,7 @@ void show_hardware_renderer_settings(Instance* iris) {
 
     if (BeginCombo("##videostandard", video_standard_names[iris->hardware_backend_config.analog_system])) {
         for (int i = 0; i < IM_ARRAYSIZE(video_standard_names); i++) {
-            if (Selectable(video_standard_names[i], iris->hardware_backend_config.analog_system == i)) {
+            if (imgui::Selectable(video_standard_names[i], iris->hardware_backend_config.analog_system == i)) {
                 iris->hardware_backend_config.analog_system = i;
                 render::refresh(iris);
             }
@@ -591,7 +680,7 @@ void show_hardware_renderer_settings(Instance* iris) {
 
     if (BeginCombo("##cabletype", cable_type_names[iris->hardware_backend_config.analog_cable])) {
         for (int i = 0; i < IM_ARRAYSIZE(cable_type_names); i++) {
-            if (Selectable(cable_type_names[i], iris->hardware_backend_config.analog_cable == i)) {
+            if (imgui::Selectable(cable_type_names[i], iris->hardware_backend_config.analog_cable == i)) {
                 iris->hardware_backend_config.analog_cable = i;
                 render::refresh(iris);
             }
@@ -621,7 +710,7 @@ void show_hardware_renderer_settings(Instance* iris) {
 
     if (BeginCombo("##decodefilter", decode_filter_names[decode_filter_index])) {
         for (int i = 0; i < IM_ARRAYSIZE(decode_filter_names); i++) {
-            if (Selectable(decode_filter_names[i], decode_filter_index == i)) {
+            if (imgui::Selectable(decode_filter_names[i], decode_filter_index == i)) {
                 switch (i) {
                     case 0: {
                         iris->hardware_backend_config.line_comb = false;
@@ -690,7 +779,7 @@ void show_graphics_settings(Instance* iris) {
         for (int i = 0; i < 3; i++) {
             BeginDisabled(i == gs::renderer::BACKEND_SOFTWARE);
 
-            if (Selectable(settings_renderer_names[i], i == iris->renderer_backend)) {
+            if (imgui::Selectable(settings_renderer_names[i], i == iris->renderer_backend)) {
                 render::switch_backend(iris, i);
             }
 
@@ -704,7 +793,7 @@ void show_graphics_settings(Instance* iris) {
 
     if (BeginCombo("##aspectmode", settings_aspect_mode_names[iris->aspect_mode])) {
         for (int i = 0; i < 7; i++) {
-            if (Selectable(settings_aspect_mode_names[i], iris->aspect_mode == i)) {
+            if (imgui::Selectable(settings_aspect_mode_names[i], iris->aspect_mode == i)) {
                 iris->aspect_mode = i;
             }
         }
@@ -726,7 +815,7 @@ void show_graphics_settings(Instance* iris) {
         for (int i = 2; i <= 6; i++) {
             snprintf(buf, 16, "%.1fx", (float)i * 0.5f);
 
-            if (Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
+            if (imgui::Selectable(buf, ((float)i * 0.5f) == iris->scale)) {
                 iris->scale = (float)i * 0.5f;
             }
         }
@@ -747,7 +836,7 @@ void show_graphics_settings(Instance* iris) {
     if (BeginCombo("##scalingfilter", filter_names[iris->filter])) {
         for (int i = 0; i < 3; i++) {
             BeginDisabled(i == 2 && !iris->vk.cubic_supported);
-            if (Selectable(filter_names[i], iris->filter == i)) {
+            if (imgui::Selectable(filter_names[i], iris->filter == i)) {
                 iris->filter = i;
             }
             EndDisabled();
@@ -763,7 +852,7 @@ void show_graphics_settings(Instance* iris) {
 
     if (BeginCombo("##rotation", settings_rotation_names[rotation_index])) {
         for (int i = 0; i < 4; i++) {
-            if (Selectable(settings_rotation_names[i], rotation_index == i)) {
+            if (imgui::Selectable(settings_rotation_names[i], rotation_index == i)) {
                 iris->angle = i * 90;
             }
         }
@@ -775,7 +864,7 @@ void show_graphics_settings(Instance* iris) {
 
     if (BeginCombo("##windowmode", settings_fullscreen_names[iris->fullscreen])) {
         for (int i = 0; i < 2; i++) {
-            if (Selectable(settings_fullscreen_names[i], iris->fullscreen == i)) {
+            if (imgui::Selectable(settings_fullscreen_names[i], iris->fullscreen == i)) {
                 iris->fullscreen = i;
 
                 SDL_SetWindowFullscreen(iris->window, settings_fullscreen_flags[i]);
@@ -791,7 +880,7 @@ void show_graphics_settings(Instance* iris) {
 
     if (BeginCombo("##presentmode", settings_present_mode_names[iris->present_mode])) {
         for (int i = 0; i < IM_ARRAYSIZE(settings_present_mode_names); i++) {
-            if (Selectable(settings_present_mode_names[i], iris->present_mode == i)) {
+            if (imgui::Selectable(settings_present_mode_names[i], iris->present_mode == i)) {
                 iris->present_mode = i;
             }
         }
@@ -833,7 +922,7 @@ void show_graphics_settings(Instance* iris) {
     PushStyleVarY(ImGuiStyleVar_ItemSpacing, 5.0F);
 
     if (BeginCombo("##gpu", hint)) {
-        if (Selectable("Auto", iris->vk.vulkan_physical_device < 0)) {
+        if (imgui::Selectable("Auto", iris->vk.vulkan_physical_device < 0)) {
             iris->vk.vulkan_physical_device = -1;
         }
 
@@ -846,7 +935,7 @@ void show_graphics_settings(Instance* iris) {
                 name += " (Current)";
             }
 
-            if (Selectable(name.c_str(), device.device == selected_device.device)) {
+            if (imgui::Selectable(name.c_str(), device.device == selected_device.device)) {
                 changed = iris->vk.vulkan_physical_device != i;
 
                 iris->vk.vulkan_physical_device = i;
@@ -888,7 +977,7 @@ void show_controller_slot(Instance* iris, int slot) {
         SetNextItemWidth(avail_width);
 
         if (BeginCombo("##controller", controller_name.c_str())) {
-            if (Selectable("None")) {
+            if (imgui::Selectable("None")) {
                 if (iris->input.ds[slot]) {
                     sio2::detach_device(iris->ps2->sio2, slot);
 
@@ -896,7 +985,7 @@ void show_controller_slot(Instance* iris, int slot) {
                 }
             }
 
-            if (Selectable("DualShock 2")) {
+            if (imgui::Selectable("DualShock 2")) {
                 if (!iris->input.ds[slot]) {
                     iris->input.ds[slot] = dev::ds::attach(iris->logger, iris->ps2->sio2, slot);
                 }
@@ -928,7 +1017,7 @@ void show_controller_slot(Instance* iris, int slot) {
         SetNextItemWidth(avail_width);
 
         if (BeginCombo("##devicetype", name.c_str())) {
-            if (Selectable("None")) {
+            if (imgui::Selectable("None")) {
                 if (iris->input.input_devices[slot]) {
                     delete iris->input.input_devices[slot];
 
@@ -936,7 +1025,7 @@ void show_controller_slot(Instance* iris, int slot) {
                 }
             }
 
-            if (Selectable("Keyboard")) {
+            if (imgui::Selectable("Keyboard")) {
                 if (iris->input.input_devices[slot]) {
                     delete iris->input.input_devices[slot];
 
@@ -952,7 +1041,7 @@ void show_controller_slot(Instance* iris, int slot) {
             }
 
             for (auto gamepad : iris->input.gamepads) {
-                if (Selectable(SDL_GetGamepadNameForID(gamepad.first))) {
+                if (imgui::Selectable(SDL_GetGamepadNameForID(gamepad.first))) {
                     if (iris->input.input_devices[slot]) {
                         delete iris->input.input_devices[slot];
 
@@ -1000,14 +1089,14 @@ void show_controller_slot(Instance* iris, int slot) {
     Mapping* selected = get_input_mapping(iris, slot);
 
     if (BeginCombo("##mapping", selected ? selected->name.c_str() : "None")) {
-        if (Selectable("None", selected == nullptr)) {
+        if (imgui::Selectable("None", selected == nullptr)) {
             iris->input.input_map[slot] = -1;
         }
 
         int i = 0;
 
         for (auto& map : iris->input.input_maps) {
-            if (Selectable(map.name.c_str(), selected == &map)) {
+            if (imgui::Selectable(map.name.c_str(), selected == &map)) {
                 iris->input.input_map[slot] = i;
             }
 
@@ -1092,7 +1181,7 @@ void show_mappings_editor(Instance* iris) {
         int i = 0;
 
         for (auto& map : iris->input.input_maps) {
-            if (Selectable(map.name.c_str(), selected_mapping == i)) {
+            if (imgui::Selectable(map.name.c_str(), selected_mapping == i)) {
                 selected_mapping = i;
             }
 
@@ -1245,7 +1334,7 @@ void show_usb_port(Instance* iris, int port) {
         for (int i = 0; i < usb::USB_DEVICE_TYPE_COUNT; i++) {
             const char* name = usb::device_type_name(i);
 
-            if (Selectable(name, i == current)) {
+            if (imgui::Selectable(name, i == current)) {
                 iris->input.usb_devices[port] = i;
 
                 usb::set_port_device(iris->ps2->usb, port, i);
@@ -1334,12 +1423,14 @@ void show_usb_settings(Instance* iris) {
 void show_paths_settings(Instance* iris) {
     using namespace ImGui;
 
-    static char buf[512];
-    static char dvd_buf[512];
-    static char rom2_buf[512];
-    static char nvram_buf[512];
-    static char hdd_buf[512];
-    static char flash_buf[512];
+    SettingsWindow& settings = iris->applets.settings;
+
+    char* buf = settings.bios_buf;
+    char* dvd_buf = settings.rom1_buf;
+    char* rom2_buf = settings.rom2_buf;
+    char* nvram_buf = settings.nvram_buf;
+    char* hdd_buf = settings.hdd_buf;
+    char* flash_buf = settings.flash_buf;
 
     Text("BIOS (rom0)");
 
@@ -1375,8 +1466,6 @@ void show_paths_settings(Instance* iris) {
 
         if (f.result().size()) {
             strncpy(buf, f.result().at(0).c_str(), 512);
-
-            ps2::load_bios(iris->ps2, buf);
         }
     }
 
@@ -1605,19 +1694,65 @@ void show_paths_settings(Instance* iris) {
         std::string nvram_path = nvram_buf;
         std::string hdd_path = hdd_buf;
 
-        if (bios_path.size()) iris->paths.bios_path = bios_path;
-        if (rom1_path.size()) iris->paths.rom1_path = rom1_path;
-        if (rom2_path.size()) iris->paths.rom2_path = rom2_path;
-        if (flash_path.size()) iris->paths.flash_path = flash_path;
-        if (nvram_path.size()) iris->paths.nvram_path = nvram_path;
-        if (hdd_path.size()) iris->paths.hdd_path = hdd_path;
+        request_reset(
+            "System paths",
+            "The BIOS and ROM images are read when the system boots, so the\n"
+            "running emulator keeps using the current ones until it resets.",
+            [=]() {
+                if (bios_path.size()) iris->paths.bios_path = bios_path;
+                if (rom1_path.size()) iris->paths.rom1_path = rom1_path;
+                if (rom2_path.size()) iris->paths.rom2_path = rom2_path;
+                if (flash_path.size()) iris->paths.flash_path = flash_path;
+                if (nvram_path.size()) iris->paths.nvram_path = nvram_path;
+                if (hdd_path.size()) iris->paths.hdd_path = hdd_path;
+            },
+            [=]() {
+                if (iris->paths.bios_path.size())
+                    ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
 
-        saved = 1;
+                emu::load_rom_files(iris);
+            },
+            [iris]() {
+                iris->applets.settings.sync_paths();
+            }
+        );
     } SameLine();
 
-    if (saved) {
-        TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_WARNING " Restart the emulator to apply these changes");
+    if (settings.paths_dirty()) {
+        TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_FIBER_MANUAL_RECORD " Unsaved changes");
+    } else if (reset_prompt.deferred) {
+        TextColored(ImVec4(211.0/255.0, 167.0/255.0, 30.0/255.0, 1.0), ICON_MS_SCHEDULE " Saved, applies on next start");
     }
+}
+
+void SettingsWindow::sync_paths() {
+    auto copy = [](char* dst, const std::string& src) {
+        strncpy(dst, src.c_str(), 511);
+
+        dst[511] = 0;
+    };
+
+    copy(bios_buf, iris->paths.bios_path);
+    copy(rom1_buf, iris->paths.rom1_path);
+    copy(rom2_buf, iris->paths.rom2_path);
+    copy(nvram_buf, iris->paths.nvram_path);
+    copy(hdd_buf, iris->paths.hdd_path);
+    copy(flash_buf, iris->paths.flash_path);
+}
+
+bool SettingsWindow::paths_dirty() const {
+    return iris->paths.bios_path != bios_buf ||
+           iris->paths.rom1_path != rom1_buf ||
+           iris->paths.rom2_path != rom2_buf ||
+           iris->paths.nvram_path != nvram_buf ||
+           iris->paths.hdd_path != hdd_buf ||
+           iris->paths.flash_path != flash_buf;
+}
+
+void SettingsWindow::on_open() {
+    sync_paths();
+
+    reset_prompt.deferred = false;
 }
 
 static char slot0_buf[1024];
@@ -1742,7 +1877,6 @@ void show_memory_card_settings(Instance* iris) {
     show_memory_card(iris, 1);
 }
 
-// Indexed by imgui::Theme, so this follows the enum, not the menu
 static const char* const theme_names[] = {
     "Granite Neo",
     "ImGui Dark",
@@ -1796,7 +1930,7 @@ void show_misc_settings(Instance* iris) {
         for (int i = 0; i < IM_ARRAYSIZE(theme_order); i++) {
             int theme = theme_order[i];
 
-            if (Selectable(theme_names[theme], iris->ui.theme == theme)) {
+            if (imgui::Selectable(theme_names[theme], iris->ui.theme == theme)) {
                 iris->ui.theme = theme;
 
                 imgui::set_theme(iris, theme);
@@ -1828,7 +1962,7 @@ void show_misc_settings(Instance* iris) {
 
     if (BeginCombo("##titlebar_style", titlebar_style_names[iris->windows_titlebar_style])) {
         for (int i = 0; i < 2; i++) {
-            if (Selectable(titlebar_style_names[i], iris->windows_titlebar_style == i)) {
+            if (imgui::Selectable(titlebar_style_names[i], iris->windows_titlebar_style == i)) {
                 iris->windows_titlebar_style = i;
 
                 platform::apply_settings(iris);
@@ -1927,7 +2061,7 @@ void show_misc_settings(Instance* iris) {
 
     if (BeginCombo("##screenshotformat", format_names[iris->screenshot_format])) {
         for (int i = 0; i < 4; i++) {
-            if (Selectable(format_names[i], iris->screenshot_format == i)) {
+            if (imgui::Selectable(format_names[i], iris->screenshot_format == i)) {
                 iris->screenshot_format = i;
             }
         }
@@ -1939,7 +2073,7 @@ void show_misc_settings(Instance* iris) {
 
     if (BeginCombo("##screenshotmode", mode_names[iris->screenshot_mode])) {
         for (int i = 0; i < 2; i++) {
-            if (Selectable(mode_names[i], iris->screenshot_mode == i)) {
+            if (imgui::Selectable(mode_names[i], iris->screenshot_mode == i)) {
                 iris->screenshot_mode = i;
             }
         }
@@ -1952,7 +2086,7 @@ void show_misc_settings(Instance* iris) {
 
         if (BeginCombo("##jpgquality", jpg_quality_names[iris->screenshot_jpg_quality_mode])) {
             for (int i = 0; i < 6; i++) {
-                if (Selectable(jpg_quality_names[i], iris->screenshot_jpg_quality_mode == i)) {
+                if (imgui::Selectable(jpg_quality_names[i], iris->screenshot_jpg_quality_mode == i)) {
                     iris->screenshot_jpg_quality_mode = i;
                 }
             }
@@ -1997,7 +2131,7 @@ void show_shader_settings(Instance* iris) {
     Text("Add shader");
     if (BeginCombo("##combo", selected_shader)) {
         for (int i = 0; i < IM_ARRAYSIZE(builtin_shader_names); i++) {
-            if (Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
+            if (imgui::Selectable(builtin_shader_names[i], selected_shader == builtin_shader_names[i])) {
                 selected_shader = builtin_shader_names[i];
             }
         }
@@ -2021,7 +2155,7 @@ void show_shader_settings(Instance* iris) {
 
     // if (BeginCombo("##presets", selected_shader)) {
     //     for (int i = 0; i < 3; i++) {
-    //         if (Selectable(presets[i], selected_shader == builtin_shader_names[i])) {
+    //         if (imgui::Selectable(presets[i], selected_shader == builtin_shader_names[i])) {
     //             selected_shader = builtin_shader_names[i];
     //         }
     //     }
@@ -2272,13 +2406,7 @@ void SettingsWindow::on_render() {
         }
     } EndChild();
 
-    // Separator();
-
-    // if (hovered) {
-    //     TextWrapped(tooltip.c_str());
-    // } else {
-    //     Text("Hover over an item to get more information");
-    // }
+    draw_reset_prompt(iris);
 }
 
 }

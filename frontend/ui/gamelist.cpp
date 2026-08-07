@@ -514,11 +514,11 @@ void show_gamelist(Instance* iris) {
     }
 
     // if (BeginPopupContextItem("symbols_settings")) {
-    //     if (MenuItem(ICON_MS_REGULAR_EXPRESSION " Regex mode", NULL, &gamelib_regex)) {
+    //     if (imgui::MenuItem(ICON_MS_REGULAR_EXPRESSION " Regex mode", NULL, &gamelib_regex)) {
     //         gamelib_filter_symbols(iris, buf, gamelib_regex, gamelib_case_sensitive);
     //     }
 
-    //     if (MenuItem(ICON_MS_MATCH_CASE " Case-sensitive", NULL, &gamelib_case_sensitive)) {
+    //     if (imgui::MenuItem(ICON_MS_MATCH_CASE " Case-sensitive", NULL, &gamelib_case_sensitive)) {
     //         gamelib_filter_symbols(iris, buf, gamelib_regex, gamelib_case_sensitive);
     //     }
 

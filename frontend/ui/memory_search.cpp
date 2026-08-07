@@ -489,23 +489,23 @@ void MemorySearch::show_search_table() {
                 PopFont();
 
                 PushFont(iris->ui.font_body);
-                if (BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
-                    if (Selectable("Address")) {
+                if (imgui::BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
+                    if (imgui::Selectable("Address")) {
                         ImGui::SetClipboardText(addr_label);
                     }
 
-                    if (Selectable("Previous Value")) {
+                    if (imgui::Selectable("Previous Value")) {
                         ImGui::SetClipboardText(prev_value_label);
                     }
 
-                    if (Selectable("Current Value")) {
+                    if (imgui::Selectable("Current Value")) {
                         ImGui::SetClipboardText(curr_value_label);
                     }
 
                     ImGui::EndMenu();
                 }
 
-                if (BeginMenu(ICON_MS_EDIT " Edit value")) {
+                if (imgui::BeginMenu(ICON_MS_EDIT " Edit value")) {
                     show_match_change_dialog(m, addr_label, type, cpu);
 
                     ImGui::EndMenu();
@@ -520,7 +520,7 @@ void MemorySearch::show_search_table() {
                     }
                 }
 
-                if (Selectable(in_address_list ? ICON_MS_REMOVE " Remove from address list" : ICON_MS_ADD " Add to address list")) {
+                if (imgui::Selectable(in_address_list ? ICON_MS_REMOVE " Remove from address list" : ICON_MS_ADD " Add to address list")) {
                     if (in_address_list) {
                         std::erase_if(address_list, [m](const Match& am) {
                             return am.address == m.address;
@@ -607,37 +607,37 @@ void MemorySearch::show_address_list() {
                 PopFont();
 
                 PushFont(iris->ui.font_body);
-                if (BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
-                    if (Selectable("Address")) {
+                if (imgui::BeginMenu(ICON_MS_CONTENT_COPY " Copy")) {
+                    if (imgui::Selectable("Address")) {
                         ImGui::SetClipboardText(addr_label);
                     }
 
-                    if (Selectable("Previous Value")) {
+                    if (imgui::Selectable("Previous Value")) {
                         ImGui::SetClipboardText(prev_value_label);
                     }
 
-                    if (Selectable("Current Value")) {
+                    if (imgui::Selectable("Current Value")) {
                         ImGui::SetClipboardText(curr_value_label);
                     }
 
                     ImGui::EndMenu();
                 }
 
-                if (BeginMenu(ICON_MS_EDIT " Edit value")) {
+                if (imgui::BeginMenu(ICON_MS_EDIT " Edit value")) {
                     show_match_change_dialog(m, addr_label, m.type, m.cpu);
 
                     ImGui::EndMenu();
                 }
 
-                if (BeginMenu(ICON_MS_EDIT " Edit description")) {
+                if (imgui::BeginMenu(ICON_MS_EDIT " Edit description")) {
                     show_description_change_dialog(m);
 
                     ImGui::EndMenu();
                 }
 
-                if (BeginMenu(ICON_MS_EDIT " Edit type")) {
+                if (imgui::BeginMenu(ICON_MS_EDIT " Edit type")) {
                     for (int i = 0; i < IM_ARRAYSIZE(search_type_names); i++) {
-                        if (MenuItem(search_type_names[i], nullptr, m.type == i)) {
+                        if (imgui::MenuItem(search_type_names[i], nullptr, m.type == i)) {
                             m.type = i;
                         }
                     }
@@ -645,7 +645,7 @@ void MemorySearch::show_address_list() {
                     ImGui::EndMenu();
                 }
 
-                if (Selectable(ICON_MS_REMOVE " Remove from address list")) {
+                if (imgui::Selectable(ICON_MS_REMOVE " Remove from address list")) {
                     std::erase_if(address_list, [m](const Match& am) {
                         return am.address == m.address;
                     });
@@ -701,7 +701,7 @@ void MemorySearch::show_search_options() {
     Text("Type");
     if (BeginCombo("##type", search_type_names[type])) {
         for (int i = 0; i < IM_ARRAYSIZE(search_type_names); i++) {
-            if (Selectable(search_type_names[i], type == i)) {
+            if (imgui::Selectable(search_type_names[i], type == i)) {
                 type = i;
             }
         }
@@ -716,7 +716,7 @@ void MemorySearch::show_search_options() {
     Text("Comparison");
     if (BeginCombo("##comparison", search_cmp_names[cmp])) {
         for (int i = 0; i < IM_ARRAYSIZE(search_cmp_names); i++) {
-            if (Selectable(search_cmp_names[i], cmp == i)) {
+            if (imgui::Selectable(search_cmp_names[i], cmp == i)) {
                 cmp = i;
             }
         }
@@ -727,7 +727,7 @@ void MemorySearch::show_search_options() {
     Text("Memory");
     if (BeginCombo("##memory", search_cpu_names[cpu])) {
         for (int i = 0; i < IM_ARRAYSIZE(search_cpu_names); i++) {
-            if (Selectable(search_cpu_names[i], cpu == i)) {
+            if (imgui::Selectable(search_cpu_names[i], cpu == i)) {
                 cpu = i;
             }
         }
@@ -813,9 +813,9 @@ void MemorySearch::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("File")) {
-            if (BeginMenu("Address list")) {
-                if (MenuItem("Export to file...")) {
+        if (imgui::BeginMenu("File")) {
+            if (imgui::BeginMenu("Address list")) {
+                if (imgui::MenuItem("Export to file...")) {
                     std::string str = serialize_address_list();
 
                     pfd::save_file file("Export Address List", "address_list.csv", { "CSV Files (*.csv)", "*.csv", "All files (*.*)", "" });
@@ -833,7 +833,7 @@ void MemorySearch::on_render() {
                     }
                 }
 
-                if (MenuItem("Import from file...")) {
+                if (imgui::MenuItem("Import from file...")) {
                     pfd::open_file file("Import Address List", "", { "CSV Files (*.csv)", "*.csv", "All Files (*.*)", "*" });
 
                     if (!file.result().empty()) {
@@ -847,13 +847,13 @@ void MemorySearch::on_render() {
                     }
                 }
 
-                if (MenuItem("Export to clipboard")) {
+                if (imgui::MenuItem("Export to clipboard")) {
                     std::string str = serialize_address_list();
 
                     SDL_SetClipboardText(str.c_str());
                 }
 
-                if (MenuItem("Import from clipboard")) {
+                if (imgui::MenuItem("Import from clipboard")) {
                     if (SDL_HasClipboardText()) {
                         std::string clip_text = SDL_GetClipboardText();
 
@@ -863,7 +863,7 @@ void MemorySearch::on_render() {
                     }
                 }
 
-                if (MenuItem("Clear")) {
+                if (imgui::MenuItem("Clear")) {
                     address_list.clear();
                 }
 
@@ -873,8 +873,8 @@ void MemorySearch::on_render() {
             ImGui::EndMenu();
         }
 
-        if (BeginMenu("View")) {
-            MenuItem("Display as hex", nullptr, &display_hex);
+        if (imgui::BeginMenu("View")) {
+            imgui::MenuItem("Display as hex", nullptr, &display_hex);
 
             ImGui::EndMenu();
         }

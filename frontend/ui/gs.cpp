@@ -489,7 +489,7 @@ void show_gs_memory(Instance* iris) {
         for (int i = 0; i < 6; i++) {
             sprintf(buf4, "%.1f", 1.0f + (0.5f * i));
 
-            if (Selectable(buf4, scale == 1.0f + (0.5f * i))) {
+            if (imgui::Selectable(buf4, scale == 1.0f + (0.5f * i))) {
                 scale = 1.0f + (0.5f * i);
             }
         }
@@ -499,7 +499,7 @@ void show_gs_memory(Instance* iris) {
 
     if (BeginCombo("Format", format_names[format], ImGuiComboFlags_HeightSmall)) {
         for (int i = 0; i < 2; i++) {
-            if (Selectable(format_names[i], i == format)) {
+            if (imgui::Selectable(format_names[i], i == format)) {
                 format = i;
             }
         }
@@ -623,10 +623,10 @@ void GsDebugger::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("Settings")) {
-            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+        if (imgui::BeginMenu("Settings")) {
+            if (imgui::BeginMenu(ICON_MS_CROP " Sizing")) {
                 for (int i = 0; i < 4; i++) {
-                    if (Selectable(sizing_combo_items[i], i == gs_sizing_index)) {
+                    if (imgui::Selectable(sizing_combo_items[i], i == gs_sizing_index)) {
                         gs_table_sizing = table_sizing_flags[i];
                         gs_sizing_index = i;
                     }

@@ -70,23 +70,23 @@ void Console::on_render() {
         rebuild_sources();
 
     if (BeginMenuBar()) {
-        if (BeginMenu("View")) {
-            MenuItem(ICON_MS_ARROW_DOWNWARD " Autoscroll", nullptr, &autoscroll);
-            MenuItem(ICON_MS_PALETTE " Colorize", nullptr, &colorize);
-            MenuItem(ICON_MS_WRAP_TEXT " Wrap long lines", nullptr, &wrap);
+        if (imgui::BeginMenu("View")) {
+            imgui::MenuItem(ICON_MS_ARROW_DOWNWARD " Autoscroll", nullptr, &autoscroll);
+            imgui::MenuItem(ICON_MS_PALETTE " Colorize", nullptr, &colorize);
+            imgui::MenuItem(ICON_MS_WRAP_TEXT " Wrap long lines", nullptr, &wrap);
 
             Separator();
 
-            MenuItem(ICON_MS_TERMINAL " Mirror to system console", nullptr, &iris->log_to_console);
+            imgui::MenuItem(ICON_MS_TERMINAL " Mirror to system console", nullptr, &iris->log_to_console);
 
             ImGui::EndMenu();
         }
 
-        if (BeginMenu("Level")) {
+        if (imgui::BeginMenu("Level")) {
             for (int i = 0; i < IM_ARRAYSIZE(level_values); i++) {
                 PushStyleColor(ImGuiCol_Text, log_level_color(level_values[i]));
 
-                if (MenuItem(log_level_name(level_values[i]), nullptr, min_level == i))
+                if (imgui::MenuItem(log_level_name(level_values[i]), nullptr, min_level == i))
                     min_level = i;
 
                 PopStyleColor();
@@ -95,7 +95,7 @@ void Console::on_render() {
             ImGui::EndMenu();
         }
 
-        if (BeginMenu("Sources")) {
+        if (imgui::BeginMenu("Sources")) {
             size_t enabled = 0;
 
             for (const SourceEntry& entry : source_entries)

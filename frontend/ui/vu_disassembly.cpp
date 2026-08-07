@@ -341,17 +341,17 @@ void VuDisassembler::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("File")) {
-            if (MenuItem(ICON_MS_FILE_SAVE " Save disassembly as...", NULL)) {
+        if (imgui::BeginMenu("File")) {
+            if (imgui::MenuItem(ICON_MS_FILE_SAVE " Save disassembly as...", NULL)) {
                 
             }
 
             ImGui::EndMenu();
         }
 
-        if (BeginMenu("Settings")) {
-            MenuItem(ICON_MS_FORMAT_LETTER_SPACING_WIDER " Add padding", NULL, &add_padding);
-            MenuItem(ICON_MS_COLLAPSE_ALL " Compact view", NULL, &compact_view);
+        if (imgui::BeginMenu("Settings")) {
+            imgui::MenuItem(ICON_MS_FORMAT_LETTER_SPACING_WIDER " Add padding", NULL, &add_padding);
+            imgui::MenuItem(ICON_MS_COLLAPSE_ALL " Compact view", NULL, &compact_view);
 
             ImGui::EndMenu();
         }

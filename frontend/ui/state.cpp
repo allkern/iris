@@ -832,10 +832,10 @@ void EeState::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("Settings")) {
-            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+        if (imgui::BeginMenu("Settings")) {
+            if (imgui::BeginMenu(ICON_MS_CROP " Sizing")) {
                 for (int i = 0; i < 4; i++) {
-                    if (Selectable(sizing_combo_items[i], i == ee_sizing_combo)) {
+                    if (imgui::Selectable(sizing_combo_items[i], i == ee_sizing_combo)) {
                         ee_table_sizing = table_sizing_flags[i];
                         ee_sizing_combo = i;
                     }
@@ -844,7 +844,7 @@ void EeState::on_render() {
                 ImGui::EndMenu();
             }
 
-            MenuItem("Display VU0f as floats", nullptr, &vu0f_float);
+            imgui::MenuItem("Display VU0f as floats", nullptr, &vu0f_float);
 
             ImGui::EndMenu();
         }
@@ -905,10 +905,10 @@ void IopState::on_render() {
     using namespace ImGui;
 
     if (BeginMenuBar()) {
-        if (BeginMenu("Settings")) {
-            if (BeginMenu(ICON_MS_CROP " Sizing")) {
+        if (imgui::BeginMenu("Settings")) {
+            if (imgui::BeginMenu(ICON_MS_CROP " Sizing")) {
                 for (int i = 0; i < 4; i++) {
-                    if (Selectable(sizing_combo_items[i], i == iop_sizing_combo)) {
+                    if (imgui::Selectable(sizing_combo_items[i], i == iop_sizing_combo)) {
                         iop_table_sizing = table_sizing_flags[i];
                         iop_sizing_combo = i;
                     }
