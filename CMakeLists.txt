@@ -255,6 +255,7 @@ target_sources(iris PRIVATE
     frontend/ui/breakpoints.cpp
     frontend/ui/compat_report.cpp
     frontend/ui/console.cpp
+    frontend/ui/debugger.cpp
     frontend/ui/control.cpp
     frontend/ui/dma.cpp
     frontend/ui/fatal_error.cpp

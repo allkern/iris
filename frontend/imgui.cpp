@@ -4,6 +4,7 @@
 #include "imgui_impl_sdl3.h"
 #include "imgui_impl_vulkan.h"
 #include "implot.h"
+#include "imgui_internal.h"
 
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_vulkan.h>
@@ -227,7 +228,7 @@ bool setup_fonts(Instance* iris, ImGuiIO& io) {
     return true;
 }
 
-void section(Instance* iris, const char* label) {
+static void draw_section(Instance* iris, const char* label, bool* open) {
     using namespace ImGui;
 
     constexpr float size = 11.0f;
@@ -237,12 +238,41 @@ void section(Instance* iris, const char* label) {
     ImFontBaked* baked = font->GetFontBaked(size);
     ImDrawList* dl = GetWindowDrawList();
 
-    ImVec2 pos = GetCursorScreenPos();
+    float spacing = GetStyle().ItemSpacing.y;
+    float row = size + spacing * 2.0f;
+    float arrow = open ? size + 6.0f : 0.0f;
 
-    pos.y += GetStyle().ItemSpacing.y;
+    ImVec2 start = GetCursorScreenPos();
+    bool hovered = false;
 
-    ImU32 text_col = GetColorU32(ImGuiCol_TextDisabled);
-    float x = pos.x;
+    if (open) {
+        PushID(label);
+
+        if (InvisibleButton("##section", ImVec2(GetContentRegionAvail().x, row)))
+            *open = !*open;
+
+        hovered = IsItemHovered();
+
+        PopID();
+
+        SetCursorScreenPos(start);
+    }
+
+    ImVec2 pos = start;
+
+    pos.y += spacing;
+
+    ImU32 text_col = GetColorU32(hovered ? ImGuiCol_Text : ImGuiCol_TextDisabled);
+
+    if (open) {
+        constexpr float scale = 0.7f;
+
+        float arrow_y = pos.y + size * 0.5f - GetFontSize() * 0.5f * scale;
+
+        RenderArrow(dl, ImVec2(start.x, arrow_y), text_col, *open ? ImGuiDir_Down : ImGuiDir_Right, scale);
+    }
+
+    float x = pos.x + arrow;
 
     for (const char* p = label; *p; p++) {
         unsigned int c = (unsigned char)*p;
@@ -272,7 +302,18 @@ void section(Instance* iris, const char* label) {
         );
     }
 
-    Dummy(ImVec2(0.0f, size + GetStyle().ItemSpacing.y));
+    SetCursorScreenPos(start);
+    Dummy(ImVec2(0.0f, row));
+}
+
+void section(Instance* iris, const char* label) {
+    draw_section(iris, label, nullptr);
+}
+
+bool section(Instance* iris, const char* label, bool* open) {
+    draw_section(iris, label, open);
+
+    return *open;
 }
 
 constexpr float menu_rounding = 5.0f;
@@ -348,6 +389,110 @@ bool Selectable(const char* label, bool selected, ImGuiSelectableFlags flags, co
 
 bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags, const ImVec2& size) {
     return selectable_rounded(label, false, p_selected, flags, size);
+}
+
+bool segmented(const char* id, int* value, const char* const* labels, int count, float width) {
+    using namespace ImGui;
+
+    if (count <= 0)
+        return false;
+
+    bool compact = width <= 0.0f;
+
+    if (compact)
+        PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 3.0f));
+
+    ImGuiStyle& style = GetStyle();
+    ImDrawList* draw_list = GetWindowDrawList();
+
+    float height = GetFrameHeight();
+    float total = compact ? GetContentRegionAvail().x : width * count;
+    float step = total / count;
+    float rounding = style.FrameRounding;
+
+    ImVec2 origin = GetCursorScreenPos();
+
+    PushID(id);
+
+    bool pressed = InvisibleButton("##segmented", ImVec2(total, height));
+    bool over = IsItemHovered();
+
+    PopID();
+
+    if (compact)
+        PopStyleVar();
+
+    int hovered = -1;
+
+    if (over) {
+        hovered = (int)((GetIO().MousePos.x - origin.x) / step);
+        hovered = hovered < 0 ? 0 : (hovered >= count ? count - 1 : hovered);
+    }
+
+    bool changed = false;
+
+    if (pressed && hovered >= 0 && hovered != *value) {
+        *value = hovered;
+        changed = true;
+    }
+
+    auto edge = [&](int i) {
+        if (count == 1)
+            return ImDrawFlags_RoundCornersAll;
+
+        if (i == 0)
+            return ImDrawFlags_RoundCornersLeft;
+
+        if (i == count - 1)
+            return ImDrawFlags_RoundCornersRight;
+
+        return ImDrawFlags_RoundCornersNone;
+    };
+
+    auto cell = [&](int i, ImVec2* min, ImVec2* max) {
+        *min = ImVec2(origin.x + step * i, origin.y);
+        *max = ImVec2(min->x + step, origin.y + height);
+    };
+
+    ImVec2 min, max;
+
+    draw_list->AddRectFilled(origin, ImVec2(origin.x + total, origin.y + height), GetColorU32(ImGuiCol_FrameBg), rounding);
+
+    if (hovered >= 0 && hovered != *value) {
+        cell(hovered, &min, &max);
+
+        draw_list->AddRectFilled(min, max, GetColorU32(ImGuiCol_FrameBgHovered), rounding, edge(hovered));
+    }
+
+    for (int i = 1; i < count; i++) {
+        if (i == *value || i - 1 == *value)
+            continue;
+
+        float x = origin.x + step * i;
+
+        draw_list->AddLine(ImVec2(x, origin.y + 4.0f), ImVec2(x, origin.y + height - 4.0f), GetColorU32(ImGuiCol_Border));
+    }
+
+    if (*value >= 0 && *value < count) {
+        cell(*value, &min, &max);
+
+        draw_list->AddRectFilled(min, max, GetColorU32(ImGuiCol_HeaderActive), rounding, edge(*value));
+    }
+
+    for (int i = 0; i < count; i++) {
+        cell(i, &min, &max);
+
+        ImVec2 size = CalcTextSize(labels[i]);
+        ImVec2 pos = ImVec2(min.x + (step - size.x) * 0.5f, min.y + (height - size.y) * 0.5f);
+
+        draw_list->PushClipRect(min, max, true);
+        draw_list->AddText(pos, GetColorU32(ImGuiCol_Text), labels[i]);
+        draw_list->PopClipRect();
+    }
+
+    draw_list->AddRect(origin, ImVec2(origin.x + total, origin.y + height), GetColorU32(ImGuiCol_Border), rounding);
+
+    return changed;
 }
 
 bool BeginMenu(const char* label, bool enabled) {

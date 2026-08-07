@@ -8,6 +8,7 @@ struct PadDebugger : Applet {
     PadDebugger() {
         id = "pad_debugger";
         title = "DualShock 2";
+        needs_ps2 = true;
     }
 
     void on_render() override;

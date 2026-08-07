@@ -475,33 +475,7 @@ static void show_debug_menu(Instance* iris) {
     using namespace ImGui;
 
     if (imgui::BeginMenu("Debug")) {
-        SeparatorText("EE");
-        // if (imgui::BeginMenu(ICON_MS_BUG_REPORT " EE")) {
-            imgui::MenuItem(ICON_MS_SETTINGS " Control##ee", NULL, &iris->applets.ee_control.open);
-            imgui::MenuItem(ICON_MS_EDIT_NOTE " State##ee", NULL, &iris->applets.ee_state.open);
-            imgui::MenuItem(ICON_MS_TERMINAL " Logs##ee", NULL, &iris->applets.ee_logs.open);
-            imgui::MenuItem(ICON_MS_BOLT " Interrupts##ee", NULL, &iris->applets.ee_interrupts.open);
-
-            BeginDisabled(iris->debug.symbols.empty());
-            imgui::MenuItem(ICON_MS_CODE " Symbols##ee", NULL, &iris->applets.symbols.open);
-            EndDisabled();
-
-            imgui::MenuItem(ICON_MS_ACCOUNT_TREE " Threads##ee", NULL, &iris->applets.ee_threads.open);
-
-            // ImGui::EndMenu();
-        // }
-
-        SeparatorText("IOP");
-        // if (imgui::BeginMenu(ICON_MS_BUG_REPORT " IOP")) {
-            imgui::MenuItem(ICON_MS_SETTINGS " Control##iop", NULL, &iris->applets.iop_control.open);
-            imgui::MenuItem(ICON_MS_EDIT_NOTE " State##iop", NULL, &iris->applets.iop_state.open);
-            imgui::MenuItem(ICON_MS_TERMINAL " Logs##iop", NULL, &iris->applets.iop_logs.open);
-            imgui::MenuItem(ICON_MS_BOLT " Interrupts##iop", NULL, &iris->applets.iop_interrupts.open);
-            imgui::MenuItem(ICON_MS_EXTENSION " Modules##iop", NULL, &iris->applets.iop_modules.open);
-            imgui::MenuItem(ICON_MS_ACCOUNT_TREE " Threads##iop", NULL, &iris->applets.iop_threads.open);
-
-        //     ImGui::EndMenu();
-        // }
+        imgui::MenuItem(ICON_MS_DEVELOPER_BOARD " Debugger", NULL, &iris->applets.debugger.open);
 
         Separator();
 

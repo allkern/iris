@@ -9,6 +9,7 @@ struct IopModules : Applet {
         id = "iop_modules";
         title = "IOP Modules";
         flags = ImGuiWindowFlags_MenuBar;
+        needs_ps2 = true;
     }
 
     void on_render() override;

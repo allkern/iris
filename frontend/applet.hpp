@@ -29,6 +29,7 @@ struct Applet {
     const char* title = "";
     ImGuiWindowFlags flags = 0;
 
+    bool needs_ps2 = false;
     bool open = false;
     bool was_open = false;
     bool focus = false;

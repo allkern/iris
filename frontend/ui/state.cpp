@@ -852,19 +852,7 @@ void EeState::on_render() {
         EndMenuBar();
     }
 
-    if (BeginTable("table4", 5, ImGuiTableFlags_SizingStretchSame | ImGuiTableFlags_BordersInnerV)) {
-        TableNextRow();
-
-        for (int i = 0; i < 5; i++) {
-            TableSetColumnIndex(i);
-
-            if (Selectable(ee_reg_group_names[i], ee_reg_group == i)) {
-                ee_reg_group = i;
-            }
-        }
-
-        EndTable();
-    }
+    imgui::segmented("##ee_reg_groups", &ee_reg_group, ee_reg_group_names, 5);
 
     if (BeginChild("ee#child")) {
         switch (ee_reg_group) {

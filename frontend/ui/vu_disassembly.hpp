@@ -9,6 +9,7 @@ struct VuDisassembler : Applet {
         id = "vu_disassembler";
         title = "VU disassembler";
         flags = ImGuiWindowFlags_MenuBar;
+        needs_ps2 = true;
     }
 
     bool begin() override;

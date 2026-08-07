@@ -19,7 +19,7 @@ static void show_logs(Instance* iris, const std::vector <std::string>& logs, boo
 
             TableSetColumnIndex(0);
 
-            Text("  %-3d ", i+1);
+            TextDisabled("  %-3d ", i+1);
 
             TableSetColumnIndex(1);
 

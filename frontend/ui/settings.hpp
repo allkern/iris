@@ -12,6 +12,7 @@ struct SettingsWindow : Applet {
             ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoDocking;
         persist = false;
+        needs_ps2 = true;
     }
 
     bool begin() override;

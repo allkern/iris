@@ -9,6 +9,7 @@ struct EeState : Applet {
         id = "ee_state";
         title = "EE state";
         flags = ImGuiWindowFlags_MenuBar;
+        needs_ps2 = true;
     }
 
     void end() override;
@@ -20,6 +21,7 @@ struct IopState : Applet {
         id = "iop_state";
         title = "IOP state";
         flags = ImGuiWindowFlags_MenuBar;
+        needs_ps2 = true;
     }
 
     void end() override;

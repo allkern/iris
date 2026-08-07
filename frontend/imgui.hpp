@@ -45,12 +45,15 @@ void render_dim(Instance* iris);
 bool BeginEx(const char* name, bool* p_open, ImGuiWindowFlags flags = 0);
 
 void section(Instance* iris, const char* label);
+bool section(Instance* iris, const char* label, bool* open);
 
 bool MenuItem(const char* label, const char* shortcut = nullptr, bool selected = false, bool enabled = true);
 bool MenuItem(const char* label, const char* shortcut, bool* p_selected, bool enabled = true);
 bool BeginMenu(const char* label, bool enabled = true);
 bool Selectable(const char* label, bool selected = false, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
 bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
+
+bool segmented(const char* id, int* value, const char* const* labels, int count, float width = 0.0f);
 
 }
 

@@ -1,9 +1,35 @@
+#include <algorithm>
+#include <string>
+
 #include "iris.hpp"
 #include "applets.hpp"
+
+#include "res/IconsMaterialSymbols.h"
 
 namespace iris {
 
 namespace applets {
+
+static void show_loading(Instance* iris) {
+    using namespace ImGui;
+
+    std::string text = ICON_MS_HOURGLASS_TOP " Loading";
+
+    if (iris->ui.loading_target.size())
+        text += " " + iris->ui.loading_target;
+
+    text += "...";
+
+    ImVec2 size = CalcTextSize(text.c_str());
+    ImVec2 avail = GetContentRegionAvail();
+
+    SetCursorPos(ImVec2(
+        GetCursorPosX() + std::max(0.0f, (avail.x - size.x) * 0.5f),
+        GetCursorPosY() + std::max(0.0f, (avail.y - size.y) * 0.5f)
+    ));
+
+    TextDisabled("%s", text.c_str());
+}
 
 void create(Instance* iris) {
     Applets& applets = iris->applets;
@@ -35,6 +61,7 @@ void create(Instance* iris) {
         &applets.timers,
         &applets.sysmem_logs,
         &applets.console,
+        &applets.debugger,
         &applets.memory_card_tool,
         &applets.memory_search,
         &applets.hdd_tool,
@@ -79,7 +106,11 @@ void render(Instance* iris) {
             }
 
             if (visible) {
-                a->on_render();
+                if (a->needs_ps2 && iris->ui.loading_file_active) {
+                    show_loading(iris);
+                } else {
+                    a->on_render();
+                }
             }
 
             a->end();

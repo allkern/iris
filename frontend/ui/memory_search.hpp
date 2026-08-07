@@ -14,6 +14,7 @@ struct MemorySearch : Applet {
         id = "memory_search";
         title = "Memory search";
         flags = ImGuiWindowFlags_MenuBar;
+        needs_ps2 = true;
     }
 
     enum {

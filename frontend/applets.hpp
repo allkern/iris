@@ -10,6 +10,7 @@
 #include "ui/compat_report.hpp"
 #include "ui/console.hpp"
 #include "ui/control.hpp"
+#include "ui/debugger.hpp"
 #include "ui/dma.hpp"
 #include "ui/gs.hpp"
 #include "ui/gs_dump.hpp"
@@ -47,6 +48,7 @@ struct Applets {
     IopThreads iop_threads;
     SysmemLogs sysmem_logs;
     Console console;
+    Debugger debugger;
     GsDebugger gs_debugger;
     Spu2Debugger spu2_debugger;
     MemoryViewer memory_viewer;

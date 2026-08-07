@@ -122,8 +122,6 @@ void EeThreads::on_render() {
         SetCursorPos(pos);
         TextDisabled(ICON_MS_WARNING " Thread list hasn't been initialized yet");
 
-        End();
-
         return;
     }
 
@@ -214,8 +212,6 @@ void IopThreads::on_render() {
 
         SetCursorPos(pos);
         TextDisabled(ICON_MS_WARNING " Thread list hasn't been initialized yet");
-
-        End();
 
         return;
     }

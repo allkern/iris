@@ -118,7 +118,7 @@ void print_highlighted(Instance* iris, const char* buf) {
     NewLine();
 }
 
-static void show_ee_disassembly_view(Instance* iris) {
+void show_ee_disassembly_view(Instance* iris) {
     using namespace ImGui;
 
     float font_scale = GetStyle().FontScaleMain;
@@ -321,7 +321,7 @@ static void show_ee_disassembly_view(Instance* iris) {
     GetStyle().FontScaleMain = font_scale;
 }
 
-static void show_iop_disassembly_view(Instance* iris) {
+void show_iop_disassembly_view(Instance* iris) {
     using namespace ImGui;
 
     float font_scale = GetStyle().FontScaleMain;
