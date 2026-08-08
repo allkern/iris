@@ -123,6 +123,7 @@ struct MemoryEditor
     size_t          HighlightMin, HighlightMax;
     int             PreviewEndianness;
     ImGuiDataType   PreviewDataType;
+    float           FooterHeight;
 
     MemoryEditor()
     {
@@ -158,6 +159,7 @@ struct MemoryEditor
         HighlightMin = HighlightMax = (size_t)-1;
         PreviewEndianness = 0;
         PreviewDataType = ImGuiDataType_S32;
+        FooterHeight = -1.0f;
     }
 
     void GotoAddrAndHighlight(size_t addr_min, size_t addr_max)
@@ -245,12 +247,18 @@ struct MemoryEditor
 
         // We begin into our scrolling region with the 'ImGuiWindowFlags_NoMove' in order to prevent click from moving the window.
         // This is used as a facility since our main click detection code doesn't assign an ActiveId so the click would normally be caught as a window-move.
-        const float height_separator = style.ItemSpacing.y + 4.0f;
-        float footer_height = OptFooterExtraHeight;
-        if (OptShowOptions)
-            footer_height += height_separator + ImGui::GetFrameHeightWithSpacing() * 1;
-        if (OptShowDataPreview)
-            footer_height += height_separator + ImGui::GetFrameHeightWithSpacing() * 1 + ImGui::GetTextLineHeightWithSpacing() * 3;
+        // FooterHeight is measured from the previous frame's footer, so the reservation stays exact
+        // across theme/font/option changes. Seeded with an estimate for the first frame.
+        if (FooterHeight < 0.0f)
+        {
+            const float height_separator = style.ItemSpacing.y + 1.0f;
+            FooterHeight = style.ItemSpacing.y;
+            if (OptShowOptions)
+                FooterHeight += height_separator + ImGui::GetFrameHeightWithSpacing();
+            if (OptShowDataPreview)
+                FooterHeight += height_separator + ImGui::GetFrameHeightWithSpacing() + ImGui::GetTextLineHeightWithSpacing() * 3;
+        }
+        const float footer_height = OptFooterExtraHeight + FooterHeight;
         ImGui::BeginChild("##scrolling", ImVec2(-FLT_MIN, -footer_height), ImGuiChildFlags_None, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoNav);
         ImDrawList* draw_list = ImGui::GetWindowDrawList();
 
@@ -490,6 +498,7 @@ struct MemoryEditor
         ImGui::PopStyleVar(2);
         const float child_width = ImGui::GetWindowSize().x;
         ImGui::EndChild();
+        const float footer_start_y = ImGui::GetCursorPosY();
 
         // Notify the main window of our ideal child content size (FIXME: we are missing an API to get the contents size from the child)
         ImGui::SetCursorPosX(s.WindowWidth);
@@ -525,6 +534,8 @@ struct MemoryEditor
 
         if (FontOptions) ImGui::PopFont();
 
+        FooterHeight = ImGui::GetCursorPosY() - footer_start_y;
+
         const ImVec2 contents_pos_end(contents_pos_start.x + child_width, ImGui::GetCursorScreenPos().y);
         //ImGui::GetForegroundDrawList()->AddRect(contents_pos_start, contents_pos_end, IM_COL32(255, 0, 0, 255));
         if (OptShowOptions)
@@ -539,7 +550,7 @@ struct MemoryEditor
             if (ImGui::DragInt("##cols", &Cols, 0.2f, 4, 32, "%d cols")) { ContentsWidthChanged = true; if (Cols < 1) Cols = 1; }
 
             ImGui::PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0f);
-            ImGui::Checkbox("Show Data Preview", &OptShowDataPreview);
+            if (ImGui::Checkbox("Show Data Preview", &OptShowDataPreview)) { FooterHeight = -1.0f; }
             ImGui::Checkbox("Show HexII", &OptShowHexII);
             if (ImGui::Checkbox("Show Ascii", &OptShowAscii)) { ContentsWidthChanged = true; }
             ImGui::Checkbox("Grey out zeroes", &OptGreyOutZeroes);

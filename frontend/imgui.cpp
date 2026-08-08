@@ -397,16 +397,13 @@ bool segmented(const char* id, int* value, const char* const* labels, int count,
     if (count <= 0)
         return false;
 
-    bool compact = width <= 0.0f;
-
-    if (compact)
-        PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 3.0f));
+    bool stretch = width <= 0.0f;
 
     ImGuiStyle& style = GetStyle();
     ImDrawList* draw_list = GetWindowDrawList();
 
     float height = GetFrameHeight();
-    float total = compact ? GetContentRegionAvail().x : width * count;
+    float total = stretch ? GetContentRegionAvail().x : width * count;
     float step = total / count;
     float rounding = style.FrameRounding;
 
@@ -418,9 +415,6 @@ bool segmented(const char* id, int* value, const char* const* labels, int count,
     bool over = IsItemHovered();
 
     PopID();
-
-    if (compact)
-        PopStyleVar();
 
     int hovered = -1;
 
@@ -505,7 +499,7 @@ bool BeginMenu(const char* label, bool enabled) {
     return open;
 }
 
-namespace granite {
+namespace palette {
 
 constexpr ImVec4 rgb(int hex, float a = 1.0f) {
     return ImVec4(
@@ -526,9 +520,10 @@ struct Palette {
     ImVec4 accent, accent_hi, link;
     ImVec4 scroll, scroll_hover, scroll_active;
     ImVec4 alt_row, grip, table_line;
+    bool light = false;
 };
 
-constexpr Palette dark = {
+constexpr Palette granite_dark = {
     .app          = rgb(0x0b0b0d),
     .window       = rgb(0x131316),
     .popup        = rgb(0x19191d),
@@ -552,7 +547,7 @@ constexpr Palette dark = {
 // Surfaces invert but the ramp direction does too: on light, hovering a
 // control darkens it. The accent drops two steps so it still carries
 // contrast against a near-white background.
-constexpr Palette light = {
+constexpr Palette granite_light = {
     .app          = rgb(0xe8e8ea),
     .window       = rgb(0xf7f7f8),
     .popup        = rgb(0xffffff),
@@ -570,13 +565,156 @@ constexpr Palette light = {
     .scroll_active= rgb(0x000000, 0.36f),
     .alt_row      = rgb(0x000000, 0.028f),
     .grip         = rgb(0x000000, 0.10f),
-    .table_line   = rgb(0x000000, 0.06f)
+    .table_line   = rgb(0x000000, 0.06f),
+    .light        = true
 };
+
+constexpr Palette nord = {
+    .app          = rgb(0x242933),
+    .window       = rgb(0x2e3440),
+    .popup        = rgb(0x3b4252),
+    .frame        = rgb(0x3b4252),
+    .hover        = rgb(0x434c5e),
+    .active       = rgb(0x4c566a),
+    .border       = rgb(0x434c5e),
+    .text         = rgb(0xeceff4),
+    .text_dim     = rgb(0x8b98b0),
+    .accent       = rgb(0x88c0d0),
+    .accent_hi    = rgb(0xa3d4e2),
+    .link         = rgb(0x81a1c1),
+    .scroll       = rgb(0xd8dee9, 0.14f),
+    .scroll_hover = rgb(0xd8dee9, 0.24f),
+    .scroll_active= rgb(0xd8dee9, 0.34f),
+    .alt_row      = rgb(0xd8dee9, 0.030f),
+    .grip         = rgb(0xd8dee9, 0.08f),
+    .table_line   = rgb(0xd8dee9, 0.06f)
+};
+
+constexpr Palette gruvbox = {
+    .app          = rgb(0x1d2021),
+    .window       = rgb(0x282828),
+    .popup        = rgb(0x32302f),
+    .frame        = rgb(0x3c3836),
+    .hover        = rgb(0x504945),
+    .active       = rgb(0x665c54),
+    .border       = rgb(0x3c3836),
+    .text         = rgb(0xebdbb2),
+    .text_dim     = rgb(0xa89984),
+    .accent       = rgb(0xfe8019),
+    .accent_hi    = rgb(0xffa04d),
+    .link         = rgb(0x83a598),
+    .scroll       = rgb(0xfbf1c7, 0.12f),
+    .scroll_hover = rgb(0xfbf1c7, 0.20f),
+    .scroll_active= rgb(0xfbf1c7, 0.30f),
+    .alt_row      = rgb(0xfbf1c7, 0.028f),
+    .grip         = rgb(0xfbf1c7, 0.07f),
+    .table_line   = rgb(0xfbf1c7, 0.05f)
+};
+
+constexpr Palette tokyo_night = {
+    .app          = rgb(0x16161e),
+    .window       = rgb(0x1a1b26),
+    .popup        = rgb(0x1f2335),
+    .frame        = rgb(0x24283b),
+    .hover        = rgb(0x292e42),
+    .active       = rgb(0x414868),
+    .border       = rgb(0x292e42),
+    .text         = rgb(0xc0caf5),
+    .text_dim     = rgb(0x6b7394),
+    .accent       = rgb(0x7aa2f7),
+    .accent_hi    = rgb(0x9db8ff),
+    .link         = rgb(0x7dcfff),
+    .scroll       = rgb(0xc0caf5, 0.12f),
+    .scroll_hover = rgb(0xc0caf5, 0.20f),
+    .scroll_active= rgb(0xc0caf5, 0.30f),
+    .alt_row      = rgb(0xc0caf5, 0.026f),
+    .grip         = rgb(0xc0caf5, 0.07f),
+    .table_line   = rgb(0xc0caf5, 0.05f)
+};
+
+constexpr Palette mocha = {
+    .app          = rgb(0x11111b),
+    .window       = rgb(0x1e1e2e),
+    .popup        = rgb(0x181825),
+    .frame        = rgb(0x313244),
+    .hover        = rgb(0x45475a),
+    .active       = rgb(0x585b70),
+    .border       = rgb(0x313244),
+    .text         = rgb(0xcdd6f4),
+    .text_dim     = rgb(0x9399b2),
+    .accent       = rgb(0xcba6f7),
+    .accent_hi    = rgb(0xddc0ff),
+    .link         = rgb(0x89b4fa),
+    .scroll       = rgb(0xcdd6f4, 0.12f),
+    .scroll_hover = rgb(0xcdd6f4, 0.20f),
+    .scroll_active= rgb(0xcdd6f4, 0.30f),
+    .alt_row      = rgb(0xcdd6f4, 0.026f),
+    .grip         = rgb(0xcdd6f4, 0.07f),
+    .table_line   = rgb(0xcdd6f4, 0.05f)
+};
+
+constexpr Palette latte = {
+    .app          = rgb(0xdce0e8),
+    .window       = rgb(0xeff1f5),
+    .popup        = rgb(0xfbfcfe),
+    .frame        = rgb(0xe6e9ef),
+    .hover        = rgb(0xdce0e8),
+    .active       = rgb(0xccd0da),
+    .border       = rgb(0xccd0da),
+    .text         = rgb(0x4c4f69),
+    .text_dim     = rgb(0x6c6f85),
+    .accent       = rgb(0x8839ef),
+    .accent_hi    = rgb(0x7024d4),
+    .link         = rgb(0x1e66f5),
+    .scroll       = rgb(0x4c4f69, 0.18f),
+    .scroll_hover = rgb(0x4c4f69, 0.28f),
+    .scroll_active= rgb(0x4c4f69, 0.38f),
+    .alt_row      = rgb(0x4c4f69, 0.030f),
+    .grip         = rgb(0x4c4f69, 0.10f),
+    .table_line   = rgb(0x4c4f69, 0.07f),
+    .light        = true
+};
+
+constexpr Palette solarized = {
+    .app          = rgb(0x00212b),
+    .window       = rgb(0x002b36),
+    .popup        = rgb(0x073642),
+    .frame        = rgb(0x073642),
+    .hover        = rgb(0x0d4a59),
+    .active       = rgb(0x14606f),
+    .border       = rgb(0x0b414f),
+    .text         = rgb(0x93a1a1),
+    .text_dim     = rgb(0x657b83),
+    .accent       = rgb(0x268bd2),
+    .accent_hi    = rgb(0x4aa8e8),
+    .link         = rgb(0x2aa198),
+    .scroll       = rgb(0x93a1a1, 0.16f),
+    .scroll_hover = rgb(0x93a1a1, 0.26f),
+    .scroll_active= rgb(0x93a1a1, 0.36f),
+    .alt_row      = rgb(0x93a1a1, 0.030f),
+    .grip         = rgb(0x93a1a1, 0.08f),
+    .table_line   = rgb(0x93a1a1, 0.06f)
+};
+
+static const Palette* find(int theme) {
+    switch (theme) {
+        case Theme::GRANITE_NEO:       return &granite_dark;
+        case Theme::GRANITE_NEO_LIGHT: return &granite_light;
+        case Theme::NORD:              return &nord;
+        case Theme::GRUVBOX:           return &gruvbox;
+        case Theme::TOKYO_NIGHT:       return &tokyo_night;
+        case Theme::MOCHA:             return &mocha;
+        case Theme::LATTE:             return &latte;
+        case Theme::SOLARIZED:         return &solarized;
+    }
+
+    return nullptr;
+}
 
 }
 
-static void apply_granite(ImGuiStyle& style, const granite::Palette& p) {
-    using granite::alpha;
+static void apply_palette(ImGuiStyle& style, const palette::Palette& p) {
+    using palette::alpha;
 
     ImVec4* colors = style.Colors;
 
@@ -635,10 +773,80 @@ static void apply_granite(ImGuiStyle& style, const granite::Palette& p) {
     colors[ImGuiCol_TextLink]               = p.link;
     colors[ImGuiCol_TextSelectedBg]         = alpha(p.accent, 0.35f);
     colors[ImGuiCol_DragDropTarget]         = p.accent;
+    colors[ImGuiCol_DragDropTargetBg]       = alpha(p.accent, 0.20f);
+    colors[ImGuiCol_TreeLines]              = p.table_line;
+    colors[ImGuiCol_UnsavedMarker]          = p.text_dim;
     colors[ImGuiCol_NavCursor]              = p.accent;
     colors[ImGuiCol_NavWindowingHighlight]  = alpha(p.text, 0.70f);
-    colors[ImGuiCol_NavWindowingDimBg]      = granite::rgb(0x000000, 0.45f);
-    colors[ImGuiCol_ModalWindowDimBg]       = granite::rgb(0x000000, 0.55f);
+    colors[ImGuiCol_NavWindowingDimBg]      = palette::rgb(0x000000, 0.45f);
+    colors[ImGuiCol_ModalWindowDimBg]       = palette::rgb(0x000000, 0.55f);
+}
+
+// The hand-written themes below predate a good number of ImGuiCol slots. Rather than
+// leaving those on ImGui's default palette, every slot is flagged before the theme runs
+// and whatever it left untouched is derived from the colors it did set.
+static const ImVec4 unset_color(-1.0f, -1.0f, -1.0f, -1.0f);
+
+static void derive_unset_colors(ImGuiStyle& style, const ImVec4* fallback) {
+    ImVec4* colors = style.Colors;
+
+    auto set = [&](ImGuiCol idx) { return colors[idx].w >= 0.0f; };
+    auto get = [&](ImGuiCol idx) { return set(idx) ? colors[idx] : fallback[idx]; };
+
+    auto alpha = [](ImVec4 c, float a) { return ImVec4(c.x, c.y, c.z, a); };
+    auto mix = [](ImVec4 a, ImVec4 b, float t) {
+        return ImVec4(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t, a.z + (b.z - a.z) * t, a.w);
+    };
+
+    const ImVec4 text = get(ImGuiCol_Text);
+    const ImVec4 window = get(ImGuiCol_WindowBg);
+    const ImVec4 border = get(ImGuiCol_Border);
+    const ImVec4 accent = get(ImGuiCol_CheckMark);
+    const ImVec4 title = get(ImGuiCol_TitleBg);
+    const ImVec4 title_hi = get(ImGuiCol_TitleBgActive);
+
+    // Cherry leaves Border fully transparent, which would make separators vanish
+    const ImVec4 line = border.w < 0.05f ? alpha(text, 0.20f) : border;
+
+    struct Rule { ImGuiCol idx; ImVec4 color; };
+
+    const Rule rules[] = {
+        { ImGuiCol_Separator,                 line },
+        { ImGuiCol_SeparatorHovered,          get(ImGuiCol_HeaderHovered) },
+        { ImGuiCol_SeparatorActive,           get(ImGuiCol_HeaderActive) },
+        { ImGuiCol_InputTextCursor,           text },
+        { ImGuiCol_Tab,                       title },
+        { ImGuiCol_TabHovered,                get(ImGuiCol_HeaderHovered) },
+        { ImGuiCol_TabSelected,               title_hi },
+        { ImGuiCol_TabSelectedOverline,       accent },
+        { ImGuiCol_TabDimmed,                 title },
+        { ImGuiCol_TabDimmedSelected,         mix(title, title_hi, 0.5f) },
+        { ImGuiCol_TabDimmedSelectedOverline, alpha(accent, 0.00f) },
+        { ImGuiCol_DockingPreview,            alpha(accent, 0.35f) },
+        { ImGuiCol_DockingEmptyBg,            mix(window, ImVec4(0.0f, 0.0f, 0.0f, window.w), 0.35f) },
+        { ImGuiCol_TableHeaderBg,             mix(window, text, 0.08f) },
+        { ImGuiCol_TableBorderStrong,         alpha(text, 0.18f) },
+        { ImGuiCol_TableBorderLight,          alpha(text, 0.08f) },
+        { ImGuiCol_TableRowBg,                alpha(text, 0.00f) },
+        { ImGuiCol_TableRowBgAlt,             alpha(text, 0.035f) },
+        { ImGuiCol_TreeLines,                 alpha(text, 0.16f) },
+        { ImGuiCol_TextLink,                  accent },
+        { ImGuiCol_DragDropTarget,            accent },
+        { ImGuiCol_DragDropTargetBg,          alpha(accent, 0.20f) },
+        { ImGuiCol_UnsavedMarker,             alpha(text, 0.60f) },
+        { ImGuiCol_NavCursor,                 accent },
+        { ImGuiCol_NavWindowingHighlight,     alpha(text, 0.70f) },
+        { ImGuiCol_NavWindowingDimBg,         ImVec4(0.0f, 0.0f, 0.0f, 0.45f) },
+        { ImGuiCol_ModalWindowDimBg,          ImVec4(0.0f, 0.0f, 0.0f, 0.55f) }
+    };
+
+    for (const Rule& r : rules) {
+        if (!set(r.idx)) colors[r.idx] = r.color;
+    }
+
+    for (int i = 0; i < ImGuiCol_COUNT; i++) {
+        if (!set((ImGuiCol)i)) colors[i] = fallback[i];
+    }
 }
 
 static void set_clear_color(Instance* iris, const ImVec4& c) {
@@ -702,26 +910,25 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
     // Use ImGui's default dark style as a base for our own style
     ImGui::StyleColorsDark();
 
-    switch (theme) {
-        case Theme::GRANITE_NEO: {
-            apply_granite(style, granite::dark);
+    const palette::Palette* p = palette::find(theme);
 
-            if (!set_bg_color) break;
+    ImVec4 fallback[ImGuiCol_COUNT];
 
-            set_clear_color(iris, granite::dark.app);
-        } break;
+    memcpy(fallback, style.Colors, sizeof(fallback));
 
-        case Theme::GRANITE_NEO_LIGHT: {
-            // Light base so anything ImGui adds later doesn't come through dark
-            ImGui::StyleColorsLight();
+    if (!p) {
+        for (int i = 0; i < ImGuiCol_COUNT; i++)
+            style.Colors[i] = unset_color;
+    }
 
-            apply_granite(style, granite::light);
+    if (p) {
+        // Light base so anything ImGui adds later doesn't come through dark
+        if (p->light) ImGui::StyleColorsLight();
 
-            if (!set_bg_color) break;
+        apply_palette(style, *p);
 
-            set_clear_color(iris, granite::light.app);
-        } break;
-
+        if (set_bg_color) set_clear_color(iris, p->app);
+    } else switch (theme) {
         case Theme::GRANITE: {
             set_classic_geometry(style);
 
@@ -952,6 +1159,8 @@ void set_theme(Instance* iris, int theme, bool set_bg_color) {
             iris->vk.clear_value.color.float32[3] = 1.00f;
         } break;
     }
+
+    if (!p) derive_unset_colors(style, fallback);
 
     ImPlotStyle& pstyle = ImPlot::GetStyle();
 

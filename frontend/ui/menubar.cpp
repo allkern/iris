@@ -487,7 +487,7 @@ static void show_debug_menu(Instance* iris) {
         imgui::MenuItem(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->applets.pad_debugger.open);
         imgui::MenuItem(ICON_MS_TIMER " Timers", NULL, &iris->applets.timers.open);
         imgui::MenuItem(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->ui.show_overlay);
-        imgui::MenuItem(ICON_MS_TERMINAL " SYSMEM logs", NULL, &iris->applets.sysmem_logs.open);
+        imgui::MenuItem(ICON_MS_TERMINAL " Logs", NULL, &iris->applets.logs.open);
         imgui::MenuItem(ICON_MS_LIST_ALT " Console", NULL, &iris->applets.console.open);
 
         Separator();
@@ -502,12 +502,10 @@ static void show_debug_menu(Instance* iris) {
         if (imgui::MenuItem(ICON_MS_CLOSE " Close all")) {
             iris->applets.ee_control.open = false;
             iris->applets.ee_state.open = false;
-            iris->applets.ee_logs.open = false;
             iris->applets.ee_interrupts.open = false;
             iris->applets.ee_dmac.open = false;
             iris->applets.iop_control.open = false;
             iris->applets.iop_state.open = false;
-            iris->applets.iop_logs.open = false;
             iris->applets.iop_interrupts.open = false;
             iris->applets.iop_modules.open = false;
             iris->applets.iop_dma.open = false;
@@ -520,7 +518,7 @@ static void show_debug_menu(Instance* iris) {
             iris->applets.breakpoints.open = false;
             iris->applets.ee_threads.open = false;
             iris->applets.iop_threads.open = false;
-            iris->applets.sysmem_logs.open = false;
+            iris->applets.logs.open = false;
             iris->ui.show_imgui_demo = false;
             iris->ui.show_overlay = false;
         }

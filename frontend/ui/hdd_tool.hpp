@@ -4,21 +4,22 @@
 
 namespace iris {
 
-enum : int {
-    IMAGE_FMT_RAW,
-    IMAGE_FMT_ISIF
+enum ImageFormat : int {
+    RAW,
+    ISIF
 };
 
 struct HddTool : Applet {
     HddTool() {
         id = "hdd_tool";
         title = "HDD Tool";
+        flags = ImGuiWindowFlags_AlwaysAutoResize;
         persist = false;
     }
 
     void on_render() override;
 
-    int image_format = IMAGE_FMT_ISIF;
+    int image_format = ImageFormat::ISIF;
     int size_add = 0;
     bool assign = true;
 };

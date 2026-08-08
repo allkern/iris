@@ -37,12 +37,10 @@ void create(Instance* iris) {
     applets.all = {
         &applets.ee_control,
         &applets.ee_state,
-        &applets.ee_logs,
         &applets.ee_interrupts,
         &applets.ee_dmac,
         &applets.iop_control,
         &applets.iop_state,
-        &applets.iop_logs,
         &applets.iop_interrupts,
         &applets.iop_modules,
         &applets.iop_dma,
@@ -59,7 +57,7 @@ void create(Instance* iris) {
         &applets.ee_threads,
         &applets.iop_threads,
         &applets.timers,
-        &applets.sysmem_logs,
+        &applets.logs,
         &applets.console,
         &applets.debugger,
         &applets.memory_card_tool,
@@ -80,6 +78,8 @@ void init(Instance* iris) {
 
 void render(Instance* iris) {
     for (Applet* a : iris->applets.all) {
+        a->on_tick();
+
         if (a->open && !a->was_open) {
             a->was_open = true;
 

@@ -981,12 +981,10 @@ void destroy(Instance* iris) {
     if (iris->ui.imgui_enable_viewports) {
         iris->applets.ee_control.open = false;
         iris->applets.ee_state.open = false;
-        iris->applets.ee_logs.open = false;
         iris->applets.ee_interrupts.open = false;
         iris->applets.ee_dmac.open = false;
         iris->applets.iop_control.open = false;
         iris->applets.iop_state.open = false;
-        iris->applets.iop_logs.open = false;
         iris->applets.iop_interrupts.open = false;
         iris->applets.iop_modules.open = false;
         iris->applets.iop_dma.open = false;
@@ -999,7 +997,7 @@ void destroy(Instance* iris) {
         iris->applets.ee_threads.open = false;
         iris->applets.iop_threads.open = false;
         iris->applets.timers.open = false;
-        iris->applets.sysmem_logs.open = false;
+        iris->applets.logs.open = false;
         iris->ui.show_imgui_demo = false;
         iris->ui.show_overlay = false;
     }

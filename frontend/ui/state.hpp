@@ -12,7 +12,7 @@ struct EeState : Applet {
         needs_ps2 = true;
     }
 
-    void end() override;
+    void on_tick() override;
     void on_render() override;
 };
 
@@ -24,7 +24,7 @@ struct IopState : Applet {
         needs_ps2 = true;
     }
 
-    void end() override;
+    void on_tick() override;
     void on_render() override;
 };
 

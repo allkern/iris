@@ -52,7 +52,7 @@ void GsDumpTool::on_render() {
         Spacing();
     }
 
-    TextDisabled("Serial");
+    Text("Serial");
     if (serial.empty()) {
         TextDisabled("No serial detected");
     } else {
@@ -61,7 +61,7 @@ void GsDumpTool::on_render() {
 
     Spacing();
 
-    TextDisabled("Output file");
+    Text("Output file");
     SetNextItemWidth(360.0f);
     InputText("##gsdump_file", filename, sizeof(filename));
     SameLine();
@@ -108,14 +108,14 @@ void GsDumpTool::on_render() {
                 iris->debug.gsdump_frames_remaining);
         }
 
-        if (Button(ICON_MS_CLOSE " Close")) {
+        if (Button("Close")) {
             iris->applets.gs_dump_tool.open = false;
         }
     } else {
         BeginDisabled(filename[0] == '\0' ||
             iris->renderer_backend != gs::renderer::BACKEND_HARDWARE);
 
-        if (Button(ICON_MS_MOVIE " Start capture")) {
+        if (Button("Start capture")) {
             iris->debug.pause = false;
 
             render::gs_dump_start(iris, filename, frames, delay, serial);
@@ -127,7 +127,7 @@ void GsDumpTool::on_render() {
 
         SameLine();
 
-        if (Button(ICON_MS_CLOSE " Cancel")) {
+        if (Button("Cancel")) {
             iris->debug.pause = iris->debug.gsdump_prev_pause;
 
             iris->applets.gs_dump_tool.open = false;

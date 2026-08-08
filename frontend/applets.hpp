@@ -35,18 +35,16 @@ namespace iris {
 struct Applets {
     EeControl ee_control;
     EeState ee_state;
-    EeLogs ee_logs;
     EeInterrupts ee_interrupts;
     EeDmac ee_dmac;
     EeThreads ee_threads;
     IopControl iop_control;
     IopState iop_state;
-    IopLogs iop_logs;
     IopInterrupts iop_interrupts;
     IopModules iop_modules;
     IopDma iop_dma;
     IopThreads iop_threads;
-    SysmemLogs sysmem_logs;
+    Logs logs;
     Console console;
     Debugger debugger;
     GsDebugger gs_debugger;

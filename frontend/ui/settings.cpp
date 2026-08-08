@@ -1885,22 +1885,16 @@ static const char* const theme_names[] = {
     "Cherry",
     "Source",
     "Granite Neo Light",
-    "Granite"
-};
-
-static const int theme_order[] = {
-    imgui::GRANITE_NEO,
-    imgui::GRANITE_NEO_LIGHT,
-    imgui::GRANITE,
-    imgui::IMGUI_DARK,
-    imgui::IMGUI_LIGHT,
-    imgui::IMGUI_CLASSIC,
-    imgui::CHERRY,
-    imgui::SOURCE
+    "Granite",
+    "Nord",
+    "Gruvbox",
+    "Tokyo Night",
+    "Catppuccin Mocha",
+    "Catppuccin Latte",
+    "Solarized Dark"
 };
 
 static_assert(IM_ARRAYSIZE(theme_names) == imgui::THEME_COUNT);
-static_assert(IM_ARRAYSIZE(theme_order) == imgui::THEME_COUNT);
 
 static const char* const codeview_color_scheme_names[] = {
     "Solarized Dark",
@@ -1926,20 +1920,37 @@ void show_misc_settings(Instance* iris) {
 
     Text("Theme");
 
+#define THEME(id)     if (imgui::Selectable(theme_names[id], iris->ui.theme == id)) {         iris->ui.theme = id;         imgui::set_theme(iris, id);         platform::apply_settings(iris);     }
+
     if (BeginCombo("##theme", theme_names[iris->ui.theme])) {
-        for (int i = 0; i < IM_ARRAYSIZE(theme_order); i++) {
-            int theme = theme_order[i];
+        PushFont(iris->ui.font_small);
+        TextDisabled("Dark");
+        PopFont();
 
-            if (imgui::Selectable(theme_names[theme], iris->ui.theme == theme)) {
-                iris->ui.theme = theme;
+        THEME(imgui::GRANITE_NEO);
+        THEME(imgui::GRANITE);
+        THEME(imgui::NORD);
+        THEME(imgui::GRUVBOX);
+        THEME(imgui::TOKYO_NIGHT);
+        THEME(imgui::MOCHA);
+        THEME(imgui::SOLARIZED);
+        THEME(imgui::IMGUI_DARK);
+        THEME(imgui::IMGUI_CLASSIC);
+        THEME(imgui::CHERRY);
+        THEME(imgui::SOURCE);
 
-                imgui::set_theme(iris, theme);
-                platform::apply_settings(iris);
-            }
-        }
+        PushFont(iris->ui.font_small);
+        TextDisabled("Light");
+        PopFont();
+
+        THEME(imgui::GRANITE_NEO_LIGHT);
+        THEME(imgui::LATTE);
+        THEME(imgui::IMGUI_LIGHT);
 
         EndCombo();
     }
+
+#undef THEME
 
     Text("Background color");
 

@@ -18,6 +18,7 @@ struct Debugger : Applet {
     void on_render() override;
 
     int cpu = 0;
+    int log_source = 0;
 
     float left_width = 300.0f;
     float right_width = 460.0f;

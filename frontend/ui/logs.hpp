@@ -4,39 +4,25 @@
 
 namespace iris {
 
-struct EeLogs : Applet {
-    EeLogs() {
-        id = "ee_logs";
-        title = "EE logs";
-    }
-
-    void on_render() override;
-
-    bool follow = true;
+enum {
+    LOG_EE,
+    LOG_IOP,
+    LOG_SYSMEM,
+    LOG_COUNT
 };
 
-struct IopLogs : Applet {
-    IopLogs() {
-        id = "iop_logs";
-        title = "IOP logs";
+void show_log_view(Instance* iris, int source);
+
+struct Logs : Applet {
+    Logs() {
+        id = "logs";
+        title = "Logs";
         flags = ImGuiWindowFlags_MenuBar;
     }
 
     void on_render() override;
 
-    bool follow = true;
-};
-
-struct SysmemLogs : Applet {
-    SysmemLogs() {
-        id = "sysmem_logs";
-        title = "SYSMEM logs";
-        flags = ImGuiWindowFlags_MenuBar;
-    }
-
-    void on_render() override;
-
-    bool follow = true;
+    int source = LOG_EE;
 };
 
 }

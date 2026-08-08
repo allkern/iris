@@ -250,18 +250,23 @@ static void show_disassembly(Instance* iris, ImVec2 size, bool ee) {
     } EndChild();
 }
 
-static void show_logs_collapsible(Instance* iris, ImVec2 size, bool* open) {
+static void show_logs_collapsible(Instance* iris, ImVec2 size, Debugger& d) {
     using namespace ImGui;
 
-    if (BeginChild("##dbg_logs", size, ImGuiChildFlags_Borders)) {
-        if (imgui::section(iris, "Logs", open)) {
-            if (BeginTabBar("##dbg_log_tabs")) {
-                show_tab("EE", "##dbg_eelog", iris->applets.ee_logs);
-                show_tab("IOP", "##dbg_ioplog", iris->applets.iop_logs);
-                show_tab("SYSMEM", "##dbg_syslog", iris->applets.sysmem_logs);
-                show_tab("Iris", "##dbg_console", iris->applets.console);
+    static const char* const sources[] = { "EE", "IOP", "SYSMEM", "Iris" };
 
-                EndTabBar();
+    if (BeginChild("##dbg_logs", size, ImGuiChildFlags_Borders)) {
+        if (imgui::section(iris, "Logs", &d.logs_open)) {
+            imgui::segmented("##dbg_logsrc", &d.log_source, sources, IM_ARRAYSIZE(sources), 76.0f);
+
+            if (d.log_source < LOG_COUNT) {
+                SameLine();
+
+                show_log_view(iris, d.log_source);
+            } else {
+                if (BeginChild("##dbg_console")) {
+                    iris->applets.console.on_render();
+                } EndChild();
             }
         }
     } EndChild();
@@ -327,7 +332,7 @@ static void show_center_column(Instance* iris, ImVec2 size, bool ee, Debugger& d
             show_disassembly(iris, ImVec2(0, 0), ee);
         } else if (!d.logs_open) {
             show_disassembly(iris, ImVec2(0, std::max(160.0f, h - collapsed - spacing)), ee);
-            show_logs_collapsible(iris, ImVec2(0, collapsed), &d.logs_open);
+            show_logs_collapsible(iris, ImVec2(0, collapsed), d);
         } else {
             float flex = std::max(240.0f, h - spacing);
 
@@ -339,7 +344,7 @@ static void show_center_column(Instance* iris, ImVec2 size, bool ee, Debugger& d
 
             splitter("##dbg_split_disasm", false, splitter_at_cursor(false), &d.disasm_height, &logs_h, 140.0f, 100.0f, w);
 
-            show_logs_collapsible(iris, ImVec2(0, logs_h), &d.logs_open);
+            show_logs_collapsible(iris, ImVec2(0, logs_h), d);
         }
     } EndChild();
 }

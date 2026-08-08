@@ -19,6 +19,12 @@ enum Theme {
     SOURCE,
     GRANITE_NEO_LIGHT,
     GRANITE,
+    NORD,
+    GRUVBOX,
+    TOKYO_NIGHT,
+    MOCHA,
+    LATTE,
+    SOLARIZED,
     THEME_COUNT
 };
 

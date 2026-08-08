@@ -17,6 +17,18 @@
 
 namespace iris {
 
+static ImVec4 changed_color(float a) {
+    const ImVec4& text = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+    const ImVec4 hi(0.98f, 0.36f, 0.42f, text.w);
+
+    return ImVec4(
+        text.x + (hi.x - text.x) * a,
+        text.y + (hi.y - text.y) * a,
+        text.z + (hi.z - text.z) * a,
+        text.w
+    );
+}
+
 static const char* ee_cop0_r[] = {
     "Index",
     "Random",
@@ -203,7 +215,7 @@ static inline void show_ee_main_registers(Instance* iris) {
                     EndPopup();
                 }
 
-                TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%08x", ee->r[i].u32[j]);
+                TextColored(changed_color(a), "%08x", ee->r[i].u32[j]);
             }
         }
     }
@@ -300,7 +312,7 @@ static inline void show_ee_cop0_registers(Instance* iris) {
                 EndPopup();
             }
 
-            TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%08x", ee->cop0_r[i]);
+            TextColored(changed_color(a), "%08x", ee->cop0_r[i]);
         }
     }
 
@@ -395,7 +407,7 @@ using namespace ImGui;
                 EndPopup();
             }
 
-            TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%08x", ee->f[i].u32);
+            TextColored(changed_color(a), "%08x", ee->f[i].u32);
 
             TableSetColumnIndex(2);
 
@@ -452,7 +464,7 @@ using namespace ImGui;
                 EndPopup();
             }
 
-            TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%.7f", ee->f[i].f);
+            TextColored(changed_color(a), "%.7f", ee->f[i].f);
         }
     }
 
@@ -566,9 +578,9 @@ static inline void show_vu0_float(Instance* iris) {
                 }
 
                 if (vu0f_float) {
-                    TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%.7f", vu0->vf[i].f[j]);
+                    TextColored(changed_color(a), "%.7f", vu0->vf[i].f[j]);
                 } else {
-                    TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%08x", vu0->vf[i].u32[j]);
+                    TextColored(changed_color(a), "%08x", vu0->vf[i].u32[j]);
                 }
             }
         }
@@ -674,7 +686,7 @@ static inline void show_vu0_integer(Instance* iris) {
                 EndPopup();
             }
 
-            TextColored(ImVec4(0.6+a, 0.6, 0.6, 1.0), "%08x", i < 16 ? vu0->vi[i] : vu0->cr[i-16]);
+            TextColored(changed_color(a), "%08x", i < 16 ? vu0->vi[i] : vu0->cr[i-16]);
         }
     }
 
@@ -760,7 +772,7 @@ static inline void show_iop_main_registers(Instance* iris) {
                 SameLine(0.0, 0.0);
 
                 Text("%2s", mips_cc_r[i]); SameLine();
-                TextColored(ImVec4(0.6 + a, 0.6, 0.6, 1.0), "%08x", iop->r[i]);
+                TextColored(changed_color(a), "%08x", iop->r[i]);
 
                 ++i;
             }
@@ -805,9 +817,7 @@ static const char* ee_reg_group_names[] = {
 
 static int ee_reg_group = 0;
 
-void EeState::end() {
-    ImGui::End();
-
+void EeState::on_tick() {
     for (int i = 0; i < 32; i++) {
         if (ee_fpu_frames[i])
             ee_fpu_frames[i]--;
@@ -852,7 +862,9 @@ void EeState::on_render() {
         EndMenuBar();
     }
 
+    PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 3.0f));
     imgui::segmented("##ee_reg_groups", &ee_reg_group, ee_reg_group_names, 5);
+    PopStyleVar();
 
     if (BeginChild("ee#child")) {
         switch (ee_reg_group) {
@@ -881,9 +893,7 @@ void EeState::on_render() {
     }
 }
 
-void IopState::end() {
-    ImGui::End();
-
+void IopState::on_tick() {
     for (int i = 0; i < 32; i++)
         if (iop_frames[i])
             iop_frames[i]--;

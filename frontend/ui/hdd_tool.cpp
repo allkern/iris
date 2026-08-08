@@ -34,7 +34,7 @@ void create_raw_image(const char* path, uint64_t size) {
 std::string get_file_size_string(int format, uint64_t size) {
     uint64_t total_size = 0;
 
-    if (format == IMAGE_FMT_ISIF) {
+    if (format == ImageFormat::ISIF) {
         uint64_t block_count = size / 512;
 
         // BAT size
@@ -100,7 +100,7 @@ void HddTool::on_render() {
             if (Button("Create")) {
                 std::string default_path = iris->paths.pref_path;
                 
-                if (image_format == IMAGE_FMT_RAW) {
+                if (image_format == ImageFormat::RAW) {
                     default_path += "hdd.raw";
                 } else {
                     default_path += "hdd.isif";
@@ -115,7 +115,7 @@ void HddTool::on_render() {
                 while (!f.ready());
 
                 if (f.result().size()) {
-                    if (image_format == IMAGE_FMT_RAW) {
+                    if (image_format == ImageFormat::RAW) {
                         create_raw_image(f.result().c_str(), MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add));
                     } else {
                         uint64_t block_count = (MIN_HDD_SIZE + (HDD_SIZE_INCREMENT * size_add)) / 512;
