@@ -2274,6 +2274,16 @@ void compile_block(Iop* iop, Block* block) {
     // }
 }
 
+static inline bool has_breakpoint(Iop* iop, uint32_t addr) {
+    for (int i = 0; i < iop->breakpoint_count; i++) {
+        if (iop->breakpoints[i] == addr) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 Block* find_block(Iop* iop, uint32_t pc) {
     BlockLutEntry& lut = iop->block_lut[(pc >> 2) & IOP_BLOCK_LUT_MASK];
 
@@ -2363,7 +2373,12 @@ Block* cache_block(Iop* iop, uint32_t addr, int max_cycles) {
 
     // iris_debug(iop, "Caching block at {:08x}", block_pc);
 
+    bool delay_slot = false;
+
     while (max_cycles) {
+        if (iop->breakpoint_count && !delay_slot && block.end_pc != addr && has_breakpoint(iop, block.end_pc))
+            break;
+
         uint32_t opcode = bus_read32(iop, block.end_pc);
 
         i = decode(opcode);
@@ -2373,6 +2388,8 @@ Block* cache_block(Iop* iop, uint32_t addr, int max_cycles) {
         block.cycles += 1;
 
         if (i.branch == 1) {
+            delay_slot = true;
+
             max_cycles = 2;
         } else if (i.branch == 2) {
             max_cycles = 1;
@@ -2415,8 +2432,27 @@ int execute_block(Iop* iop, Block* block) {
     return block->cycles;
 }
 
+bool breakpoint_hit(Iop* iop) {
+    return iop->bp_hit;
+}
+
+void set_breakpoints(Iop* iop, const uint32_t* addrs, int count) {
+    if (count > IOP_MAX_BREAKPOINTS)
+        count = IOP_MAX_BREAKPOINTS;
+
+    iop->breakpoint_count = count;
+
+    for (int i = 0; i < count; i++)
+        iop->breakpoints[i] = addrs[i];
+
+    iop->bp_hit = false;
+    iop->bp_skip_pc = 0xffffffff;
+
+    flush_cache(iop);
+}
+
 int run_block(Iop* iop, int max_cycles) {
-    if (max_cycles <= 0) {
+    if (max_cycles <= 0 || iop->bp_hit) {
         return 0;
     }
 
@@ -2424,6 +2460,17 @@ int run_block(Iop* iop, int max_cycles) {
     int cycles = 0;
 
     while (cycles < max_cycles) {
+        if (iop->breakpoint_count) {
+            if (iop->pc == iop->bp_skip_pc) {
+                iop->bp_skip_pc = 0xffffffff;
+            } else if (has_breakpoint(iop, iop->pc)) {
+                iop->bp_hit = true;
+                iop->bp_hit_pc = iop->pc;
+
+                break;
+            }
+        }
+
         Block* block = find_block(iop, iop->pc);
 
         if (!block) {

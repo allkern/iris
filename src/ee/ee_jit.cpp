@@ -4169,6 +4169,16 @@ Instruction decode(uint32_t opcode) {
     return i;
 }
 
+static inline bool has_breakpoint(Ee* ee, uint32_t addr) {
+    for (int i = 0; i < ee->breakpoint_count; i++) {
+        if (ee->breakpoints[i] == addr) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static inline SubBlock decode_sub_block(Ee* ee, uint32_t pc, int max_cycles, std::vector<Instruction>& out) {
     SubBlock sb;
 
@@ -4189,6 +4199,9 @@ static inline SubBlock decode_sub_block(Ee* ee, uint32_t pc, int max_cycles, std
     bool delay_slot = false;
 
     while (max_cycles) {
+        if (ee->breakpoint_count && !delay_slot && sb.end_pc != sb.start_pc && has_breakpoint(ee, sb.end_pc))
+            break;
+
         ee->opcode = bus_read32(ee, sb.end_pc);
 
         if (ee->opcode != 0) {
@@ -4363,6 +4376,9 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
                 continue;
 
             if ((sb.succ_pc[e] & ~(uint32_t)(MIN_PAGESIZE - 1)) != page_base)
+                continue;
+
+            if (ee->breakpoint_count && has_breakpoint(ee, sb.succ_pc[e]))
                 continue;
 
             pending.push_back(sb.succ_pc[e]);
@@ -7819,6 +7835,17 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
     int total = 0;
 
     while (true) {
+        if (ee->breakpoint_count) {
+            if (ee->pc == ee->bp_skip_pc) {
+                ee->bp_skip_pc = 0xffffffff;
+            } else if (has_breakpoint(ee, ee->pc)) {
+                ee->bp_hit = true;
+                ee->bp_hit_pc = ee->pc;
+
+                break;
+            }
+        }
+
         Block* block = find_block(ee, ee->pc);
 
         if (!block) {
@@ -7877,7 +7904,29 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
     return total;
 }
 
+bool breakpoint_hit(Ee* ee) {
+    return ee->bp_hit;
+}
+
+void set_breakpoints(Ee* ee, const uint32_t* addrs, int count) {
+    if (count > EE_MAX_BREAKPOINTS)
+        count = EE_MAX_BREAKPOINTS;
+
+    ee->breakpoint_count = count;
+
+    for (int i = 0; i < count; i++)
+        ee->breakpoints[i] = addrs[i];
+
+    ee->bp_hit = false;
+    ee->bp_skip_pc = 0xffffffff;
+
+    purge_cache(ee);
+}
+
 int run_block(Ee* ee, int max_cycles) {
+    if (ee->bp_hit)
+        return 0;
+
     if (is_irq_pending(ee)) {
         int cycles = _ee_run_block(ee, 1, 4);
 

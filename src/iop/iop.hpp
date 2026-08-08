@@ -118,6 +118,8 @@ void reset(Iop* iop);
 void set_irq_pending(Iop* iop, int value);
 int run_block(Iop* iop, int max_cycles);
 void flush_cache(Iop* iop);
+void set_breakpoints(Iop* iop, const uint32_t* addrs, int count);
+bool breakpoint_hit(Iop* iop);
 void invalidate_block(Iop* iop, uint32_t addr);
 
 // External bus access functions

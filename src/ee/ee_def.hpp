@@ -548,6 +548,8 @@ struct BlockLutEntry {
     Block* block;
 };
 
+constexpr int EE_MAX_BREAKPOINTS = 64;
+
 struct Ee {
     EE_ALIGNED16 uint128_t r[32];
     EE_ALIGNED16 uint8_t qfsrv_buf[32];
@@ -624,6 +626,12 @@ struct Ee {
 
     std::vector <CachePage> block_cache;
     bool pending_purge = false;
+
+    uint32_t breakpoints[EE_MAX_BREAKPOINTS];
+    int breakpoint_count = 0;
+    uint32_t bp_skip_pc = 0xffffffff;
+    uint32_t bp_hit_pc = 0;
+    bool bp_hit = false;
 
     std::vector <SubBlock> sub_blocks;
 

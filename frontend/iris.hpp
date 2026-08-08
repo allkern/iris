@@ -227,6 +227,10 @@ struct Instance {
         std::vector <std::string> iop_log = { "" };
         std::vector <std::string> sysmem_log = { "" };
         std::vector <Breakpoint> breakpoints = {};
+        uint32_t pushed_ee[MAX_EXEC_BREAKPOINTS] = {};
+        uint32_t pushed_iop[MAX_EXEC_BREAKPOINTS] = {};
+        int pushed_ee_count = -1;
+        int pushed_iop_count = -1;
         std::vector <elf::Symbol> symbols;
         std::vector <uint8_t> strtab;
         gs::dump::Dump* gsdump = nullptr;

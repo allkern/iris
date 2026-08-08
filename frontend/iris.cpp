@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdlib>
 #include <cstdio>
+#include <cstring>
 #include <chrono>
 #include <thread>
 #include <cmath>
@@ -88,6 +89,57 @@ void sleep_limiter(Instance* iris) {
     // }
 }
 
+static void sync_breakpoints(Instance* iris) {
+    static_assert(MAX_EXEC_BREAKPOINTS <= ee::EE_MAX_BREAKPOINTS);
+    static_assert(MAX_EXEC_BREAKPOINTS <= iop::IOP_MAX_BREAKPOINTS);
+
+    uint32_t ee_addrs[MAX_EXEC_BREAKPOINTS];
+    uint32_t iop_addrs[MAX_EXEC_BREAKPOINTS];
+
+    int ee_count = 0;
+    int iop_count = 0;
+
+    for (const Breakpoint& b : iris->debug.breakpoints) {
+        if (!b.enabled || !b.cond_x)
+            continue;
+
+        if (b.cpu == BreakpointCpu::EE) {
+            if (ee_count < MAX_EXEC_BREAKPOINTS)
+                ee_addrs[ee_count++] = b.addr;
+        } else {
+            if (iop_count < MAX_EXEC_BREAKPOINTS)
+                iop_addrs[iop_count++] = b.addr;
+        }
+    }
+
+    if (ee_count == iris->debug.pushed_ee_count &&
+        iop_count == iris->debug.pushed_iop_count &&
+        !memcmp(ee_addrs, iris->debug.pushed_ee, ee_count * sizeof(uint32_t)) &&
+        !memcmp(iop_addrs, iris->debug.pushed_iop, iop_count * sizeof(uint32_t)))
+        return;
+
+    memcpy(iris->debug.pushed_ee, ee_addrs, ee_count * sizeof(uint32_t));
+    memcpy(iris->debug.pushed_iop, iop_addrs, iop_count * sizeof(uint32_t));
+
+    iris->debug.pushed_ee_count = ee_count;
+    iris->debug.pushed_iop_count = iop_count;
+
+    ee::set_breakpoints(iris->ps2->ee, ee_addrs, ee_count);
+    iop::set_breakpoints(iris->ps2->iop, iop_addrs, iop_count);
+}
+
+static void resume_breakpoints(Instance* iris) {
+    if (iris->ps2->ee->bp_hit) {
+        iris->ps2->ee->bp_hit = false;
+        iris->ps2->ee->bp_skip_pc = iris->ps2->ee->pc;
+    }
+
+    if (iris->ps2->iop->bp_hit) {
+        iris->ps2->iop->bp_hit = false;
+        iris->ps2->iop->bp_skip_pc = iris->ps2->iop->pc;
+    }
+}
+
 static inline void do_cycle(Instance* iris) {
     ps2::cycle(iris->ps2);
 
@@ -109,16 +161,8 @@ static inline void do_cycle(Instance* iris) {
         }
     }
 
-    for (const Breakpoint& b : iris->debug.breakpoints) {
-        if (b.cpu == BreakpointCpu::EE) {
-            if (iris->ps2->ee->pc == b.addr) {
-                iris->debug.pause = true;
-            }
-        } else {
-            if (iris->ps2->iop->pc == b.addr) {
-                iris->debug.pause = true;
-            }
-        }
+    if (iris->ps2->ee->bp_hit || iris->ps2->iop->bp_hit) {
+        iris->debug.pause = true;
     }
 }
 
@@ -571,6 +615,8 @@ SDL_AppResult update(Instance* iris) {
     // int ee_count = iris->ps2->ee->total_cycles;
 
     if (iris->debug.pause) {
+        sync_breakpoints(iris);
+
         emu::start_pending_load(iris);
 
         iris->debug.step_out = false;
@@ -586,6 +632,9 @@ SDL_AppResult update(Instance* iris) {
 
         return SDL_APP_CONTINUE;
     }
+
+    sync_breakpoints(iris);
+    resume_breakpoints(iris);
 
     if (iris->ps2 && iris->ps2->speed)
         slirp::pump(iris->ps2->speed->smap);

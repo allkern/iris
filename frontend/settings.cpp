@@ -192,6 +192,18 @@ bool parse_toml_settings(Instance* iris, bool reset) {
             a->open = debugger[std::string("show_") + a->id].value_or(a->open);
     }
 
+    Debugger& dbg = iris->applets.debugger;
+
+    dbg.show_left = debugger["dbg_show_left"].value_or(dbg.show_left);
+    dbg.show_memory = debugger["dbg_show_memory"].value_or(dbg.show_memory);
+    dbg.show_logs = debugger["dbg_show_logs"].value_or(dbg.show_logs);
+    dbg.memory_open = debugger["dbg_memory_open"].value_or(dbg.memory_open);
+    dbg.logs_open = debugger["dbg_logs_open"].value_or(dbg.logs_open);
+    dbg.left_width = debugger["dbg_left_width"].value_or(dbg.left_width);
+    dbg.right_width = debugger["dbg_right_width"].value_or(dbg.right_width);
+    dbg.disasm_height = debugger["dbg_disasm_height"].value_or(dbg.disasm_height);
+    dbg.memory_height = debugger["dbg_memory_height"].value_or(dbg.memory_height);
+
     auto usb = tbl["usb"];
     iris->input.usb_devices[0] = usb["port1_device"].value_or(usb::USB_DEVICE_NONE);
     iris->input.usb_devices[1] = usb["port2_device"].value_or(usb::USB_DEVICE_NONE);
@@ -752,6 +764,18 @@ void close(Instance* iris) {
             if (a->persist)
                 debugger_tbl->insert_or_assign(std::string("show_") + a->id, a->open);
         }
+
+        const Debugger& dbg = iris->applets.debugger;
+
+        debugger_tbl->insert_or_assign("dbg_show_left", dbg.show_left);
+        debugger_tbl->insert_or_assign("dbg_show_memory", dbg.show_memory);
+        debugger_tbl->insert_or_assign("dbg_show_logs", dbg.show_logs);
+        debugger_tbl->insert_or_assign("dbg_memory_open", dbg.memory_open);
+        debugger_tbl->insert_or_assign("dbg_logs_open", dbg.logs_open);
+        debugger_tbl->insert_or_assign("dbg_left_width", dbg.left_width);
+        debugger_tbl->insert_or_assign("dbg_right_width", dbg.right_width);
+        debugger_tbl->insert_or_assign("dbg_disasm_height", dbg.disasm_height);
+        debugger_tbl->insert_or_assign("dbg_memory_height", dbg.memory_height);
     }
 
     file << tbl;

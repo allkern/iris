@@ -4,6 +4,8 @@
 
 namespace iris {
 
+constexpr int MAX_EXEC_BREAKPOINTS = 64;
+
 enum class BreakpointCpu : int {
     EE,
     IOP

@@ -14,14 +14,15 @@ void show_fatal_error(Instance* iris) {
         ImGuiWindowFlags_NoCollapse |
         ImGuiWindowFlags_NoDocking |
         ImGuiWindowFlags_NoSavedSettings |
-        ImGuiWindowFlags_AlwaysAutoResize;
+        ImGuiWindowFlags_AlwaysAutoResize |
+        ImGuiWindowFlags_NoDecoration;
 
     ImVec2 center = GetMainViewport()->GetCenter();
 
     SetNextWindowPos(center, ImGuiCond_Appearing, ImVec2(0.5, 0.5));
 
-    if (Begin(ICON_MS_ERROR " Emulation halted", nullptr, flags)) {
-        TextUnformatted("The emulator hit an error it can't continue past.");
+    if (Begin("Emulation halted", nullptr, flags)) {
+        TextUnformatted("The virtual machine encountered an error it can't continue past.");
 
         Spacing();
         Separator();

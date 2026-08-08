@@ -21,7 +21,7 @@ Ps2* create(logger::Logger* logger) {
 void init(Ps2* ps2) {
     ps2->sched = scheduler::create(ps2->logger);
 
-    // Components take their dependencies in create(), so this list is ordered:
+    // Components take their dependencies in create(), so this list is ordered.
     // everything a component needs must already exist above it.
     ps2->ee = ee::create(ps2->logger, (int)ram::Size::_32MB);
     ps2->vu0 = vu::create(ps2->logger, 0);
@@ -315,6 +315,9 @@ void cycle(Ps2* ps2) {
 
     while (ps2->ee_cycles < max_block_cycles) {
         ps2->ee_cycles += ee::run_block(ps2->ee, (int)(max_block_cycles - ps2->ee_cycles));
+
+        if (ee::breakpoint_hit(ps2->ee))
+            break;
     }
 
     scheduler::tick(ps2->sched, ps2->timescale * ps2->ee_cycles);
@@ -339,6 +342,9 @@ void cycle(Ps2* ps2) {
 
         ps2->iop_cycles -= cycles;
         ps2->ee_cycles -= cycles * 8;
+
+        if (iop::breakpoint_hit(ps2->iop))
+            break;
     }
 }
 

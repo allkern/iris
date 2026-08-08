@@ -146,7 +146,15 @@ struct CachedReg {
     uint32_t value = 0;
 };
 
+constexpr int IOP_MAX_BREAKPOINTS = 64;
+
 struct Iop {
+    uint32_t breakpoints[IOP_MAX_BREAKPOINTS];
+    int breakpoint_count = 0;
+    uint32_t bp_skip_pc = 0xffffffff;
+    uint32_t bp_hit_pc = 0;
+    bool bp_hit = false;
+
     uint32_t r[32] = { 0 };
     uint32_t hi = 0, lo = 0;
     uint32_t opcode = 0;

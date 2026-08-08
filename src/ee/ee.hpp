@@ -168,6 +168,8 @@ void reset_csr_reads(Ee* ee);
 void invalidate_block(Ee* ee, uint32_t addr);
 void invalidate_range(Ee* ee, uint32_t addr, uint32_t size);
 void flush_cache(Ee* ee);
+void set_breakpoints(Ee* ee, const uint32_t* addrs, int count);
+bool breakpoint_hit(Ee* ee);
 void set_ram_size(Ee* ee, int ram_size);
 void set_osd_config(Ee* ee, OsdConfig config);
 OsdConfig get_osd_config(Ee* ee);

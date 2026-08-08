@@ -230,9 +230,8 @@ static void show_left_column(Instance* iris, ImVec2 size, bool ee) {
     } EndChild();
 }
 
-static void show_right_column(Instance* iris, ImVec2 size, bool ee) {
-    show_section(iris, "##dbg_regs", "Registers", size,
-        ee ? (Applet&)iris->applets.ee_state : (Applet&)iris->applets.iop_state);
+static float collapsed_height() {
+    return 11.0f + ImGui::GetStyle().ItemSpacing.y * 2.0f + ImGui::GetStyle().WindowPadding.y * 2.0f;
 }
 
 static void show_disassembly(Instance* iris, ImVec2 size, bool ee) {
@@ -248,22 +247,6 @@ static void show_disassembly(Instance* iris, ImVec2 size, bool ee) {
                 show_iop_disassembly_view(iris);
             }
         } EndChild();
-    } EndChild();
-}
-
-static float collapsed_height() {
-    return 11.0f + ImGui::GetStyle().ItemSpacing.y * 2.0f + ImGui::GetStyle().WindowPadding.y * 2.0f;
-}
-
-static void show_memory_panel(Instance* iris, ImVec2 size, bool* open) {
-    using namespace ImGui;
-
-    if (BeginChild("##dbg_mem", size, ImGuiChildFlags_Borders)) {
-        if (imgui::section(iris, "Memory", open)) {
-            if (BeginChild("##body")) {
-                iris->applets.memory_viewer.on_render();
-            } EndChild();
-        }
     } EndChild();
 }
 
@@ -284,80 +267,77 @@ static void show_logs_collapsible(Instance* iris, ImVec2 size, bool* open) {
     } EndChild();
 }
 
+static void show_memory_panel(Instance* iris, ImVec2 size, bool* open) {
+    using namespace ImGui;
+
+    if (BeginChild("##dbg_mem", size, ImGuiChildFlags_Borders)) {
+        if (imgui::section(iris, "Memory", open)) {
+            if (BeginChild("##body")) {
+                iris->applets.memory_viewer.on_render();
+            } EndChild();
+        }
+    } EndChild();
+}
+
+static void show_registers_panel(Instance* iris, ImVec2 size, bool ee) {
+    show_section(iris, "##dbg_regs", "Registers", size,
+        ee ? (Applet&)iris->applets.ee_state : (Applet&)iris->applets.iop_state);
+}
+
+static void show_right_column(Instance* iris, ImVec2 size, bool ee, Debugger& d) {
+    using namespace ImGui;
+
+    if (BeginChild("##dbg_right", size)) {
+        float h = GetContentRegionAvail().y;
+        float w = GetContentRegionAvail().x;
+        float spacing = GetStyle().ItemSpacing.y;
+        float collapsed = collapsed_height();
+
+        if (!d.show_memory) {
+            show_registers_panel(iris, ImVec2(0, 0), ee);
+        } else if (!d.memory_open) {
+            show_registers_panel(iris, ImVec2(0, std::max(120.0f, h - collapsed - spacing)), ee);
+            show_memory_panel(iris, ImVec2(0, collapsed), &d.memory_open);
+        } else {
+            float flex = std::max(240.0f, h - spacing);
+
+            d.memory_height = std::clamp(d.memory_height, 100.0f, std::max(120.0f, flex - 120.0f));
+
+            float regs_h = flex - d.memory_height;
+
+            show_registers_panel(iris, ImVec2(0, regs_h), ee);
+
+            splitter("##dbg_split_mem", false, splitter_at_cursor(false), &regs_h, &d.memory_height, 120.0f, 100.0f, w);
+
+            show_memory_panel(iris, ImVec2(0, d.memory_height), &d.memory_open);
+        }
+    } EndChild();
+}
+
 static void show_center_column(Instance* iris, ImVec2 size, bool ee, Debugger& d) {
     using namespace ImGui;
 
     if (BeginChild("##dbg_center", size)) {
         float h = GetContentRegionAvail().y;
+        float w = GetContentRegionAvail().x;
         float spacing = GetStyle().ItemSpacing.y;
         float collapsed = collapsed_height();
 
-        bool mem = d.show_memory;
-        bool logs = d.show_logs;
-        bool mem_big = mem && d.memory_open;
-        bool logs_big = logs && d.logs_open;
+        if (!d.show_logs) {
+            show_disassembly(iris, ImVec2(0, 0), ee);
+        } else if (!d.logs_open) {
+            show_disassembly(iris, ImVec2(0, std::max(160.0f, h - collapsed - spacing)), ee);
+            show_logs_collapsible(iris, ImVec2(0, collapsed), &d.logs_open);
+        } else {
+            float flex = std::max(240.0f, h - spacing);
 
-        int gaps = (mem ? 1 : 0) + (logs ? 1 : 0);
-        int expanded = (mem_big ? 1 : 0) + (logs_big ? 1 : 0);
+            d.disasm_height = std::clamp(d.disasm_height, 140.0f, std::max(160.0f, flex - 100.0f));
 
-        float fixed = 0.0f;
+            float logs_h = flex - d.disasm_height;
 
-        if (mem && !mem_big)
-            fixed += collapsed;
+            show_disassembly(iris, ImVec2(0, d.disasm_height), ee);
 
-        if (logs && !logs_big)
-            fixed += collapsed;
-
-        float flex = std::max(160.0f, h - gaps * spacing - fixed);
-
-        float disasm_h = flex;
-        float mem_h = collapsed;
-        float logs_h = collapsed;
-
-        if (expanded > 0) {
-            d.disasm_height = std::clamp(d.disasm_height, 140.0f, std::max(160.0f, flex - 100.0f * expanded));
-
-            disasm_h = d.disasm_height;
-
-            float below = flex - disasm_h;
-
-            if (expanded == 2) {
-                d.memory_height = std::clamp(d.memory_height, 100.0f, std::max(120.0f, below - 100.0f));
-
-                mem_h = d.memory_height;
-                logs_h = below - mem_h;
-            } else if (mem_big) {
-                mem_h = below;
-            } else {
-                logs_h = below;
-            }
-
-        }
-
-        show_disassembly(iris, ImVec2(0, disasm_h), ee);
-
-        float below = flex - disasm_h;
-
-        if (mem) {
-            if (mem_big) {
-                float rest = below;
-
-                splitter("##dbg_split_disasm", false, splitter_at_cursor(false), &d.disasm_height, &rest, 140.0f, 100.0f, size.x);
-            }
-
-            show_memory_panel(iris, ImVec2(0, mem_h), &d.memory_open);
-        }
-
-        if (logs) {
-            if (logs_big) {
-                float rest = logs_h;
-
-                if (expanded == 2) {
-                    splitter("##dbg_split_mem", false, splitter_at_cursor(false), &d.memory_height, &rest, 100.0f, 80.0f, size.x);
-                } else {
-                    splitter("##dbg_split_disasm", false, splitter_at_cursor(false), &d.disasm_height, &rest, 140.0f, 100.0f, size.x);
-                }
-            }
+            splitter("##dbg_split_disasm", false, splitter_at_cursor(false), &d.disasm_height, &logs_h, 140.0f, 100.0f, w);
 
             show_logs_collapsible(iris, ImVec2(0, logs_h), &d.logs_open);
         }
@@ -372,17 +352,27 @@ static void show_layout(Instance* iris, bool ee, Debugger& d) {
     float spacing = GetStyle().ItemSpacing.x;
     float min_center = 320.0f;
 
-    d.left_width = std::clamp(d.left_width, 200.0f, std::max(220.0f, avail.x - min_center - 200.0f));
-    d.right_width = std::clamp(d.right_width, 200.0f, std::max(220.0f, avail.x - min_center - d.left_width));
+    float left_w = d.show_left ? d.left_width : 0.0f;
 
-    float center_w = avail.x - d.left_width - d.right_width - spacing * 2.0f;
-    float rest = avail.x - d.left_width;
+    if (d.show_left) {
+        d.left_width = std::clamp(d.left_width, 200.0f, std::max(220.0f, avail.x - min_center - 200.0f));
 
-    splitter("##dbg_split_left", true, splitter_before(true, d.left_width), &d.left_width, &rest, 200.0f, min_center, avail.y);
+        left_w = d.left_width;
+    }
 
-    show_left_column(iris, ImVec2(d.left_width, avail.y), ee);
+    d.right_width = std::clamp(d.right_width, 200.0f, std::max(220.0f, avail.x - min_center - left_w));
 
-    SameLine();
+    float center_w = avail.x - left_w - d.right_width - spacing * (d.show_left ? 2.0f : 1.0f);
+
+    if (d.show_left) {
+        float rest = avail.x - d.left_width;
+
+        splitter("##dbg_split_left", true, splitter_before(true, d.left_width), &d.left_width, &rest, 200.0f, min_center, avail.y);
+
+        show_left_column(iris, ImVec2(d.left_width, avail.y), ee);
+
+        SameLine();
+    }
 
     splitter("##dbg_split_right", true, splitter_before(true, center_w), &center_w, &d.right_width, min_center, 200.0f, avail.y);
 
@@ -390,7 +380,7 @@ static void show_layout(Instance* iris, bool ee, Debugger& d) {
 
     SameLine();
 
-    show_right_column(iris, ImVec2(0, avail.y), ee);
+    show_right_column(iris, ImVec2(0, avail.y), ee, d);
 }
 
 static void show_view_menu(Instance* iris, Debugger& d) {
@@ -400,6 +390,7 @@ static void show_view_menu(Instance* iris, Debugger& d) {
         return;
 
     if (imgui::BeginMenu("View")) {
+        imgui::MenuItem(ICON_MS_VIEW_SIDEBAR " Left panel", nullptr, &d.show_left);
         imgui::MenuItem(ICON_MS_MEMORY " Memory pane", nullptr, &d.show_memory);
         imgui::MenuItem(ICON_MS_TERMINAL " Logs pane", nullptr, &d.show_logs);
 
@@ -410,6 +401,7 @@ static void show_view_menu(Instance* iris, Debugger& d) {
             d.right_width = 380.0f;
             d.disasm_height = 330.0f;
             d.memory_height = 220.0f;
+            d.show_left = true;
             d.show_memory = true;
             d.show_logs = true;
             d.memory_open = true;

@@ -10,6 +10,7 @@ struct Debugger : Applet {
         title = "Debugger";
         flags = ImGuiWindowFlags_MenuBar;
         needs_ps2 = true;
+        persist = false;
     }
 
     bool begin() override;
@@ -19,9 +20,10 @@ struct Debugger : Applet {
     int cpu = 0;
 
     float left_width = 300.0f;
-    float right_width = 380.0f;
+    float right_width = 460.0f;
     float disasm_height = 330.0f;
     float memory_height = 220.0f;
+    bool show_left = true;
     bool show_memory = true;
     bool show_logs = true;
     bool memory_open = true;
