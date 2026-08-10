@@ -15,6 +15,7 @@
 [submodule "parallel-gs"]
 	path = deps/parallel-gs
 	url = https://github.com/allkern/parallel-gs
+	branch = main
 [submodule "libchdr"]
 	path = deps/libchdr
 	url = https://github.com/rtissera/libchdr

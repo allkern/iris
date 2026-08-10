@@ -458,7 +458,11 @@ std::filesystem::path get_rom_path(std::filesystem::path filename, std::string e
 }
 
 bool load_rom_files(Instance* iris) {
-    ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
+    bool loaded = ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
+
+    std::string rom1 = iris->paths.rom1_path;
+    std::string rom2 = iris->paths.rom2_path;
+    std::string nvram = iris->paths.nvram_path;
 
     if (iris->paths.auto_paths) {
         std::filesystem::path bios_path(iris->paths.bios_path);
@@ -466,38 +470,29 @@ bool load_rom_files(Instance* iris) {
         // Get full path without extension
         bios_path = bios_path.parent_path() / bios_path.stem();
 
-        std::filesystem::path rom1_path = get_rom_path(bios_path, "rom1");
-        std::filesystem::path rom2_path = get_rom_path(bios_path, "rom2");
-        std::filesystem::path nvm_path = get_rom_path(bios_path, "nvm");
+        if (!iris->paths.pinned_rom1)
+            rom1 = get_rom_path(bios_path, "rom1").string();
 
-        if (rom1_path.string().size()) {
-            ps2::load_rom1(iris->ps2, rom1_path.string().c_str());
-        }
+        if (!iris->paths.pinned_rom2)
+            rom2 = get_rom_path(bios_path, "rom2").string();
 
-        if (rom2_path.string().size()) {
-            ps2::load_rom2(iris->ps2, rom2_path.string().c_str());
-        }
-
-        if (nvm_path.string().size()) {
-            cdvd::load_nvram(iris->ps2->cdvd, nvm_path.string().c_str());
-        }
-
-        return true;
+        if (!iris->paths.pinned_nvram)
+            nvram = get_rom_path(bios_path, "nvm").string();
     }
 
-    if (iris->paths.rom1_path.size()) {
-        ps2::load_rom1(iris->ps2, iris->paths.rom1_path.c_str());
+    if (rom1.size()) {
+        ps2::load_rom1(iris->ps2, rom1.c_str());
     }
 
-    if (iris->paths.rom2_path.size()) {
-        ps2::load_rom2(iris->ps2, iris->paths.rom2_path.c_str());
+    if (rom2.size()) {
+        ps2::load_rom2(iris->ps2, rom2.c_str());
     }
 
-    if (iris->paths.nvram_path.size()) {
-        cdvd::load_nvram(iris->ps2->cdvd, iris->paths.nvram_path.c_str());
+    if (nvram.size()) {
+        cdvd::load_nvram(iris->ps2->cdvd, nvram.c_str());
     }
 
-    return true;
+    return loaded;
 }
 
 }

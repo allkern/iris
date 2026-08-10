@@ -8,50 +8,12 @@
 #define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
 
+#include <algorithm>
 #include <filesystem>
 
 namespace iris::settings {
 
-void print_version() {
-    puts(
-        "iris (" STR(_IRIS_VERSION) " " STR(_IRIS_OSVERSION) ")\n"
-        "Copyright (C) 2026 Allkern/Lisandro Alarcon\n\n"
-        "MIT License\n"
-        "THE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\n"
-        "IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\n"
-        "FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\n"
-        "AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\n"
-        "LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\n"
-        "OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\n"
-        "SOFTWARE."
-    );
-}
-
-void print_help() {
-    puts(
-        "Usage: iris [OPTION]... <path-to-disc-image>\n"
-        "\n"
-        "  -b, --bios               Specify a PlayStation 2 BIOS dump file\n"
-        "      --rom1               Specify a DVD player dump file\n"
-        "      --rom2               Specify a ROM2 dump file\n"
-        "  -d, --boot               Specify a direct kernel boot path\n"
-        "  -i, --disc               Specify a path to a disc image file\n"
-        "  -x, --executable         Specify a path to an ELF executable to be\n"
-        "                             loaded on system startup\n"
-        "      --slot1              Specify a path to a memory card file to\n"
-        "                             be inserted on slot 1\n"
-        "      --slot2              Specify a path to a memory card file to\n"
-        "                             be inserted on slot 2\n"
-        "      --snap               Specify a directory for storing screenshots\n"
-        "      --reset-settings     Reset the settings file to its defaults\n"
-        "  -h, --help               Display this help and exit\n"
-        "  -v, --version            Output version information and exit\n"
-    );
-}
-
 bool parse_mappings_file(Instance* iris) {
-    iris->paths.mappings_path = iris->paths.pref_path + "mappings.toml";
-
     std::ifstream mappings_file(iris->paths.mappings_path);
 
     if (!mappings_file.is_open())
@@ -93,22 +55,18 @@ bool parse_mappings_file(Instance* iris) {
 }
 
 bool parse_toml_settings(Instance* iris, bool reset) {
-    iris->paths.settings_path = iris->paths.pref_path + "settings.toml";
-
     toml::table tbl;
 
     if (!reset) {
         toml::parse_result result = toml::parse_file(iris->paths.settings_path);
 
-        if (!result) {
+        if (result) {
+            tbl = std::move(result).table();
+        } else if (std::filesystem::exists(iris->paths.settings_path)) {
             std::string desc(result.error().description());
 
             iris_error(&iris->log.settings, "Couldn't parse settings file: {}", desc.c_str());
-
-            return false;
         }
-
-        tbl = std::move(result).table();
     }
 
     auto paths = tbl["paths"];
@@ -327,169 +285,6 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     return parse_mappings_file(iris);
 }
 
-bool check_for_quick_exit(int argc, const char* argv[]) {
-    for (int i = 1; i < argc; i++) {
-        std::string a(argv[i]);
-
-        if (a == "-h" || a == "--help") {
-            print_help();
-
-            return true;
-        } else if (a == "-v" || a == "--version") {
-            print_version();
-
-            return true;
-        } else if (a == "--reset-settings") {
-            Instance* tmp = create();
-
-            if (std::filesystem::exists("portable") || std::filesystem::exists("portable.txt")) {
-                tmp->paths.pref_path = "./";
-            } else {
-                char* pref = SDL_GetPrefPath("Allkern", "Iris");
-
-                tmp->paths.pref_path = pref ? std::string(pref) : "./";
-
-                if (pref)
-                    SDL_free(pref);
-            }
-
-            // Load defaults (ignoring the existing file) and write them back out.
-            parse_toml_settings(tmp, true);
-            close(tmp);
-
-            printf("iris: Settings reset\n");
-
-            return true;
-        }
-    }
-
-    return false;
-}
-
-void parse_cli_settings(Instance* iris, int argc, const char* argv[]) {
-    std::string bios_path;
-    std::string rom1_path;
-    std::string rom2_path;
-
-    for (int i = 1; i < argc; i++) {
-        std::string a(argv[i]);
-
-        if (a == "-x" || a == "--executable") {
-            iris->paths.elf_path = argv[i+1];
-
-            ++i;
-        } else if (a == "-d" || a == "--boot") {
-            iris->paths.boot_path = argv[i+1];
-
-            ++i;
-        } else if (a == "-b" || a == "--bios") {
-            bios_path = argv[i+1];
-
-            ++i;
-        } else if (a == "--rom1") {
-            rom1_path = argv[i+1];
-
-            ++i;
-        } else if (a == "--rom2") {
-            rom2_path = argv[i+1];
-
-            ++i;
-        } else if (a == "-i" || a == "--disc") {
-            iris->paths.disc_path = argv[i+1];
-
-            ++i;
-        } else if (a == "--slot1") {
-            iris->paths.mcd0_path = argv[i+1];
-
-            ++i;
-        } else if (a == "--slot2") {
-            iris->paths.mcd1_path = argv[i+1];
-
-            ++i;
-        } else if (a == "-H" || a == "--headless") {
-            iris->headless = true;
-        } else if (a == "-S" || a == "--snap-on-exit") {
-            iris->snap_on_exit = true;
-        } else {
-            iris->paths.disc_path = argv[i];
-        }
-    }
-
-    if (bios_path.size()) {
-        if (!ps2::load_bios(iris->ps2, bios_path.c_str())) {
-            // push_info(iris, "Couldn't load BIOS");
-
-            iris->applets.bios_setting.show();
-        }
-    } else {
-        if (iris->paths.bios_path.size()) {
-            if (!ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str())) {
-                // push_info(iris, "Couldn't load BIOS");
-
-                iris->applets.bios_setting.show();
-            }
-        } else {
-            iris->applets.bios_setting.show();
-        }
-    }
-
-    if (rom1_path.size()) {
-        if (!ps2::load_rom1(iris->ps2, rom1_path.c_str())) {
-            // push_info(iris, "Couldn't load ROM1");
-        }
-    } else {
-        if (iris->paths.rom1_path.size()) {
-            if (!ps2::load_rom1(iris->ps2, iris->paths.rom1_path.c_str())) {
-                // push_info(iris, "Couldn't load ROM1");
-            }
-        }
-    }
-
-    if (rom2_path.size()) {
-        if (!ps2::load_rom2(iris->ps2, rom2_path.c_str())) {
-            // push_info(iris, "Couldn't load ROM2");
-        }
-    } else {
-        if (iris->paths.rom2_path.size()) {
-            if (!ps2::load_rom2(iris->ps2, iris->paths.rom2_path.c_str())) {
-                // push_info(iris, "Couldn't load ROM2");
-            }
-        }
-    }
-
-    if (iris->paths.elf_path.size()) {
-        ps2::set_system(iris->ps2, iris->system);
-        ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
-        elf::load(iris->ps2, iris->paths.elf_path.c_str());
-
-        iris->loaded = iris->paths.elf_path;
-    }
-
-    if (iris->paths.boot_path.size()) {
-        ps2::set_system(iris->ps2, iris->system);
-        ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
-        ps2::boot_file(iris->ps2, iris->paths.boot_path.c_str());
-
-        iris->loaded = iris->paths.boot_path;
-    }
-
-    if (iris->paths.disc_path.size()) {
-        if (cdvd::open(iris->ps2->cdvd, iris->paths.disc_path.c_str(), 0))
-            return;
-
-        char* boot_file = iop::disc::get_boot_path(iris->ps2->cdvd->disc);
-
-        if (!boot_file)
-            return;
-
-        ps2::set_system(iris->ps2, iris->system);
-        ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
-        ps2::boot_file(iris->ps2, boot_file);
-
-        iris->loaded = iris->paths.disc_path;
-    }
-}
-
 void apply_device_maps(Instance* iris) {
     ps2::iop_clear_device_maps(iris->ps2);
 
@@ -507,12 +302,25 @@ void apply_device_maps(Instance* iris) {
     }
 }
 
-bool init(Instance* iris, int argc, const char* argv[]) {
-    parse_toml_settings(iris, false);
+bool init(Instance* iris) {
+    if (iris->paths.settings_path.empty())
+        iris->paths.settings_path = iris->paths.pref_path + "settings.toml";
 
-    parse_cli_settings(iris, argc, argv);
+    if (iris->paths.mappings_path.empty())
+        iris->paths.mappings_path = iris->paths.pref_path + "mappings.toml";
 
-    emu::load_rom_files(iris);
+    parse_toml_settings(iris, iris->cli.reset_settings);
+
+    // CLI settings override TOML settings
+    cli::apply(iris);
+
+    if (iris->cli.reset_settings)
+        save(iris);
+
+    ps2::set_system(iris->ps2, iris->system);
+
+    if (!emu::load_rom_files(iris))
+        iris->applets.bios_setting.show();
 
     if (iris->paths.mcd0_path.size())
         emu::attach_memory_card(iris, 0, iris->paths.mcd0_path.c_str());
@@ -520,14 +328,12 @@ bool init(Instance* iris, int argc, const char* argv[]) {
     if (iris->paths.mcd1_path.size())
         emu::attach_memory_card(iris, 1, iris->paths.mcd1_path.c_str());
 
-    // Apply settings loaded from file/CLI
     ps2::set_timescale(iris->ps2, iris->timescale);
 
     apply_device_maps(iris);
 
     ee::set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
 
-    ps2::set_system(iris->ps2, iris->system);
     speed::load_flash(iris->ps2->speed, iris->paths.flash_path.c_str());
     speed::load_hdd(iris->ps2->speed, iris->paths.hdd_path.c_str());
     speed::set_mac_address(iris->ps2->speed, iris->mac_address);
@@ -541,37 +347,20 @@ bool init(Instance* iris, int argc, const char* argv[]) {
         usb::set_port_device(iris->ps2->usb, i, iris->input.usb_devices[i]);
     }
 
-    for (int i = 1; i < argc; i++) {
-        std::string a(argv[i]);
-
-        if (a == "--autoboot-disc") {
-            std::string path = argv[i+1];
-
-            if (cdvd::open(iris->ps2->cdvd, path.c_str(), 0))
-                return false;
-
-            char* boot_file = iop::disc::get_boot_path(iris->ps2->cdvd->disc);
-
-            if (!boot_file)
-                return false;
-
-            ps2::set_system(iris->ps2, iris->system);
-            ps2::load_bios(iris->ps2, iris->paths.bios_path.c_str());
-            ps2::boot_file(iris->ps2, boot_file);
-
-            iris->debug.pause = false;
-        }
-    }
+    cli::boot(iris);
 
     return true;
 }
 
-void close(Instance* iris) {
+void save(Instance* iris) {
     if (!iris->dump_to_file)
         return;
 
+    // Command line overrides belong to this run, the file keeps its own values
+    cli::unapply(iris);
+
     std::ofstream file(iris->paths.settings_path);
-    std::ofstream mappings_file(iris->paths.pref_path + "mappings.toml");
+    std::ofstream mappings_file(iris->paths.mappings_path);
 
     file << "# File auto-generated by " IRIS_TITLE "\n\n";
 
@@ -735,8 +524,14 @@ void close(Instance* iris) {
 
     toml::array* shaders = tbl["shaders"]["array"].as_array();
 
-    for (auto& s : shaders::vector(iris))
-        shaders->push_back(s->get_id());
+    for (auto& s : shaders::vector(iris)) {
+        std::string id = s->get_id();
+
+        if (std::find(iris->cli.shaders.begin(), iris->cli.shaders.end(), id) != iris->cli.shaders.end())
+            continue;
+
+        shaders->push_back(id);
+    }
 
     // Generate input mappings file
     mappings_file << "# File auto-generated by " IRIS_TITLE "\n\n";
@@ -780,6 +575,12 @@ void close(Instance* iris) {
 
     file << tbl;
     mappings_file << mappings_tbl;
+
+    cli::reapply(iris);
+}
+
+void close(Instance* iris) {
+    save(iris);
 }
 
 }

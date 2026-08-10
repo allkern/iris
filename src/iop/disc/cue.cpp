@@ -6,36 +6,36 @@
 namespace iris::iop::disc::cue {
 
 static const char* keywords[] = {
-    "CUE_4CH",
-    "CUE_AIFF",
-    "CUE_AUDIO",
-    "CUE_BINARY",
-    "CUE_CATALOG",
-    "CUE_CDG",
+    "4CH",
+    "AIFF",
+    "AUDIO",
+    "BINARY",
+    "CATALOG",
+    "CDG",
     "CDI/2336",
     "CDI/2352",
-    "CUE_CDTEXTFILE",
-    "CUE_DCP",
-    "CUE_FILE",
-    "CUE_FLAGS",
-    "CUE_INDEX",
-    "CUE_ISRC",
+    "CDTEXTFILE",
+    "DCP",
+    "FILE",
+    "FLAGS",
+    "INDEX",
+    "ISRC",
     "MODE1/2048",
     "MODE1/2352",
     "MODE2/2336",
     "MODE2/2352",
-    "CUE_MOTOROLA",
-    "CUE_MP3",
-    "CUE_PERFORMER",
-    "CUE_POSTGAP",
-    "CUE_PRE",
-    "CUE_PREGAP",
-    "CUE_REM",
-    "CUE_SCMS",
-    "CUE_SONGWRITER",
-    "CUE_TITLE",
-    "CUE_TRACK",
-    "CUE_WAVE",
+    "MOTOROLA",
+    "MP3",
+    "PERFORMER",
+    "POSTGAP",
+    "PRE",
+    "PREGAP",
+    "REM",
+    "SCMS",
+    "SONGWRITER",
+    "TITLE",
+    "TRACK",
+    "WAVE",
     0
 };
 
@@ -306,9 +306,9 @@ int parse(Cue* cue, const char* path) {
             } break;
 
             default: {
-                iris_debug(cue, "Unknown keyword: {} ({})", keywords[kw], kw);
+                iris_error(cue, "Unknown keyword in CUE sheet at offset {}", ftell(cue->file));
 
-                return 1;
+                return CUE_PARSE_ERROR;
             } break;
         }
 
@@ -604,13 +604,13 @@ int get_sector_size(void* udata) {
 
 int init(Cue* cue, const char* path) {
     if (parse(cue, path) != CUE_OK) {
-        iris_debug(cue, "Failed to parse CUE file '{}'", path);
+        iris_error(cue, "Failed to parse CUE file '{}'", path);
 
         return 0;
     }
 
     if (load(cue, LD_FILE) != CUE_OK) {
-        iris_debug(cue, "Failed to load CUE file '{}'", path);
+        iris_error(cue, "Failed to load CUE file '{}'", path);
 
         return 0;
     }

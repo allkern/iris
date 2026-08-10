@@ -235,6 +235,7 @@ target_sources(iris PRIVATE
     main.cpp
     frontend/applets.cpp
     frontend/audio.cpp
+    frontend/cli.cpp
     frontend/log.cpp
     frontend/gamelist.cpp
     frontend/handlers.cpp

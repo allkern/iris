@@ -14,6 +14,7 @@ bool init(void* udata, const CreateInfo& info) {
 
     ctx->gs = info.gs;
     ctx->gif = info.gif;
+    ctx->config = *(HardwareConfig*)info.config;
 
     ctx->instance = new ExternallyManagedInstance(info.instance, info.instance_create_info);
     ctx->device = new ExternallyManagedDevice(info.device, info.device_create_info);
@@ -53,8 +54,6 @@ bool init(void* udata, const CreateInfo& info) {
 
     ctx->iface.reset_context_state();
     ctx->iface.set_signal_interface(ctx->signal_handler);
-
-    ctx->config = *(HardwareConfig*)info.config;
 
     Hacks hacks = {};
     hacks.allow_blend_demote = ctx->config.allow_blend_demote;
@@ -125,7 +124,8 @@ Image get_frame(void* udata) {
     gs::get_privileged_state(ctx->gs, &state);
 
     if (!state.pmode) {
-        // No display enabled.
+        ctx->iface.flush();
+
         Image image = {};
         image.image = VK_NULL_HANDLE;
         image.view = VK_NULL_HANDLE;

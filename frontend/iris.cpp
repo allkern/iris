@@ -142,7 +142,6 @@ static void resume_breakpoints(Instance* iris) {
 
 static inline void do_cycle(Instance* iris) {
     ps2::cycle(iris->ps2);
-
     if (iris->debug.step_out) {
         // jr $ra
         if (iris->ps2->ee->opcode == 0x03e00008) {
@@ -473,7 +472,7 @@ Instance* create() {
     return iris;
 }
 
-bool init(Instance* iris, int argc, const char* argv[]) {
+bool init(Instance* iris) {
     if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO | SDL_INIT_EVENTS | SDL_INIT_GAMEPAD)) {
         iris_error(&iris->log.iris, "Failed to init SDL \'{}\'", SDL_GetError());
 
@@ -490,7 +489,7 @@ bool init(Instance* iris, int argc, const char* argv[]) {
     iris->vk.main_scale = SDL_GetDisplayContentScale(SDL_GetPrimaryDisplay());
 
     // Init preferences path
-    if (std::filesystem::exists("portable") || std::filesystem::exists("portable.txt")) {
+    if (iris->cli.portable || std::filesystem::exists("portable") || std::filesystem::exists("portable.txt")) {
         iris->paths.pref_path = "./";
     } else {
         char* pref = SDL_GetPrefPath("Allkern", "Iris");
@@ -508,7 +507,7 @@ bool init(Instance* iris, int argc, const char* argv[]) {
 
     applets::create(iris);
 
-    if (!settings::init(iris, argc, argv)) {
+    if (!settings::init(iris)) {
         iris_error(&iris->log.iris, "Failed to initialize settings");
 
         return false;

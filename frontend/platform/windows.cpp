@@ -2,8 +2,15 @@
 #include "imgui.h"
 
 #include <dwmapi.h>
+#include <io.h>
 
 namespace iris::platform {
+
+static bool stream_is_open(FILE* stream) {
+    int fd = _fileno(stream);
+
+    return fd >= 0 && _get_osfhandle(fd) != -1;
+}
 
 void init_console() {
     static bool done = false;
@@ -16,8 +23,11 @@ void init_console() {
     if (AttachConsole(ATTACH_PARENT_PROCESS)) {
         FILE* f = nullptr;
 
-        freopen_s(&f, "CONOUT$", "w", stdout);
-        freopen_s(&f, "CONOUT$", "w", stderr);
+        if (!stream_is_open(stdout))
+            freopen_s(&f, "CONOUT$", "w", stdout);
+
+        if (!stream_is_open(stderr))
+            freopen_s(&f, "CONOUT$", "w", stderr);
     }
 
     HANDLE handles[] = {

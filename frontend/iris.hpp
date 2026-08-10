@@ -42,6 +42,7 @@
 #include "settings.hpp"
 #include "gamelist.hpp"
 #include "applets.hpp"
+#include "cli.hpp"
 
 namespace iris::gs::dump { struct Dump; }
 namespace iris::dev::ds { struct Ds; }
@@ -260,6 +261,10 @@ struct Instance {
         std::string gcdb_path = "";
         std::string hdd_path = "";
         bool auto_paths = true;
+
+        bool pinned_rom1 = false;
+        bool pinned_rom2 = false;
+        bool pinned_nvram = false;
         std::string host_path = "";
         bool host_from_elf = false;
         std::string host_elf_dir = "";
@@ -270,6 +275,8 @@ struct Instance {
     } paths;
 
     Applets applets;
+
+    cli::State cli;
 
     SDL_Window* window = nullptr;
 
@@ -368,7 +375,7 @@ struct Instance {
 };
 
 Instance* create();
-bool init(Instance* iris, int argc, const char* argv[]);
+bool init(Instance* iris);
 void destroy(Instance* iris);
 SDL_AppResult handle_events(Instance* iris, SDL_Event* event);
 SDL_AppResult update(Instance* iris);

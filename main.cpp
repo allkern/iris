@@ -29,19 +29,21 @@
 SDL_AppResult SDL_AppInit(void** appstate, int argc, char** argv) {
     SDL_SetAppMetadata("Iris", STR(_IRIS_VERSION), "com.allkern.iris");
 
-    // Has to happen before --help/--version print anything: on Windows there
-    // is no console attached until this runs
     iris::platform::init_console();
 
     // Check if we got --help or --version in the commandline args
     // if so, don't do anything else.
-    if (iris::settings::check_for_quick_exit(argc, (const char**)argv)) {
+    if (iris::cli::quick_exit(argc, (const char**)argv)) {
         return SDL_APP_SUCCESS;
     }
 
     iris::Instance* iris = iris::create();
 
-    if (!iris::init(iris, argc, (const char**)argv)) {
+    if (!iris::cli::parse(iris, argc, (const char**)argv)) {
+        return SDL_APP_FAILURE;
+    }
+
+    if (!iris::init(iris)) {
         iris_error(&iris->log.iris, "Failed to initialize instance");
 
         return SDL_APP_FAILURE;

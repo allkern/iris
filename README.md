@@ -26,21 +26,25 @@ Navigate over to `Iris > Open...` and choose a disc image or ELF executable, dra
 
 ### CLI
 ```
-Usage: iris [OPTION]... <path-to-disc-image>
+Usage: iris [OPTION]... [FILE]
+```
+`FILE` is a disc image or an executable. Options take precedence over the
+settings file and are never written back to it, so they only apply to that run.
+Switches are shown as `--[no-]NAME`, so `--no-fullscreen` turns off a
+`fullscreen` that the settings file enabled.
 
-  -b, --bios               Specify a PlayStation 2 BIOS dump file
-      --rom1               Specify a DVD player dump file
-      --rom2               Specify a ROM2 dump file
-  -d, --boot               Specify a direct kernel boot path
-  -i, --disc               Specify a path to a disc image file
-  -x, --executable         Specify a path to an ELF executable to be
-                             loaded on system startup
-      --slot1              Specify a path to a memory card file to
-                             be inserted on slot 1
-      --slot2              Specify a path to a memory card file to
-                             be inserted on slot 2
-  -h, --help               Display this help and exit
-  -v, --version            Output version information and exit
+```
+  -b, --bios FILE                 PlayStation 2 BIOS dump to boot from
+  -i, --disc FILE                 Disc image to insert and boot
+  -x, --executable FILE           ELF executable to side-load on startup
+  -d, --boot PATH                 Boot the kernel straight into this path
+  -f, --[no-]fullscreen           Start in fullscreen
+  -r, --renderer BACKEND          null, software or hardware
+  -c, --config FILE               Settings file to use instead of the default
+  -H, --[no-]headless             Run without showing the window
+  -S, --[no-]snap-on-exit         Take a screenshot right before quitting
+  -h, --help                      Display the full option list and exit
+  -v, --version                   Output version information and exit
 ```
 
 ## Features
