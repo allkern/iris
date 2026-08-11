@@ -139,7 +139,7 @@ void BiosSetting::show_bios_stage() {
             } break;
         }
 
-        TextColored(col, "%s", text);
+        imgui::badge(text, col);
     }
 
     // To-do: Add file validation

@@ -449,6 +449,10 @@ static void show_tools_menu(Instance* iris) {
             iris->applets.hdd_tool.show();
         }
 
+        if (imgui::MenuItem(ICON_MS_FOLDER_OPEN " File Explorer")) {
+            iris->applets.file_explorer.show();
+        }
+
         ImGui::EndMenu();
     }
 }

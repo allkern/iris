@@ -32,30 +32,12 @@ void create_raw_image(const char* path, uint64_t size) {
 }
 
 std::string get_file_size_string(int format, uint64_t size) {
-    uint64_t total_size = 0;
-
     if (format == ImageFormat::ISIF) {
-        uint64_t block_count = size / 512;
-
-        // BAT size
-        total_size = block_count * sizeof(uint64_t);
-    } else {
-        total_size = size;
+        // Only the block allocation table is written up front
+        return imgui::format_size((size / 512) * sizeof(uint64_t));
     }
 
-    char buf[128];
-
-    if (total_size >= 0x40000000) {
-        sprintf(buf, "%.1f GiB", (float)total_size / 0x40000000ull);
-    } else if (total_size >= 0x100000) {
-        sprintf(buf, "%.1f MiB", (float)total_size / 0x100000ull);
-    } else if (total_size >= 0x400) {
-        sprintf(buf, "%.1f KiB", (float)total_size / 0x400ull);
-    } else {
-        sprintf(buf, "%llu B", total_size);
-    }
-
-    return std::string(buf);
+    return imgui::format_size(size);
 }
 
 void HddTool::on_render() {

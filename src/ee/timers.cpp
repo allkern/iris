@@ -410,8 +410,6 @@ void tick(Timers* timers) {
 }
 
 void tick_cycles(Timers* timers, uint32_t cycles) {
-    // Lazy evaluation: just advance the global cycle counter
-    // No timer updates happen until reads/writes or event checks
     if (timers->active_mask && cycles) {
         uint64_t step = ee_timers_ee_cycles_to_busclk(timers, cycles);
 

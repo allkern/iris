@@ -20,15 +20,7 @@ static void show_loading(Instance* iris) {
 
     text += "...";
 
-    ImVec2 size = CalcTextSize(text.c_str());
-    ImVec2 avail = GetContentRegionAvail();
-
-    SetCursorPos(ImVec2(
-        GetCursorPosX() + std::max(0.0f, (avail.x - size.x) * 0.5f),
-        GetCursorPosY() + std::max(0.0f, (avail.y - size.y) * 0.5f)
-    ));
-
-    TextDisabled("%s", text.c_str());
+    imgui::TextDisabledCentered("%s", text.c_str());
 }
 
 void create(Instance* iris) {
@@ -63,6 +55,7 @@ void create(Instance* iris) {
         &applets.memory_card_tool,
         &applets.memory_search,
         &applets.hdd_tool,
+        &applets.file_explorer,
         &applets.gs_dump_tool,
         &applets.bios_setting
     };

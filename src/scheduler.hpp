@@ -7,7 +7,6 @@
 
 namespace iris::scheduler {
 
-// Overshoot is zero or negative: how far past the deadline we ticked.
 typedef void (*EventCallback)(void* udata, int overshoot);
 
 inline constexpr int64_t NO_EVENT = INT64_MAX;

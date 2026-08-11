@@ -34,7 +34,11 @@ struct Applet {
     bool open = false;
     bool was_open = false;
     bool focus = false;
-    bool persist = true;
+
+    // Now that viewports are the default, we actually don't
+    // want to persist most windows, we'll leave it here
+    // in case we want to make that configurable.
+    bool persist = false;
 };
 
 }

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "imgui.h"
 
 namespace iris {
@@ -25,6 +27,8 @@ enum Theme {
     MOCHA,
     LATTE,
     SOLARIZED,
+    SAKURA,
+    SAKURA_LIGHT,
     THEME_COUNT
 };
 
@@ -59,7 +63,16 @@ bool BeginMenu(const char* label, bool enabled = true);
 bool Selectable(const char* label, bool selected = false, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
 bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
 
+void TextDisabledCentered(const char* fmt, ...) IM_FMTARGS(1);
+
+std::string format_size(uint64_t size);
+
+bool splitter(const char* id, bool vertical, float place, float* size1, float* size2, float min1, float min2, float long_axis);
+float splitter_before(bool vertical, float size1);
+float splitter_at_cursor(bool vertical);
+
 bool segmented(const char* id, int* value, const char* const* labels, int count, float width = 0.0f);
+void badge(const char* text, const ImVec4& color, float bg_alpha = 0.16f);
 
 }
 

@@ -15,7 +15,15 @@ bool About::begin() {
     if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
         flags |= ImGuiWindowFlags_NoTitleBar;
 
-    return Begin(title, &open, flags);
+    ImVec2 padding = GetStyle().WindowPadding;
+
+    PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(padding.x, padding.y + 8.0));
+
+    bool visible = Begin(title, &open, flags);
+
+    PopStyleVar();
+
+    return visible;
 }
 
 void About::on_render() {

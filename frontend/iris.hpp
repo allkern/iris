@@ -144,7 +144,7 @@ struct Instance {
         bool show_status_bar = true;
         bool show_imgui_demo = false;
         bool show_overlay = false;
-        bool show_gamelist = true;
+        bool show_gamelist = false;
         int theme = imgui::GRANITE_NEO;
         bool imgui_enable_viewports = true;
         int codeview_color_scheme = 0;
@@ -367,7 +367,7 @@ struct Instance {
     gs::renderer::HardwareConfig hardware_backend_config;
 
 #ifdef _WIN32
-    int windows_titlebar_style = IRIS_TITLEBAR_DEFAULT;
+    int windows_titlebar_style = IRIS_TITLEBAR_SEAMLESS;
     bool windows_enable_borders = true;
     bool windows_dark_mode = true;
 #endif

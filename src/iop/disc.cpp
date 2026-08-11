@@ -493,9 +493,20 @@ void close(Disc* disc) {
             cue::destroy((cue::Cue*)disc->udata);
         } break;
 
-        // Raw 2352-byte sector disc image (CD)
+        // Raw 2352-byte sector disc image (CD). open() routes an unknown
+        // extension here too, so both cases have to be freed
+        case DISC_EXT_NONE:
         case DISC_EXT_BIN: {
             bin::destroy((bin::Bin*)disc->udata);
+        } break;
+
+        case DISC_EXT_CHD: {
+            chd::destroy((chd::Chd*)disc->udata);
+        } break;
+
+        case DISC_EXT_CSO:
+        case DISC_EXT_ZSO: {
+            ciso::destroy((ciso::Ciso*)disc->udata);
         } break;
     }
 

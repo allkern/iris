@@ -260,6 +260,7 @@ target_sources(iris PRIVATE
     frontend/ui/control.cpp
     frontend/ui/dma.cpp
     frontend/ui/fatal_error.cpp
+    frontend/ui/file_explorer.cpp
     frontend/ui/gamelist.cpp
     frontend/ui/gs.cpp
     frontend/ui/gs_dump.cpp
@@ -304,6 +305,16 @@ target_sources(iris PRIVATE
     src/ee/vif.cpp
     src/ee/vu_cached.cpp
     src/ee/vu_dis.cpp
+    src/fs/apa.cpp
+    src/fs/blk.cpp
+    src/fs/exfat.cpp
+    src/fs/fat.cpp
+    src/fs/fs.cpp
+    src/fs/iso9660.cpp
+    src/fs/part.cpp
+    src/fs/pfs.cpp
+    src/fs/ps1mcd.cpp
+    src/fs/ps2mcd.cpp
     src/gs/gs.cpp
     src/gs/gs_dump.cpp
     src/gs/renderer/null.cpp

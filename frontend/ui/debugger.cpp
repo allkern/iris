@@ -10,44 +10,6 @@
 
 namespace iris {
 
-static bool splitter(const char* id, bool vertical, float place, float* size1, float* size2, float min1, float min2, float long_axis) {
-    using namespace ImGui;
-
-    constexpr float thickness = 1.0f;
-    constexpr float grab = 4.0f;
-
-    ImGuiWindow* window = GetCurrentWindow();
-
-    ImRect bb;
-
-    ImVec2 cursor = window->DC.CursorPos;
-    ImVec2 size = CalcItemSize(vertical ? ImVec2(thickness, long_axis) : ImVec2(long_axis, thickness), 0.0f, 0.0f);
-
-    bb.Min = ImVec2(cursor.x + (vertical ? place : 0.0f), cursor.y + (vertical ? 0.0f : place));
-    bb.Max = ImVec2(bb.Min.x + size.x, bb.Min.y + size.y);
-
-    PushStyleColor(ImGuiCol_SeparatorHovered, GetStyleColorVec4(ImGuiCol_Separator));
-    PushStyleColor(ImGuiCol_Separator, ImVec4(0.0, 0.0, 0.0, 0.0));
-
-    bool r = SplitterBehavior(bb, window->GetID(id), vertical ? ImGuiAxis_X : ImGuiAxis_Y, size1, size2, min1, min2, grab);
-
-    PopStyleColor(2);
-
-    return r;
-}
-
-static float splitter_before(bool vertical, float size1) {
-    ImGuiStyle& style = ImGui::GetStyle();
-
-    return size1 + ((vertical ? style.ItemSpacing.x : style.ItemSpacing.y) - 1.0f) * 0.5f;
-}
-
-static float splitter_at_cursor(bool vertical) {
-    ImGuiStyle& style = ImGui::GetStyle();
-
-    return -((vertical ? style.ItemSpacing.x : style.ItemSpacing.y) + 1.0f) * 0.5f;
-}
-
 static void show_run_controls(Instance* iris) {
     using namespace ImGui;
 
@@ -312,7 +274,7 @@ static void show_right_column(Instance* iris, ImVec2 size, bool ee, Debugger& d)
 
             show_registers_panel(iris, ImVec2(0, regs_h), ee);
 
-            splitter("##dbg_split_mem", false, splitter_at_cursor(false), &regs_h, &d.memory_height, 120.0f, 100.0f, w);
+            imgui::splitter("##dbg_split_mem", false, imgui::splitter_at_cursor(false), &regs_h, &d.memory_height, 120.0f, 100.0f, w);
 
             show_memory_panel(iris, ImVec2(0, d.memory_height), &d.memory_open);
         }
@@ -342,7 +304,7 @@ static void show_center_column(Instance* iris, ImVec2 size, bool ee, Debugger& d
 
             show_disassembly(iris, ImVec2(0, d.disasm_height), ee);
 
-            splitter("##dbg_split_disasm", false, splitter_at_cursor(false), &d.disasm_height, &logs_h, 140.0f, 100.0f, w);
+            imgui::splitter("##dbg_split_disasm", false, imgui::splitter_at_cursor(false), &d.disasm_height, &logs_h, 140.0f, 100.0f, w);
 
             show_logs_collapsible(iris, ImVec2(0, logs_h), d);
         }
@@ -372,14 +334,14 @@ static void show_layout(Instance* iris, bool ee, Debugger& d) {
     if (d.show_left) {
         float rest = avail.x - d.left_width;
 
-        splitter("##dbg_split_left", true, splitter_before(true, d.left_width), &d.left_width, &rest, 200.0f, min_center, avail.y);
+        imgui::splitter("##dbg_split_left", true, imgui::splitter_before(true, d.left_width), &d.left_width, &rest, 200.0f, min_center, avail.y);
 
         show_left_column(iris, ImVec2(d.left_width, avail.y), ee);
 
         SameLine();
     }
 
-    splitter("##dbg_split_right", true, splitter_before(true, center_w), &center_w, &d.right_width, min_center, 200.0f, avail.y);
+    imgui::splitter("##dbg_split_right", true, imgui::splitter_before(true, center_w), &center_w, &d.right_width, min_center, 200.0f, avail.y);
 
     show_center_column(iris, ImVec2(center_w, avail.y), ee, d);
 

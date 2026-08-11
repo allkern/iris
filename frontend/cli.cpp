@@ -163,6 +163,8 @@ static const EnumValue theme_values[] = {
     { "mocha", imgui::MOCHA },
     { "latte", imgui::LATTE },
     { "solarized", imgui::SOLARIZED },
+    { "sakura", imgui::SAKURA },
+    { "sakura-light", imgui::SAKURA_LIGHT },
     { nullptr, 0 }
 };
 

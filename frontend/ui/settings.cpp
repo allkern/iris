@@ -1397,6 +1397,17 @@ void show_usb_port(Instance* iris, int port) {
         }
 
         EndDisabled();
+
+        SameLine();
+
+        BeginDisabled(path.empty());
+
+        if (Button(ICON_MS_FOLDER_OPEN "##msdbrowse"))
+            browse_device(iris, FE_DEV_USB, port);
+
+        EndDisabled();
+
+        SetItemTooltip("Browse the files on this drive image");
     }
 }
 
@@ -1656,6 +1667,18 @@ void show_paths_settings(Instance* iris) {
         memset(hdd_buf, 0, 512);
     }
 
+    SameLine();
+
+    // Enabled once the APA reader lands
+    BeginDisabled(true);
+
+    if (Button(ICON_MS_FOLDER_OPEN "##hddbrowse"))
+        browse_device(iris, FE_DEV_HDD, 0);
+
+    EndDisabled();
+
+    SetItemTooltip("PS2 HDD (APA/PFS) browsing is not supported yet");
+
     Text("Flash memory (xfrom)");
 
     SetNextItemWidth(300);
@@ -1815,6 +1838,7 @@ void show_memory_card(Instance* iris, int slot) {
 
         char it_label[7] = "##mcd0";
         char bt_label[10] = ICON_MS_FOLDER "##mcd0";
+        char br_label[15] = ICON_MS_FOLDER_OPEN "##mcdbr0";
         char ed_label[10];
 
         snprintf(ed_label, 10, "%s##mcd0", iris->input.mcd_slot_type[slot] ? ICON_MS_ARROW_DOWNWARD : ICON_MS_ARROW_UPWARD);
@@ -1822,6 +1846,7 @@ void show_memory_card(Instance* iris, int slot) {
         it_label[5] = '0' + slot;
         bt_label[8] = '0' + slot;
         ed_label[8] = '0' + slot;
+        br_label[13] = '0' + slot;
 
         InputTextWithHint(it_label, hint, buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
         SameLine();
@@ -1860,6 +1885,17 @@ void show_memory_card(Instance* iris, int slot) {
         }
 
         EndDisabled();
+
+        SameLine();
+
+        BeginDisabled((!iris->input.mcd_slot_type[slot]) && (!path.size()));
+
+        if (Button(br_label))
+            browse_device(iris, FE_DEV_MCD, slot);
+
+        EndDisabled();
+
+        SetItemTooltip("Browse the files on this memory card");
     } EndChild();
 }
 
@@ -1891,7 +1927,9 @@ static const char* const theme_names[] = {
     "Tokyo Night",
     "Catppuccin Mocha",
     "Catppuccin Latte",
-    "Solarized Dark"
+    "Solarized Dark",
+    "Sakura",
+    "Sakura Light"
 };
 
 static_assert(IM_ARRAYSIZE(theme_names) == imgui::THEME_COUNT);
@@ -1934,6 +1972,7 @@ void show_misc_settings(Instance* iris) {
         THEME(imgui::TOKYO_NIGHT);
         THEME(imgui::MOCHA);
         THEME(imgui::SOLARIZED);
+        THEME(imgui::SAKURA);
         THEME(imgui::IMGUI_DARK);
         THEME(imgui::IMGUI_CLASSIC);
         THEME(imgui::CHERRY);
@@ -1945,6 +1984,7 @@ void show_misc_settings(Instance* iris) {
 
         THEME(imgui::GRANITE_NEO_LIGHT);
         THEME(imgui::LATTE);
+        THEME(imgui::SAKURA_LIGHT);
         THEME(imgui::IMGUI_LIGHT);
 
         EndCombo();
@@ -1966,7 +2006,7 @@ void show_misc_settings(Instance* iris) {
     Checkbox("Enable viewports", &iris->ui.imgui_enable_viewports); SameLine();
     PopStyleVar();
 
-    TextDisabled(ICON_MS_WARNING " Experimental feature, requires restart");
+    TextDisabled(ICON_MS_WARNING " requires restart");
 
 #ifdef _WIN32
     Text("Titlebar style (Windows only)");

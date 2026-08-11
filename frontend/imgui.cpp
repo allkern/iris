@@ -10,6 +10,7 @@
 #include <SDL3/SDL_vulkan.h>
 
 #include <array>
+#include <cstdarg>
 
 // External includes
 #include "res/IconsMaterialSymbols.h"
@@ -391,6 +392,80 @@ bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags,
     return selectable_rounded(label, false, p_selected, flags, size);
 }
 
+void TextDisabledCentered(const char* fmt, ...) {
+    char buf[1024];
+
+    va_list args;
+
+    va_start(args, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    ImVec2 size = ImGui::CalcTextSize(buf);
+    ImVec2 avail = ImGui::GetContentRegionAvail();
+
+    ImGui::SetCursorPos(ImVec2(
+        ImGui::GetCursorPosX() + std::max(0.0f, (avail.x - size.x) * 0.5f),
+        ImGui::GetCursorPosY() + std::max(0.0f, (avail.y - size.y) * 0.5f)
+    ));
+
+    ImGui::TextDisabled("%s", buf);
+}
+
+std::string format_size(uint64_t size) {
+    char buf[64];
+
+    if (size >= 0x40000000ull) {
+        snprintf(buf, sizeof(buf), "%.1f GiB", (double)size / 0x40000000ull);
+    } else if (size >= 0x100000ull) {
+        snprintf(buf, sizeof(buf), "%.1f MiB", (double)size / 0x100000ull);
+    } else if (size >= 0x400ull) {
+        snprintf(buf, sizeof(buf), "%.1f KiB", (double)size / 0x400ull);
+    } else {
+        snprintf(buf, sizeof(buf), "%llu B", (unsigned long long)size);
+    }
+
+    return std::string(buf);
+}
+
+bool splitter(const char* id, bool vertical, float place, float* size1, float* size2, float min1, float min2, float long_axis) {
+    using namespace ImGui;
+
+    constexpr float thickness = 1.0f;
+    constexpr float grab = 4.0f;
+
+    ImGuiWindow* window = GetCurrentWindow();
+
+    ImRect bb;
+
+    ImVec2 cursor = window->DC.CursorPos;
+    ImVec2 size = CalcItemSize(vertical ? ImVec2(thickness, long_axis) : ImVec2(long_axis, thickness), 0.0f, 0.0f);
+
+    bb.Min = ImVec2(cursor.x + (vertical ? place : 0.0f), cursor.y + (vertical ? 0.0f : place));
+    bb.Max = ImVec2(bb.Min.x + size.x, bb.Min.y + size.y);
+
+    PushStyleColor(ImGuiCol_SeparatorHovered, GetStyleColorVec4(ImGuiCol_Separator));
+    PushStyleColor(ImGuiCol_Separator, ImVec4(0.0, 0.0, 0.0, 0.0));
+
+    bool r = SplitterBehavior(bb, window->GetID(id), vertical ? ImGuiAxis_X : ImGuiAxis_Y, size1, size2, min1, min2, grab);
+
+    PopStyleColor(2);
+
+    return r;
+}
+
+float splitter_before(bool vertical, float size1) {
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    return size1 + ((vertical ? style.ItemSpacing.x : style.ItemSpacing.y) - 1.0f) * 0.5f;
+}
+
+float splitter_at_cursor(bool vertical) {
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    return -((vertical ? style.ItemSpacing.x : style.ItemSpacing.y) + 1.0f) * 0.5f;
+}
+
 bool segmented(const char* id, int* value, const char* const* labels, int count, float width) {
     using namespace ImGui;
 
@@ -499,6 +574,27 @@ bool BeginMenu(const char* label, bool enabled) {
     return open;
 }
 
+void badge(const char* text, const ImVec4& color, float bg_alpha) {
+    using namespace ImGui;
+
+    ImGuiStyle& style = GetStyle();
+    ImDrawList* draw_list = GetWindowDrawList();
+
+    ImVec2 padding = ImVec2(style.FramePadding.x * 0.75f, style.FramePadding.y * 0.5f);
+    ImVec2 size = CalcTextSize(text);
+    ImVec2 total = ImVec2(size.x + padding.x * 2.0f, size.y + padding.y * 2.0f);
+    ImVec2 origin = GetCursorScreenPos();
+
+    Dummy(total);
+
+    ImVec2 end = ImVec2(origin.x + total.x, origin.y + total.y);
+    float rounding = total.y * 0.5f;
+
+    draw_list->AddRectFilled(origin, end, GetColorU32(ImVec4(color.x, color.y, color.z, bg_alpha)), rounding);
+    draw_list->AddRect(origin, end, GetColorU32(ImVec4(color.x, color.y, color.z, bg_alpha * 2.5f)), rounding);
+    draw_list->AddText(ImVec2(origin.x + padding.x, origin.y + padding.y), GetColorU32(color), text);
+}
+
 namespace palette {
 
 constexpr ImVec4 rgb(int hex, float a = 1.0f) {
@@ -524,176 +620,216 @@ struct Palette {
 };
 
 constexpr Palette granite_dark = {
-    .app          = rgb(0x0b0b0d),
-    .window       = rgb(0x131316),
-    .popup        = rgb(0x19191d),
-    .frame        = rgb(0x202025),
-    .hover        = rgb(0x2b2b32),
-    .active       = rgb(0x373740),
-    .border       = rgb(0x28282e),
-    .text         = rgb(0xe6e6ec),
-    .text_dim     = rgb(0x8b8b96),
-    .accent       = rgb(0x8b5cf6),
-    .accent_hi    = rgb(0x9d75f8),
-    .link         = rgb(0x60a5fa),
-    .scroll       = rgb(0xffffff, 0.10f),
-    .scroll_hover = rgb(0xffffff, 0.18f),
-    .scroll_active= rgb(0xffffff, 0.26f),
-    .alt_row      = rgb(0xffffff, 0.022f),
-    .grip         = rgb(0xffffff, 0.06f),
-    .table_line   = rgb(0xffffff, 0.04f)
+    .app           = rgb(0x0b0b0d),
+    .window        = rgb(0x131316),
+    .popup         = rgb(0x19191d),
+    .frame         = rgb(0x202025),
+    .hover         = rgb(0x2b2b32),
+    .active        = rgb(0x373740),
+    .border        = rgb(0x28282e),
+    .text          = rgb(0xe6e6ec),
+    .text_dim      = rgb(0x8b8b96),
+    .accent        = rgb(0x8b5cf6),
+    .accent_hi     = rgb(0x9d75f8),
+    .link          = rgb(0x60a5fa),
+    .scroll        = rgb(0xffffff, 0.10f),
+    .scroll_hover  = rgb(0xffffff, 0.18f),
+    .scroll_active = rgb(0xffffff, 0.26f),
+    .alt_row       = rgb(0xffffff, 0.022f),
+    .grip          = rgb(0xffffff, 0.06f),
+    .table_line    = rgb(0xffffff, 0.04f)
 };
 
-// Surfaces invert but the ramp direction does too: on light, hovering a
-// control darkens it. The accent drops two steps so it still carries
-// contrast against a near-white background.
 constexpr Palette granite_light = {
-    .app          = rgb(0xe8e8ea),
-    .window       = rgb(0xf7f7f8),
-    .popup        = rgb(0xffffff),
-    .frame        = rgb(0xecedef),
-    .hover        = rgb(0xe0e0e5),
-    .active       = rgb(0xd2d2d9),
-    .border       = rgb(0xdcdce1),
-    .text         = rgb(0x1c1c21),
-    .text_dim     = rgb(0x6b6b75),
-    .accent       = rgb(0x7c3aed),
-    .accent_hi    = rgb(0x6d28d9),
-    .link         = rgb(0x2563eb),
-    .scroll       = rgb(0x000000, 0.16f),
-    .scroll_hover = rgb(0x000000, 0.26f),
-    .scroll_active= rgb(0x000000, 0.36f),
-    .alt_row      = rgb(0x000000, 0.028f),
-    .grip         = rgb(0x000000, 0.10f),
-    .table_line   = rgb(0x000000, 0.06f),
-    .light        = true
+    .app           = rgb(0xe8e8ea),
+    .window        = rgb(0xf7f7f8),
+    .popup         = rgb(0xffffff),
+    .frame         = rgb(0xecedef),
+    .hover         = rgb(0xe0e0e5),
+    .active        = rgb(0xd2d2d9),
+    .border        = rgb(0xdcdce1),
+    .text          = rgb(0x1c1c21),
+    .text_dim      = rgb(0x6b6b75),
+    .accent        = rgb(0x7c3aed),
+    .accent_hi     = rgb(0x6d28d9),
+    .link          = rgb(0x2563eb),
+    .scroll        = rgb(0x000000, 0.16f),
+    .scroll_hover  = rgb(0x000000, 0.26f),
+    .scroll_active = rgb(0x000000, 0.36f),
+    .alt_row       = rgb(0x000000, 0.028f),
+    .grip          = rgb(0x000000, 0.10f),
+    .table_line    = rgb(0x000000, 0.06f),
+    .light         = true
 };
 
 constexpr Palette nord = {
-    .app          = rgb(0x242933),
-    .window       = rgb(0x2e3440),
-    .popup        = rgb(0x3b4252),
-    .frame        = rgb(0x3b4252),
-    .hover        = rgb(0x434c5e),
-    .active       = rgb(0x4c566a),
-    .border       = rgb(0x434c5e),
-    .text         = rgb(0xeceff4),
-    .text_dim     = rgb(0x8b98b0),
-    .accent       = rgb(0x88c0d0),
-    .accent_hi    = rgb(0xa3d4e2),
-    .link         = rgb(0x81a1c1),
-    .scroll       = rgb(0xd8dee9, 0.14f),
-    .scroll_hover = rgb(0xd8dee9, 0.24f),
-    .scroll_active= rgb(0xd8dee9, 0.34f),
-    .alt_row      = rgb(0xd8dee9, 0.030f),
-    .grip         = rgb(0xd8dee9, 0.08f),
-    .table_line   = rgb(0xd8dee9, 0.06f)
+    .app           = rgb(0x242933),
+    .window        = rgb(0x2e3440),
+    .popup         = rgb(0x3b4252),
+    .frame         = rgb(0x3b4252),
+    .hover         = rgb(0x434c5e),
+    .active        = rgb(0x4c566a),
+    .border        = rgb(0x434c5e),
+    .text          = rgb(0xeceff4),
+    .text_dim      = rgb(0x8b98b0),
+    .accent        = rgb(0x88c0d0),
+    .accent_hi     = rgb(0xa3d4e2),
+    .link          = rgb(0x81a1c1),
+    .scroll        = rgb(0xd8dee9, 0.14f),
+    .scroll_hover  = rgb(0xd8dee9, 0.24f),
+    .scroll_active = rgb(0xd8dee9, 0.34f),
+    .alt_row       = rgb(0xd8dee9, 0.030f),
+    .grip          = rgb(0xd8dee9, 0.08f),
+    .table_line    = rgb(0xd8dee9, 0.06f)
 };
 
 constexpr Palette gruvbox = {
-    .app          = rgb(0x1d2021),
-    .window       = rgb(0x282828),
-    .popup        = rgb(0x32302f),
-    .frame        = rgb(0x3c3836),
-    .hover        = rgb(0x504945),
-    .active       = rgb(0x665c54),
-    .border       = rgb(0x3c3836),
-    .text         = rgb(0xebdbb2),
-    .text_dim     = rgb(0xa89984),
-    .accent       = rgb(0xfe8019),
-    .accent_hi    = rgb(0xffa04d),
-    .link         = rgb(0x83a598),
-    .scroll       = rgb(0xfbf1c7, 0.12f),
-    .scroll_hover = rgb(0xfbf1c7, 0.20f),
-    .scroll_active= rgb(0xfbf1c7, 0.30f),
-    .alt_row      = rgb(0xfbf1c7, 0.028f),
-    .grip         = rgb(0xfbf1c7, 0.07f),
-    .table_line   = rgb(0xfbf1c7, 0.05f)
+    .app           = rgb(0x1d2021),
+    .window        = rgb(0x282828),
+    .popup         = rgb(0x32302f),
+    .frame         = rgb(0x3c3836),
+    .hover         = rgb(0x504945),
+    .active        = rgb(0x665c54),
+    .border        = rgb(0x3c3836),
+    .text          = rgb(0xebdbb2),
+    .text_dim      = rgb(0xa89984),
+    .accent        = rgb(0xfe8019),
+    .accent_hi     = rgb(0xffa04d),
+    .link          = rgb(0x83a598),
+    .scroll        = rgb(0xfbf1c7, 0.12f),
+    .scroll_hover  = rgb(0xfbf1c7, 0.20f),
+    .scroll_active = rgb(0xfbf1c7, 0.30f),
+    .alt_row       = rgb(0xfbf1c7, 0.028f),
+    .grip          = rgb(0xfbf1c7, 0.07f),
+    .table_line    = rgb(0xfbf1c7, 0.05f)
 };
 
 constexpr Palette tokyo_night = {
-    .app          = rgb(0x16161e),
-    .window       = rgb(0x1a1b26),
-    .popup        = rgb(0x1f2335),
-    .frame        = rgb(0x24283b),
-    .hover        = rgb(0x292e42),
-    .active       = rgb(0x414868),
-    .border       = rgb(0x292e42),
-    .text         = rgb(0xc0caf5),
-    .text_dim     = rgb(0x6b7394),
-    .accent       = rgb(0x7aa2f7),
-    .accent_hi    = rgb(0x9db8ff),
-    .link         = rgb(0x7dcfff),
-    .scroll       = rgb(0xc0caf5, 0.12f),
-    .scroll_hover = rgb(0xc0caf5, 0.20f),
-    .scroll_active= rgb(0xc0caf5, 0.30f),
-    .alt_row      = rgb(0xc0caf5, 0.026f),
-    .grip         = rgb(0xc0caf5, 0.07f),
-    .table_line   = rgb(0xc0caf5, 0.05f)
+    .app           = rgb(0x16161e),
+    .window        = rgb(0x1a1b26),
+    .popup         = rgb(0x1f2335),
+    .frame         = rgb(0x24283b),
+    .hover         = rgb(0x292e42),
+    .active        = rgb(0x414868),
+    .border        = rgb(0x292e42),
+    .text          = rgb(0xc0caf5),
+    .text_dim      = rgb(0x6b7394),
+    .accent        = rgb(0x7aa2f7),
+    .accent_hi     = rgb(0x9db8ff),
+    .link          = rgb(0x7dcfff),
+    .scroll        = rgb(0xc0caf5, 0.12f),
+    .scroll_hover  = rgb(0xc0caf5, 0.20f),
+    .scroll_active = rgb(0xc0caf5, 0.30f),
+    .alt_row       = rgb(0xc0caf5, 0.026f),
+    .grip          = rgb(0xc0caf5, 0.07f),
+    .table_line    = rgb(0xc0caf5, 0.05f)
 };
 
 constexpr Palette mocha = {
-    .app          = rgb(0x11111b),
-    .window       = rgb(0x1e1e2e),
-    .popup        = rgb(0x181825),
-    .frame        = rgb(0x313244),
-    .hover        = rgb(0x45475a),
-    .active       = rgb(0x585b70),
-    .border       = rgb(0x313244),
-    .text         = rgb(0xcdd6f4),
-    .text_dim     = rgb(0x9399b2),
-    .accent       = rgb(0xcba6f7),
-    .accent_hi    = rgb(0xddc0ff),
-    .link         = rgb(0x89b4fa),
-    .scroll       = rgb(0xcdd6f4, 0.12f),
-    .scroll_hover = rgb(0xcdd6f4, 0.20f),
-    .scroll_active= rgb(0xcdd6f4, 0.30f),
-    .alt_row      = rgb(0xcdd6f4, 0.026f),
-    .grip         = rgb(0xcdd6f4, 0.07f),
-    .table_line   = rgb(0xcdd6f4, 0.05f)
+    .app           = rgb(0x11111b),
+    .window        = rgb(0x1e1e2e),
+    .popup         = rgb(0x181825),
+    .frame         = rgb(0x313244),
+    .hover         = rgb(0x45475a),
+    .active        = rgb(0x585b70),
+    .border        = rgb(0x313244),
+    .text          = rgb(0xcdd6f4),
+    .text_dim      = rgb(0x9399b2),
+    .accent        = rgb(0xcba6f7),
+    .accent_hi     = rgb(0xddc0ff),
+    .link          = rgb(0x89b4fa),
+    .scroll        = rgb(0xcdd6f4, 0.12f),
+    .scroll_hover  = rgb(0xcdd6f4, 0.20f),
+    .scroll_active = rgb(0xcdd6f4, 0.30f),
+    .alt_row       = rgb(0xcdd6f4, 0.026f),
+    .grip          = rgb(0xcdd6f4, 0.07f),
+    .table_line    = rgb(0xcdd6f4, 0.05f)
 };
 
 constexpr Palette latte = {
-    .app          = rgb(0xdce0e8),
-    .window       = rgb(0xeff1f5),
-    .popup        = rgb(0xfbfcfe),
-    .frame        = rgb(0xe6e9ef),
-    .hover        = rgb(0xdce0e8),
-    .active       = rgb(0xccd0da),
-    .border       = rgb(0xccd0da),
-    .text         = rgb(0x4c4f69),
-    .text_dim     = rgb(0x6c6f85),
-    .accent       = rgb(0x8839ef),
-    .accent_hi    = rgb(0x7024d4),
-    .link         = rgb(0x1e66f5),
-    .scroll       = rgb(0x4c4f69, 0.18f),
-    .scroll_hover = rgb(0x4c4f69, 0.28f),
-    .scroll_active= rgb(0x4c4f69, 0.38f),
-    .alt_row      = rgb(0x4c4f69, 0.030f),
-    .grip         = rgb(0x4c4f69, 0.10f),
-    .table_line   = rgb(0x4c4f69, 0.07f),
-    .light        = true
+    .app           = rgb(0xdce0e8),
+    .window        = rgb(0xeff1f5),
+    .popup         = rgb(0xfbfcfe),
+    .frame         = rgb(0xe6e9ef),
+    .hover         = rgb(0xdce0e8),
+    .active        = rgb(0xccd0da),
+    .border        = rgb(0xccd0da),
+    .text          = rgb(0x4c4f69),
+    .text_dim      = rgb(0x6c6f85),
+    .accent        = rgb(0x8839ef),
+    .accent_hi     = rgb(0x7024d4),
+    .link          = rgb(0x1e66f5),
+    .scroll        = rgb(0x4c4f69, 0.18f),
+    .scroll_hover  = rgb(0x4c4f69, 0.28f),
+    .scroll_active = rgb(0x4c4f69, 0.38f),
+    .alt_row       = rgb(0x4c4f69, 0.030f),
+    .grip          = rgb(0x4c4f69, 0.10f),
+    .table_line    = rgb(0x4c4f69, 0.07f),
+    .light         = true
 };
 
 constexpr Palette solarized = {
-    .app          = rgb(0x00212b),
-    .window       = rgb(0x002b36),
-    .popup        = rgb(0x073642),
-    .frame        = rgb(0x073642),
-    .hover        = rgb(0x0d4a59),
-    .active       = rgb(0x14606f),
-    .border       = rgb(0x0b414f),
-    .text         = rgb(0x93a1a1),
-    .text_dim     = rgb(0x657b83),
-    .accent       = rgb(0x268bd2),
-    .accent_hi    = rgb(0x4aa8e8),
-    .link         = rgb(0x2aa198),
-    .scroll       = rgb(0x93a1a1, 0.16f),
-    .scroll_hover = rgb(0x93a1a1, 0.26f),
-    .scroll_active= rgb(0x93a1a1, 0.36f),
-    .alt_row      = rgb(0x93a1a1, 0.030f),
-    .grip         = rgb(0x93a1a1, 0.08f),
-    .table_line   = rgb(0x93a1a1, 0.06f)
+    .app           = rgb(0x00212b),
+    .window        = rgb(0x002b36),
+    .popup         = rgb(0x073642),
+    .frame         = rgb(0x073642),
+    .hover         = rgb(0x0d4a59),
+    .active        = rgb(0x14606f),
+    .border        = rgb(0x0b414f),
+    .text          = rgb(0x93a1a1),
+    .text_dim      = rgb(0x657b83),
+    .accent        = rgb(0x268bd2),
+    .accent_hi     = rgb(0x4aa8e8),
+    .link          = rgb(0x2aa198),
+    .scroll        = rgb(0x93a1a1, 0.16f),
+    .scroll_hover  = rgb(0x93a1a1, 0.26f),
+    .scroll_active = rgb(0x93a1a1, 0.36f),
+    .alt_row       = rgb(0x93a1a1, 0.030f),
+    .grip          = rgb(0x93a1a1, 0.08f),
+    .table_line    = rgb(0x93a1a1, 0.06f)
+};
+
+constexpr Palette sakura = {
+    .app           = rgb(0x1a1017),
+    .window        = rgb(0x241820),
+    .popup         = rgb(0x2e1f29),
+    .frame         = rgb(0x3a2833),
+    .hover         = rgb(0x4b3341),
+    .active        = rgb(0x5e4050),
+    .border        = rgb(0x3d2a35),
+    .text          = rgb(0xf9e4ed),
+    .text_dim      = rgb(0xb692a3),
+    .accent        = rgb(0xff8fbc),
+    .accent_hi     = rgb(0xffb3d1),
+    .link          = rgb(0xc9a6ff),
+    .scroll        = rgb(0xffd7e6, 0.14f),
+    .scroll_hover  = rgb(0xffd7e6, 0.24f),
+    .scroll_active = rgb(0xffd7e6, 0.34f),
+    .alt_row       = rgb(0xffd7e6, 0.032f),
+    .grip          = rgb(0xffd7e6, 0.08f),
+    .table_line    = rgb(0xffd7e6, 0.06f)
+};
+
+constexpr Palette sakura_light = {
+    .app           = rgb(0xf0dde5),
+    .window        = rgb(0xfdf4f7),
+    .popup         = rgb(0xffffff),
+    .frame         = rgb(0xfbe9f0),
+    .hover         = rgb(0xf6d8e4),
+    .active        = rgb(0xeec5d6),
+    .border        = rgb(0xf3dbe4),
+    .text          = rgb(0x3d2430),
+    .text_dim      = rgb(0x8a6b78),
+    .accent        = rgb(0xd9497f),
+    .accent_hi     = rgb(0xbc3468),
+    .link          = rgb(0x7c4dd8),
+    .scroll        = rgb(0x6b2440, 0.16f),
+    .scroll_hover  = rgb(0x6b2440, 0.26f),
+    .scroll_active = rgb(0x6b2440, 0.36f),
+    .alt_row       = rgb(0x6b2440, 0.032f),
+    .grip          = rgb(0x6b2440, 0.10f),
+    .table_line    = rgb(0x6b2440, 0.07f),
+    .light         = true
 };
 
 static const Palette* find(int theme) {
@@ -706,6 +842,8 @@ static const Palette* find(int theme) {
         case Theme::MOCHA:             return &mocha;
         case Theme::LATTE:             return &latte;
         case Theme::SOLARIZED:         return &solarized;
+        case Theme::SAKURA:            return &sakura;
+        case Theme::SAKURA_LIGHT:      return &sakura_light;
     }
 
     return nullptr;
@@ -782,9 +920,6 @@ static void apply_palette(ImGuiStyle& style, const palette::Palette& p) {
     colors[ImGuiCol_ModalWindowDimBg]       = palette::rgb(0x000000, 0.55f);
 }
 
-// The hand-written themes below predate a good number of ImGuiCol slots. Rather than
-// leaving those on ImGui's default palette, every slot is flagged before the theme runs
-// and whatever it left untouched is derived from the colors it did set.
 static const ImVec4 unset_color(-1.0f, -1.0f, -1.0f, -1.0f);
 
 static void derive_unset_colors(ImGuiStyle& style, const ImVec4* fallback) {
@@ -805,7 +940,6 @@ static void derive_unset_colors(ImGuiStyle& style, const ImVec4* fallback) {
     const ImVec4 title = get(ImGuiCol_TitleBg);
     const ImVec4 title_hi = get(ImGuiCol_TitleBgActive);
 
-    // Cherry leaves Border fully transparent, which would make separators vanish
     const ImVec4 line = border.w < 0.05f ? alpha(text, 0.20f) : border;
 
     struct Rule { ImGuiCol idx; ImVec4 color; };
@@ -856,7 +990,6 @@ static void set_clear_color(Instance* iris, const ImVec4& c) {
     iris->vk.clear_value.color.float32[3] = 1.00f;
 }
 
-// Granite's original geometry: tighter, flatter, no window borders
 static void set_classic_geometry(ImGuiStyle& style) {
     style.WindowPadding           = ImVec2(8.0, 8.0);
     style.FramePadding            = ImVec2(5.0, 5.0);
@@ -1584,21 +1717,12 @@ void cleanup(Instance* iris) {
     iris->vk.instance = NULL;
 }
 
-// Between a successful acquire and a successful present there is no way to undo
-// a failure in place: the image stays acquired and the acquire semaphore may be
-// left signalled with nothing to wait on it. Re-entering the loop in that state
-// is what turns one transient failure into an endless stream of
-// VUID-vkAcquireNextImageKHR-{semaphore-01779,surface-07783}. Forcing a rebuild
-// is the only recovery, since CreateOrResizeWindow recreates the semaphores
-// along with the swapchain.
 static bool abort_frame(Instance* iris, const char* what, VkResult err) {
     iris_error(&iris->log.imgui, "{} ({})", what, (int)err);
 
     if (err == VK_ERROR_DEVICE_LOST) {
         vulkan::dump_device_fault(iris);
 
-        // Every subsequent call on this device would fail the same way, so stop
-        // rendering rather than rebuilding into the same error.
         iris->vk.device_lost = true;
 
         if (!iris->fatal_error) {
@@ -1640,7 +1764,6 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
 
         return true;
     } else if (err != VK_SUCCESS) {
-        // Nothing was acquired, so there is no swapchain state to unwind
         if (err == VK_ERROR_DEVICE_LOST)
             return abort_frame(iris, "Failed to acquire next image", err);
 

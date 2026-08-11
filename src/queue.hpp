@@ -6,8 +6,6 @@
 
 namespace iris::queue {
 
-// Reading advances an index instead of removing, so at() can address entries
-// relative to the read position. clear() is what actually reclaims storage.
 struct Queue {
     std::vector <uint32_t> buf;
     size_t index = 0;

@@ -704,8 +704,6 @@ VFAST_READ_FUNC(64)
 
 #undef VFAST_READ_FUNC
 
-// Materializes a baked host pointer into a register. Kept separate so every
-// folded access constructs its address the same way.
 static inline asmjit::ujit::Gp fold_base(asmjit::ujit::UniCompiler& uc, void* host) {
     asmjit::ujit::Gp base = uc.new_gp_ptr();
 
@@ -746,9 +744,6 @@ static inline void set_pc(Ee* ee, uint32_t addr) {
 void exception_level1(Ee* ee, uint32_t cause) {
     uint32_t vec = VEC_COMMON;
 
-    // Get a running region off a back edge promptly. Not load-bearing today --
-    // everything reaching here terminates its sub-block anyway -- but it keeps
-    // a region from looping on into a vector that has already been set.
     ee->exit_req = 1;
 
     switch (cause) {
@@ -1369,7 +1364,7 @@ static inline void i_lwr(Ee* ee, const Instruction& i) {
         // This special case requires sign extension into the full 64 bit dest.
         RT = (int32_t)data;
     } else {
-        // This case sets the lower 32 bits of the target register.  Upper
+        // This case sets the lower 32 bits of the target register. Upper
         // 32 bits are always preserved.
         RT32 = data;
     }
@@ -2294,8 +2289,6 @@ static inline void i_plzcw(Ee* ee, const Instruction& i) {
         ee->r[D_RD].u32[j] = (word ? (__builtin_clz(word) - 1) : 0x1f);
     }
 
-    // PLZCW only defines the low two words; normalize the upper half to zero so
-    // the JIT (which writes the whole 128-bit register) matches.
     ee->r[D_RD].u32[2] = 0;
     ee->r[D_RD].u32[3] = 0;
 }
@@ -2499,11 +2492,6 @@ static inline void i_pmsubw(Ee* ee, const Instruction& i) {
     int t = D_RT;
     int d = D_RD;
 
-    // Multiply-subtract counterpart of PMADDW, using PCSX2's recompiler
-    // semantics: full 64-bit accumulator (HI<<32)|LO minus the signed product,
-    // then split. Real hardware has an "off by one" multiplier quirk (PMSUBW
-    // divides by 0xFFFFFFFF instead of >>32); PCSX2's JIT ignores it, and this
-    // matches the JIT so the two stay in sync (see mmi::pmsubw).
     uint64_t r0 = (int64_t)ee->r[s].s32[0] * (int64_t)ee->r[t].s32[0];
     uint64_t r1 = (int64_t)ee->r[s].s32[2] * (int64_t)ee->r[t].s32[2];
 
@@ -3584,8 +3572,6 @@ Ee* create(logger::Logger* logger, int ram_size) {
     ee->logger_id = logger::register_source(logger, "ee");
     ee->ram_size = ram_size - 1;
 
-    // Inline load fast path: virtual-page -> host-pointer table, filled lazily.
-    // Null only if the allocation fails, in which case loads fall back to the bus.
     ee->vfast_r = (void**)calloc(VFAST_ENTRIES, sizeof(void*));
 
     ee->spr = ram::create(logger, 0x4000);

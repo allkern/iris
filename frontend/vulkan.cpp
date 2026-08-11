@@ -774,10 +774,17 @@ void free_texture(Instance* iris, Texture& tex) {
     if (!iris->vk.device)
         return;
 
+    // Textures are now released while the app is running, not only at shutdown,
+    // so any frame still referencing this descriptor set has to retire first
+    vkDeviceWaitIdle(iris->vk.device);
+
+    if (tex.descriptor_set) vkFreeDescriptorSets(iris->vk.device, iris->vk.descriptor_pool, 1, &tex.descriptor_set);
     if (tex.sampler) vkDestroySampler(iris->vk.device, tex.sampler, nullptr);
     if (tex.image_view) vkDestroyImageView(iris->vk.device, tex.image_view, nullptr);
     if (tex.image) vkDestroyImage(iris->vk.device, tex.image, nullptr);
     if (tex.image_memory) vkFreeMemory(iris->vk.device, tex.image_memory, nullptr);
+
+    tex = Texture();
 }
 
 bool init(Instance* iris, bool enable_validation) {

@@ -12,6 +12,7 @@
 #include "ui/control.hpp"
 #include "ui/debugger.hpp"
 #include "ui/dma.hpp"
+#include "ui/file_explorer.hpp"
 #include "ui/gs.hpp"
 #include "ui/gs_dump.hpp"
 #include "ui/hdd_tool.hpp"
@@ -58,6 +59,7 @@ struct Applets {
     PadDebugger pad_debugger;
     MemoryCardTool memory_card_tool;
     HddTool hdd_tool;
+    FileExplorer file_explorer;
     GsDumpTool gs_dump_tool;
     BiosSetting bios_setting;
     SettingsWindow settings;

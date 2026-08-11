@@ -915,11 +915,8 @@ static inline void jit_function_call_impl(asmjit::ujit::UniCompiler* uc, Func fu
     auto args_tuple = std::forward_as_tuple(std::forward<Args>(args)...);
 
     if constexpr (std::is_same_v<R, void>) {
-        // All variadic args are call arguments.
         (call->set_arg(I, std::get<I>(args_tuple)), ...);
     } else {
-        // The first variadic arg is the return-value destination; the rest are
-        // the call arguments. I ranges over [0, sizeof...(Args) - 1).
         call->set_ret(0, std::get<0>(args_tuple));
 
         (call->set_arg(I, std::get<I + 1>(args_tuple)), ...);
@@ -930,8 +927,6 @@ template <class Func, class... Args>
 static inline void jit_function_call(asmjit::ujit::UniCompiler* uc, Func func, Args&&... args) {
     using R = typename function_traits<Func>::return_type;
 
-    // Non-void calls reserve the first variadic arg for the return destination,
-    // so they emit one fewer set_arg() than they have variadic args.
     constexpr std::size_t arg_count =
         std::is_same_v<R, void> ? sizeof...(Args) : sizeof...(Args) - 1;
 
@@ -1015,9 +1010,6 @@ static inline void sextn(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& 
     uc.sar(reg.r32(), reg.r32(), asmjit::Imm(shift));
 }
 
-// Materialize a multiply operand into a freshly-allocated 64-bit register,
-// extended from 32 bits (sign-extended for MULT, zero-extended for MULTU).
-// Constant cache entries are folded into the (already extended) immediate.
 static inline asmjit::ujit::Gp mul_load_operand(asmjit::ujit::UniCompiler& uc, const CachedReg& c, bool is_signed) {
     asmjit::ujit::Gp r = uc.new_gp64();
 
@@ -1026,9 +1018,6 @@ static inline asmjit::ujit::Gp mul_load_operand(asmjit::ujit::UniCompiler& uc, c
 
         uc.mov(r, asmjit::Imm(v));
     } else {
-        // Place the value in the low half, then extend with a 64-bit shift pair.
-        // The shl writes the full 64-bit register (discarding any stale upper
-        // bits), so the result never depends on implicit zero-extension.
         uc.mov(r.r32(), c.reg);
         uc.shl(r, r, asmjit::Imm(32));
 
@@ -1042,9 +1031,6 @@ static inline asmjit::ujit::Gp mul_load_operand(asmjit::ujit::UniCompiler& uc, c
     return r;
 }
 
-// Return a 32-bit register holding the cached value: the cache register itself
-// when live, or a freshly-materialized constant. The result is read-only, so
-// callers must not write through it (it may alias a cached register).
 static inline asmjit::ujit::Gp value_to_gp32(asmjit::ujit::UniCompiler& uc, const CachedReg& c) {
     if (!c.constant)
         return c.reg;
@@ -1106,13 +1092,8 @@ void compile_block(Iop* iop, Block* block) {
                     case IOP_I_LW: func = bus_read32; break;
                 }
 
-                // If RS and RT are the same, alloc_store_reg will change the constant bool
-                // to indicate that the register is no longer constant. We assign the result
-                // of alloc_load_reg by value to preserve the constant bool and the
-                // constant value for the following call.
                 CachedReg s = alloc_load_reg(iop, &uc, S);
 
-                // If RT is zero we should emit a call and discard the result
                 if (!T) {
                     InvokeNode* call;
 
@@ -1158,25 +1139,15 @@ void compile_block(Iop* iop, Block* block) {
             case IOP_I_LWR: {
                 const bool is_lwl = ins.id == IOP_I_LWL;
 
-                // Copy by value so the constant flags survive the store-reg
-                // allocation below (which may reallocate when S aliases T).
                 CachedReg s = alloc_load_reg(iop, &uc, S);
                 CachedReg t = alloc_load_reg(iop, &uc, T);
 
-                // LWL/LWR read the aligned word and splice it into the current
-                // RT value (RT is both source and destination). The bus read
-                // stays a call; the byte merge is emitted inline. This matches
-                // the interpreter's no-load-delay behaviour: RT updates now.
                 if (s.constant) {
-                    // The address (and thus the byte shift) is known at compile
-                    // time, so the mask and shifts all fold to immediates.
                     const uint32_t addr = s.value + ins.imm16s;
                     const uint32_t aligned = addr & 0xfffffffc;
                     const uint32_t shift = (addr & 0x3) << 3;
-                    const uint32_t mask = is_lwl ? (0x00ffffffu >> shift)
-                                                 : (0xffffff00u << (24 - shift));
+                    const uint32_t mask = is_lwl ? (0x00ffffffu >> shift) : (0xffffff00u << (24 - shift));
 
-                    // RT == $zero: read for side effects and discard the merge.
                     if (!T) {
                         InvokeNode* call;
 
@@ -1196,7 +1167,6 @@ void compile_block(Iop* iop, Block* block) {
 
                     jit_function_call(&uc, bus_read32, load, iop->ptr, Imm(aligned));
 
-                    // loaded_part = LWL ? load << (24 - shift) : load >> shift
                     if (is_lwl) {
                         if (uint32_t c = 24 - shift) uc.shl(load, load, Imm(c));
                     } else {
@@ -1217,7 +1187,6 @@ void compile_block(Iop* iop, Block* block) {
                     break;
                 }
 
-                // General case: the byte shift depends on the runtime address.
                 ujit::Gp addr = uc.new_gp32();
 
                 uc.add(addr, s.reg, Imm(ins.imm16s));
@@ -1237,7 +1206,6 @@ void compile_block(Iop* iop, Block* block) {
                 uc.mov(inv, Imm(24));
                 uc.sub(inv, inv, shift);
 
-                // RT == $zero: read for side effects and discard the merge.
                 if (!T) {
                     InvokeNode* call;
 
@@ -1253,8 +1221,6 @@ void compile_block(Iop* iop, Block* block) {
                     break;
                 }
 
-                // Capture the old RT value before allocating the destination
-                // (which may reuse t's register).
                 ujit::Gp rt = value_to_gp32(uc, t);
 
                 ujit::Gp load = uc.new_gp32();
@@ -1264,12 +1230,10 @@ void compile_block(Iop* iop, Block* block) {
                 ujit::Gp mask = uc.new_gp32();
 
                 if (is_lwl) {
-                    // mask = 0x00ffffff >> shift ; load <<= (24 - shift)
                     uc.mov(mask, Imm(0x00ffffff));
                     uc.shr(mask, mask, shift);
                     uc.shl(load, load, inv);
                 } else {
-                    // mask = 0xffffff00 << (24 - shift) ; load >>= shift
                     uc.mov(mask, Imm(0xffffff00));
                     uc.shl(mask, mask, inv);
                     uc.shr(load, load, shift);
@@ -1341,20 +1305,11 @@ void compile_block(Iop* iop, Block* block) {
                 CachedReg s = alloc_load_reg(iop, &uc, S);
                 CachedReg t = alloc_load_reg(iop, &uc, T);
 
-                // SWL/SWR are read-modify-write: read the aligned word, splice
-                // in the shifted RT bytes, write it back. The bus accesses stay
-                // calls (they route through the bus + SMC invalidation); the
-                // byte splicing is emitted inline. No SR_ISC guard here: SWL/SWR
-                // are never emitted by the cache-flush routines that run with the
-                // cache isolated, so the check would only ever cost cycles.
                 if (s.constant) {
-                    // The address (and thus the byte shift) is known at compile
-                    // time, so the masks and shifts all fold to immediates.
                     const uint32_t addr = s.value + ins.imm16s;
                     const uint32_t aligned = addr & 0xfffffffc;
                     const uint32_t shift = (addr & 0x3) << 3;
-                    const uint32_t mask = is_swl ? (0xffffff00u << shift)
-                                                 : (0x00ffffffu >> (24 - shift));
+                    const uint32_t mask = is_swl ? (0xffffff00u << shift) : (0x00ffffffu >> (24 - shift));
 
                     ujit::Gp load = uc.new_gp32();
 
@@ -1365,8 +1320,7 @@ void compile_block(Iop* iop, Block* block) {
                     uc.and_(value, load, Imm(mask));
 
                     if (t.constant) {
-                        const uint32_t part = is_swl ? (t.value >> (24 - shift))
-                                                     : (t.value << shift);
+                        const uint32_t part = is_swl ? (t.value >> (24 - shift)) : (t.value << shift);
 
                         uc.or_(value, value, Imm(part));
                     } else {
@@ -1386,8 +1340,6 @@ void compile_block(Iop* iop, Block* block) {
                     break;
                 }
 
-                // General case: the byte shift depends on the runtime address,
-                // so the masks and merges use variable shifts.
                 ujit::Gp addr = uc.new_gp32();
 
                 uc.add(addr, s.reg, Imm(ins.imm16s));
@@ -1396,7 +1348,6 @@ void compile_block(Iop* iop, Block* block) {
 
                 uc.and_(aligned, addr, Imm(0xfffffffc));
 
-                // shift = (addr & 3) << 3 ; inv = 24 - shift
                 ujit::Gp shift = uc.new_gp32();
 
                 uc.and_(shift, addr, Imm(0x3));
@@ -1416,12 +1367,11 @@ void compile_block(Iop* iop, Block* block) {
                 ujit::Gp value = uc.new_gp32();
 
                 if (is_swl) {
-                    // mask = 0xffffff00 << shift ; value = t >> (24 - shift)
                     uc.mov(mask, Imm(0xffffff00));
                     uc.shl(mask, mask, shift);
                     uc.shr(value, t_reg, inv);
                 } else {
-                    // mask = 0x00ffffff >> (24 - shift) ; value = t << shift
+                    // mask = 0x00ffffff >> (24 - shift) ; vale = t << shift
                     uc.mov(mask, Imm(0x00ffffff));
                     uc.shr(mask, mask, inv);
                     uc.shl(value, t_reg, shift);
@@ -1811,7 +1761,6 @@ void compile_block(Iop* iop, Block* block) {
             } break;
 
             case IOP_I_BNE: {
-                // RS != RT with S = T never happens
                 if (S == T)
                     break;
 

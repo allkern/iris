@@ -162,6 +162,20 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     dbg.disasm_height = debugger["dbg_disasm_height"].value_or(dbg.disasm_height);
     dbg.memory_height = debugger["dbg_memory_height"].value_or(dbg.memory_height);
 
+    FileExplorer& fe = iris->applets.file_explorer;
+
+    fe.sidebar_width = debugger["fe_sidebar_width"].value_or(fe.sidebar_width);
+    fe.raw_view = debugger["fe_raw_view"].value_or(fe.raw_view);
+    fe.hide_ecc = debugger["fe_hide_ecc"].value_or(fe.hide_ecc);
+    fe.show_deleted = debugger["fe_show_deleted"].value_or(fe.show_deleted);
+    fe.show_hidden = debugger["fe_show_hidden"].value_or(fe.show_hidden);
+    fe.preview_height = debugger["fe_preview_height"].value_or(fe.preview_height);
+    fe.show_preview = debugger["fe_show_preview"].value_or(fe.show_preview);
+    fe.sort_column = debugger["fe_sort_column"].value_or(fe.sort_column);
+    fe.sort_ascending = debugger["fe_sort_ascending"].value_or(fe.sort_ascending);
+    fe.last_extract_dir = debugger["fe_last_extract_dir"].value_or("");
+    fe.last_device = debugger["fe_last_device"].value_or("");
+
     auto usb = tbl["usb"];
     iris->input.usb_devices[0] = usb["port1_device"].value_or(usb::USB_DEVICE_NONE);
     iris->input.usb_devices[1] = usb["port2_device"].value_or(usb::USB_DEVICE_NONE);
@@ -189,10 +203,10 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     }
 
     auto network = tbl["network"];
-    iris->slirp_config.enabled    = network["enabled"].value_or(true);
-    iris->slirp_config.network    = network["network"].value_or("10.0.2.0");
-    iris->slirp_config.netmask    = network["netmask"].value_or("255.255.255.0");
-    iris->slirp_config.gateway    = network["gateway"].value_or("10.0.2.2");
+    iris->slirp_config.enabled = network["enabled"].value_or(true);
+    iris->slirp_config.network = network["network"].value_or("10.0.2.0");
+    iris->slirp_config.netmask = network["netmask"].value_or("255.255.255.0");
+    iris->slirp_config.gateway = network["gateway"].value_or("10.0.2.2");
     iris->slirp_config.dhcp_start = network["dhcp_start"].value_or("10.0.2.15");
     iris->slirp_config.nameserver = network["nameserver"].value_or("10.0.2.3");
 
@@ -230,7 +244,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->ui.codeview_color_scheme = ui["codeview_color_scheme"].value_or(imgui::CodeviewColorScheme::SOLARIZED_DARK);
     iris->ui.codeview_use_theme_background = ui["codeview_use_theme_background"].value_or(true);
     iris->ui.ui_scale = ui["scale"].value_or(1.0f);
-    iris->ui.imgui_enable_viewports = ui["enable_viewports"].value_or(false);
+    iris->ui.imgui_enable_viewports = ui["enable_viewports"].value_or(true);
 
     toml::array* bgcolor = tbl["ui"]["bgcolor"].as_array();
 
@@ -245,7 +259,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     }
 
 #ifdef _WIN32
-    iris->windows_titlebar_style = tbl["ui"]["windows_titlebar_style"].value_or(IRIS_TITLEBAR_DEFAULT);
+    iris->windows_titlebar_style = tbl["ui"]["windows_titlebar_style"].value_or(IRIS_TITLEBAR_SEAMLESS);
     iris->windows_enable_borders = tbl["ui"]["windows_enable_borders"].value_or(true);
     iris->windows_dark_mode = tbl["ui"]["windows_dark_mode"].value_or(true);
 #endif
@@ -571,6 +585,20 @@ void save(Instance* iris) {
         debugger_tbl->insert_or_assign("dbg_right_width", dbg.right_width);
         debugger_tbl->insert_or_assign("dbg_disasm_height", dbg.disasm_height);
         debugger_tbl->insert_or_assign("dbg_memory_height", dbg.memory_height);
+
+        const FileExplorer& fe = iris->applets.file_explorer;
+
+        debugger_tbl->insert_or_assign("fe_sidebar_width", fe.sidebar_width);
+        debugger_tbl->insert_or_assign("fe_raw_view", fe.raw_view);
+        debugger_tbl->insert_or_assign("fe_hide_ecc", fe.hide_ecc);
+        debugger_tbl->insert_or_assign("fe_show_deleted", fe.show_deleted);
+        debugger_tbl->insert_or_assign("fe_show_hidden", fe.show_hidden);
+        debugger_tbl->insert_or_assign("fe_preview_height", fe.preview_height);
+        debugger_tbl->insert_or_assign("fe_show_preview", fe.show_preview);
+        debugger_tbl->insert_or_assign("fe_sort_column", fe.sort_column);
+        debugger_tbl->insert_or_assign("fe_sort_ascending", fe.sort_ascending);
+        debugger_tbl->insert_or_assign("fe_last_extract_dir", fe.last_extract_dir);
+        debugger_tbl->insert_or_assign("fe_last_device", fe.last_device);
     }
 
     file << tbl;
