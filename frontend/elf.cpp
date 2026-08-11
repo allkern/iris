@@ -8,8 +8,9 @@
 #include <elf.h>
 #else
 #include "elf.h"
-#include "ps2.hpp"
 #endif
+
+#include "ps2.hpp"
 
 namespace iris::elf {
 
