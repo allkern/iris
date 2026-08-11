@@ -1707,7 +1707,18 @@ void show_paths_settings(Instance* iris) {
         iris->paths.flash_path = "";
 
         memset(flash_buf, 0, 512);
-    } 
+    }
+
+    SameLine();
+
+    BeginDisabled(!iris->paths.flash_path.size());
+
+    if (Button(ICON_MS_FOLDER_OPEN "##xfrombrowse"))
+        browse_device(iris, FE_DEV_XFROM, 0);
+
+    EndDisabled();
+
+    SetItemTooltip("Browse the files on the internal flash");
 
     if (Button(ICON_MS_SAVE " Save")) {
         std::string bios_path = buf;

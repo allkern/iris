@@ -16,6 +16,7 @@ enum : int {
     FE_DEV_USB,
     FE_DEV_DISC,
     FE_DEV_HDD,
+    FE_DEV_XFROM,
     FE_DEV_IMAGE
 };
 

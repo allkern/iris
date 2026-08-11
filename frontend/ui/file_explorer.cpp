@@ -44,6 +44,7 @@ std::string file_explorer_device_key(const FileExplorerDevice& dev) {
         case FE_DEV_USB: return "usb" + std::to_string(dev.index);
         case FE_DEV_DISC: return "disc";
         case FE_DEV_HDD: return "hdd";
+        case FE_DEV_XFROM: return "xfrom";
     }
 
     return "image:" + dev.path;
@@ -61,6 +62,13 @@ static iop::disc::Disc* live_disc(Instance* iris) {
         return nullptr;
 
     return iris->ps2->cdvd->disc;
+}
+
+static speed::flash::Flash* live_flash(Instance* iris) {
+    if (!iris->ps2 || !iris->ps2->speed || !iris->ps2->speed->flash)
+        return nullptr;
+
+    return iris->ps2->speed->flash->id ? iris->ps2->speed->flash : nullptr;
 }
 
 static bool looks_like_disc(const std::string& path) {
@@ -181,6 +189,17 @@ static void enumerate(Instance* iris, FileExplorer* fe) {
     hdd.available = hdd.live || hdd.path.size();
 
     fe->devices.push_back(hdd);
+
+    FileExplorerDevice xfrom;
+
+    xfrom.kind = FE_DEV_XFROM;
+    xfrom.path = iris->paths.flash_path;
+    xfrom.label = "Flash (XFROM)";
+    xfrom.live = live_flash(iris) != nullptr;
+    xfrom.available = xfrom.live || xfrom.path.size();
+    xfrom.detail = xfrom.live ? "PSX internal flash" : "";
+
+    fe->devices.push_back(xfrom);
 
     for (const FileExplorerDevice& image : fe->images)
         fe->devices.push_back(image);
@@ -527,6 +546,16 @@ void FileExplorer::open_device(const FileExplorerDevice& dev) {
 
     if (dev.kind == FE_DEV_HDD && iris->ps2 && iris->ps2->speed && iris->ps2->speed->ata)
         raw = fs::blk::open_ata(iris->logger, &iris->ps2->speed->ata->hdd);
+
+    if (dev.kind == FE_DEV_XFROM) {
+        live_udata = live_flash(iris);
+
+        if (live_udata) {
+            speed::flash::Flash* flash = (speed::flash::Flash*)live_udata;
+
+            raw = fs::blk::open_memory(iris->logger, flash->file, speed::flash::CARD_SIZE_ECC, false);
+        }
+    }
 
     if (!raw && !disc && dev.path.size())
         raw = fs::blk::open_file(iris->logger, dev.path.c_str());
@@ -926,7 +955,8 @@ static void show_sidebar(Instance* iris, FileExplorer* fe) {
             dev.kind == FE_DEV_MCD ? ICON_MS_SD_CARD :
             dev.kind == FE_DEV_USB ? ICON_MS_USB :
             dev.kind == FE_DEV_DISC ? ICON_MS_ALBUM :
-            dev.kind == FE_DEV_HDD ? ICON_MS_HARD_DRIVE : ICON_MS_FOLDER_ZIP;
+            dev.kind == FE_DEV_HDD ? ICON_MS_HARD_DRIVE :
+            dev.kind == FE_DEV_XFROM ? ICON_MS_MEMORY : ICON_MS_FOLDER_ZIP;
 
         ImU32 normal = GetColorU32(ImGuiCol_Text);
         ImU32 dim = GetColorU32(ImGuiCol_TextDisabled);
@@ -935,7 +965,8 @@ static void show_sidebar(Instance* iris, FileExplorer* fe) {
         float y = origin.y + style.FramePadding.y;
         float right = origin.x + width - style.FramePadding.x;
 
-        float tag = dev.live ? CalcTextSize("live").x + style.ItemInnerSpacing.x * 2.0f : 0.0f;
+        float dot = line * 0.2f;
+        float tag = dev.live ? dot * 2.0f + style.ItemInnerSpacing.x * 2.0f : 0.0f;
 
         std::string title = elide(std::string(glyph) + "  " + dev.label,
             width - style.FramePadding.x * 2.0f - tag);
@@ -943,7 +974,7 @@ static void show_sidebar(Instance* iris, FileExplorer* fe) {
         draw->AddText(ImVec2(x, y), normal, title.c_str());
 
         if (dev.live)
-            draw->AddText(ImVec2(right - CalcTextSize("live").x, y), dim, "live");
+            draw->AddCircleFilled(ImVec2(right - dot, y + line * 0.5f), dot, GetColorU32(IM_COL32(90, 200, 110, 255)));
 
         float indent = CalcTextSize(glyph).x + CalcTextSize("  ").x;
 
@@ -1441,6 +1472,9 @@ void FileExplorer::on_render() {
     using namespace ImGui;
 
     if (blk && device.kind == FE_DEV_MCD && mcd_udata(iris, device.index) != live_udata)
+        open_device(device);
+
+    if (blk && device.kind == FE_DEV_XFROM && live_flash(iris) != live_udata)
         open_device(device);
 
     enumerate(iris, this);
