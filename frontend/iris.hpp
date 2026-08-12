@@ -306,6 +306,7 @@ struct Instance {
     std::mutex log_mutex;
     bool log_to_console = true;
     bool log_to_file = true;
+    logger::Level log_level = logger::LEVEL_INFO;
     FILE* log_file = nullptr;
     std::string log_file_path = "";
     std::vector <size_t> frontend_log_sources;

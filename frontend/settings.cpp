@@ -134,16 +134,17 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     auto audio = tbl["audio"];
     iris->audio.mute = audio["mute"].value_or(false);
     iris->audio.volume = audio["volume"].value_or(1.0);
-    iris->audio.mute_adma = audio["mute_adma"].value_or(true);
+    iris->audio.mute_adma = audio["mute_adma"].value_or(false);
 
     auto debugger = tbl["debugger"];
     iris->ui.show_status_bar = debugger["show_status_bar"].value_or(true);
     iris->ui.show_overlay = debugger["show_overlay"].value_or(false);
     iris->ui.show_imgui_demo = debugger["show_imgui_demo"].value_or(false);
     iris->skip_fmv = debugger["skip_fmv"].value_or(false);
-    iris->timescale = debugger["timescale"].value_or(2);
+    iris->timescale = debugger["timescale"].value_or(1);
     iris->log_to_console = debugger["log_to_console"].value_or(true);
     iris->log_to_file = debugger["log_to_file"].value_or(true);
+    iris->log_level = log_level_from_name(debugger["log_level"].value_or(std::string("info")));
 
     for (Applet* a : iris->applets.all) {
         if (a->persist)
@@ -452,7 +453,8 @@ void save(Instance* iris) {
             { "skip_fmv", iris->skip_fmv },
             { "timescale", iris->timescale },
             { "log_to_console", iris->log_to_console },
-            { "log_to_file", iris->log_to_file }
+            { "log_to_file", iris->log_to_file },
+            { "log_level", log_level_name(iris->log_level) }
         } },
         { "display", toml::table {
             { "scale", iris->scale },

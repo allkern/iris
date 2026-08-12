@@ -26,6 +26,18 @@ size_t register_callback(Logger* logger, CallbackFunc func, void* udata) {
     return logger->callbacks.back().id;
 }
 
+void set_level(Logger* logger, Level level) {
+    if (!logger) return;
+
+    logger->level = level;
+}
+
+Level get_level(Logger* logger) {
+    if (!logger) return Level::INFO;
+
+    return logger->level;
+}
+
 void destroy(Logger* logger) {
     delete logger;
 }

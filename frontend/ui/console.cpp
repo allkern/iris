@@ -83,11 +83,31 @@ void Console::on_render() {
         }
 
         if (imgui::BeginMenu("Level")) {
+            SeparatorText("Show");
+
             for (int i = 0; i < IM_ARRAYSIZE(level_values); i++) {
                 PushStyleColor(ImGuiCol_Text, log_level_color(level_values[i]));
 
-                if (imgui::MenuItem(log_level_name(level_values[i]), nullptr, min_level == i))
+                std::string label = fmt::format("{}##show", log_level_name(level_values[i]));
+
+                if (imgui::MenuItem(label.c_str(), nullptr, min_level == i))
                     min_level = i;
+
+                PopStyleColor();
+            }
+
+            SeparatorText("Capture");
+
+            for (logger::Level level : level_values) {
+                PushStyleColor(ImGuiCol_Text, log_level_color(level));
+
+                std::string label = fmt::format("{}##capture", log_level_name(level));
+
+                if (imgui::MenuItem(label.c_str(), nullptr, iris->log_level == level)) {
+                    iris->log_level = level;
+
+                    logger::set_level(iris->logger, level);
+                }
 
                 PopStyleColor();
             }

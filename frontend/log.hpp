@@ -25,6 +25,7 @@ struct LogEntry {
 const char* log_level_name(logger::Level level);
 const char* log_level_ansi(logger::Level level);
 ImVec4 log_level_color(logger::Level level);
+logger::Level log_level_from_name(const std::string& name);
 
 struct Instance;
 

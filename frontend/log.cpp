@@ -41,6 +41,15 @@ ImVec4 log_level_color(logger::Level level) {
     return ImVec4(1.00f, 1.00f, 1.00f, 1.00f);
 }
 
+logger::Level log_level_from_name(const std::string& name) {
+    for (int i = (int)logger::LEVEL_DEBUG; i <= (int)logger::LEVEL_FATAL_ERROR; i++) {
+        if (name == log_level_name((logger::Level)i))
+            return (logger::Level)i;
+    }
+
+    return logger::LEVEL_INFO;
+}
+
 void log_write_file(Instance* iris, const LogEntry& entry) {
     if (!iris->log_file)
         return;
@@ -65,6 +74,8 @@ void log_close_file(Instance* iris) {
 }
 
 void log_apply_settings(Instance* iris) {
+    logger::set_level(iris->logger, iris->log_level);
+
     if (!iris->log_to_file || iris->paths.log_path.empty()) {
         log_close_file(iris);
 

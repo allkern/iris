@@ -42,9 +42,7 @@ struct Logger {
     std::vector <Source> sources;
     std::vector <Callback> callbacks;
 
-    // Anything below this is dropped without being formatted, so trace-level
-    // logging in hot paths costs a comparison.
-    Level min_level = Level::INFO;
+    Level level = Level::INFO;
 
     Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -53,6 +51,8 @@ struct Logger {
 Logger* create();
 size_t register_source(Logger* logger, const std::string& name);
 size_t register_callback(Logger* logger, CallbackFunc func, void* udata);
+void set_level(Logger* logger, Level level);
+Level get_level(Logger* logger);
 void destroy(Logger* logger);
 
 const std::vector <Source>& get_sources(const Logger* logger);
@@ -61,7 +61,7 @@ const std::vector <Callback>& get_callbacks(const Logger* logger);
 template <typename... Args>
 void log(Logger* logger, Level level, size_t source, fmt::format_string<Args...> fmt, Args&&... args) {
     if (!logger) return;
-    if (level < logger->min_level) return;
+    if (level < logger->level) return;
 
     std::string text = fmt::format(fmt, std::forward<Args>(args)...);
 
@@ -69,19 +69,12 @@ void log(Logger* logger, Level level, size_t source, fmt::format_string<Args...>
         callback.func(callback.udata, level, logger->sources[source], text);
 }
 
-// The #undef above only holds until the next Windows header. A translation unit
-// that reaches one after this file -- anything including SDL, say -- gets ERROR
-// back as a macro, which would mangle Level::ERROR inside the macros below. They
-// go through these instead, resolved here where the name is known to be clean.
 inline constexpr Level LEVEL_DEBUG = Level::DEBUG;
 inline constexpr Level LEVEL_INFO = Level::INFO;
 inline constexpr Level LEVEL_OK = Level::OK;
 inline constexpr Level LEVEL_WARNING = Level::WARNING;
 inline constexpr Level LEVEL_ERROR = Level::ERROR;
 inline constexpr Level LEVEL_FATAL_ERROR = Level::FATAL_ERROR;
-
-// These take the owning struct rather than a logger, and read the logger
-// and logger_id members every module is expected to carry.
 
 #define iris_log(src, level, fmt, ...) ::iris::logger::log((src)->logger, level, (src)->logger_id, fmt, ##__VA_ARGS__)
 #define iris_info(src, fmt, ...) ::iris::logger::log((src)->logger, ::iris::logger::LEVEL_INFO, (src)->logger_id, fmt, ##__VA_ARGS__)
