@@ -187,6 +187,30 @@ void set_vsync(Instance* iris, bool vsync) {
     render::refresh(iris);
 }
 
+static void (*g_platform_set_window_size)(ImGuiViewport*, ImVec2) = nullptr;
+
+// Note: SDL resizes platform windows async. ImGui calls Platform_SetWindowSize and then
+//       immediately hands the viewport to Renderer_SetWindowSize, which asks the surface
+//       for its capabilities to size the new swapchain. Under X11 the server has usually
+//       not applied the resize yet, so the swapchain gets built against the stale extent,
+//       and doing that on a swapchain that has already presented is enough to make the
+//       graphics driver lose the device, so we flush the resize before the renderer looks
+static void install_viewport_resize_sync() {
+    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+
+    if (!platform_io.Platform_SetWindowSize || g_platform_set_window_size)
+        return;
+
+    g_platform_set_window_size = platform_io.Platform_SetWindowSize;
+
+    platform_io.Platform_SetWindowSize = [](ImGuiViewport* viewport, ImVec2 size) {
+        g_platform_set_window_size(viewport, size);
+
+        if (SDL_Window* window = SDL_GetWindowFromID((SDL_WindowID)(intptr_t)viewport->PlatformHandle))
+            SDL_SyncWindow(window);
+    };
+}
+
 bool setup_fonts(Instance* iris, ImGuiIO& io) {
     io.Fonts->AddFontDefault();
 
@@ -1638,6 +1662,8 @@ bool init(Instance* iris) {
 
         return false;
     }
+
+    install_viewport_resize_sync();
 
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.ApiVersion = IRIS_VULKAN_API_VERSION;
