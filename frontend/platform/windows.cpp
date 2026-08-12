@@ -54,10 +54,9 @@ bool init(Instance* iris) {
     return true;
 }
 
-bool apply_settings(Instance* iris) {
-    SDL_PropertiesID props = SDL_GetWindowProperties(iris->window);
-
-    HWND hwnd = (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL);
+static bool apply_to_window(Instance* iris, HWND hwnd) {
+    if (!hwnd)
+        return false;
 
     COLORREF border_color = iris->windows_enable_borders ? DWMWA_COLOR_DEFAULT : DWMWA_COLOR_NONE;
 
@@ -71,7 +70,7 @@ bool apply_settings(Instance* iris) {
     }
 
     if (iris->windows_titlebar_style == IRIS_TITLEBAR_DEFAULT) {
-        BOOL dark_mode = iris->windows_dark_mode;
+        BOOL dark_mode = iris->dark_titlebar;
 
         if (!SUCCEEDED(DwmSetWindowAttribute(
             hwnd,
@@ -119,6 +118,23 @@ bool apply_settings(Instance* iris) {
 
     // ShowWindow(hwnd, SW_MINIMIZE);
     // ShowWindow(hwnd, SW_RESTORE);
+
+    return result;
+}
+
+bool apply_settings(Instance* iris) {
+    SDL_PropertiesID props = SDL_GetWindowProperties(iris->window);
+
+    bool result = apply_to_window(iris, (HWND)SDL_GetPointerProperty(props, SDL_PROP_WINDOW_WIN32_HWND_POINTER, NULL));
+
+    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+
+    for (int i = 1; i < platform_io.Viewports.Size; i++) {
+        HWND hwnd = (HWND)platform_io.Viewports[i]->PlatformHandleRaw;
+
+        if (hwnd)
+            result &= apply_to_window(iris, hwnd);
+    }
 
     return result;
 }

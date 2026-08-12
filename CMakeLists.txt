@@ -448,6 +448,14 @@ endif()
 if (WIN32)
     target_link_libraries(iris PRIVATE dwmapi)
     target_sources(iris PRIVATE frontend/platform/windows.cpp)
+elseif (APPLE)
+    set_source_files_properties(frontend/platform/macos.mm PROPERTIES
+        LANGUAGE CXX
+        COMPILE_OPTIONS "-x;objective-c++"
+    )
+
+    target_link_libraries(iris PRIVATE "-framework AppKit")
+    target_sources(iris PRIVATE frontend/platform/macos.mm)
 else()
     target_sources(iris PRIVATE frontend/platform/stub.cpp)
 endif()

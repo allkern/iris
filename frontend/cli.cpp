@@ -447,8 +447,10 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->windows_titlebar_style, (int)v.integer); }, titlebar_values },
     { "window-borders", 0, FLAG, nullptr, "Draw a border around the window",
         [](Instance* i, const Value& v) { set(i, i->windows_enable_borders, v.flag); } },
+#endif
+#ifdef IRIS_HAS_DARK_TITLEBAR
     { "dark-mode", 0, FLAG, nullptr, "Use the dark window frame",
-        [](Instance* i, const Value& v) { set(i, i->windows_dark_mode, v.flag); } },
+        [](Instance* i, const Value& v) { set(i, i->dark_titlebar, v.flag); } },
 #endif
 
     { nullptr, 0, FLAG, nullptr, "Vulkan" },

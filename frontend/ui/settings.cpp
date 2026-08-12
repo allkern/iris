@@ -2122,18 +2122,26 @@ void show_misc_settings(Instance* iris) {
 
         EndCombo();
     }
+#endif
 
+#ifdef IRIS_HAS_DARK_TITLEBAR
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
+#ifdef _WIN32
     BeginDisabled(iris->windows_titlebar_style != IRIS_TITLEBAR_DEFAULT);
-    if (Checkbox(" Immersive dark mode", &iris->windows_dark_mode)) {
+#endif
+
+    if (Checkbox(" Dark titlebar", &iris->dark_titlebar)) {
         platform::apply_settings(iris);
     }
+
+#ifdef _WIN32
     EndDisabled();
 
     if (Checkbox(" Show window borders", &iris->windows_enable_borders)) {
         platform::apply_settings(iris);
     }
+#endif
 
     PopStyleVar();
 #endif

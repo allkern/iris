@@ -370,7 +370,10 @@ struct Instance {
 #ifdef _WIN32
     int windows_titlebar_style = IRIS_TITLEBAR_SEAMLESS;
     bool windows_enable_borders = true;
-    bool windows_dark_mode = true;
+#endif
+
+#ifdef IRIS_HAS_DARK_TITLEBAR
+    bool dark_titlebar = true;
 #endif
 
 };

@@ -211,6 +211,25 @@ static void install_viewport_resize_sync() {
     };
 }
 
+static void (*g_platform_create_window)(ImGuiViewport*) = nullptr;
+static Instance* g_platform_iris = nullptr;
+
+static void install_viewport_window_style(Instance* iris) {
+    ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+
+    if (!platform_io.Platform_CreateWindow || g_platform_create_window)
+        return;
+
+    g_platform_iris = iris;
+    g_platform_create_window = platform_io.Platform_CreateWindow;
+
+    platform_io.Platform_CreateWindow = [](ImGuiViewport* viewport) {
+        g_platform_create_window(viewport);
+
+        platform::apply_settings(g_platform_iris);
+    };
+}
+
 bool setup_fonts(Instance* iris, ImGuiIO& io) {
     io.Fonts->AddFontDefault();
 
@@ -1664,6 +1683,7 @@ bool init(Instance* iris) {
     }
 
     install_viewport_resize_sync();
+    install_viewport_window_style(iris);
 
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.ApiVersion = IRIS_VULKAN_API_VERSION;

@@ -262,7 +262,10 @@ bool parse_toml_settings(Instance* iris, bool reset) {
 #ifdef _WIN32
     iris->windows_titlebar_style = tbl["ui"]["windows_titlebar_style"].value_or(IRIS_TITLEBAR_SEAMLESS);
     iris->windows_enable_borders = tbl["ui"]["windows_enable_borders"].value_or(true);
-    iris->windows_dark_mode = tbl["ui"]["windows_dark_mode"].value_or(true);
+#endif
+
+#ifdef IRIS_HAS_DARK_TITLEBAR
+    iris->dark_titlebar = tbl["ui"]["dark_titlebar"].value_or(tbl["ui"]["windows_dark_mode"].value_or(true));
 #endif
 
     toml::array* recents = tbl["recents"]["array"].as_array();
@@ -486,7 +489,9 @@ void save(Instance* iris) {
 #ifdef _WIN32
             { "windows_titlebar_style", iris->windows_titlebar_style },
             { "windows_enable_borders", iris->windows_enable_borders },
-            { "windows_dark_mode", iris->windows_dark_mode },
+#endif
+#ifdef IRIS_HAS_DARK_TITLEBAR
+            { "dark_titlebar", iris->dark_titlebar },
 #endif
         } },
         { "audio", toml::table {
