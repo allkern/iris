@@ -1414,6 +1414,12 @@ void show_usb_port(Instance* iris, int port) {
 void show_usb_settings(Instance* iris) {
     using namespace ImGui;
 
+    if (Button(ICON_MS_EDIT " Create drive image...")) {
+        iris->applets.media_tool.open_for(MEDIA_USB_DRIVE);
+    }
+
+    Separator();
+
     if (BeginTabBar("##usbtabs")) {
         if (BeginTabItem("Port 1")) {
             show_usb_port(iris, 0);
@@ -1792,6 +1798,73 @@ void SettingsWindow::on_open() {
 static char slot0_buf[1024];
 static char slot1_buf[1024];
 
+static int format_slot = -1;
+static bool format_pending = false;
+
+static void draw_format_prompt(Instance* iris) {
+    using namespace ImGui;
+
+    if (format_slot == -1)
+        return;
+
+    if (format_pending) {
+        OpenPopup("###formatprompt");
+
+        format_pending = false;
+    }
+
+    ImGuiWindowFlags flags = ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+
+    if (GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable && !GetIO().ConfigViewportsNoDecoration)
+        flags |= ImGuiWindowFlags_NoTitleBar;
+
+    ImGuiWindowClass window_class;
+
+    window_class.ViewportFlagsOverrideSet = ImGuiViewportFlags_NoAutoMerge;
+
+    SetNextWindowClass(&window_class);
+    SetNextWindowPos(GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+
+    if (!BeginPopupModal("Format memory card###formatprompt", nullptr, flags))
+        return;
+
+    const std::string& path = format_slot ? iris->paths.mcd1_path : iris->paths.mcd0_path;
+
+    PushFont(iris->ui.font_heading);
+    Text("Slot %d", format_slot + 1);
+    PopFont();
+
+    Spacing();
+
+    TextUnformatted(path.c_str());
+
+    Spacing();
+    TextDisabled(ICON_MS_WARNING " Every save on this card will be lost.");
+    Spacing();
+    Separator();
+    Spacing();
+
+    if (Button("Format")) {
+        if (emu::format_memory_card(iris, format_slot)) {
+            push_info(iris, "Memory card formatted successfully.");
+        } else {
+            push_info(iris, "Failed to format memory card.");
+        }
+
+        format_slot = -1;
+
+        CloseCurrentPopup();
+    } SameLine();
+
+    if (Button("Cancel")) {
+        format_slot = -1;
+
+        CloseCurrentPopup();
+    }
+
+    EndPopup();
+}
+
 void show_memory_card(Instance* iris, int slot) {
     using namespace ImGui;
 
@@ -1850,6 +1923,7 @@ void show_memory_card(Instance* iris, int slot) {
         char it_label[7] = "##mcd0";
         char bt_label[10] = ICON_MS_FOLDER "##mcd0";
         char br_label[15] = ICON_MS_FOLDER_OPEN "##mcdbr0";
+        char fm_label[15] = ICON_MS_DELETE_SWEEP "##mcdfm0";
         char ed_label[10];
 
         snprintf(ed_label, 10, "%s##mcd0", iris->input.mcd_slot_type[slot] ? ICON_MS_ARROW_DOWNWARD : ICON_MS_ARROW_UPWARD);
@@ -1857,7 +1931,8 @@ void show_memory_card(Instance* iris, int slot) {
         it_label[5] = '0' + slot;
         bt_label[8] = '0' + slot;
         ed_label[8] = '0' + slot;
-        br_label[13] = '0' + slot;
+        br_label[10] = '0' + slot;
+        fm_label[10] = '0' + slot;
 
         InputTextWithHint(it_label, hint, buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
         SameLine();
@@ -1907,6 +1982,19 @@ void show_memory_card(Instance* iris, int slot) {
         EndDisabled();
 
         SetItemTooltip("Browse the files on this memory card");
+
+        SameLine();
+
+        BeginDisabled(path.empty());
+
+        if (Button(fm_label)) {
+            format_slot = slot;
+            format_pending = true;
+        }
+
+        EndDisabled();
+
+        SetItemTooltip("Format this memory card, erasing every save on it");
     } EndChild();
 }
 
@@ -1914,14 +2002,15 @@ void show_memory_card_settings(Instance* iris) {
     using namespace ImGui;
 
     if (Button(ICON_MS_EDIT " Create memory cards...")) {
-        // Launch memory card utility
-        iris->applets.memory_card_tool.show();
+        iris->applets.media_tool.open_for(MEDIA_MEMORY_CARD);
     }
 
     Separator();
 
     show_memory_card(iris, 0); SameLine(0.0, 10.0);
     show_memory_card(iris, 1);
+
+    draw_format_prompt(iris);
 }
 
 static const char* const theme_names[] = {

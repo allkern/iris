@@ -264,11 +264,10 @@ target_sources(iris PRIVATE
     frontend/ui/gamelist.cpp
     frontend/ui/gs.cpp
     frontend/ui/gs_dump.cpp
-    frontend/ui/hdd_tool.cpp
     frontend/ui/intc.cpp
     frontend/ui/logs.cpp
+    frontend/ui/media_tool.cpp
     frontend/ui/memory.cpp
-    frontend/ui/memory_card_tool.cpp
     frontend/ui/memory_search.cpp
     frontend/ui/menubar.cpp
     frontend/ui/modules.cpp
@@ -311,6 +310,7 @@ target_sources(iris PRIVATE
     src/fs/fat.cpp
     src/fs/fs.cpp
     src/fs/iso9660.cpp
+    src/fs/mkfs.cpp
     src/fs/part.cpp
     src/fs/pfs.cpp
     src/fs/ps1mcd.cpp

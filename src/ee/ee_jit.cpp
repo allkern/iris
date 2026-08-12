@@ -19,6 +19,8 @@
 #include "ee_fpu.hpp"
 #include "ee_lsw.hpp"
 
+#include "../jit_invoke.hpp"
+
 namespace iris::ee {
 
 #define max(a, b) ((a) > (b) ? (a) : (b))
@@ -4739,7 +4741,9 @@ void compile_block(Ee* ee, Block* block) {
     CodeHolder code;
 
     code.init(ee->rt.environment(), ee->rt.cpu_features());
-    // code.set_logger(ee->jit_logger);
+
+    // if (logger::get_level(ee->logger) == logger::LEVEL_DEBUG)
+    //     code.set_logger(ee->jit_logger);
 
     // if (code.logger()) {
     //     iris_debug(ee, "---------------------------------- Block at PC={:08x}, {} sub-blocks, {} instructions", block->start_pc, ee->sub_blocks.size(), block->instructions.size());
@@ -5444,10 +5448,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u32(skip_fmv_reg, EE(fmv_skip));
                     uc.j(L0, ujit::test_z(skip_fmv_reg));
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)skip_fmv,
                         FuncSignature::build<int, Ee*, uint32_t>()
                     );
@@ -5487,10 +5489,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u32(skip_fmv_reg, EE(fmv_skip));
                     uc.j(L0, ujit::test_z(skip_fmv_reg));
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)skip_fmv,
                         FuncSignature::build<int, Ee*, uint32_t>()
                     );
@@ -5860,11 +5860,9 @@ void compile_block(Ee* ee, Block* block) {
                     uc.mov(addr, Imm((int32_t)(int16_t)i.i16));
                     uc.add(addr, addr, rs.reg.r32());
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
-                        bus_read32,
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
+                        (uintptr_t)bus_read32,
                         FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
 
@@ -5885,10 +5883,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.add(addr, addr, rs.reg.r32());
                     uc.load_u32(val, EE(f[i.rt.r]));
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)bus_write32,
                         FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
                     );
@@ -6159,10 +6155,8 @@ void compile_block(Ee* ee, Block* block) {
                         uc.j(done);
                         uc.bind(slow);
 
-                        InvokeNode* slow_node;
-
-                        bc.invoke(
-                            Out(slow_node),
+                        InvokeNode* slow_node = jit_invoke(
+                            uc,
                             slow_func,
                             FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
@@ -6191,10 +6185,8 @@ void compile_block(Ee* ee, Block* block) {
                         uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
                         uc.add(tmp, tmp, rs.reg.r32());
 
-                        InvokeNode* invoke_node;
-
-                        bc.invoke(
-                            Out(invoke_node),
+                        InvokeNode* invoke_node = jit_invoke(
+                            uc,
                             func,
                             FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
@@ -6214,10 +6206,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
                     uc.add(tmp, tmp, rs.reg.r32());
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         func,
                         FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
@@ -6254,10 +6244,8 @@ void compile_block(Ee* ee, Block* block) {
 
                     ujit::Gp data = uc.new_gp64();
 
-                    InvokeNode* rd_node;
-
-                    bc.invoke(
-                        Out(rd_node),
+                    InvokeNode* rd_node = jit_invoke(
+                        uc,
                         (uintptr_t)bus_read64,
                         FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
@@ -6389,10 +6377,8 @@ void compile_block(Ee* ee, Block* block) {
                         uc.j(done);
                         uc.bind(slow);
 
-                        InvokeNode* slow_node;
-
-                        bc.invoke(
-                            Out(slow_node),
+                        InvokeNode* slow_node = jit_invoke(
+                            uc,
                             slow_func,
                             FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
@@ -6415,10 +6401,8 @@ void compile_block(Ee* ee, Block* block) {
                         uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
                         uc.add(tmp, tmp, rs.reg.r32());
 
-                        InvokeNode* invoke_node;
-
-                        bc.invoke(
-                            Out(invoke_node),
+                        InvokeNode* invoke_node = jit_invoke(
+                            uc,
                             func,
                             FuncSignature::build<uint64_t, Ee*, uint32_t>()
                         );
@@ -6439,10 +6423,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.mov(tmp, Imm((int32_t)(int16_t)i.i16));
                     uc.add(tmp, tmp, rs.reg.r32());
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         func,
                         FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
@@ -6476,10 +6458,8 @@ void compile_block(Ee* ee, Block* block) {
 
                     uc.lea(ptr, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + rt * sizeof(uint128_t)));
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)jit_read128,
                         FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
@@ -6530,10 +6510,8 @@ void compile_block(Ee* ee, Block* block) {
                                 uc.load_u8(pgv, ujit::mem_ptr(pgp, offsetof(CachePage, valid)));
                                 uc.j(no_smc, ujit::test_z(pgv));
 
-                                InvokeNode* inv_node;
-
-                                bc.invoke(
-                                    Out(inv_node),
+                                InvokeNode* inv_node = jit_invoke(
+                                    uc,
                                     (uintptr_t)invalidate_page,
                                     FuncSignature::build<void, Ee*, uint32_t>()
                                 );
@@ -6565,10 +6543,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.mov(tmp1, Imm((int32_t)(int16_t)i.i16));
                     uc.add(tmp1, tmp1, rs.reg);
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         func,
                         FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
                     );
@@ -6596,10 +6572,8 @@ void compile_block(Ee* ee, Block* block) {
 
                     ujit::Gp data = uc.new_gp64();
 
-                    InvokeNode* rd_node;
-
-                    bc.invoke(
-                        Out(rd_node),
+                    InvokeNode* rd_node = jit_invoke(
+                        uc,
                         (uintptr_t)bus_read64,
                         FuncSignature::build<uint64_t, Ee*, uint32_t>()
                     );
@@ -6643,10 +6617,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.and_(store_val, data, mask);
                     uc.or_(store_val, store_val, rtsh);
 
-                    InvokeNode* wr_node;
-
-                    bc.invoke(
-                        Out(wr_node),
+                    InvokeNode* wr_node = jit_invoke(
+                        uc,
                         (uintptr_t)bus_write64,
                         FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
                     );
@@ -6671,10 +6643,8 @@ void compile_block(Ee* ee, Block* block) {
 
                     uc.lea(ptr, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i.rt.r * sizeof(uint128_t)));
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)jit_write128,
                         FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
@@ -6702,10 +6672,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u64(ptr, EE(vu0));
                     uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + rt * sizeof(vu::Reg128))));
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)jit_read128,
                         FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
@@ -6729,10 +6697,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u64(ptr, EE(vu0));
                     uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + i.rt.r * sizeof(vu::Reg128))));
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)jit_write128,
                         FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
                     );
@@ -7479,10 +7445,8 @@ void compile_block(Ee* ee, Block* block) {
 
                     uc.load_u64(vu, EE(vu0));
 
-                    InvokeNode* inv;
-
-                    bc.invoke(
-                        Out(inv),
+                    InvokeNode* inv = jit_invoke(
+                        uc,
                         (uintptr_t)vu::read_vi,
                         FuncSignature::build<uint32_t, void*, int32_t>()
                     );
@@ -7508,10 +7472,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.mov(val, rt.reg.r32());
                     uc.load_u64(vu, EE(vu0));
 
-                    InvokeNode* inv;
-
-                    bc.invoke(
-                        Out(inv),
+                    InvokeNode* inv = jit_invoke(
+                        uc,
                         (uintptr_t)vu::write_vi,
                         FuncSignature::build<void, void*, int32_t, uint32_t>()
                     );
@@ -7521,10 +7483,8 @@ void compile_block(Ee* ee, Block* block) {
                     inv->set_arg(2, val);
 
                     if (i.opcode & 1) {
-                        InvokeNode* inv_lock;
-
-                        bc.invoke(
-                            Out(inv_lock),
+                        InvokeNode* inv_lock = jit_invoke(
+                            uc,
                             (uintptr_t)vu::is_interlocked,
                             FuncSignature::build<int32_t, void*>()
                         );
@@ -7539,10 +7499,8 @@ void compile_block(Ee* ee, Block* block) {
 
                         uc.j(l_skip, ujit::test_z(locked));
 
-                        InvokeNode* inv_exec;
-
-                        bc.invoke(
-                            Out(inv_exec),
+                        InvokeNode* inv_exec = jit_invoke(
+                            uc,
                             (uintptr_t)vu::execute_program_tpc,
                             FuncSignature::build<void, void*>()
                         );
@@ -7586,10 +7544,8 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u32(fs, EE(fmv_skip));
                     uc.j(l_store, ujit::test_z(fs));
 
-                    InvokeNode* eret_inv;
-
-                    bc.invoke(
-                        Out(eret_inv),
+                    InvokeNode* eret_inv = jit_invoke(
+                        uc,
                         (uintptr_t)skip_fmv,
                         FuncSignature::build<int, Ee*, uint32_t>()
                     );
@@ -7660,9 +7616,7 @@ void compile_block(Ee* ee, Block* block) {
                     uc.and_(aligned, addr, Imm(~3));
                     uc.and_(shift, addr, Imm(3));
 
-                    InvokeNode* rd;
-
-                    bc.invoke(Out(rd), (uintptr_t)bus_read32, FuncSignature::build<uint64_t, Ee*, uint32_t>());
+                    InvokeNode* rd = jit_invoke(uc, (uintptr_t)bus_read32, FuncSignature::build<uint64_t, Ee*, uint32_t>());
                     rd->set_arg(0, ee->state_ptr);
                     rd->set_arg(1, aligned);
                     rd->set_ret(0, mem);
@@ -7681,9 +7635,7 @@ void compile_block(Ee* ee, Block* block) {
                         
                         uc.mov(val64.r32(), val);
 
-                        InvokeNode* wr;
-
-                        bc.invoke(Out(wr), (uintptr_t)bus_write32, FuncSignature::build<void, Ee*, uint32_t, uint64_t>());
+                        InvokeNode* wr = jit_invoke(uc, (uintptr_t)bus_write32, FuncSignature::build<void, Ee*, uint32_t, uint64_t>());
                         wr->set_arg(0, ee->state_ptr);
                         wr->set_arg(1, aligned);
                         wr->set_arg(2, val64);
@@ -7693,10 +7645,8 @@ void compile_block(Ee* ee, Block* block) {
                 default: {
                     flush_reg_cache(ee, &uc);
 
-                    InvokeNode* invoke_node;
-
-                    bc.invoke(
-                        Out(invoke_node),
+                    InvokeNode* invoke_node = jit_invoke(
+                        uc,
                         (uintptr_t)i.func,
                         FuncSignature::build<void, Ee*, Instruction&>()
                     );
@@ -7776,18 +7726,26 @@ void compile_block(Ee* ee, Block* block) {
         ds.pc = block->start_pc;
 
         for (const auto& i : block->instructions) {
-            iris_error(ee, "  {:08x}: {:08x}  {}", ds.pc, i.opcode, dis::disassemble(buf, i.opcode, &ds));
+            iris_error(ee, "  {}", dis::disassemble(buf, i.opcode, &ds));
 
             ds.pc += 4;
         }
 
         iris_fatal_error(ee, "Failed to finalize JIT compilation ({})", DebugUtils::error_as_string(err));
+
+        block->func = nullptr;
+
+        return;
     }
 
     Error err1 = ee->rt.add(&block->func, &code);
 
     if (err1 != Error::kOk) {
         iris_fatal_error(ee, "Failed to add JIT code to runtime ({})", DebugUtils::error_as_string(err1));
+
+        block->func = nullptr;
+
+        return;
     }
 
     // if (code.logger()) {
@@ -7801,7 +7759,7 @@ void compile_block(Ee* ee, Block* block) {
     //     iris_debug(ee, "\n <------- Guest disassembly for block at PC=0x{:08x}:", block->start_pc);
 
     //     for (const auto& i : block->instructions) {
-    //         puts(dis::disassemble(buf, i.opcode, &ds));
+    //         iris_debug(ee, "{}", dis::disassemble(buf, i.opcode, &ds));
 
     //         ds.pc += 4;
     //     }
@@ -7843,6 +7801,8 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
         } else {
             ee->cache_hits++;
         }
+
+        if (!block->func) break;
 
         ee->block_pc = ee->pc;
         ee->pc = block->end_pc - 4;

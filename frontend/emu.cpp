@@ -4,6 +4,7 @@
 
 #include "miniz.h"
 #include "ps2.hpp"
+#include "fs/mkfs.hpp"
 
 #include <filesystem>
 #include <algorithm>
@@ -341,6 +342,42 @@ bool load_arcade(Instance* iris, std::string path) {
     }
 
     return false;
+}
+
+static int memory_card_type(const char* path) {
+    FILE* file = fopen(path, "rb");
+
+    if (!file)
+        return fs::mkfs::MKFS_PS2_MCD;
+
+    fseek(file, 0, SEEK_END);
+    long size = ftell(file);
+    fclose(file);
+
+    return size < 0x800000 ? fs::mkfs::MKFS_PS1_MCD : fs::mkfs::MKFS_PS2_MCD;
+}
+
+int format_memory_card(Instance* iris, int slot) {
+    const std::string& path = slot ? iris->paths.mcd1_path : iris->paths.mcd0_path;
+
+    if (path.empty())
+        return 0;
+
+    bool attached = iris->input.mcd_slot_type[slot];
+
+    if (attached)
+        detach_memory_card(iris, slot);
+
+    fs::mkfs::Params params;
+
+    params.type = memory_card_type(path.c_str());
+
+    int r = fs::mkfs::format(iris->logger, path.c_str(), params);
+
+    if (attached)
+        attach_memory_card(iris, slot, path.c_str());
+
+    return r == fs::FS_OK;
 }
 
 int attach_memory_card(Instance* iris, int slot, const char* path) {

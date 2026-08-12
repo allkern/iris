@@ -441,12 +441,8 @@ static void show_tools_menu(Instance* iris) {
             iris->applets.gs_dump_tool.show();
         }
 
-        if (imgui::MenuItem(ICON_MS_SD_CARD " Memory Card tool")) {
-            iris->applets.memory_card_tool.show();
-        }
-
-        if (imgui::MenuItem(ICON_MS_HARD_DRIVE " HDD tool")) {
-            iris->applets.hdd_tool.show();
+        if (imgui::MenuItem(ICON_MS_SD_CARD " Create media image...")) {
+            iris->applets.media_tool.show();
         }
 
         if (imgui::MenuItem(ICON_MS_FOLDER_OPEN " File Explorer")) {

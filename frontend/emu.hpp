@@ -30,6 +30,7 @@ void finalize_load(Instance* iris);
 bool load_arcade(Instance* iris, std::string path);
 int attach_memory_card(Instance* iris, int slot, const char* path);
 void detach_memory_card(Instance* iris, int slot);
+int format_memory_card(Instance* iris, int slot);
 const char* get_system_name(Instance* iris, int system);
 const char* get_current_system_name(Instance* iris);
 int get_system_count(Instance* iris);

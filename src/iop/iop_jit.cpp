@@ -7,8 +7,11 @@
 #include "iop_dis.hpp"
 
 #include "iop_export.hpp"
+
 #include <functional>
 #include <type_traits>
+
+#include "../jit_invoke.hpp"
 
 namespace iris::iop {
 
@@ -904,10 +907,8 @@ static inline void jit_function_call_impl(asmjit::ujit::UniCompiler* uc, Func fu
     using namespace asmjit;
     using R = typename function_traits<Func>::return_type;
 
-    InvokeNode* call;
-
-    uc->cc->invoke(
-        Out(call),
+    InvokeNode* call = jit_invoke(
+        *uc,
         (uintptr_t)func,
         jit_build_signature(func)
     );
@@ -1048,7 +1049,9 @@ void compile_block(Iop* iop, Block* block) {
     CodeHolder code;
 
     code.init(iop->rt.environment(), iop->rt.cpu_features());
-    // code.set_logger(iop->jit_logger);
+
+    // if (logger::get_level(iop->logger) == logger::LEVEL_DEBUG)
+    //     code.set_logger(iop->jit_logger);
 
     ujit::BackendCompiler bc(&code);
     ujit::UniCompiler uc(&bc, iop->rt.cpu_features(), iop->rt.cpu_hints());
@@ -1095,10 +1098,8 @@ void compile_block(Iop* iop, Block* block) {
                 CachedReg s = alloc_load_reg(iop, &uc, S);
 
                 if (!T) {
-                    InvokeNode* call;
-
-                    bc.invoke(
-                        Out(call),
+                    InvokeNode* call = jit_invoke(
+                        uc,
                         (uintptr_t)func,
                         FuncSignature::build<void, Iop*, uint32_t>()
                     );
@@ -1149,10 +1150,8 @@ void compile_block(Iop* iop, Block* block) {
                     const uint32_t mask = is_lwl ? (0x00ffffffu >> shift) : (0xffffff00u << (24 - shift));
 
                     if (!T) {
-                        InvokeNode* call;
-
-                        bc.invoke(
-                            Out(call),
+                        InvokeNode* call = jit_invoke(
+                            uc,
                             (uintptr_t)bus_read32,
                             FuncSignature::build<void, Iop*, uint32_t>()
                         );
@@ -1207,10 +1206,8 @@ void compile_block(Iop* iop, Block* block) {
                 uc.sub(inv, inv, shift);
 
                 if (!T) {
-                    InvokeNode* call;
-
-                    bc.invoke(
-                        Out(call),
+                    InvokeNode* call = jit_invoke(
+                        uc,
                         (uintptr_t)bus_read32,
                         FuncSignature::build<void, Iop*, uint32_t>()
                     );
@@ -2197,12 +2194,20 @@ void compile_block(Iop* iop, Block* block) {
 
     if (err != Error::kOk) {
         iris_fatal_error(iop, "Failed to finalize JIT compilation ({})", DebugUtils::error_as_string(err));
+
+        block->func = nullptr;
+
+        return;
     }
 
     Error err1 = iop->rt.add(&block->func, &code);
 
     if (err1 != Error::kOk) {
         iris_fatal_error(iop, "Failed to add JIT code to runtime ({})", DebugUtils::error_as_string(err1));
+
+        block->func = nullptr;
+
+        return;
     }
 
     // if (code.logger()) {
@@ -2216,8 +2221,8 @@ void compile_block(Iop* iop, Block* block) {
 
     //     dis.addr = block->start_pc;
 
-    //     for (const Instruction& ins : block->instructions) {
-    //         iris_debug(iop, "{}", iop::dis::disassemble(buf, ins.opcode, &dis));
+    //     for (int i = 0; i < iop->instruction_buf_index; i++) {
+    //         iris_debug(iop, "{}", iop::dis::disassemble(buf, iop->instruction_buf[i].opcode, &dis));
     //         dis.addr += 4;
     //     }
     // }
@@ -2361,6 +2366,8 @@ Block* cache_block(Iop* iop, uint32_t addr, int max_cycles) {
 }
 
 int execute_block(Iop* iop, Block* block) {
+    if (!block->func) return 0;
+
     iop->delay_slot = 0;
     iop->branch = 0;
 

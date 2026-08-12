@@ -15,11 +15,10 @@
 #include "ui/file_explorer.hpp"
 #include "ui/gs.hpp"
 #include "ui/gs_dump.hpp"
-#include "ui/hdd_tool.hpp"
 #include "ui/intc.hpp"
 #include "ui/logs.hpp"
+#include "ui/media_tool.hpp"
 #include "ui/memory.hpp"
-#include "ui/memory_card_tool.hpp"
 #include "ui/memory_search.hpp"
 #include "ui/modules.hpp"
 #include "ui/pad.hpp"
@@ -57,8 +56,7 @@ struct Applets {
     Symbols symbols;
     Timers timers;
     PadDebugger pad_debugger;
-    MemoryCardTool memory_card_tool;
-    HddTool hdd_tool;
+    MediaTool media_tool;
     FileExplorer file_explorer;
     GsDumpTool gs_dump_tool;
     BiosSetting bios_setting;

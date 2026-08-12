@@ -52,9 +52,8 @@ void create(Instance* iris) {
         &applets.logs,
         &applets.console,
         &applets.debugger,
-        &applets.memory_card_tool,
+        &applets.media_tool,
         &applets.memory_search,
-        &applets.hdd_tool,
         &applets.file_explorer,
         &applets.gs_dump_tool,
         &applets.bios_setting
