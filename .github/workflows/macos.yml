@@ -9,8 +9,8 @@ jobs:
     runs-on: macos-latest
 
     env:
-      # Both slices must get an identical seed and iteration count, otherwise
-      # they generate different test cases and comparing them means nothing.
+      # Both slices must get an identical seed and iteration count: they have to
+      # generate the same cases in the same order for the recording to line up.
       JIT_DIFF_SEED: '0x123456789abcdef'
       JIT_DIFF_ITERATIONS: '4000'
 
@@ -52,12 +52,12 @@ jobs:
     # Deliberately after the artifact upload: a codegen regression should turn
     # the job red without also costing us the build.
     #
-    # The recompiler has a separate asmjit backend per architecture; the
-    # interpreter it is checked against is portable C++. So a divergence present
-    # in one slice of the universal binary and absent in the other is a codegen
-    # bug in that backend. This is the only place in CI where both backends are
-    # built from the same source by the same compiler and can be compared case
-    # for case.
+    # The x86_64 recompiler is the reference - it is the one that is known good.
+    # It runs a fixed set of cases and records what it produced; the arm64
+    # recompiler then replays the same cases and compares. Both slices come out
+    # of the same universal binary, so this is the same source built by the same
+    # compiler, differing only in asmjit backend. Any disagreement is a codegen
+    # bug in one of them.
     - name: Run EE/IOP recompiler differential test
       run: |
         set -uo pipefail
@@ -67,111 +67,111 @@ jobs:
         echo "slices in the universal binary: $(lipo -archs "$BIN")"
 
         native=$(uname -m)
-        case "$native" in
-          arm64)  other=x86_64 ;;
-          x86_64) other=arm64  ;;
-          *)      other=""     ;;
-        esac
 
-        run_slice() {
-          a="$1"
+        can_run() { arch -"$1" /usr/bin/true 2>/dev/null; }
 
-          echo "::group::$a"
-          arch -"$a" "$BIN" \
-            --seed "$JIT_DIFF_SEED" \
-            --iterations "$JIT_DIFF_ITERATIONS" \
-            --signatures-out "sig-$a.txt" 2>&1 | tee "out-$a.txt"
+        summary() { cat >> "$GITHUB_STEP_SUMMARY"; }
 
-          rc=${PIPESTATUS[0]}
+        echo "## EE/IOP recompiler differential test" | summary
+        echo | summary
+        echo "seed \`$JIT_DIFF_SEED\`, $JIT_DIFF_ITERATIONS iterations per core" | summary
+        echo | summary
 
-          echo "::endgroup::"
-          echo "$a exited $rc"
-
-          # comm needs both inputs ordered the same way it compares them.
-          [ -f "sig-$a.txt" ] && LC_ALL=C sort -o "sig-$a.txt" "sig-$a.txt"
-
-          return $rc
-        }
-
-        run_slice "$native"
-        native_rc=$?
-
-        other_rc=0
-        other_ran=0
-
-        # The second slice needs Rosetta on an arm64 runner. Probe rather than
-        # assume: a missing translator is not a build failure, it only means we
-        # cannot self-baseline this run.
-        if [ -n "$other" ] && arch -"$other" /usr/bin/true 2>/dev/null; then
-          run_slice "$other"
-          other_rc=$?
-          other_ran=1
-        else
-          echo "cannot execute the $other slice on this runner; skipping it"
-        fi
-
-        {
-          echo "## EE/IOP recompiler differential test"
-          echo
-          echo "seed \`$JIT_DIFF_SEED\`, $JIT_DIFF_ITERATIONS iterations per core"
-          echo
-        } >> "$GITHUB_STEP_SUMMARY"
-
-        backend_specific=""
-
-        if [ "$other_ran" = 1 ]; then
-          comm -23 "sig-$native.txt" "sig-$other.txt" > "only-$native.txt"
-          comm -13 "sig-$native.txt" "sig-$other.txt" > "only-$other.txt"
-
-          for a in "$native" "$other"; do
-            if [ -s "only-$a.txt" ]; then
-              backend_specific=1
-
-              {
-                echo "### Divergences only on $a"
-                echo '```'
-                cat "only-$a.txt"
-                echo '```'
-              } >> "$GITHUB_STEP_SUMMARY"
-            fi
-          done
-
-          if [ -z "$backend_specific" ]; then
-            echo "Both slices produced an identical signature list." >> "$GITHUB_STEP_SUMMARY"
-          fi
-        else
-          {
-            echo "Only the $native slice ran, so there is no cross-architecture comparison."
-            echo
-            echo "Signatures found:"
-            echo '```'
-            cat "sig-$native.txt"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-        fi
-
-        # Test exit status: 0 clean, 1 divergences, 2 a core logged a fatal
-        # error. Divergences alone do not fail the job - there is a known set of
-        # them and they are the same on every architecture. The other two do.
         status=0
 
-        if [ "$native_rc" -ge 2 ] || [ "$other_rc" -ge 2 ]; then
-          echo "::error::a core logged a fatal error, see the job summary"
+        # The x86_64 slice needs Rosetta on an arm64 runner. Probe rather than
+        # assume: a missing translator is not a build failure, it only costs us
+        # the cross-backend comparison for that run.
+        if can_run x86_64 && can_run arm64; then
+          echo "::group::record (x86_64)"
+          arch -x86_64 "$BIN" \
+            --seed "$JIT_DIFF_SEED" \
+            --iterations "$JIT_DIFF_ITERATIONS" \
+            --label x86_64 \
+            --record jit-x86_64.rec 2>&1 | tee out-record.txt
+          record_rc=${PIPESTATUS[0]}
+          echo "::endgroup::"
+
+          echo "::group::compare (arm64)"
+          arch -arm64 "$BIN" \
+            --seed "$JIT_DIFF_SEED" \
+            --iterations "$JIT_DIFF_ITERATIONS" \
+            --label arm64 \
+            --other-label x86_64 \
+            --compare jit-x86_64.rec \
+            --signatures-out sig-arm64.txt 2>&1 | tee out-compare.txt
+          compare_rc=${PIPESTATUS[0]}
+          echo "::endgroup::"
+
+          if [ "$record_rc" -ge 2 ]; then
+            echo "::error::the x86_64 recompiler logged a fatal error"
+            status=1
+          fi
+
+          if [ "$compare_rc" -ge 2 ]; then
+            echo "::error::the arm64 recompiler logged a fatal error"
+            status=1
+          fi
+
+          # In this mode every divergence is a backend disagreement, so unlike
+          # the interpreter fallback below there is no known-noise to tolerate.
+          if [ "$compare_rc" = 1 ]; then
+            echo "::error::the arm64 recompiler disagrees with the x86_64 recompiler"
+            status=1
+          fi
+
+          if [ "$status" = 0 ]; then
+            echo "The arm64 recompiler agreed with the x86_64 recompiler on every case." | summary
+          else
+            {
+              echo "### arm64 vs x86_64"
+              echo '```'
+              sed -n '/divergences in/,$p' out-compare.txt
+              echo '```'
+            } | summary
+          fi
+        else
+          # No second slice, so fall back to the interpreter. It answers a
+          # weaker question and has its own false positives (see the README),
+          # so divergences are reported but do not fail the job. A fatal error
+          # still does - that is the class where a block cannot be encoded at
+          # all, and it is worth catching however we got there.
+          echo "cannot run both slices on this runner, falling back to the interpreter"
+
+          echo "::group::interpreter ($native)"
+          arch -"$native" "$BIN" \
+            --seed "$JIT_DIFF_SEED" \
+            --iterations "$JIT_DIFF_ITERATIONS" \
+            --label "$native" \
+            --interpreter \
+            --signatures-out "sig-$native.txt" 2>&1 | tee out-interpreter.txt
+          interp_rc=${PIPESTATUS[0]}
+          echo "::endgroup::"
 
           {
+            echo "Could not run both slices on this runner, so there is no"
+            echo "cross-backend comparison. Fell back to checking $native against"
+            echo "the interpreter, which reports but does not fail on divergences."
             echo
-            echo "**A core logged a fatal error.** A block the recompiler cannot"
-            echo "encode leaves \`block->func\` null, and that core then makes no"
-            echo "forward progress at all - it presents as a freeze, not as a"
-            echo "wrong value."
-          } >> "$GITHUB_STEP_SUMMARY"
+            echo '```'
+            sed -n '/divergences in/,$p' out-interpreter.txt
+            echo '```'
+          } | summary
 
-          status=1
+          if [ "$interp_rc" -ge 2 ]; then
+            echo "::error::the $native recompiler logged a fatal error"
+            status=1
+          fi
         fi
 
-        if [ -n "$backend_specific" ]; then
-          echo "::error::the two slices disagree, so one backend miscompiles"
-          status=1
+        if [ "$status" != 0 ]; then
+          {
+            echo
+            echo "A fatal error is the more serious outcome: a block the recompiler"
+            echo "cannot encode leaves \`block->func\` null, and that core then makes"
+            echo "no forward progress at all - it presents as a freeze, not as a"
+            echo "wrong value."
+          } | summary
         fi
 
         exit $status
@@ -183,5 +183,5 @@ jobs:
         path: |
           out-*.txt
           sig-*.txt
-          only-*.txt
+          jit-*.rec
         if-no-files-found: warn

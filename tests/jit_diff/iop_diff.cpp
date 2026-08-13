@@ -42,26 +42,35 @@ void bus_write8(void*, uint32_t addr, uint32_t data) { ram_write(addr, data, 1);
 void bus_write16(void*, uint32_t addr, uint32_t data) { ram_write(addr, data, 2); }
 void bus_write32(void*, uint32_t addr, uint32_t data) { ram_write(addr, data, 4); }
 
-struct State {
+// What goes into the core before a case runs.
+struct Seed {
     uint32_t r[32];
     uint32_t hi, lo;
-    uint32_t pc;
     uint32_t cop0_r[16];
     uint8_t mem[SCRATCH_SIZE];
 };
 
-void capture(iop::Iop* iop, State* s) {
+// What comes out, and the only thing compared. Scratch memory is hashed rather
+// than kept verbatim so a recording stays small.
+struct Result {
+    uint32_t r[32];
+    uint32_t hi, lo;
+    uint32_t pc;
+    uint32_t cop0_r[16];
+    uint64_t mem_hash;
+};
+
+void capture(iop::Iop* iop, Result* s) {
     memcpy(s->r, iop->r, sizeof(s->r));
     memcpy(s->cop0_r, iop->cop0_r, sizeof(s->cop0_r));
 
     s->hi = iop->hi;
     s->lo = iop->lo;
     s->pc = iop->pc;
-
-    memcpy(s->mem, g_ram + SCRATCH, SCRATCH_SIZE);
+    s->mem_hash = hash64(g_ram + SCRATCH, SCRATCH_SIZE);
 }
 
-void restore(iop::Iop* iop, const State* s) {
+void apply(iop::Iop* iop, const Seed* s) {
     memcpy(iop->r, s->r, sizeof(s->r));
     memcpy(iop->cop0_r, s->cop0_r, sizeof(s->cop0_r));
 
@@ -75,6 +84,36 @@ void restore(iop::Iop* iop, const State* s) {
     iop->delay_slot = 0;
 
     memcpy(g_ram + SCRATCH, s->mem, SCRATCH_SIZE);
+}
+
+void serialize(Blob* b, uint32_t opcode, int steps, const Result& r) {
+    b->put_u32(opcode);
+    b->put_u32((uint32_t)steps);
+
+    for (int i = 0; i < 32; i++) b->put_u32(r.r[i]);
+
+    b->put_u32(r.hi);
+    b->put_u32(r.lo);
+    b->put_u32(r.pc);
+
+    for (int i = 0; i < 16; i++) b->put_u32(r.cop0_r[i]);
+
+    b->put_u64(r.mem_hash);
+}
+
+void deserialize(Blob* b, uint32_t* opcode, int* steps, Result* r) {
+    *opcode = b->get_u32();
+    *steps = (int)b->get_u32();
+
+    for (int i = 0; i < 32; i++) r->r[i] = b->get_u32();
+
+    r->hi = b->get_u32();
+    r->lo = b->get_u32();
+    r->pc = b->get_u32();
+
+    for (int i = 0; i < 16; i++) r->cop0_r[i] = b->get_u32();
+
+    r->mem_hash = b->get_u64();
 }
 
 enum Kind { ALU, MEM, BRANCH, JUMP, COP0, TRAP };
@@ -202,8 +241,8 @@ const char* g_cop0_name[16] = {
     "BADVADDR", "BDAM", "10", "BPCM", "SR", "CAUSE", "EPC", "PRID"
 };
 
-void diff(Report* rep, const Entry& e, uint32_t opcode,
-          const State& a, const State& b, int steps) {
+void diff(Report* rep, const Options& opt, const Entry& e, uint32_t opcode,
+          const Result& a, const Result& b, int steps) {
     char buf[128];
     iop::dis::Dis ds;
 
@@ -216,8 +255,8 @@ void diff(Report* rep, const Entry& e, uint32_t opcode,
     auto note = [&](const std::string& what, uint64_t ia, uint64_t ib) {
         rep->fail(
             fmt::format("iop {} {}", e.name, what),
-            fmt::format("op={:08x} [{}] steps={} jit={:08x} interp={:08x}",
-                        opcode, text, steps, ia, ib));
+            fmt::format("op={:08x} [{}] steps={} {}={:08x} {}={:08x}",
+                        opcode, text, steps, opt.label, ia, opt.other_label, ib));
     };
 
     for (int i = 0; i < 32; i++)
@@ -232,20 +271,12 @@ void diff(Report* rep, const Entry& e, uint32_t opcode,
         if (a.cop0_r[i] != b.cop0_r[i])
             note(fmt::format("cop0.{}", g_cop0_name[i]), a.cop0_r[i], b.cop0_r[i]);
 
-    if (memcmp(a.mem, b.mem, SCRATCH_SIZE) != 0) {
-        for (uint32_t i = 0; i < SCRATCH_SIZE; i++) {
-            if (a.mem[i] != b.mem[i]) {
-                note("mem", a.mem[i], b.mem[i]);
-
-                break;
-            }
-        }
-    }
+    if (a.mem_hash != b.mem_hash) note("mem", a.mem_hash, b.mem_hash);
 }
 
 }
 
-int run_iop_tests(logger::Logger* logger, uint64_t seed, int iterations, Report* out) {
+int run_iop_tests(Logger* logger, const Options& opt, Report* out) {
     g_ram = (uint8_t*)calloc(RAM_SIZE, 1);
 
     iop::Iop* iop = iop::create(logger);
@@ -264,13 +295,14 @@ int run_iop_tests(logger::Logger* logger, uint64_t seed, int iterations, Report*
     iop::reset(iop);
 
     out->core = "iop";
-    out->seed = seed;
+    out->seed = opt.seed;
 
-    Rng rng(seed);
+    Rng rng(opt.seed);
 
-    State s0, jit_state, int_state;
+    Seed s0;
+    Result jit_result, other_result;
 
-    for (int it = 0; it < iterations; it++) {
+    for (int it = 0; it < opt.iterations; it++) {
         const Entry& e = g_entries[it % ENTRY_COUNT];
 
         uint32_t rs = 0;
@@ -282,10 +314,8 @@ int run_iop_tests(logger::Logger* logger, uint64_t seed, int iterations, Report*
         for (int i = 1; i < 32; i++)
             s0.r[i] = rng.interesting32();
 
-        s0.r[0] = 0;
         s0.hi = rng.interesting32();
         s0.lo = rng.interesting32();
-        s0.pc = CODE_PC;
 
         memset(s0.cop0_r, 0, sizeof(s0.cop0_r));
 
@@ -307,26 +337,58 @@ int run_iop_tests(logger::Logger* logger, uint64_t seed, int iterations, Report*
         for (uint32_t i = 0; i < SCRATCH_SIZE; i++)
             s0.mem[i] = (uint8_t)(rng.u32() & 0xff);
 
-        restore(iop, &s0);
+        apply(iop, &s0);
 
         // Targeted: flush_cache() walks a million cache pages per call.
         iop::invalidate_block(iop, CODE_PC);
 
         int steps = iop::run_block(iop, 1);
 
-        capture(iop, &jit_state);
-
-        restore(iop, &s0);
-
-        for (int k = 0; k < steps; k++)
-            iop::cycle(iop);
-
-        capture(iop, &int_state);
+        capture(iop, &jit_result);
 
         ++out->cases;
 
-        diff(out, e, opcode, jit_state, int_state, steps);
+        if (opt.mode == Mode::Record) {
+            serialize(opt.blob, opcode, steps, jit_result);
 
+            continue;
+        }
+
+        int other_steps = steps;
+
+        if (opt.mode == Mode::Compare) {
+            uint32_t recorded_opcode = 0;
+
+            deserialize(opt.blob, &recorded_opcode, &other_steps, &other_result);
+
+            if (!opt.blob->ok) {
+                out->fail("iop recording truncated", "ran out of recorded cases");
+
+                break;
+            }
+
+            if (recorded_opcode != opcode) {
+                out->fail("iop recording mismatch",
+                          fmt::format("case {} is {:08x} here, {:08x} in the recording",
+                                      it, opcode, recorded_opcode));
+
+                break;
+            }
+        } else {
+            apply(iop, &s0);
+
+            for (int k = 0; k < steps; k++)
+                iop::cycle(iop);
+
+            capture(iop, &other_result);
+        }
+
+        if (other_steps != steps)
+            out->fail("iop step count",
+                      fmt::format("op={:08x} {}={} {}={}", opcode, opt.label, steps,
+                                  opt.other_label, other_steps));
+
+        diff(out, opt, e, opcode, jit_result, other_result, steps);
     }
 
     iop::destroy(iop);

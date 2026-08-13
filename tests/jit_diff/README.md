@@ -1,14 +1,16 @@
 # EE/IOP recompiler differential test
 
-Both cores ship two implementations of every instruction: the recompiler and the
-interpreter (`ee::run_block` / `ee::step`, `iop::run_block` / `iop::cycle`). This
-runs one instruction at a time through both from identical state and compares the
-architectural result.
+Answers one question: **does this recompiler backend generate code that computes
+the same thing as another backend's?**
 
-The interpreter is portable C++, so it computes the same answer on every host.
-The recompiler goes through asmjit's `ujit`, which has a separate backend per
-architecture. So: **a divergence that appears on one host and not another is a
-codegen bug in that host's backend.** That is what this is for.
+One build runs a fixed set of single-instruction cases through `run_block` and
+records what came out. Another build, on another architecture, replays the same
+cases and compares. The x86 backend is the reference because it is the one known
+to work.
+
+Nothing in that loop involves an interpreter. There is an `--interpreter` mode,
+but it is a fallback for when only one machine is available - see the caveats at
+the bottom.
 
 ## Building
 
@@ -17,27 +19,30 @@ cmake -S . -B build -DIRIS_BUILD_TESTS=ON
 cmake --build build --target iris-jit-diff
 ```
 
-On a macOS universal build both slices are produced. Run each explicitly:
-
-```
-arch -x86_64 ./build/tests/jit_diff/iris-jit-diff
-arch -arm64  ./build/tests/jit_diff/iris-jit-diff
-```
+On macOS the binary is universal, so both backends come out of one build.
 
 ## Running
 
 ```
-iris-jit-diff [--seed N] [--iterations N] [--ee | --iop] [--signatures-out PATH]
+iris-jit-diff --record  jit-x86_64.rec --label x86_64
+iris-jit-diff --compare jit-x86_64.rec --label arm64 --other-label x86_64
 ```
 
-The seed drives everything, so the same seed generates the same cases on every
-machine. Keep the seed *and* the iteration count fixed when comparing hosts -
-the set of signatures grows with the number of cases. `JITDIFF_TRACE=1` prints
-each case before it runs, which is how you find the opcode responsible if a case
-hangs or crashes.
+with the **same `--seed` and `--iterations` on both sides** - they have to
+generate the same cases in the same order for the recording to line up. A
+mismatch is detected and reported rather than silently compared against the
+wrong case.
 
-`--signatures-out` writes one signature per line, sorted and nothing else, for
-diffing two runs with `comm(1)`.
+On a macOS universal binary, both runs happen on one machine:
+
+```
+arch -x86_64 ./build/tests/jit_diff/iris-jit-diff --record jit-x86_64.rec --label x86_64
+arch -arm64  ./build/tests/jit_diff/iris-jit-diff --compare jit-x86_64.rec --label arm64 --other-label x86_64
+```
+
+Other options: `--ee` / `--iop` to run one core, `--signatures-out PATH` to write
+one signature per line for `comm(1)`, `JITDIFF_TRACE=1` to print each case
+before it runs (how you find the opcode if a case hangs or crashes).
 
 Exit status:
 
@@ -48,57 +53,66 @@ Exit status:
 | 2 | a core logged a fatal error - failed codegen or an unimplemented opcode |
 | 3 | bad usage |
 
-2 is the serious one. See the note on fatal errors below.
+2 is the serious one. A block the recompiler cannot encode logs a fatal error
+and leaves `block->func` null, and the core then makes no forward progress at
+all. It presents as a freeze, not as a wrong value. The offending guest block is
+logged just above the fatal error.
 
 Output is grouped by signature rather than listing every case:
 
 ```
-[ee] 4000 cases, 36 divergences in 4 signature(s) (seed=0xa486e0c22c0e684a)
-  ee lwl gpr.lo    x12   op=89921000 [lwl $s2, 4096($t4)] steps=4 jit=...007fc040 interp=...00000000
+[ee] 3994 cases, 39 divergences in 5 signature(s) (seed=0xa486e0c22c0e684a)
+  ee lwl gpr.lo   x13   op=885e1d06 [lwl $fp, 7430($v0)] steps=4 arm64=...4000 x86_64=...e462
 ```
-
-To find backend-specific bugs, run the same seed and iteration count on both
-architectures and diff the signature lists. Signatures present on both are
-architecture-independent. **Signatures present on only one are that backend's
-codegen bugs.**
-
-The `N fatal error(s) logged by the cores` section matters as much as the
-divergences: a recompiler that fails to encode an instruction logs a fatal error,
-leaves `block->func` null, and the core then makes no forward progress at all. It
-does not show up as a wrong value, it shows up as a freeze.
 
 ## In CI
 
-`.github/workflows/macos.yml` builds the universal binary and runs **both
-slices** with the same seed, then diffs their signature lists against each other.
-That self-baselines: no checked-in expected-output file to keep up to date.
+`.github/workflows/macos.yml` builds the universal binary, records with the
+x86_64 slice and compares with the arm64 slice. **Any** divergence fails the job
+- in this mode there is no known-noise to tolerate, a disagreement means one
+backend miscompiles.
 
-The job fails when a core logs a fatal error, or when the two slices disagree.
-Divergences that appear in both slices do not fail it - those are the known
-architecture-independent bugs, and gating on them would just keep CI red.
-
-The x86_64 slice needs Rosetta. The workflow probes for it and carries on
-without the comparison if it is missing, so the arm64 result is never lost to a
-runner-image change.
+The x86_64 slice needs Rosetta. The workflow probes for it and falls back to
+`--interpreter` on the native slice if it is missing, which still catches the
+fatal-error class.
 
 ## Known scope limits
 
-- **The oracle is pinned to the scalar MMI interpreter** on every host
-  (`_EE_USE_INTRINSICS` is deliberately not defined here) so that an x86 run and
-  an arm64 run are comparable. `-DIRIS_JIT_DIFF_INTRINSICS=ON` switches the
-  oracle to the SSE path that shipped x86 builds actually use; that is a
-  different question and gives different results.
-- **VU0 macro mode (COP2 with the CO bit set) is skipped.** The recompiler hands
-  every one of those to the same interpreter routine, so there is no codegen to
-  compare, and `VCALLMS` would run VU0 microcode with no E bit and hang.
-  Validating `vu_cached.cpp`, which is a second recompiler, needs its own
-  harness.
+- **One instruction per block**, so the register cache, constant folding and
+  block chaining are only lightly exercised.
+- **VU0 macro mode (COP2 with the CO bit set) is skipped.** `VCALLMS` would run
+  VU0 microcode with no E bit and hang. `vu_cached.cpp` is a second recompiler
+  and has no harness at all.
 - **Exceptions are out of scope.** Trap instructions, `syscall`, `break`, `eret`
-  and the TLB ops are excluded, and the operands for trapping arithmetic are
-  seeded narrow so overflow never fires. An exception taken part way through a
-  block is a real question, but an architecture-independent one.
+  and the TLB ops are excluded; trapping arithmetic is seeded narrow so overflow
+  never fires; memory ops are steered to KSEG0 with a real base register so they
+  never take a TLB miss.
 - **The fastmem path is not covered.** The test's bus hands out a zeroed
-  `ee::bus::Bus`, so every `vfast` lookup misses and both engines go through the
-  slow callbacks. Covering the fast path needs a bus with real fastmem tables.
-- One instruction per block, so the register cache and constant folding are only
-  lightly exercised. Multi-instruction blocks would widen coverage.
+  `ee::bus::Bus`, so every `vfast` lookup misses and the slow callbacks are used.
+- **Bugs both backends share are invisible.** That is the cost of using one
+  backend as the reference instead of an independent model. The EE `SRL`
+  sign-extension bug was found in interpreter mode and would not have shown up
+  here.
+
+## Why not the interpreter
+
+`--interpreter` compares against `ee::step` / `iop::cycle` in the same process.
+It needs no second machine, and it can catch bugs both backends share. But the
+interpreters stopped being maintained when the emulator switched to the
+recompiler, so a divergence is as likely to be an interpreter bug, and some of
+its false positives are architecture-specific, which is exactly where it is
+least useful:
+
+- `MTC0` - the interpreters mask hardwired bits, the recompilers store raw.
+- `syscall` - the two engines keep `pc` on a different convention within a
+  block, so `EPC` differs by 4.
+- `madda.s` / `msuba.s` on arm64 - the interpreter computes `acc += fs * ft` in
+  one statement, and clang contracts that to a fused multiply-add on AArch64
+  (one rounding) but not on x86-64 baseline (two roundings). The recompiler
+  emits a separate multiply and add on both. So the interpreter is the one that
+  changes behaviour between architectures, not the recompiler.
+- MMI ops - the interpreter has an SSE implementation and a scalar one, chosen
+  by `_EE_USE_INTRINSICS`, and they do not always agree with each other. The
+  test target deliberately builds without it so the scalar path is used
+  everywhere; `-DIRIS_JIT_DIFF_INTRINSICS=ON` switches to the SSE path that
+  shipped x86 builds actually use.

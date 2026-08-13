@@ -296,10 +296,30 @@ static inline void psrlvw(UniCompiler& uc, const Vec& d, const Vec& s, const Vec
 static inline void psravw(UniCompiler& uc, const Vec& d, const Vec& s, const Vec& t) { pshiftv(uc, d, s, t, 2); }
 static inline void psllh(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) { uc.v_slli_u16(d, t, sa & 0xf); }
 static inline void psllw(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) { uc.v_slli_u32(d, t, sa & 0x1f); }
-static inline void psrlh(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) { uc.v_srli_u16(d, t, sa & 0xf); }
-static inline void psrlw(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) { uc.v_srli_u32(d, t, sa & 0x1f); }
-static inline void psrah(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) { uc.v_srai_i16(d, t, sa & 0xf); }
-static inline void psraw(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) { uc.v_srai_i32(d, t, sa & 0x1f); }
+
+static inline void psrlh(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) {
+    if (!(sa & 0xf)) { uc.v_mov(d, t); return; }
+
+    uc.v_srli_u16(d, t, sa & 0xf);
+}
+
+static inline void psrlw(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) {
+    if (!(sa & 0x1f)) { uc.v_mov(d, t); return; }
+
+    uc.v_srli_u32(d, t, sa & 0x1f);
+}
+
+static inline void psrah(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) {
+    if (!(sa & 0xf)) { uc.v_mov(d, t); return; }
+
+    uc.v_srai_i16(d, t, sa & 0xf);
+}
+
+static inline void psraw(UniCompiler& uc, const Vec& d, const Vec& t, uint32_t sa) {
+    if (!(sa & 0x1f)) { uc.v_mov(d, t); return; }
+
+    uc.v_srai_i32(d, t, sa & 0x1f);
+}
 
 static inline void mmi_gather_even_u32(UniCompiler& uc, const Vec& d, const Vec& s) {
     uc.v_swizzle_u32x4(d, s, swizzle(3, 2, 2, 0));

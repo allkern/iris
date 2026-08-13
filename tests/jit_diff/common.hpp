@@ -12,6 +12,23 @@ namespace jitdiff {
 
 using iris::logger::Logger;
 
+// What the recompiler output is being checked against.
+enum class Mode {
+    // Against a recording made by another build. This is the one that answers
+    // "does the arm64 backend agree with the x86 backend", and it is the
+    // default, because the interpreters stopped being maintained when the
+    // emulator switched to the recompiler.
+    Compare,
+
+    // Produce that recording.
+    Record,
+
+    // Against the in-process interpreter. Kept because it needs no second
+    // machine, but it answers a weaker question and it has its own failure
+    // modes - see the note in the README about FMA contraction.
+    Interpreter
+};
+
 // Deterministic PRNG so a failure on one machine reproduces on another.
 struct Rng {
     uint64_t s;
@@ -83,9 +100,88 @@ struct Rng {
     }
 };
 
-// Divergences are aggregated by signature ("iop mtc0 cop0.CAUSE") rather than
-// dumped one per line. A run on a second host is then a diff of signatures:
-// anything new is specific to that backend.
+inline uint64_t hash64(const void* p, size_t n) {
+    const uint8_t* b = (const uint8_t*)p;
+    uint64_t h = 0xcbf29ce484222325ull;
+
+    for (size_t i = 0; i < n; i++) {
+        h ^= b[i];
+        h *= 0x100000001b3ull;
+    }
+
+    return h;
+}
+
+// Recompiler output from one build, written by --record and read by --compare.
+// Fields go in one at a time rather than as a struct copy: the two builds are
+// different targets and nothing here should depend on how either lays a struct
+// out.
+struct Blob {
+    std::vector <uint8_t> data;
+    size_t pos = 0;
+    bool ok = true;
+
+    void put(const void* p, size_t n) {
+        const uint8_t* b = (const uint8_t*)p;
+
+        data.insert(data.end(), b, b + n);
+    }
+
+    void put_u32(uint32_t v) { put(&v, 4); }
+    void put_u64(uint64_t v) { put(&v, 8); }
+
+    void get(void* p, size_t n) {
+        if (pos + n > data.size()) {
+            ok = false;
+
+            return;
+        }
+
+        memcpy(p, data.data() + pos, n);
+
+        pos += n;
+    }
+
+    uint32_t get_u32() { uint32_t v = 0; get(&v, 4); return v; }
+    uint64_t get_u64() { uint64_t v = 0; get(&v, 8); return v; }
+
+    bool save(const char* path) const {
+        FILE* f = fopen(path, "wb");
+
+        if (!f) return false;
+
+        bool wrote = data.empty() || fwrite(data.data(), 1, data.size(), f) == data.size();
+
+        fclose(f);
+
+        return wrote;
+    }
+
+    bool load(const char* path) {
+        FILE* f = fopen(path, "rb");
+
+        if (!f) return false;
+
+        fseek(f, 0, SEEK_END);
+
+        long n = ftell(f);
+
+        fseek(f, 0, SEEK_SET);
+
+        data.resize((size_t)(n < 0 ? 0 : n));
+
+        bool read = data.empty() || fread(data.data(), 1, data.size(), f) == data.size();
+
+        fclose(f);
+
+        pos = 0;
+
+        return read;
+    }
+};
+
+// Divergences are aggregated by signature ("ee psrlw gpr.lo") rather than
+// dumped one per line, so two runs can be compared as sets.
 struct Report {
     struct Bucket {
         int count = 0;
@@ -111,16 +207,27 @@ struct Report {
     }
 };
 
-// Anything the cores log at FATAL_ERROR: a JIT that fails to compile, or an
-// unimplemented opcode, must not be mistaken for a passing test.
+// Anything the cores log at ERROR or worse. A recompiler that cannot encode an
+// instruction logs the offending guest block and then a fatal error; both are
+// worth keeping, and neither is a divergence.
 struct FatalSink {
-    int count = 0;
+    int fatal_count = 0;
+
     std::vector <std::string> lines;
 };
 
 void install_fatal_sink(Logger* logger, FatalSink* sink);
 
-int run_iop_tests(Logger* logger, uint64_t seed, int iterations, Report* out);
-int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out);
+struct Options {
+    uint64_t seed = 0;
+    int iterations = 0;
+    Mode mode = Mode::Compare;
+    Blob* blob = nullptr;
+    const char* label = "this";
+    const char* other_label = "recorded";
+};
+
+int run_iop_tests(Logger* logger, const Options& opt, Report* out);
+int run_ee_tests(Logger* logger, const Options& opt, Report* out);
 
 }

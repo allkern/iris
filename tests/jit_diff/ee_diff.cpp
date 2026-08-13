@@ -24,6 +24,7 @@ constexpr uint32_t CODE_PHYS = 0x00100000;
 constexpr uint32_t CODE_PC = 0x80000000 | CODE_PHYS;   // KSEG0, so no TLB walk
 constexpr uint32_t SCRATCH_PHYS = 0x00080000;
 constexpr uint32_t SCRATCH_SIZE = 0x200;
+constexpr uint32_t SPR_SIZE = 0x4000;
 
 uint8_t* g_ram = nullptr;
 
@@ -65,20 +66,31 @@ void bus_write128(void*, uint32_t addr, uint128_t data) {
     ram_write(addr + 8, data.u64[1], 8);
 }
 
-struct State {
+// What goes into the core before a case runs.
+struct Seed {
     uint128_t r[32];
     uint128_t hi, lo;
     uint64_t sa;
     uint32_t f[32];
-    uint32_t acc;
-    uint32_t fcr;
-    uint32_t pc;
+    uint32_t acc, fcr;
     uint32_t cop0_r[32];
-    uint8_t spr[0x4000];
     uint8_t mem[SCRATCH_SIZE];
+    uint8_t spr[SPR_SIZE];
 };
 
-void capture(ee::Ee* ee, State* s) {
+// What comes out, and the only thing compared. Scratchpad and scratch memory
+// are hashed rather than kept verbatim so a recording stays small.
+struct Result {
+    uint128_t r[32];
+    uint128_t hi, lo;
+    uint64_t sa;
+    uint32_t f[32];
+    uint32_t acc, fcr, pc;
+    uint32_t cop0_r[32];
+    uint64_t mem_hash, spr_hash;
+};
+
+void capture(ee::Ee* ee, Result* s) {
     memcpy(s->r, ee->r, sizeof(s->r));
     memcpy(s->cop0_r, ee->cop0_r, sizeof(s->cop0_r));
 
@@ -92,11 +104,11 @@ void capture(ee::Ee* ee, State* s) {
     s->fcr = ee->fcr;
     s->pc = ee->pc;
 
-    memcpy(s->spr, ee::get_spr(ee)->buf, sizeof(s->spr));
-    memcpy(s->mem, g_ram + SCRATCH_PHYS, SCRATCH_SIZE);
+    s->mem_hash = hash64(g_ram + SCRATCH_PHYS, SCRATCH_SIZE);
+    s->spr_hash = hash64(ee::get_spr(ee)->buf, SPR_SIZE);
 }
 
-void restore(ee::Ee* ee, const State* s) {
+void apply(ee::Ee* ee, const Seed* s) {
     memcpy(ee->r, s->r, sizeof(s->r));
     memcpy(ee->cop0_r, s->cop0_r, sizeof(s->cop0_r));
 
@@ -115,8 +127,62 @@ void restore(ee::Ee* ee, const State* s) {
     ee->branch_taken = 0;
     ee->delay_slot = 0;
 
-    memcpy(ee::get_spr(ee)->buf, s->spr, sizeof(s->spr));
+    memcpy(ee::get_spr(ee)->buf, s->spr, SPR_SIZE);
     memcpy(g_ram + SCRATCH_PHYS, s->mem, SCRATCH_SIZE);
+}
+
+void serialize(Blob* b, uint32_t opcode, int steps, const Result& r) {
+    b->put_u32(opcode);
+    b->put_u32((uint32_t)steps);
+
+    for (int i = 0; i < 32; i++) {
+        b->put_u64(r.r[i].u64[0]);
+        b->put_u64(r.r[i].u64[1]);
+    }
+
+    b->put_u64(r.hi.u64[0]);
+    b->put_u64(r.hi.u64[1]);
+    b->put_u64(r.lo.u64[0]);
+    b->put_u64(r.lo.u64[1]);
+    b->put_u64(r.sa);
+
+    for (int i = 0; i < 32; i++) b->put_u32(r.f[i]);
+
+    b->put_u32(r.acc);
+    b->put_u32(r.fcr);
+    b->put_u32(r.pc);
+
+    for (int i = 0; i < 32; i++) b->put_u32(r.cop0_r[i]);
+
+    b->put_u64(r.mem_hash);
+    b->put_u64(r.spr_hash);
+}
+
+void deserialize(Blob* b, uint32_t* opcode, int* steps, Result* r) {
+    *opcode = b->get_u32();
+    *steps = (int)b->get_u32();
+
+    for (int i = 0; i < 32; i++) {
+        r->r[i].u64[0] = b->get_u64();
+        r->r[i].u64[1] = b->get_u64();
+    }
+
+    r->hi.u64[0] = b->get_u64();
+    r->hi.u64[1] = b->get_u64();
+    r->lo.u64[0] = b->get_u64();
+    r->lo.u64[1] = b->get_u64();
+    r->sa = b->get_u64();
+
+    for (int i = 0; i < 32; i++) r->f[i] = b->get_u32();
+
+    r->acc = b->get_u32();
+    r->fcr = b->get_u32();
+    r->pc = b->get_u32();
+
+    for (int i = 0; i < 32; i++) r->cop0_r[i] = b->get_u32();
+
+    r->mem_hash = b->get_u64();
+    r->spr_hash = b->get_u64();
 }
 
 // Instructions whose whole purpose is to leave the block: an exception taken
@@ -217,27 +283,24 @@ void discover(std::vector <Template>* out) {
     }
 }
 
-// Fill in the operand fields without disturbing whatever selector bits made
-// this encoding decode the way it did.
+// Fill in operand fields, then confirm the instruction still decodes to the
+// same thing - the same bits are operands in one group and sub-opcode selectors
+// in another, so the decoder has to arbitrate.
+//
+// A candidate is picked at random among those that survive, not first-match.
+// The shift-amount field matters here: the template always carries sa=0
+// (discover() finds it first), and first-match would pin every MMI shift to a
+// shift of zero forever. Zero is worth testing - it is the one AArch64 cannot
+// encode for a right shift - but so is everything else.
 uint32_t randomise(const Template& t, Rng& rng, uint32_t* out_rs) {
     uint32_t rs = 1 + rng.u32() % 31;
     uint32_t rt = 1 + rng.u32() % 31;
     uint32_t rd = 1 + rng.u32() % 31;
     uint32_t imm = rng.u32() & 0xffff;
-
     uint32_t sa = rng.u32() & 0x1f;
 
     *out_rs = (t.opcode >> 21) & 0x1f;
 
-    // Fill in operand fields, then confirm the instruction still decodes to the
-    // same thing - the same bits are operands in one group and sub-opcode
-    // selectors in another, so the decoder has to arbitrate.
-    //
-    // A candidate is picked at random among those that survive, not first-match.
-    // The shift-amount field matters here: the template always carries sa=0
-    // (discover() finds it first), and first-match would pin every MMI shift to
-    // a shift of zero forever. Zero is worth testing - it is the one AArch64
-    // cannot encode for a right shift - but so is everything else.
     uint32_t candidates[5];
     int n = 0;
 
@@ -281,8 +344,8 @@ const char* g_cop0_name[32] = {
     "debug", "perf", "r26", "r27", "taglo", "taghi", "errorepc", "r31"
 };
 
-void diff(Report* rep, const char* name, uint32_t opcode,
-          const State& a, const State& b, int steps) {
+void diff(Report* rep, const Options& opt, const char* name, uint32_t opcode,
+          const Result& a, const Result& b, int steps) {
     char buf[192];
     ee::dis::Dis ds;
 
@@ -296,8 +359,8 @@ void diff(Report* rep, const char* name, uint32_t opcode,
     auto note = [&](const std::string& what, uint64_t ia, uint64_t ib) {
         rep->fail(
             fmt::format("ee {} {}", name, what),
-            fmt::format("op={:08x} [{}] steps={} jit={:016x} interp={:016x}",
-                        opcode, text, steps, ia, ib));
+            fmt::format("op={:08x} [{}] steps={} {}={:016x} {}={:016x}",
+                        opcode, text, steps, opt.label, ia, opt.other_label, ib));
     };
 
     for (int i = 0; i < 32; i++) {
@@ -327,26 +390,13 @@ void diff(Report* rep, const char* name, uint32_t opcode,
             note(fmt::format("cop0.{}", g_cop0_name[i]), a.cop0_r[i], b.cop0_r[i]);
     }
 
-    for (uint32_t i = 0; i < SCRATCH_SIZE; i++) {
-        if (a.mem[i] != b.mem[i]) {
-            note("mem", a.mem[i], b.mem[i]);
-
-            break;
-        }
-    }
-
-    for (uint32_t i = 0; i < sizeof(a.spr); i++) {
-        if (a.spr[i] != b.spr[i]) {
-            note("spr", a.spr[i], b.spr[i]);
-
-            break;
-        }
-    }
+    if (a.mem_hash != b.mem_hash) note("mem", a.mem_hash, b.mem_hash);
+    if (a.spr_hash != b.spr_hash) note("spr", a.spr_hash, b.spr_hash);
 }
 
 }
 
-int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out) {
+int run_ee_tests(Logger* logger, const Options& opt, Report* out) {
     g_ram = (uint8_t*)calloc(RAM_SIZE, 1);
 
     // vfast_page_base() reinterprets bus udata as an ee::bus::Bus to reach the
@@ -380,7 +430,7 @@ int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out) {
     ee::reset(ee);
 
     out->core = "ee";
-    out->seed = seed;
+    out->seed = opt.seed;
 
     std::vector <Template> templates;
 
@@ -388,13 +438,14 @@ int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out) {
 
     printf("  ee opcodes discovered: %d\n", (int)templates.size());
 
-    Rng rng(seed);
+    Rng rng(opt.seed);
 
-    State s0, jit_state, int_state;
+    Seed s0;
+    Result jit_result, other_result;
 
     char name_buf[192];
 
-    for (int it = 0; it < iterations; it++) {
+    for (int it = 0; it < opt.iterations; it++) {
         const Template& t = templates[it % templates.size()];
 
         uint32_t rs = 0;
@@ -419,13 +470,11 @@ int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out) {
             s0.r[i].u64[1] = rng.interesting64();
         }
 
-        s0.r[0].u64[0] = 0;
-        s0.r[0].u64[1] = 0;
-
         s0.hi.u64[0] = rng.interesting64();
         s0.hi.u64[1] = rng.interesting64();
         s0.lo.u64[0] = rng.interesting64();
         s0.lo.u64[1] = rng.interesting64();
+
         // SA only ever holds a byte offset; MTSAB/MTSAH mask it to 0..15.
         s0.sa = rng.u32() & 0xf;
 
@@ -434,7 +483,6 @@ int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out) {
 
         s0.acc = rng.interesting_f32();
         s0.fcr = 0x01000001;
-        s0.pc = CODE_PC;
 
         memset(s0.cop0_r, 0, sizeof(s0.cop0_r));
 
@@ -454,50 +502,16 @@ int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out) {
             s0.r[rs].u64[1] = 0;
         }
 
-        // Last word on r0, after every other seeding step. r0 reads as zero, and
-        // the recompiler is entitled to assume that; seeding it non-zero (which
-        // the base-register steering above will happily do when the encoding
-        // picked r0) invents a divergence that no real code could produce.
+        // Last word on r0, after every other seeding step. r0 reads as zero,
+        // and the recompiler is entitled to assume that.
         s0.r[0].u64[0] = 0;
         s0.r[0].u64[1] = 0;
 
         for (uint32_t i = 0; i < SCRATCH_SIZE; i++)
             s0.mem[i] = (uint8_t)(rng.u32() & 0xff);
 
-        for (uint32_t i = 0; i < sizeof(s0.spr); i++)
+        for (uint32_t i = 0; i < SPR_SIZE; i++)
             s0.spr[i] = (uint8_t)(rng.u32() & 0xff);
-
-        if (g_trace) {
-            ee::dis::Dis tds;
-
-            tds.print_address = 0;
-            tds.print_opcode = 0;
-            tds.pseudo_instructions = 0;
-            tds.pc = CODE_PC;
-
-            printf("    case %d op=%08x id=%d %s\n", it, opcode, t.id,
-                   ee::dis::disassemble(name_buf, opcode, &tds));
-            fflush(stdout);
-        }
-
-        restore(ee, &s0);
-
-        // Targeted: flush_cache() walks a million cache pages and clears the
-        // 8 MB fastmem table, which would dominate the run.
-        ee::invalidate_block(ee, CODE_PHYS);
-
-        int steps = ee::run_block(ee, 1);
-
-        capture(ee, &jit_state);
-
-        restore(ee, &s0);
-
-        for (int k = 0; k < steps; k++)
-            ee::step(ee);
-
-        capture(ee, &int_state);
-
-        ++out->cases;
 
         ee::dis::Dis nds;
 
@@ -512,7 +526,64 @@ int run_ee_tests(Logger* logger, uint64_t seed, int iterations, Report* out) {
 
         if (space) *space = 0;
 
-        diff(out, name_buf, opcode, jit_state, int_state, steps);
+        if (g_trace) {
+            printf("    case %d op=%08x id=%d %s\n", it, opcode, t.id, name_buf);
+            fflush(stdout);
+        }
+
+        apply(ee, &s0);
+
+        // Targeted: flush_cache() walks a million cache pages and clears the
+        // 8 MB fastmem table, which would dominate the run.
+        ee::invalidate_block(ee, CODE_PHYS);
+
+        int steps = ee::run_block(ee, 1);
+
+        capture(ee, &jit_result);
+
+        ++out->cases;
+
+        if (opt.mode == Mode::Record) {
+            serialize(opt.blob, opcode, steps, jit_result);
+
+            continue;
+        }
+
+        int other_steps = steps;
+
+        if (opt.mode == Mode::Compare) {
+            uint32_t recorded_opcode = 0;
+
+            deserialize(opt.blob, &recorded_opcode, &other_steps, &other_result);
+
+            if (!opt.blob->ok) {
+                out->fail("ee recording truncated", "ran out of recorded cases");
+
+                break;
+            }
+
+            if (recorded_opcode != opcode) {
+                out->fail("ee recording mismatch",
+                          fmt::format("case {} is {:08x} here, {:08x} in the recording",
+                                      it, opcode, recorded_opcode));
+
+                break;
+            }
+        } else {
+            apply(ee, &s0);
+
+            for (int k = 0; k < steps; k++)
+                ee::step(ee);
+
+            capture(ee, &other_result);
+        }
+
+        if (other_steps != steps)
+            out->fail("ee step count",
+                      fmt::format("op={:08x} [{}] {}={} {}={}", opcode, name_buf,
+                                  opt.label, steps, opt.other_label, other_steps));
+
+        diff(out, opt, name_buf, opcode, jit_result, other_result, steps);
     }
 
     ee::destroy(ee);

@@ -5549,7 +5549,7 @@ void compile_block(Ee* ee, Block* block) {
                     uint64_t ct;
 
                     if (reg_is_const(ee, i.rt.r, &ct)) {
-                        set_const(ee, &uc, i.rd.r, (uint64_t)((uint32_t)ct >> i.sa));
+                        set_const(ee, &uc, i.rd.r, (uint64_t)(int64_t)(int32_t)((uint32_t)ct >> i.sa));
 
                         continue;
                     }
@@ -5563,6 +5563,8 @@ void compile_block(Ee* ee, Block* block) {
 
                     uc.and_(tmp, rt.reg, Imm(0xFFFFFFFF));
                     uc.shr(rd.reg, tmp, Imm(i.sa));
+
+                    sext32(uc, rd.reg, rd.reg.r32());
 
                     ee->reg_cache[i.rd.r].constant = false;
                 } break;
@@ -7602,7 +7604,7 @@ void compile_block(Ee* ee, Block* block) {
                     if (is_load && !i.rt.r) continue;
 
                     CachedReg& rs = get_reg(ee, &uc, i.rs.r);
-                    CachedReg& rt = get_reg(ee, &uc, i.rt.r, is_load ? (i.rt.r == i.rs.r) : true);
+                    CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
                     ujit::Gp addr = uc.new_gp32();
 
