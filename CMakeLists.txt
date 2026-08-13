@@ -556,3 +556,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
         COMPONENT Runtime
     )
 endif()
+
+option(IRIS_BUILD_TESTS "Build the EE/IOP recompiler differential test" OFF)
+
+if (IRIS_BUILD_TESTS)
+    add_subdirectory(tests/jit_diff)
+endif()

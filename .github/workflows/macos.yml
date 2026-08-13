@@ -8,6 +8,12 @@ jobs:
   macos-universal-build:
     runs-on: macos-latest
 
+    env:
+      # Both slices must get an identical seed and iteration count, otherwise
+      # they generate different test cases and comparing them means nothing.
+      JIT_DIFF_SEED: '0x123456789abcdef'
+      JIT_DIFF_ITERATIONS: '4000'
+
     steps:
     - uses: actions/checkout@v6
       with:
@@ -32,7 +38,7 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DIRIS_BUILD_TESTS=ON
         cmake --build build
         sudo cmake --install build
         mkdir -p ./build/dist
@@ -42,3 +48,140 @@ jobs:
       with:
         name: iris-latest-macos-universal
         path: ./build/dist
+
+    # Deliberately after the artifact upload: a codegen regression should turn
+    # the job red without also costing us the build.
+    #
+    # The recompiler has a separate asmjit backend per architecture; the
+    # interpreter it is checked against is portable C++. So a divergence present
+    # in one slice of the universal binary and absent in the other is a codegen
+    # bug in that backend. This is the only place in CI where both backends are
+    # built from the same source by the same compiler and can be compared case
+    # for case.
+    - name: Run EE/IOP recompiler differential test
+      run: |
+        set -uo pipefail
+
+        BIN=./build/tests/jit_diff/iris-jit-diff
+
+        echo "slices in the universal binary: $(lipo -archs "$BIN")"
+
+        native=$(uname -m)
+        case "$native" in
+          arm64)  other=x86_64 ;;
+          x86_64) other=arm64  ;;
+          *)      other=""     ;;
+        esac
+
+        run_slice() {
+          a="$1"
+
+          echo "::group::$a"
+          arch -"$a" "$BIN" \
+            --seed "$JIT_DIFF_SEED" \
+            --iterations "$JIT_DIFF_ITERATIONS" \
+            --signatures-out "sig-$a.txt" 2>&1 | tee "out-$a.txt"
+
+          rc=${PIPESTATUS[0]}
+
+          echo "::endgroup::"
+          echo "$a exited $rc"
+
+          # comm needs both inputs ordered the same way it compares them.
+          [ -f "sig-$a.txt" ] && LC_ALL=C sort -o "sig-$a.txt" "sig-$a.txt"
+
+          return $rc
+        }
+
+        run_slice "$native"
+        native_rc=$?
+
+        other_rc=0
+        other_ran=0
+
+        # The second slice needs Rosetta on an arm64 runner. Probe rather than
+        # assume: a missing translator is not a build failure, it only means we
+        # cannot self-baseline this run.
+        if [ -n "$other" ] && arch -"$other" /usr/bin/true 2>/dev/null; then
+          run_slice "$other"
+          other_rc=$?
+          other_ran=1
+        else
+          echo "cannot execute the $other slice on this runner; skipping it"
+        fi
+
+        {
+          echo "## EE/IOP recompiler differential test"
+          echo
+          echo "seed \`$JIT_DIFF_SEED\`, $JIT_DIFF_ITERATIONS iterations per core"
+          echo
+        } >> "$GITHUB_STEP_SUMMARY"
+
+        backend_specific=""
+
+        if [ "$other_ran" = 1 ]; then
+          comm -23 "sig-$native.txt" "sig-$other.txt" > "only-$native.txt"
+          comm -13 "sig-$native.txt" "sig-$other.txt" > "only-$other.txt"
+
+          for a in "$native" "$other"; do
+            if [ -s "only-$a.txt" ]; then
+              backend_specific=1
+
+              {
+                echo "### Divergences only on $a"
+                echo '```'
+                cat "only-$a.txt"
+                echo '```'
+              } >> "$GITHUB_STEP_SUMMARY"
+            fi
+          done
+
+          if [ -z "$backend_specific" ]; then
+            echo "Both slices produced an identical signature list." >> "$GITHUB_STEP_SUMMARY"
+          fi
+        else
+          {
+            echo "Only the $native slice ran, so there is no cross-architecture comparison."
+            echo
+            echo "Signatures found:"
+            echo '```'
+            cat "sig-$native.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+        # Test exit status: 0 clean, 1 divergences, 2 a core logged a fatal
+        # error. Divergences alone do not fail the job - there is a known set of
+        # them and they are the same on every architecture. The other two do.
+        status=0
+
+        if [ "$native_rc" -ge 2 ] || [ "$other_rc" -ge 2 ]; then
+          echo "::error::a core logged a fatal error, see the job summary"
+
+          {
+            echo
+            echo "**A core logged a fatal error.** A block the recompiler cannot"
+            echo "encode leaves \`block->func\` null, and that core then makes no"
+            echo "forward progress at all - it presents as a freeze, not as a"
+            echo "wrong value."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          status=1
+        fi
+
+        if [ -n "$backend_specific" ]; then
+          echo "::error::the two slices disagree, so one backend miscompiles"
+          status=1
+        fi
+
+        exit $status
+
+    - uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: jit-diff-macos
+        path: |
+          out-*.txt
+          sig-*.txt
+          only-*.txt
+        if-no-files-found: warn
