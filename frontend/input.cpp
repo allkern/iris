@@ -451,10 +451,8 @@ bool save_screenshot(Instance* iris, std::string path) {
         width = iris->vk.main_window_data.Width;
         height = iris->vk.main_window_data.Height;
         
-        if (!iris->fullscreen) {
-            offset = iris->ui.menubar_height;
-            height -= iris->ui.menubar_height;
-        }
+        offset = get_menubar_inset(iris);
+        height -= offset;
     }
 
     if (!ptr) {

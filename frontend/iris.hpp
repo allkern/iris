@@ -386,6 +386,7 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event);
 SDL_AppResult update(Instance* iris);
 void update_window(Instance* iris);
 int get_menubar_height(Instance* iris);
+int get_menubar_inset(Instance* iris);
 
 void show_main_menubar(Instance* iris);
 void show_status_bar(Instance* iris);

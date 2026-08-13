@@ -15,6 +15,8 @@ bool apply_settings(Instance* iris) {
     return true;
 }
 
+void set_menubar(Instance* iris, const std::vector <menu::Node>& nodes) {}
+
 void destroy(Instance* iris) {}
 
 }

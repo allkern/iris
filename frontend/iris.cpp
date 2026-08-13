@@ -225,9 +225,7 @@ void update_window(Instance* iris) {
     if (usb_mouse_owns_pointer)
         SetMouseCursor(ImGuiMouseCursor_None);
 
-    if (!iris->fullscreen) {
-        show_main_menubar(iris);
-    }
+    show_main_menubar(iris);
 
     DockSpaceOverViewport(0, GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
@@ -412,11 +410,7 @@ void update_window(Instance* iris) {
 
         ts.x -= 1.0f;
 
-        int menubar_offset = 0;
-
-        if (!iris->fullscreen) {
-            menubar_offset += iris->ui.menubar_height;
-        }
+        int menubar_offset = get_menubar_inset(iris);
 
         // GetBackgroundDrawList()->AddRectFilled(
         //     ImVec2(width - ts.x - offset.x - padding.x, menubar_offset + offset.y - padding.y),
@@ -952,12 +946,20 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
     return SDL_APP_CONTINUE;
 }
 
-int get_menubar_height(Instance* iris) {
-    if (iris->ui.show_status_bar) {
-        return iris->ui.menubar_height * 2;
-    }
+int get_menubar_inset(Instance* iris) {
+    if (menu::native() || iris->fullscreen)
+        return 0;
 
     return iris->ui.menubar_height;
+}
+
+int get_menubar_height(Instance* iris) {
+    int height = menu::native() ? 0 : iris->ui.menubar_height;
+
+    if (iris->ui.show_status_bar)
+        height += iris->ui.menubar_height;
+
+    return height;
 }
 
 void destroy(Instance* iris) {

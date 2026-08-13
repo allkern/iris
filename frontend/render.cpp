@@ -339,13 +339,13 @@ static inline void update_vertex_buffer(Instance* iris, VkCommandBuffer command_
     display.x = 0;
     display.y = 0;
     
-    if (!iris->fullscreen) {
-        display.h -= iris->ui.menubar_height;
-        display.y += iris->ui.menubar_height;
+    int inset = get_menubar_inset(iris);
 
-        if (iris->ui.show_status_bar) {
-            display.h -= iris->ui.menubar_height;
-        }
+    display.h -= inset;
+    display.y += inset;
+
+    if (!iris->fullscreen && iris->ui.show_status_bar) {
+        display.h -= iris->ui.menubar_height;
     }
 
     rect.w = iris->vk.image.width;

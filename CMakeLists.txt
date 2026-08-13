@@ -250,6 +250,7 @@ target_sources(iris PRIVATE
     frontend/net.cpp
     frontend/slirp.cpp
     frontend/notifications.cpp
+    frontend/menu.cpp
     frontend/settings.cpp
     frontend/ui/about.cpp
     frontend/ui/bios_setting.cpp
