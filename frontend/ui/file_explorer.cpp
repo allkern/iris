@@ -33,8 +33,42 @@ static constexpr int MAX_EXTRACT_DEPTH = 64;
 struct Action {
     std::string go;
     std::string extract;
+    std::string boot;
     bool directory = false;
 };
+
+static std::string ps2_boot_path(const FileExplorer* fe, const std::string& name) {
+    std::string path = fs::path_join(fe->cwd, name);
+
+    switch (fe->device.kind) {
+        case FE_DEV_MCD:
+            return "mc" + std::to_string(fe->device.index) + ":" + path;
+
+        case FE_DEV_USB:
+            return "mass" + std::to_string(fe->device.index) + ":" + path;
+
+        case FE_DEV_HDD: {
+            if (fe->partition < 0 || fe->partition >= (int)fe->partitions.size())
+                return "";
+
+            return "hdd0:" + std::string(fe->partitions[fe->partition].name) + ":pfs:" + path;
+        }
+
+        case FE_DEV_DISC: {
+            std::string iso;
+
+            for (char c : path)
+                iso += c == '/' ? '\\' : (char)toupper((unsigned char)c);
+
+            if (iso.find(';') == std::string::npos)
+                iso += ";1";
+
+            return "cdrom0:" + iso;
+        }
+    }
+
+    return "";
+}
 
 static MemoryEditor editor;
 
@@ -1130,6 +1164,15 @@ static void show_listing(FileExplorer* fe, Action* action) {
             if (BeginPopupContextItem(("##ctx" + std::to_string(i)).c_str())) {
                 fe->selected = i;
 
+                if (!dir) {
+                    std::string boot = ps2_boot_path(fe, e.name);
+
+                    if (imgui::MenuItem(ICON_MS_PLAY_ARROW " Boot", nullptr, false, fe->device.live && boot.size()))
+                        action->boot = boot;
+
+                    Separator();
+                }
+
                 if (imgui::MenuItem(dir ? ICON_MS_FOLDER_COPY " Extract folder..." : ICON_MS_FILE_DOWNLOAD " Extract...")) {
                     action->extract = e.name;
                     action->directory = dir;
@@ -1342,6 +1385,9 @@ static void show_browser(Instance* iris, FileExplorer* fe) {
     } else {
         show_listing(fe, &action);
     }
+
+    if (action.boot.size())
+        emu::boot_ps2_path(iris, action.boot);
 
     if (action.extract.size())
         extract_selected(iris, fe, action.extract, action.directory);

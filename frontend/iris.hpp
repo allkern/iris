@@ -359,6 +359,7 @@ struct Instance {
     int load_result = 0;
     std::string load_pending_name = "";
     bool load_start_pending = false;
+    bool load_pending_boot = false;
     std::string load_pending_file = "";
 
     float avg_fps;

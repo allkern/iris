@@ -218,15 +218,50 @@ int open_file(Instance* iris, std::string file) {
     return 0;
 }
 
+static int boot_ps2_path_thread(Instance* iris, std::string path) {
+    ps2::set_system(iris->ps2, iris->system);
+    emu::load_rom_files(iris);
+    ps2::boot_file(iris->ps2, path.c_str());
+
+    finish_load(iris, 0, path);
+
+    return 0;
+}
+
+int boot_ps2_path(Instance* iris, std::string path) {
+    size_t sep = path.find_last_of("/\\");
+
+    iris->ui.loading_target = sep == std::string::npos ? path : path.substr(sep + 1);
+    iris->ui.loading_file_active = true;
+    iris->load_ready = false;
+    iris->debug.pause = true;
+
+    gs::renderer::hotswap(iris->renderer, gs::renderer::BACKEND_NULL);
+
+    imgui::start_dim(iris, 0.35f, 100);
+
+    iris->load_pending_file = path;
+    iris->load_pending_boot = true;
+    iris->load_start_pending = true;
+
+    return 0;
+}
+
 void start_pending_load(Instance* iris) {
     if (!iris->load_start_pending)
         return;
 
     iris->load_start_pending = false;
 
-    std::thread t(open_file_thread, iris, iris->load_pending_file);
+    if (iris->load_pending_boot) {
+        iris->load_pending_boot = false;
 
-    t.detach();
+        std::thread(boot_ps2_path_thread, iris, iris->load_pending_file).detach();
+
+        return;
+    }
+
+    std::thread(open_file_thread, iris, iris->load_pending_file).detach();
 }
 
 template <typename T> std::optional<T> query_arcade_value(std::string arcade_name, std::string key) {

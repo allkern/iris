@@ -10,8 +10,6 @@ struct Instance;
 
 namespace imgui {
 
-// Values are persisted to settings.toml, so new themes get appended rather
-// than slotted in
 enum Theme {
     GRANITE_NEO,
     IMGUI_DARK,
@@ -72,6 +70,7 @@ float splitter_before(bool vertical, float size1);
 float splitter_at_cursor(bool vertical);
 
 bool segmented(const char* id, int* value, const char* const* labels, int count, float width = 0.0f);
+bool text_input(const char* id, std::string* value, const char* placeholder = "", float width = 0.0f);
 void badge(const char* text, const ImVec4& color, float bg_alpha = 0.16f);
 
 }

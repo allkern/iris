@@ -1,5 +1,7 @@
 #pragma once
 
+#include <string>
+
 #include "applet.hpp"
 
 namespace iris {
@@ -25,12 +27,12 @@ struct SettingsWindow : Applet {
 
     int selected = 0;
 
-    char bios_buf[512] = "";
-    char rom1_buf[512] = "";
-    char rom2_buf[512] = "";
-    char nvram_buf[512] = "";
-    char hdd_buf[512] = "";
-    char flash_buf[512] = "";
+    std::string bios_buf;
+    std::string rom1_buf;
+    std::string rom2_buf;
+    std::string nvram_buf;
+    std::string hdd_buf;
+    std::string flash_buf;
 };
 
 }

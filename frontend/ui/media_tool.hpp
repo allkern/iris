@@ -47,6 +47,18 @@ struct MediaTool : Applet {
         show();
     }
 
+    void open_for_slot(int media, int slot) {
+        pending_tab = media;
+
+        if (media == MEDIA_MEMORY_CARD) {
+            mcd_slot = slot;
+        } else if (media == MEDIA_USB_DRIVE) {
+            usb_port = slot;
+        }
+
+        show();
+    }
+
     int pending_tab = -1;
 
     int mcd_type = MEMCARD_TYPE_PS2;

@@ -21,6 +21,7 @@ namespace emu {
 bool init(Instance* iris);
 void destroy(Instance* iris);
 int open_file(Instance* iris, std::string path);
+int boot_ps2_path(Instance* iris, std::string path);
 
 bool is_disc_image(const std::string& path);
 

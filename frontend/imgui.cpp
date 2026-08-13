@@ -13,6 +13,7 @@
 #include <cstdarg>
 
 // External includes
+#include "misc/cpp/imgui_stdlib.h"
 #include "res/IconsMaterialSymbols.h"
 
 constexpr unsigned char g_inter_data[] = {
@@ -507,6 +508,25 @@ float splitter_at_cursor(bool vertical) {
     ImGuiStyle& style = ImGui::GetStyle();
 
     return -((vertical ? style.ItemSpacing.x : style.ItemSpacing.y) + 1.0f) * 0.5f;
+}
+
+bool text_input(const char* id, std::string* value, const char* placeholder, float width) {
+    using namespace ImGui;
+
+    static std::string original;
+
+    if (width > 0.0f)
+        SetNextItemWidth(width);
+
+    bool entered = InputTextWithHint(id, placeholder, value, ImGuiInputTextFlags_EnterReturnsTrue);
+
+    if (IsItemActivated())
+        original = *value;
+
+    if (!entered && !IsItemDeactivatedAfterEdit())
+        return false;
+
+    return original != *value;
 }
 
 bool segmented(const char* id, int* value, const char* const* labels, int count, float width) {

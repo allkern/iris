@@ -18,6 +18,20 @@ namespace iris {
 static bool hovered = false;
 static std::string tooltip = "";
 
+static float segment_width(const char* const* labels, int count) {
+    using namespace ImGui;
+
+    float width = 0.0f;
+
+    for (int i = 0; i < count; i++) {
+        float w = CalcTextSize(labels[i]).x;
+
+        if (w > width) width = w;
+    }
+
+    return width + GetStyle().FramePadding.x * 2.0f + 12.0f;
+}
+
 struct ResetPrompt {
     const char* setting = "";
     std::string detail = "";
@@ -1129,18 +1143,17 @@ static uint64_t mapping_editing = 0;
 void show_mappings_editor(Instance* iris) {
     using namespace ImGui;
 
-    static char buf[1024] = { 0 };
-    const char* hint = iris->paths.gcdb_path.size() ? iris->paths.gcdb_path.c_str() : "Not configured (using default)";
-
     Text("Game controller DB");
 
     SetNextItemWidth(300);
 
-    if (InputTextWithHint("##gcdbinput", hint, buf, 1024, ImGuiInputTextFlags_EscapeClearsAll | ImGuiInputTextFlags_EnterReturnsTrue)) {
-        iris->paths.gcdb_path = std::string(buf);
-
-        // To-do: Check return value
-        input::load_db_from_file(iris, iris->paths.gcdb_path.c_str());
+    if (imgui::text_input("##gcdbinput", &iris->paths.gcdb_path, "Not configured (using default)")) {
+        if (iris->paths.gcdb_path.size()) {
+            // To-do: Check return value
+            input::load_db_from_file(iris, iris->paths.gcdb_path.c_str());
+        } else {
+            input::load_db_default(iris);
+        }
     }
 
     SameLine();
@@ -1158,9 +1171,7 @@ void show_mappings_editor(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(buf, f.result().at(0).c_str(), 1024);
-
-            iris->paths.gcdb_path = std::string(buf);
+            iris->paths.gcdb_path = f.result().at(0);
 
             // To-do: Check return value
             input::load_db_from_file(iris, iris->paths.gcdb_path.c_str());
@@ -1169,8 +1180,6 @@ void show_mappings_editor(Instance* iris) {
 
     if (Button(ICON_MS_CLEAR "##gcdbclear")) {
         iris->paths.gcdb_path = "";
-
-        memset(buf, 0, 1024);
 
         input::load_db_default(iris);
     }
@@ -1297,26 +1306,17 @@ void show_mappings_editor(Instance* iris) {
 void show_input_settings(Instance* iris) {
     using namespace ImGui;
 
-    if (BeginTabBar("##inputtabs")) {
-        if (BeginTabItem("Slot 1")) {
-            show_controller_slot(iris, 0);
+    static const char* const tabs[] = { "Slot 1", "Slot 2", "Mappings" };
+    static int tab = 0;
 
-            EndTabItem();
-        }
+    imgui::segmented("##inputtabs", &tab, tabs, IM_ARRAYSIZE(tabs), segment_width(tabs, IM_ARRAYSIZE(tabs)));
 
-        if (BeginTabItem("Slot 2")) {
-            show_controller_slot(iris, 1);
+    Spacing();
 
-            EndTabItem();
-        }
-
-        if (BeginTabItem("Mappings")) {
-            show_mappings_editor(iris);
-
-            EndTabItem();
-        }
-
-        EndTabBar();
+    switch (tab) {
+        case 0: show_controller_slot(iris, 0); break;
+        case 1: show_controller_slot(iris, 1); break;
+        case 2: show_mappings_editor(iris); break;
     }
 }
 
@@ -1345,29 +1345,23 @@ void show_usb_port(Instance* iris, int port) {
     }
 
     if (iris->input.usb_devices[port] == usb::USB_DEVICE_MSD) {
-        static char msd_buf[2][512];
-
         std::string& path = iris->input.usb_msd_paths[port];
 
         Separator();
         Text("Image");
 
-        const char* hint = path.size() ? path.c_str() : "No image (drive empty)";
+        float spacing = GetStyle().ItemSpacing.x;
+        float width = 300.0f;
 
-        SetNextItemWidth(300);
+        ImVec2 size((float)(int)((width - spacing * 3.0f) / 4.0f), 0.0f);
+        ImVec2 last(width - (size.x + spacing) * 3.0f, 0.0f);
 
-        if (InputTextWithHint("##msdimage", hint, msd_buf[port], 512, ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_EscapeClearsAll)) {
-            if (msd_buf[port][0]) {
-                path = msd_buf[port];
-                msd_buf[port][0] = '\0';
+        SetNextItemWidth(width);
 
-                usb::msd_set_image(iris->ps2->usb, port, path.c_str());
-            }
-        }
+        if (imgui::text_input("##msdimage", &path, "No image (drive empty)"))
+            usb::msd_set_image(iris->ps2->usb, port, path.size() ? path.c_str() : nullptr);
 
-        SameLine();
-
-        if (Button(ICON_MS_FOLDER "##msdimage")) {
+        if (Button(ICON_MS_FOLDER "##msdimage", size)) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Select USB drive image", "", {
@@ -1386,11 +1380,20 @@ void show_usb_port(Instance* iris, int port) {
             }
         }
 
+        SetItemTooltip("Select an existing drive image");
+
+        SameLine();
+
+        if (Button(ICON_MS_NOTE_ADD "##msdcreate", size))
+            iris->applets.media_tool.open_for_slot(MEDIA_USB_DRIVE, port);
+
+        SetItemTooltip("Create a new drive image");
+
         SameLine();
 
         BeginDisabled(path.empty());
 
-        if (Button(ICON_MS_CLEAR "##msdimage")) {
+        if (Button(ICON_MS_CLEAR "##msdclear", size)) {
             path = "";
 
             usb::msd_set_image(iris->ps2->usb, port, nullptr);
@@ -1398,11 +1401,13 @@ void show_usb_port(Instance* iris, int port) {
 
         EndDisabled();
 
+        SetItemTooltip("Eject this drive image");
+
         SameLine();
 
         BeginDisabled(path.empty());
 
-        if (Button(ICON_MS_FOLDER_OPEN "##msdbrowse"))
+        if (Button(ICON_MS_FOLDER_OPEN "##msdbrowse", last))
             browse_device(iris, FE_DEV_USB, port);
 
         EndDisabled();
@@ -1414,27 +1419,14 @@ void show_usb_port(Instance* iris, int port) {
 void show_usb_settings(Instance* iris) {
     using namespace ImGui;
 
-    if (Button(ICON_MS_EDIT " Create drive image...")) {
-        iris->applets.media_tool.open_for(MEDIA_USB_DRIVE);
-    }
+    static const char* const tabs[] = { "Port 1", "Port 2" };
+    static int tab = 0;
 
-    Separator();
+    imgui::segmented("##usbtabs", &tab, tabs, IM_ARRAYSIZE(tabs), segment_width(tabs, IM_ARRAYSIZE(tabs)));
 
-    if (BeginTabBar("##usbtabs")) {
-        if (BeginTabItem("Port 1")) {
-            show_usb_port(iris, 0);
+    Spacing();
 
-            EndTabItem();
-        }
-
-        if (BeginTabItem("Port 2")) {
-            show_usb_port(iris, 1);
-
-            EndTabItem();
-        }
-
-        EndTabBar();
-    }
+    show_usb_port(iris, tab);
 }
 
 void show_paths_settings(Instance* iris) {
@@ -1442,12 +1434,12 @@ void show_paths_settings(Instance* iris) {
 
     SettingsWindow& settings = iris->applets.settings;
 
-    char* buf = settings.bios_buf;
-    char* dvd_buf = settings.rom1_buf;
-    char* rom2_buf = settings.rom2_buf;
-    char* nvram_buf = settings.nvram_buf;
-    char* hdd_buf = settings.hdd_buf;
-    char* flash_buf = settings.flash_buf;
+    std::string& buf = settings.bios_buf;
+    std::string& dvd_buf = settings.rom1_buf;
+    std::string& rom2_buf = settings.rom2_buf;
+    std::string& nvram_buf = settings.nvram_buf;
+    std::string& hdd_buf = settings.hdd_buf;
+    std::string& flash_buf = settings.flash_buf;
 
     Text("BIOS (rom0)");
 
@@ -1457,16 +1449,9 @@ void show_paths_settings(Instance* iris) {
         tooltip = ICON_MS_INFO " Select a BIOS file, this is required for the emulator to function properly";
     }
 
-    const char* bios_hint = iris->paths.bios_path.size() ? iris->paths.bios_path.c_str() : "e.g. scph10000.bin";
-    const char* rom1_hint = iris->paths.rom1_path.size() ? iris->paths.rom1_path.c_str() : "Not configured";
-    const char* rom2_hint = iris->paths.rom2_path.size() ? iris->paths.rom2_path.c_str() : "Not configured";
-    const char* nvram_hint = iris->paths.nvram_path.size() ? iris->paths.nvram_path.c_str() : "Not configured";
-    const char* hdd_hint = iris->paths.hdd_path.size() ? iris->paths.hdd_path.c_str() : "Not configured";
-    const char* flash_hint = iris->paths.flash_path.size() ? iris->paths.flash_path.c_str() : "Not configured";
-
     SetNextItemWidth(300);
 
-    InputTextWithHint("##rom0", bios_hint, buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    imgui::text_input("##rom0", &buf, "e.g. scph10000.bin");
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom0")) {
@@ -1482,7 +1467,7 @@ void show_paths_settings(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(buf, f.result().at(0).c_str(), 512);
+            buf = f.result().at(0);
         }
     }
 
@@ -1529,7 +1514,7 @@ void show_paths_settings(Instance* iris) {
 
     SetNextItemWidth(300);
 
-    InputTextWithHint("##rom1", rom1_hint, dvd_buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    imgui::text_input("##rom1", &dvd_buf, "Not configured");
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom1")) {
@@ -1545,16 +1530,16 @@ void show_paths_settings(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(dvd_buf, f.result().at(0).c_str(), 512);
+            dvd_buf = f.result().at(0);
 
-            ps2::load_rom1(iris->ps2, dvd_buf);
+            ps2::load_rom1(iris->ps2, dvd_buf.c_str());
         }
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##rom1")) {
         iris->paths.rom1_path = "";
 
-        memset(dvd_buf, 0, 512);
+        dvd_buf.clear();
     }
 
     if (iris->paths.rom1_path.size()) {
@@ -1584,7 +1569,7 @@ void show_paths_settings(Instance* iris) {
 
     SetNextItemWidth(300);
 
-    InputTextWithHint("##rom2", rom2_hint, rom2_buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    imgui::text_input("##rom2", &rom2_buf, "Not configured");
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##rom2")) {
@@ -1600,21 +1585,21 @@ void show_paths_settings(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(rom2_buf, f.result().at(0).c_str(), 512);
+            rom2_buf = f.result().at(0);
         }
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##rom2")) {
         iris->paths.rom2_path = "";
 
-        memset(rom2_buf, 0, 512);
+        rom2_buf.clear();
     } 
 
     Text("EEPROM memory (nvram)");
 
     SetNextItemWidth(300);
 
-    InputTextWithHint("##nvram", nvram_hint, nvram_buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    imgui::text_input("##nvram", &nvram_buf, "Not configured");
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##nvram")) {
@@ -1630,14 +1615,14 @@ void show_paths_settings(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(nvram_buf, f.result().at(0).c_str(), 512);
+            nvram_buf = f.result().at(0);
         }
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##nvram")) {
         iris->paths.nvram_path = "";
 
-        memset(nvram_buf, 0, 512);
+        nvram_buf.clear();
     }
 
     EndDisabled();
@@ -1647,7 +1632,7 @@ void show_paths_settings(Instance* iris) {
     Text("Hard Disk Drive (hdd0)");
 
     SetNextItemWidth(300);
-    InputTextWithHint("##hdd", hdd_hint, hdd_buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    imgui::text_input("##hdd", &hdd_buf, "Not configured");
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##hdd")) {
@@ -1663,14 +1648,14 @@ void show_paths_settings(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(hdd_buf, f.result().at(0).c_str(), 512);
+            hdd_buf = f.result().at(0);
         }
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##hdd")) {
         iris->paths.hdd_path = "";
 
-        memset(hdd_buf, 0, 512);
+        hdd_buf.clear();
     }
 
     SameLine();
@@ -1689,7 +1674,7 @@ void show_paths_settings(Instance* iris) {
 
     SetNextItemWidth(300);
 
-    InputTextWithHint("##flash", flash_hint, flash_buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
+    imgui::text_input("##flash", &flash_buf, "Not configured");
     SameLine();
 
     if (Button(ICON_MS_FOLDER "##flash")) {
@@ -1705,14 +1690,14 @@ void show_paths_settings(Instance* iris) {
         audio::unmute(iris);
 
         if (f.result().size()) {
-            strncpy(flash_buf, f.result().at(0).c_str(), 512);
+            flash_buf = f.result().at(0);
         }
     } SameLine();
 
     if (Button(ICON_MS_CLEAR "##xfrom")) {
         iris->paths.flash_path = "";
 
-        memset(flash_buf, 0, 512);
+        flash_buf.clear();
     }
 
     SameLine();
@@ -1766,18 +1751,12 @@ void show_paths_settings(Instance* iris) {
 }
 
 void SettingsWindow::sync_paths() {
-    auto copy = [](char* dst, const std::string& src) {
-        strncpy(dst, src.c_str(), 511);
-
-        dst[511] = 0;
-    };
-
-    copy(bios_buf, iris->paths.bios_path);
-    copy(rom1_buf, iris->paths.rom1_path);
-    copy(rom2_buf, iris->paths.rom2_path);
-    copy(nvram_buf, iris->paths.nvram_path);
-    copy(hdd_buf, iris->paths.hdd_path);
-    copy(flash_buf, iris->paths.flash_path);
+    bios_buf = iris->paths.bios_path;
+    rom1_buf = iris->paths.rom1_path;
+    rom2_buf = iris->paths.rom2_path;
+    nvram_buf = iris->paths.nvram_path;
+    hdd_buf = iris->paths.hdd_path;
+    flash_buf = iris->paths.flash_path;
 }
 
 bool SettingsWindow::paths_dirty() const {
@@ -1794,9 +1773,6 @@ void SettingsWindow::on_open() {
 
     reset_prompt.deferred = false;
 }
-
-static char slot0_buf[1024];
-static char slot1_buf[1024];
 
 static int format_slot = -1;
 static bool format_pending = false;
@@ -1865,6 +1841,18 @@ static void draw_format_prompt(Instance* iris) {
     EndPopup();
 }
 
+static const char* get_memory_card_type_name(int type) {
+    switch (type) {
+        case 0: return "None";
+        case 1: return "PS2 Memory Card";
+        case 2: return "PS1 Memory Card";
+        case 3: return "PocketStation";
+        default: return "Unknown";
+    }
+
+    return "Unknown";
+}
+
 void show_memory_card(Instance* iris, int slot) {
     using namespace ImGui;
 
@@ -1872,7 +1860,7 @@ void show_memory_card(Instance* iris, int slot) {
 
     label[7] = '0' + slot;
 
-    if (BeginChild(label, ImVec2(GetContentRegionAvail().x / (slot ? 1.0 : 2.0) - 10.0, 0))) {
+    if (BeginChild(label, ImVec2(0, 0))) {
         std::string& path = slot ? iris->paths.mcd1_path : iris->paths.mcd0_path;
 
         ImVec4 col = GetStyleColorVec4(iris->input.mcd_slot_type[slot] ? ImGuiCol_Text : ImGuiCol_TextDisabled);
@@ -1914,14 +1902,12 @@ void show_memory_card(Instance* iris, int slot) {
         }
 
         PushFont(iris->ui.font_heading);
-        Text("Slot %d", slot+1);
+        Text("%s", get_memory_card_type_name(iris->input.mcd_slot_type[slot]));
         PopFont();
-
-        char* buf = slot ? slot1_buf : slot0_buf;
-        const char* hint = path.size() ? path.c_str() : "Not configured";
 
         char it_label[7] = "##mcd0";
         char bt_label[10] = ICON_MS_FOLDER "##mcd0";
+        char cr_label[15] = ICON_MS_NOTE_ADD "##mcdcr0";
         char br_label[15] = ICON_MS_FOLDER_OPEN "##mcdbr0";
         char fm_label[15] = ICON_MS_DELETE_SWEEP "##mcdfm0";
         char ed_label[10];
@@ -1930,14 +1916,27 @@ void show_memory_card(Instance* iris, int slot) {
 
         it_label[5] = '0' + slot;
         bt_label[8] = '0' + slot;
+        cr_label[10] = '0' + slot;
         ed_label[8] = '0' + slot;
         br_label[10] = '0' + slot;
         fm_label[10] = '0' + slot;
 
-        InputTextWithHint(it_label, hint, buf, 512, ImGuiInputTextFlags_EscapeClearsAll);
-        SameLine();
+        float spacing = GetStyle().ItemSpacing.x;
+        float avail = GetContentRegionAvail().x;
 
-        if (Button(bt_label)) {
+        // Truncated so the row can never total more than the field above it and wrap.
+        // The last button takes whatever that leaves over, landing the row on the same edge
+        ImVec2 size((float)(int)((avail - spacing * 4.0f) / 5.0f), 0.0f);
+        ImVec2 last(avail - (size.x + spacing) * 4.0f, 0.0f);
+
+        SetNextItemWidth(avail);
+
+        if (imgui::text_input(it_label, &path, "Not configured")) {
+            if (iris->input.mcd_slot_type[slot])
+                emu::attach_memory_card(iris, slot, path.c_str());
+        }
+
+        if (Button(bt_label, size)) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Select Memory Card file for Slot 1", iris->paths.pref_path, {
@@ -1950,19 +1949,26 @@ void show_memory_card(Instance* iris, int slot) {
             audio::unmute(iris);
 
             if (f.result().size()) {
-                strncpy(buf, f.result().at(0).c_str(), 512);
-
                 path = f.result().at(0);
 
                 emu::attach_memory_card(iris, slot, path.c_str());
             }
         }
 
+        SetItemTooltip("Select an existing memory card image");
+
+        SameLine();
+
+        if (Button(cr_label, size))
+            iris->applets.media_tool.open_for_slot(MEDIA_MEMORY_CARD, slot);
+
+        SetItemTooltip("Create a new memory card image");
+
         SameLine();
 
         BeginDisabled((!iris->input.mcd_slot_type[slot]) && (!path.size()));
 
-        if (Button(ed_label)) {
+        if (Button(ed_label, size)) {
             if (iris->input.mcd_slot_type[slot]) {
                 emu::detach_memory_card(iris, slot);
             } else {
@@ -1972,11 +1978,13 @@ void show_memory_card(Instance* iris, int slot) {
 
         EndDisabled();
 
+        SetItemTooltip(iris->input.mcd_slot_type[slot] ? "Detach this memory card" : "Attach this memory card");
+
         SameLine();
 
         BeginDisabled((!iris->input.mcd_slot_type[slot]) && (!path.size()));
 
-        if (Button(br_label))
+        if (Button(br_label, size))
             browse_device(iris, FE_DEV_MCD, slot);
 
         EndDisabled();
@@ -1987,7 +1995,7 @@ void show_memory_card(Instance* iris, int slot) {
 
         BeginDisabled(path.empty());
 
-        if (Button(fm_label)) {
+        if (Button(fm_label, last)) {
             format_slot = slot;
             format_pending = true;
         }
@@ -2001,14 +2009,14 @@ void show_memory_card(Instance* iris, int slot) {
 void show_memory_card_settings(Instance* iris) {
     using namespace ImGui;
 
-    if (Button(ICON_MS_EDIT " Create memory cards...")) {
-        iris->applets.media_tool.open_for(MEDIA_MEMORY_CARD);
-    }
+    static const char* const tabs[] = { "Slot 1", "Slot 2" };
+    static int tab = 0;
 
-    Separator();
+    imgui::segmented("##mcardtabs", &tab, tabs, IM_ARRAYSIZE(tabs), segment_width(tabs, IM_ARRAYSIZE(tabs)));
 
-    show_memory_card(iris, 0); SameLine(0.0, 10.0);
-    show_memory_card(iris, 1);
+    Spacing();
+
+    show_memory_card(iris, tab);
 
     draw_format_prompt(iris);
 }
