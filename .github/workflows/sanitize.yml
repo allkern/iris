@@ -1,0 +1,144 @@
+name: Sanitizers
+
+on:
+  push:
+  pull_request:
+
+# Memory safety, not codegen agreement.
+#
+# The differential test answers "do the two backends compute the same thing",
+# and it will stay green through an out-of-bounds write as long as both backends
+# make the same one. That is the class the recent IOP fixes were - cop0_r[16]
+# indexed by a five bit rd, block_cache indexed by an untranslated wild jump -
+# and none of them are ARM bugs. They are undefined behaviour that the x86 build
+# happened to survive.
+#
+# So this runs on x86_64: the bugs are there too, the runners are cheap, and it
+# means finding them does not need an arm64 machine to hand.
+jobs:
+  jit-diff:
+    name: jit-diff (asan+ubsan)
+    runs-on: ubuntu-24.04
+
+    env:
+      CLANG_VERSION: 20
+
+      # Sanitized, this runs several times slower than a plain build, and the
+      # point here is reaching varied code rather than case count - the harness
+      # already covers agreement at full width on macOS.
+      JIT_DIFF_SEED: '0x123456789abcdef'
+      JIT_DIFF_ITERATIONS: '2000'
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+
+    # Same clang the Ubuntu build uses: #embed needs 19 or newer, and the
+    # runner images ship 16-18.
+    - name: Install clang ${{ env.CLANG_VERSION }}
+      run: |
+        sudo add-apt-repository -y universe
+        sudo apt-get install -y cmake ninja-build
+        if ! apt-cache show "clang-${CLANG_VERSION}" > /dev/null 2>&1; then
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "${CLANG_VERSION}"
+        fi
+        sudo apt-get install -y "clang-${CLANG_VERSION}"
+        clang-${CLANG_VERSION} --version
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install mbedTLS codegen deps
+      run: pip install -r deps/mbedtls/scripts/basic.requirements.txt
+
+    # Only the differential test target. Every dependency is EXCLUDE_FROM_ALL
+    # and this one links just asmjit and fmt, so SDL, curl and the GPU stack are
+    # never built - which is also why this job needs no Vulkan SDK.
+    - name: Build the differential test with sanitizers
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_C_COMPILER=clang-${CLANG_VERSION} \
+          -DCMAKE_CXX_COMPILER=clang++-${CLANG_VERSION} \
+          -DIRIS_BUILD_TESTS=ON \
+          -DIRIS_SANITIZE=address,undefined
+        cmake --build build --target iris-jit-diff
+
+    - name: Run under ASan and UBSan
+      run: |
+        set -uo pipefail
+
+        BIN=./build/tests/jit_diff/iris-jit-diff
+
+        summary() { cat >> "$GITHUB_STEP_SUMMARY"; }
+
+        # ASan stops at the first report: once memory is corrupt, everything
+        # after it is a guess. UBSan does the opposite and keeps going, because
+        # its findings are independent of each other and one run that lists all
+        # of them is worth more than one that stops at the first.
+        export ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
+        export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
+        export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer-${CLANG_VERSION} || command -v llvm-symbolizer || true)"
+
+        # --interpreter reaches the most C++: it runs the recompiler and the
+        # interpreter for every case. Its divergences are meaningless here - the
+        # interpreters have known false positives and this job is not asking
+        # about agreement - so exit status 1 is ignored below.
+        echo "::group::jit-diff (interpreter mode, sanitized)"
+        "$BIN" \
+          --seed "$JIT_DIFF_SEED" \
+          --iterations "$JIT_DIFF_ITERATIONS" \
+          --label sanitized \
+          --interpreter 2>&1 | tee out-sanitize.txt
+        rc=${PIPESTATUS[0]}
+        echo "::endgroup::"
+
+        # Exit status cannot tell a sanitizer abort from a divergence - both can
+        # surface as 1 - so the reports themselves are the signal.
+        asan=$(grep -c "ERROR: AddressSanitizer" out-sanitize.txt || true)
+        lsan=$(grep -c "ERROR: LeakSanitizer" out-sanitize.txt || true)
+        ubsan=$(grep -c "runtime error:" out-sanitize.txt || true)
+
+        status=0
+
+        echo "## Sanitizers" | summary
+        echo | summary
+
+        if [ "$asan" != 0 ] || [ "$ubsan" != 0 ] || [ "$lsan" != 0 ]; then
+          echo "- AddressSanitizer reports: $asan" | summary
+          echo "- UndefinedBehaviorSanitizer reports: $ubsan" | summary
+          echo "- LeakSanitizer reports: $lsan" | summary
+          echo | summary
+          echo '```' | summary
+          grep -E "ERROR: (Address|Leak)Sanitizer|runtime error:" out-sanitize.txt | sort | uniq -c | sort -rn | head -40 | summary
+          echo '```' | summary
+
+          echo "::error::sanitizers reported $asan ASan, $ubsan UBSan, $lsan LSan finding(s)"
+          status=1
+        else
+          echo "No ASan or UBSan findings." | summary
+        fi
+
+        # Worth failing on separately: a block the recompiler cannot encode
+        # leaves block->func null, and that is a hang in the emulator rather
+        # than a wrong value. Status 1 is divergences and is ignored here.
+        if [ "$rc" -ge 2 ] && [ "$asan" = 0 ]; then
+          echo "::error::a core logged a fatal error (exit $rc)"
+          echo | summary
+          echo "A core logged a fatal error - failed codegen or an unimplemented opcode." | summary
+          status=1
+        fi
+
+        exit $status
+
+    - uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: sanitize-log
+        path: out-sanitize.txt
+        if-no-files-found: warn

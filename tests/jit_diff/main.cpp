@@ -72,9 +72,19 @@ void print_report(const Report& rep, int budget) {
     // ran. Without this, a pass whose cases all leave on the first instruction
     // is indistinguishable from one that walks every branch it generated.
     if (rep.cases) {
-        printf("  steps/case: min %d mean %.1f max %d, %d of %d used the whole %d-cycle budget\n",
-               rep.steps_min, (double)rep.steps_total / rep.cases, rep.steps_max,
-               rep.at_budget, rep.cases, budget);
+        printf("  steps/case: min %d mean %.1f max %d",
+               rep.steps_min, (double)rep.steps_total / rep.cases, rep.steps_max);
+
+        // The budget is a floor, not a ceiling: run_block() tests cycles_left
+        // at sub-block edges rather than per instruction, so a case overshoots
+        // to the end of whichever sub-block it was in. Only worth reporting
+        // where it discriminates - at a budget of 1 every case trivially
+        // reaches it, and the count says nothing.
+        if (budget > 1)
+            printf(", %d of %d ran until the %d-cycle budget stopped them",
+                   rep.at_budget, rep.cases, budget);
+
+        printf("\n");
 
         // Descending by frequency, so the shape of the pass is the first thing
         // on the line. Truncated because a long tail costs width without

@@ -60,6 +60,55 @@ check_ipo_supported(RESULT LTO_SUPPORTED OUTPUT LTO_ERROR)
 
 set(BUILD_SHARED_LIBS OFF)
 
+# Sanitizers, off by default. -DIRIS_SANITIZE=address,undefined is the useful
+# combination, and it takes both to cover the emulator's two failure modes:
+#
+#   ASan  finds the ones that run off the end of an allocation - block_cache is
+#         a std::vector, so indexing it with a page derived from a wild jump
+#         reads past a real heap block.
+#
+#   UBSan finds the ones that stay inside an object, which ASan cannot see
+#         because there is no redzone between struct members. cop0_r[rd] with a
+#         five bit rd overflowing into the fields behind it is exactly that
+#         shape, and only -fsanitize=bounds catches it.
+#
+# The flags go on the emulator's own targets rather than globally on purpose.
+# Instrumenting SDL, curl, mbedTLS and ImGui buries our findings in third-party
+# noise, which is the usual reason one of these builds gets set up once and then
+# abandoned. ASan does not need whole-program instrumentation - uninstrumented
+# dependencies are simply not checked, and only the final link needs the runtime.
+set(IRIS_SANITIZE "" CACHE STRING "Sanitizers to build the emulator with, e.g. address,undefined")
+
+if (IRIS_SANITIZE)
+    # Checks an emulator trips constantly by design. Left on, they drown
+    # everything worth reading:
+    #
+    #   alignment              guest memory is reinterpreted at any offset
+    #   signed-integer-overflow
+    #   shift-base             emulated arithmetic wraps, and shifts negative
+    #                          values, as a matter of course
+    #   float-cast-overflow    PS2 float to int conversion saturates
+    #   vptr                   needs RTTI
+    #
+    # shift-exponent is deliberately NOT excluded. A shift by more than the
+    # width of the type is the one shift-related thing that is a real bug rather
+    # than an emulated quirk, and it is a class that genuinely differs between
+    # the ARM and x86 backends.
+    #
+    # The exclusion list is restricted to checks both GCC and Clang accept -
+    # -fno-sanitize=function is Clang-only and breaks a GCC build.
+    set(IRIS_SANITIZE_COMPILE
+        -fsanitize=${IRIS_SANITIZE}
+        -fno-sanitize=alignment,signed-integer-overflow,shift-base,float-cast-overflow,vptr
+        -fno-omit-frame-pointer
+        -g
+    )
+
+    set(IRIS_SANITIZE_LINK -fsanitize=${IRIS_SANITIZE})
+
+    message(STATUS "Sanitizers: ${IRIS_SANITIZE}")
+endif()
+
 # And this part tells CMake where to find and install the file itself
 add_executable(iris WIN32 MACOSX_BUNDLE ${OSX_ICON} ${WIN_ICON})
 
@@ -71,6 +120,11 @@ if(CMAKE_CXX_COMPILER_FRONTEND_VARIANT STREQUAL "MSVC")
     target_compile_definitions(iris PUBLIC _CRT_NONSTDC_NO_DEPRECATE _CRT_SECURE_NO_WARNINGS)
 else()
     target_compile_options(iris PUBLIC "-fno-exceptions")
+endif()
+
+if (IRIS_SANITIZE)
+    target_compile_options(iris PRIVATE ${IRIS_SANITIZE_COMPILE})
+    target_link_options(iris PRIVATE ${IRIS_SANITIZE_LINK})
 endif()
 
 set_source_files_properties(
