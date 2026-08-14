@@ -63,10 +63,47 @@ const char* ujit_backend() {
 #endif
 }
 
-void print_report(const Report& rep) {
+void print_report(const Report& rep, int budget) {
     printf("\n[%s] %d cases, %d divergences in %d signature(s) (seed=0x%llx)\n",
            rep.core.c_str(), rep.cases, rep.failures, (int)rep.buckets.size(),
            (unsigned long long)rep.seed);
+
+    // A case count says how many blocks were built, not how much of each one
+    // ran. Without this, a pass whose cases all leave on the first instruction
+    // is indistinguishable from one that walks every branch it generated.
+    if (rep.cases) {
+        printf("  steps/case: min %d mean %.1f max %d, %d of %d used the whole %d-cycle budget\n",
+               rep.steps_min, (double)rep.steps_total / rep.cases, rep.steps_max,
+               rep.at_budget, rep.cases, budget);
+
+        // Descending by frequency, so the shape of the pass is the first thing
+        // on the line. Truncated because a long tail costs width without
+        // saying much - min and max above already bound it.
+        std::vector <std::pair<int, int>> by_freq(rep.steps_hist.begin(), rep.steps_hist.end());
+
+        std::sort(by_freq.begin(), by_freq.end(),
+                  [](const std::pair<int, int>& a, const std::pair<int, int>& b) {
+                      return a.second != b.second ? a.second > b.second : a.first < b.first;
+                  });
+
+        printf("  steps seen (steps x cases):");
+
+        for (int i = 0; i < (int)by_freq.size() && i < 8; i++)
+            printf("  %d x%d", by_freq[i].first, by_freq[i].second);
+
+        if ((int)by_freq.size() > 8)
+            printf("  (+%d more)", (int)by_freq.size() - 8);
+
+        printf("\n");
+
+        // The failure this is here to catch: a block pass whose cases mostly
+        // leave early is not testing the register cache, the spills or the
+        // sub-block edges it exists to test, and it reports clean while not
+        // testing them.
+        if (budget > 1 && rep.at_budget * 2 < rep.cases)
+            printf("  NOTE: most cases left the block before the budget ran out, so this\n"
+                   "        pass covers less than its case count suggests\n");
+    }
 
     for (const auto& kv : rep.buckets)
         printf("  %-30s x%-6d %s\n", kv.first.c_str(), kv.second.count,
@@ -271,7 +308,7 @@ int main(int argc, char** argv) {
         failures += pass.ee ? run_ee_tests(logger, o, &rep)
                             : run_iop_tests(logger, o, &rep);
 
-        print_report(rep);
+        print_report(rep, o.budget);
         collect(rep);
     }
 

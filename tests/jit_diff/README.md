@@ -63,8 +63,19 @@ Output is grouped by signature rather than listing every case:
 
 ```
 [ee/ee-block] 4000 cases, 39 divergences in 5 signature(s) (seed=0xa486e0c22c0e684a)
+  steps/case: min 5 mean 47.7 max 48, 3970 of 4000 used the whole 48-cycle budget
+  steps seen (steps x cases):  48 x3970  5 x5  9 x5  6 x4  7 x4  8 x4  10 x4  11 x4
   ee block[14] gpr.lo   x13   case=761 tag=4f227ef6 words=14 arm64=...4000 x86_64=...e462
 ```
+
+The two `steps` lines are the coverage signal. A case count says how many blocks
+were built, not how much of each one ran, so `4000 cases, 0 divergences` reads
+the same whether every case walked its branches or every case left `run_block`
+on the first instruction. A block pass ends with a jump back to the start, so a
+healthy case runs until the cycle budget is gone: most of them should land in
+`used the whole budget`. When most do not, the pass prints a `NOTE` saying so -
+it is covering less than its case count suggests, and it will keep reporting
+clean while doing it.
 
 ## Passes
 

@@ -709,6 +709,8 @@ int run_iop_tests(Logger* logger, const Options& opt, Report* out) {
 
         ++out->cases;
 
+        out->note_steps(steps, opt.budget);
+
         if (opt.mode == Mode::Record) {
             serialize(opt.blob, tag, steps, jit_result);
 

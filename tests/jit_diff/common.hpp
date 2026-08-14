@@ -195,6 +195,42 @@ struct Report {
 
     std::map <std::string, Bucket> buckets;
 
+    // What run_block() actually retired, per case.
+    //
+    // "4000 cases, 0 divergences" reads exactly the same whether every case
+    // walked its branches or every case fell out of run_block on the first
+    // instruction, so a clean run on its own says nothing about what it
+    // covered. The distribution is what tells those two apart, and it is the
+    // first thing to look at when the harness is clean but a build is not.
+    //
+    // A block pass ends with a jump back to the start, so a healthy case runs
+    // until the cycle budget is gone and lands in at_budget. Cases that retire
+    // fewer steps than that left the block early - they took an exception, or
+    // ran into something the recompiler declined to chain - and a pass made up
+    // mostly of those is testing far less than its case count suggests.
+    int steps_min = 0;
+    int steps_max = 0;
+    int64_t steps_total = 0;
+    int at_budget = 0;
+
+    std::map <int, int> steps_hist;
+
+    void note_steps(int steps, int budget) {
+        if (!steps_hist.empty()) {
+            if (steps < steps_min) steps_min = steps;
+            if (steps > steps_max) steps_max = steps;
+        } else {
+            steps_min = steps_max = steps;
+        }
+
+        steps_total += steps;
+
+        if (steps >= budget)
+            ++at_budget;
+
+        ++steps_hist[steps];
+    }
+
     void fail(const std::string& signature, const std::string& detail) {
         ++failures;
 
