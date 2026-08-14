@@ -69,7 +69,11 @@ jobs:
     # executed.
     - name: Check fastmem against the slow path
       run: |
-        set -uo pipefail
+        # +e on purpose. Actions runs these as `bash -e` and `set -uo pipefail`
+        # does not clear it, so without this a core that exits non-zero kills
+        # the step before any of the reporting below gets to run - which is
+        # precisely the run where the reporting is worth having.
+        set +e -uo pipefail
 
         BIN=./build/tests/jit_diff/iris-jit-diff
 
@@ -134,7 +138,11 @@ jobs:
     # bug in one of them.
     - name: Run EE/IOP recompiler differential test
       run: |
-        set -uo pipefail
+        # See the note on +e above. A divergence makes the compare exit 1, and
+        # under errexit that would end the step right there - before the status
+        # is classified, before the summary is written, and before the artifact
+        # names the cases. The exit code is handled explicitly below instead.
+        set +e -uo pipefail
 
         BIN=./build/tests/jit_diff/iris-jit-diff
 

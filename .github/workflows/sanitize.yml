@@ -102,7 +102,11 @@ jobs:
     #   ASan has no redzone there) and a read off the end of a heap block.
     - name: Verify the sanitizers actually fire
       run: |
-        set -uo pipefail
+        # +e, because the whole point of this step is running commands that are
+        # meant to fail. Actions invokes these as `bash -e`, and `set -uo
+        # pipefail` does not clear that - so without the +e the canary's abort
+        # kills the step before anything gets to check that it aborted.
+        set +e -uo pipefail
 
         BIN=./build/tests/jit_diff/iris-jit-diff
 
@@ -159,8 +163,10 @@ jobs:
         export ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_leaks=0"
         export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
 
-        ./canary        > canary-ubsan.txt 2>&1
-        ./canary extra  > canary-asan.txt  2>&1
+        # Both are expected to fail - ASan aborts by design - so their status is
+        # not the signal. What they printed is.
+        ./canary        > canary-ubsan.txt 2>&1 || true
+        ./canary extra  > canary-asan.txt  2>&1 || true
 
         if ! grep -q "runtime error:" canary-ubsan.txt; then
           echo "::error::UBSan did not report a known out-of-bounds write - findings below are not trustworthy"
@@ -182,7 +188,9 @@ jobs:
 
     - name: Run under ASan and UBSan
       run: |
-        set -uo pipefail
+        # See the note on +e above: a sanitizer abort or a non-zero exit from
+        # the harness has to reach the reporting below, not kill the step.
+        set +e -uo pipefail
 
         BIN=./build/tests/jit_diff/iris-jit-diff
 
