@@ -188,7 +188,7 @@ struct Report {
         std::string example;
     };
 
-    const char* core = "";
+    std::string core;
     uint64_t seed = 0;
     int cases = 0;
     int failures = 0;
@@ -218,6 +218,28 @@ struct FatalSink {
 
 void install_fatal_sink(Logger* logger, FatalSink* sink);
 
+// How a case is built.
+enum class Shape {
+    // One instruction, a nop, and a jump back to the start. Every sub-block
+    // holds exactly one instruction, so the register cache is allocated and
+    // flushed around each instruction in isolation.
+    Single,
+
+    // A run of instructions with branches wired to targets inside it. This is
+    // the shape real guest code has, and the only one that puts the register
+    // cache, constant folding, register pressure and sub-block chaining under
+    // any load at all.
+    Block,
+
+    // One instruction that leaves for the exception vector, or ERET coming back
+    // from one. Everything here is excluded from the other two shapes because it
+    // does not stay inside the case, but the BIOS spends most of its time in
+    // exactly these: a syscall out and an eret back. ERET in particular is
+    // twenty-odd emitted instructions with branches and a call in the middle,
+    // and nothing else was reaching any of it.
+    Except
+};
+
 struct Options {
     uint64_t seed = 0;
     int iterations = 0;
@@ -225,6 +247,25 @@ struct Options {
     Blob* blob = nullptr;
     const char* label = "this";
     const char* other_label = "recorded";
+
+    Shape shape = Shape::Single;
+
+    // Instructions per case in Shape::Block, before the terminating jump.
+    int block_size = 12;
+
+    // Cycles handed to run_block(). One is enough to retire a single-instruction
+    // sub-block; a block with internal edges needs enough budget to actually
+    // walk them, because every edge is guarded by a cycles_left check that
+    // leaves the block when the budget is gone.
+    int budget = 1;
+
+    // Populate the bus fastmem tables, so the inline load/store path and the
+    // constant-address folding path execute instead of being emitted and never
+    // taken. Shipped builds always run with this on.
+    bool fastmem = false;
+
+    // Shown in the report and in the pass banner.
+    const char* pass = "";
 };
 
 int run_iop_tests(Logger* logger, const Options& opt, Report* out);

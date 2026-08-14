@@ -156,7 +156,15 @@ static const uint32_t g_iop_cop0_write_mask_table[] = {
     0xffffffff, // SR       - System status register (R/W)
     0x00000300, // CAUSE    - Describes the most recently recognised exception (R)
     0x00000000, // EPC      - Return Address from Trap (R)
-    0x00000000  // PRID     - Processor ID (R)
+    0x00000000, // PRID     - Processor ID (R)
+
+    // cop0r16..31 do not exist on the R3000A, but rd is five bits wide and
+    // guest code can still name them. Indexed, not bounds checked - see the
+    // note on Iop::cop0_r.
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000,
+    0x00000000, 0x00000000, 0x00000000, 0x00000000
 };
 
 #define S (ins.rs)
@@ -311,7 +319,7 @@ void reset(Iop* iop) {
     for (int i = 0; i < 32; i++)
         iop->r[i] = 0;
 
-    for (int i = 0; i < 16; i++)
+    for (int i = 0; i < 32; i++)
         iop->cop0_r[i] = 0;
 
     iop->pc = 0xbfc00000;
@@ -2246,6 +2254,14 @@ Block* find_block(Iop* iop, uint32_t pc) {
     }
 
     uint32_t addr = translate_addr(pc);
+
+    // translate_addr leaves KUSEG and KSEG2 alone, so addr can be anything a
+    // wild jump put in pc, while block_cache only covers the low 512 MB. Without
+    // this the index runs off the end of the array and reads whatever follows
+    // the Iop struct.
+    if (!is_executable_region(addr))
+        return nullptr;
+
     uint32_t page = addr / _IOP_CACHE_PAGESIZE;
 
     if (!iop->block_cache[page].valid) {
@@ -2281,6 +2297,11 @@ Block* find_block(Iop* iop, uint32_t pc) {
 
 Block* cache_block(Iop* iop, uint32_t addr, int max_cycles) {
     uint32_t translated = translate_addr(addr);
+
+    // See the same check in find_block: block_cache only covers the low 512 MB
+    // and translated can be any address the guest jumped to.
+    if (!is_executable_region(translated))
+        return nullptr;
 
     uint32_t page = translated / _IOP_CACHE_PAGESIZE;
     uint32_t offset = (translated & (_IOP_CACHE_PAGESIZE - 1)) >> 2;
@@ -2432,8 +2453,24 @@ int run_block(Iop* iop, int max_cycles) {
         if (!block) {
             block = cache_block(iop, iop->pc, max_cycles);
 
+            // Nothing is cached outside RAM and BIOS, so a jump anywhere else
+            // is the end of the road for this timeslice.
+            if (!block) {
+                iris_fatal_error(iop, "No executable memory at PC={:08x}", iop->pc);
+
+                break;
+            }
+
             compile_block(iop, block);
         }
+
+        // A block the recompiler could not encode has a null func, and
+        // execute_block reports zero cycles for it. Without this the loop never
+        // reaches max_cycles and the core spins here forever - a codegen failure
+        // presents as a hang instead of as the fatal error it already logged.
+        // The EE loop already leaves on the same condition.
+        if (!block->func)
+            break;
 
         cycles += execute_block(iop, block);
     }
