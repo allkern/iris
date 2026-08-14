@@ -89,6 +89,97 @@ jobs:
           -DIRIS_SANITIZE=address,undefined
         cmake --build build --target iris-jit-diff
 
+    # A clean sanitizer run is only evidence if the sanitizers were switched on,
+    # and nothing about a quiet run distinguishes "found nothing" from "was not
+    # instrumented". Both are checked, because they fail differently:
+    #
+    #   the symbol check catches the flags not reaching the target - a CMake
+    #   mistake, which is the likely one here since the option is new
+    #
+    #   the canary catches a toolchain where the flags are present but the
+    #   runtime does not report - and it uses the same two bug shapes the real
+    #   fixes were, an index past a fixed array inside a struct (UBSan only,
+    #   ASan has no redzone there) and a read off the end of a heap block.
+    - name: Verify the sanitizers actually fire
+      run: |
+        set -uo pipefail
+
+        BIN=./build/tests/jit_diff/iris-jit-diff
+
+        status=0
+
+        asan_syms=$(nm "$BIN" 2>/dev/null | grep -c "__asan_" || true)
+        ubsan_syms=$(nm "$BIN" 2>/dev/null | grep -c "__ubsan_" || true)
+
+        echo "instrumentation in the test binary: __asan_ x$asan_syms, __ubsan_ x$ubsan_syms"
+
+        if [ "$asan_syms" = 0 ] || [ "$ubsan_syms" = 0 ]; then
+          echo "::error::the test binary is not instrumented - IRIS_SANITIZE did not reach the target"
+          status=1
+        fi
+
+        cat > canary.cpp <<'EOF'
+        #include <cstdio>
+        #include <cstdlib>
+        #include <cstdint>
+
+        // The cop0_r[16]-with-a-five-bit-rd shape: stays inside the object, so
+        // only UBSan's bounds check can see it.
+        struct S { uint32_t a[16]; void* p[4]; };
+
+        __attribute__((noinline)) void intra(S* s, int i) { s->a[i] = 1; }
+
+        // The block_cache[page] shape: runs off the end of a real allocation,
+        // which is ASan's.
+        __attribute__((noinline)) uint32_t heap(uint32_t* v, int i) { return v[i]; }
+
+        int main(int argc, char**) {
+            if (argc == 1) {
+                S s{};
+
+                intra(&s, 20);
+
+                printf("intra-object write not reported\n");
+            } else {
+                uint32_t* v = (uint32_t*)malloc(16 * sizeof(uint32_t));
+
+                printf("%u\n", heap(v, 100));
+            }
+
+            return 0;
+        }
+        EOF
+
+        # Same compiler and the same flags the CMake option applies.
+        clang++-${CLANG_VERSION} -std=c++23 -O1 -g -fno-omit-frame-pointer \
+          -fsanitize=address,undefined \
+          -fno-sanitize=alignment,signed-integer-overflow,shift-base,float-cast-overflow,vptr \
+          -o canary canary.cpp
+
+        export ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_leaks=0"
+        export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
+
+        ./canary        > canary-ubsan.txt 2>&1
+        ./canary extra  > canary-asan.txt  2>&1
+
+        if ! grep -q "runtime error:" canary-ubsan.txt; then
+          echo "::error::UBSan did not report a known out-of-bounds write - findings below are not trustworthy"
+          cat canary-ubsan.txt
+          status=1
+        fi
+
+        if ! grep -q "ERROR: AddressSanitizer" canary-asan.txt; then
+          echo "::error::ASan did not report a known heap overflow - findings below are not trustworthy"
+          cat canary-asan.txt
+          status=1
+        fi
+
+        if [ "$status" = 0 ]; then
+          echo "both sanitizers report correctly, so a clean run below is meaningful"
+        fi
+
+        exit $status
+
     - name: Run under ASan and UBSan
       run: |
         set -uo pipefail
@@ -105,16 +196,22 @@ jobs:
         export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
         export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer-${CLANG_VERSION} || command -v llvm-symbolizer || true)"
 
-        # --interpreter reaches the most C++: it runs the recompiler and the
-        # interpreter for every case. Its divergences are meaningless here - the
-        # interpreters have known false positives and this job is not asking
-        # about agreement - so exit status 1 is ignored below.
-        echo "::group::jit-diff (interpreter mode, sanitized)"
+        # Record mode, not --interpreter.
+        #
+        # --interpreter executes more C++ per case, but the extra C++ is
+        # ee::step and iop::cycle, which stopped being maintained when the
+        # emulator switched to the recompiler and are not what a build ships.
+        # Undefined behaviour found in them costs time to triage and fixes
+        # nothing anyone runs. Record mode drives the recompilers, the block
+        # cache and the bus - all of it shipping code - and it produces no
+        # divergences, so a report in this log is a finding rather than one line
+        # in a thousand lines of documented known-noise.
+        echo "::group::jit-diff (record mode, sanitized)"
         "$BIN" \
           --seed "$JIT_DIFF_SEED" \
           --iterations "$JIT_DIFF_ITERATIONS" \
           --label sanitized \
-          --interpreter 2>&1 | tee out-sanitize.txt
+          --record jit-sanitize.rec 2>&1 | tee out-sanitize.txt
         rc=${PIPESTATUS[0]}
         echo "::endgroup::"
 
