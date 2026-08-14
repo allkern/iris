@@ -35,12 +35,32 @@ jobs:
         submodules: 'recursive'
         fetch-depth: 0
 
+    # EXCLUDE_FROM_ALL keeps SDL from being built, but it does not keep it from
+    # being configured: add_subdirectory still runs its CMakeLists, and SDL
+    # fails outright when it can find neither X11 nor Wayland. So this job needs
+    # the windowing headers to get through configure even though it never
+    # compiles SDL and iris-jit-diff never links it.
+    #
+    # This is the Ubuntu build's dependency list, minus the AppImage packaging
+    # one, rather than a minimal subset: SDL probes for audio, dbus, udev and
+    # GL at configure time too, and that list is already known to configure this
+    # tree. SDL does document an escape hatch for console-only builds, but its
+    # spelling depends on the vendored SDL version, and guessing wrong here just
+    # costs another red run.
+    - name: Install configure-time deps
+      run: |
+        sudo add-apt-repository -y universe
+        sudo apt-get install -y git make \
+        pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
+        libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev \
+        libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+        libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
+        libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev
+
     # Same clang the Ubuntu build uses: #embed needs 19 or newer, and the
     # runner images ship 16-18.
     - name: Install clang ${{ env.CLANG_VERSION }}
       run: |
-        sudo add-apt-repository -y universe
-        sudo apt-get install -y cmake ninja-build
         if ! apt-cache show "clang-${CLANG_VERSION}" > /dev/null 2>&1; then
           wget -qO llvm.sh https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
