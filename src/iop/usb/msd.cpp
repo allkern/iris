@@ -531,7 +531,7 @@ static int bulk_out(device::Device* dev, uint8_t* buf, int len) {
         uint32_t n = (uint32_t)len < msd->data_remaining ? (uint32_t)len : msd->data_remaining;
 
         if (msd->data_src == SRC_FILE && msd->image) {
-            fseek64(msd->image, (long)msd->file_offset, SEEK_SET);
+            fseek64(msd->image, (int64_t)msd->file_offset, SEEK_SET);
             fwrite(buf, 1, n, msd->image);
 
             msd->file_offset += n;
@@ -563,7 +563,7 @@ static int bulk_in(device::Device* dev, uint8_t* buf, int len) {
 
             msd->data_off += n;
         } else if (msd->data_src == SRC_FILE && msd->image) {
-            fseek64(msd->image, (long)msd->file_offset, SEEK_SET);
+            fseek64(msd->image, (int64_t)msd->file_offset, SEEK_SET);
 
             size_t rd = fread(buf, 1, n, msd->image);
 
@@ -688,7 +688,7 @@ int set_image(device::Device* dev, const char* path) {
 
     fseek64(f, 0, SEEK_END);
 
-    long size = ftell64(f);
+    int64_t size = ftell64(f);
 
     if (size < 0)
         size = 0;
