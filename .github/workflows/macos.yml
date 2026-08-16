@@ -11,6 +11,7 @@ jobs:
     env:
       # Both slices must get an identical seed and iteration count: they have to
       # generate the same cases in the same order for the recording to line up.
+      # The count is per pass, and the harness walks seven of them.
       JIT_DIFF_SEED: '0x123456789abcdef'
       JIT_DIFF_ITERATIONS: '4000'
 
@@ -52,6 +53,83 @@ jobs:
     # Deliberately after the artifact upload: a codegen regression should turn
     # the job red without also costing us the build.
     #
+    # This is the one check here that needs no second slice. A fastmem pass and
+    # its slow-path twin share a seed group, so they run the same cases, and the
+    # only difference between them is whether the bus fastmem tables are
+    # populated - which decides whether a load or store goes through the inline
+    # sequence or calls out to the bus. Fastmem is meant to be transparent, so
+    # two recordings of the same cases on the same machine have to come out byte
+    # for byte identical.
+    #
+    # It runs before the cross-backend comparison because it localises a fault
+    # to one path on one machine, which an arm64-vs-x86_64 diff cannot do. It
+    # also covers the path shipped builds actually run: the harness this
+    # replaces left the tables zeroed, so the inline load/store sequence and the
+    # constant-address folding path were emitted on every build and never once
+    # executed.
+    - name: Check fastmem against the slow path
+      run: |
+        # +e on purpose. Actions runs these as `bash -e` and `set -uo pipefail`
+        # does not clear it, so without this a core that exits non-zero kills
+        # the step before any of the reporting below gets to run - which is
+        # precisely the run where the reporting is worth having.
+        set +e -uo pipefail
+
+        BIN=./build/tests/jit_diff/iris-jit-diff
+
+        native=$(uname -m)
+
+        summary() { cat >> "$GITHUB_STEP_SUMMARY"; }
+
+        status=0
+
+        echo "## Fastmem transparency" | summary
+        echo | summary
+        echo "Recorded twice on the $native slice, fastmem off then on." | summary
+        echo | summary
+
+        for pass in ee-single ee-block; do
+          echo "::group::$pass with fastmem off and on"
+
+          for variant in "$pass" "$pass-fastmem"; do
+            arch -"$native" "$BIN" \
+              --seed "$JIT_DIFF_SEED" \
+              --iterations "$JIT_DIFF_ITERATIONS" \
+              --label "$native" \
+              --pass "$variant" \
+              --record "jit-$variant.rec" 2>&1 | tee "out-$variant.txt"
+            rc=${PIPESTATUS[0]}
+
+            # Record mode reports no divergences - there is nothing to compare
+            # against yet - so a non-zero status here is a fatal error.
+            if [ "$rc" != 0 ]; then
+              echo "::error::$variant logged a fatal error"
+              status=1
+            fi
+          done
+
+          echo "::endgroup::"
+
+          if cmp "jit-$pass.rec" "jit-$pass-fastmem.rec"; then
+            echo "- \`$pass\`: identical with fastmem off and on" | summary
+          else
+            echo "::error::fastmem changes what $pass computes"
+            echo "- \`$pass\`: **differs** once fastmem is on" | summary
+            status=1
+          fi
+        done
+
+        if [ "$status" != 0 ]; then
+          {
+            echo
+            echo "A difference here is in the inline load/store sequence or the"
+            echo "constant-folded pointer path, on this one machine - not a"
+            echo "disagreement between backends."
+          } | summary
+        fi
+
+        exit $status
+
     # The x86_64 recompiler is the reference - it is the one that is known good.
     # It runs a fixed set of cases and records what it produced; the arm64
     # recompiler then replays the same cases and compares. Both slices come out
@@ -60,7 +138,11 @@ jobs:
     # bug in one of them.
     - name: Run EE/IOP recompiler differential test
       run: |
-        set -uo pipefail
+        # See the note on +e above. A divergence makes the compare exit 1, and
+        # under errexit that would end the step right there - before the status
+        # is classified, before the summary is written, and before the artifact
+        # names the cases. The exit code is handled explicitly below instead.
+        set +e -uo pipefail
 
         BIN=./build/tests/jit_diff/iris-jit-diff
 

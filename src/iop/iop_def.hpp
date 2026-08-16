@@ -164,7 +164,12 @@ struct Iop {
     uint64_t total_cycles = 0;
     uint32_t biu_config = 0;
     int branch = 0, delay_slot = 0, branch_taken = 0;
-    uint32_t cop0_r[16] = { 0 };
+    // 32, not the 16 the R3000A implements. rd in MFC0/MTC0 is a five bit
+    // field, and guest code is free to name a register the hardware does not
+    // have. Both the recompiler and the interpreter index this array with it
+    // directly, so a short array turns that encoding into a write past the end
+    // of the struct.
+    uint32_t cop0_r[32] = { 0 };
 
     iop::bus::Iface bus = { nullptr };
 

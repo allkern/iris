@@ -1,0 +1,269 @@
+name: Sanitizers
+
+on:
+  push:
+  pull_request:
+
+# Memory safety, not codegen agreement.
+#
+# The differential test answers "do the two backends compute the same thing",
+# and it will stay green through an out-of-bounds write as long as both backends
+# make the same one. That is the class the recent IOP fixes were - cop0_r[16]
+# indexed by a five bit rd, block_cache indexed by an untranslated wild jump -
+# and none of them are ARM bugs. They are undefined behaviour that the x86 build
+# happened to survive.
+#
+# So this runs on x86_64: the bugs are there too, the runners are cheap, and it
+# means finding them does not need an arm64 machine to hand.
+jobs:
+  jit-diff:
+    name: jit-diff (asan+ubsan)
+    runs-on: ubuntu-24.04
+
+    env:
+      CLANG_VERSION: 20
+
+      # Sanitized, this runs several times slower than a plain build, and the
+      # point here is reaching varied code rather than case count - the harness
+      # already covers agreement at full width on macOS.
+      JIT_DIFF_SEED: '0x123456789abcdef'
+      JIT_DIFF_ITERATIONS: '2000'
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+
+    # EXCLUDE_FROM_ALL keeps SDL from being built, but it does not keep it from
+    # being configured: add_subdirectory still runs its CMakeLists, and SDL
+    # fails outright when it can find neither X11 nor Wayland. So this job needs
+    # the windowing headers to get through configure even though it never
+    # compiles SDL and iris-jit-diff never links it.
+    #
+    # This is the Ubuntu build's dependency list, minus the AppImage packaging
+    # one, rather than a minimal subset: SDL probes for audio, dbus, udev and
+    # GL at configure time too, and that list is already known to configure this
+    # tree. SDL does document an escape hatch for console-only builds, but its
+    # spelling depends on the vendored SDL version, and guessing wrong here just
+    # costs another red run.
+    - name: Install configure-time deps
+      run: |
+        sudo add-apt-repository -y universe
+        sudo apt-get install -y git make \
+        pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev \
+        libaudio-dev libjack-dev libsndio-dev libx11-dev libxext-dev \
+        libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev \
+        libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
+        libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev
+
+    # Same clang the Ubuntu build uses: #embed needs 19 or newer, and the
+    # runner images ship 16-18.
+    - name: Install clang ${{ env.CLANG_VERSION }}
+      run: |
+        if ! apt-cache show "clang-${CLANG_VERSION}" > /dev/null 2>&1; then
+          wget -qO llvm.sh https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "${CLANG_VERSION}"
+        fi
+        sudo apt-get install -y "clang-${CLANG_VERSION}"
+        clang-${CLANG_VERSION} --version
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install mbedTLS codegen deps
+      run: pip install -r deps/mbedtls/scripts/basic.requirements.txt
+
+    # Only the differential test target. Every dependency is EXCLUDE_FROM_ALL
+    # and this one links just asmjit and fmt, so SDL, curl and the GPU stack are
+    # never built - which is also why this job needs no Vulkan SDK.
+    - name: Build the differential test with sanitizers
+      run: |
+        cmake -S . -B build -G Ninja \
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+          -DCMAKE_C_COMPILER=clang-${CLANG_VERSION} \
+          -DCMAKE_CXX_COMPILER=clang++-${CLANG_VERSION} \
+          -DIRIS_BUILD_TESTS=ON \
+          -DIRIS_SANITIZE=address,undefined
+        cmake --build build --target iris-jit-diff
+
+    # A clean sanitizer run is only evidence if the sanitizers were switched on,
+    # and nothing about a quiet run distinguishes "found nothing" from "was not
+    # instrumented". Both are checked, because they fail differently:
+    #
+    #   the symbol check catches the flags not reaching the target - a CMake
+    #   mistake, which is the likely one here since the option is new
+    #
+    #   the canary catches a toolchain where the flags are present but the
+    #   runtime does not report - and it uses the same two bug shapes the real
+    #   fixes were, an index past a fixed array inside a struct (UBSan only,
+    #   ASan has no redzone there) and a read off the end of a heap block.
+    - name: Verify the sanitizers actually fire
+      run: |
+        # +e, because the whole point of this step is running commands that are
+        # meant to fail. Actions invokes these as `bash -e`, and `set -uo
+        # pipefail` does not clear that - so without the +e the canary's abort
+        # kills the step before anything gets to check that it aborted.
+        set +e -uo pipefail
+
+        BIN=./build/tests/jit_diff/iris-jit-diff
+
+        status=0
+
+        asan_syms=$(nm "$BIN" 2>/dev/null | grep -c "__asan_" || true)
+        ubsan_syms=$(nm "$BIN" 2>/dev/null | grep -c "__ubsan_" || true)
+
+        echo "instrumentation in the test binary: __asan_ x$asan_syms, __ubsan_ x$ubsan_syms"
+
+        if [ "$asan_syms" = 0 ] || [ "$ubsan_syms" = 0 ]; then
+          echo "::error::the test binary is not instrumented - IRIS_SANITIZE did not reach the target"
+          status=1
+        fi
+
+        cat > canary.cpp <<'EOF'
+        #include <cstdio>
+        #include <cstdlib>
+        #include <cstdint>
+
+        // The cop0_r[16]-with-a-five-bit-rd shape: stays inside the object, so
+        // only UBSan's bounds check can see it.
+        struct S { uint32_t a[16]; void* p[4]; };
+
+        __attribute__((noinline)) void intra(S* s, int i) { s->a[i] = 1; }
+
+        // The block_cache[page] shape: runs off the end of a real allocation,
+        // which is ASan's.
+        __attribute__((noinline)) uint32_t heap(uint32_t* v, int i) { return v[i]; }
+
+        int main(int argc, char**) {
+            if (argc == 1) {
+                S s{};
+
+                intra(&s, 20);
+
+                printf("intra-object write not reported\n");
+            } else {
+                uint32_t* v = (uint32_t*)malloc(16 * sizeof(uint32_t));
+
+                printf("%u\n", heap(v, 100));
+            }
+
+            return 0;
+        }
+        EOF
+
+        # Same compiler and the same flags the CMake option applies.
+        clang++-${CLANG_VERSION} -std=c++23 -O1 -g -fno-omit-frame-pointer \
+          -fsanitize=address,undefined \
+          -fno-sanitize=alignment,signed-integer-overflow,shift-base,float-cast-overflow,vptr \
+          -o canary canary.cpp
+
+        export ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_leaks=0"
+        export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
+
+        # Both are expected to fail - ASan aborts by design - so their status is
+        # not the signal. What they printed is.
+        ./canary        > canary-ubsan.txt 2>&1 || true
+        ./canary extra  > canary-asan.txt  2>&1 || true
+
+        if ! grep -q "runtime error:" canary-ubsan.txt; then
+          echo "::error::UBSan did not report a known out-of-bounds write - findings below are not trustworthy"
+          cat canary-ubsan.txt
+          status=1
+        fi
+
+        if ! grep -q "ERROR: AddressSanitizer" canary-asan.txt; then
+          echo "::error::ASan did not report a known heap overflow - findings below are not trustworthy"
+          cat canary-asan.txt
+          status=1
+        fi
+
+        if [ "$status" = 0 ]; then
+          echo "both sanitizers report correctly, so a clean run below is meaningful"
+        fi
+
+        exit $status
+
+    - name: Run under ASan and UBSan
+      run: |
+        # See the note on +e above: a sanitizer abort or a non-zero exit from
+        # the harness has to reach the reporting below, not kill the step.
+        set +e -uo pipefail
+
+        BIN=./build/tests/jit_diff/iris-jit-diff
+
+        summary() { cat >> "$GITHUB_STEP_SUMMARY"; }
+
+        # ASan stops at the first report: once memory is corrupt, everything
+        # after it is a guess. UBSan does the opposite and keeps going, because
+        # its findings are independent of each other and one run that lists all
+        # of them is worth more than one that stops at the first.
+        export ASAN_OPTIONS="halt_on_error=1:abort_on_error=1:detect_leaks=0:print_stacktrace=1"
+        export UBSAN_OPTIONS="halt_on_error=0:print_stacktrace=1"
+        export ASAN_SYMBOLIZER_PATH="$(command -v llvm-symbolizer-${CLANG_VERSION} || command -v llvm-symbolizer || true)"
+
+        # Record mode, not --interpreter.
+        #
+        # --interpreter executes more C++ per case, but the extra C++ is
+        # ee::step and iop::cycle, which stopped being maintained when the
+        # emulator switched to the recompiler and are not what a build ships.
+        # Undefined behaviour found in them costs time to triage and fixes
+        # nothing anyone runs. Record mode drives the recompilers, the block
+        # cache and the bus - all of it shipping code - and it produces no
+        # divergences, so a report in this log is a finding rather than one line
+        # in a thousand lines of documented known-noise.
+        echo "::group::jit-diff (record mode, sanitized)"
+        "$BIN" \
+          --seed "$JIT_DIFF_SEED" \
+          --iterations "$JIT_DIFF_ITERATIONS" \
+          --label sanitized \
+          --record jit-sanitize.rec 2>&1 | tee out-sanitize.txt
+        rc=${PIPESTATUS[0]}
+        echo "::endgroup::"
+
+        # Exit status cannot tell a sanitizer abort from a divergence - both can
+        # surface as 1 - so the reports themselves are the signal.
+        asan=$(grep -c "ERROR: AddressSanitizer" out-sanitize.txt || true)
+        lsan=$(grep -c "ERROR: LeakSanitizer" out-sanitize.txt || true)
+        ubsan=$(grep -c "runtime error:" out-sanitize.txt || true)
+
+        status=0
+
+        echo "## Sanitizers" | summary
+        echo | summary
+
+        if [ "$asan" != 0 ] || [ "$ubsan" != 0 ] || [ "$lsan" != 0 ]; then
+          echo "- AddressSanitizer reports: $asan" | summary
+          echo "- UndefinedBehaviorSanitizer reports: $ubsan" | summary
+          echo "- LeakSanitizer reports: $lsan" | summary
+          echo | summary
+          echo '```' | summary
+          grep -E "ERROR: (Address|Leak)Sanitizer|runtime error:" out-sanitize.txt | sort | uniq -c | sort -rn | head -40 | summary
+          echo '```' | summary
+
+          echo "::error::sanitizers reported $asan ASan, $ubsan UBSan, $lsan LSan finding(s)"
+          status=1
+        else
+          echo "No ASan or UBSan findings." | summary
+        fi
+
+        # Worth failing on separately: a block the recompiler cannot encode
+        # leaves block->func null, and that is a hang in the emulator rather
+        # than a wrong value. Status 1 is divergences and is ignored here.
+        if [ "$rc" -ge 2 ] && [ "$asan" = 0 ]; then
+          echo "::error::a core logged a fatal error (exit $rc)"
+          echo | summary
+          echo "A core logged a fatal error - failed codegen or an unimplemented opcode." | summary
+          status=1
+        fi
+
+        exit $status
+
+    - uses: actions/upload-artifact@v7
+      if: always()
+      with:
+        name: sanitize-log
+        path: out-sanitize.txt
+        if-no-files-found: warn

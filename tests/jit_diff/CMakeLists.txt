@@ -44,6 +44,15 @@ target_link_libraries(iris-jit-diff PRIVATE asmjit fmt)
 set_property(TARGET iris-jit-diff PROPERTY CXX_STANDARD 23)
 set_property(TARGET iris-jit-diff PROPERTY C_STANDARD 23)
 
+# See IRIS_SANITIZE in the top-level CMakeLists. This target is the one worth
+# running under sanitizers in CI: it drives both recompilers and all the block
+# management around them, needs no BIOS, no disc and no GPU, and is
+# deterministic for a given seed.
+if (IRIS_SANITIZE)
+    target_compile_options(iris-jit-diff PRIVATE ${IRIS_SANITIZE_COMPILE})
+    target_link_options(iris-jit-diff PRIVATE ${IRIS_SANITIZE_LINK})
+endif()
+
 # Deliberately built WITHOUT _EE_USE_INTRINSICS, on every target.
 #
 # The MMI interpreter has two implementations: SSE intrinsics (x86, non-Apple)
