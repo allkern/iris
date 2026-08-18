@@ -4,69 +4,69 @@
 
 namespace iris::speed::flash {
 
-static unsigned char xor_table[256] = {
-    0x00, 0x87, 0x96, 0x11, 0xA5, 0x22, 0x33, 0xB4,
-    0xB4, 0x33, 0x22, 0xA5, 0x11, 0x96, 0x87, 0x00,
-    0xC3, 0x44, 0x55, 0xD2, 0x66, 0xE1, 0xF0, 0x77,
-    0x77, 0xF0, 0xE1, 0x66, 0xD2, 0x55, 0x44, 0xC3,
-    0xD2, 0x55, 0x44, 0xC3, 0x77, 0xF0, 0xE1, 0x66,
-    0x66, 0xE1, 0xF0, 0x77, 0xC3, 0x44, 0x55, 0xD2,
-    0x11, 0x96, 0x87, 0x00, 0xB4, 0x33, 0x22, 0xA5,
-    0xA5, 0x22, 0x33, 0xB4, 0x00, 0x87, 0x96, 0x11,
-    0xE1, 0x66, 0x77, 0xF0, 0x44, 0xC3, 0xD2, 0x55,
-    0x55, 0xD2, 0xC3, 0x44, 0xF0, 0x77, 0x66, 0xE1,
-    0x22, 0xA5, 0xB4, 0x33, 0x87, 0x00, 0x11, 0x96,
-    0x96, 0x11, 0x00, 0x87, 0x33, 0xB4, 0xA5, 0x22,
-    0x33, 0xB4, 0xA5, 0x22, 0x96, 0x11, 0x00, 0x87,
-    0x87, 0x00, 0x11, 0x96, 0x22, 0xA5, 0xB4, 0x33,
-    0xF0, 0x77, 0x66, 0xE1, 0x55, 0xD2, 0xC3, 0x44,
-    0x44, 0xC3, 0xD2, 0x55, 0xE1, 0x66, 0x77, 0xF0,
-    0xF0, 0x77, 0x66, 0xE1, 0x55, 0xD2, 0xC3, 0x44,
-    0x44, 0xC3, 0xD2, 0x55, 0xE1, 0x66, 0x77, 0xF0,
-    0x33, 0xB4, 0xA5, 0x22, 0x96, 0x11, 0x00, 0x87,
-    0x87, 0x00, 0x11, 0x96, 0x22, 0xA5, 0xB4, 0x33,
-    0x22, 0xA5, 0xB4, 0x33, 0x87, 0x00, 0x11, 0x96,
-    0x96, 0x11, 0x00, 0x87, 0x33, 0xB4, 0xA5, 0x22,
-    0xE1, 0x66, 0x77, 0xF0, 0x44, 0xC3, 0xD2, 0x55,
-    0x55, 0xD2, 0xC3, 0x44, 0xF0, 0x77, 0x66, 0xE1,
-    0x11, 0x96, 0x87, 0x00, 0xB4, 0x33, 0x22, 0xA5,
-    0xA5, 0x22, 0x33, 0xB4, 0x00, 0x87, 0x96, 0x11,
-    0xD2, 0x55, 0x44, 0xC3, 0x77, 0xF0, 0xE1, 0x66,
-    0x66, 0xE1, 0xF0, 0x77, 0xC3, 0x44, 0x55, 0xD2,
-    0xC3, 0x44, 0x55, 0xD2, 0x66, 0xE1, 0xF0, 0x77,
-    0x77, 0xF0, 0xE1, 0x66, 0xD2, 0x55, 0x44, 0xC3,
-    0x00, 0x87, 0x96, 0x11, 0xA5, 0x22, 0x33, 0xB4,
-    0xB4, 0x33, 0x22, 0xA5, 0x11, 0x96, 0x87, 0x00
-};
+    static unsigned char xor_table[256] = {
+        0x00, 0x87, 0x96, 0x11, 0xA5, 0x22, 0x33, 0xB4,
+        0xB4, 0x33, 0x22, 0xA5, 0x11, 0x96, 0x87, 0x00,
+        0xC3, 0x44, 0x55, 0xD2, 0x66, 0xE1, 0xF0, 0x77,
+        0x77, 0xF0, 0xE1, 0x66, 0xD2, 0x55, 0x44, 0xC3,
+        0xD2, 0x55, 0x44, 0xC3, 0x77, 0xF0, 0xE1, 0x66,
+        0x66, 0xE1, 0xF0, 0x77, 0xC3, 0x44, 0x55, 0xD2,
+        0x11, 0x96, 0x87, 0x00, 0xB4, 0x33, 0x22, 0xA5,
+        0xA5, 0x22, 0x33, 0xB4, 0x00, 0x87, 0x96, 0x11,
+        0xE1, 0x66, 0x77, 0xF0, 0x44, 0xC3, 0xD2, 0x55,
+        0x55, 0xD2, 0xC3, 0x44, 0xF0, 0x77, 0x66, 0xE1,
+        0x22, 0xA5, 0xB4, 0x33, 0x87, 0x00, 0x11, 0x96,
+        0x96, 0x11, 0x00, 0x87, 0x33, 0xB4, 0xA5, 0x22,
+        0x33, 0xB4, 0xA5, 0x22, 0x96, 0x11, 0x00, 0x87,
+        0x87, 0x00, 0x11, 0x96, 0x22, 0xA5, 0xB4, 0x33,
+        0xF0, 0x77, 0x66, 0xE1, 0x55, 0xD2, 0xC3, 0x44,
+        0x44, 0xC3, 0xD2, 0x55, 0xE1, 0x66, 0x77, 0xF0,
+        0xF0, 0x77, 0x66, 0xE1, 0x55, 0xD2, 0xC3, 0x44,
+        0x44, 0xC3, 0xD2, 0x55, 0xE1, 0x66, 0x77, 0xF0,
+        0x33, 0xB4, 0xA5, 0x22, 0x96, 0x11, 0x00, 0x87,
+        0x87, 0x00, 0x11, 0x96, 0x22, 0xA5, 0xB4, 0x33,
+        0x22, 0xA5, 0xB4, 0x33, 0x87, 0x00, 0x11, 0x96,
+        0x96, 0x11, 0x00, 0x87, 0x33, 0xB4, 0xA5, 0x22,
+        0xE1, 0x66, 0x77, 0xF0, 0x44, 0xC3, 0xD2, 0x55,
+        0x55, 0xD2, 0xC3, 0x44, 0xF0, 0x77, 0x66, 0xE1,
+        0x11, 0x96, 0x87, 0x00, 0xB4, 0x33, 0x22, 0xA5,
+        0xA5, 0x22, 0x33, 0xB4, 0x00, 0x87, 0x96, 0x11,
+        0xD2, 0x55, 0x44, 0xC3, 0x77, 0xF0, 0xE1, 0x66,
+        0x66, 0xE1, 0xF0, 0x77, 0xC3, 0x44, 0x55, 0xD2,
+        0xC3, 0x44, 0x55, 0xD2, 0x66, 0xE1, 0xF0, 0x77,
+        0x77, 0xF0, 0xE1, 0x66, 0xD2, 0x55, 0x44, 0xC3,
+        0x00, 0x87, 0x96, 0x11, 0xA5, 0x22, 0x33, 0xB4,
+        0xB4, 0x33, 0x22, 0xA5, 0x11, 0x96, 0x87, 0x00
+    };
 
-static void flash_calculate_xor(unsigned char buffer[128], unsigned char blah[4]) {
-    unsigned char a = 0, b = 0, c = 0, i;
+    static void flash_calculate_xor(unsigned char buffer[128], unsigned char blah[4]) {
+        unsigned char a = 0, b = 0, c = 0, i;
 
-    for (i = 0; i < 128; i++) {
-        a ^= xor_table[buffer[i]];
+        for (i = 0; i < 128; i++) {
+            a ^= xor_table[buffer[i]];
 
-        if (xor_table[buffer[i]] & 0x80) {
-            b ^= ~i;
-            c ^= i;
+            if (xor_table[buffer[i]] & 0x80) {
+                b ^= ~i;
+                c ^= i;
+            }
         }
+
+        blah[0] = (~a) & 0x77;
+        blah[1] = (~b) & 0x7F;
+        blah[2] = (~c) & 0x7F;
     }
 
-    blah[0] = (~a) & 0x77;
-    blah[1] = (~b) & 0x7F;
-    blah[2] = (~c) & 0x7F;
-}
+    static void flash_calculate_ecc(uint8_t page[PAGE_SIZE_ECC]) {
+        memset(page + PAGE_SIZE, 0, ECC_SIZE);
 
-static void flash_calculate_ecc(uint8_t page[PAGE_SIZE_ECC]) {
-    memset(page + PAGE_SIZE, 0, ECC_SIZE);
+        flash_calculate_xor(page + 0 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 0 * 3); //(ECC_SIZE>>2));
+        flash_calculate_xor(page + 1 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 1 * 3); //(ECC_SIZE>>2));
+        flash_calculate_xor(page + 2 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 2 * 3); //(ECC_SIZE>>2));
+        flash_calculate_xor(page + 3 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 3 * 3); //(ECC_SIZE>>2));
+    }
 
-    flash_calculate_xor(page + 0 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 0 * 3); //(ECC_SIZE>>2));
-    flash_calculate_xor(page + 1 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 1 * 3); //(ECC_SIZE>>2));
-    flash_calculate_xor(page + 2 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 2 * 3); //(ECC_SIZE>>2));
-    flash_calculate_xor(page + 3 * (PAGE_SIZE >> 2), page + PAGE_SIZE + 3 * 3); //(ECC_SIZE>>2));
-}
-
-static const char* flash_get_cmd_name(uint32_t cmd) {
-    switch (cmd) {
+    static const char* flash_get_cmd_name(uint32_t cmd) {
+        switch (cmd) {
         case SM_CMD_READ1: return "READ1";
         case SM_CMD_READ2: return "READ2";
         case SM_CMD_READ3: return "READ3";
@@ -77,233 +77,108 @@ static const char* flash_get_cmd_name(uint32_t cmd) {
         case SM_CMD_ERASECONFIRM: return "ERASECONFIRM";
         case SM_CMD_GETSTATUS: return "GETSTATUS";
         case SM_CMD_READID: return "READID";
+        }
+
+        return "<unknown>";
     }
 
-    return "<unknown>";
-}
+    Flash* create(logger::Logger* logger) {
+        Flash* flash = new Flash();
 
-Flash* create(logger::Logger* logger) {
-    Flash* flash = new Flash();
+        flash->logger = logger;
+        flash->logger_id = logger::register_source(logger, "flash");
 
-    flash->logger = logger;
-    flash->logger_id = logger::register_source(logger, "flash");
+        return flash;
+    }
 
-    return flash;
-}
+    void init(Flash* flash) {
+        new (flash) Flash();
 
-void init(Flash* flash) {
-    new (flash) Flash();
+        flash->counter = 0;
+        flash->addrbyte = 0;
+        flash->address = 0;
+        flash->ctrl = CTRL_READY;
 
-    flash->counter = 0;
-    flash->addrbyte = 0;
-    flash->address = 0;
-    flash->ctrl = CTRL_READY;
-
-    memset(flash->data, 0xff, PAGE_SIZE);
-    memset(flash->file, 0xff, CARD_SIZE_ECC);
-
-    flash_calculate_ecc(flash->data);
-}
-
-int load(Flash* flash, const char* path) {
-    FILE* fd = fopen(path, "rb");
-
-    if (!fd) {
+        memset(flash->data, 0xff, PAGE_SIZE);
         memset(flash->file, 0xff, CARD_SIZE_ECC);
 
-        return 0;
+        flash_calculate_ecc(flash->data);
     }
 
-    size_t size = fread(flash->file, 1, CARD_SIZE_ECC, fd);
+    int load(Flash* flash, const char* path) {
+        flash->path = path;
+        FILE* fd = fopen(path, "rb");
 
-    if (size != CARD_SIZE_ECC) {
-        iris_debug(flash, "Flash file size incorrect ({} bytes)", size);
+        if (!fd) {
+            memset(flash->file, 0xff, CARD_SIZE_ECC);
 
-        return 0;
-    }
-
-    fclose(fd);
-
-    flash->id = ID_64MBIT;
-
-    iris_debug(flash, "Dump \'{}\' loaded ({} bytes)", path, size);
-
-    return 1;
-}
-
-void destroy(Flash* flash) {
-    // To-do: Flush to file
-
-    delete flash;
-}
-
-void reset(Flash* flash) {
-    flash->cmd = 0;
-    flash->ctrl = CTRL_READY;
-    flash->counter = 0;
-    flash->addrbyte = 0;
-    flash->address = 0;
-
-    memset(flash->data, 0xff, PAGE_SIZE);
-
-    flash_calculate_ecc(flash->data);
-}
-
-uint32_t flash_read_data(Flash* flash, int size) {
-    uint32_t value, refill = 0;
-
-    memcpy(&value, &flash->data[flash->counter], size);
-
-    flash->counter += size;
-
-    if (flash->cmd == SM_CMD_READ3) {
-        if (flash->counter >= PAGE_SIZE_ECC) {
-            flash->counter = PAGE_SIZE;
-
-            refill = 1;
+            return 0;
         }
-    } else {
-        if ((flash->ctrl & CTRL_NOECC) && (flash->counter >= PAGE_SIZE)) {
-            flash->counter %= PAGE_SIZE;
 
-            refill = 1;
-        } else if (!(flash->ctrl & CTRL_NOECC) && (flash->counter >= PAGE_SIZE_ECC)) {
-            flash->counter %= PAGE_SIZE_ECC;
+        size_t size = fread(flash->file, 1, CARD_SIZE_ECC, fd);
 
-            refill = 1;
+        if (size != CARD_SIZE_ECC) {
+            iris_debug(flash, "Flash file size incorrect ({} bytes)", size);
+
+            return 0;
         }
+
+        fclose(fd);
+
+        flash->id = ID_64MBIT;
+
+        iris_debug(flash, "Dump \'{}\' loaded ({} bytes)", path, size);
+
+        return 1;
     }
 
-    if (refill) {
-        flash->address += PAGE_SIZE;
-        flash->address %= CARD_SIZE;
-
-        memcpy(flash->data, flash->file + (flash->address >> PAGE_SIZE_BITS) * PAGE_SIZE_ECC, PAGE_SIZE);
-
-        flash_calculate_ecc(flash->data); // calculate ECC; should be in the file already
-
-        flash->ctrl |= CTRL_READY;
+    void destroy(Flash* flash) {
+        delete flash;
     }
 
-    return value;
-}
+    void reset(Flash* flash) {
+        flash->cmd = 0;
+        flash->ctrl = CTRL_READY;
+        flash->counter = 0;
+        flash->addrbyte = 0;
+        flash->address = 0;
 
-uint32_t flash_read_id(Flash* flash) {
-    switch (flash->cmd) {
-        case SM_CMD_READID: {
-            return flash->id;
-        } break;
+        memset(flash->data, 0xff, PAGE_SIZE);
 
-        case SM_CMD_GETSTATUS: {
-            return 0x80 | ((flash->ctrl & CTRL_READY) ? 0x40 : 0x00);
-        } break;
+        flash_calculate_ecc(flash->data);
     }
 
-    return 0;
-}
+    uint32_t flash_read_data(Flash* flash, int size) {
+        uint32_t value, refill = 0;
 
-void flash_write_data(Flash* flash, int size, uint32_t data) {
-    memcpy(&flash->data[flash->counter], &flash->data, size);
+        memcpy(&value, &flash->data[flash->counter], size);
 
-    flash->counter += size;
-    flash->counter %= PAGE_SIZE_ECC; //should not get past the last byte, but at the end
-}
+        flash->counter += size;
 
-void flash_write_cmd(Flash* flash, uint16_t value) {
-    // iris_debug(flash, "Command {:02x} ({})", value, flash_get_cmd_name(value));
+        if (flash->cmd == SM_CMD_READ3) {
+            if (flash->counter >= PAGE_SIZE_ECC) {
+                flash->counter = PAGE_SIZE;
 
-    if (!(flash->ctrl & CTRL_READY)) {
-        if ((value != SM_CMD_GETSTATUS) && (value != SM_CMD_RESET)) {
-            return;
+                refill = 1;
+            }
         }
-    }
+        else {
+            if ((flash->ctrl & CTRL_NOECC) && (flash->counter >= PAGE_SIZE)) {
+                flash->counter %= PAGE_SIZE;
 
-    if (flash->cmd == SM_CMD_WRITEDATA) {
-        if ((value != SM_CMD_PROGRAMPAGE) && (value != SM_CMD_RESET)) {
-            flash->ctrl &= ~CTRL_READY; //go busy, reset is needed
+                refill = 1;
+            }
+            else if (!(flash->ctrl & CTRL_NOECC) && (flash->counter >= PAGE_SIZE_ECC)) {
+                flash->counter %= PAGE_SIZE_ECC;
+
+                refill = 1;
+            }
         }
-    }
 
-    switch (value) { // A8 bit is encoded in READ cmd;)
-        case SM_CMD_READ1: {
-            flash->counter = 0;
+        if (refill) {
+            flash->address += PAGE_SIZE;
+            flash->address %= CARD_SIZE;
 
-            if (flash->cmd != SM_CMD_GETSTATUS)
-                flash->address = flash->counter;
-
-            flash->addrbyte = 0;
-        } break;
-
-        case SM_CMD_READ2: {
-            flash->counter = PAGE_SIZE / 2;
-
-            if (flash->cmd != SM_CMD_GETSTATUS)
-                flash->address = flash->counter;
-
-            flash->addrbyte = 0;
-        } break;
-
-        case SM_CMD_READ3: {
-            flash->counter = PAGE_SIZE;
-
-            if (flash->cmd != SM_CMD_GETSTATUS)
-                flash->address = flash->counter;
-
-            flash->addrbyte = 0;
-        } break;
-
-        case SM_CMD_RESET: {
-            reset(flash);
-        } break;
-
-        case SM_CMD_WRITEDATA: {
-            flash->counter = 0;
-            flash->address = flash->counter;
-            flash->addrbyte = 0;
-        } break;
-
-        case SM_CMD_ERASEBLOCK: {
-            flash->counter = 0;
-
-            memset(flash->data, 0xff, PAGE_SIZE);
-
-            flash->address = flash->counter;
-            flash->addrbyte = 1;
-        } break;
-            
-        case SM_CMD_PROGRAMPAGE: //fall
-        case SM_CMD_ERASECONFIRM: {
-            flash_calculate_ecc(flash->data);
-
-            memcpy(flash->file + (flash->address / PAGE_SIZE) * PAGE_SIZE_ECC, flash->data, PAGE_SIZE_ECC);
-
-            /*write2file*/
-            flash->ctrl |= CTRL_READY;
-        } break;
-
-        case SM_CMD_GETSTATUS: break;
-        case SM_CMD_READID: {
-            flash->counter = 0;
-            flash->address = flash->counter;
-            flash->addrbyte = 0;
-        } break;
-
-        default: {
-            flash->ctrl &= ~CTRL_READY;
-
-            return;
-        } break;
-    }
-
-    flash->cmd = value;
-}
-
-void flash_write_addr(Flash* flash, uint16_t value) {
-    flash->address |= (value & 0xff) << (flash->addrbyte == 0 ? 0 : (1 + 8 * flash->addrbyte));
-    flash->addrbyte++;
-
-    if (!(value & 0x100)) { // address is complete
-        if ((flash->cmd == SM_CMD_READ1) || (flash->cmd == SM_CMD_READ2) || (flash->cmd == SM_CMD_READ3)) {
             memcpy(flash->data, flash->file + (flash->address >> PAGE_SIZE_BITS) * PAGE_SIZE_ECC, PAGE_SIZE);
 
             flash_calculate_ecc(flash->data); // calculate ECC; should be in the file already
@@ -311,58 +186,203 @@ void flash_write_addr(Flash* flash, uint16_t value) {
             flash->ctrl |= CTRL_READY;
         }
 
-        flash->addrbyte = 0; // address reset
+        return value;
     }
-}
 
-void flash_write_ctrl(Flash* flash, uint16_t value) {
-    flash->ctrl = (flash->ctrl & CTRL_READY) | (value & ~CTRL_READY);
-}
+    uint32_t flash_read_id(Flash* flash) {
+        switch (flash->cmd) {
+        case SM_CMD_READID: {
+            return flash->id;
+        } break;
 
-uint64_t read16(Flash* flash, uint32_t addr) {
-    switch (addr) {
+        case SM_CMD_GETSTATUS: {
+            return 0x80 | ((flash->ctrl & CTRL_READY) ? 0x40 : 0x00);
+        } break;
+        }
+
+        return 0;
+    }
+    static void flash_flush_page(Flash* flash, size_t offset) {
+        if (flash->path.empty())
+            return;
+
+        FILE* fd = fopen(flash->path.c_str(), "r+b");
+        if (!fd)
+            return;
+
+        if (fseek(fd, (long)offset, SEEK_SET) == 0) {
+            fwrite(flash->file + offset, 1, PAGE_SIZE_ECC, fd);
+            fflush(fd);
+        }
+
+        fclose(fd);
+    }
+
+    void flash_write_data(Flash* flash, int size, uint32_t data) {
+        memcpy(&flash->data[flash->counter], &data, size);
+        flash->counter += size;
+        flash->counter %= PAGE_SIZE_ECC; //should not get past the last byte, but at the end
+    }
+
+    void flash_write_cmd(Flash* flash, uint16_t value) {
+        if (!(flash->ctrl & CTRL_READY)) {
+            if ((value != SM_CMD_GETSTATUS) && (value != SM_CMD_RESET))
+                return;
+        }
+
+        if (flash->cmd == SM_CMD_WRITEDATA) {
+            if ((value != SM_CMD_PROGRAMPAGE) && (value != SM_CMD_RESET))
+                flash->ctrl &= ~CTRL_READY;
+        }
+
+        switch (value) {
+        case SM_CMD_READ1:
+            flash->counter = 0;
+            if (flash->cmd != SM_CMD_GETSTATUS)
+                flash->address = flash->counter;
+            flash->addrbyte = 0;
+            break;
+
+        case SM_CMD_READ2:
+            flash->counter = PAGE_SIZE / 2;
+            if (flash->cmd != SM_CMD_GETSTATUS)
+                flash->address = flash->counter;
+            flash->addrbyte = 0;
+            break;
+
+        case SM_CMD_READ3:
+            flash->counter = PAGE_SIZE;
+            if (flash->cmd != SM_CMD_GETSTATUS)
+                flash->address = flash->counter;
+            flash->addrbyte = 0;
+            break;
+
+        case SM_CMD_RESET:
+            reset(flash);
+            break;
+
+        case SM_CMD_WRITEDATA:
+            flash->counter = 0;
+            flash->address = flash->counter;
+            flash->addrbyte = 0;
+            break;
+
+        case SM_CMD_ERASEBLOCK:
+            flash->counter = 0;
+            memset(flash->data, 0xFF, PAGE_SIZE);
+            flash->address = flash->counter;
+            flash->addrbyte = 1;
+            break;
+
+        case SM_CMD_PROGRAMPAGE: {
+            flash_calculate_ecc(flash->data);
+
+            size_t offset = (flash->address / PAGE_SIZE) * PAGE_SIZE_ECC;
+
+            memcpy(flash->file + offset, flash->data, PAGE_SIZE_ECC);
+
+            flash_flush_page(flash, offset);
+            flash->ctrl |= CTRL_READY;
+        } break;
+
+        case SM_CMD_ERASECONFIRM: {
+            size_t block = flash->address / BLOCK_SIZE;
+            size_t offset = block * BLOCK_SIZE_ECC;
+
+            memset(flash->file + offset, 0xff, BLOCK_SIZE_ECC);
+
+            FILE* fd = fopen(flash->path.c_str(), "r+b");
+            if (fd) {
+                fseek(fd, offset, SEEK_SET);
+                fwrite(flash->file + offset, 1, BLOCK_SIZE_ECC, fd);
+                fflush(fd);
+                fclose(fd);
+            }
+
+            flash->ctrl |= CTRL_READY;
+        } break;
+        case SM_CMD_GETSTATUS:
+            break;
+
+        case SM_CMD_READID:
+            flash->counter = 0;
+            flash->address = flash->counter;
+            flash->addrbyte = 0;
+            break;
+
+        default:
+            flash->ctrl &= ~CTRL_READY;
+            return;
+        }
+
+        flash->cmd = value;
+    }
+
+    void flash_write_addr(Flash* flash, uint16_t value) {
+        flash->address |= (value & 0xff) << (flash->addrbyte == 0 ? 0 : (1 + 8 * flash->addrbyte));
+        flash->addrbyte++;
+
+        if (!(value & 0x100)) { // address is complete
+            if ((flash->cmd == SM_CMD_READ1) || (flash->cmd == SM_CMD_READ2) || (flash->cmd == SM_CMD_READ3)) {
+                memcpy(flash->data, flash->file + (flash->address >> PAGE_SIZE_BITS) * PAGE_SIZE_ECC, PAGE_SIZE);
+
+                flash_calculate_ecc(flash->data); // calculate ECC; should be in the file already
+
+                flash->ctrl |= CTRL_READY;
+            }
+
+            flash->addrbyte = 0; // address reset
+        }
+    }
+
+    void flash_write_ctrl(Flash* flash, uint16_t value) {
+        flash->ctrl = (flash->ctrl & CTRL_READY) | (value & ~CTRL_READY);
+    }
+
+    uint64_t read16(Flash* flash, uint32_t addr) {
+        switch (addr) {
         case 0x4800: return flash_read_data(flash, 2);
         case 0x480c: return flash->ctrl;
         case 0x4814: return flash_read_id(flash);
+        }
+
+        iris_debug(flash, "Unknown 16-bit read at address {:08x}", addr);
+
+        return 0;
     }
 
-    iris_debug(flash, "Unknown 16-bit read at address {:08x}", addr);
-
-    return 0;
-}
-
-uint64_t read32(Flash* flash, uint32_t addr) {
-    switch (addr) {
+    uint64_t read32(Flash* flash, uint32_t addr) {
+        switch (addr) {
         case 0x4800: return flash_read_data(flash, 4);
         case 0x480c: return flash->ctrl;
         case 0x4814: return flash_read_id(flash);
+        }
+
+        iris_debug(flash, "Unknown 32-bit read at address {:08x}", addr);
+
+        return 0;
     }
 
-    iris_debug(flash, "Unknown 32-bit read at address {:08x}", addr);
-
-    return 0;
-}
-
-void write16(Flash* flash, uint32_t addr, uint64_t data) {
-    switch (addr) {
+    void write16(Flash* flash, uint32_t addr, uint64_t data) {
+        switch (addr) {
         case 0x4800: flash_write_data(flash, 2, data); return;
         case 0x4804: flash_write_cmd(flash, data); return;
         case 0x4808: flash_write_addr(flash, data); return;
         case 0x480c: flash_write_ctrl(flash, data); return;
+        }
+
+        iris_debug(flash, "Unknown 16-bit write at address {:08x} ({:08x})", addr, data);
     }
 
-    iris_debug(flash, "Unknown 16-bit write at address {:08x} ({:08x})", addr, data);
-}
-
-void write32(Flash* flash, uint32_t addr, uint64_t data) {
-    switch (addr) {
+    void write32(Flash* flash, uint32_t addr, uint64_t data) {
+        switch (addr) {
         case 0x4800: flash_write_data(flash, 4, data); return;
         case 0x4804: flash_write_cmd(flash, data); return;
         case 0x4808: flash_write_addr(flash, data); return;
         case 0x480c: flash_write_ctrl(flash, data); return;
-    }
+        }
 
-    iris_debug(flash, "Unknown 32-bit write at address {:08x} ({:08x})", addr, data);
-}
+        iris_debug(flash, "Unknown 32-bit write at address {:08x} ({:08x})", addr, data);
+    }
 
 }
