@@ -8009,7 +8009,7 @@ void set_boot_args(Ee* ee, const char* const* args, int count) {
     for (int i = 0; i < count; i++) {
         strncpy(ee->boot_args[i], args[i], sizeof(ee->boot_args[0]) - 1);
 
-        ee->boot_args[i][sizeof(ee->boot_args[0]) - 1] = ' ';
+        ee->boot_args[i][sizeof(ee->boot_args[0]) - 1] = '\0';
     }
 
     ee->boot_argc = count;
