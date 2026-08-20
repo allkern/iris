@@ -212,6 +212,10 @@ struct Instance {
         float volume = 1.0f;
         bool mute_adma = true;
         std::vector <spu2::Sample> audio_buf;
+        double adma_position = 0.0;
+        double voice_position = 0.0;
+        spu2::Sample voice_prev = {};
+        spu2::Sample voice_next = {};
     } audio;
 
     // Debugger state: stepping, breakpoints, logs, symbols, GS dumps

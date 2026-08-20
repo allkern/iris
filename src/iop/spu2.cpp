@@ -149,12 +149,18 @@ void connect(Spu2* spu2, iop::dma::Dma* dma) {
     spu2->hw.dma = dma;
 }
 
+void set_ee_clock(Spu2* spu2, int hz) {
+    spu2->sample_rate = hz / IOP_CLOCK_DIVIDER / CYCLES_PER_SAMPLE;
+}
+
 void reset(Spu2* spu2) {
     auto hw = spu2->hw;
+    int sample_rate = spu2->sample_rate;
 
     new (spu2) Spu2();
 
     spu2->hw = hw;
+    spu2->sample_rate = sample_rate;
 
     // CORE0/1 DMA status (ready)
     spu2->c[0].stat = 0x80;

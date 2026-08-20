@@ -633,6 +633,7 @@ void set_system(Ps2* ps2, int system) {
     ps2->detected_system = system;
 
     gs::set_ee_clock(ps2->gs, ee_clock);
+    spu2::set_ee_clock(ps2->spu2, ee_clock);
 
     ram::destroy(ps2->ee_ram);
     ram::destroy(ps2->iop_ram);

@@ -8,6 +8,8 @@
 
 namespace iris::audio {
 
+static constexpr int OUTPUT_RATE = 48000;
+
 static inline int16_t clamp_s16(float v) {
     if (v > 32767.0f) return 32767;
     if (v < -32768.0f) return -32768;
@@ -41,24 +43,41 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
 
     uint32_t mask = spu2->c[0].adma_buffer_max_size - 1;
 
+    double step = (double)spu2->sample_rate / OUTPUT_RATE;
+    double position = iris->audio.adma_position;
+
     for (uint32_t i = 0; i < frames; i++) {
+        uint32_t index = (uint32_t)position;
+        float weight = (float)(position - index);
+
         int32_t l = 0, r = 0;
 
         for (int c = 0; c < 2; c++) {
-            if (i < avail[c]) {
-                spu2::Sample s = spu2->c[c].adma_buffer[(read[c] + i) & mask];
+            if (index >= avail[c])
+                continue;
 
-                l += s.s16[0];
-                r += s.s16[1];
-            }
+            spu2::Sample a = spu2->c[c].adma_buffer[(read[c] + index) & mask];
+            spu2::Sample b = a;
+
+            if (index + 1 < avail[c])
+                b = spu2->c[c].adma_buffer[(read[c] + index + 1) & mask];
+
+            l += (int32_t)(a.s16[0] + (b.s16[0] - a.s16[0]) * weight);
+            r += (int32_t)(a.s16[1] + (b.s16[1] - a.s16[1]) * weight);
         }
 
         iris->audio.audio_buf[i].s16[0] = iris->audio.mute_adma ? 0 : clamp_s16(l * iris->audio.volume);
         iris->audio.audio_buf[i].s16[1] = iris->audio.mute_adma ? 0 : clamp_s16(r * iris->audio.volume);
+
+        position += step;
     }
 
+    uint32_t consumed_frames = (uint32_t)position;
+
+    iris->audio.adma_position = position - consumed_frames;
+
     for (int c = 0; c < 2; c++) {
-        uint32_t consumed = (avail[c] < frames) ? avail[c] : frames;
+        uint32_t consumed = (avail[c] < consumed_frames) ? avail[c] : consumed_frames;
 
         __atomic_store_n(&spu2->c[c].adma_read, read[c] + consumed, __ATOMIC_RELEASE);
     }
@@ -67,6 +86,19 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
 }
 
 static std::vector <spu2::Sample> samples;
+
+static spu2::Sample next_voice_sample(Instance* iris, spu2::Spu2* spu2) {
+    spu2::Sample s;
+
+#if SPU2_SYNC
+    if (!spu2::pop_sample(spu2, &s))
+        s.u32 = 0;
+#else
+    s = spu2::get_sample(spu2, !iris->audio.mute_adma);
+#endif
+
+    return s;
+}
 
 void update_spu2(void* userdata, SDL_AudioStream* stream, int additional_amount, int total_amount) {
     Instance* iris = (Instance*)userdata;
@@ -87,19 +119,31 @@ void update_spu2(void* userdata, SDL_AudioStream* stream, int additional_amount,
 
     samples.resize(additional_amount);
 
+    double step = (double)spu2->sample_rate / OUTPUT_RATE;
+    double position = iris->audio.voice_position;
+
     for (int i = 0; i < additional_amount; i++) {
-        spu2::Sample s;
+        while (position >= 1.0) {
+            iris->audio.voice_prev = iris->audio.voice_next;
+            iris->audio.voice_next = next_voice_sample(iris, spu2);
 
-#if SPU2_SYNC
-        if (!spu2::pop_sample(spu2, &s))
-            s.u32 = 0;
-#else
-        s = spu2::get_sample(spu2, !iris->audio.mute_adma);
-#endif
+            position -= 1.0;
+        }
 
-        samples[i].s16[0] = iris->audio.mute ? 0 : clamp_s16(s.s16[0] * iris->audio.volume);
-        samples[i].s16[1] = iris->audio.mute ? 0 : clamp_s16(s.s16[1] * iris->audio.volume);
+        spu2::Sample a = iris->audio.voice_prev;
+        spu2::Sample b = iris->audio.voice_next;
+
+        float weight = (float)position;
+        float l = a.s16[0] + (b.s16[0] - a.s16[0]) * weight;
+        float r = a.s16[1] + (b.s16[1] - a.s16[1]) * weight;
+
+        samples[i].s16[0] = iris->audio.mute ? 0 : clamp_s16(l * iris->audio.volume);
+        samples[i].s16[1] = iris->audio.mute ? 0 : clamp_s16(r * iris->audio.volume);
+
+        position += step;
     }
+
+    iris->audio.voice_position = position;
 
     SDL_PutAudioStreamData(stream, (void*)samples.data(), samples.size() * sizeof(spu2::Sample));
 }
@@ -109,7 +153,7 @@ bool init(Instance* iris) {
 
     spec.channels = 2;
     spec.format = SDL_AUDIO_S16;
-    spec.freq = 48000;
+    spec.freq = OUTPUT_RATE;
 
     iris->audio.audio_device = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
 

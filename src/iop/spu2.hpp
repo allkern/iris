@@ -19,6 +19,10 @@ inline constexpr auto RAM_SIZE = 0x100000;// 2 MB
 //       and gap-free under load, at the cost of envelope-timing accuracy.
 #define SPU2_SYNC 0
 
+inline constexpr auto IOP_CLOCK_DIVIDER = 8;
+inline constexpr auto CYCLES_PER_SAMPLE = 768;
+inline constexpr auto CONSOLE_SAMPLE_RATE = 48000;
+
 inline constexpr auto OUT_BUFFER_SIZE = 4096;
 inline constexpr auto ADMA_RING_FRAMES = 32768;
 
@@ -243,6 +247,7 @@ struct Spu2 {
     int spdif_irq;
 
     int sample_cycles;
+    int sample_rate = CONSOLE_SAMPLE_RATE;
 
     uint64_t emu_cycle;
     uint32_t reverb_cycles;
@@ -258,6 +263,7 @@ struct Spu2 {
 Spu2* create(logger::Logger* logger, iop::intc::Intc* intc, scheduler::Scheduler* sched);
 void connect(Spu2* spu2, iop::dma::Dma* dma);
 void reset(Spu2* spu2);
+void set_ee_clock(Spu2* spu2, int hz);
 uint64_t read16(Spu2* spu2, uint32_t addr);
 void write16(Spu2* spu2, uint32_t addr, uint64_t data);
 void destroy(Spu2* spu2);
