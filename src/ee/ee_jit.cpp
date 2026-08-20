@@ -377,6 +377,8 @@ static inline int translate_virt(Ee* ee, uint32_t virt, uint32_t* phys, int load
 
         iris_debug(ee, "TLB miss on {} at virt={:08x}", load ? "load" : "store", virt);
 
+        *phys = 0;
+
         return -1;
     }
 
@@ -476,6 +478,8 @@ static inline int translate_virt(Ee* ee, uint32_t virt, uint32_t* phys) {
 
     if (!page->valid) {
         iris_debug(ee, "Segmentation fault at 0x{:08x}", virt);
+
+        *phys = 0;
 
         return -1;
     }
@@ -3280,6 +3284,38 @@ static inline void i_syscall(Ee* ee, const Instruction& i) {
         // LoadExecPS2
         case 0x06:
         case 0x07: {
+            if (ee->boot_args_pending && id == 0x07 && ee->r[6].u32[0] == 1) {
+                uint32_t argv = ee->r[7].u32[0];
+                uint32_t str = bus_read32(ee, argv);
+
+                uint32_t room = 0;
+
+                while (bus_read8(ee, str + room))
+                    room++;
+
+                uint32_t needed = 0;
+
+                for (int k = 0; k < ee->boot_argc; k++)
+                    needed += (uint32_t)strlen(ee->boot_args[k]) + 1;
+
+                if (needed <= room) {
+                    uint32_t at = str;
+
+                    for (int k = 0; k < ee->boot_argc; k++) {
+                        bus_write32(ee, argv + k * 4, at);
+
+                        for (size_t m = 0; m <= strlen(ee->boot_args[k]); m++)
+                            bus_write8(ee, at + (uint32_t)m, ee->boot_args[k][m]);
+
+                        at += (uint32_t)strlen(ee->boot_args[k]) + 1;
+                    }
+
+                    ee->r[6].u32[0] = ee->boot_argc;
+                }
+
+                ee->boot_args_pending = 0;
+            }
+
             // Note: This prevents keeping stale cache blocks
             //       stored in memory when switching games/software.
             ee->pending_purge = true;
@@ -4203,7 +4239,15 @@ static inline SubBlock decode_sub_block(Ee* ee, uint32_t pc, int max_cycles, std
         }
 
         if (i.branch == 1 && delay_slot) {
-            iris_fatal_error(ee, "Branch in delay slot at PC={:08x} (Unhandled edge case)", sb.end_pc);
+            if (sb.end_pc != ee->last_delay_slot_branch) {
+                ee->last_delay_slot_branch = sb.end_pc;
+
+                iris_error(ee, "Branch in delay slot at PC={:08x} (Unhandled edge case)", sb.end_pc);
+            }
+
+            sb.end_pc += 4;
+
+            break;
         }
 
         sb.cycles++; // += i.cycles;
@@ -7950,6 +7994,26 @@ ram::Ram* get_spr(Ee* ee) {
 
 void set_fmv_skip(Ee* ee, int v) {
     ee->fmv_skip = v;
+}
+
+void set_boot_args(Ee* ee, const char* const* args, int count) {
+    ee->boot_argc = 0;
+    ee->boot_args_pending = 0;
+
+    if (!args || count <= 0)
+        return;
+
+    if (count > (int)(sizeof(ee->boot_args) / sizeof(ee->boot_args[0])))
+        return;
+
+    for (int i = 0; i < count; i++) {
+        strncpy(ee->boot_args[i], args[i], sizeof(ee->boot_args[0]) - 1);
+
+        ee->boot_args[i][sizeof(ee->boot_args[0]) - 1] = ' ';
+    }
+
+    ee->boot_argc = count;
+    ee->boot_args_pending = 1;
 }
 
 void reset_intc_reads(Ee* ee) {

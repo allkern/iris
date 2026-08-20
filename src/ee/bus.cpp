@@ -19,6 +19,22 @@ Bus* create(logger::Logger* logger) {
 #define likely(x) __builtin_expect(!!(x), 1)
 #define unlikely(x) __builtin_expect(!!(x), 0)
 
+inline constexpr auto FASTMEM_LIMIT = 0x20000000;
+
+static inline void* fastmem_read_ptr(Bus* bus, uint32_t addr) {
+    if (addr >= FASTMEM_LIMIT)
+        return nullptr;
+
+    return bus->fastmem_r_table[addr >> 13];
+}
+
+static inline void* fastmem_write_ptr(Bus* bus, uint32_t addr) {
+    if (addr >= FASTMEM_LIMIT)
+        return nullptr;
+
+    return bus->fastmem_w_table[addr >> 13];
+}
+
 void init_fastmem(Bus* bus, int ee_ram_size, int iop_ram_size) {
     memset(bus->fastmem_r_table, 0, sizeof(bus->fastmem_r_table));
     memset(bus->fastmem_w_table, 0, sizeof(bus->fastmem_w_table));
@@ -79,7 +95,7 @@ void destroy(Bus* bus) {
 uint64_t read8(void* udata, uint32_t addr) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_r_table[addr >> 13];
+    void* ptr = fastmem_read_ptr(bus, addr);
 
     if (likely(ptr)) return *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
@@ -109,7 +125,7 @@ uint64_t read8(void* udata, uint32_t addr) {
 uint64_t read16(void* udata, uint32_t addr) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_r_table[addr >> 13];
+    void* ptr = fastmem_read_ptr(bus, addr);
 
     if (likely(ptr)) return *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
@@ -181,7 +197,7 @@ uint64_t read32(void* udata, uint32_t addr) {
     // DoA (U)
     // if (addr == 0x002b06ec) return 0x24060000;
 
-    void* ptr = bus->fastmem_r_table[addr >> 13];
+    void* ptr = fastmem_read_ptr(bus, addr);
 
     if (likely(ptr)) return *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
@@ -256,7 +272,7 @@ uint64_t read32(void* udata, uint32_t addr) {
 uint64_t read64(void* udata, uint32_t addr) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_r_table[addr >> 13];
+    void* ptr = fastmem_read_ptr(bus, addr);
 
     if (likely(ptr)) return *((uint64_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
@@ -284,7 +300,7 @@ uint64_t read64(void* udata, uint32_t addr) {
 uint128_t read128(void* udata, uint32_t addr) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_r_table[addr >> 13];
+    void* ptr = fastmem_read_ptr(bus, addr);
 
     if (likely(ptr)) return *((uint128_t*)(((uint8_t*)ptr) + (addr & 0x1fff)));
 
@@ -311,7 +327,7 @@ uint128_t read128(void* udata, uint32_t addr) {
 void write8(void* udata, uint32_t addr, uint64_t data) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_w_table[addr >> 13];
+    void* ptr = fastmem_write_ptr(bus, addr);
 
     if (likely(ptr)) {
         *((uint8_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
@@ -333,7 +349,7 @@ void write8(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE_NS(8, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_WRITE_NS(8, 0x14000000, 0x1400FFFF, speed, speed);
 
-    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+    if (addr >= 0x1C000000 && addr < 0x1C000000 + bus->iop_ram->size) {
         ram::write8(bus->iop_ram, addr - 0x1C000000, data & 0xFF);
 
         iop::invalidate_block(bus->iop, addr - 0x1C000000);
@@ -349,7 +365,7 @@ void write8(void* udata, uint32_t addr, uint64_t data) {
 void write16(void* udata, uint32_t addr, uint64_t data) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_w_table[addr >> 13];
+    void* ptr = fastmem_write_ptr(bus, addr);
 
     if (likely(ptr)) {
         *((uint16_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
@@ -371,7 +387,7 @@ void write16(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE_NS(16, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_WRITE_NS(16, 0x14000000, 0x1400FFFF, speed, speed);
 
-    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+    if (addr >= 0x1C000000 && addr < 0x1C000000 + bus->iop_ram->size) {
         ram::write16(bus->iop_ram, addr - 0x1C000000, data & 0xFFFF);
 
         iop::invalidate_block(bus->iop, addr - 0x1C000000);
@@ -391,7 +407,7 @@ void write16(void* udata, uint32_t addr, uint64_t data) {
 void write32(void* udata, uint32_t addr, uint64_t data) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_w_table[addr >> 13];
+    void* ptr = fastmem_write_ptr(bus, addr);
 
     if (likely(ptr)) {
         *((uint32_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
@@ -423,7 +439,7 @@ void write32(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE_NS(32, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_WRITE_NS(32, 0x14000000, 0x1400FFFF, speed, speed);
 
-    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+    if (addr >= 0x1C000000 && addr < 0x1C000000 + bus->iop_ram->size) {
         ram::write32(bus->iop_ram, addr - 0x1C000000, data & 0xFFFFFFFF);
 
         iop::invalidate_block(bus->iop, addr - 0x1C000000);
@@ -466,7 +482,7 @@ void write32(void* udata, uint32_t addr, uint64_t data) {
 void write64(void* udata, uint32_t addr, uint64_t data) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_w_table[addr >> 13];
+    void* ptr = fastmem_write_ptr(bus, addr);
 
     if (likely(ptr)) {
         *((uint64_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
@@ -489,8 +505,8 @@ void write64(void* udata, uint32_t addr, uint64_t data) {
     MAP_MEM_WRITE_NS(64, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_WRITE_NS(64, 0x1000F000, 0x1000F01F, intc, intc);
 
-    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
-        ram::write64(bus->iop_ram, addr - 0x1C000000, data & 0xFF);
+    if (addr >= 0x1C000000 && addr < 0x1C000000 + bus->iop_ram->size) {
+        ram::write64(bus->iop_ram, addr - 0x1C000000, data);
 
         iop::invalidate_block(bus->iop, addr - 0x1C000000);
 
@@ -503,7 +519,7 @@ void write64(void* udata, uint32_t addr, uint64_t data) {
 void write128(void* udata, uint32_t addr, uint128_t data) {
     Bus* bus = (Bus*)udata;
 
-    void* ptr = bus->fastmem_w_table[addr >> 13];
+    void* ptr = fastmem_write_ptr(bus, addr);
 
     if (likely(ptr)) {
         *((uint128_t*)(((uint8_t*)ptr) + (addr & 0x1fff))) = data;
@@ -523,7 +539,7 @@ void write128(void* udata, uint32_t addr, uint128_t data) {
     MAP_MEM_WRITE_NS(128, 0x11000000, 0x11007FFF, vu, vu0);
     MAP_MEM_WRITE_NS(128, 0x11008000, 0x1100FFFF, vu, vu1);
 
-    if (addr >= 0x1C000000 && addr <= 0x1C1FFFFF) {
+    if (addr >= 0x1C000000 && addr < 0x1C000000 + bus->iop_ram->size) {
         ram::write128(bus->iop_ram, addr - 0x1C000000, data);
 
         iop::invalidate_block(bus->iop, addr - 0x1C000000);

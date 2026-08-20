@@ -164,6 +164,10 @@ const char* get_input_name(InputAction action) {
         case IRIS_S14X_SW_P2_START: return "System 147/148 P2 Start";
         case IRIS_S14X_SW_P3_START: return "System 147/148 P3 Start";
         case IRIS_S14X_SW_P4_START: return "System 147/148 P4 Start";
+
+        case IRIS_S2X6_SW_COIN1: return "System 246/256 Coin 1";
+        case IRIS_S2X6_SW_COIN2: return "System 246/256 Coin 2";
+        case IRIS_S2X6_SW_TEST: return "System 246/256 Test";
         case IRIS_INPUT_ACTION_MAX: break;
     }
 
@@ -602,6 +606,10 @@ void show_system_settings(Instance* iris) {
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     Checkbox("Start games automatically", &iris->autostart);
     Checkbox("Skip FMVs", &iris->skip_fmv);
+    Checkbox("Keep arcade files extracted from archives", &iris->cache_arcade_files);
+    SetItemTooltip("Loads archived arcade games faster, at the cost of keeping a second copy of their files");
+    Checkbox("Always boot System 246/256 games off the dongle", &iris->arcade_dongle_boot);
+    SetItemTooltip("Runs the game's own boot program on the dongle even when a boot.elf is there to chainload it. Games without a boot.elf take this route regardless");
     PopStyleVar();
 }
 
@@ -1660,15 +1668,10 @@ void show_paths_settings(Instance* iris) {
 
     SameLine();
 
-    // Enabled once the APA reader lands
-    BeginDisabled(true);
-
     if (Button(ICON_MS_FOLDER_OPEN "##hddbrowse"))
         browse_device(iris, FE_DEV_HDD, 0);
 
-    EndDisabled();
-
-    SetItemTooltip("PS2 HDD (APA/PFS) browsing is not supported yet");
+    SetItemTooltip("Browse files on the HDD");
 
     Text("Flash memory (xfrom)");
 
@@ -1709,7 +1712,43 @@ void show_paths_settings(Instance* iris) {
 
     EndDisabled();
 
-    SetItemTooltip("Browse the files on the internal flash");
+    SetItemTooltip("Browse files on the internal flash");
+
+    imgui::section(iris, "Arcade");
+
+    for (int i = 0; i < emu::ARCADE_BIOS_COUNT; i++) {
+        std::string& arcade_buf = settings.arcade_bios_bufs[i];
+
+        PushID(i);
+
+        Text("%s", emu::get_arcade_bios_label(i));
+
+        SetNextItemWidth(300);
+
+        imgui::text_input("##arcadebios", &arcade_buf, "No bootrom selected");
+        SameLine();
+
+        if (Button(ICON_MS_FOLDER "##arcadebios")) {
+            audio::mute(iris);
+
+            auto f = pfd::open_file("Select bootrom file", "", {
+                "Bootrom dumps (*.bin; *.ic1; *.7d; *.8g)", "*.bin *.ic1 *.7d *.8g",
+                "All Files (*.*)", "*"
+            });
+
+            while (!f.ready());
+
+            audio::unmute(iris);
+
+            if (f.result().size())
+                arcade_buf = f.result().at(0);
+        } SameLine();
+
+        if (Button(ICON_MS_CLOSE "##arcadebios"))
+            arcade_buf.clear();
+
+        PopID();
+    }
 
     if (Button(ICON_MS_SAVE " Save")) {
         std::string bios_path = buf;
@@ -1718,6 +1757,8 @@ void show_paths_settings(Instance* iris) {
         std::string flash_path = flash_buf;
         std::string nvram_path = nvram_buf;
         std::string hdd_path = hdd_buf;
+
+        std::vector<std::string> arcade_bios_paths(settings.arcade_bios_bufs, settings.arcade_bios_bufs + emu::ARCADE_BIOS_COUNT);
 
         request_reset(
             "System paths",
@@ -1730,6 +1771,9 @@ void show_paths_settings(Instance* iris) {
                 if (flash_path.size()) iris->paths.flash_path = flash_path;
                 if (nvram_path.size()) iris->paths.nvram_path = nvram_path;
                 if (hdd_path.size()) iris->paths.hdd_path = hdd_path;
+
+                for (int i = 0; i < emu::ARCADE_BIOS_COUNT; i++)
+                    iris->paths.arcade_bios_paths[i] = arcade_bios_paths[i];
             },
             [=]() {
                 if (iris->paths.bios_path.size())
@@ -1757,9 +1801,16 @@ void SettingsWindow::sync_paths() {
     nvram_buf = iris->paths.nvram_path;
     hdd_buf = iris->paths.hdd_path;
     flash_buf = iris->paths.flash_path;
+
+    for (int i = 0; i < emu::ARCADE_BIOS_COUNT; i++)
+        arcade_bios_bufs[i] = iris->paths.arcade_bios_paths[i];
 }
 
 bool SettingsWindow::paths_dirty() const {
+    for (int i = 0; i < emu::ARCADE_BIOS_COUNT; i++)
+        if (iris->paths.arcade_bios_paths[i] != arcade_bios_bufs[i])
+            return true;
+
     return iris->paths.bios_path != bios_buf ||
            iris->paths.rom1_path != rom1_buf ||
            iris->paths.rom2_path != rom2_buf ||

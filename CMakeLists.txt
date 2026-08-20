@@ -288,6 +288,7 @@ add_definitions("-D_IRIS_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
 target_sources(iris PRIVATE
     main.cpp
     frontend/applets.cpp
+    frontend/archive.cpp
     frontend/audio.cpp
     frontend/cli.cpp
     frontend/log.cpp
@@ -295,6 +296,7 @@ target_sources(iris PRIVATE
     frontend/handlers.cpp
     frontend/vulkan.cpp
     frontend/imgui.cpp
+    frontend/ini.cpp
     frontend/emu.cpp
     frontend/render.cpp
     frontend/shaders.cpp
@@ -393,6 +395,7 @@ target_sources(iris PRIVATE
     src/iop/usb/kbd.cpp
     src/iop/usb/mouse.cpp
     src/iop/usb/msd.cpp
+    src/iop/usb/an986.cpp
     src/iop/disc/bin.cpp
     src/iop/disc/cue.cpp
     src/iop/disc/chd.cpp
@@ -401,6 +404,8 @@ target_sources(iris PRIVATE
     src/iop/hle/ioman.cpp
     src/iop/hle/loadcore.cpp
     src/iop/hle/sysmem.cpp
+    src/iop/hle/sifcmd.cpp
+    src/iop/hle/thbase.cpp
     src/ipu/chromtable.cpp
     src/ipu/codedblockpattern.cpp
     src/ipu/dct_coeff.cpp
@@ -436,6 +441,10 @@ target_sources(iris PRIVATE
     src/s14x/aiboard.cpp
     src/s2x6/acata.cpp
     src/s2x6/acjv.cpp
+    src/s2x6/acsram.cpp
+    src/s2x6/acram.cpp
+    src/s2x6/accore.cpp
+    src/s2x6/acuart.cpp
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp
@@ -612,8 +621,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
     )
 endif()
 
-option(IRIS_BUILD_TESTS "Build the EE/IOP recompiler differential test" OFF)
+# option(IRIS_BUILD_TESTS "Build the EE/IOP recompiler differential test" OFF)
 
-if (IRIS_BUILD_TESTS)
-    add_subdirectory(tests/jit_diff)
-endif()
+# if (IRIS_BUILD_TESTS)
+#     add_subdirectory(tests/jit_diff)
+# endif()

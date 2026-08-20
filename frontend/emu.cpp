@@ -1,18 +1,72 @@
 #include "iris.hpp"
 #include "arcade.hpp"
+#include "archive.hpp"
+#include "ini.hpp"
 #include "slirp.hpp"
 
-#include "miniz.h"
 #include "ps2.hpp"
+#include "ps2_elf.hpp"
 #include "fs/mkfs.hpp"
+#include "fs/fs.hpp"
+#include "fs/blk.hpp"
 
 #include <filesystem>
+#include <vector>
 #include <algorithm>
 #include <optional>
 #include <cctype>
 #include <thread>
 
 namespace iris::emu {
+
+struct ArcadeBiosSlot {
+    int system;
+    const char* key;
+    const char* label;
+};
+
+static const ArcadeBiosSlot g_arcade_bios_slots[ARCADE_BIOS_COUNT] = {
+    { ps2::NAMCO_SYSTEM_147, "arcade_bios_147_path", "Namco System 147" },
+    { ps2::NAMCO_SYSTEM_148, "arcade_bios_148_path", "Namco System 148" },
+    { ps2::NAMCO_SYSTEM_246, "arcade_bios_246_path", "Namco System 246" },
+    { ps2::NAMCO_SYSTEM_256, "arcade_bios_256_path", "Namco System 256/Super 256" },
+    { ps2::KONAMI_PYTHON, "arcade_bios_python_path", "Konami Python" },
+    { ps2::KONAMI_PYTHON2, "arcade_bios_python2_path", "Konami Python 2" }
+};
+
+const char* get_arcade_bios_label(int slot) {
+    if (slot < 0 || slot >= ARCADE_BIOS_COUNT)
+        return "Unknown";
+
+    return g_arcade_bios_slots[slot].label;
+}
+
+const char* get_arcade_bios_key(int slot) {
+    if (slot < 0 || slot >= ARCADE_BIOS_COUNT)
+        return "";
+
+    return g_arcade_bios_slots[slot].key;
+}
+
+int get_arcade_bios_slot(int system) {
+    if (system == ps2::NAMCO_SYSTEM_SUPER_256)
+        system = ps2::NAMCO_SYSTEM_256;
+
+    for (int i = 0; i < ARCADE_BIOS_COUNT; i++)
+        if (g_arcade_bios_slots[i].system == system)
+            return i;
+
+    return -1;
+}
+
+std::string get_arcade_bios_path(Instance* iris, int system) {
+    int slot = get_arcade_bios_slot(system);
+
+    if (slot < 0)
+        return "";
+
+    return iris->paths.arcade_bios_paths[slot];
+}
 
 bool init(Instance* iris) {
     // Initialize our emulator state
@@ -32,6 +86,17 @@ void destroy(Instance* iris) {
     slirp::stop();
 
     if (iris->ps2) ps2::destroy(iris->ps2);
+
+    clean_arcade_files(iris);
+}
+
+void clean_arcade_files(Instance* iris) {
+    if (iris->cache_arcade_files)
+        return;
+
+    std::error_code ec;
+
+    std::filesystem::remove_all(std::filesystem::path(iris->paths.pref_path) / "arcade", ec);
 }
 
 const char* get_extension(const char* path) {
@@ -73,47 +138,14 @@ void finalize_load(Instance* iris) {
 }
 
 int open_archive(Instance* iris, std::string path) {
-    mz_zip_archive zip;
-
-    mz_zip_zero_struct(&zip);
-
-    if (!mz_zip_reader_init_file(&zip, path.c_str(), 0)) {
-        iris_error(&iris->log.emu, "Couldn't open archive \"{}\"", path.c_str());
-
-        return 1;
-    }
-
     // Decompress everything into pref_path/tmp/
     std::filesystem::path tmp_path = std::filesystem::path(iris->paths.pref_path) / "tmp";
 
-    std::error_code ec;
-    std::filesystem::create_directories(tmp_path, ec);
+    if (!archive::extract_all(path, tmp_path)) {
+        iris_error(&iris->log.emu, "Couldn't extract archive \"{}\"", path.c_str());
 
-    mz_uint count = mz_zip_reader_get_num_files(&zip);
-
-    for (mz_uint i = 0; i < count; i++) {
-        mz_zip_archive_file_stat stat;
-
-        if (!mz_zip_reader_file_stat(&zip, i, &stat))
-            continue;
-
-        std::filesystem::path dst = tmp_path / stat.m_filename;
-
-        if (mz_zip_reader_is_file_a_directory(&zip, i)) {
-            std::filesystem::create_directories(dst, ec);
-
-            continue;
-        }
-
-        // Make sure the parent directory exists before extracting
-        std::filesystem::create_directories(dst.parent_path(), ec);
-
-        if (!mz_zip_reader_extract_to_file(&zip, i, dst.string().c_str(), 0)) {
-            iris_error(&iris->log.emu, "Failed to extract \"{}\" from archive", stat.m_filename);
-        }
+        return 1;
     }
-
-    mz_zip_reader_end(&zip);
 
     return 0;
 }
@@ -140,12 +172,8 @@ int insert_disc(Instance* iris, std::string file) {
 
 int open_file_thread(Instance* iris, std::string file) {
     std::filesystem::path path(file);
-    std::string ext = path.extension().string();
 
-    for (char& c : ext)
-        c = tolower(c);
-
-    if (ext == ".zip") {
+    if (archive::is_archive(path)) {
         int res = open_archive(iris, file);
 
         finish_load(iris, res);
@@ -203,6 +231,10 @@ int open_file_thread(Instance* iris, std::string file) {
 int open_file(Instance* iris, std::string file) {
     std::filesystem::path path(file);
 
+    if (is_arcade_file(iris, file)) {
+        return load_arcade(iris, file) ? 0 : 1;
+    }
+
     iris->ui.loading_target = path.filename().string();
     iris->ui.loading_file_active = true;
     iris->load_ready = false;
@@ -247,6 +279,20 @@ int boot_ps2_path(Instance* iris, std::string path) {
     return 0;
 }
 
+static int boot_arcade_thread(Instance* iris, std::string path);
+
+struct ArcadeFiles {
+    std::filesystem::path bios;
+    std::filesystem::path nand;
+    std::filesystem::path dongle;
+    std::filesystem::path media;
+    std::filesystem::path loader;
+    std::filesystem::path sram;
+    std::filesystem::path nvram;
+
+    int media_type;
+};
+
 void start_pending_load(Instance* iris) {
     if (!iris->load_start_pending)
         return;
@@ -257,6 +303,14 @@ void start_pending_load(Instance* iris) {
         iris->load_pending_boot = false;
 
         std::thread(boot_ps2_path_thread, iris, iris->load_pending_file).detach();
+
+        return;
+    }
+
+    if (iris->load_pending_arcade) {
+        iris->load_pending_arcade = false;
+
+        std::thread(boot_arcade_thread, iris, iris->load_pending_file).detach();
 
         return;
     }
@@ -294,60 +348,770 @@ template <typename T> std::optional<T> query_arcade_value(std::string arcade_nam
     return {};
 }
 
-bool load_arcade(Instance* iris, std::string path) {
-    std::filesystem::path base_path(path);
+struct ArchiveIndex {
+    std::filesystem::path path;
+    std::vector<archive::Entry> entries;
+};
 
-    std::string id = base_path.stem().string();
-    std::string name = query_arcade_value<std::string>(id, "name").value_or("");
+struct ArcadeFileNames {
+    std::string bios;
+    std::string nand;
+    std::string dongle;
+    std::string media;
+    std::string loader;
+};
 
-    if (!name.size()) {
+struct ArcadeSource {
+    std::string id;
+    std::string name;
+    std::string bootprog;
+
+    int system = ps2::AUTO;
+    int media_type = s2x6::acata::MEDIA_DVD;
+    int uart_device = s2x6::acuart::DEVICE_NONE;
+    int jvs_mode = s2x6::acjv::MODE_DEFAULT;
+    int wheel_style = s2x6::acjv::WHEEL_STANDARD;
+    int ioboard_mode = 0;
+
+    ArcadeFileNames names;
+
+    std::filesystem::path extract_path;
+    std::vector<std::filesystem::path> search_paths;
+    std::vector<ArchiveIndex> archives;
+};
+
+static std::string lowercase(std::string text) {
+    for (char& c : text)
+        c = tolower(c);
+
+    return text;
+}
+
+static ArcadeFileNames arcade_file_names(const std::string& id) {
+    std::string gameid = query_arcade_value<std::string>(id, "gameid").value_or(id);
+
+    ArcadeFileNames names;
+
+    names.bios = query_arcade_value<std::string>(id, "bios").value_or("bios.bin");
+    names.nand = query_arcade_value<std::string>(id, "nand").value_or("nand.bin");
+    names.dongle = query_arcade_value<std::string>(id, "dongle").value_or(gameid + ".ps2");
+    names.media = query_arcade_value<std::string>(id, "media").value_or(gameid + ".chd");
+    names.loader = query_arcade_value<std::string>(id, "loader").value_or("boot.elf");
+
+    return names;
+}
+
+static void load_arcade_definition(ArcadeSource* source) {
+    source->name = query_arcade_value<std::string>(source->id, "name").value_or("");
+    source->system = query_arcade_value<int>(source->id, "system").value_or(ps2::AUTO);
+    source->media_type = query_arcade_value<int>(source->id, "media_type").value_or(s2x6::acata::MEDIA_DVD);
+    source->uart_device = query_arcade_value<int>(source->id, "uart_device").value_or(s2x6::acuart::DEVICE_NONE);
+    source->jvs_mode = query_arcade_value<int>(source->id, "jvs_mode").value_or(s2x6::acjv::MODE_DEFAULT);
+    source->wheel_style = query_arcade_value<int>(source->id, "wheel_style").value_or(s2x6::acjv::WHEEL_STANDARD);
+    source->ioboard_mode = query_arcade_value<int>(source->id, "ioboard_mode").value_or(0);
+    source->bootprog = query_arcade_value<std::string>(source->id, "bootprog").value_or("");
+    source->names = arcade_file_names(source->id);
+}
+
+static const archive::Entry* find_archive_entry(const ArchiveIndex& index, const std::string& name) {
+    std::string wanted = lowercase(name);
+
+    for (const archive::Entry& entry : index.entries) {
+        if (entry.directory)
+            continue;
+
+        if (lowercase(entry.name) == wanted)
+            return &entry;
+    }
+
+    return nullptr;
+}
+
+static const ArchiveIndex* find_archive_with_file(const ArcadeSource& source, const std::string& name) {
+    for (const ArchiveIndex& index : source.archives)
+        if (find_archive_entry(index, name))
+            return &index;
+
+    return nullptr;
+}
+
+static std::filesystem::path find_extracted_file(const ArcadeSource& source, const std::string& name) {
+    for (const std::filesystem::path& dir : source.search_paths)
+        if (std::filesystem::exists(dir / name))
+            return dir / name;
+
+    return {};
+}
+
+static bool arcade_file_available(const ArcadeSource& source, const std::string& name) {
+    if (!find_extracted_file(source, name).empty())
+        return true;
+
+    return find_archive_with_file(source, name) != nullptr;
+}
+
+static std::filesystem::path locate_arcade_file(const ArcadeSource& source, const std::string& name) {
+    std::filesystem::path found = find_extracted_file(source, name);
+
+    if (!found.empty())
+        return found;
+
+    if (find_archive_with_file(source, name))
+        return source.extract_path / name;
+
+    return source.search_paths.front() / name;
+}
+
+static bool arcade_bios_available(Instance* iris, const ArcadeSource& source) {
+    if (arcade_file_available(source, source.names.bios))
+        return true;
+
+    std::string configured = get_arcade_bios_path(iris, source.system);
+
+    if (!configured.size())
+        return false;
+
+    if (std::filesystem::exists(configured))
+        return true;
+
+    iris_error(&iris->log.emu, "Configured {} bootrom \"{}\" is missing",
+        get_system_name(iris, source.system), configured.c_str());
+
+    return false;
+}
+
+static ArcadeFiles resolve_arcade_files(Instance* iris, const ArcadeSource& source) {
+    std::filesystem::path pref_path(iris->paths.pref_path);
+
+    ArcadeFiles files;
+
+    files.bios = locate_arcade_file(source, source.names.bios);
+    files.nand = locate_arcade_file(source, source.names.nand);
+    files.dongle = locate_arcade_file(source, source.names.dongle);
+    files.media = locate_arcade_file(source, source.names.media);
+    files.loader = locate_arcade_file(source, source.names.loader);
+    files.sram = pref_path / "acsram" / (source.id + ".bin");
+    files.nvram = pref_path / "acnvram" / (source.id + ".nvm");
+
+    files.media_type = source.media_type;
+
+    if (!std::filesystem::exists(files.bios)) {
+        std::string configured = get_arcade_bios_path(iris, source.system);
+
+        if (configured.size() && std::filesystem::exists(configured))
+            files.bios = configured;
+    }
+
+    return files;
+}
+
+static bool arcade_boots_from_dongle(Instance* iris, const ArcadeSource& source) {
+    switch (source.system) {
+        case ps2::NAMCO_SYSTEM_246:
+        case ps2::NAMCO_SYSTEM_256:
+        case ps2::NAMCO_SYSTEM_SUPER_256:
+            break;
+
+        default:
+            return false;
+    }
+
+    if (source.bootprog.empty())
+        return false;
+
+    return iris->arcade_dongle_boot || !arcade_file_available(source, source.names.loader);
+}
+
+static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& source, bool want_loader = false) {
+    if (!arcade_bios_available(iris, source))
+        return "bootrom";
+
+    if (source.system == ps2::NAMCO_SYSTEM_147 || source.system == ps2::NAMCO_SYSTEM_148) {
+        if (!arcade_file_available(source, source.names.nand))
+            return "NAND";
+
+        return nullptr;
+    }
+
+    if (!arcade_file_available(source, source.names.dongle)) return "dongle";
+    if (!arcade_file_available(source, source.names.media)) return "media image";
+    if ((want_loader || !arcade_boots_from_dongle(iris, source)) &&
+        !arcade_file_available(source, source.names.loader)) return "loader";
+
+    return nullptr;
+}
+
+static bool is_namco_game_id(const std::string& text) {
+    if (text.size() != 7)
+        return false;
+
+    if (toupper(text[0]) != 'N' || toupper(text[1]) != 'M')
+        return false;
+
+    for (size_t i = 2; i < text.size(); i++)
+        if (!isdigit((unsigned char)text[i]))
+            return false;
+
+    return true;
+}
+
+static int score_arcade_definition(const ArchiveIndex& index, const std::string& id) {
+    std::optional<std::string> nand = query_arcade_value<std::string>(id, "nand");
+    std::optional<std::string> dongle = query_arcade_value<std::string>(id, "dongle");
+    std::optional<std::string> media = query_arcade_value<std::string>(id, "media");
+    std::optional<std::string> bios = query_arcade_value<std::string>(id, "bios");
+
+    int score = 0;
+
+    if (nand && find_archive_entry(index, *nand)) score += 4;
+    if (dongle && find_archive_entry(index, *dongle)) score += 4;
+    if (media && find_archive_entry(index, *media)) score += 2;
+    if (bios && find_archive_entry(index, *bios)) score += 1;
+
+    return score;
+}
+
+static std::string find_set_by_game_id(const std::string& gameid) {
+    for (auto&& [key, value] : g_arcade_definitions) {
+        std::string id(key.str());
+
+        if (lowercase(query_arcade_value<std::string>(id, "gameid").value_or("")) == lowercase(gameid))
+            return id;
+    }
+
+    return "";
+}
+
+static std::string identify_by_game_id(const ArchiveIndex& index) {
+    for (const archive::Entry& entry : index.entries) {
+        std::string gameid = std::filesystem::path(entry.name).stem().string();
+
+        if (!is_namco_game_id(gameid))
+            continue;
+
+        std::string id = find_set_by_game_id(gameid);
+
+        if (id.size())
+            return id;
+    }
+
+    return "";
+}
+
+static std::string identify_arcade_archive(const ArchiveIndex& index) {
+    std::string stem = lowercase(index.path.stem().string());
+
+    if (g_arcade_definitions.contains(stem))
+        return stem;
+
+    std::string best_id;
+    int best_score = 0;
+
+    for (auto&& [key, value] : g_arcade_definitions) {
+        std::string id(key.str());
+
+        int score = score_arcade_definition(index, id);
+
+        if (score > best_score) {
+            best_score = score;
+            best_id = id;
+        }
+    }
+
+    if (best_score >= 4)
+        return best_id;
+
+    return identify_by_game_id(index);
+}
+
+static bool archive_completes_source(const ArcadeSource& source, const ArchiveIndex& index) {
+    const ArcadeFileNames& names = source.names;
+
+    for (const std::string& name : { names.bios, names.nand, names.dongle, names.media, names.loader }) {
+        if (arcade_file_available(source, name))
+            continue;
+
+        if (find_archive_entry(index, name))
+            return true;
+    }
+
+    return false;
+}
+
+static void index_sibling_archives(Instance* iris, ArcadeSource* source) {
+    if (!find_missing_arcade_file(iris, *source, true))
+        return;
+
+    std::error_code ec;
+
+    for (const auto& entry : std::filesystem::directory_iterator(source->archives.front().path.parent_path(), ec)) {
+        if (!entry.is_regular_file(ec))
+            continue;
+
+        if (entry.path() == source->archives.front().path)
+            continue;
+
+        if (!archive::is_archive(entry.path()))
+            continue;
+
+        ArchiveIndex index;
+
+        index.path = entry.path();
+
+        if (!archive::list(index.path, &index.entries))
+            continue;
+
+        if (!archive_completes_source(*source, index))
+            continue;
+
+        iris_info(&iris->log.emu, "Taking files missing from \"{}\" out of \"{}\"",
+            source->archives.front().path.filename().string().c_str(),
+            index.path.filename().string().c_str());
+
+        source->archives.push_back(std::move(index));
+
+        if (!find_missing_arcade_file(iris, *source, true))
+            return;
+    }
+}
+
+static bool is_arcade_manifest(const std::filesystem::path& path) {
+    return lowercase(path.extension().string()) == ".acgame";
+}
+
+static int manifest_system(const std::string& platform) {
+    if (platform == "246") return ps2::NAMCO_SYSTEM_246;
+    if (platform == "256") return ps2::NAMCO_SYSTEM_256;
+    if (platform == "super256") return ps2::NAMCO_SYSTEM_SUPER_256;
+
+    return ps2::AUTO;
+}
+
+static int manifest_media_type(const std::string& media) {
+    if (media == "CD") return s2x6::acata::MEDIA_CD;
+    if (media == "DVD") return s2x6::acata::MEDIA_DVD;
+    if (media == "HDD") return s2x6::acata::MEDIA_HDD;
+
+    return -1;
+}
+
+static std::optional<ArcadeSource> open_arcade_manifest(Instance* iris, const std::filesystem::path& path) {
+    ini::File acgame;
+
+    if (!ini::load(path, &acgame)) {
+        iris_error(&iris->log.emu, "Couldn't read arcade acgame \"{}\"", path.string().c_str());
+
+        return {};
+    }
+
+    std::string gameid = ini::value(acgame, "game", "gameid");
+
+    if (!is_namco_game_id(gameid)) {
+        iris_error(&iris->log.emu, "Arcade acgame \"{}\" has an invalid game ID \"{}\"", path.string().c_str(), gameid.c_str());
+
+        return {};
+    }
+
+    ArcadeSource source;
+
+    std::string set = find_set_by_game_id(gameid);
+
+    source.id = set.size() ? set : lowercase(gameid);
+
+    load_arcade_definition(&source);
+
+    source.name = ini::value(acgame, "game", "name", source.name.size() ? source.name : gameid);
+
+    int system = manifest_system(ini::value(acgame, "game", "platform"));
+
+    if (system != ps2::AUTO)
+        source.system = system;
+
+    int media_type = manifest_media_type(ini::value(acgame, "data", "media"));
+
+    if (media_type >= 0)
+        source.media_type = media_type;
+
+    if (ini::value(acgame, "data", "jvsmode") == "racing")
+        source.jvs_mode = s2x6::acjv::MODE_DRIVE;
+
+    source.names.dongle = ini::value(acgame, "data", "dongle", gameid + ".ps2");
+    source.names.media = ini::value(acgame, "data", "mediasrc", gameid + ".chd");
+    source.names.loader = ini::value(acgame, "data", "elf", "boot.elf");
+    source.bootprog = ini::value(acgame, "data", "bootprog", source.bootprog);
+
+    for (const char* key : { "args", "256Region", "card", "sram" }) {
+        if (ini::value(acgame, "data", key).size())
+            iris_info(&iris->log.emu, "Ignoring unsupported \"{}\" key in \"{}\"", key, path.filename().string().c_str());
+    }
+
+    std::filesystem::path base = path.parent_path() / ini::value(acgame, "data", "subdir", gameid);
+
+    source.extract_path = base;
+
+    source.search_paths.push_back(base);
+    source.search_paths.push_back(path.parent_path());
+
+    return source;
+}
+
+static std::optional<ArcadeSource> open_arcade_source(Instance* iris, const std::filesystem::path& path) {
+    ArcadeSource source;
+
+    if (std::filesystem::is_directory(path)) {
+        source.id = lowercase(path.stem().string());
+
+        load_arcade_definition(&source);
+
+        if (!source.name.size())
+            return {};
+
+        source.extract_path = path;
+
+        source.search_paths.push_back(path);
+
+        return source;
+    }
+
+    if (is_arcade_manifest(path))
+        return open_arcade_manifest(iris, path);
+
+    if (!archive::is_archive(path))
+        return {};
+
+    ArchiveIndex index;
+
+    index.path = path;
+
+    if (!archive::list(index.path, &index.entries)) {
+        iris_error(&iris->log.emu, "Couldn't open archive \"{}\"", path.string().c_str());
+
+        return {};
+    }
+
+    source.id = identify_arcade_archive(index);
+
+    if (!source.id.size())
+        return {};
+
+    load_arcade_definition(&source);
+
+    source.archives.push_back(std::move(index));
+
+    source.extract_path = std::filesystem::path(iris->paths.pref_path) / "arcade" / source.id;
+
+    source.search_paths.push_back(source.extract_path);
+    source.search_paths.push_back(path.parent_path());
+    source.search_paths.push_back(path.parent_path() / source.id);
+
+    if (lowercase(path.stem().string()) != source.id)
+        source.search_paths.push_back(path.parent_path() / path.stem());
+
+    index_sibling_archives(iris, &source);
+
+    return source;
+}
+
+static bool extract_arcade_entry(Instance* iris, const ArcadeSource& source, const ArchiveIndex& index, const archive::Entry& entry) {
+    std::filesystem::path dst = source.extract_path / entry.name;
+
+    std::error_code ec;
+
+    uintmax_t size = std::filesystem::file_size(dst, ec);
+
+    if (!ec && size == entry.size)
+        return true;
+
+    iris_info(&iris->log.emu, "Extracting \"{}\" from \"{}\"...",
+        entry.name.c_str(), index.path.filename().string().c_str());
+
+    if (archive::extract(index.path, entry, dst))
+        return true;
+
+    iris_error(&iris->log.emu, "Couldn't extract \"{}\" from \"{}\"",
+        entry.name.c_str(), index.path.string().c_str());
+
+    return false;
+}
+
+static bool extract_arcade_source(Instance* iris, const ArcadeSource& source) {
+    if (source.archives.empty())
+        return true;
+
+    std::error_code ec;
+
+    std::filesystem::create_directories(source.extract_path, ec);
+
+    for (const archive::Entry& entry : source.archives.front().entries) {
+        if (entry.directory)
+            continue;
+
+        if (!extract_arcade_entry(iris, source, source.archives.front(), entry))
+            return false;
+    }
+
+    const ArcadeFileNames& names = source.names;
+
+    for (const std::string& name : { names.bios, names.nand, names.dongle, names.media, names.loader }) {
+        if (!find_extracted_file(source, name).empty())
+            continue;
+
+        for (size_t i = 1; i < source.archives.size(); i++) {
+            const archive::Entry* entry = find_archive_entry(source.archives[i], name);
+
+            if (!entry)
+                continue;
+
+            if (!extract_arcade_entry(iris, source, source.archives[i], *entry))
+                return false;
+
+            break;
+        }
+    }
+
+    return true;
+}
+
+static std::filesystem::path prepare_dongle(Instance* iris, std::filesystem::path dump) {
+    const uint32_t page_size = fs::mkfs::PAGE_SIZE + fs::mkfs::PAGE_ECC_SIZE;
+
+    std::error_code ec;
+    uintmax_t size = std::filesystem::file_size(dump, ec);
+
+    if (ec)
+        return dump;
+
+    if (size % page_size == 0)
+        return dump;
+
+    if (size % fs::mkfs::PAGE_SIZE) {
+        iris_error(&iris->log.emu, "Dongle \"{}\" isn't a whole number of pages", dump.string().c_str());
+
+        return dump;
+    }
+
+    std::filesystem::path card = dump.parent_path() / "dongle.ps2";
+
+    if (std::filesystem::exists(card) &&
+        std::filesystem::last_write_time(card, ec) >= std::filesystem::last_write_time(dump, ec))
+        return card;
+
+    std::filesystem::path ecc_path = dump.parent_path() /
+        (dump.stem().string() + "_spr" + dump.extension().string());
+
+    uintmax_t pages = size / fs::mkfs::PAGE_SIZE;
+
+    FILE* data_file = fopen(dump.string().c_str(), "rb");
+
+    if (!data_file)
+        return dump;
+
+    FILE* ecc_file = fopen(ecc_path.string().c_str(), "rb");
+
+    if (!ecc_file) {
+        iris_info(&iris->log.emu, "No ECC dump for \"{}\", generating one", dump.filename().string().c_str());
+    }
+
+    FILE* out = fopen(card.string().c_str(), "wb");
+
+    if (!out) {
+        fclose(data_file);
+
+        if (ecc_file)
+            fclose(ecc_file);
+
+        return dump;
+    }
+
+    std::vector<uint8_t> page(page_size);
+
+    for (uintmax_t i = 0; i < pages; i++) {
+        if (fread(page.data(), 1, fs::mkfs::PAGE_SIZE, data_file) != fs::mkfs::PAGE_SIZE)
+            break;
+
+        uint8_t* ecc = page.data() + fs::mkfs::PAGE_SIZE;
+
+        if (!ecc_file || fread(ecc, 1, fs::mkfs::PAGE_ECC_SIZE, ecc_file) != fs::mkfs::PAGE_ECC_SIZE)
+            fs::mkfs::page_ecc(page.data(), ecc);
+
+        fwrite(page.data(), 1, page_size, out);
+    }
+
+    fclose(out);
+    fclose(data_file);
+
+    if (ecc_file)
+        fclose(ecc_file);
+
+    iris_info(&iris->log.emu, "Converted dongle dump into \"{}\"", card.string().c_str());
+
+    return card;
+}
+
+// EELOAD reaches the boot path long before anything registers a memory card
+// driver on the IOP, so "mc0:" is a dead device at that point. The dongle is a
+// plain PS2 memory card image though, so we can unpack it ourselves and let the
+// IOP HLE serve "mc0:" out of a host directory, the same way it serves "host:".
+// That covers the boot program and every module it goes on to load off the card
+static bool unpack_dongle(Instance* iris, const std::filesystem::path& path,
+    const std::filesystem::path& out, const std::string& bootprog) {
+    fs::blk::Device* dev = fs::blk::open_file(iris->logger, path.string().c_str());
+
+    if (!dev) {
+        iris_warning(&iris->log.emu, "Couldn't open dongle \"{}\" to look for \"{}\"",
+            path.string().c_str(), bootprog.c_str());
+
         return false;
     }
 
-    iris_info(&iris->log.emu, "Loading arcade game \"{}\" ({})...", name.c_str(), id.c_str());
+    fs::Fs* filesystem = fs::probe(iris->logger, dev, true);
 
-    int system = query_arcade_value<int>(id, "system").value_or(ps2::AUTO);
+    if (!filesystem) {
+        iris_warning(&iris->log.emu, "Dongle \"{}\" doesn't hold a readable memory card filesystem",
+            path.string().c_str());
+
+        fs::blk::close(dev);
+
+        return false;
+    }
+
+    std::vector <fs::Entry> entries;
+
+    int r = fs::list(filesystem, "/", &entries);
+
+    if (r != fs::FS_OK) {
+        iris_warning(&iris->log.emu, "Couldn't read the dongle's root directory ({})", fs::error_name(r));
+
+        fs::close(filesystem);
+
+        return false;
+    }
+
+    std::error_code ec;
+
+    std::filesystem::create_directories(out, ec);
+
+    bool found = false;
+
+    std::vector <uint8_t> buf;
+
+    for (const fs::Entry& entry : entries) {
+        if (entry.flags & fs::ENTRY_DIRECTORY)
+            continue;
+
+        std::string name;
+
+        if (!fs::sanitize_name(entry.name, &name))
+            continue;
+
+        iris_debug(&iris->log.emu, "Dongle holds \"{}\" ({} bytes)", name.c_str(), entry.size);
+
+        fs::Handle* handle = nullptr;
+
+        if (fs::open(filesystem, ("/" + name).c_str(), &handle) != fs::FS_OK)
+            continue;
+
+        buf.resize((size_t)entry.size);
+
+        int64_t got = entry.size ? fs::read(filesystem, handle, 0, buf.data(), entry.size) : 0;
+
+        fs::close_handle(filesystem, handle);
+
+        if (got < 0) {
+            iris_warning(&iris->log.emu, "Couldn't read \"{}\" off the dongle", name.c_str());
+
+            continue;
+        }
+
+        FILE* file = fopen((out / name).string().c_str(), "wb");
+
+        if (!file) {
+            iris_warning(&iris->log.emu, "Couldn't write \"{}\" out of the dongle", name.c_str());
+
+            continue;
+        }
+
+        if (got)
+            fwrite(buf.data(), 1, (size_t)got, file);
+
+        fclose(file);
+
+        if (bootprog == name)
+            found = true;
+    }
+
+    fs::close(filesystem);
+
+    return found;
+}
+
+
+static int boot_arcade_thread(Instance* iris, std::string path) {
+    if (!load_arcade_files(iris, path))
+        finish_load(iris, 1);
+
+    return 0;
+}
+
+static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
+    const std::string& name = source.name;
+
+    std::string gameid = query_arcade_value<std::string>(source.id, "gameid").value_or("");
+
+    if (gameid.size()) {
+        iris_info(&iris->log.emu, "Loading arcade game \"{}\" ({}, {})...", name.c_str(), source.id.c_str(), gameid.c_str());
+    } else {
+        iris_info(&iris->log.emu, "Loading arcade game \"{}\" ({})...", name.c_str(), source.id.c_str());
+    }
+
+    if (!extract_arcade_source(iris, source)) {
+        push_info(iris, "Couldn't start arcade game (Extraction failed)");
+
+        return false;
+    }
+
+    int system = source.system;
+
+    ArcadeFiles files = resolve_arcade_files(iris, source);
+
+    std::error_code ec;
+
+    std::filesystem::create_directories(files.sram.parent_path(), ec);
+    std::filesystem::create_directories(files.nvram.parent_path(), ec);
 
     switch (system) {
         case ps2::NAMCO_SYSTEM_147:
         case ps2::NAMCO_SYSTEM_148: {
-            std::string bios = query_arcade_value<std::string>(id, "bios").value_or("");
-            std::string nand = query_arcade_value<std::string>(id, "nand").value_or("");
-
-            int ioboard_mode = query_arcade_value<int>(id, "ioboard_mode").value_or(0);
-
-            std::filesystem::path bios_path = base_path / bios;
-            std::filesystem::path nand_path = base_path / nand;
-            std::filesystem::path sram_path = base_path / "sram.bin";
-
-            if (!std::filesystem::exists(bios_path)) {
-                iris_error(&iris->log.emu, "Couldn't find bootrom file \"{}\"", bios_path.string().c_str());
+            if (!std::filesystem::exists(files.bios)) {
+                iris_error(&iris->log.emu, "Couldn't find bootrom file \"{}\"", files.bios.string().c_str());
 
                 push_info(iris, "Couldn't start arcade game (Missing bootrom)");
 
                 return false;
             }
 
-            if (!std::filesystem::exists(nand_path)) {
-                iris_error(&iris->log.emu, "Couldn't find NAND file \"{}\"", nand_path.string().c_str());
+            if (!std::filesystem::exists(files.nand)) {
+                iris_error(&iris->log.emu, "Couldn't find NAND file \"{}\"", files.nand.string().c_str());
 
                 push_info(iris, "Couldn't start arcade game (Missing NAND)");
 
                 return false;
             }
 
-            ps2::load_bios(iris->ps2, bios_path.string().c_str());
+            ps2::load_bios(iris->ps2, files.bios.string().c_str());
             ps2::set_system(iris->ps2, system);
-            s14x::nand::load(iris->ps2->s14x_nand, nand_path.string().c_str());
-            s14x::sram::load(iris->ps2->s14x_sram, sram_path.string().c_str());
+            s14x::nand::load(iris->ps2->s14x_nand, files.nand.string().c_str());
+            s14x::sram::load(iris->ps2->s14x_sram, files.sram.string().c_str());
+
+            cdvd::load_nvram(iris->ps2->cdvd, files.nvram.string().c_str());
 
             if (iris->ps2->s14x_ioboard) {
-                iris->ps2->s14x_ioboard->mode = ioboard_mode;
+                iris->ps2->s14x_ioboard->mode = source.ioboard_mode;
             }
 
             ps2::reset(iris->ps2);
 
-            iris->loaded = name + " (" + id + ")";
+            iris->loaded = name + " (" + source.id + ")";
 
             if (iris->autostart) {
                 iris->debug.pause = false;
@@ -356,27 +1120,159 @@ bool load_arcade(Instance* iris, std::string path) {
             return true;
         } break;
 
-        default: {
-            const char* names[] = {
-                "Auto",
-                "Retail (Fat)",
-                "Retail (Slim)",
-                "PSX DESR",
-                "TEST unit (DTL-H)",
-                "TOOL unit (DTL-T)",
-                "Konami Python",
-                "Konami Python 2",
-                "Namco System 147",
-                "Namco System 148",
-                "Namco System 246",
-                "Namco System 256"
-            };
+        case ps2::NAMCO_SYSTEM_246:
+        case ps2::NAMCO_SYSTEM_256:
+        case ps2::NAMCO_SYSTEM_SUPER_256: {
+            ps2::load_bios(iris->ps2, files.bios.string().c_str());
+            ps2::set_system(iris->ps2, system);
 
-            iris_error(&iris->log.emu, "{} isn't supported yet", names[system]);
+            cdvd::load_nvram(iris->ps2->cdvd, files.nvram.string().c_str());
+
+            std::filesystem::path dongle = prepare_dongle(iris, files.dongle);
+
+            bool dongle_boot = arcade_boots_from_dongle(iris, source);
+
+            std::filesystem::path dongle_files =
+                std::filesystem::path(iris->paths.pref_path) / "arcade" / "dongle" / source.id;
+
+            if (dongle_boot && !unpack_dongle(iris, dongle, dongle_files, source.bootprog)) {
+                iris_error(&iris->log.emu, "Dongle \"{}\" doesn't hold boot program \"{}\"",
+                    dongle.string().c_str(), source.bootprog.c_str());
+
+                push_info(iris, "Couldn't start arcade game (Boot program not on dongle)");
+
+                return false;
+            }
+
+            attach_memory_card(iris, 0, dongle.string().c_str());
+
+            if (!s2x6::acata::load(iris->ps2->s2x6_acata, files.media.string().c_str(), files.media_type)) {
+                iris_error(&iris->log.emu, "Couldn't read media image \"{}\"", files.media.string().c_str());
+
+                return false;
+            }
+
+            s2x6::acsram::load(iris->ps2->s2x6_acsram, files.sram.string().c_str());
+
+            s2x6::acuart::set_device(iris->ps2->s2x6_acuart, source.uart_device);
+
+            s2x6::acjv::set_mode(iris->ps2->s2x6_acjv, source.jvs_mode, source.wheel_style);
+
+            if (dongle_boot) {
+                std::filesystem::path program = dongle_files / source.bootprog;
+
+                // EELOAD picks the boot path apart before any memory card
+                // driver exists, and derails outright on an "mc0:" it can't
+                // reach, so the boot program goes in through "host:" instead.
+                //
+                // The maps have to outlive the boot. The boot program pulls the
+                // arcade IOP modules off "mc0:" as it comes up, long before a
+                // real driver shows up, and some of them reboot the IOP with an
+                // image they ask for on a devkit's "host0:"
+                ps2::iop_map_device(iris->ps2, "mc0", dongle_files.string().c_str());
+                ps2::iop_map_device(iris->ps2, "host", dongle_files.string().c_str());
+                ps2::iop_map_device(iris->ps2, "host0", dongle_files.string().c_str());
+
+                elf::load_symbols_from_file(iris, program.string());
+
+                iris_info(&iris->log.emu, "Booting \"{}\" off the dongle", source.bootprog.c_str());
+
+                ps2::boot_file(iris->ps2, ("host:  " + program.string()).c_str());
+
+                // The boot program has to believe it came off the dongle.
+                // boot_file() resets the machine, so this goes after it
+                std::string dongle_arg = "mc0:" + source.bootprog;
+
+                const char* boot_args[] = { dongle_arg.c_str(), "DANGLE" };
+
+                ps2::set_boot_args(iris->ps2, boot_args, 2);
+            } else {
+                ps2::iop_map_device(iris->ps2, "host", files.loader.parent_path().string().c_str());
+
+                elf::load_symbols_from_file(iris, files.loader.string());
+
+                ps2::boot_file(iris->ps2, ("host:  " + files.loader.string()).c_str());
+            }
+
+            finish_load(iris, 0, name + " (" + source.id + ")");
+
+            return true;
+        } break;
+
+        default: {
+            iris_error(&iris->log.emu, "{} isn't supported yet", get_system_name(iris, system));
         } break;
     }
 
     return false;
+}
+
+bool is_arcade_file(Instance* iris, std::string path) {
+    if (is_arcade_manifest(path))
+        return true;
+
+    if (!archive::is_archive(path))
+        return false;
+
+    ArchiveIndex index;
+
+    index.path = path;
+
+    if (!archive::list(index.path, &index.entries))
+        return false;
+
+    return identify_arcade_archive(index).size() != 0;
+}
+
+bool load_arcade(Instance* iris, std::string path) {
+    std::optional<ArcadeSource> source = open_arcade_source(iris, path);
+
+    if (!source)
+        return false;
+
+    int system = source->system;
+
+    // System 246/256 has to run the bootrom before it can hand over to the
+    // game, which takes long enough to freeze the window
+    if (system == ps2::NAMCO_SYSTEM_246 || system == ps2::NAMCO_SYSTEM_256 ||
+        system == ps2::NAMCO_SYSTEM_SUPER_256) {
+        // Notifications touch the UI, so this can't wait for the thread
+        const char* missing = find_missing_arcade_file(iris, *source);
+
+        if (missing) {
+            iris_error(&iris->log.emu, "Couldn't find {} file for \"{}\"", missing, source->id.c_str());
+
+            push_info(iris, std::string("Couldn't start arcade game (Missing ") + missing + ")");
+
+            return false;
+        }
+
+        iris->ui.loading_target = source->id;
+        iris->ui.loading_file_active = true;
+        iris->load_ready = false;
+        iris->debug.pause = true;
+
+        gs::renderer::hotswap(iris->renderer, gs::renderer::BACKEND_NULL);
+
+        imgui::start_dim(iris, 0.35f, 100);
+
+        iris->load_pending_file = path;
+        iris->load_pending_arcade = true;
+        iris->load_start_pending = true;
+
+        return true;
+    }
+
+    return load_arcade_source(iris, *source);
+}
+
+bool load_arcade_files(Instance* iris, std::string path) {
+    std::optional<ArcadeSource> source = open_arcade_source(iris, path);
+
+    if (!source)
+        return false;
+
+    return load_arcade_source(iris, *source);
 }
 
 static int memory_card_type(const char* path) {
@@ -471,10 +1367,15 @@ const char* g_system_names[] = {
     "Namco System 147",
     "Namco System 148",
     "Namco System 246",
-    "Namco System 256"
+    "Namco System 256",
+    "Namco System Super 256",
+    "Wega HVX"
 };
 
 const char* get_system_name(Instance* iris, int system) {
+    if (system < 0 || system >= (int)(sizeof(g_system_names) / sizeof(*g_system_names)))
+        return "Unknown";
+
     return g_system_names[system];
 }
 
@@ -492,6 +1393,8 @@ const char* get_current_system_name(Instance* iris) {
         case ps2::NAMCO_SYSTEM_148:
         case ps2::NAMCO_SYSTEM_246:
         case ps2::NAMCO_SYSTEM_256:
+        case ps2::NAMCO_SYSTEM_SUPER_256:
+        case ps2::WEGA_HVX:
             return g_system_names[iris->system];
         default: return "Unknown";
     }

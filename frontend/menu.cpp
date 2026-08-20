@@ -9,13 +9,8 @@ inline constexpr bool NATIVE = true;
 inline constexpr bool NATIVE = false;
 #endif
 
-// Description being built by the current walk
 static std::vector <Node> g_nodes;
-
-// What the OS is showing, so the menubar is only rebuilt when it really changed
 static std::vector <Node> g_published;
-
-// Items the user picked since the last walk, by index into g_published
 static std::vector <int> g_pending;
 
 static int g_depth = 0;

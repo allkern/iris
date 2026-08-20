@@ -87,8 +87,8 @@ static bool fill(Image* img, uint64_t offset, uint8_t byte, uint64_t size) {
     return true;
 }
 
-inline constexpr uint32_t MCD_PAGE = 512;
-inline constexpr uint32_t MCD_SPARE = 16;
+inline constexpr uint32_t MCD_PAGE = PAGE_SIZE;
+inline constexpr uint32_t MCD_ECC = PAGE_ECC_SIZE;
 inline constexpr uint32_t MCD_PAGES_PER_CLUSTER = 2;
 inline constexpr uint32_t MCD_PAGES_PER_BLOCK = 16;
 inline constexpr uint32_t MCD_CLUSTER = MCD_PAGE * MCD_PAGES_PER_CLUSTER;
@@ -142,11 +142,27 @@ static void ecc_chunk(const Ecc* ecc, const uint8_t* data, uint8_t* out) {
     out[2] = line1;
 }
 
+void page_ecc(const uint8_t* page, uint8_t* out) {
+    static Ecc ecc;
+    static bool ready = false;
+
+    if (!ready) {
+        ecc_init(&ecc);
+
+        ready = true;
+    }
+
+    memset(out, 0, MCD_ECC);
+
+    for (uint32_t chunk = 0; chunk < MCD_PAGE / 128; chunk++)
+        ecc_chunk(&ecc, page + chunk * 128, out + chunk * 3);
+}
+
 struct Mcd {
     Image* img = nullptr;
     Ecc ecc;
 
-    uint32_t spare = MCD_SPARE;
+    uint32_t ecc_size = MCD_ECC;
     uint32_t clusters_per_card = 0;
     uint32_t clusters_per_block = 0;
     uint32_t entries_per_cluster = 0;
@@ -159,23 +175,23 @@ struct Mcd {
 };
 
 static bool mcd_write_cluster(Mcd* mcd, uint32_t cluster, const uint8_t* data) {
-    uint8_t page[MCD_PAGE + MCD_SPARE];
+    uint8_t page[MCD_PAGE + MCD_ECC];
 
     for (uint32_t i = 0; i < MCD_PAGES_PER_CLUSTER; i++) {
         const uint8_t* src = data + i * MCD_PAGE;
 
         memcpy(page, src, MCD_PAGE);
 
-        if (mcd->spare) {
-            memset(page + MCD_PAGE, 0, mcd->spare);
+        if (mcd->ecc_size) {
+            memset(page + MCD_PAGE, 0, mcd->ecc_size);
 
             for (uint32_t chunk = 0; chunk < MCD_PAGE / 128; chunk++)
                 ecc_chunk(&mcd->ecc, src + chunk * 128, page + MCD_PAGE + chunk * 3);
         }
 
-        uint64_t offset = (uint64_t)(cluster * MCD_PAGES_PER_CLUSTER + i) * (MCD_PAGE + mcd->spare);
+        uint64_t offset = (uint64_t)(cluster * MCD_PAGES_PER_CLUSTER + i) * (MCD_PAGE + mcd->ecc_size);
 
-        if (!put(mcd->img, offset, page, MCD_PAGE + mcd->spare))
+        if (!put(mcd->img, offset, page, MCD_PAGE + mcd->ecc_size))
             return false;
     }
 
@@ -249,7 +265,7 @@ static int mcd_format(Image* img, uint32_t pages, bool ecc) {
     Mcd mcd;
 
     mcd.img = img;
-    mcd.spare = ecc ? MCD_SPARE : 0;
+    mcd.ecc_size = ecc ? MCD_ECC : 0;
 
     ecc_init(&mcd.ecc);
 
@@ -857,7 +873,7 @@ int format(logger::Logger* logger, const char* path, const Params& params) {
 
     switch (params.type) {
         case MKFS_PS2_MCD: {
-            bool ecc = !(total % (MCD_PAGE + MCD_SPARE));
+            bool ecc = !(total % (MCD_PAGE + MCD_ECC));
 
             if (!ecc && (total % MCD_PAGE)) {
                 iris_error(&src, "{} bytes is not a whole number of memory card pages", total);
@@ -865,7 +881,7 @@ int format(logger::Logger* logger, const char* path, const Params& params) {
                 break;
             }
 
-            r = mcd_format(&img, (uint32_t)(total / (ecc ? MCD_PAGE + MCD_SPARE : MCD_PAGE)), ecc);
+            r = mcd_format(&img, (uint32_t)(total / (ecc ? MCD_PAGE + MCD_ECC : MCD_PAGE)), ecc);
         } break;
 
         case MKFS_PS1_MCD: {

@@ -90,7 +90,7 @@ void init(Ps2* ps2) {
 
     // Wire the components that reference each other
     ee::dmac::connect(ps2->ee_dma, ps2->gif, ps2->vif0, ps2->vif1, ps2->ipu, ps2->iop_dma, ps2->ee);
-    iop::dma::connect(ps2->iop_dma, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->s2x6_acata);
+    iop::dma::connect(ps2->iop_dma, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->s2x6_acata, ps2->s2x6_acram);
     gif::connect(ps2->gif, ps2->ee_dma, ps2->vu1, ps2->gs);
     vif::connect(ps2->vif0, ps2->vu0, ps2->gif, ps2->ee_intc, ps2->ee_dma);
     vif::connect(ps2->vif1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->ee_dma);
@@ -181,10 +181,22 @@ void iop_clear_device_maps(Ps2* ps2) {
     iop::hle::ioman::clear_devices();
 }
 
+void set_boot_args(Ps2* ps2, const char* const* args, int count) {
+    ee::set_boot_args(ps2->ee, args, count);
+}
+
 void boot_file(Ps2* ps2, const char* path) {
     reset(ps2);
 
+    uint64_t cycles_left = 1500000000;
+
     while (ee::get_pc(ps2->ee) != 0x00082000) {
+        if (!cycles_left) {
+            iris_error(ps2, "Bootrom never reached the loader, stuck at 0x{:08x}", ee::get_pc(ps2->ee));
+
+            return;
+        }
+
         while (ps2->ee_cycles < 16*64) {
             ps2->ee_cycles += ee::run_block(ps2->ee, 1);
 
@@ -193,6 +205,8 @@ void boot_file(Ps2* ps2, const char* path) {
 
             ipu::run(ps2->ipu);
         }
+
+        cycles_left -= ps2->ee_cycles < cycles_left ? ps2->ee_cycles : cycles_left;
 
         scheduler::tick(ps2->sched, ps2->timescale * ps2->ee_cycles);
 
@@ -218,6 +232,8 @@ void boot_file(Ps2* ps2, const char* path) {
 
     uint32_t i;
 
+    int found = 0;
+
     // Find rom0:OSDSYS string
     for (i = 0; i < (uint32_t)ram::Size::_32MB; i += 0x10) {
         char* ptr = (char*)&ps2->ee_ram->buf[i];
@@ -226,7 +242,13 @@ void boot_file(Ps2* ps2, const char* path) {
             iris_debug(ps2, "Found OSDSYS path at {:08x}", i);
 
             sprintf(ptr, "%s", path);
+
+            found++;
         }
+    }
+
+    if (!found) {
+        iris_error(ps2, "Couldn't find the bootrom's boot path, \"{}\" won't be loaded", path);
     }
 }
 
@@ -295,6 +317,9 @@ void reset(Ps2* ps2) {
     ram::reset(ps2->iop_ram);
 
     ipu::reset(ps2->ipu);
+
+    if (ps2->s2x6_acjv) s2x6::acjv::reset(ps2->s2x6_acjv);
+    if (ps2->s2x6_acuart) s2x6::acuart::reset(ps2->s2x6_acuart);
 
     // Restore mode
     iop::dma::set_dev9_mode(ps2->iop_dma, iop_dev9_mode);
@@ -427,6 +452,10 @@ void destroy(Ps2* ps2) {
 
     if (ps2->s2x6_acata) { s2x6::acata::destroy(ps2->s2x6_acata); ps2->s2x6_acata = NULL; }
     if (ps2->s2x6_acjv) { s2x6::acjv::destroy(ps2->s2x6_acjv); ps2->s2x6_acjv = NULL; }
+    if (ps2->s2x6_acsram) { s2x6::acsram::destroy(ps2->s2x6_acsram); ps2->s2x6_acsram = NULL; }
+    if (ps2->s2x6_acram) { s2x6::acram::destroy(ps2->s2x6_acram); ps2->s2x6_acram = NULL; }
+    if (ps2->s2x6_accore) { s2x6::accore::destroy(ps2->s2x6_accore); ps2->s2x6_accore = NULL; }
+    if (ps2->s2x6_acuart) { s2x6::acuart::destroy(ps2->s2x6_acuart); ps2->s2x6_acuart = NULL; }
 
     delete ps2;
 }
@@ -435,9 +464,13 @@ void set_system(Ps2* ps2, int system) {
     int mechacon_model;
     ram::Size ee_ram_size, iop_ram_size;
 
+    int ee_clock = EE_CLOCK_CONSOLE;
+
     iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_RETAIL);
     speed::set_dvrp_enabled(ps2->speed, 0);
+    speed::set_flash_enabled(ps2->speed, 0);
     iop::bus::set_usb_disabled(ps2->iop_bus, 0);
+    iop::set_daemon_suppressed(ps2->iop, 0);
 
     // Destroy optional hardware
     if (ps2->s14x_nand) { s14x::nand::destroy(ps2->s14x_nand); ps2->s14x_nand = NULL; }
@@ -449,6 +482,21 @@ void set_system(Ps2* ps2, int system) {
 
     if (ps2->s2x6_acata) { s2x6::acata::destroy(ps2->s2x6_acata); ps2->s2x6_acata = NULL; }
     if (ps2->s2x6_acjv) { s2x6::acjv::destroy(ps2->s2x6_acjv); ps2->s2x6_acjv = NULL; }
+    if (ps2->s2x6_acsram) { s2x6::acsram::destroy(ps2->s2x6_acsram); ps2->s2x6_acsram = NULL; }
+    if (ps2->s2x6_acram) { s2x6::acram::destroy(ps2->s2x6_acram); ps2->s2x6_acram = NULL; }
+    if (ps2->s2x6_accore) { s2x6::accore::destroy(ps2->s2x6_accore); ps2->s2x6_accore = NULL; }
+    if (ps2->s2x6_acuart) { s2x6::acuart::destroy(ps2->s2x6_acuart); ps2->s2x6_acuart = NULL; }
+
+    ps2->iop_bus->s14x_nand = NULL;
+    ps2->iop_bus->s14x_syscon = NULL;
+    ps2->iop_bus->s14x_sram = NULL;
+    ps2->iop_bus->s14x_link = NULL;
+    ps2->iop_bus->s2x6_acata = NULL;
+    ps2->iop_bus->s2x6_acjv = NULL;
+    ps2->iop_bus->s2x6_acsram = NULL;
+    ps2->iop_bus->s2x6_acram = NULL;
+    ps2->iop_bus->s2x6_accore = NULL;
+    ps2->iop_bus->s2x6_acuart = NULL;
 
     switch (system) {
         case AUTO: {
@@ -536,21 +584,41 @@ void set_system(Ps2* ps2, int system) {
         } break;
 
         case NAMCO_SYSTEM_246:
-        case NAMCO_SYSTEM_256: {
+        case NAMCO_SYSTEM_256:
+        case NAMCO_SYSTEM_SUPER_256: {
             ee_ram_size = system == NAMCO_SYSTEM_246 ? ram::Size::_32MB : ram::Size::_64MB;
-            iop_ram_size = system == NAMCO_SYSTEM_246 ? ram::Size::_2MB : ram::Size::_4MB;
+
+            iop_ram_size = ram::Size::_8MB;
+
+            if (system == NAMCO_SYSTEM_256)
+                ee_clock = EE_CLOCK_SYSTEM_256;
+
+            if (system == NAMCO_SYSTEM_SUPER_256)
+                ee_clock = EE_CLOCK_SUPER_256;
             mechacon_model = cdvd::MECHACON_DRAGON;
 
-            ps2->s2x6_acata = s2x6::acata::create(ps2->logger, ps2->iop_intc, ps2->sched);
-            ps2->s2x6_acjv = s2x6::acjv::create(ps2->logger);
+            ps2->s2x6_acjv = s2x6::acjv::create(ps2->logger, ps2->sched);
+            ps2->s2x6_accore = s2x6::accore::create(ps2->logger, ps2->iop_intc, ps2->s2x6_acjv);
+            ps2->s2x6_acata = s2x6::acata::create(ps2->logger, ps2->s2x6_accore, ps2->sched);
+            ps2->s2x6_acsram = s2x6::acsram::create(ps2->logger);
+            ps2->s2x6_acuart = s2x6::acuart::create(ps2->logger, ps2->s2x6_accore, ps2->sched);
+            ps2->s2x6_acram = s2x6::acram::create(ps2->logger, system == NAMCO_SYSTEM_246);
 
             ps2->iop_bus->s2x6_acata = ps2->s2x6_acata;
+            ps2->iop_bus->s2x6_acjv = ps2->s2x6_acjv;
+            ps2->iop_bus->s2x6_acsram = ps2->s2x6_acsram;
+            ps2->iop_bus->s2x6_acram = ps2->s2x6_acram;
+            ps2->iop_bus->s2x6_accore = ps2->s2x6_accore;
+            ps2->iop_bus->s2x6_acuart = ps2->s2x6_acuart;
 
             // The IOP DMA was wired before this board existed
-            iop::dma::connect(ps2->iop_dma, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->s2x6_acata);
-            ps2->iop_bus->s2x6_acjv = ps2->s2x6_acjv;
+            iop::dma::connect(ps2->iop_dma, ps2->cdvd, ps2->ee_dma, ps2->sio2, ps2->spu2, ps2->s2x6_acata, ps2->s2x6_acram);
+
+            iop::set_daemon_suppressed(ps2->iop, 1);
 
             iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_ACATA);
+
+            speed::set_flash_enabled(ps2->speed, 1);
         } break;
 
         default: {
@@ -564,11 +632,16 @@ void set_system(Ps2* ps2, int system) {
 
     ps2->detected_system = system;
 
+    gs::set_ee_clock(ps2->gs, ee_clock);
+
     ram::destroy(ps2->ee_ram);
     ram::destroy(ps2->iop_ram);
 
     ps2->ee_ram = ram::create(ps2->logger, ee_ram_size);
     ps2->iop_ram = ram::create(ps2->logger, iop_ram_size);
+
+    iris_info(ps2, "System {}: {} MB EE RAM, {} MB IOP RAM",
+        system, ps2->ee_ram->size / 0x100000, ps2->iop_ram->size / 0x100000);
 
     cdvd::set_mechacon_model(ps2->cdvd, mechacon_model);
 

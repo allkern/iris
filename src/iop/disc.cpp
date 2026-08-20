@@ -111,7 +111,7 @@ int get_extension(const char* path) {
     return DISC_EXT_UNSUPPORTED;
 }
 
-Disc* open(const char* path) {
+Disc* open(logger::Logger* logger, const char* path) {
     int ext = get_extension(path);
 
     if (ext == DISC_EXT_UNSUPPORTED)
@@ -119,6 +119,8 @@ Disc* open(const char* path) {
 
     Disc* s = new Disc();
 
+    s->logger = logger;
+    s->logger_id = logger::register_source(logger, "disc");
     s->layer2_lba = 0;
     s->ext = ext;
 

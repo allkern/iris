@@ -100,7 +100,8 @@ struct Disc {
     size_t logger_id = 0;
 };
 
-Disc* open(const char* path);
+int get_extension(const char* path);
+Disc* open(logger::Logger* logger, const char* path);
 int read_sector(Disc* disc, unsigned char* buf, uint64_t lba, int size);
 int get_type(Disc* disc);
 uint64_t get_size(Disc* disc);

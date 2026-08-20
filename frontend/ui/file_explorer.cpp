@@ -565,7 +565,7 @@ void FileExplorer::open_device(const FileExplorerDevice& dev) {
         if (live) {
             raw = fs::blk::open_disc(iris->logger, live);
         } else if (dev.path.size()) {
-            disc = iop::disc::open(dev.path.c_str());
+            disc = iop::disc::open(iris->logger, dev.path.c_str());
 
             if (disc)
                 raw = fs::blk::open_disc(iris->logger, disc);

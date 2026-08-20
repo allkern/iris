@@ -299,6 +299,30 @@ static bool host_path(iop::Iop* iop, uint32_t addr, std::filesystem::path& out) 
     return resolve_device_path(read_string(iop, addr), out);
 }
 
+const std::string WHITESPACE = " \n\r\t\f\v";
+
+// Trim from the start (left)
+void ltrim(std::string &s) {
+    size_t start = s.find_first_not_of(WHITESPACE);
+    s.erase(0, start);
+}
+
+// Trim from the end (right)
+void rtrim(std::string &s) {
+    size_t end = s.find_last_not_of(WHITESPACE);
+    if (end != std::string::npos) {
+        s.erase(end + 1);
+    } else {
+        s.clear(); // String is entirely whitespace
+    }
+}
+
+// Trim from both ends
+void trim(std::string &s) {
+    rtrim(s);
+    ltrim(s);
+}
+
 int open(iop::Iop* iop, int iomanx) {
     int mode = iop->r[5];
 
@@ -307,10 +331,17 @@ int open(iop::Iop* iop, int iomanx) {
     if (!host_path(iop, iop->r[4], absolute))
         return 0;
 
+    std::string str = absolute.string();
+
+    trim(str);
+
+    absolute = std::filesystem::path(str);
+
     FILE* file = open_host(absolute, mode);
 
-    if (!file)
+    if (!file) {
         return 0;
+    }
 
     int slot = allocate_file(file);
 
@@ -319,8 +350,7 @@ int open(iop::Iop* iop, int iomanx) {
 
         return 0;
     }
-
-
+    
     // Return file handle
     iop::set_return(iop, IOMAN_HLE_FD_START + slot);
 

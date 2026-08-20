@@ -47,6 +47,8 @@ struct Speed {
     uint16_t rev; // 10000000
     uint16_t rev1; // 10000002
     uint16_t rev3; // 10000004
+
+    int flash_loaded = 0;
     uint16_t rev8; // 1000000e
     uint32_t dma_ctrl; // 10000024
     uint16_t intr_stat; // 10000028
@@ -85,6 +87,7 @@ void send_irq(Speed* speed, uint16_t irq);
 int load_hdd(Speed* speed, const char* path);
 int load_flash(Speed* speed, const char* path);
 void set_dvrp_enabled(Speed* speed, int enabled);
+void set_flash_enabled(Speed* speed, int enabled);
 void set_smap_enabled(Speed* speed, int enabled);
 void set_mac_address(Speed* speed, const uint8_t* mac);
 

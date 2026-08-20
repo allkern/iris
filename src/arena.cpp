@@ -19,8 +19,6 @@ void reset(Arena* arena) {
 }
 
 void* alloc(Arena* arena, size_t size) {
-    // Callers treat null as "arena exhausted" and reset before retrying, so
-    // rewinding here keeps the retry from failing a second time.
     if (arena->offset + size > arena->buf.size()) {
         arena->offset = 0;
 

@@ -7,6 +7,7 @@
 #include "iop_dis.hpp"
 
 #include "iop_export.hpp"
+#include "hle/sifcmd.hpp"
 
 #include <functional>
 #include <type_traits>
@@ -346,6 +347,11 @@ void reset(Iop* iop) {
     iop->deferred_invalidate_page = 0xffffffff;
 }
 
+void set_daemon_suppressed(Iop* iop, int suppressed) {
+    iop->suppress_daemon = suppressed;
+    iop->suppress_next_thread_start = 0;
+}
+
 void set_irq_pending(Iop* iop, int value) {
     if (value) {
         iop->cop0_r[COP0_CAUSE] |= SR_IM2;
@@ -355,9 +361,19 @@ void set_irq_pending(Iop* iop, int value) {
 }
 
 static inline void i_invalid(Iop* iop, Instruction& ins) {
-    iris_fatal_error(iop, "{:08x}: Illegal instruction {:08x}", iop->pc - 8, ins.opcode);
+    // uint32_t pc = iop->pc - 8;
 
-    exception(iop, CAUSE_RI);
+    // iris_error(iop, "ra={:08x} sp={:08x} gp={:08x}", iop->r[31], iop->r[29], iop->r[28]);
+
+    // for (uint32_t addr = pc & ~0xf; addr < (pc & ~0xf) + 0x20; addr += 16) {
+    //     iris_error(iop, "{:08x}: {:08x} {:08x} {:08x} {:08x}", addr,
+    //         read32(iop, addr), read32(iop, addr + 4),
+    //         read32(iop, addr + 8), read32(iop, addr + 12));
+    // }
+
+    // iris_fatal_error(iop, "{:08x}: Illegal instruction {:08x}", pc, ins.opcode);
+
+    // exception(iop, CAUSE_RI);
 }
 
 static inline void i_bltz(Iop* iop, Instruction& ins) {
@@ -1643,9 +1659,14 @@ void compile_block(Iop* iop, Block* block) {
 
                 int module = get_module_for_address(iop, block->end_pc - 4, &slot);
 
+                uint32_t target = (block->end_pc & 0xf0000000) | (ins.imm26 << 2);
+
+                int thbase_hook = iop::hle::thbase::hook_for_target(iop, target);
+                int sifcmd_hook = iop::hle::sifcmd::hook_for_target(iop, target);
+
                 ujit::Gp tmp = uc.new_gp32();
 
-                if (!module) {
+                if (!module && !thbase_hook && !sifcmd_hook) {
                     uc.load_u32(tmp, IOP(next_pc));
                     uc.and_(tmp, tmp, Imm(0xf0000000));
                     uc.or_(tmp, tmp, Imm(ins.imm26 << 2));
@@ -1654,7 +1675,11 @@ void compile_block(Iop* iop, Block* block) {
                     break;
                 }
 
-                switch (module) {
+                if (thbase_hook) {
+                    jit_function_call(&uc, iop::hle::thbase::run_hook, tmp, iop->ptr, Imm(thbase_hook));
+                } else if (sifcmd_hook) {
+                    jit_function_call(&uc, iop::hle::sifcmd::run_hook, tmp, iop->ptr, Imm(sifcmd_hook));
+                } else switch (module) {
                     case MODULE_IOMAN: {
                         jit_function_call(&uc, delegate_ioman, tmp, iop->ptr, Imm(slot), Imm(0));
                     } break;

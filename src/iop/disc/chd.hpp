@@ -7,12 +7,15 @@
 
 namespace iris::iop::disc::chd {
 
+inline constexpr auto NO_CACHED_HUNK = (size_t)-1;
+
 struct Chd {
     const chd_header* header;
     chd_file* file;
     uint8_t* buffer;
-    size_t cached_hunknum;
+    size_t cached_hunknum = NO_CACHED_HUNK;
     int sector_size;
+    int is_disc;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;

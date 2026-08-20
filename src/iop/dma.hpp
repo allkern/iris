@@ -7,13 +7,13 @@
 #include "intc.hpp"
 #include "scheduler.hpp"
 #include "s2x6/acata.hpp"
+#include "s2x6/acram.hpp"
 
 #include "bus_decl.hpp"
 
 #include "ee/dmac.hpp"
 #include "logger.hpp"
 
-// These include dma.h in turn, so they stay forward declarations here
 namespace iris::cdvd { struct Cdvd; }
 namespace iris::sio2 { struct Sio2; }
 namespace iris::spu2 { struct Spu2; }
@@ -80,6 +80,7 @@ struct Dma {
         spu2::Spu2* spu2;
         speed::Speed* speed;
         s2x6::acata::Acata* s2x6_acata;
+        s2x6::acram::Acram* s2x6_acram;
         scheduler::Scheduler* sched;
         iop::Iop* iop;
     } hw;
@@ -95,12 +96,14 @@ struct Dma {
 
     int dev9_mode;
 
+    uint32_t dev9_dma_target;
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
 
 Dma* create(logger::Logger* logger, iop::intc::Intc* intc, sif::Sif* sif, speed::Speed* speed, scheduler::Scheduler* sched, iop::Iop* iop, bus::Bus* bus);
-void connect(Dma* dma, cdvd::Cdvd* cdvd, ee::dmac::Dmac* ee_dma, sio2::Sio2* sio2, spu2::Spu2* spu2, s2x6::acata::Acata* s2x6_acata);
+void connect(Dma* dma, cdvd::Cdvd* cdvd, ee::dmac::Dmac* ee_dma, sio2::Sio2* sio2, spu2::Spu2* spu2, s2x6::acata::Acata* s2x6_acata, s2x6::acram::Acram* s2x6_acram);
 void reset(Dma* dma);
 void set_dev9_mode(Dma* dma, int mode);
 void destroy(Dma* dma);

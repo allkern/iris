@@ -64,7 +64,7 @@ void handle_vblank_out(void* udata, int overshoot) {
     scheduler::Event vblank_in_event;
 
     vblank_in_event.callback = handle_vblank_in;
-    vblank_in_event.cycles = FRAME_NTSC;
+    vblank_in_event.cycles = gs->frame_cycles;
     vblank_in_event.name = "Vblank in event";
     vblank_in_event.udata = gs;
 
@@ -92,7 +92,7 @@ void handle_vblank_in(void* udata, int overshoot) {
     scheduler::Event vblank_out_event;
 
     vblank_out_event.callback = handle_vblank_out;
-    vblank_out_event.cycles = VBLANK_NTSC;
+    vblank_out_event.cycles = gs->vblank_cycles;
     vblank_out_event.name = "Vblank out event";
     vblank_out_event.udata = gs;
 
@@ -133,7 +133,7 @@ void handle_hblank(void* udata, int overshoot) {
     scheduler::Event hblank_event;
 
     hblank_event.callback = handle_hblank;
-    hblank_event.cycles = SCANLINE_NTSC*2;
+    hblank_event.cycles = gs->scanline_cycles * 2;
     hblank_event.name = "Hblank event";
     hblank_event.udata = gs;
 
@@ -153,6 +153,14 @@ void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers) {
     gs->hw.ee_timers = ee_timers;
 }
 
+// Note: System 256/Super 256 games detect the jumper setting/system
+//       by detecting EE frequency. These systems have higher clocks.
+void set_ee_clock(Gs* gs, int hz) {
+    gs->frame_cycles = (int)(((int64_t)FRAME_NTSC * hz) / EE_CLOCK);
+    gs->vblank_cycles = (int)(((int64_t)VBLANK_NTSC * hz) / EE_CLOCK);
+    gs->scanline_cycles = (int)(((int64_t)SCANLINE_NTSC * hz) / EE_CLOCK);
+}
+
 void reset(Gs* gs) {
     gs->ctx = &gs->context[0];
     gs->csr |= 2;
@@ -164,7 +172,7 @@ void reset(Gs* gs) {
     // Schedule Vblank event
     scheduler::Event vblank_event;
     vblank_event.callback = handle_vblank_in;
-    vblank_event.cycles = FRAME_NTSC;
+    vblank_event.cycles = gs->frame_cycles;
     vblank_event.name = "Vblank in event";
     vblank_event.udata = gs;
 
@@ -172,7 +180,7 @@ void reset(Gs* gs) {
 
     scheduler::Event hblank_event;
     hblank_event.callback = handle_hblank;
-    hblank_event.cycles = SCANLINE_NTSC*2;
+    hblank_event.cycles = gs->scanline_cycles * 2;
     hblank_event.name = "Hblank event";
     hblank_event.udata = gs;
 

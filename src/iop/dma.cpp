@@ -78,12 +78,13 @@ Dma* create(logger::Logger* logger, iop::intc::Intc* intc, sif::Sif* sif, speed:
     return dma;
 }
 
-void connect(Dma* dma, cdvd::Cdvd* cdvd, ee::dmac::Dmac* ee_dma, sio2::Sio2* sio2, spu2::Spu2* spu2, s2x6::acata::Acata* s2x6_acata) {
+void connect(Dma* dma, cdvd::Cdvd* cdvd, ee::dmac::Dmac* ee_dma, sio2::Sio2* sio2, spu2::Spu2* spu2, s2x6::acata::Acata* s2x6_acata, s2x6::acram::Acram* s2x6_acram) {
     dma->hw.cdvd = cdvd;
     dma->hw.ee_dma = ee_dma;
     dma->hw.sio2 = sio2;
     dma->hw.spu2 = spu2;
     dma->hw.s2x6_acata = s2x6_acata;
+    dma->hw.s2x6_acram = s2x6_acram;
 }
 
 void reset(Dma* dma) {
@@ -577,6 +578,37 @@ void handle_dev9_acata_transfer(Dma* dma) {
     dma->channels[DEV9].chcr &= ~0x1000000;
 }
 
+void handle_dev9_acram_transfer(Dma* dma) {
+    int dir = dma->channels[DEV9].chcr & 1;
+    int bank = s2x6::acram::bank_from_dma_target(dma->dev9_dma_target);
+
+    if (dir) {
+        while (dma->channels[DEV9].transfer_size) {
+            uint32_t d = bus::read32(dma->hw.bus, dma->channels[DEV9].madr);
+
+            s2x6::acram::dma_write32(dma->hw.s2x6_acram, bank, d);
+
+            dma->channels[DEV9].madr += 4;
+            dma->channels[DEV9].transfer_size -= 4;
+        }
+    } else {
+        while (dma->channels[DEV9].transfer_size) {
+            uint32_t d = s2x6::acram::dma_read32(dma->hw.s2x6_acram, bank);
+
+            iop::invalidate_cache_page(dma->hw.iop, dma->channels[DEV9].madr);
+            bus::write32(dma->hw.bus, dma->channels[DEV9].madr, d);
+
+            dma->channels[DEV9].madr += 4;
+            dma->channels[DEV9].transfer_size -= 4;
+        }
+    }
+
+    set_dicr_flag(dma, DEV9);
+    check_irq(dma);
+
+    dma->channels[DEV9].chcr &= ~0x1000000;
+}
+
 void handle_dev9_smap_transfer(Dma* dma) {
     int dir = dma->channels[DEV9].chcr & 1;
 
@@ -632,7 +664,11 @@ void handle_dev9_transfer(Dma* dma) {
     if (dma->dev9_mode == DEV9_MODE_RETAIL) {
         handle_dev9_ata_transfer(dma);
     } else if (dma->dev9_mode == DEV9_MODE_ACATA) {
-        handle_dev9_acata_transfer(dma);
+        if (!s2x6::acata::dma_pending(dma->hw.s2x6_acata) && s2x6::acram::is_dma_target(dma->dev9_dma_target)) {
+            handle_dev9_acram_transfer(dma);
+        } else {
+            handle_dev9_acata_transfer(dma);
+        }
     } else {
         handle_dev9_nand_transfer(dma);
     }
@@ -924,6 +960,7 @@ uint64_t read32(Dma* dma, uint32_t addr) {
     }
 
     switch (addr) {
+        case 0x1f801410: return dma->dev9_dma_target;
         case 0x1f8010f0: return dma->dpcr;
         case 0x1f801570: return dma->dpcr2;
         case 0x1f8010f4: return dma->dicr;
@@ -1020,6 +1057,7 @@ void write32(Dma* dma, uint32_t addr, uint64_t data) {
     }
 
     switch (addr) {
+        case 0x1f801410: dma->dev9_dma_target = data; return;
         case 0x1f8010f0: dma->dpcr = data; return;
         case 0x1f801570: dma->dpcr2 = data; return;
         case 0x1f8010f4: set_dicr(dma, data); check_irq(dma); return;

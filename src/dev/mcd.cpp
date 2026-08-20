@@ -304,6 +304,12 @@ void cmd_unk_bf(sio2::Sio2* sio2, Mcd* mcd) {
     queue::push(sio2->out, mcd->term);
 }
 
+void cmd_ps1_probe(sio2::Sio2* sio2, Mcd* mcd) {
+    queue::push(sio2->out, 0x00);
+    queue::push(sio2->out, 0x00);
+    queue::push(sio2->out, 0x00);
+}
+
 void handle_command(sio2::Sio2* sio2, void* udata, int cmd) {
     Mcd* mcd = (Mcd*)udata;
 
@@ -318,7 +324,12 @@ void handle_command(sio2::Sio2* sio2, void* udata, int cmd) {
         case 0x28: cmd_get_terminator(sio2, mcd); return;
         case 0x42: cmd_write_data(sio2, mcd); return;
         case 0x43: cmd_read_data(sio2, mcd); return;
-        // case 0x52: cmd_ps1_read(sio2, mcd); return;
+
+        // Reply with zeroes to signal that this card is a PS2 card
+        case 0x52: case 0x53: case 0x57: case 0x58: {
+            cmd_ps1_probe(sio2, mcd);
+        } return;
+
         case 0x81: cmd_rw_end(sio2, mcd); return;
         case 0x82: cmd_erase_block(sio2, mcd); return;
         case 0xf0: cmd_auth_f0(sio2, mcd); return;

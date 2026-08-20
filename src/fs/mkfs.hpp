@@ -20,7 +20,11 @@ struct Params {
     char label[64] = {};
 };
 
+inline constexpr uint32_t PAGE_SIZE = 512;
+inline constexpr uint32_t PAGE_ECC_SIZE = 16;
+
 int create_image(logger::Logger* logger, const char* path, uint64_t size, uint8_t fill);
 int format(logger::Logger* logger, const char* path, const Params& params);
+void page_ecc(const uint8_t* page, uint8_t* out);
 
 }

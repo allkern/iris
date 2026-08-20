@@ -183,6 +183,18 @@ struct Iop {
     BlockLutEntry block_lut[IOP_BLOCK_LUT_SIZE] = {};
     uint32_t block_lut_gen = 1;
 
+    // Entry points thbase published, used to park the arcade security
+    // daemon's card checker, see hle/thbase.cpp
+    uint32_t thbase_library = 0;
+    uint32_t thbase_create_thread = 0;
+    uint32_t thbase_start_thread = 0;
+    int suppress_daemon = 0;
+    int suppress_next_thread_start = 0;
+
+    // Entry point sifcmd published, used to report which RPC servers
+    // register, see hle/sifcmd.cpp
+    uint32_t sifcmd_register_rpc = 0;
+
     void (*kputchar)(void*, char) = nullptr;
     void* kputchar_udata = nullptr;
     void (*sm_putchar)(void*, char) = nullptr;

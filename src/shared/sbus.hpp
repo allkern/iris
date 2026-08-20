@@ -5,8 +5,6 @@
 #include "logger.hpp"
 #include "scheduler.hpp"
 
-// ee/bus.h includes this header and the intc headers reach back into it, so
-// these stay forward declarations; sbus.cpp includes them for real.
 namespace iris::ee::intc { struct Intc; }
 namespace iris::iop::intc { struct Intc; }
 

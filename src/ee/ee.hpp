@@ -163,6 +163,7 @@ ram::Ram* get_spr(Ee* ee);
 int run_block(Ee* ee, int cycles);
 int step(Ee* ee);
 void set_fmv_skip(Ee* ee, int v);
+void set_boot_args(Ee* ee, const char* const* args, int count);
 void reset_intc_reads(Ee* ee);
 void reset_csr_reads(Ee* ee);
 void invalidate_block(Ee* ee, uint32_t addr);

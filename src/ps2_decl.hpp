@@ -4,10 +4,6 @@
 
 #include "logger.hpp"
 
-// The whole ps2:: API takes Ps2 by pointer, so callers that only drive the
-// machine can include this instead of ps2.hpp and skip the 40-odd core headers
-// it pulls in. Only code that reaches into Ps2's members needs the full header.
-
 namespace iris::ps2 {
 
 struct Ps2;
@@ -17,6 +13,10 @@ enum TtyType {
     IOP,
     SYSMEM
 };
+
+inline constexpr auto EE_CLOCK_CONSOLE = 294912000;
+inline constexpr auto EE_CLOCK_SYSTEM_256 = 393216000;
+inline constexpr auto EE_CLOCK_SUPER_256 = 442368000;
 
 enum SystemType {
     AUTO = 0,
@@ -42,6 +42,7 @@ void iop_map_device(Ps2* ps2, const char* device, const char* host_path);
 void iop_unmap_device(Ps2* ps2, const char* device);
 void iop_clear_device_maps(Ps2* ps2);
 void boot_file(Ps2* ps2, const char* path);
+void set_boot_args(Ps2* ps2, const char* const* args, int count);
 void reset(Ps2* ps2);
 int load_bios(Ps2* ps2, const char* path);
 int load_rom1(Ps2* ps2, const char* path);

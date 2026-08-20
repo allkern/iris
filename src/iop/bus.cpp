@@ -92,6 +92,15 @@ void destroy(Bus* bus) {
 #define MAP_MEM_WRITE_CHK(b, l, u, d, n) \
     if (bus->n && (addr >= l) && (addr <= u)) { d ## _write ## b (bus->n, addr - l, data); return; }
 
+#define MAP_REG_READ8_VIA16_CHK_NS(l, u, d, n) \
+    if (bus->n && (addr >= l) && (addr <= u)) \
+        return (d::read16(bus->n, addr & ~1) >> ((addr & 1) * 8)) & 0xff;
+
+#define MAP_REG_WRITE8_VIA16_CHK_NS(l, u, d, n) \
+    if (bus->n && (addr >= l) && (addr <= u)) { \
+        d::write16(bus->n, addr & ~1, (data & 0xff) << ((addr & 1) * 8)); return; \
+    }
+
 uint32_t read8(void* udata, uint32_t addr) {
     Bus* bus = (Bus*)udata;
 
@@ -114,6 +123,15 @@ uint32_t read8(void* udata, uint32_t addr) {
     MAP_REG_READ_CHK_NS(8, 0x10800000, 0x108000FF, s14x::link, s14x_link);
     MAP_MEM_READ_CHK_NS(8, 0x10C00000, 0x10C07FFF, s14x::sram, s14x_sram);
     MAP_REG_READ_CHK_NS(8, 0x14000000, 0x1400000F, s14x::nand, s14x_nand);
+
+    // System 246/256 mappings
+    MAP_MEM_READ_CHK_NS(8, 0x12500000, 0x1250FFFF, s2x6::acsram, s2x6_acsram);
+    MAP_REG_READ8_VIA16_CHK_NS(0x12400000, 0x12407FFF, s2x6::acjv, s2x6_acjv);
+    MAP_REG_READ8_VIA16_CHK_NS(0x12418000, 0x12418FFF, s2x6::acuart, s2x6_acuart);
+    MAP_REG_READ8_VIA16_CHK_NS(0x12415000, 0x1241FFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_READ8_VIA16_CHK_NS(0x13000000, 0x131FFFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_READ8_VIA16_CHK_NS(0x14000000, 0x14FFFFFF, s2x6::acram, s2x6_acram);
+    MAP_REG_READ8_VIA16_CHK_NS(0x16000000, 0x1616FFFF, s2x6::acata, s2x6_acata);
 
     // System 147/148 syscon overlays retail SPEED
     MAP_REG_READ_NS(8, 0x10000000, 0x1000FFFF, speed, speed);
@@ -159,6 +177,11 @@ uint32_t read16(void* udata, uint32_t addr) {
 
     // System 246/256 mappings
     MAP_REG_READ_CHK_NS(16, 0x12400000, 0x12407FFF, s2x6::acjv, s2x6_acjv);
+    MAP_MEM_READ_CHK_NS(16, 0x12500000, 0x1250FFFF, s2x6::acsram, s2x6_acsram);
+    MAP_REG_READ_CHK_NS(16, 0x12418000, 0x12418FFF, s2x6::acuart, s2x6_acuart);
+    MAP_REG_READ_CHK_NS(16, 0x12415000, 0x1241FFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_READ_CHK_NS(16, 0x13000000, 0x131FFFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_READ_CHK_NS(16, 0x14000000, 0x14FFFFFF, s2x6::acram, s2x6_acram);
     MAP_REG_READ_CHK_NS(16, 0x16000000, 0x1616FFFF, s2x6::acata, s2x6_acata);
 
     // PSX DESR
@@ -216,10 +239,10 @@ uint32_t read32(void* udata, uint32_t addr) {
     MAP_MEM_READ_NS(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
     MAP_REG_READ_NS(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ_NS(32, 0x1F801410, 0x1F801413, dma, dma);
     MAP_REG_READ_NS(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
-    MAP_MEM_READ_CHK_NS(32, 0x12400000, 0x12407FFF, s2x6::acjv, s2x6_acjv);
     MAP_MEM_READ_CHK_NS(32, 0x10C00000, 0x10C07FFF, s14x::sram, s14x_sram);
 
     if (addr == 0x1f801450) return 0;
@@ -267,6 +290,15 @@ void write8(void* udata, uint32_t addr, uint32_t data) {
     MAP_MEM_WRITE_CHK_NS(8, 0x10C00000, 0x10C07FFF, s14x::sram, s14x_sram);
     MAP_REG_WRITE_CHK_NS(8, 0x14000000, 0x1400000F, s14x::nand, s14x_nand);
 
+    // System 246/256 mappings
+    MAP_MEM_WRITE_CHK_NS(16, 0x12500000, 0x1250FFFF, s2x6::acsram, s2x6_acsram);
+    MAP_REG_WRITE8_VIA16_CHK_NS(0x12400000, 0x12407FFF, s2x6::acjv, s2x6_acjv);
+    MAP_REG_WRITE8_VIA16_CHK_NS(0x12418000, 0x12418FFF, s2x6::acuart, s2x6_acuart);
+    MAP_REG_WRITE8_VIA16_CHK_NS(0x12415000, 0x1241FFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_WRITE8_VIA16_CHK_NS(0x13000000, 0x131FFFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_WRITE8_VIA16_CHK_NS(0x14000000, 0x14FFFFFF, s2x6::acram, s2x6_acram);
+    MAP_REG_WRITE8_VIA16_CHK_NS(0x16000000, 0x1616FFFF, s2x6::acata, s2x6_acata);
+
     // System 147/148 syscon overlays retail SPEED
     MAP_REG_WRITE_NS(8, 0x10000000, 0x1000FFFF, speed, speed);
 
@@ -303,6 +335,11 @@ void write16(void* udata, uint32_t addr, uint32_t data) {
 
     // System 246/256 mappings
     MAP_REG_WRITE_CHK_NS(16, 0x12400000, 0x12407FFF, s2x6::acjv, s2x6_acjv);
+    MAP_MEM_WRITE_CHK_NS(16, 0x12500000, 0x1250FFFF, s2x6::acsram, s2x6_acsram);
+    MAP_REG_WRITE_CHK_NS(16, 0x12418000, 0x12418FFF, s2x6::acuart, s2x6_acuart);
+    MAP_REG_WRITE_CHK_NS(16, 0x12415000, 0x1241FFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_WRITE_CHK_NS(16, 0x13000000, 0x131FFFFF, s2x6::accore, s2x6_accore);
+    MAP_REG_WRITE_CHK_NS(16, 0x14000000, 0x14FFFFFF, s2x6::acram, s2x6_acram);
     MAP_REG_WRITE_CHK_NS(16, 0x16000000, 0x1616FFFF, s2x6::acata, s2x6_acata);
 
     // iris_debug(bus, "Bus: Unhandled 16-bit write to physical address 0x{:08x} (0x{:04x})", addr, data);
@@ -343,10 +380,10 @@ void write32(void* udata, uint32_t addr, uint32_t data) {
 
     MAP_REG_WRITE_NS(32, 0x1F808400, 0x1F80854F, fw, fw);
     MAP_REG_WRITE_NS(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE_NS(32, 0x1F801410, 0x1F801413, dma, dma);
     MAP_REG_WRITE_NS(32, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
-    MAP_MEM_WRITE_CHK_NS(32, 0x12400000, 0x12407FFF, s2x6::acjv, s2x6_acjv);
     MAP_MEM_WRITE_CHK_NS(32, 0x10C00000, 0x10C07FFF, s14x::sram, s14x_sram);
 
     // iris_debug(bus, "Bus: Unhandled 32-bit write to physical address 0x{:08x} (0x{:08x})", addr, data);

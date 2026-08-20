@@ -87,6 +87,19 @@ static void show_recent_menu(Instance* iris) {
     }
 }
 
+static void open_arcade_path(Instance* iris, std::string path) {
+    if (!path.size())
+        return;
+
+    if (!emu::load_arcade(iris, path)) {
+        push_info(iris, "Failed to boot arcade: " + path);
+
+        return;
+    }
+
+    add_recent(iris, path, RecentType::ARCADE);
+}
+
 static void show_iris_menu(Instance* iris) {
     using namespace ImGui;
 
@@ -95,7 +108,7 @@ static void show_iris_menu(Instance* iris) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Select a file to load", "", {
-                "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.elf)", "*.iso *.bin *.cue *.chd *.cso *.zso *.elf",
+                "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.elf; *.zip)", "*.iso *.bin *.cue *.chd *.cso *.zso *.elf *.zip",
                 "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
                 "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
                 "DVD Images (*.iso; *.chd; *.cso; *.zso)", "*.iso *.chd *.cso *.zso",
@@ -105,6 +118,7 @@ static void show_iris_menu(Instance* iris) {
                 "CHD Files (*.chd)", "*.chd",
                 "CSO/ZSO Files (*.cso; *.zso)", "*.cso *.zso",
                 "ELF Executables (*.elf)", "*.elf",
+                "Archives (*.zip)", "*.zip",
                 "All Files (*.*)", "*"
             });
 
@@ -127,26 +141,50 @@ static void show_iris_menu(Instance* iris) {
 
         show_recent_menu(iris);
 
-        if (menu::item(ICON_MS_JOYSTICK " Open Arcade...")) {
-            audio::mute(iris);
+        if (menu::begin(ICON_MS_JOYSTICK " Open Arcade")) {
+            if (menu::item(ICON_MS_FOLDER_OPEN " Folder...")) {
+                audio::mute(iris);
 
-            auto f = pfd::select_folder("Select arcade game folder", "", pfd::opt::none);
+                auto f = pfd::select_folder("Select arcade game folder", "", pfd::opt::none);
 
-            while (!f.ready());
+                while (!f.ready());
 
-            audio::unmute(iris);
+                audio::unmute(iris);
 
-            if (f.result().size()) {
-                std::string path = f.result();
-
-                if (path.size()) {
-                    if (!emu::load_arcade(iris, path)) {
-                        push_info(iris, "Failed to boot arcade: " + path);
-                    } else {
-                        add_recent(iris, path, RecentType::ARCADE);
-                    }
-                }
+                open_arcade_path(iris, f.result());
             }
+
+            if (menu::item(ICON_MS_FOLDER_ZIP " Archive...")) {
+                audio::mute(iris);
+
+                auto f = pfd::open_file("Select an arcade archive to load", "", {
+                    "Archives (*.zip)", "*.zip",
+                    "All Files (*.*)", "*"
+                });
+
+                while (!f.ready());
+
+                audio::unmute(iris);
+
+                open_arcade_path(iris, f.result().size() ? f.result().at(0) : "");
+            }
+
+            if (menu::item(ICON_MS_DESCRIPTION " Manifest...")) {
+                audio::mute(iris);
+
+                auto f = pfd::open_file("Select an acgame (Arcade manifest) to load", "", {
+                    "Arcade manifests (*.acgame)", "*.acgame",
+                    "All Files (*.*)", "*"
+                });
+
+                while (!f.ready());
+
+                audio::unmute(iris);
+
+                open_arcade_path(iris, f.result().size() ? f.result().at(0) : "");
+            }
+
+            menu::end();
         }
 
         menu::separator();
@@ -355,7 +393,6 @@ static void show_audio_settings_menu(Instance* iris) {
     using namespace ImGui;
 
     if (menu::begin(ICON_MS_MUSIC_NOTE " Audio")) {
-        // A slider has no native equivalent, so the OS menubar gets steps instead
         if (menu::native()) {
             if (menu::begin(ICON_MS_VOLUME_UP " Volume")) {
                 for (int i = 4; i >= 0; i--) {

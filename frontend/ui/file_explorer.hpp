@@ -118,7 +118,6 @@ struct FileExplorer : Applet {
 
 std::string file_explorer_device_key(const FileExplorerDevice& dev);
 
-// Opens the explorer on a device, for the buttons in the Settings window
 void browse_device(Instance* iris, int kind, int index);
 
 }

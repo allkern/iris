@@ -33,9 +33,22 @@ Chd* create(logger::Logger* logger) {
     return chd;
 }
 
+static void close_file(Chd* chd) {
+    chd_close(chd->file);
+
+    free(chd->buffer);
+
+    chd->file = nullptr;
+    chd->buffer = nullptr;
+}
+
 int init(Chd* chd, const char* path) {
-    if (chd_open(path, CHD_OPEN_READ, NULL, &chd->file)) {
-        chd_close(chd->file);
+    chd_error err = chd_open(path, CHD_OPEN_READ, NULL, &chd->file);
+
+    if (err != CHDERR_NONE) {
+        iris_error(chd, "Couldn't open \"{}\": {}", path, chd_error_string(err));
+
+        chd->file = nullptr;
 
         return 0;
     }
@@ -48,17 +61,26 @@ int init(Chd* chd, const char* path) {
     uint32_t len, tag;
     uint8_t flags;
 
-    if (chd_get_metadata(chd->file, CDROM_TRACK_METADATA2_TAG, 0, buf, 512, &len, &tag, &flags)) {
-        iris_debug(chd, "Failed to get metadata");
+    int has_tracks =
+        !chd_get_metadata(chd->file, CDROM_TRACK_METADATA2_TAG, 0, buf, 512, &len, &tag, &flags) ||
+        !chd_get_metadata(chd->file, CDROM_TRACK_METADATA_TAG, 0, buf, 512, &len, &tag, &flags);
 
-        return 0;
+    // Only discs carry track metadata, everything else stores plain units
+    if (!has_tracks) {
+        chd->sector_size = chd->header->unitbytes;
+
+        if (!chd->sector_size) {
+            iris_error(chd, "Image \"{}\" has neither track metadata nor a unit size", path);
+
+            close_file(chd);
+
+            return 0;
+        }
+
+        return 1;
     }
 
-    if (tag != CDROM_TRACK_METADATA2_TAG) {
-        iris_debug(chd, "Failed to get track metadata");
-
-        return 0;
-    }
+    chd->is_disc = 1;
 
     // Parse track type
     char* c = buf;
@@ -81,7 +103,9 @@ int init(Chd* chd, const char* path) {
     chd->sector_size = get_sector_type_size(type);
 
     if (!chd->sector_size) {
-        iris_debug(chd, "Unsupported sector type \'{}\'", type);
+        iris_error(chd, "Image \"{}\" has an unsupported track sector type \"{}\"", path, type);
+
+        close_file(chd);
 
         return 0;
     }
@@ -117,7 +141,9 @@ int read_sector(void* udata, unsigned char* buf, uint64_t lba, int size) {
         uint8_t* base = chd->buffer + (offset % chd->header->hunkbytes);
 
         // Hunk is cached
-        if (chd->sector_size == 2048) {
+        if (!chd->is_disc) {
+            memcpy(buf, base, chd->sector_size);
+        } else if (chd->sector_size == 2048) {
             memcpy(buf, base, 2048);
         } else {
             if (size == DISC_SS_DATA) {
@@ -137,7 +163,7 @@ int read_sector(void* udata, unsigned char* buf, uint64_t lba, int size) {
 uint64_t get_size(void* udata) {
     Chd* chd = (Chd*)udata;
 
-    return chd->sector_size * chd->header->hunkcount;
+    return chd->header->logicalbytes;
 }
 
 int get_sector_size(void* udata) {

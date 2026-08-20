@@ -116,7 +116,7 @@ void make_gamelist_cache(Instance* iris, std::string path) {
             }
 
             if (ext == ".iso" || ext == ".bin" || ext == ".cue" || ext == ".chd" || ext == ".cso" || ext == ".zso") {
-                iop::disc::Disc* disc = iop::disc::open(entry.path().string().c_str());
+                iop::disc::Disc* disc = iop::disc::open(iris->logger, entry.path().string().c_str());
 
                 gamelist_entry e;
 

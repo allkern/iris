@@ -42,6 +42,10 @@
 // Namco System 246/256
 #include "s2x6/acata.hpp"
 #include "s2x6/acjv.hpp"
+#include "s2x6/acsram.hpp"
+#include "s2x6/acram.hpp"
+#include "s2x6/accore.hpp"
+#include "s2x6/acuart.hpp"
 
 // SIO2 devices (controllers, memory cards, etc.)
 #include "dev/ds.hpp"
@@ -117,6 +121,10 @@ struct Ps2 {
     // Namco System 246/256/Super 256
     s2x6::acata::Acata* s2x6_acata;
     s2x6::acjv::Acjv* s2x6_acjv;
+    s2x6::acsram::Acsram* s2x6_acsram;
+    s2x6::acram::Acram* s2x6_acram;
+    s2x6::accore::Accore* s2x6_accore;
+    s2x6::acuart::Acuart* s2x6_acuart;
 
     scheduler::Scheduler* sched;
 

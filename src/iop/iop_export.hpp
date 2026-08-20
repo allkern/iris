@@ -5,6 +5,7 @@
 #include "hle/ioman.hpp"
 #include "hle/loadcore.hpp"
 #include "hle/sysmem.hpp"
+#include "hle/thbase.hpp"
 #include <cstdint>
 #include "logger.hpp"
 

@@ -4,6 +4,7 @@
 #include "usb/kbd.hpp"
 #include "usb/mouse.hpp"
 #include "usb/msd.hpp"
+#include "usb/an986.hpp"
 
 namespace iris::usb {
 
@@ -404,6 +405,7 @@ static const struct {
     { "Keyboard", kbd::create },  // USB_DEVICE_KEYBOARD
     { "Mouse", mouse::create },   // USB_DEVICE_MOUSE
     { "Thumb drive", msd::create },
+    { "AN986 Pegasus Ethernet", an986::create },
 };
 
 const char* device_type_name(int type) {

@@ -4,11 +4,18 @@
 #include "shared/ata/isif.hpp"
 #include "shared/ata/raw.hpp"
 
-#include "iop/intc.hpp"
+#include "iop/disc.hpp"
+
+#include "accore.hpp"
 #include "scheduler.hpp"
 #include "logger.hpp"
 
 namespace iris::s2x6::acata {
+
+// The board talks ATAPI to the first two
+inline constexpr auto MEDIA_CD = 0;
+inline constexpr auto MEDIA_DVD = 1;
+inline constexpr auto MEDIA_HDD = 2;
 
 inline constexpr auto R_DATA = 0x16000000;// Read/Write PIO data bytes
 inline constexpr auto R_FEATURE = 0x16010000;// [W] Used to control command specific interface features.
@@ -23,20 +30,41 @@ inline constexpr auto R_COMMAND = R_STATUS;// [W] Used to send ATA commands to t
 inline constexpr auto R_STATUS_ALT = 0x16160000;// [R] A duplicate of the Status Register which does not affect interrupts.
 inline constexpr auto R_CONTROL = R_STATUS_ALT;// [W] Used to reset the bus or enable/disable interrupts.
 
+inline constexpr auto ATAPI_SIGNATURE_LCYL = 0x14;
+inline constexpr auto ATAPI_SIGNATURE_HCYL = 0xeb;
+inline constexpr auto POWER_MODE_ACTIVE = 0xff;
+inline constexpr auto CONTROL_NO_INTERRUPT = 0x02;
+inline constexpr auto CONTROL_RESET = 0x04;
+inline constexpr auto ERR_ABORT = 0x04;
+inline constexpr auto FEATURE_DMA = 0x01;
+inline constexpr auto ATAPI_PHASE_DATA_OUT = 0x00;
+inline constexpr auto ATAPI_PHASE_DATA_IN = 0x02;
+inline constexpr auto ATAPI_PHASE_COMPLETE = 0x03;
+
+enum {
+    ATAPI_TEST_UNIT_READY = 0x00,
+    ATAPI_INQUIRY = 0x12,
+    ATAPI_READ_CAPACITY = 0x25,
+    ATAPI_READ = 0x28,
+    ATAPI_MODE_SELECT = 0x55,
+    ATAPI_MODE_SENSE = 0x5a,
+    ATAPI_SET_STREAMING = 0xb6,
+    ATAPI_SET_CD_SPEED = 0xbb
+};
+
 struct AtapiPacket {
+    uint8_t raw[12];
+
     uint8_t cmd;
     uint32_t lba;
     uint16_t len;
 };
 
-struct AtapiDvd {
-    FILE* file;
-    uint64_t num_sectors;
-};
-
 struct Acata {
     speed::ata::Hdd hdd;
-    AtapiDvd dvd;
+    iop::disc::Disc* disc;
+
+    int media;
 
     uint16_t data;
     uint16_t error;
@@ -60,20 +88,26 @@ struct Acata {
     uint8_t identify[speed::ata::SECTOR_SIZE];
 
     int atapi_response;
+    int irq_on_ready;
+    int busy_until_read;
+    int last_unhandled_command;
+    int last_unhandled_atapi_command;
 
-    iop::intc::Intc* intc;
+    uint64_t media_sectors;
+
+    accore::Accore* accore;
     scheduler::Scheduler* sched;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
 
-Acata* create(logger::Logger* logger, iop::intc::Intc* intc, scheduler::Scheduler* sched);
-int load(Acata* acata, const char* path);
+Acata* create(logger::Logger* logger, accore::Accore* accore, scheduler::Scheduler* sched);
+int load(Acata* acata, const char* path, int media);
+bool dma_pending(Acata* acata);
 void destroy(Acata* acata);
 uint16_t read(Acata* acata, uint32_t addr);
 void write(Acata* acata, uint32_t addr, uint64_t data);
 uint64_t read16(Acata* acata, uint32_t addr);
 void write16(Acata* acata, uint32_t addr, uint64_t data);
-
 }

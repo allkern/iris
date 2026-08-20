@@ -116,6 +116,7 @@ void destroy(Iop* iop);
 void cycle(Iop* iop);
 void reset(Iop* iop);
 void set_irq_pending(Iop* iop, int value);
+void set_daemon_suppressed(Iop* iop, int suppressed);
 int run_block(Iop* iop, int max_cycles);
 void flush_cache(Iop* iop);
 void set_breakpoints(Iop* iop, const uint32_t* addrs, int count);

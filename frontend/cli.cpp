@@ -145,6 +145,7 @@ static const EnumValue usb_values[] = {
     { "keyboard", usb::USB_DEVICE_KEYBOARD },
     { "mouse", usb::USB_DEVICE_MOUSE },
     { "msd", usb::USB_DEVICE_MSD },
+    { "an986", usb::USB_DEVICE_AN986 },
     { nullptr, 0 }
 };
 
@@ -285,6 +286,8 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->system, (int)v.integer); }, system_values },
     { "autostart", 0, FLAG, nullptr, "Start running as soon as something is loaded",
         [](Instance* i, const Value& v) { set(i, i->autostart, v.flag); } },
+    { "cache-arcade-files", 0, FLAG, nullptr, "Keep arcade files extracted from archives between runs",
+        [](Instance* i, const Value& v) { set(i, i->cache_arcade_files, v.flag); } },
     { "timescale", 0, INT, "N", "Run the machine N times faster than real time",
         [](Instance* i, const Value& v) { set(i, i->timescale, std::clamp((int)v.integer, 1, 16)); } },
     { "skip-fmv", 0, FLAG, nullptr, "Skip full motion videos",
@@ -747,10 +750,22 @@ void boot(Instance* iris) {
     std::string executable = iris->paths.elf_path;
     std::string boot_path = iris->paths.boot_path;
 
-    // A bare path is opened the way the file picker would open it
     bool host_boot = false;
 
     if (iris->cli.open_path.size()) {
+        if (emu::is_arcade_file(iris, iris->cli.open_path)) {
+            if (!emu::load_arcade_files(iris, iris->cli.open_path)) {
+                iris_error(&iris->log.settings, "Couldn't start arcade game \"{}\"", iris->cli.open_path.c_str());
+
+                return;
+            }
+
+            if (iris->autostart)
+                iris->debug.pause = false;
+
+            return;
+        }
+
         if (emu::is_disc_image(iris->cli.open_path)) {
             disc = iris->cli.open_path;
         } else {

@@ -51,6 +51,7 @@ struct Bus {
     dev9::Dev9* dev9;
     speed::Speed* speed;
 
+    // 0x2000 bytes per entry, so these cover the first 512 MB
     void* fastmem_r_table[0x10000];
     void* fastmem_w_table[0x10000];
 

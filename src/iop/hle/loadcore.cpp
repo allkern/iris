@@ -1,6 +1,8 @@
 #include "loadcore.hpp"
 
 #include "../iop_def.hpp"
+#include "thbase.hpp"
+#include "sifcmd.hpp"
 
 namespace iris::iop::hle::loadcore {
 
@@ -124,7 +126,12 @@ int reg_lib_ent(iop::Iop* iop)
     if (strncmp(name, "thbase", 6) == 0) {
         unsigned thread_list = get_thread_list(iop);
         iop->thread_list_addr = thread_list;
+
+        thbase::register_exports(iop, iop->r[4]);
     }
+
+    if (strncmp(name, "sifcmd", 6) == 0)
+        sifcmd::register_exports(iop, iop->r[4]);
 
     return 0;
 }

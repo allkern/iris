@@ -606,6 +606,11 @@ struct Ee {
     int32_t exit_req;
 
     int fmv_skip;
+
+    char boot_args[4][64];
+    int boot_argc;
+    int boot_args_pending;
+
     uint32_t prev_pc;
     uint32_t pc;
     uint32_t next_pc;
@@ -668,6 +673,7 @@ struct Ee {
     int ram_size;
 
     uint32_t thread_list_base;
+    uint32_t last_delay_slot_branch;
 
     // Stats
     uint64_t cache_misses;

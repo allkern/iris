@@ -211,6 +211,7 @@ int load_flash(Speed* speed, const char* path) {
     int ret = flash::load(speed->flash, path);
 
     if (ret) {
+        speed->flash_loaded = 1;
         speed->rev3 |= CAPS_FLASH;
     }
 
@@ -252,6 +253,19 @@ void set_dvrp_enabled(Speed* speed, int enabled) {
         speed->rev3 |= CAPS_DVR;
     } else {
         speed->rev3 &= ~CAPS_DVR;
+    }
+}
+
+void set_flash_enabled(Speed* speed, int enabled) {
+    if (speed->flash_loaded)
+        return;
+
+    if (enabled) {
+        speed->flash->id = flash::ID_64MBIT;
+        speed->rev3 |= CAPS_FLASH;
+    } else {
+        speed->flash->id = 0;
+        speed->rev3 &= ~CAPS_FLASH;
     }
 }
 

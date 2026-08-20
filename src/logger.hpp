@@ -7,15 +7,12 @@
 #include <fmt/base.h>
 #include <fmt/format.h>
 
-// <wingdi.h> defines ERROR as a macro, which would mangle Level::ERROR in any
-// translation unit that reaches a Windows header before this one.
 #ifdef ERROR
 #undef ERROR
 #endif
 
 namespace iris::logger {
 
-// Ordered by severity so log() can drop a message before formatting it
 enum class Level {
     DEBUG,
     INFO,

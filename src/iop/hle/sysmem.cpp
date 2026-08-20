@@ -7,10 +7,15 @@ namespace iris::iop::hle::sysmem {
 #define SM_PUTCHAR(c) \
     iop->sm_putchar(iop->sm_putchar_udata, c);
 
-int reg_index = 0;
+inline constexpr auto REGISTER_PARAMS = 3;
 
-uint32_t fetch_next_param(iop::Iop* iop) {
-    return iop->r[5 + reg_index++];
+static uint32_t fetch_next_param(iop::Iop* iop, int* index) {
+    int param = (*index)++;
+
+    if (param < REGISTER_PARAMS)
+        return iop->r[5 + param];
+
+    return iop::read32(iop, iop->r[29] + 16 + ((param - REGISTER_PARAMS) * 4));
 }
 
 int kprintf(iop::Iop* iop) {
@@ -18,8 +23,7 @@ int kprintf(iop::Iop* iop) {
         return 0;
 
     int ptr = iop->r[4];
-
-    reg_index = 5;
+    int param = 0;
 
     char c = iop::read8(iop, ptr++);
 
@@ -35,13 +39,13 @@ int kprintf(iop::Iop* iop) {
 
                 switch (c) {
                     case 'c': {
-                        char ch = fetch_next_param(iop) & 0xff;
+                        char ch = fetch_next_param(iop, &param) & 0xff;
 
                         SM_PUTCHAR(ch);
                     } break;
 
                     case 's': {
-                        uint32_t str_addr = fetch_next_param(iop);
+                        uint32_t str_addr = fetch_next_param(iop, &param);
                         char ch = iop::read8(iop, str_addr++);
 
                         while (ch != 0) {
@@ -66,7 +70,7 @@ int kprintf(iop::Iop* iop) {
                     } break;
 
                     case 'd': case 'u': case 'i': case 'x': case 'X':{
-                        uint32_t val = fetch_next_param(iop);
+                        uint32_t val = fetch_next_param(iop, &param);
 
                         char fmt_buf[8];
                         char* fmt = fmt_buf;

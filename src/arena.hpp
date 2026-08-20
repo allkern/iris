@@ -6,8 +6,6 @@
 
 namespace iris::arena {
 
-// Bump allocator over one fixed block. Individual allocations are never
-// released; reset() reclaims the whole arena at once.
 struct Arena {
     std::vector <uint8_t> buf;
     size_t offset = 0;

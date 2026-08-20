@@ -26,6 +26,7 @@
 #include "config.hpp"
 #include "slirp.hpp"
 
+#include "emu.hpp"
 #include "log.hpp"
 #include "bidirectional_map.hpp"
 #include "debug.hpp"
@@ -248,6 +249,7 @@ struct Instance {
         std::string elf_path = "";
         std::string boot_path = "";
         std::string bios_path = "";
+        std::string arcade_bios_paths[emu::ARCADE_BIOS_COUNT] = {};
         std::string rom1_path = "";
         std::string rom2_path = "";
         std::string nvram_path = "";
@@ -293,6 +295,9 @@ struct Instance {
         LogSource elf;
         LogSource settings;
         LogSource emu;
+        LogSource ee_tty;
+        LogSource iop_tty;
+        LogSource sysmem_tty;
         LogSource input;
         LogSource audio;
         LogSource slirp;
@@ -333,6 +338,8 @@ struct Instance {
     int system = ps2::AUTO;
     bool enable_shaders = false;
     bool autostart = true;
+    bool cache_arcade_files = false;
+    bool arcade_dongle_boot = false;
     int angle = 0;
     bool flip_x = false;
     bool flip_y = false;
@@ -360,6 +367,7 @@ struct Instance {
     std::string load_pending_name = "";
     bool load_start_pending = false;
     bool load_pending_boot = false;
+    bool load_pending_arcade = false;
     std::string load_pending_file = "";
 
     float avg_fps;

@@ -27,6 +27,10 @@
 #include "s14x/link.hpp"
 #include "s2x6/acata.hpp"
 #include "s2x6/acjv.hpp"
+#include "s2x6/acsram.hpp"
+#include "s2x6/acram.hpp"
+#include "s2x6/accore.hpp"
+#include "s2x6/acuart.hpp"
 #include "logger.hpp"
 
 namespace iris::iop::bus {
@@ -60,6 +64,10 @@ struct Bus {
     s14x::link::Link* s14x_link;
     s2x6::acata::Acata* s2x6_acata;
     s2x6::acjv::Acjv* s2x6_acjv;
+    s2x6::acsram::Acsram* s2x6_acsram;
+    s2x6::acram::Acram* s2x6_acram;
+    s2x6::accore::Accore* s2x6_accore;
+    s2x6::acuart::Acuart* s2x6_acuart;
 
     int disable_usb;
 

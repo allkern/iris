@@ -365,6 +365,10 @@ struct Gs {
     int dither[4][4];
 
 
+    int frame_cycles = FRAME_NTSC;
+    int vblank_cycles = VBLANK_NTSC;
+    int scanline_cycles = SCANLINE_NTSC;
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
@@ -372,6 +376,7 @@ struct Gs {
 Gs* create(logger::Logger* logger, iop::intc::Intc* iop_intc, iop::timers::Timers* iop_timers, scheduler::Scheduler* sched);
 void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers);
 void reset(Gs* gs);
+void set_ee_clock(Gs* gs, int hz);
 void destroy(Gs* gs);
 uint64_t read64(Gs* gs, uint32_t addr);
 void write64(Gs* gs, uint32_t addr, uint64_t data);

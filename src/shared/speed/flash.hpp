@@ -1,9 +1,6 @@
 #pragma once
 #include "logger.hpp"
-#include <string>
 
-// speed.hpp includes this header, so the parent stays a forward
-// declaration here and is included for real in the .cpp
 namespace iris::speed { struct Speed; }
 
 namespace iris::speed::flash {
@@ -45,14 +42,13 @@ namespace iris::speed::flash {
     0x90 - READID
 */
 
-
 inline constexpr auto ID_64MBIT = 0xe6;
 inline constexpr auto ID_128MBIT = 0x73;
 inline constexpr auto ID_256MBIT = 0x75;
 inline constexpr auto ID_512MBIT = 0x76;
 inline constexpr auto ID_1024MBIT = 0x79;
 
-/* SmartMedia commands.  */
+/* SmartMedia commands  */
 inline constexpr auto SM_CMD_READ1 = 0x00;
 inline constexpr auto SM_CMD_READ2 = 0x01;
 inline constexpr auto SM_CMD_READ3 = 0x50;
@@ -90,7 +86,6 @@ struct Flash {
     int address;
     uint8_t data[PAGE_SIZE_ECC];
     uint8_t file[CARD_SIZE_ECC];
-    std::string path;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;

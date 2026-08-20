@@ -28,6 +28,7 @@ struct SettingsWindow : Applet {
     int selected = 0;
 
     std::string bios_buf;
+    std::string arcade_bios_bufs[emu::ARCADE_BIOS_COUNT];
     std::string rom1_buf;
     std::string rom2_buf;
     std::string nvram_buf;

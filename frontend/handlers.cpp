@@ -25,6 +25,9 @@ void handle_ee_tty_event(void* udata, char c) {
         return;
 
     if (c == '\n') {
+        if (iris->debug.ee_log.back().size())
+            iris_info(&iris->log.ee_tty, "{}", iris->debug.ee_log.back().c_str());
+
         iris->debug.ee_log.push_back("");
     } else {
         iris->debug.ee_log.back().push_back(c);
@@ -38,6 +41,9 @@ void handle_iop_tty_event(void* udata, char c) {
         return;
 
     if (c == '\n') {
+        if (iris->debug.iop_log.back().size())
+            iris_info(&iris->log.iop_tty, "{}", iris->debug.iop_log.back().c_str());
+
         iris->debug.iop_log.push_back("");
     } else {
         iris->debug.iop_log.back().push_back(c);
@@ -109,6 +115,9 @@ void init_logger(Instance* iris) {
     reg(iris->log.elf, "elf");
     reg(iris->log.settings, "settings");
     reg(iris->log.emu, "emu");
+    reg(iris->log.ee_tty, "ee_tty");
+    reg(iris->log.iop_tty, "iop_tty");
+    reg(iris->log.sysmem_tty, "sysmem_tty");
     reg(iris->log.input, "input");
     reg(iris->log.audio, "audio");
     reg(iris->log.slirp, "slirp");
@@ -125,6 +134,9 @@ void handle_sysmem_tty_event(void* udata, char c) {
         return;
 
     if (c == '\n') {
+        if (iris->debug.sysmem_log.back().size())
+            iris_info(&iris->log.sysmem_tty, "{}", iris->debug.sysmem_log.back().c_str());
+
         iris->debug.sysmem_log.push_back("");
     } else {
         iris->debug.sysmem_log.back().push_back(c);

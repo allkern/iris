@@ -71,6 +71,11 @@ bool parse_toml_settings(Instance* iris, bool reset) {
 
     auto paths = tbl["paths"];
     iris->paths.bios_path = paths["bios_path"].value_or("");
+
+    for (int i = 0; i < emu::ARCADE_BIOS_COUNT; i++) {
+        iris->paths.arcade_bios_paths[i] = paths[emu::get_arcade_bios_key(i)].value_or("");
+    }
+
     iris->paths.rom1_path = paths["rom1_path"].value_or("");
     iris->paths.rom2_path = paths["rom2_path"].value_or("");
     iris->paths.nvram_path = paths["nvram_path"].value_or("");
@@ -186,6 +191,8 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     auto system = tbl["system"];
     iris->system = system["model"].value_or(ps2::AUTO);
     iris->autostart = system["autostart"].value_or(true);
+    iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
+    iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(false);
 
     toml::array* mac_array = system["mac_address"].as_array();
 
@@ -365,6 +372,8 @@ bool init(Instance* iris) {
         usb::set_port_device(iris->ps2->usb, i, iris->input.usb_devices[i]);
     }
 
+    emu::clean_arcade_files(iris);
+
     cli::boot(iris);
 
     return true;
@@ -393,7 +402,9 @@ void save(Instance* iris) {
                 iris->mac_address[4],
                 iris->mac_address[5]
             } },
-            { "autostart", iris->autostart }
+            { "autostart", iris->autostart },
+            { "cache_arcade_files", iris->cache_arcade_files },
+            { "arcade_dongle_boot", iris->arcade_dongle_boot }
         } },
         { "network", toml::table {
             { "enabled", iris->slirp_config.enabled },
@@ -501,6 +512,12 @@ void save(Instance* iris) {
         } },
         { "paths", toml::table {
             { "bios_path", iris->paths.bios_path },
+            { "arcade_bios_147_path", iris->paths.arcade_bios_paths[emu::ARCADE_BIOS_147] },
+            { "arcade_bios_148_path", iris->paths.arcade_bios_paths[emu::ARCADE_BIOS_148] },
+            { "arcade_bios_246_path", iris->paths.arcade_bios_paths[emu::ARCADE_BIOS_246] },
+            { "arcade_bios_256_path", iris->paths.arcade_bios_paths[emu::ARCADE_BIOS_256] },
+            { "arcade_bios_python_path", iris->paths.arcade_bios_paths[emu::ARCADE_BIOS_PYTHON] },
+            { "arcade_bios_python2_path", iris->paths.arcade_bios_paths[emu::ARCADE_BIOS_PYTHON2] },
             { "rom1_path", iris->paths.rom1_path },
             { "rom2_path", iris->paths.rom2_path },
             { "nvram_path", iris->paths.nvram_path },

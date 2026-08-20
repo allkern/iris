@@ -276,12 +276,17 @@ static inline void s_read_ilink_id(Cdvd* cdvd) {
 
     const uint8_t* id = &cdvd->nvram[cdvd->layout.ilink_id_offset];
 
-    int have = 0;
+    int zeros = 0;
+    int ones = 0;
 
-    for (int i = 0; i < 8; i++)
-        have |= id[i];
+    for (int i = 0; i < 8; i++) {
+        zeros += id[i] == 0x00;
+        ones += id[i] == 0xff;
+    }
 
-    memcpy(&cdvd->s_fifo[1], have ? id : dummy, 8);
+    int blank = zeros == 8 || ones == 8;
+
+    memcpy(&cdvd->s_fifo[1], blank ? dummy : id, 8);
 
     // iris_debug(cdvd, "read_ilink_id -> {:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x}{:02x} (nvram={})", //     cdvd->s_fifo[1], cdvd->s_fifo[2], cdvd->s_fifo[3], cdvd->s_fifo[4],
     //     cdvd->s_fifo[5], cdvd->s_fifo[6], cdvd->s_fifo[7], cdvd->s_fifo[8], have);
@@ -1426,7 +1431,7 @@ int open(Cdvd* cdvd, const char* path, int delay) {
 
     cdvd->layer2_lba = 0;
 
-    cdvd->disc = iop::disc::open(path);
+    cdvd->disc = iop::disc::open(cdvd->logger, path);
 
     if (!cdvd->disc) {
         iris_debug(cdvd, "Couldn't open disc \'{}\'", path);
@@ -1619,20 +1624,20 @@ void set_mechacon_model(Cdvd* cdvd, int model) {
 int load_nvram(Cdvd* cdvd, const char* path) {
     FILE* file = fopen(path, "rb");
 
+    // Claim the path either way, so a first run starts blank and still has
+    // somewhere to persist to
     if (!file) {
-        iris_debug(cdvd, "Couldn't open NVRAM file \'{}\'", path);
-
-        return 0;
+        memset(cdvd->nvram, 0, sizeof(cdvd->nvram));
+    } else {
+        fread(cdvd->nvram, 1, 1024, file);
+        fclose(file);
     }
-
-    fread(cdvd->nvram, 1, 1024, file);
-    fclose(file);
 
     strncpy(cdvd->nvram_path, path, sizeof(cdvd->nvram_path) - 1);
 
     cdvd->nvram_path[sizeof(cdvd->nvram_path) - 1] = 0;
 
-    return 1;
+    return file != nullptr;
 }
 
 static void nvram_writeback(Cdvd* cdvd) {

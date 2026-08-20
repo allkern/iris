@@ -7,14 +7,10 @@
 #include "logger.hpp"
 #include "u128.h"
 
-// The bus headers include this one and iop/intc.h reaches back into them,
-// so this stays a forward declaration; sif.cpp includes it for real.
 namespace iris::iop::intc { struct Intc; }
 
 namespace iris::sif {
 
-// read_index and write_index are reset independently of the storage, so the
-// backing allocation is reused across transfers rather than freed.
 struct Fifo {
     std::vector <uint128_t> data;
     int read_index = 0;

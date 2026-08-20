@@ -64,9 +64,7 @@ bool load_db_from_file(Instance* iris, const char* path) {
 #define IEVENT(event, id, mod) \
     (((uint64_t)event << 32) | (((id & 0xf0000fff) | ((mod & 0xffff) << 12)) & 0xffffffff))
 
-void init_default_mapping(Instance* iris, int id) {
-    Mapping& map = iris->input.input_maps[id];
-
+static void build_default_mapping(Mapping& map, int id) {
     if (id == 0) {
         map.name = "Keyboard (default)";
 
@@ -105,6 +103,9 @@ void init_default_mapping(Instance* iris, int id) {
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_2     , SDL_KMOD_LSHIFT), IRIS_S14X_SW_P2_START);
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_3     , SDL_KMOD_LSHIFT), IRIS_S14X_SW_P3_START);
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_4     , SDL_KMOD_LSHIFT), IRIS_S14X_SW_P4_START);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_5     , SDL_KMOD_NONE), IRIS_S2X6_SW_COIN1);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_4     , SDL_KMOD_NONE), IRIS_S2X6_SW_COIN2);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_2     , SDL_KMOD_NONE), IRIS_S2X6_SW_TEST);
     } else {
         map.name = "Gamepad (default)";
 
@@ -137,6 +138,10 @@ void init_default_mapping(Instance* iris, int id) {
     }
 }
 
+void init_default_mapping(Instance* iris, int id) {
+    build_default_mapping(iris->input.input_maps[id], id);
+}
+
 bool init(Instance* iris) {
     if (!iris->paths.gcdb_path.size()) {
         iris_info(&iris->log.input, "Adding default database");
@@ -151,75 +156,13 @@ bool init(Instance* iris) {
     iris->input.input_devices[0] = new KeyboardDevice();
 
     if (iris->input.input_maps.size() == 0) {
-        Mapping map;
+        Mapping keyboard, gamepad;
 
-        map.name = "Keyboard (default)";
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_X     , SDL_KMOD_NONE), IRIS_DS_BT_CROSS);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_A     , SDL_KMOD_NONE), IRIS_DS_BT_SQUARE);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_W     , SDL_KMOD_NONE), IRIS_DS_BT_TRIANGLE);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_D     , SDL_KMOD_NONE), IRIS_DS_BT_CIRCLE);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_RETURN, SDL_KMOD_NONE), IRIS_DS_BT_START);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_S     , SDL_KMOD_NONE), IRIS_DS_BT_SELECT);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_UP    , SDL_KMOD_NONE), IRIS_DS_BT_UP);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_DOWN  , SDL_KMOD_NONE), IRIS_DS_BT_DOWN);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_LEFT  , SDL_KMOD_NONE), IRIS_DS_BT_LEFT);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_RIGHT , SDL_KMOD_NONE), IRIS_DS_BT_RIGHT);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_Q     , SDL_KMOD_NONE), IRIS_DS_BT_L1);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_E     , SDL_KMOD_NONE), IRIS_DS_BT_R1);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_1     , SDL_KMOD_NONE), IRIS_DS_BT_L2);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_3     , SDL_KMOD_NONE), IRIS_DS_BT_R2);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_Z     , SDL_KMOD_NONE), IRIS_DS_BT_L3);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_C     , SDL_KMOD_NONE), IRIS_DS_BT_R3);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_I     , SDL_KMOD_NONE), IRIS_DS_AX_LEFTV_POS);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_J     , SDL_KMOD_NONE), IRIS_DS_AX_LEFTH_NEG);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_K     , SDL_KMOD_NONE), IRIS_DS_AX_LEFTV_NEG);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_L     , SDL_KMOD_NONE), IRIS_DS_AX_LEFTH_POS);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_T     , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTV_POS);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_F     , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTH_NEG);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_G     , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTV_NEG);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_H     , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTH_POS);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_0     , SDL_KMOD_NONE), IRIS_S14X_SW_SERVICE);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_9     , SDL_KMOD_NONE), IRIS_S14X_SW_TEST);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_8     , SDL_KMOD_NONE), IRIS_S14X_SW_ENTER);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_7     , SDL_KMOD_NONE), IRIS_S14X_SW_UP);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_6     , SDL_KMOD_NONE), IRIS_S14X_SW_DOWN);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_1     , SDL_KMOD_LSHIFT), IRIS_S14X_SW_P1_START);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_2     , SDL_KMOD_LSHIFT), IRIS_S14X_SW_P2_START);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_3     , SDL_KMOD_LSHIFT), IRIS_S14X_SW_P3_START);
-        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_4     , SDL_KMOD_LSHIFT), IRIS_S14X_SW_P4_START);
+        build_default_mapping(keyboard, 0);
+        build_default_mapping(gamepad, 1);
 
-        iris->input.input_maps.push_back(map);
-
-        map.map.clear();
-        map = {};
-
-        map.name = "Gamepad (default)";
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_SOUTH         , SDL_KMOD_NONE), IRIS_DS_BT_CROSS);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_WEST          , SDL_KMOD_NONE), IRIS_DS_BT_SQUARE);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_NORTH         , SDL_KMOD_NONE), IRIS_DS_BT_TRIANGLE);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_EAST          , SDL_KMOD_NONE), IRIS_DS_BT_CIRCLE);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_START         , SDL_KMOD_NONE), IRIS_DS_BT_START);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_BACK          , SDL_KMOD_NONE), IRIS_DS_BT_SELECT);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_UP       , SDL_KMOD_NONE), IRIS_DS_BT_UP);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_DOWN     , SDL_KMOD_NONE), IRIS_DS_BT_DOWN);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_LEFT     , SDL_KMOD_NONE), IRIS_DS_BT_LEFT);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_DPAD_RIGHT    , SDL_KMOD_NONE), IRIS_DS_BT_RIGHT);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_LEFT_SHOULDER , SDL_KMOD_NONE), IRIS_DS_BT_L1);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_RIGHT_SHOULDER, SDL_KMOD_NONE), IRIS_DS_BT_R1);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_LEFT_STICK    , SDL_KMOD_NONE), IRIS_DS_BT_L3);
-        map.map.insert(IEVENT(EventType::GAMEPAD_BUTTON  , SDL_GAMEPAD_BUTTON_RIGHT_STICK   , SDL_KMOD_NONE), IRIS_DS_BT_R3);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFT_TRIGGER    , SDL_KMOD_NONE), IRIS_DS_BT_L2);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHT_TRIGGER   , SDL_KMOD_NONE), IRIS_DS_BT_R2);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFTY           , SDL_KMOD_NONE), IRIS_DS_AX_LEFTV_POS);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_LEFTY           , SDL_KMOD_NONE), IRIS_DS_AX_LEFTV_NEG);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_LEFTX           , SDL_KMOD_NONE), IRIS_DS_AX_LEFTH_POS);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_LEFTX           , SDL_KMOD_NONE), IRIS_DS_AX_LEFTH_NEG);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHTY          , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTV_POS);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_RIGHTY          , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTV_NEG);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_POS, SDL_GAMEPAD_AXIS_RIGHTX          , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTH_POS);
-        map.map.insert(IEVENT(EventType::GAMEPAD_AXIS_NEG, SDL_GAMEPAD_AXIS_RIGHTX          , SDL_KMOD_NONE), IRIS_DS_AX_RIGHTH_NEG);
-
-        iris->input.input_maps.push_back(map);
+        iris->input.input_maps.push_back(keyboard);
+        iris->input.input_maps.push_back(gamepad);
     }
 
 #undef IEVENT
@@ -230,6 +173,28 @@ bool init(Instance* iris) {
 
         iris->input.input_maps[0] = iris->input.input_maps[1];
         iris->input.input_maps[1] = map;
+    }
+
+    for (int i = 0; i < 2 && i < (int)iris->input.input_maps.size(); i++) {
+        Mapping defaults;
+
+        build_default_mapping(defaults, i);
+
+        Mapping& map = iris->input.input_maps[i];
+
+        int added = 0;
+
+        for (const auto& entry : defaults.map.forward_map()) {
+            if (map.map.get_key(entry.second) || map.map.get_value(entry.first))
+                continue;
+
+            map.map.insert(entry.first, entry.second);
+
+            added++;
+        }
+
+        if (added)
+            iris_info(&iris->log.input, "Added {} missing default binding(s) to \"{}\"", added, map.name.c_str());
     }
 
     // Use keyboard mapping for slot 0 and none for slot 1 by default
@@ -272,7 +237,65 @@ static inline void change_s14x_switch(Instance* iris, float value, uint32_t mask
     }
 }
 
+static uint16_t s2x6_switch(InputAction action) {
+    switch (action) {
+        case IRIS_DS_BT_UP: return s2x6::acjv::BTN_UP;
+        case IRIS_DS_BT_DOWN: return s2x6::acjv::BTN_DOWN;
+        case IRIS_DS_BT_LEFT: return s2x6::acjv::BTN_LEFT;
+        case IRIS_DS_BT_RIGHT: return s2x6::acjv::BTN_RIGHT;
+        case IRIS_DS_BT_START: return s2x6::acjv::BTN_START;
+        case IRIS_DS_BT_SELECT: return s2x6::acjv::BTN_SERVICE;
+        case IRIS_DS_BT_SQUARE: return s2x6::acjv::BTN_1;
+        case IRIS_DS_BT_TRIANGLE: return s2x6::acjv::BTN_2;
+        case IRIS_DS_BT_L1: return s2x6::acjv::BTN_3;
+        case IRIS_DS_BT_CROSS: return s2x6::acjv::BTN_4;
+        case IRIS_DS_BT_CIRCLE: return s2x6::acjv::BTN_5;
+        case IRIS_DS_BT_R1: return s2x6::acjv::BTN_6;
+        default: return 0;
+    }
+}
+
+static bool handle_s2x6_action(Instance* iris, InputAction action, int slot, float value) {
+    s2x6::acjv::Acjv* acjv = iris->ps2->s2x6_acjv;
+
+    if (!acjv)
+        return false;
+
+    bool pressed = value > 0.5f;
+
+    switch (action) {
+        case IRIS_S2X6_SW_COIN1: s2x6::acjv::set_coin_switch(acjv, 0, pressed); return true;
+        case IRIS_S2X6_SW_COIN2: s2x6::acjv::set_coin_switch(acjv, 1, pressed); return true;
+        case IRIS_S2X6_SW_TEST: s2x6::acjv::set_test_switch(acjv, pressed); return true;
+        default: break;
+    }
+
+    switch (action) {
+        case IRIS_DS_AX_LEFTH_NEG: s2x6::acjv::set_axis(acjv, s2x6::acjv::AXIS_STEER_LEFT, value); return true;
+        case IRIS_DS_AX_LEFTH_POS: s2x6::acjv::set_axis(acjv, s2x6::acjv::AXIS_STEER_RIGHT, value); return true;
+        case IRIS_DS_BT_R2: s2x6::acjv::set_axis(acjv, s2x6::acjv::AXIS_GAS, value); return true;
+        case IRIS_DS_BT_L2: s2x6::acjv::set_axis(acjv, s2x6::acjv::AXIS_BRAKE, value); return true;
+        default: break;
+    }
+
+    uint16_t mask = s2x6_switch(action);
+
+    if (!mask)
+        return false;
+
+    if (pressed) {
+        s2x6::acjv::press_switch(acjv, slot, mask);
+    } else {
+        s2x6::acjv::release_switch(acjv, slot, mask);
+    }
+
+    return true;
+}
+
 void execute_action(Instance* iris, InputAction action, int slot, float value) {
+    if (handle_s2x6_action(iris, action, slot, value))
+        return;
+
     if (!iris->input.ds[slot])
         return;
 
@@ -311,6 +334,10 @@ void execute_action(Instance* iris, InputAction action, int slot, float value) {
         case IRIS_S14X_SW_P2_START: change_s14x_switch(iris, value, s14x::ioboard::P2_START); break;
         case IRIS_S14X_SW_P3_START: change_s14x_switch(iris, value, s14x::ioboard::P3_START); break;
         case IRIS_S14X_SW_P4_START: change_s14x_switch(iris, value, s14x::ioboard::P4_START); break;
+
+        case IRIS_S2X6_SW_COIN1:
+        case IRIS_S2X6_SW_COIN2:
+        case IRIS_S2X6_SW_TEST:
         case IRIS_INPUT_ACTION_MAX: break;
     }
 }
