@@ -94,11 +94,13 @@ Flash* create(logger::Logger* logger) {
 void init(Flash* flash) {
     logger::Logger* logger = flash->logger;
     size_t logger_id = flash->logger_id;
+    std::string path = std::move(flash->path);
 
     new (flash) Flash();
 
     flash->logger = logger;
     flash->logger_id = logger_id;
+    flash->path = std::move(path);
 
     flash->counter = 0;
     flash->addrbyte = 0;
@@ -112,6 +114,8 @@ void init(Flash* flash) {
 }
 
 int load(Flash* flash, const char* path) {
+    flash->path = path;
+
     FILE* fd = fopen(path, "rb");
 
     if (!fd) {
@@ -138,8 +142,6 @@ int load(Flash* flash, const char* path) {
 }
 
 void destroy(Flash* flash) {
-    // To-do: Flush to file
-
     delete flash;
 }
 
@@ -208,8 +210,23 @@ uint32_t flash_read_id(Flash* flash) {
     return 0;
 }
 
+static void flash_flush(Flash* flash, size_t offset, size_t size) {
+    if (flash->path.empty())
+        return;
+
+    FILE* fd = fopen(flash->path.c_str(), "r+b");
+
+    if (!fd)
+        return;
+
+    if (fseek(fd, (long)offset, SEEK_SET) == 0)
+        fwrite(flash->file + offset, 1, size, fd);
+
+    fclose(fd);
+}
+
 void flash_write_data(Flash* flash, int size, uint32_t data) {
-    memcpy(&flash->data[flash->counter], &flash->data, size);
+    memcpy(&flash->data[flash->counter], &data, size);
 
     flash->counter += size;
     flash->counter %= PAGE_SIZE_ECC; //should not get past the last byte, but at the end
@@ -277,13 +294,25 @@ void flash_write_cmd(Flash* flash, uint16_t value) {
             flash->addrbyte = 1;
         } break;
             
-        case SM_CMD_PROGRAMPAGE: //fall
-        case SM_CMD_ERASECONFIRM: {
+        case SM_CMD_PROGRAMPAGE: {
             flash_calculate_ecc(flash->data);
 
-            memcpy(flash->file + (flash->address / PAGE_SIZE) * PAGE_SIZE_ECC, flash->data, PAGE_SIZE_ECC);
+            size_t offset = (flash->address / PAGE_SIZE) * PAGE_SIZE_ECC;
 
-            /*write2file*/
+            memcpy(flash->file + offset, flash->data, PAGE_SIZE_ECC);
+
+            flash_flush(flash, offset, PAGE_SIZE_ECC);
+
+            flash->ctrl |= CTRL_READY;
+        } break;
+
+        case SM_CMD_ERASECONFIRM: {
+            size_t offset = (flash->address / BLOCK_SIZE) * BLOCK_SIZE_ECC;
+
+            memset(flash->file + offset, 0xff, BLOCK_SIZE_ECC);
+
+            flash_flush(flash, offset, BLOCK_SIZE_ECC);
+
             flash->ctrl |= CTRL_READY;
         } break;
 

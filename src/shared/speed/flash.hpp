@@ -1,4 +1,7 @@
 #pragma once
+
+#include <string>
+
 #include "logger.hpp"
 
 namespace iris::speed { struct Speed; }
@@ -86,6 +89,8 @@ struct Flash {
     int address;
     uint8_t data[PAGE_SIZE_ECC];
     uint8_t file[CARD_SIZE_ECC];
+
+    std::string path;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
