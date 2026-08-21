@@ -144,8 +144,16 @@ void set_gun_off_screen(Acjv* acjv, int player) {
         return;
 
     acjv->gun[player].aimed_away = 1;
+    acjv->gun[player].touching = 0;
 
     update_gun_sensor(acjv, player);
+}
+
+void set_touch_pressed(Acjv* acjv, int player, int pressed) {
+    if (player < 0 || player >= PLAYER_COUNT)
+        return;
+
+    acjv->gun[player].touching = pressed;
 }
 
 void set_gun_board(Acjv* acjv, int board, uint16_t sensor, int sensor_active_high) {
@@ -246,6 +254,21 @@ static void read_gun_two_tier(const Gun* gun, uint16_t* x, uint16_t* y) {
     *y = to_signed_position((1.0f - gun->y) * GUN_TWO_TIER_HEIGHT);
 }
 
+static void read_gun_touch(const Gun* gun, uint16_t* x, uint16_t* y) {
+    if (!gun->touching) {
+        *x = GUN_LOST;
+        *y = GUN_LOST;
+
+        return;
+    }
+
+    float across = clamp_axis(gun->x, 0.0f, 1.0f);
+    float down = clamp_axis(gun->y, 0.0f, 1.0f);
+
+    *x = (uint16_t)clamp_axis(across * GUN_RANGE, 0.0f, TOUCH_MAX);
+    *y = (uint16_t)clamp_axis((1.0f - down) * GUN_RANGE, 0.0f, TOUCH_MAX);
+}
+
 static void read_gun_side_switch(const Gun* gun, uint16_t* x, uint16_t* y) {
     float across = clamp_axis(gun->x, 0.0f, 1.0f);
     float down = clamp_axis(gun->y, 0.0f, 1.0f);
@@ -292,6 +315,12 @@ static void read_gun(Acjv* acjv, int player, uint16_t* x, uint16_t* y) {
         return;
 
     const Gun* gun = &acjv->gun[player];
+
+    if (acjv->mode == MODE_TOUCH) {
+        read_gun_touch(gun, x, y);
+
+        return;
+    }
 
     if (gun->aimed_away) {
         int sentinel = acjv->gun_board == GUN_BOARD_TWO_TIER ||
@@ -461,6 +490,13 @@ static void handle_jvs_packet(Acjv* acjv, const uint8_t* packet, uint8_t* out) {
                     report(&reply, WHEEL_CHANNELS);
                     report(&reply, WHEEL_BITS);
                     report(&reply, 0);
+                }
+
+                if (acjv->mode == MODE_TOUCH) {
+                    report(&reply, FEATURE_SCREEN_POSITION);
+                    report(&reply, GUN_BITS);
+                    report(&reply, GUN_BITS);
+                    report(&reply, TOUCH_CHANNELS);
                 }
 
                 if (acjv->mode == MODE_LIGHTGUN) {

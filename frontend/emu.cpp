@@ -354,11 +354,11 @@ struct ArchiveIndex {
 };
 
 struct ArcadeFileNames {
-    std::string bios;
-    std::string nand;
-    std::string dongle;
-    std::string media;
-    std::string loader;
+    std::vector <std::string> bios;
+    std::vector <std::string> nand;
+    std::vector <std::string> dongle;
+    std::vector <std::string> media;
+    std::vector <std::string> loader;
 };
 
 struct ArcadeSource {
@@ -392,16 +392,45 @@ static std::string lowercase(std::string text) {
     return text;
 }
 
+static std::vector <std::string> query_arcade_names(const std::string& id, const std::string& key, const std::string& fallback) {
+    std::vector <std::string> names;
+
+    auto it = g_arcade_definitions.find(id);
+
+    if (it != g_arcade_definitions.end()) {
+        const toml::table* table = it->second.as_table();
+        const toml::node* node = table ? table->get(key) : nullptr;
+
+        if (const toml::array* listed = node ? node->as_array() : nullptr) {
+            for (const toml::node& element : *listed) {
+                if (auto value = element.value<std::string>()) {
+                    names.push_back(*value);
+                }
+            }
+        } else if (node) {
+            if (auto value = node->value<std::string>()) {
+                names.push_back(*value);
+            }
+        }
+    }
+
+    if (names.empty() && fallback.size()) {
+        names.push_back(fallback);
+    }
+
+    return names;
+}
+
 static ArcadeFileNames arcade_file_names(const std::string& id) {
     std::string gameid = query_arcade_value<std::string>(id, "gameid").value_or(id);
 
     ArcadeFileNames names;
 
-    names.bios = query_arcade_value<std::string>(id, "bios").value_or("bios.bin");
-    names.nand = query_arcade_value<std::string>(id, "nand").value_or("nand.bin");
-    names.dongle = query_arcade_value<std::string>(id, "dongle").value_or(gameid + ".ps2");
-    names.media = query_arcade_value<std::string>(id, "media").value_or(gameid + ".chd");
-    names.loader = query_arcade_value<std::string>(id, "loader").value_or("boot.elf");
+    names.bios = query_arcade_names(id, "bios", "bios.bin");
+    names.nand = query_arcade_names(id, "nand", "nand.bin");
+    names.dongle = query_arcade_names(id, "dongle", gameid + ".ps2");
+    names.media = query_arcade_names(id, "media", gameid + ".chd");
+    names.loader = query_arcade_names(id, "loader", "boot.elf");
 
     return names;
 }
@@ -437,39 +466,50 @@ static const archive::Entry* find_archive_entry(const ArchiveIndex& index, const
     return nullptr;
 }
 
-static const ArchiveIndex* find_archive_with_file(const ArcadeSource& source, const std::string& name) {
+static const ArchiveIndex* find_archive_with_file(const ArcadeSource& source, const std::vector <std::string>& names) {
     for (const ArchiveIndex& index : source.archives)
-        if (find_archive_entry(index, name))
-            return &index;
+        for (const std::string& name : names)
+            if (find_archive_entry(index, name))
+                return &index;
 
     return nullptr;
 }
 
-static std::filesystem::path find_extracted_file(const ArcadeSource& source, const std::string& name) {
+static std::filesystem::path find_extracted_file(const ArcadeSource& source, const std::vector <std::string>& names) {
     for (const std::filesystem::path& dir : source.search_paths)
-        if (std::filesystem::exists(dir / name))
-            return dir / name;
+        for (const std::string& name : names)
+            if (std::filesystem::exists(dir / name))
+                return dir / name;
 
     return {};
 }
 
-static bool arcade_file_available(const ArcadeSource& source, const std::string& name) {
-    if (!find_extracted_file(source, name).empty())
+static bool arcade_file_available(const ArcadeSource& source, const std::vector <std::string>& names) {
+    if (!find_extracted_file(source, names).empty())
         return true;
 
-    return find_archive_with_file(source, name) != nullptr;
+    return find_archive_with_file(source, names) != nullptr;
 }
 
-static std::filesystem::path locate_arcade_file(const ArcadeSource& source, const std::string& name) {
-    std::filesystem::path found = find_extracted_file(source, name);
+static std::filesystem::path locate_arcade_file(const ArcadeSource& source, const std::vector <std::string>& names) {
+    std::filesystem::path found = find_extracted_file(source, names);
 
     if (!found.empty())
         return found;
 
-    if (find_archive_with_file(source, name))
-        return source.extract_path / name;
+    for (const ArchiveIndex& index : source.archives) {
+        for (const std::string& name : names) {
+            if (find_archive_entry(index, name)) {
+                return source.extract_path / name;
+            }
+        }
+    }
 
-    return source.search_paths.front() / name;
+    if (names.empty()) {
+        return source.search_paths.front();
+    }
+
+    return source.search_paths.front() / names.front();
 }
 
 static bool arcade_bios_available(Instance* iris, const ArcadeSource& source) {
@@ -566,17 +606,22 @@ static bool is_namco_game_id(const std::string& text) {
 }
 
 static int score_arcade_definition(const ArchiveIndex& index, const std::string& id) {
-    std::optional<std::string> nand = query_arcade_value<std::string>(id, "nand");
-    std::optional<std::string> dongle = query_arcade_value<std::string>(id, "dongle");
-    std::optional<std::string> media = query_arcade_value<std::string>(id, "media");
-    std::optional<std::string> bios = query_arcade_value<std::string>(id, "bios");
+    auto present = [&](const char* key) {
+        for (const std::string& name : query_arcade_names(id, key, "")) {
+            if (find_archive_entry(index, name)) {
+                return true;
+            }
+        }
+
+        return false;
+    };
 
     int score = 0;
 
-    if (nand && find_archive_entry(index, *nand)) score += 4;
-    if (dongle && find_archive_entry(index, *dongle)) score += 4;
-    if (media && find_archive_entry(index, *media)) score += 2;
-    if (bios && find_archive_entry(index, *bios)) score += 1;
+    if (present("nand")) score += 4;
+    if (present("dongle")) score += 4;
+    if (present("media")) score += 2;
+    if (present("bios")) score += 1;
 
     return score;
 }
@@ -592,17 +637,95 @@ static std::string find_set_by_game_id(const std::string& gameid) {
     return "";
 }
 
+static std::string identify_by_catalog(const std::vector <std::pair <std::string, arcade::Fingerprint>>& files) {
+    std::string strong;
+    std::string weak;
+    int weak_votes = 0;
+
+    for (const auto& [name, print] : files) {
+        arcade::Match match = arcade::identify(print, name);
+
+        if (!match.id.size())
+            continue;
+
+        if (match.confidence == arcade::CONFIDENCE_STRONG) {
+            if (match.role == arcade::ROLE_DONGLE) {
+                return match.id;
+            }
+
+            if (!strong.size()) {
+                strong = match.id;
+            }
+
+            continue;
+        }
+
+        if (!weak.size() || weak == match.id) {
+            weak = match.id;
+            weak_votes++;
+        }
+    }
+
+    if (strong.size())
+        return strong;
+
+    return weak_votes >= 2 ? weak : "";
+}
+
+static std::string identify_arcade_directory(const std::filesystem::path& path) {
+    std::error_code ec;
+
+    std::vector <std::pair <std::string, arcade::Fingerprint>> files;
+
+    for (const auto& entry : std::filesystem::directory_iterator(path, ec)) {
+        if (ec)
+            break;
+
+        if (!entry.is_regular_file(ec))
+            continue;
+
+        arcade::Fingerprint print;
+
+        if (!arcade::probe_file(entry.path(), &print))
+            continue;
+
+        files.push_back({ entry.path().filename().string(), print });
+    }
+
+    return identify_by_catalog(files);
+}
+
+static std::string identify_archive_by_catalog(const ArchiveIndex& index) {
+    std::vector <std::pair <std::string, arcade::Fingerprint>> files;
+
+    for (const archive::Entry& entry : index.entries) {
+        if (entry.directory)
+            continue;
+
+        arcade::Fingerprint print;
+
+        if (!arcade::probe_size(entry.size, &print))
+            continue;
+
+        files.push_back({ std::filesystem::path(entry.name).filename().string(), print });
+    }
+
+    return identify_by_catalog(files);
+}
+
 static std::string identify_by_game_id(const ArchiveIndex& index) {
     for (const archive::Entry& entry : index.entries) {
         std::string gameid = std::filesystem::path(entry.name).stem().string();
 
-        if (!is_namco_game_id(gameid))
+        if (!is_namco_game_id(gameid)) {
             continue;
+        }
 
         std::string id = find_set_by_game_id(gameid);
 
-        if (id.size())
+        if (id.size()) {
             return id;
+        }
     }
 
     return "";
@@ -631,18 +754,26 @@ static std::string identify_arcade_archive(const ArchiveIndex& index) {
     if (best_score >= 4)
         return best_id;
 
-    return identify_by_game_id(index);
+    std::string by_game_id = identify_by_game_id(index);
+
+    if (by_game_id.size())
+        return by_game_id;
+
+    return identify_archive_by_catalog(index);
 }
 
 static bool archive_completes_source(const ArcadeSource& source, const ArchiveIndex& index) {
     const ArcadeFileNames& names = source.names;
 
-    for (const std::string& name : { names.bios, names.nand, names.dongle, names.media, names.loader }) {
-        if (arcade_file_available(source, name))
+    for (const std::vector <std::string>& role : { names.bios, names.nand, names.dongle, names.media, names.loader }) {
+        if (arcade_file_available(source, role))
             continue;
 
-        if (find_archive_entry(index, name))
-            return true;
+        for (const std::string& name : role) {
+            if (find_archive_entry(index, name)) {
+                return true;
+            }
+        }
     }
 
     return false;
@@ -745,9 +876,9 @@ static std::optional<ArcadeSource> open_arcade_manifest(Instance* iris, const st
     if (ini::value(acgame, "data", "jvsmode") == "racing")
         source.jvs_mode = s2x6::acjv::MODE_DRIVE;
 
-    source.names.dongle = ini::value(acgame, "data", "dongle", gameid + ".ps2");
-    source.names.media = ini::value(acgame, "data", "mediasrc", gameid + ".chd");
-    source.names.loader = ini::value(acgame, "data", "elf", "boot.elf");
+    source.names.dongle = { ini::value(acgame, "data", "dongle", gameid + ".ps2") };
+    source.names.media = { ini::value(acgame, "data", "mediasrc", gameid + ".chd") };
+    source.names.loader = { ini::value(acgame, "data", "elf", "boot.elf") };
     source.bootprog = ini::value(acgame, "data", "bootprog", source.bootprog);
 
     for (const char* key : { "args", "256Region", "card", "sram" }) {
@@ -772,6 +903,12 @@ static std::optional<ArcadeSource> open_arcade_source(Instance* iris, const std:
         source.id = lowercase(path.stem().string());
 
         load_arcade_definition(&source);
+
+        if (!source.name.size()) {
+            source.id = identify_arcade_directory(path);
+
+            load_arcade_definition(&source);
+        }
 
         if (!source.name.size())
             return {};
@@ -862,12 +999,19 @@ static bool extract_arcade_source(Instance* iris, const ArcadeSource& source) {
 
     const ArcadeFileNames& names = source.names;
 
-    for (const std::string& name : { names.bios, names.nand, names.dongle, names.media, names.loader }) {
-        if (!find_extracted_file(source, name).empty())
+    for (const std::vector <std::string>& role : { names.bios, names.nand, names.dongle, names.media, names.loader }) {
+        if (!find_extracted_file(source, role).empty())
             continue;
 
         for (size_t i = 1; i < source.archives.size(); i++) {
-            const archive::Entry* entry = find_archive_entry(source.archives[i], name);
+            const archive::Entry* entry = nullptr;
+
+            for (const std::string& name : role) {
+                entry = find_archive_entry(source.archives[i], name);
+
+                if (entry)
+                    break;
+            }
 
             if (!entry)
                 continue;

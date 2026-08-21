@@ -87,6 +87,8 @@ inline constexpr auto GUN_EDGE_MARGIN = 0.01f;
 inline constexpr auto GUN_CAMERA_VISIBLE_X = 230.0f / 320.0f;
 inline constexpr auto GUN_CAMERA_VISIBLE_Y = 140.0f / 224.0f;
 inline constexpr auto GUN_CAMERA_SAMPLER_GAP = 0x7fff;
+inline constexpr auto TOUCH_MAX = 0xfffe;
+inline constexpr auto TOUCH_CHANNELS = 1;
 
 inline constexpr auto BOARD_ID_RAYS = "namco ltd.;RAYS PCB;";
 inline constexpr auto BOARD_ID_MIU = "namco ltd.;MIU-I/O;Ver2.05;JPN,GUN-EXTENTION";
@@ -103,13 +105,15 @@ struct Gun {
     float x;
     float y;
     int aimed_away;
+    int touching;
 };
 
 enum {
     MODE_DEFAULT,
     MODE_DRIVE,
     MODE_FCA,
-    MODE_LIGHTGUN
+    MODE_LIGHTGUN,
+    MODE_TOUCH
 };
 
 inline constexpr auto FCA_HEARTBEAT = 0x0e;
@@ -222,6 +226,7 @@ void set_mode(Acjv* acjv, int mode, int wheel_style);
 void set_axis(Acjv* acjv, int axis, float value);
 void set_gun_position(Acjv* acjv, int player, float x, float y);
 void set_gun_off_screen(Acjv* acjv, int player);
+void set_touch_pressed(Acjv* acjv, int player, int pressed);
 void set_gun_buttons(Acjv* acjv, uint16_t trigger, uint16_t pedal);
 void set_gun_board(Acjv* acjv, int board, uint16_t sensor, int sensor_active_high);
 void set_gun_trigger(Acjv* acjv, int player, int pressed);

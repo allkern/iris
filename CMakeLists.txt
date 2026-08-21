@@ -288,6 +288,7 @@ add_definitions("-D_IRIS_PROCESSOR=${CMAKE_SYSTEM_PROCESSOR}")
 target_sources(iris PRIVATE
     main.cpp
     frontend/applets.cpp
+    frontend/arcade.cpp
     frontend/archive.cpp
     frontend/audio.cpp
     frontend/cli.cpp

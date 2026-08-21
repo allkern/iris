@@ -728,7 +728,8 @@ static bool guest_owns_pointer(Instance* iris) {
         return true;
 
     if (iris->ps2 && iris->ps2->s2x6_acjv &&
-        iris->ps2->s2x6_acjv->mode == s2x6::acjv::MODE_LIGHTGUN)
+        (iris->ps2->s2x6_acjv->mode == s2x6::acjv::MODE_LIGHTGUN ||
+         iris->ps2->s2x6_acjv->mode == s2x6::acjv::MODE_TOUCH))
         return true;
 
     return false;
@@ -737,7 +738,12 @@ static bool guest_owns_pointer(Instance* iris) {
 static void handle_lightgun_event(Instance* iris, SDL_Event* event) {
     s2x6::acjv::Acjv* acjv = iris->ps2 ? iris->ps2->s2x6_acjv : nullptr;
 
-    if (!acjv || acjv->mode != s2x6::acjv::MODE_LIGHTGUN)
+    if (!acjv)
+        return;
+
+    bool touch = acjv->mode == s2x6::acjv::MODE_TOUCH;
+
+    if (acjv->mode != s2x6::acjv::MODE_LIGHTGUN && !touch)
         return;
 
     switch (event->type) {
@@ -758,10 +764,15 @@ static void handle_lightgun_event(Instance* iris, SDL_Event* event) {
         case SDL_EVENT_MOUSE_BUTTON_UP: {
             int pressed = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN;
 
-            if (event->button.button == SDL_BUTTON_LEFT)
-                s2x6::acjv::set_gun_trigger(acjv, 0, pressed);
+            if (event->button.button == SDL_BUTTON_LEFT) {
+                if (touch) {
+                    s2x6::acjv::set_touch_pressed(acjv, 0, pressed);
+                } else {
+                    s2x6::acjv::set_gun_trigger(acjv, 0, pressed);
+                }
+            }
 
-            if (event->button.button == SDL_BUTTON_RIGHT)
+            if (event->button.button == SDL_BUTTON_RIGHT && !touch)
                 s2x6::acjv::set_gun_pedal(acjv, 0, pressed);
         } break;
     }

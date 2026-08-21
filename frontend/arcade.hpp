@@ -1,6 +1,52 @@
+#pragma once
+
+#include <cstdint>
+#include <filesystem>
+#include <string>
+
 #include <toml++/toml.hpp>
 
 #include "ps2.hpp"
+
+namespace iris::arcade {
+
+enum {
+    ROLE_NONE,
+    ROLE_DONGLE,
+    ROLE_MEDIA
+};
+
+enum {
+    CONFIDENCE_NONE,
+    CONFIDENCE_WEAK,
+    CONFIDENCE_STRONG
+};
+
+inline constexpr uint64_t DONGLE_SIZE = 8650752;
+
+struct Fingerprint {
+    uint64_t size = 0;
+    uint32_t crc = 0;
+    std::string sha1;
+
+    bool has_crc = false;
+};
+
+struct Match {
+    std::string id;
+    int role = ROLE_NONE;
+    int confidence = CONFIDENCE_NONE;
+};
+
+bool probe_file(const std::filesystem::path& path, Fingerprint* out);
+bool probe_size(uint64_t size, Fingerprint* out);
+
+Match identify(const Fingerprint& print, const std::string& name);
+Match identify_file(const std::filesystem::path& path);
+
+std::string normalize_key(const std::string& text);
+
+}
 
 const toml::table g_arcade_definitions = toml::table {
     // Namco System 147/148
@@ -51,9 +97,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "uart_device", iris::s2x6::acuart::DEVICE_DRIVE_BOARD },
         { "jvs_mode", iris::s2x6::acjv::MODE_FCA },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "rrv3vera.ic002" },
-        { "media", "rrv1-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "rrv3vera.ic002", "NM00001 RRV3, Ver.A a025539111143a.bin" } },
+        { "media", toml::array { "rrv1-a.chd", "NM00001 RRV1-A (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0x78bd29b0 },
+        { "dongle_sha1", "20084f64eeefb5b8eec31bb6774c306f56ec5cc1" },
+        { "media_crc", 0xbe034b12 },
+        { "media_sha1", "cc7c64b66d520909b669c64aa306bb6f6bc76a44" },
+        { "media_size", 258684928ll }
     }},
     { "rrvac2", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -64,8 +115,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "jvs_mode", iris::s2x6::acjv::MODE_FCA },
         { "bios", "r27v1602f.7d" },
         { "dongle", "rrv2vera.ic002" },
-        { "media", "rrv1-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "media", toml::array { "rrv1-a.chd", "NM00001 RRV1-A (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "media_crc", 0xbe034b12 },
+        { "media_sha1", "cc7c64b66d520909b669c64aa306bb6f6bc76a44" },
+        { "media_size", 258684928ll }
     }},
     { "rrvac1", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -75,9 +129,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "uart_device", iris::s2x6::acuart::DEVICE_DRIVE_BOARD },
         { "jvs_mode", iris::s2x6::acjv::MODE_FCA },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "rrv1vera.ic002" },
-        { "media", "rrv1-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "rrv1vera.ic002", "NM00001 RRV1, Ver.A a025539109879a.bin" } },
+        { "media", toml::array { "rrv1-a.chd", "NM00001 RRV1-A (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0xa99c579c },
+        { "dongle_sha1", "d97b23e461e36eb0625f8cfdcfe334745d98f596" },
+        { "media_crc", 0xbe034b12 },
+        { "media_sha1", "cc7c64b66d520909b669c64aa306bb6f6bc76a44" },
+        { "media_size", 258684928ll }
     }},
     { "vnight", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -85,15 +144,20 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00003" },
         { "bootprog", "VPNGAME" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "vpn3verb.ic002" },
-        { "media", "vpn1cd0.chd" },
+        { "dongle", toml::array { "vpn3verb.ic002", "NM00003 VPN3, Ver.B a025651218273a.bin" } },
+        { "media", toml::array { "vpn1cd0.chd", "NM00003 VPN1 CD0 (CD-ROM).iso" } },
         { "media_type", iris::s2x6::acata::MEDIA_CD },
         { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
         { "gun_trigger", iris::s2x6::acjv::BTN_2 },
         { "gun_pedal", 0 },
         { "gun_board", iris::s2x6::acjv::GUN_BOARD_CAMERA },
         { "gun_sensor", 0x0200 },
-        { "gun_sensor_active_high", 1 }
+        { "gun_sensor_active_high", 1 },
+        { "dongle_crc", 0xb240d892 },
+        { "dongle_sha1", "e494a416c2fe63d0dfafde45d39b95494e966725" },
+        { "media_crc", 0xba7f72e6 },
+        { "media_sha1", "8bca912409e83f30af95a7e7cb05bb8df4e96e69" },
+        { "media_size", 554002432ll }
     }},
     { "bldyr3b", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -102,8 +166,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bootprog", "BDRGAME" },
         { "bios", "r27v1602f.7d" },
         { "dongle", "br3-dongle.bin" },
-        { "media", "bldyr3b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "media", toml::array { "bldyr3b.chd", "NM00002 BRT1-A (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "media_crc", 0x5eb41089 },
+        { "media_sha1", "2e745effaada7d5b1b7a934d4f65b6927c6901fb" },
+        { "media_size", 565344256ll }
     }},
     { "tekken4", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -111,9 +178,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00004" },
         { "bootprog", "TK4LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "tef3verc.ic002" },
-        { "media", "tef1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "tef3verc.ic002", "NM00004 TEF3, Ver.C a025671230614a.bin" } },
+        { "media", toml::array { "tef1dvd0.chd", "NM00004 TEF1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x9af44a60 },
+        { "dongle_sha1", "9c576099b2f0ed1f2d84cd3f3b77960ead84c729" },
+        { "media_crc", 0x05ec5024 },
+        { "media_sha1", "020100e7d9fbed862a5d9a262f5a94e1a68df523" },
+        { "media_size", 2375331840ll }
     }},
     { "tekken4a", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -122,8 +194,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bootprog", "TK4LOAD" },
         { "bios", "r27v1602f.7d" },
         { "dongle", "tef2vera.ic002" },
-        { "media", "tef1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "media", toml::array { "tef1dvd0.chd", "NM00004 TEF1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "media_crc", 0x05ec5024 },
+        { "media_sha1", "020100e7d9fbed862a5d9a262f5a94e1a68df523" },
+        { "media_size", 2375331840ll }
     }},
     { "tekken4b", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -131,9 +206,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00004" },
         { "bootprog", "TK4LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "tef1vera.bin" },
-        { "media", "tef1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "tef1vera.bin", "NM00004 TEF1, Ver.A a025671220412a.bin" } },
+        { "media", toml::array { "tef1dvd0.chd", "NM00004 TEF1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x2123f26e },
+        { "dongle_sha1", "2f7162bef9cc7ebe95b55d17a10db7a767dfa560" },
+        { "media_crc", 0x05ec5024 },
+        { "media_sha1", "020100e7d9fbed862a5d9a262f5a94e1a68df523" },
+        { "media_size", 2375331840ll }
     }},
     { "tekken4c", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -141,9 +221,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00004" },
         { "bootprog", "TK4LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "tef1verc.ic002" },
-        { "media", "tef1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "tef1verc.ic002", "NM00004 TEF1, Ver.C a025671226896a.bin" } },
+        { "media", toml::array { "tef1dvd0.chd", "NM00004 TEF1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xfd65daef },
+        { "dongle_sha1", "a5b80f96301ed69f86784613c983c7714ef3f346" },
+        { "media_crc", 0x05ec5024 },
+        { "media_sha1", "020100e7d9fbed862a5d9a262f5a94e1a68df523" },
+        { "media_size", 2375331840ll }
     }},
     { "wanganmd", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -153,9 +238,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "jvs_mode", iris::s2x6::acjv::MODE_DRIVE },
         { "wheel_style", iris::s2x6::acjv::WHEEL_WANGAN },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "wmn1vera.ic002" },
-        { "media", "wmn1-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "wmn1vera.ic002", "NM00008 WMN1, Ver.A a025811135768a.bin" } },
+        { "media", toml::array { "wmn1-a.chd", "NM00008 WMN1-A (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0xd4e1ea7a },
+        { "dongle_sha1", "9083fba50b1e8ee925777eddf91e5e574da87d5a" },
+        { "media_crc", 0x53181eab },
+        { "media_sha1", "d2040f2aed405c131d7c9f6313a1041fffd10642" },
+        { "media_size", 507039744ll }
     }},
     { "wanganmr", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -165,9 +255,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "jvs_mode", iris::s2x6::acjv::MODE_DRIVE },
         { "wheel_style", iris::s2x6::acjv::WHEEL_WANGAN },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "wmr1vera.ic002" },
-        { "media", "wmr1-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "wmr1vera.ic002", "NM00005 WMR1, Ver.A a025891144809a.bin" } },
+        { "media", toml::array { "wmr1-a.chd", "NM00005 WMR1-A (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0x559ad426 },
+        { "dongle_sha1", "820c3c939572d1cf5ba20056cebdb6aadd5934fe" },
+        { "media_crc", 0x7ed36f1f },
+        { "media_sha1", "3dabc2a62ac61c482238b25e8a97c74a7834507b" },
+        { "media_size", 525203456ll }
     }},
     { "batlgr3", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -177,8 +272,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "jvs_mode", iris::s2x6::acjv::MODE_DRIVE },
         { "bios", "r27v1602f.7d" },
         { "dongle", "batlgr3.ic002" },
-        { "media", "batlgr3.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "media", toml::array { "batlgr3.chd", "NM00010 M9005793A, Ver.2.04J (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "media_crc", 0xe4dce77e },
+        { "media_sha1", "b27c266795a29b532badc1ee6c95907ad211e385" },
+        { "media_size", 20020396032ll }
     }},
     { "dragchrn", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -187,8 +285,12 @@ const toml::table g_arcade_definitions = toml::table {
         { "bootprog", "DGNLOAD" },
         { "bios", "r27v1602f.7d" },
         { "dongle", "dc001vera.ic002" },
-        { "media", "dragchrn.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "media", toml::array { "dragchrn.chd", "NM00014 DGC11 CD0 (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_TOUCH },
+        { "media_crc", 0x890f0dd5 },
+        { "media_sha1", "905e8f3e5e8f18899de2fc11fc00d9a359006e38" },
+        { "media_size", 215304192ll }
     }},
     { "netchu02c", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -196,9 +298,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00009" },
         { "bootprog", "NPBLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "npy1verc.ic002" },
-        { "media", "npy1cd0c.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "npy1verc.ic002", "NM00009 NPY1, Ver.C a025831145654a.bin" } },
+        { "media", toml::array { "npy1cd0c.chd", "NM00009 NPY1 CD0C (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0x64c7a8e4 },
+        { "dongle_sha1", "1bfd656f0d24bebe8f7341f163d85e92a5beee40" },
+        { "media_crc", 0xdc3129e1 },
+        { "media_sha1", "e8e2458943a2cbb390596b11d2b9e5e3a6efcd20" },
+        { "media_size", 194267136ll }
     }},
     { "netchu02b", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -206,9 +313,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00009" },
         { "bootprog", "NPBLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "npy1verb.ic002" },
-        { "media", "npy1cd0b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "npy1verb.ic002", "NM00009 NPY1, Ver.B a025831145685a.bin" } },
+        { "media", toml::array { "npy1cd0b.chd", "NM00009 NPY1 CD0B (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0xdc003ba0 },
+        { "dongle_sha1", "b93e598bd543c77e16020abb9de4c00341cd9be6" },
+        { "media_crc", 0xbb9ce834 },
+        { "media_sha1", "2b648ea005f88f3e6d6c4f758b8c3d957a55d509" },
+        { "media_size", 317546496ll }
     }},
     { "scptour", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -216,9 +328,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00006" },
         { "bootprog", "SCPTLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "scp1vera.ic002" },
-        { "media", "scp1cd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "scp1vera.ic002", "NM00006 SCP1, Ver.A a025671143734a.bin" } },
+        { "media", toml::array { "scp1cd0.chd", "NM00006 SCP1 CD0 (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0x76fc8fdc },
+        { "dongle_sha1", "431e94fcf9bf1e643e77c7f7c67d0d5e9a924e51" },
+        { "media_crc", 0x76ad74ce },
+        { "media_sha1", "ca56d2f65cc34f7e02a82fe3e236ccc1eb17056a" },
+        { "media_size", 99522560ll }
     }},
     { "soulclb2", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -226,9 +343,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00007" },
         { "bootprog", "SCSLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sc23vera.ic002" },
-        { "media", "sc21-dvd0d.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sc23vera.ic002", "NM00007 SC23, Ver.A10 a025781150426a.bin" } },
+        { "media", toml::array { "sc21-dvd0d.chd", "NM00007 SC21 DVD0D (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x7e9830e0 },
+        { "dongle_sha1", "4f1bca39c52fe830d86305a08b8332e3656fc5ca" },
+        { "media_crc", 0x18124a0f },
+        { "media_sha1", "187d94b055324efd999b83a7fc9ebef8d179548f" },
+        { "media_size", 4053794816ll }
     }},
     { "soulcl2a", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -236,9 +358,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00007" },
         { "bootprog", "SCSLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sc22vera.ic002" },
-        { "media", "sc21-dvd0d.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sc22vera.ic002", "NM00007 SC22, Ver.A10 a025781151571a [Rebuilt].bin" } },
+        { "media", toml::array { "sc21-dvd0d.chd", "NM00007 SC21 DVD0D (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xfe6f51e9 },
+        { "dongle_sha1", "6cfe8a321f1c9929c2cda987b12601da51771b03" },
+        { "media_crc", 0x18124a0f },
+        { "media_sha1", "187d94b055324efd999b83a7fc9ebef8d179548f" },
+        { "media_size", 4053794816ll }
     }},
     { "soulcl2b", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -246,9 +373,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00007" },
         { "bootprog", "SCSLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sc21vera.ic002" },
-        { "media", "sc21-dvd0d.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sc21vera.ic002", "NM00007 SC21, Ver.A10 a025781148773a.bin" } },
+        { "media", toml::array { "sc21-dvd0d.chd", "NM00007 SC21 DVD0D (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x635f9d09 },
+        { "dongle_sha1", "daf1755f95d0513a9168ffaac3c828d1d16c5a1b" },
+        { "media_crc", 0x18124a0f },
+        { "media_sha1", "187d94b055324efd999b83a7fc9ebef8d179548f" },
+        { "media_size", 4053794816ll }
     }},
     { "soulcl2w", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -256,9 +388,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00007" },
         { "bootprog", "SCSLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sc23vera.ic002" },
-        { "media", "sc21-dvd0b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sc23vera.ic002", "NM00007 SC23, Ver.A10 a025781150426a.bin" } },
+        { "media", toml::array { "sc21-dvd0b.chd", "NM00007 SC21 DVD0B (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x7e9830e0 },
+        { "dongle_sha1", "4f1bca39c52fe830d86305a08b8332e3656fc5ca" },
+        { "media_crc", 0x42fb3215 },
+        { "media_sha1", "49df1fe6dd01b7b8eaf17e0237dd70df04c0cfe6" },
+        { "media_size", 4555014144ll }
     }},
     { "prdgp03", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -266,9 +403,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00011" },
         { "bootprog", "FGTLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "pr21vera.ic002" },
-        { "media", "pr21dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "pr21vera.ic002", "NM00011 PR21, Ver.A a000002000023a.bin" } },
+        { "media", toml::array { "pr21dvd0.chd", "NM00011 PR21 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x85b29816 },
+        { "dongle_sha1", "50e7397cd5df1eb12faa3c509d99c85833cbdcfc" },
+        { "media_crc", 0xe98ecf0e },
+        { "media_sha1", "e519b9b1bd358d1b09a1b4c7f572f2cab9be0d4b" },
+        { "media_size", 1358790656ll }
     }},
     { "timecrs3", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -276,13 +418,18 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00012" },
         { "bootprog", "TC3LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "tst1vera.ic002" },
-        { "media", "tst1dvd0.chd" },
+        { "dongle", toml::array { "tst1vera.ic002", "NM00012 TST1, Ver.A10 a025921160376a.bin" } },
+        { "media", toml::array { "tst1dvd0.chd", "NM00012 TST1 DVD0 (DVD-ROM).iso" } },
         { "media_type", iris::s2x6::acata::MEDIA_DVD },
         { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
         { "gun_trigger", iris::s2x6::acjv::BTN_2 },
         { "gun_pedal", iris::s2x6::acjv::BTN_6 },
-        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER }
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER },
+        { "dongle_crc", 0x215ba818 },
+        { "dongle_sha1", "9432fafbe353d3dc19a43eae5ce41ad23d054bf3" },
+        { "media_crc", 0xccc74ba0 },
+        { "media_sha1", "9823d705d6f41acdd4e73dcf8cc08b6ae0810267" },
+        { "media_size", 3178233856ll }
     }},
     { "timecrs3e", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -290,13 +437,18 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00012" },
         { "bootprog", "TC3LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "tst2vera.ic002" },
-        { "media", "tst1dvd0.chd" },
+        { "dongle", toml::array { "tst2vera.ic002", "NM00012 TST2, Ver.A9 a025921168340a.bin" } },
+        { "media", toml::array { "tst1dvd0.chd", "NM00012 TST1 DVD0 (DVD-ROM).iso" } },
         { "media_type", iris::s2x6::acata::MEDIA_DVD },
         { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
         { "gun_trigger", iris::s2x6::acjv::BTN_2 },
         { "gun_pedal", iris::s2x6::acjv::BTN_6 },
-        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER }
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER },
+        { "dongle_crc", 0x62705207 },
+        { "dongle_sha1", "1c23ddf38a45db0bd96076a31b14f3360cffe78f" },
+        { "media_crc", 0xccc74ba0 },
+        { "media_sha1", "9823d705d6f41acdd4e73dcf8cc08b6ae0810267" },
+        { "media_size", 3178233856ll }
     }},
     { "timecrs3u", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -304,13 +456,18 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00012" },
         { "bootprog", "TC3LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "tst3vera.ic002" },
-        { "media", "tst1dvd0.chd" },
+        { "dongle", toml::array { "tst3vera.ic002", "NM00012 TST3, Ver.A9 a025921186498a.bin" } },
+        { "media", toml::array { "tst1dvd0.chd", "NM00012 TST1 DVD0 (DVD-ROM).iso" } },
         { "media_type", iris::s2x6::acata::MEDIA_DVD },
         { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
         { "gun_trigger", iris::s2x6::acjv::BTN_2 },
         { "gun_pedal", iris::s2x6::acjv::BTN_6 },
-        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER }
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER },
+        { "dongle_crc", 0x09c168ee },
+        { "dongle_sha1", "23c0321d3d4371e25de8be478de1c107853700fb" },
+        { "media_crc", 0xccc74ba0 },
+        { "media_sha1", "9823d705d6f41acdd4e73dcf8cc08b6ae0810267" },
+        { "media_size", 3178233856ll }
     }},
     { "zgundm", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -318,9 +475,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00013" },
         { "bootprog", "GDMLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "zga1vera.ic002" },
-        { "media", "zga1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "zga1vera.ic002", "NM00013 ZGA1, Ver.A a000001000039a.bin" } },
+        { "media", toml::array { "zga1dvd0.chd", "NM00013 ZGA1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xb6a11f43 },
+        { "dongle_sha1", "275fc13eada884e4cf4ba4adf2b51de3d438c647" },
+        { "media_crc", 0x7cb21182 },
+        { "media_sha1", "fe6dc6b21cc85fd6fb34403387a9c8fc6628871c" },
+        { "media_size", 2413985792ll }
     }},
     { "zgundmdx", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -328,9 +490,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00017" },
         { "bootprog", "GDXLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "zdx1vera.ic002" },
-        { "media", "zdx1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "zdx1vera.ic002", "NM00017 ZDX1, Ver.A a000003000012a.bin" } },
+        { "media", toml::array { "zdx1dvd0.chd", "NM00017 ZDX1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xfcba8146 },
+        { "dongle_sha1", "ea31cd90bee812a156159ff99c2034a4ad223993" },
+        { "media_crc", 0xd16dc2b0 },
+        { "media_sha1", "331288e0b05a2b6014d867cba6f5ff95fadc0705" },
+        { "media_size", 2358345728ll }
     }},
     { "fghtjam", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -338,9 +505,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00018" },
         { "bootprog", "FJMLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "jam1vera.ic002" },
-        { "media", "jam1-dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "jam1vera.ic002", "NM00018 JAM1, Ver.A a000004000124a.bin" } },
+        { "media", toml::array { "jam1-dvd0.chd", "NM00018 JAM1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x1348c76b },
+        { "dongle_sha1", "a13eb58896ef9f9328d6dc4048c7c591f58f7396" },
+        { "media_crc", 0x559b7873 },
+        { "media_sha1", "81aaa0f67a30eee460f46e75bfa47d3d7f0c23b5" },
+        { "media_size", 3007119360ll }
     }},
     { "sukuinuf", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -348,9 +520,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00037" },
         { "bootprog", "DR2LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "in2vera.ic002" },
-        { "media", "hm-in2.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "dongle", toml::array { "in2vera.ic002", "NM00037 IN2, Ver.A a000001000371a.bin" } },
+        { "media", toml::array { "hm-in2.chd", "NM00037 HM-IN2 (CD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "dongle_crc", 0x7dfcdf45 },
+        { "dongle_sha1", "1d29f4db511af35fca4f7db37d3c31e6c1c89d32" },
+        { "media_crc", 0x9f401119 },
+        { "media_sha1", "9450dc410aea3e50e31fdab2ea3489f3e6bca7ba" },
+        { "media_size", 276670464ll }
     }},
     { "zoidsinf", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -358,9 +535,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00016" },
         { "bootprog", "ZOILOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "b3900076a.ic002" },
-        { "media", "zoidsinf.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "dongle", toml::array { "b3900076a.ic002", "NM00016 B3900076A, Ver.2.06J [Terminal].bin" } },
+        { "media", toml::array { "zoidsinf.chd", "NM00016 M9006212A, Ver.2.06J (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "dongle_crc", 0xa54d87f0 },
+        { "dongle_sha1", "7a1ff94bfdb3b6032d26d41eab3d4027a137d9d0" },
+        { "media_crc", 0x69209060 },
+        { "media_sha1", "f7d492364db8da0af08885cead589fe8ecd695b5" },
+        { "media_size", 33820286976ll }
     }},
     { "zoidiexp", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -368,9 +550,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00025" },
         { "bootprog", "ZO2LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "b3900107a.ic002" },
-        { "media", "zoidsinf-ex-plus-ver2-10.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "dongle", toml::array { "b3900107a.ic002", "NM00025 B3900107A, Ver.2.10JPN [Terminal].bin" } },
+        { "media", toml::array { "zoidsinf-ex-plus-ver2-10.chd", "NM00025 M9006907A, Ver.2.10JPN (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "dongle_crc", 0xf7fc52f7 },
+        { "dongle_sha1", "4699ca049f32af06c6d1e851db881740ffb23894" },
+        { "media_crc", 0x3af2a348 },
+        { "media_sha1", "41dfead19f6d021725fe1c73a50312bb459d5842" },
+        { "media_size", 20020396032ll }
     }},
     { "gundzaft", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -378,9 +565,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00024" },
         { "bootprog", "SEDLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sed1vera.ic002" },
-        { "media", "sed1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sed1vera.ic002", "NM00024 SED1, Ver.A a000005000349a.bin" } },
+        { "media", toml::array { "sed1dvd0.chd", "NM00024 SED1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x7954ad38 },
+        { "dongle_sha1", "776c2e1685da2ca6b14443f3fb008b1906bfaad7" },
+        { "media_crc", 0xf6931df9 },
+        { "media_sha1", "e7cc73a24b23ac6b8c0ad2082b8fcda5b734993c" },
+        { "media_size", 2927427584ll }
     }},
     { "soulclb3", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -388,9 +580,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00031" },
         { "bootprog", "SC3LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sc31001-na-a.ic002" },
-        { "media", "sc31001-na-dvd0-b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sc31001-na-a.ic002", "NM00031 SC31001-NA-A, Ver.A10 a026201337278a.bin" } },
+        { "media", toml::array { "sc31001-na-dvd0-b.chd", "NM00031 SC31001-NA-DVD0-B (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x7c1c01e7 },
+        { "dongle_sha1", "ef57f5c89e561069bf4c3319eeb2268d23cbdee6" },
+        { "media_crc", 0x2f887b6d },
+        { "media_sha1", "92dc2eb22b7a4ca76bed44a3521a4d5910d1ed8b" },
+        { "media_size", 4012509184ll }
     }},
     { "soulclb3a", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -398,9 +595,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00031" },
         { "bootprog", "SC3LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sc31002-na-a.ic002" },
-        { "media", "sc31001-na-dvd0-b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sc31002-na-a.ic002", "NM00031 SC31002-NA-A, Ver.A10 a026201337751a.bin" } },
+        { "media", toml::array { "sc31001-na-dvd0-b.chd", "NM00031 SC31001-NA-DVD0-B (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x8f066ba9 },
+        { "dongle_sha1", "cd21aefeb28df399f1d9892a782f6be581ea1104" },
+        { "media_crc", 0x2f887b6d },
+        { "media_sha1", "92dc2eb22b7a4ca76bed44a3521a4d5910d1ed8b" },
+        { "media_size", 4012509184ll }
     }},
     { "soulclb3b", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -408,9 +610,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00031" },
         { "bootprog", "SC3LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "sc31001-na-a.ic002" },
-        { "media", "sc31001-na-dvd0-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "sc31001-na-a.ic002", "NM00031 SC31001-NA-A, Ver.A10 a026201337278a.bin" } },
+        { "media", toml::array { "sc31001-na-dvd0-a.chd", "NM00031 SC31001-NA-DVD0-A (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x7c1c01e7 },
+        { "dongle_sha1", "ef57f5c89e561069bf4c3319eeb2268d23cbdee6" },
+        { "media_crc", 0xb77f295c },
+        { "media_sha1", "2c9c3284174dc708aee3e81d038a14d802bda07a" },
+        { "media_size", 4003921920ll }
     }},
     { "qgundam", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -418,9 +625,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00030" },
         { "bootprog", "GQZLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "qg1vera.ic002" },
-        { "media", "qg1.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "qg1vera.ic002", "NM00030 QG1, Ver.A a032737000093a.bin" } },
+        { "media", toml::array { "qg1.chd", "NM00030 QG1 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xf8818112 },
+        { "dongle_sha1", "8a684ddaab66a7333d79de94f27f483eb2b688f4" },
+        { "media_crc", 0xbd8fb3d6 },
+        { "media_sha1", "9df7b158cfdb1d7df47e78780e2e40d43c7d3d5f" },
+        { "media_size", 1249804288ll }
     }},
     { "kinniku2", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -428,9 +640,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00040" },
         { "bootprog", "KI2LOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "kn2vera.ic002" },
-        { "media", "kn2.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "kn2vera.ic002", "NM00040 KN2, Ver.A a032917000301a.bin" } },
+        { "media", toml::array { "kn2.chd", "NM00040 KN2 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x2962e6e3 },
+        { "dongle_sha1", "5db4903f59eb6b1dff2336475a23a5bc6568d1c3" },
+        { "media_crc", 0xd9785e58 },
+        { "media_sha1", "e4d7d9005a161b859651815beb20051d76ae66ee" },
+        { "media_size", 1405227008ll }
     }},
     { "sbxc", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -438,9 +655,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00042" },
         { "bootprog", "BASLOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "bax1vera.ic002" },
-        { "media", "bax1_dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "bax1vera.ic002", "NM00042 BAX1, Ver.A a000008000334a.bin" } },
+        { "media", toml::array { "bax1_dvd0.chd", "NM00042 BAX1 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x28b3f9f5 },
+        { "dongle_sha1", "0e57d8ae6cf0a3690f763d15b141a9d9d9b3de07" },
+        { "media_crc", 0xcc477e5a },
+        { "media_sha1", "4b1b3675d578d0b99f9428a56aa26c12fec04d46" },
+        { "media_size", 4651057152ll }
     }},
     { "fateulc", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -448,9 +670,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00048" },
         { "bootprog", "FTELOAD" },
         { "bios", "r27v1602f.7d" },
-        { "dongle", "fud1vera.ic002" },
-        { "media", "fud-hdd0-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "dongle", toml::array { "fud1vera.ic002", "NM00048 FUD1, Ver.A a000009000989a.bin" } },
+        { "media", toml::array { "fud-hdd0-a.chd", "NM00048 FUD1-HDD0-A (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "dongle_crc", 0x19a868ab },
+        { "dongle_sha1", "1ebec8326217732211abe95803a0436192694508" },
+        { "media_crc", 0x1406d5bd },
+        { "media_sha1", "82a7f59d3b9261207f7a3e60298d5cc294d7637b" },
+        { "media_size", 80026361856ll }
     }},
     { "fateulcb", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -459,8 +686,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bootprog", "FTELOAD" },
         { "bios", "r27v1602f.7d" },
         { "dongle", "fates-dongle.bin" },
-        { "media", "fateulcb.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "media", toml::array { "fateulcb.chd", "NM00048 FUD1-HDD0-A (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "media_crc", 0x1406d5bd },
+        { "media_sha1", "82a7f59d3b9261207f7a3e60298d5cc294d7637b" },
+        { "media_size", 80026361856ll }
     }},
     { "cobrata", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -468,14 +698,51 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00021" },
         { "bootprog", "CBRLOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "cbr1verb.ic002" },
-        { "media", "cbr1-ha.chd" },
+        { "dongle", toml::array { "cbr1verb.ic002", "NM00021 CBR1, Ver.B a026081331755a.bin" } },
+        { "media", toml::array { "cbr1-ha.chd", "NM00021 CBR1-HA (HDD).img" } },
         { "media_type", iris::s2x6::acata::MEDIA_HDD },
         { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
         { "gun_trigger", iris::s2x6::acjv::BTN_LEFT },
         { "gun_pedal", iris::s2x6::acjv::BTN_3 },
         { "gun_board", iris::s2x6::acjv::GUN_BOARD_CLASSIC },
-        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT }
+        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT },
+        { "dongle_crc", 0xca7b0277 },
+        { "dongle_sha1", "06a68eed3a8f2ef0b712a09844483abcd4b380b7" },
+        { "media_crc", 0xc527c5be },
+        { "media_sha1", "4ed11baaef9ea51afba72390e363c19df21984d6" },
+        { "media_size", 40060403712ll }
+    }},
+    { "idolm", toml::table {
+        { "system", iris::ps2::NAMCO_SYSTEM_256 },
+        { "name", "The IDOLM@STER (IDMS1 Ver. D, Station)" },
+        { "gameid", "NM00022" },
+        { "bootprog", "IDLLOAD" },
+        { "bios", "r27v1602f.8g" },
+        { "dongle", toml::array { "idms1verd.ic002", "NM00022 IDMS1, Ver.D a026061343464a [Station].bin" } },
+        { "media", toml::array { "idm1-ha.chd", "NM00022 IDM1-HA (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_TOUCH },
+        { "dongle_crc", 0x8490d335 },
+        { "dongle_sha1", "525fd3a739498a872c779c46cd7000d9f980e668" },
+        { "media_crc", 0xf9841324 },
+        { "media_sha1", "9212e01302a8ebfb887c9c1640aa71ad4c9d58cb" },
+        { "media_size", 41110142976ll }
+    }},
+    { "idolmt", toml::table {
+        { "system", iris::ps2::NAMCO_SYSTEM_256 },
+        { "name", "The IDOLM@STER (IDMT1 Ver. D, Tower)" },
+        { "gameid", "NM00022" },
+        { "bootprog", "IDLLOAD" },
+        { "bios", "r27v1602f.8g" },
+        { "dongle", toml::array { "idmt1verd.ic002", "NM00022 IDMT1, Ver.D a026061342184a [Tower] [Rebuilt].bin" } },
+        { "media", toml::array { "idm1-ha.chd", "NM00022 IDM1-HA (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_TOUCH },
+        { "dongle_crc", 0x37a823e1 },
+        { "dongle_sha1", "4e8b4e6e0f165596f604cf5079d375ce921b882a" },
+        { "media_crc", 0xf9841324 },
+        { "media_sha1", "9212e01302a8ebfb887c9c1640aa71ad4c9d58cb" },
+        { "media_size", 41110142976ll }
     }},
     { "taiko7", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -483,9 +750,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00023" },
         { "bootprog", "TA7LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "tk71.ic002" },
-        { "media", "tk71dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "tk71.ic002", "NM00023 TK71, Ver.A26 a026031314920a.bin" } },
+        { "media", toml::array { "tk71dvd0.chd", "NM00023 TK71 DVD0 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xb1f606ab },
+        { "dongle_sha1", "5b94793096477ddb2bf64e6857de83544ef99b6c" },
+        { "media_crc", 0xffb23692 },
+        { "media_sha1", "5b8361b405f67129db27b23547e2c710bdbce962" },
+        { "media_size", 527433728ll }
     }},
     { "taiko8", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -493,9 +765,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00033" },
         { "bootprog", "TA8LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "tk81001-na-a.ic002" },
-        { "media", "tk8100-1-na-dvd0-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "tk81001-na-a.ic002", "NM00033 TK81001-NA-A, Ver.A10 a026191334761a.bin" } },
+        { "media", toml::array { "tk8100-1-na-dvd0-a.chd", "NM00033 TK8100-1-NA-DVD0-A (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x68e784d0 },
+        { "dongle_sha1", "33fc3c46904b1035a098647198c754e957449f88" },
+        { "media_crc", 0xb33bc72f },
+        { "media_sha1", "0199314d0d3ab5594dd06727d71a75fa9ec20aaf" },
+        { "media_size", 589830144ll }
     }},
     { "minnadk", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -503,9 +780,15 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00036" },
         { "bootprog", "NTRLOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "nm00036_znt100-1-st-a.bin" },
-        { "media", "znt150-1-na-dvd0-b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "nm00036_znt100-1-st-a.bin", "NM00036 ZNT100-1-ST-A, Ver.A10 a026231357058a [Station].bin" } },
+        { "media", toml::array { "znt150-1-na-dvd0-b.chd", "NM00036 ZNT150-1-NA-DVD0-B [Ver.1.50] (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_TOUCH },
+        { "dongle_crc", 0xb765cb34 },
+        { "dongle_sha1", "b01e868d4fba317c215df1bbf921890e39066bcc" },
+        { "media_crc", 0x61eddb84 },
+        { "media_sha1", "755a09f7d384af22f137317f5d26499cf7f31c75" },
+        { "media_size", 3801309184ll }
     }},
     { "acedriv3", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -514,9 +797,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "bootprog", "NRALOAD" },
         { "jvs_mode", iris::s2x6::acjv::MODE_DRIVE },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "adt1005-na-a.ic002" },
-        { "media", "adt1005-na-hdd0a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "dongle", toml::array { "adt1005-na-a.ic002", "NM00047 ADT1005-NA-A, Ver.A a026351090784a.bin" } },
+        { "media", toml::array { "adt1005-na-hdd0a.chd", "NM00047 ADT1005-NA-HDD0A (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "dongle_crc", 0x0bcadec4 },
+        { "dongle_sha1", "3c7d7b89407332e9e3ed677a134ed3d1c3109b3b" },
+        { "media_crc", 0xfe29d93c },
+        { "media_sha1", "04b1d5bfdad3725f1a3489722f50fabaa2741213" },
+        { "media_size", 80026361856ll }
     }},
     { "tekken51", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -524,9 +812,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00019" },
         { "bootprog", "TK5LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "te51verb.ic002" },
-        { "media", "te51-dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "te51verb.ic002", "NM00019 TE51, Ver.B4 a026051314505a.bin" } },
+        { "media", toml::array { "te51-dvd0.chd", "NM00019 TE51 DVD0B [Ver.5.1] (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x76770d6d },
+        { "dongle_sha1", "f56c6cf54cec38bfb47ae5fdfd85f2cd420effa9" },
+        { "media_crc", 0xb0c85ca5 },
+        { "media_sha1", "50e19741e6f6aa83905ea7eb5f2547a5eb4f7b8d" },
+        { "media_size", 4210032640ll }
     }},
     { "tekken51b", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -534,9 +827,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00019" },
         { "bootprog", "TK5LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "te53verb.ic002" },
-        { "media", "te51-dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "te53verb.ic002", "NM00019 TE53, Ver.B2 a026051307467a.bin" } },
+        { "media", toml::array { "te51-dvd0.chd", "NM00019 TE51 DVD0B [Ver.5.1] (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xb6c77aa6 },
+        { "dongle_sha1", "a9915cdc176da915c28712f3e7fd65bc4d03abdf" },
+        { "media_crc", 0xb0c85ca5 },
+        { "media_sha1", "50e19741e6f6aa83905ea7eb5f2547a5eb4f7b8d" },
+        { "media_size", 4210032640ll }
     }},
     { "tekken5d", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -544,9 +842,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00026" },
         { "bootprog", "T55LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "ted1vera.ic002" },
-        { "media", "ted1dvd0b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "ted1vera.ic002", "NM00026 TED1, Ver.A13 a026181328604a.bin" } },
+        { "media", toml::array { "ted1dvd0b.chd", "NM00026 TED1 DVD0B (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x451eeb95 },
+        { "dongle_sha1", "95b08fdb5a8b6a0d2604fdc647ff8ee0f3f3e21a" },
+        { "media_crc", 0x75064bad },
+        { "media_sha1", "139f3ffbf2be7b387ecd93b1bab1f4f9cfbd60d7" },
+        { "media_size", 3858716672ll }
     }},
     { "superdbz", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -554,9 +857,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00027" },
         { "bootprog", "DBALOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "db1verb.ic002" },
-        { "media", "db1.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "db1verb.ic002", "NM00027 DB1, Ver.B a032720000518a.bin" } },
+        { "media", toml::array { "db1.chd", "NM00027 DB1 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xc0a199d3 },
+        { "dongle_sha1", "7f8c60cb19c29e80eb038ca0e8d7c0ec71256cf0" },
+        { "media_crc", 0x88b95614 },
+        { "media_sha1", "6a9ef9943b22ad5ad70333af90258787ffef98a9" },
+        { "media_size", 432480256ll }
     }},
     { "kinniku", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -564,9 +872,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00029" },
         { "bootprog", "KINLOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "kn1vera.ic002" },
-        { "media", "kn1-b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "kn1vera.ic002", "NM00029 KN1, Ver.A a032730000575a.bin" } },
+        { "media", toml::array { "kn1-b.chd", "NM00029 KN1-B (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x39cc79d0 },
+        { "dongle_sha1", "1d277fe3b9e2a0515edb57dbcf7cd9c26046a12a" },
+        { "media_crc", 0x7be9fdca },
+        { "media_sha1", "2fc66944f54d59e5d4876b90a82db9cc357ce42b" },
+        { "media_size", 3495131136ll }
     }},
     { "taiko9", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -574,9 +887,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00038" },
         { "bootprog", "TA9LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "tk91001-na-a.ic002" },
-        { "media", "tk9100-1-na-dvd0-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "tk91001-na-a.ic002", "NM00038 TK91001-NA-A, Ver.A07 a026221355175a.bin" } },
+        { "media", toml::array { "tk9100-1-na-dvd0-a.chd", "NM00038 TK9100-1-NA-DVD0-A (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xb21f81c4 },
+        { "dongle_sha1", "9c8c6d54bb5654ce68e3c156ef109308401c0317" },
+        { "media_crc", 0x004cd461 },
+        { "media_sha1", "7f55d44e8777f6a9a4106bcb5caddc84a9c0d9e4" },
+        { "media_size", 657211392ll }
     }},
     { "yuyuhaku", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -585,8 +903,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bootprog", "YUULOAD" },
         { "bios", "r27v1602f.8g" },
         { "dongle", "dongle.bin" },
-        { "media", "yh1.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "media", toml::array { "yh1.chd", "NM00035 YH1 (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "media_crc", 0xe9a19541 },
+        { "media_sha1", "c557ed6d1b950506287bb0493c97c84fcc2be394" },
+        { "media_size", 1254490112ll }
     }},
     { "motogp", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -596,8 +917,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "jvs_mode", iris::s2x6::acjv::MODE_DRIVE },
         { "bios", "r27v1602f.8g" },
         { "dongle", "mgp1004-na-b.ic002" },
-        { "media", "mgp1004-na-hdd0-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "media", toml::array { "mgp1004-na-hdd0-a.chd", "NM00039 MGP1004-NA-HDD0-A (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "media_crc", 0x9da8856a },
+        { "media_sha1", "c6eab643550bd9f8361316ed4b7ef9728b42b712" },
+        { "media_size", 80026361856ll }
     }},
     { "taiko10", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -605,9 +929,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00041" },
         { "bootprog", "T10LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "t101001-na-a.ic002" },
-        { "media", "tk10100-1-na-dvd0-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "t101001-na-a.ic002", "NM00041 T101001-NA-A, Ver.A09 a026301364921a.bin" } },
+        { "media", toml::array { "tk10100-1-na-dvd0-a.chd", "NM00041 T10100-1-NA-DVD0-A (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xc08228f7 },
+        { "dongle_sha1", "e58abebfd88a3e0dd95c4483428c3d47b44aa2e7" },
+        { "media_crc", 0xb7786a07 },
+        { "media_sha1", "e3e561898ba892f34c5ea5d5c320ea2c47303267" },
+        { "media_size", 688011264ll }
     }},
     { "taiko11", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -615,9 +944,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00044" },
         { "bootprog", "T11LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "t111001-na-a.ic002" },
-        { "media", "t11100-1-na-dvd0-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "t111001-na-a.ic002", "NM00044 T111001-NA-A, Ver.A09 a026371371887a.bin" } },
+        { "media", toml::array { "t11100-1-na-dvd0-a.chd", "NM00044 T11100-1-NA-DVD0-A (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0xdd40dc8b },
+        { "dongle_sha1", "815bfaa25fb87a9983dfb3b0136b025d514de0ee" },
+        { "media_crc", 0x92d14933 },
+        { "media_sha1", "c5bcac7ff371a362b7fe1dbe8b84c89f9d6e34cc" },
+        { "media_size", 793284608ll }
     }},
     { "gdvsgd", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -625,9 +959,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00043" },
         { "bootprog", "GDNLOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "gvs1vera.ic002" },
-        { "media", "gvs1dvd0b.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "dongle", toml::array { "gvs1vera.ic002", "NM00043 GVS1, Ver.A a000007000238a.bin" } },
+        { "media", toml::array { "gvs1dvd0b.chd", "NM00043 GVS1 DVD0B [Ver.1.01] (DVD-ROM).iso" } },
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "dongle_crc", 0x1f66e6b4 },
+        { "dongle_sha1", "9264b71ab131405129bd3dd8452acaeee8fe1a8f" },
+        { "media_crc", 0xdfe5853c },
+        { "media_sha1", "342c483beb770a09db0e7f64658fa9cf2acef1ef" },
+        { "media_size", 3216572416ll }
     }},
     { "gdvsgdnx", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -635,9 +974,14 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00052" },
         { "bootprog", "GNXLOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "gnx1001-na-a.ic002" },
-        { "media", "gnx100-1na-a.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "dongle", toml::array { "gnx1001-na-a.ic002", "NM00052 GNX1001-NA-A, Ver.A a026521381793a.bin" } },
+        { "media", toml::array { "gnx100-1na-a.chd", "NM00052 GNX100-1-NA-HDD0-A (HDD).img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "dongle_crc", 0x96d3ad29 },
+        { "dongle_sha1", "f2493c5edf7cf12037a8ba46742f33596325c616" },
+        { "media_crc", 0xb25efc2e },
+        { "media_sha1", "8a9fb9cf30f9624b3a1e7b5e79346419d738b0ce" },
+        { "media_size", 80026361856ll }
     }},
     { "timecrs4", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_SUPER_256 },
@@ -645,14 +989,19 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00032" },
         { "bootprog", "TC4LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "tsf1002-na-a.ic002" },
-        { "media", "tsf1-ha.chd" },
+        { "dongle", toml::array { "tsf1002-na-a.ic002", "NM00032 TSF1002-NA-A, Ver.A49 a026161340912a.bin" } },
+        { "media", toml::array { "tsf1-ha.chd", "NM00032 TSF1-HA (HDD).img" } },
         { "media_type", iris::s2x6::acata::MEDIA_HDD },
         { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
         { "gun_trigger", iris::s2x6::acjv::BTN_LEFT },
         { "gun_pedal", iris::s2x6::acjv::BTN_3 },
         { "gun_board", iris::s2x6::acjv::GUN_BOARD_SIDE_SWITCH },
-        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT }
+        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT },
+        { "dongle_crc", 0x40a3ecae },
+        { "dongle_sha1", "d60572d376226c1cc11da54ac6e349934866cbd0" },
+        { "media_crc", 0x35a573ea },
+        { "media_sha1", "2ace0c7745373a88d6d5e9a2b8cc3d7daf0cbd3f" },
+        { "media_size", 40060403712ll }
     }},
     { "timecrs4j", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_SUPER_256 },
@@ -660,13 +1009,18 @@ const toml::table g_arcade_definitions = toml::table {
         { "gameid", "NM00032" },
         { "bootprog", "TC4LOAD" },
         { "bios", "r27v1602f.8g" },
-        { "dongle", "tsf1001-na-a.ic002" },
-        { "media", "tsf1-ha.chd" },
+        { "dongle", toml::array { "tsf1001-na-a.ic002", "NM00032 TSF1001-NA-A, Ver.A49 a026161346974a.bin" } },
+        { "media", toml::array { "tsf1-ha.chd", "NM00032 TSF1-HA (HDD).img" } },
         { "media_type", iris::s2x6::acata::MEDIA_HDD },
         { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
         { "gun_trigger", iris::s2x6::acjv::BTN_LEFT },
         { "gun_pedal", iris::s2x6::acjv::BTN_3 },
         { "gun_board", iris::s2x6::acjv::GUN_BOARD_SIDE_SWITCH },
-        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT }
+        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT },
+        { "dongle_crc", 0x7e866293 },
+        { "dongle_sha1", "2679b38b15f82f3f207abc79c3e86ea1a88afb8a" },
+        { "media_crc", 0x35a573ea },
+        { "media_sha1", "2ace0c7745373a88d6d5e9a2b8cc3d7daf0cbd3f" },
+        { "media_size", 40060403712ll }
     }}
 };
