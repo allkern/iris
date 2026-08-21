@@ -87,7 +87,13 @@ const toml::table g_arcade_definitions = toml::table {
         { "bios", "r27v1602f.7d" },
         { "dongle", "vpn3verb.ic002" },
         { "media", "vpn1cd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_CD }
+        { "media_type", iris::s2x6::acata::MEDIA_CD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
+        { "gun_trigger", iris::s2x6::acjv::BTN_2 },
+        { "gun_pedal", 0 },
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_CAMERA },
+        { "gun_sensor", 0x0200 },
+        { "gun_sensor_active_high", 1 }
     }},
     { "bldyr3b", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -272,7 +278,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bios", "r27v1602f.7d" },
         { "dongle", "tst1vera.ic002" },
         { "media", "tst1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
+        { "gun_trigger", iris::s2x6::acjv::BTN_2 },
+        { "gun_pedal", iris::s2x6::acjv::BTN_6 },
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER }
     }},
     { "timecrs3e", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -282,7 +292,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bios", "r27v1602f.7d" },
         { "dongle", "tst2vera.ic002" },
         { "media", "tst1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
+        { "gun_trigger", iris::s2x6::acjv::BTN_2 },
+        { "gun_pedal", iris::s2x6::acjv::BTN_6 },
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER }
     }},
     { "timecrs3u", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -292,7 +306,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bios", "r27v1602f.7d" },
         { "dongle", "tst3vera.ic002" },
         { "media", "tst1dvd0.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_DVD }
+        { "media_type", iris::s2x6::acata::MEDIA_DVD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
+        { "gun_trigger", iris::s2x6::acjv::BTN_2 },
+        { "gun_pedal", iris::s2x6::acjv::BTN_6 },
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_TWO_TIER }
     }},
     { "zgundm", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_246 },
@@ -452,7 +470,12 @@ const toml::table g_arcade_definitions = toml::table {
         { "bios", "r27v1602f.8g" },
         { "dongle", "cbr1verb.ic002" },
         { "media", "cbr1-ha.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
+        { "gun_trigger", iris::s2x6::acjv::BTN_LEFT },
+        { "gun_pedal", iris::s2x6::acjv::BTN_3 },
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_CLASSIC },
+        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT }
     }},
     { "taiko7", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_256 },
@@ -624,7 +647,12 @@ const toml::table g_arcade_definitions = toml::table {
         { "bios", "r27v1602f.8g" },
         { "dongle", "tsf1002-na-a.ic002" },
         { "media", "tsf1-ha.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
+        { "gun_trigger", iris::s2x6::acjv::BTN_LEFT },
+        { "gun_pedal", iris::s2x6::acjv::BTN_3 },
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_SIDE_SWITCH },
+        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT }
     }},
     { "timecrs4j", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_SUPER_256 },
@@ -634,6 +662,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "bios", "r27v1602f.8g" },
         { "dongle", "tsf1001-na-a.ic002" },
         { "media", "tsf1-ha.chd" },
-        { "media_type", iris::s2x6::acata::MEDIA_HDD }
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "jvs_mode", iris::s2x6::acjv::MODE_LIGHTGUN },
+        { "gun_trigger", iris::s2x6::acjv::BTN_LEFT },
+        { "gun_pedal", iris::s2x6::acjv::BTN_3 },
+        { "gun_board", iris::s2x6::acjv::GUN_BOARD_SIDE_SWITCH },
+        { "gun_sensor", iris::s2x6::acjv::BTN_RIGHT }
     }}
 };

@@ -371,6 +371,11 @@ struct ArcadeSource {
     int uart_device = s2x6::acuart::DEVICE_NONE;
     int jvs_mode = s2x6::acjv::MODE_DEFAULT;
     int wheel_style = s2x6::acjv::WHEEL_STANDARD;
+    int gun_trigger = s2x6::acjv::GUN_DEFAULT_TRIGGER;
+    int gun_pedal = s2x6::acjv::GUN_DEFAULT_PEDAL;
+    int gun_board = s2x6::acjv::GUN_BOARD_CLASSIC;
+    int gun_sensor = 0;
+    int gun_sensor_active_high = 0;
     int ioboard_mode = 0;
 
     ArcadeFileNames names;
@@ -408,6 +413,11 @@ static void load_arcade_definition(ArcadeSource* source) {
     source->uart_device = query_arcade_value<int>(source->id, "uart_device").value_or(s2x6::acuart::DEVICE_NONE);
     source->jvs_mode = query_arcade_value<int>(source->id, "jvs_mode").value_or(s2x6::acjv::MODE_DEFAULT);
     source->wheel_style = query_arcade_value<int>(source->id, "wheel_style").value_or(s2x6::acjv::WHEEL_STANDARD);
+    source->gun_trigger = query_arcade_value<int>(source->id, "gun_trigger").value_or(s2x6::acjv::GUN_DEFAULT_TRIGGER);
+    source->gun_pedal = query_arcade_value<int>(source->id, "gun_pedal").value_or(s2x6::acjv::GUN_DEFAULT_PEDAL);
+    source->gun_board = query_arcade_value<int>(source->id, "gun_board").value_or(s2x6::acjv::GUN_BOARD_CLASSIC);
+    source->gun_sensor = query_arcade_value<int>(source->id, "gun_sensor").value_or(0);
+    source->gun_sensor_active_high = query_arcade_value<int>(source->id, "gun_sensor_active_high").value_or(0);
     source->ioboard_mode = query_arcade_value<int>(source->id, "ioboard_mode").value_or(0);
     source->bootprog = query_arcade_value<std::string>(source->id, "bootprog").value_or("");
     source->names = arcade_file_names(source->id);
@@ -948,11 +958,6 @@ static std::filesystem::path prepare_dongle(Instance* iris, std::filesystem::pat
     return card;
 }
 
-// EELOAD reaches the boot path long before anything registers a memory card
-// driver on the IOP, so "mc0:" is a dead device at that point. The dongle is a
-// plain PS2 memory card image though, so we can unpack it ourselves and let the
-// IOP HLE serve "mc0:" out of a host directory, the same way it serves "host:".
-// That covers the boot program and every module it goes on to load off the card
 static bool unpack_dongle(Instance* iris, const std::filesystem::path& path,
     const std::filesystem::path& out, const std::string& bootprog) {
     fs::blk::Device* dev = fs::blk::open_file(iris->logger, path.string().c_str());
@@ -1158,17 +1163,12 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
             s2x6::acjv::set_mode(iris->ps2->s2x6_acjv, source.jvs_mode, source.wheel_style);
 
+            s2x6::acjv::set_gun_buttons(iris->ps2->s2x6_acjv, source.gun_trigger, source.gun_pedal);
+            s2x6::acjv::set_gun_board(iris->ps2->s2x6_acjv, source.gun_board, source.gun_sensor, source.gun_sensor_active_high);
+
             if (dongle_boot) {
                 std::filesystem::path program = dongle_files / source.bootprog;
 
-                // EELOAD picks the boot path apart before any memory card
-                // driver exists, and derails outright on an "mc0:" it can't
-                // reach, so the boot program goes in through "host:" instead.
-                //
-                // The maps have to outlive the boot. The boot program pulls the
-                // arcade IOP modules off "mc0:" as it comes up, long before a
-                // real driver shows up, and some of them reboot the IOP with an
-                // image they ask for on a devkit's "host0:"
                 ps2::iop_map_device(iris->ps2, "mc0", dongle_files.string().c_str());
                 ps2::iop_map_device(iris->ps2, "host", dongle_files.string().c_str());
                 ps2::iop_map_device(iris->ps2, "host0", dongle_files.string().c_str());
@@ -1179,8 +1179,6 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
                 ps2::boot_file(iris->ps2, ("host:  " + program.string()).c_str());
 
-                // The boot program has to believe it came off the dongle.
-                // boot_file() resets the machine, so this goes after it
                 std::string dongle_arg = "mc0:" + source.bootprog;
 
                 const char* boot_args[] = { dongle_arg.c_str(), "DANGLE" };
@@ -1232,11 +1230,8 @@ bool load_arcade(Instance* iris, std::string path) {
 
     int system = source->system;
 
-    // System 246/256 has to run the bootrom before it can hand over to the
-    // game, which takes long enough to freeze the window
     if (system == ps2::NAMCO_SYSTEM_246 || system == ps2::NAMCO_SYSTEM_256 ||
         system == ps2::NAMCO_SYSTEM_SUPER_256) {
-        // Notifications touch the UI, so this can't wait for the thread
         const char* missing = find_missing_arcade_file(iris, *source);
 
         if (missing) {

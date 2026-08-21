@@ -409,6 +409,9 @@ static inline void update_vertex_buffer(Instance* iris, VkCommandBuffer command_
     rect.x = display.x + ((display.w / 2) - (rect.w / 2));
     rect.y = display.y + ((display.h / 2) - (rect.h / 2));
 
+    iris->render_x = rect.x;
+    iris->render_y = rect.y;
+
     float x0 = (rect.x / ((float)size.w / 2.0f)) - 1.0f;
     float y0 = (rect.y / ((float)size.h / 2.0f)) - 1.0f;
     float x1 = ((rect.x + rect.w) / ((float)size.w / 2.0f)) - 1.0f;

@@ -9,6 +9,8 @@ static void set16(uint8_t* frame, int offset, uint16_t value);
 
 static void fca_event(void* udata, int overshoot);
 
+static void update_gun_sensor(Acjv* acjv, int player);
+
 static void schedule_fca(Acjv* acjv) {
     scheduler::Event event;
 
@@ -72,7 +74,7 @@ Acjv* create(logger::Logger* logger, scheduler::Scheduler* sched) {
     acjv->sched = sched;
 
     acjv->dip_switches = DIP_DEFAULT;
-    acjv->board_id = "namco ltd.;RAYS PCB;";
+    acjv->board_id = BOARD_ID_RAYS;
 
     schedule_fca(acjv);
 
@@ -126,11 +128,213 @@ void set_axis(Acjv* acjv, int axis, float value) {
     acjv->axis[axis] = value;
 }
 
+void set_gun_position(Acjv* acjv, int player, float x, float y) {
+    if (player < 0 || player >= PLAYER_COUNT)
+        return;
+
+    acjv->gun[player].x = x;
+    acjv->gun[player].y = y;
+    acjv->gun[player].aimed_away = 0;
+
+    update_gun_sensor(acjv, player);
+}
+
+void set_gun_off_screen(Acjv* acjv, int player) {
+    if (player < 0 || player >= PLAYER_COUNT)
+        return;
+
+    acjv->gun[player].aimed_away = 1;
+
+    update_gun_sensor(acjv, player);
+}
+
+void set_gun_board(Acjv* acjv, int board, uint16_t sensor, int sensor_active_high) {
+    acjv->gun_board = board;
+    acjv->gun_sensor = sensor;
+    acjv->gun_sensor_active_high = sensor_active_high;
+
+    switch (board) {
+        case GUN_BOARD_TWO_TIER: acjv->board_id = BOARD_ID_MIU; break;
+        case GUN_BOARD_CAMERA: acjv->board_id = BOARD_ID_TSS; break;
+
+        default: acjv->board_id = BOARD_ID_RAYS; break;
+    }
+}
+
+void set_gun_buttons(Acjv* acjv, uint16_t trigger, uint16_t pedal) {
+    acjv->gun_trigger = trigger;
+    acjv->gun_pedal = pedal;
+}
+
+void set_gun_trigger(Acjv* acjv, int player, int pressed) {
+    if (!acjv->gun_trigger)
+        return;
+
+    if (pressed) {
+        press_switch(acjv, player, acjv->gun_trigger);
+    } else {
+        release_switch(acjv, player, acjv->gun_trigger);
+    }
+}
+
+void set_gun_pedal(Acjv* acjv, int player, int pressed) {
+    if (!acjv->gun_pedal)
+        return;
+
+    if (pressed) {
+        press_switch(acjv, player, acjv->gun_pedal);
+    } else {
+        release_switch(acjv, player, acjv->gun_pedal);
+    }
+}
+
 static float clamp_axis(float value, float low, float high) {
     if (value < low) return low;
     if (value > high) return high;
 
     return value;
+}
+
+static uint16_t to_signed_position(float value) {
+    if (value > 32767.0f)
+        value = 32767.0f;
+
+    if (value < -32767.0f)
+        value = -32767.0f;
+
+    return (uint16_t)(int16_t)value;
+}
+
+static void read_gun_classic(const Gun* gun, uint16_t* x, uint16_t* y) {
+    int on_screen = gun->x >= 0.0f && gun->y >= 0.0f &&
+                    gun->x < 1.0f - GUN_EDGE_MARGIN &&
+                    gun->y < 1.0f - GUN_EDGE_MARGIN;
+
+    if (!on_screen) {
+        *x = GUN_OFF_SCREEN;
+        *y = GUN_OFF_SCREEN;
+
+        return;
+    }
+
+    *x = (uint16_t)(gun->x * GUN_RANGE);
+    *y = (uint16_t)((1.0f - gun->y) * GUN_RANGE);
+
+    if (*x == GUN_OFF_SCREEN)
+        *x = 1;
+
+    if (*y == GUN_OFF_SCREEN)
+        *y = 1;
+}
+
+static void read_gun_two_tier(const Gun* gun, uint16_t* x, uint16_t* y) {
+    float overshoot = 0.0f;
+
+    if (-gun->x > overshoot) overshoot = -gun->x;
+    if (gun->x - 1.0f > overshoot) overshoot = gun->x - 1.0f;
+    if (-gun->y > overshoot) overshoot = -gun->y;
+    if (gun->y - 1.0f > overshoot) overshoot = gun->y - 1.0f;
+
+    if (overshoot > GUN_TWO_TIER_LOST) {
+        *x = GUN_LOST;
+        *y = GUN_LOST;
+
+        return;
+    }
+
+    *x = to_signed_position(gun->x * GUN_TWO_TIER_WIDTH);
+    *y = to_signed_position((1.0f - gun->y) * GUN_TWO_TIER_HEIGHT);
+}
+
+static void read_gun_side_switch(const Gun* gun, uint16_t* x, uint16_t* y) {
+    float across = clamp_axis(gun->x, 0.0f, 1.0f);
+    float down = clamp_axis(gun->y, 0.0f, 1.0f);
+
+    *x = (uint16_t)((1.0f - across) * GUN_RANGE);
+    *y = (uint16_t)(down * GUN_RANGE);
+}
+
+static void read_gun_camera(const Gun* gun, uint16_t* x, uint16_t* y) {
+    float across = 0.5f + (gun->x - 0.5f) * GUN_CAMERA_VISIBLE_X;
+    float down = 0.5f + (0.5f - gun->y) * GUN_CAMERA_VISIBLE_Y;
+
+    int in_aim_area = gun->x >= GUN_EDGE_MARGIN && gun->x <= 1.0f - GUN_EDGE_MARGIN &&
+                      gun->y >= GUN_EDGE_MARGIN && gun->y <= 1.0f - GUN_EDGE_MARGIN;
+
+    if (!in_aim_area || across < 0.0f || across > 1.0f || down < 0.0f || down > 1.0f) {
+        *x = GUN_LOST;
+        *y = GUN_LOST;
+
+        return;
+    }
+
+    *x = (uint16_t)clamp_axis(across * GUN_RANGE, 1.0f, GUN_RANGE - 1.0f);
+    *y = (uint16_t)clamp_axis(down * GUN_RANGE, 1.0f, GUN_RANGE - 1.0f);
+
+    if (*x == GUN_CAMERA_SAMPLER_GAP)
+        *x = GUN_CAMERA_SAMPLER_GAP - 1;
+
+    if (*y == GUN_CAMERA_SAMPLER_GAP)
+        *y = GUN_CAMERA_SAMPLER_GAP - 1;
+}
+
+static int gun_is_on_screen(const Gun* gun) {
+    return !gun->aimed_away &&
+           gun->x >= 0.0f && gun->x <= 1.0f &&
+           gun->y >= 0.0f && gun->y <= 1.0f;
+}
+
+static void read_gun(Acjv* acjv, int player, uint16_t* x, uint16_t* y) {
+    *x = GUN_OFF_SCREEN;
+    *y = GUN_OFF_SCREEN;
+
+    if (player < 0 || player >= PLAYER_COUNT)
+        return;
+
+    const Gun* gun = &acjv->gun[player];
+
+    if (gun->aimed_away) {
+        int sentinel = acjv->gun_board == GUN_BOARD_TWO_TIER ||
+                       acjv->gun_board == GUN_BOARD_CAMERA;
+
+        if (sentinel) {
+            *x = GUN_LOST;
+            *y = GUN_LOST;
+        }
+
+        return;
+    }
+
+    switch (acjv->gun_board) {
+        case GUN_BOARD_TWO_TIER: read_gun_two_tier(gun, x, y); break;
+        case GUN_BOARD_CAMERA: read_gun_camera(gun, x, y); break;
+
+        default: read_gun_classic(gun, x, y); break;
+    }
+}
+
+static void read_gun_analog(Acjv* acjv, int player, uint16_t* x, uint16_t* y) {
+    *x = GUN_OFF_SCREEN;
+    *y = GUN_OFF_SCREEN;
+
+    if (player < 0 || player >= PLAYER_COUNT || acjv->gun[player].aimed_away)
+        return;
+
+    read_gun_side_switch(&acjv->gun[player], x, y);
+}
+
+static void update_gun_sensor(Acjv* acjv, int player) {
+    if (!acjv->gun_sensor)
+        return;
+
+    int on_screen = gun_is_on_screen(&acjv->gun[player]);
+    int pressed = acjv->gun_sensor_active_high ? on_screen : !on_screen;
+
+    if (pressed) {
+        press_switch(acjv, player, acjv->gun_sensor);
+    } else {
+        release_switch(acjv, player, acjv->gun_sensor);
+    }
 }
 
 static void read_wheel(Acjv* acjv, uint16_t* channels) {
@@ -259,6 +463,23 @@ static void handle_jvs_packet(Acjv* acjv, const uint8_t* packet, uint8_t* out) {
                     report(&reply, 0);
                 }
 
+                if (acjv->mode == MODE_LIGHTGUN) {
+                    report(&reply, FEATURE_SCREEN_POSITION);
+                    report(&reply, GUN_BITS);
+                    report(&reply, GUN_BITS);
+                    report(&reply, PLAYER_COUNT);
+
+                    report(&reply, FEATURE_GENERAL_OUTPUT);
+                    report(&reply, GENERAL_OUTPUT_SLOTS);
+                    report(&reply, 0);
+                    report(&reply, 0);
+
+                    report(&reply, FEATURE_ANALOG_INPUT);
+                    report(&reply, GUN_ANALOG_CHANNELS);
+                    report(&reply, GUN_BITS);
+                    report(&reply, 0);
+                }
+
                 report(&reply, FEATURE_END);
             } break;
 
@@ -325,19 +546,54 @@ static void handle_jvs_packet(Acjv* acjv, const uint8_t* packet, uint8_t* out) {
 
                 remaining--;
 
-                uint16_t wheel[WHEEL_CHANNELS] = {};
+                uint16_t value[WHEEL_CHANNELS] = {};
+                int driven = 0;
 
-                if (acjv->mode == MODE_DRIVE)
-                    read_wheel(acjv, wheel);
+                if (acjv->mode == MODE_DRIVE) {
+                    read_wheel(acjv, value);
+
+                    driven = WHEEL_CHANNELS;
+                }
+
+                if (acjv->mode == MODE_LIGHTGUN) {
+                    read_gun_analog(acjv, 0, &value[0], &value[1]);
+
+                    driven = GUN_ANALOG_CHANNELS;
+                }
 
                 report(&reply, JVS_REPORT_OK);
 
                 for (int i = 0; i < channels; i++) {
-                    uint16_t value = i < WHEEL_CHANNELS ? wheel[i] : WHEEL_CENTER;
+                    uint16_t channel = i < driven ? value[i] : WHEEL_CENTER;
 
-                    report(&reply, value >> 8);
-                    report(&reply, value & 0xff);
+                    report(&reply, channel >> 8);
+                    report(&reply, channel & 0xff);
                 }
+            } break;
+
+            case JVS_READ_SCREEN_POSITION: {
+                int gun = *cursor++;
+
+                remaining--;
+
+                uint16_t x = GUN_OFF_SCREEN;
+                uint16_t y = GUN_OFF_SCREEN;
+
+                read_gun(acjv, gun - 1, &x, &y);
+
+                if (x != acjv->logged_gun_x || y != acjv->logged_gun_y) {
+                    acjv->logged_gun_x = x;
+                    acjv->logged_gun_y = y;
+
+                    // iris_debug(acjv, "Gun {} aim {:.3f},{:.3f} reported {:04x},{:04x}",
+                    //     gun, acjv->gun[0].x, acjv->gun[0].y, x, y);
+                }
+
+                report(&reply, JVS_REPORT_OK);
+                report(&reply, x >> 8);
+                report(&reply, x & 0xff);
+                report(&reply, y >> 8);
+                report(&reply, y & 0xff);
             } break;
 
             case JVS_INCREASE_COINS:

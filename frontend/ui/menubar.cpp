@@ -169,7 +169,7 @@ static void show_iris_menu(Instance* iris) {
                 open_arcade_path(iris, f.result().size() ? f.result().at(0) : "");
             }
 
-            if (menu::item(ICON_MS_DESCRIPTION " Manifest...")) {
+            if (menu::item(ICON_MS_DESCRIPTION " acgame...")) {
                 audio::mute(iris);
 
                 auto f = pfd::open_file("Select an acgame (Arcade manifest) to load", "", {
@@ -189,7 +189,7 @@ static void show_iris_menu(Instance* iris) {
 
         menu::separator();
 
-        if (menu::item(iris->debug.pause ? ICON_MS_PLAY_ARROW " Run" : ICON_MS_PAUSE " Pause", "Space")) {
+        if (menu::item(iris->debug.pause ? ICON_MS_PLAY_ARROW " Run" : ICON_MS_PAUSE " Pause", "Space", false, !iris->ui.loading_file_active)) {
             iris->debug.pause = !iris->debug.pause;
         }
 

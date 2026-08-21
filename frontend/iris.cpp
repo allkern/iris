@@ -706,11 +706,76 @@ SDL_AppResult update(Instance* iris) {
     return SDL_APP_CONTINUE;
 }
 
+static bool is_input_event(SDL_Event* event) {
+    switch (event->type) {
+        case SDL_EVENT_KEY_DOWN:
+        case SDL_EVENT_KEY_UP:
+        case SDL_EVENT_MOUSE_MOTION:
+        case SDL_EVENT_MOUSE_WHEEL:
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP:
+        case SDL_EVENT_GAMEPAD_BUTTON_DOWN:
+        case SDL_EVENT_GAMEPAD_BUTTON_UP:
+        case SDL_EVENT_GAMEPAD_AXIS_MOTION: return true;
+    }
+
+    return false;
+}
+
+static bool guest_owns_pointer(Instance* iris) {
+    if (iris->input.usb_devices[0] == usb::USB_DEVICE_MOUSE ||
+        iris->input.usb_devices[1] == usb::USB_DEVICE_MOUSE)
+        return true;
+
+    if (iris->ps2 && iris->ps2->s2x6_acjv &&
+        iris->ps2->s2x6_acjv->mode == s2x6::acjv::MODE_LIGHTGUN)
+        return true;
+
+    return false;
+}
+
+static void handle_lightgun_event(Instance* iris, SDL_Event* event) {
+    s2x6::acjv::Acjv* acjv = iris->ps2 ? iris->ps2->s2x6_acjv : nullptr;
+
+    if (!acjv || acjv->mode != s2x6::acjv::MODE_LIGHTGUN)
+        return;
+
+    switch (event->type) {
+        case SDL_EVENT_MOUSE_MOTION: {
+            if (!iris->render_width || !iris->render_height)
+                return;
+
+            s2x6::acjv::set_gun_position(acjv, 0,
+                (event->motion.x - iris->render_x) / (float)iris->render_width,
+                (event->motion.y - iris->render_y) / (float)iris->render_height);
+        } break;
+
+        case SDL_EVENT_WINDOW_MOUSE_LEAVE: {
+            s2x6::acjv::set_gun_off_screen(acjv, 0);
+        } break;
+
+        case SDL_EVENT_MOUSE_BUTTON_DOWN:
+        case SDL_EVENT_MOUSE_BUTTON_UP: {
+            int pressed = event->type == SDL_EVENT_MOUSE_BUTTON_DOWN;
+
+            if (event->button.button == SDL_BUTTON_LEFT)
+                s2x6::acjv::set_gun_trigger(acjv, 0, pressed);
+
+            if (event->button.button == SDL_BUTTON_RIGHT)
+                s2x6::acjv::set_gun_pedal(acjv, 0, pressed);
+        } break;
+    }
+}
+
 SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
     bool skip_events = iris->ui.dim_active && (event->window.windowID == SDL_GetWindowID(iris->window));
 
     if (!skip_events) {
         ImGui_ImplSDL3_ProcessEvent(event);
+    }
+
+    if (iris->ui.loading_file_active && is_input_event(event)) {
+        return SDL_APP_CONTINUE;
     }
 
     const bool window_focused = SDL_GetWindowFlags(iris->window) & SDL_WINDOW_INPUT_FOCUS;
@@ -720,6 +785,10 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
         if (event->key.scancode <= 0xE7) {
             usb::kbd_key(iris->ps2->usb, (uint8_t)event->key.scancode, event->type == SDL_EVENT_KEY_DOWN);
         }
+    }
+
+    if (window_focused && !ImGui::GetIO().WantCaptureMouse) {
+        handle_lightgun_event(iris, event);
     }
 
     if (iris->ps2 && iris->ps2->usb && window_focused && !ImGui::GetIO().WantCaptureMouse) {
@@ -756,6 +825,10 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
 
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
             if (ImGui::GetIO().WantCaptureMouse) {
+                break;
+            }
+
+            if (guest_owns_pointer(iris)) {
                 break;
             }
 

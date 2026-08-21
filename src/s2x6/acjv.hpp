@@ -52,6 +52,7 @@ enum {
     JVS_READ_SWITCHES = 0x20,
     JVS_READ_COINS = 0x21,
     JVS_READ_ANALOG = 0x22,
+    JVS_READ_SCREEN_POSITION = 0x25,
     JVS_DECREASE_COINS = 0x30,
     JVS_GENERAL_OUTPUT = 0x32,
     JVS_INCREASE_COINS = 0x35,
@@ -69,10 +70,46 @@ enum {
 
 inline constexpr auto SWITCHES_PER_PLAYER = 16;
 
+inline constexpr auto GUN_BITS = 0x10;
+inline constexpr auto GUN_RANGE = 0xffff;
+inline constexpr auto GUN_OFF_SCREEN = 0x0000;
+inline constexpr auto GUN_ANALOG_CHANNELS = 2;
+inline constexpr auto GENERAL_OUTPUT_SLOTS = 0x10;
+
+inline constexpr auto GUN_DEFAULT_TRIGGER = 0x0001;
+inline constexpr auto GUN_DEFAULT_PEDAL = 0x8000;
+
+inline constexpr auto GUN_LOST = 0xffff;
+inline constexpr auto GUN_TWO_TIER_WIDTH = 640.0f;
+inline constexpr auto GUN_TWO_TIER_HEIGHT = 448.0f;
+inline constexpr auto GUN_TWO_TIER_LOST = 0.35f;
+inline constexpr auto GUN_EDGE_MARGIN = 0.01f;
+inline constexpr auto GUN_CAMERA_VISIBLE_X = 230.0f / 320.0f;
+inline constexpr auto GUN_CAMERA_VISIBLE_Y = 140.0f / 224.0f;
+inline constexpr auto GUN_CAMERA_SAMPLER_GAP = 0x7fff;
+
+inline constexpr auto BOARD_ID_RAYS = "namco ltd.;RAYS PCB;";
+inline constexpr auto BOARD_ID_MIU = "namco ltd.;MIU-I/O;Ver2.05;JPN,GUN-EXTENTION";
+inline constexpr auto BOARD_ID_TSS = "namco ltd.;TSS-I/O;Ver2.11;GUN-EXTENTION";
+
+enum {
+    GUN_BOARD_CLASSIC,
+    GUN_BOARD_TWO_TIER,
+    GUN_BOARD_SIDE_SWITCH,
+    GUN_BOARD_CAMERA
+};
+
+struct Gun {
+    float x;
+    float y;
+    int aimed_away;
+};
+
 enum {
     MODE_DEFAULT,
     MODE_DRIVE,
-    MODE_FCA
+    MODE_FCA,
+    MODE_LIGHTGUN
 };
 
 inline constexpr auto FCA_HEARTBEAT = 0x0e;
@@ -150,6 +187,16 @@ struct Acjv {
 
     uint16_t fca_counter;
 
+    Gun gun[PLAYER_COUNT];
+
+    uint16_t gun_trigger = GUN_DEFAULT_TRIGGER;
+    uint16_t gun_pedal = GUN_DEFAULT_PEDAL;
+    uint16_t gun_sensor = 0;
+    int gun_sensor_active_high = 0;
+    int gun_board = GUN_BOARD_CLASSIC;
+    uint16_t logged_gun_x = 0;
+    uint16_t logged_gun_y = 0;
+
     uint8_t seen_commands[256];
     uint8_t reported_bad_magic;
     int logged_frames;
@@ -173,6 +220,12 @@ void set_coin_switch(Acjv* acjv, int slot, int pressed);
 void set_test_switch(Acjv* acjv, int pressed);
 void set_mode(Acjv* acjv, int mode, int wheel_style);
 void set_axis(Acjv* acjv, int axis, float value);
+void set_gun_position(Acjv* acjv, int player, float x, float y);
+void set_gun_off_screen(Acjv* acjv, int player);
+void set_gun_buttons(Acjv* acjv, uint16_t trigger, uint16_t pedal);
+void set_gun_board(Acjv* acjv, int board, uint16_t sensor, int sensor_active_high);
+void set_gun_trigger(Acjv* acjv, int player, int pressed);
+void set_gun_pedal(Acjv* acjv, int player, int pressed);
 uint64_t read16(Acjv* acjv, uint32_t addr);
 void write16(Acjv* acjv, uint32_t addr, uint64_t data);
 }

@@ -326,6 +326,8 @@ struct Instance {
     unsigned int window_height = 720;
     unsigned int render_width = 640;
     unsigned int render_height = 480;
+    float render_x = 0.0f;
+    float render_y = 0.0f;
     unsigned int renderer_backend = gs::renderer::BACKEND_HARDWARE;
     gs::renderer::Renderer* renderer = nullptr;
     uint8_t mac_address[6] = { 0 };
