@@ -461,6 +461,8 @@ void destroy(Ps2* ps2) {
 }
 
 void set_system(Ps2* ps2, int system) {
+    ps2->system = system;
+
     int mechacon_model;
     ram::Size ee_ram_size, iop_ram_size;
 
@@ -471,6 +473,12 @@ void set_system(Ps2* ps2, int system) {
     speed::set_flash_enabled(ps2->speed, 0);
     iop::bus::set_usb_disabled(ps2->iop_bus, 0);
     iop::set_daemon_suppressed(ps2->iop, 0);
+
+    for (int i = 0; i < usb::OHCI_NUM_PORTS; i++) {
+        if (usb::get_port_device(ps2->usb, i) == usb::USB_DEVICE_P2IO) {
+            usb::set_port_device(ps2->usb, i, usb::USB_DEVICE_NONE);
+        }
+    }
 
     // Destroy optional hardware
     if (ps2->s14x_nand) { s14x::nand::destroy(ps2->s14x_nand); ps2->s14x_nand = NULL; }
@@ -505,6 +513,7 @@ void set_system(Ps2* ps2, int system) {
             set_system(ps2, ps2->rom0_info.system);
 
             ps2->detected_system = ps2->rom0_info.system;
+            ps2->system = AUTO;
 
             return;
         } break;
@@ -550,6 +559,13 @@ void set_system(Ps2* ps2, int system) {
             ee_ram_size = ram::Size::_32MB;
             iop_ram_size = ram::Size::_2MB;
             mechacon_model = cdvd::MECHACON_DRAGON;
+
+            // Python 2 is literally just a retail 50k model PS2
+            // with a USB IO board attached and a standard PS2 HDD
+            // connected through SPEED.
+            speed::set_smap_enabled(ps2->speed, 1);
+
+            usb::set_port_device(ps2->usb, 0, usb::USB_DEVICE_P2IO);
         } break;
 
         case NAMCO_SYSTEM_147:

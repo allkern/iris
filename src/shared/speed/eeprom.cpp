@@ -25,7 +25,13 @@ Eeprom* create(logger::Logger* logger) {
 }
 
 void init(Eeprom* eeprom) {
+    logger::Logger* logger = eeprom->logger;
+    size_t logger_id = eeprom->logger_id;
+
     new (eeprom) Eeprom();
+
+    eeprom->logger = logger;
+    eeprom->logger_id = logger_id;
 
     memcpy(eeprom->buf, default_data, 32 * sizeof(uint16_t));
 }

@@ -434,6 +434,7 @@ target_sources(iris PRIVATE
     src/shared/speed/smap.cpp
     src/shared/ata/raw.cpp
     src/shared/ata/isif.cpp
+    src/shared/ata/disc.cpp
     src/s14x/nand.cpp
     src/s14x/syscon.cpp
     src/s14x/sram.cpp
@@ -446,6 +447,9 @@ target_sources(iris PRIVATE
     src/s2x6/acram.cpp
     src/s2x6/accore.cpp
     src/s2x6/acuart.cpp
+    src/kp2/p2io.cpp
+    src/kp2/acio.cpp
+    src/kp2/thrilldrive.cpp
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp

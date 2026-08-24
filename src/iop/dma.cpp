@@ -90,7 +90,13 @@ void connect(Dma* dma, cdvd::Cdvd* cdvd, ee::dmac::Dmac* ee_dma, sio2::Sio2* sio
 void reset(Dma* dma) {
     auto hw = dma->hw;
 
+    logger::Logger* logger = dma->logger;
+    size_t logger_id = dma->logger_id;
+
     new (dma) Dma();
+
+    dma->logger = logger;
+    dma->logger_id = logger_id;
 
     dma->hw = hw;
 

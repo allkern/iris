@@ -611,6 +611,9 @@ struct Ee {
     int boot_argc;
     int boot_args_pending;
 
+    uint32_t deci2addr;
+    uint32_t deci2handler;
+
     uint32_t prev_pc;
     uint32_t pc;
     uint32_t next_pc;

@@ -3,6 +3,7 @@
 #include "shared/speed/ata.hpp"
 #include "shared/ata/isif.hpp"
 #include "shared/ata/raw.hpp"
+#include "shared/ata/disc.hpp"
 
 #include "iop/disc.hpp"
 

@@ -249,8 +249,75 @@ void poll_loop() {
     }
 }
 
+// Note: Ignore e-Amusement traffic. The servers are dead now, and
+//       TD3 will fail to boot if it tries to connect but doesn't get
+//       a response back
+inline constexpr auto EAMUSE_UPDATE_PORT = 42197;
+
+static const char* eamuse_hostname = "eamuse";
+
+static bool dns_query_matches_eamuse(const uint8_t* dns, int len) {
+    if (len < 13)
+        return false;
+
+    int offset = 12;
+
+    while (offset < len) {
+        int label = dns[offset];
+
+        if (label == 0)
+            return false;
+
+        if (label > 63 || offset + 1 + label > len)
+            return false;
+
+        if (label == 6 && memcmp(dns + offset + 1, eamuse_hostname, 6) == 0)
+            return true;
+
+        offset += 1 + label;
+    }
+
+    return false;
+}
+
+static bool is_eamuse_traffic(const uint8_t* buf, int len) {
+    if (len < 34)
+        return false;
+
+    if (buf[12] != 0x08 || buf[13] != 0x00)
+        return false;
+
+    const uint8_t* ip = buf + 14;
+
+    if ((ip[0] >> 4) != 4)
+        return false;
+
+    int header_size = (ip[0] & 0x0f) * 4;
+
+    if (header_size < 20 || 14 + header_size + 4 > len)
+        return false;
+
+    const uint8_t* payload = ip + header_size;
+
+    int payload_size = len - (14 + header_size);
+    int protocol = ip[9];
+    int port = (payload[2] << 8) | payload[3];
+
+    // TCP for the update session, UDP for the service discovery broadcast
+    if ((protocol == 6 || protocol == 17) && port == EAMUSE_UPDATE_PORT)
+        return true;
+
+    if (protocol == 17 && port == 53 && payload_size > 8)
+        return dns_query_matches_eamuse(payload + 8, payload_size - 8);
+
+    return false;
+}
+
 void smap_tx(void* udata, const uint8_t* buf, int len) {
     (void)udata;
+
+    if (is_eamuse_traffic(buf, len))
+        return;
 
     std::lock_guard <std::mutex> lk(g->slirp_mtx);
 

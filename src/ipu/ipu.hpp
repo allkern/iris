@@ -264,6 +264,7 @@ struct Ipu
         bool can_read_FIFO();
         bool can_write_FIFO();
         uint128_t read_FIFO();
+        uint128_t peek_in_FIFO();
         void write_FIFO(uint128_t quad);
 };
 

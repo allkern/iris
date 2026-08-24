@@ -26,8 +26,6 @@
 #include "logger.hpp"
 #include "scheduler.hpp"
 
-// speed.hpp includes this header, so the parent stays a forward
-// declaration here and is included for real in the .cpp
 namespace iris::speed { struct Speed; }
 
 namespace iris::speed::ata {
@@ -38,6 +36,7 @@ inline constexpr auto NUM_HEADS = 16;
 inline constexpr auto SECTORS_PER_TRACK = 63;
 
 inline constexpr auto ATAPI_DVD_SECTOR_SIZE = 2048;
+inline constexpr auto SCE_SECURITY_DATA_SIZE = 0x80;
 
 inline constexpr auto STAT_ERR = 0x01;
 inline constexpr auto STAT_INDEX = 0x02;
@@ -361,6 +360,7 @@ struct Ata {
 Ata* create(logger::Logger* logger);
 void init(Ata* ata, Speed* speed, scheduler::Scheduler* sched);
 int load(Ata* ata, const char* path);
+int load_security_data(Ata* ata, const char* path);
 void destroy(Ata* ata);
 uint64_t read16(Ata* ata, uint32_t addr);
 uint64_t read32(Ata* ata, uint32_t addr);

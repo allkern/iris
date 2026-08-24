@@ -7,6 +7,7 @@
 #include <toml++/toml.hpp>
 
 #include "ps2.hpp"
+#include "kp2/p2io.hpp"
 
 namespace iris::arcade {
 
@@ -1022,5 +1023,23 @@ const toml::table g_arcade_definitions = toml::table {
         { "media_crc", 0x35a573ea },
         { "media_sha1", "2ace0c7745373a88d6d5e9a2b8cc3d7daf0cbd3f" },
         { "media_size", 40060403712ll }
+    }},
+
+    // Konami Python 2
+    { "thrild3j", toml::table {
+        { "system", iris::ps2::KONAMI_PYTHON2 },
+        { "name", "Thrill Drive 3 (D44:J:A:A:20050316)" },
+        { "bios", "ps2-0190j-20030822.bin" },
+        { "media", toml::array { "d44_jab_20050316.chd", "d44_jab_20050316.img" } },
+        { "media_type", iris::s2x6::acata::MEDIA_HDD },
+        { "hdd_id", toml::array { "ps2_hdd_id", "ps2_hdd_id.bin" } },
+        { "nvram", toml::array { "ps2_nvram", "ps2_nvram.bin" } },
+        { "dongle_black", "ds2430_black_gmd44jaa.bin" },
+        { "input_type", iris::kp2::p2io::INPUT_THRILL_DRIVE },
+        { "media_sha1", "5b704e1f43c51f9f85bc056c87d4682a640dca9d" },
+        { "hdd_id_crc", 0x35b17061 },
+        { "nvram_crc", 0xaa83752f },
+        { "dongle_black_crc", 0x159f9d8a },
+        { "dongle_black_sha1", "95537df111f67478100b10e6095391846a3a71a0" }
     }}
 };

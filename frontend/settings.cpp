@@ -4,6 +4,7 @@
 #include "ps2_elf.hpp"
 #include "ps2_iso9660.hpp"
 #include "ps2.hpp"
+#include "kp2/p2io.hpp"
 
 #define TOML_EXCEPTIONS 0
 #include <toml++/toml.hpp>
@@ -87,6 +88,9 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->paths.hdd_path = paths["hdd_path"].value_or("");
     iris->paths.auto_paths = paths["auto"].value_or(true);
     iris->paths.log_path = paths["log_path"].value_or("");
+    iris->paths.hdd_id_path = paths["hdd_id_path"].value_or("");
+    iris->paths.dongle_black_path = paths["dongle_black_path"].value_or("");
+    iris->paths.dongle_white_path = paths["dongle_white_path"].value_or("");
 
     if (iris->paths.log_path.empty())
         iris->paths.log_path = iris->paths.pref_path + "iris.log";
@@ -193,6 +197,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->autostart = system["autostart"].value_or(true);
     iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
     iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(false);
+    iris->p2io_input_type = system["p2io_input_type"].value_or(kp2::p2io::INPUT_THRILL_DRIVE);
 
     toml::array* mac_array = system["mac_address"].as_array();
 
@@ -310,6 +315,13 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     return parse_mappings_file(iris);
 }
 
+void apply_p2io(Instance* iris) {
+    usb::p2io_set_input_type(iris->ps2->usb, iris->p2io_input_type);
+
+    usb::p2io_set_dongle(iris->ps2->usb, kp2::p2io::DONGLE_BLACK, iris->paths.dongle_black_path.c_str());
+    usb::p2io_set_dongle(iris->ps2->usb, kp2::p2io::DONGLE_WHITE, iris->paths.dongle_white_path.c_str());
+}
+
 void apply_device_maps(Instance* iris) {
     ps2::iop_clear_device_maps(iris->ps2);
 
@@ -361,6 +373,7 @@ bool init(Instance* iris) {
 
     speed::load_flash(iris->ps2->speed, iris->paths.flash_path.c_str());
     speed::load_hdd(iris->ps2->speed, iris->paths.hdd_path.c_str());
+    speed::load_hdd_id(iris->ps2->speed, iris->paths.hdd_id_path.c_str());
     speed::set_mac_address(iris->ps2->speed, iris->mac_address);
 
     slirp::start(iris->ps2->speed->smap, iris->slirp_config, &iris->log.slirp);
@@ -369,8 +382,13 @@ bool init(Instance* iris) {
         if (iris->input.usb_msd_paths[i].size())
             usb::msd_set_image(iris->ps2->usb, i, iris->input.usb_msd_paths[i].c_str());
 
+        if (usb::get_port_device(iris->ps2->usb, i) == usb::USB_DEVICE_P2IO)
+            continue;
+
         usb::set_port_device(iris->ps2->usb, i, iris->input.usb_devices[i]);
     }
+
+    apply_p2io(iris);
 
     emu::clean_arcade_files(iris);
 
@@ -404,7 +422,8 @@ void save(Instance* iris) {
             } },
             { "autostart", iris->autostart },
             { "cache_arcade_files", iris->cache_arcade_files },
-            { "arcade_dongle_boot", iris->arcade_dongle_boot }
+            { "arcade_dongle_boot", iris->arcade_dongle_boot },
+            { "p2io_input_type", iris->p2io_input_type }
         } },
         { "network", toml::table {
             { "enabled", iris->slirp_config.enabled },
@@ -528,6 +547,9 @@ void save(Instance* iris) {
             { "gcdb_path", iris->paths.gcdb_path },
             { "hdd_path", iris->paths.hdd_path },
             { "log_path", iris->paths.log_path },
+            { "hdd_id_path", iris->paths.hdd_id_path },
+            { "dongle_black_path", iris->paths.dongle_black_path },
+            { "dongle_white_path", iris->paths.dongle_white_path },
             { "auto", iris->paths.auto_paths }
         } },
         { "host", toml::table {

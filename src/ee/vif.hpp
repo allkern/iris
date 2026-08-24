@@ -20,6 +20,13 @@ enum {
     VIF_RECV_DATA
 };
 
+inline constexpr auto ERR_MII = 0x1;
+inline constexpr auto STAT_VIS = 1 << 10;
+inline constexpr auto STAT_FDR = 1 << 23;
+inline constexpr auto VIF0_FIFO_BASE = 0x10004000;
+inline constexpr auto VIF1_FIFO_BASE = 0x10005000;
+inline constexpr auto STAT_INT = 1 << 11;
+
 inline constexpr auto CMD_NOP = 0x00;
 inline constexpr auto CMD_STCYCL = 0x01;
 inline constexpr auto CMD_OFFSET = 0x02;

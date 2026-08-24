@@ -7,6 +7,7 @@
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
 #include "ps2.hpp"
+#include "kp2/p2io.hpp"
 
 constexpr unsigned char g_gamecontrollerdb_data[] = {
 #embed "../deps/SDL_GameControllerDB/gamecontrollerdb.txt"
@@ -255,6 +256,88 @@ static uint16_t s2x6_switch(InputAction action) {
     }
 }
 
+static uint32_t p2io_switch(InputAction action, int slot) {
+    if (slot == 0) {
+        switch (action) {
+            case IRIS_DS_BT_START: return kp2::p2io::JAMMA_P1_START;
+            case IRIS_DS_BT_UP: return kp2::p2io::JAMMA_P1_UP;
+            case IRIS_DS_BT_DOWN: return kp2::p2io::JAMMA_P1_DOWN;
+            case IRIS_DS_BT_LEFT: return kp2::p2io::JAMMA_P1_LEFT;
+            case IRIS_DS_BT_RIGHT: return kp2::p2io::JAMMA_P1_RIGHT;
+            case IRIS_DS_BT_SQUARE: return kp2::p2io::JAMMA_P1_BUTTON1;
+            case IRIS_DS_BT_TRIANGLE: return kp2::p2io::JAMMA_P1_BUTTON2;
+            case IRIS_DS_BT_CIRCLE: return kp2::p2io::JAMMA_P1_BUTTON3;
+            default: return 0;
+        }
+    }
+
+    switch (action) {
+        case IRIS_DS_BT_START: return kp2::p2io::JAMMA_P2_START;
+        case IRIS_DS_BT_UP: return kp2::p2io::JAMMA_P2_UP;
+        case IRIS_DS_BT_DOWN: return kp2::p2io::JAMMA_P2_DOWN;
+        case IRIS_DS_BT_LEFT: return kp2::p2io::JAMMA_P2_LEFT;
+        case IRIS_DS_BT_RIGHT: return kp2::p2io::JAMMA_P2_RIGHT;
+        case IRIS_DS_BT_SQUARE: return kp2::p2io::JAMMA_P2_BUTTON1;
+        case IRIS_DS_BT_TRIANGLE: return kp2::p2io::JAMMA_P2_BUTTON2;
+        case IRIS_DS_BT_CIRCLE: return kp2::p2io::JAMMA_P2_BUTTON3;
+        default: return 0;
+    }
+}
+
+static bool handle_p2io_action(Instance* iris, InputAction action, int slot, float value) {
+    if (!iris->ps2->usb)
+        return false;
+
+    if (usb::get_port_device(iris->ps2->usb, 0) != usb::USB_DEVICE_P2IO)
+        return false;
+
+    kp2::p2io::P2io* p2io = kp2::p2io::from_device(&iris->ps2->usb->device[0]);
+
+    if (!p2io)
+        return false;
+
+    bool pressed = value > 0.5f;
+
+    switch (action) {
+        case IRIS_DS_AX_LEFTH_NEG: kp2::p2io::set_axis(p2io, kp2::p2io::AXIS_STEER_LEFT, value); return true;
+        case IRIS_DS_AX_LEFTH_POS: kp2::p2io::set_axis(p2io, kp2::p2io::AXIS_STEER_RIGHT, value); return true;
+        case IRIS_DS_BT_R2: kp2::p2io::set_axis(p2io, kp2::p2io::AXIS_GAS, value); return true;
+        case IRIS_DS_BT_L2: kp2::p2io::set_axis(p2io, kp2::p2io::AXIS_BRAKE, value); return true;
+        default: break;
+    }
+
+    uint32_t mask = 0;
+
+    switch (action) {
+        case IRIS_S2X6_SW_COIN1: mask = kp2::p2io::JAMMA_COIN1; break;
+        case IRIS_S2X6_SW_COIN2: mask = kp2::p2io::JAMMA_COIN2; break;
+        case IRIS_S2X6_SW_TEST: mask = kp2::p2io::JAMMA_TEST; break;
+        case IRIS_DS_BT_SELECT: mask = kp2::p2io::JAMMA_SERVICE; break;
+        default: mask = p2io_switch(action, slot); break;
+    }
+
+    if (!mask)
+        return false;
+
+    bool was_pressed = (p2io->jamma & mask) != 0;
+
+    if (pressed) {
+        kp2::p2io::press_switch(p2io, mask);
+    } else {
+        kp2::p2io::release_switch(p2io, mask);
+    }
+
+    if (pressed && !was_pressed) {
+        if (mask == kp2::p2io::JAMMA_COIN1)
+            kp2::p2io::insert_coin(p2io, 0);
+
+        if (mask == kp2::p2io::JAMMA_COIN2)
+            kp2::p2io::insert_coin(p2io, 1);
+    }
+
+    return true;
+}
+
 static bool handle_s2x6_action(Instance* iris, InputAction action, int slot, float value) {
     s2x6::acjv::Acjv* acjv = iris->ps2->s2x6_acjv;
 
@@ -293,6 +376,9 @@ static bool handle_s2x6_action(Instance* iris, InputAction action, int slot, flo
 }
 
 void execute_action(Instance* iris, InputAction action, int slot, float value) {
+    if (handle_p2io_action(iris, action, slot, value))
+        return;
+
     if (handle_s2x6_action(iris, action, slot, value))
         return;
 

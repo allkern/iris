@@ -32,7 +32,13 @@ void reset(Vif* vif) {
     auto hw = vif->hw;
     int id = vif->id;
 
+    logger::Logger* logger = vif->logger;
+    size_t logger_id = vif->logger_id;
+
     new (vif) Vif();
+
+    vif->logger = logger;
+    vif->logger_id = logger_id;
 
     vif->hw = hw;
     vif->id = id;
@@ -158,25 +164,65 @@ void vif1_send_irq(void* udata, int overshoot) {
     ee::intc::irq(vif->hw.intc, ee::intc::VIF1);
 }
 
+static const char* vif_get_cmd_name(uint8_t cmd) {
+    switch (cmd & 0x7f) {
+        case CMD_NOP: return "NOP";
+        case CMD_STCYCL: return "STCYCL";
+        case CMD_OFFSET: return "OFFSET";
+        case CMD_BASE: return "BASE";
+        case CMD_ITOP: return "ITOP";
+        case CMD_STMOD: return "STMOD";
+        case CMD_MSKPATH3: return "MSKPATH3";
+        case CMD_MARK: return "MARK";
+        case CMD_FLUSHE: return "FLUSHE";
+        case CMD_FLUSH: return "FLUSH";
+        case CMD_FLUSHA: return "FLUSHA";
+        case CMD_MSCAL: return "MSCAL";
+        case CMD_MSCALF: return "MSCALF";
+        case CMD_MSCNT: return "MSCNT";
+        case CMD_STMASK: return "STMASK";
+        case CMD_STROW: return "STROW";
+        case CMD_STCOL: return "STCOL";
+        case CMD_MPG: return "MPG";
+        case CMD_DIRECT: return "DIRECT";
+        case CMD_DIRECTHL: return "DIRECTHL";
+    }
+
+    if ((cmd & 0x60) == 0x60)
+        return "UNPACK";
+
+    return "?";
+}
+
+static inline bool vif_is_fifo(uint32_t addr) {
+    uint32_t page = addr & 0xfffff000;
+
+    return page == VIF0_FIFO_BASE || page == VIF1_FIFO_BASE;
+}
+
 static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
     if (vif->state == VIF_IDLE) {
         vif->cmd = (data >> 24) & 0xff;
 
+        // iris_info(vif, "vif{}: Received command {:02x}, irq={} raw={:08x} ({})", vif->id, vif->cmd, (vif->cmd & 0x80) != 0, data, vif_get_cmd_name(vif->cmd));
+
         int mark = vif->cmd == CMD_MARK;
 
-        if (vif->cmd & 0x80) {
+        if ((vif->cmd & 0x80) && !(vif->err & ERR_MII)) {
             ee::intc::irq(vif->hw.intc, vif->id ? ee::intc::VIF1 : ee::intc::VIF0);
 
             // iris_debug(vif, "vif{}: Requested IRQ command={:02x}", vif->id, vif->cmd);
 
             // Note: MARK commands trigger the IRQ but don't stall the VIF.
             if (!mark) {
-                vif->stat |= 0x00000c00;
-                // vif->stat ^= 0x0f000000;
+                vif->stat |= STAT_VIS | STAT_INT;
                 vif->code = data;
                 vif->dreq = 0;
             }
         }
+
+        // iris_info(vif, "vif{}: {} code={:08x} num={:02x} imm={:04x}",
+        //     vif->id, vif_get_cmd_name(vif->cmd), data, (data >> 16) & 0xff, data & 0xffff);
 
         switch ((data >> 24) & 0x7f) {
             case CMD_NOP: {
@@ -414,9 +460,8 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                 }
             } break;
             default: {
-                // iris_debug(vif, "vif{}: Unhandled command {:02x}", vif->id, vif->cmd);
-
-                // exit(1);
+                iris_warning(vif, "vif{}: Unhandled command {:02x} (code={:08x})",
+                    vif->id, vif->cmd & 0x7f, data);
             } break;
         }
     } else {
@@ -903,11 +948,10 @@ uint64_t read32(Vif* vif, uint32_t addr) {
         case 0x10003d60: return vif->c[2];
         case 0x10003d70: return vif->c[3];
 
-        // VIF FIFOs
-        case 0x10004000: // iris_fatal_error(vif, "vif{}: 32-bit FIFO read", vif->id); break;
-        case 0x10005000: // iris_fatal_error(vif, "vif{}: 32-bit FIFO read", vif->id); break;
-
         default: {
+            if (vif_is_fifo(addr))
+                break;
+
             iris_fatal_error(vif, "vif{}: Unhandled 32-bit read to {:08x}", vif->id, addr);
         } break;
     }
@@ -938,7 +982,8 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
         case 0x10003830: vif->stat &= ~0x40; break;
 
         // VIF1 registers
-        case 0x10003c00: vif->stat &= 0x800000; vif->stat |= data & 0x800000; break;
+        // Only FDR is writable, the rest of the status is owned by the VIF
+        case 0x10003c00: vif->stat = (vif->stat & ~STAT_FDR) | (data & STAT_FDR); break;
         case 0x10003c10: {
             vif->fbrst = data;
             vif->state = VIF_IDLE;
@@ -959,56 +1004,34 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
         case 0x10003c30: vif->stat &= ~0x40; break;
         case 0x10003c80: /* Unknown */ break;
 
-        // VIF FIFOs
-        case 0x10004000: vif_handle_fifo_write(vif, data); break;
-        case 0x10004010: vif_handle_fifo_write(vif, data); break;
-        case 0x10005000: vif_handle_fifo_write(vif, data); break;
-        case 0x10005010: vif_handle_fifo_write(vif, data); break;
-
         default: {
-            iris_debug(vif, "vif{}: Unhandled 32-bit write to {:08x}", vif->id, addr);
+            if (vif_is_fifo(addr)) {
+                vif_handle_fifo_write(vif, data);
 
-            // exit(1);
+                break;
+            }
+
+            iris_debug(vif, "vif{}: Unhandled 32-bit write to {:08x}", vif->id, addr);
         } break;
     }
 }
 
 uint128_t read128(Vif* vif, uint32_t addr) {
-    switch (addr) {
-        case 0x10004000: break; // iris_fatal_error(vif, "vif{}: 128-bit FIFO read", vif->id); break;
-        case 0x10005000: break; // iris_fatal_error(vif, "vif{}: 128-bit FIFO read", vif->id); break;
-
-        default: {
-            iris_fatal_error(vif, "vif{}: Unhandled 128-bit read to {:08x}", vif->id, addr);
-        } break;
-    }
+    if (!vif_is_fifo(addr))
+        iris_fatal_error(vif, "vif{}: Unhandled 128-bit read to {:08x}", vif->id, addr);
 
     return uint128_t{};
 }
 
 void write128(Vif* vif, uint32_t addr, uint128_t data) {
-    switch (addr) {
-        case 0x10004000:
-        case 0x10004010: {
-            vif_handle_fifo_write(vif, data.u32[0]);
-            vif_handle_fifo_write(vif, data.u32[1]);
-            vif_handle_fifo_write(vif, data.u32[2]);
-            vif_handle_fifo_write(vif, data.u32[3]);
-        } break;
+    if (!vif_is_fifo(addr)) {
+        iris_debug(vif, "vif{}: Unhandled 128-bit write to {:08x}", vif->id, addr);
 
-        case 0x10005000:
-        case 0x10005010: {
-            vif_handle_fifo_write(vif, data.u32[0]);
-            vif_handle_fifo_write(vif, data.u32[1]);
-            vif_handle_fifo_write(vif, data.u32[2]);
-            vif_handle_fifo_write(vif, data.u32[3]);
-        } break;
+        return;
+    }
 
-        default: {
-            // iris_debug(vif, "vif{}: Unhandled 128-bit write to {:08x}", vif->id, addr);
-
-            // exit(1);
-        } break;
+    for (int i = 0; i < 4; i++) {
+        vif_handle_fifo_write(vif, data.u32[i]);
     }
 }
 

@@ -64,14 +64,19 @@ void connect(Dmac* dmac, gif::Gif* gif, vif::Vif* vif0, vif::Vif* vif1, ipu::Ipu
     dmac->hw.iop_dma = iop_dma;
     dmac->hw.ee = ee;
 
-    // The scratchpad belongs to the EE and only exists once it is initialised
     dmac->hw.spr = ee::get_spr(ee);
 }
 
 void reset(Dmac* dmac) {
     auto hw = dmac->hw;
 
+    logger::Logger* logger = dmac->logger;
+    size_t logger_id = dmac->logger_id;
+
     new (dmac) Dmac();
+
+    dmac->logger = logger;
+    dmac->logger_id = logger_id;
 
     dmac->hw = hw;
 
@@ -407,133 +412,121 @@ void handle_vif0_transfer(Dmac* dmac) {
     }
 }
 
-void mfifo_handle_ref_tag(Dmac* dmac) {
-    Channel* c = dmac->mfifo_drain;
+inline constexpr auto MFIFO_STEP_LIMIT = 0x10000;
 
-    while (c->qwc) {
-        uint128_t q = read_qword(dmac, c->madr);
+static inline uint32_t mfifo_wrap(Dmac* dmac, uint32_t addr) {
+    return dmac->rbor | (addr & dmac->rbsr);
+}
 
-        if (c == &dmac->channels[VIF1]) {
-            // VIF1 FIFO
-            vif::fifo_write(dmac->hw.bus->vif1, q.u32[0]);
-            vif::fifo_write(dmac->hw.bus->vif1, q.u32[1]);
-            vif::fifo_write(dmac->hw.bus->vif1, q.u32[2]);
-            vif::fifo_write(dmac->hw.bus->vif1, q.u32[3]);
-        } else {
-            // GIF FIFO
-            gif::fifo_write(dmac->hw.bus->gif, q, gif::PATH3);
-        }
+static inline int mfifo_tag_is_ref(int id) {
+    return id == 0 || id == 3 || id == 4;
+}
 
-        c->madr += 16;
-        c->qwc--;
-    }
+static uint32_t mfifo_available(Dmac* dmac, uint32_t drain) {
+    uint32_t write = dmac->channels[SPR_FROM].madr;
 
-    if (channel_is_done(c)) {
-        // iris_debug(dmac, "mfifo channel done end={} tte-irq={}", c->tag.end, c->tag.irq && (c->chcr & 0x80));
-        set_irq(dmac, c == &dmac->channels[VIF1] ? VIF1 : GIF);
+    if (drain <= write)
+        return (write - drain) >> 4;
 
-        c->chcr &= ~0x100;
-        c->qwc = 0;
+    uint32_t limit = dmac->rbor + dmac->rbsr + 16;
+
+    return ((write - dmac->rbor) + (limit - drain)) >> 4;
+}
+
+static void mfifo_push_qword(Dmac* dmac, Channel* c, uint128_t q) {
+    if (c != &dmac->channels[VIF1]) {
+        gif::fifo_write(dmac->hw.gif, q, gif::PATH3);
 
         return;
     }
 
-    if (c->tag.id == 1) {
-        c->tadr = dmac->rbor | (c->madr & dmac->rbsr);
+    for (int i = 0; i < 4; i++) {
+        vif::fifo_write(dmac->hw.vif1, q.u32[i]);
     }
 }
 
-void mfifo_write_qword(Dmac* dmac, uint128_t q) {
-    Channel* c = dmac->mfifo_drain;
+static void mfifo_push_tag(Dmac* dmac, Channel* c) {
+    if (c != &dmac->channels[VIF1]) {
+        uint128_t q = { 0 };
 
-    if (c->qwc) {
-        uint128_t q = read_qword(dmac, c->madr);
+        q.u64[0] = c->tag.data;
 
-        if (c == &dmac->channels[VIF1]) {
-            // VIF1 FIFO
-            vif::fifo_write(dmac->hw.vif1, q.u32[0]);
-            vif::fifo_write(dmac->hw.vif1, q.u32[1]);
-            vif::fifo_write(dmac->hw.vif1, q.u32[2]);
-            vif::fifo_write(dmac->hw.vif1, q.u32[3]);
-        } else {
-            // GIF FIFO
-            gif::fifo_write(dmac->hw.bus->gif, q, gif::PATH3);
-        }
-
-        c->madr += 16;
-        c->qwc--;
-
-        // iris_debug(dmac, "mfifo channel qwc={}", c->qwc);
-
-        if (c->qwc == 0) {
-            if (channel_is_done(c)) {
-                // iris_debug(dmac, "mfifo channel done end={} tte-irq={}", c->tag.end, c->tag.irq && (c->chcr & 0x80));
-                set_irq(dmac, c == &dmac->channels[VIF1] ? VIF1 : GIF);
-
-                c->chcr &= ~0x100;
-                c->qwc = 0;
-
-                return;
-            }
-
-            if (c->tag.id == 1) {
-                c->tadr = dmac->rbor | (c->madr & dmac->rbsr);
-            }
-        }
+        gif::fifo_write(dmac->hw.gif, q, gif::PATH3);
 
         return;
     }
 
-    uint128_t tag = read_qword(dmac, c->tadr);
+    vif::fifo_write(dmac->hw.vif1, c->tag.data & 0xffffffff);
+    vif::fifo_write(dmac->hw.vif1, c->tag.data >> 32);
+}
 
-    process_source_tag(dmac, c, tag);
+static void mfifo_end(Dmac* dmac, Channel* c) {
+    set_irq(dmac, c == &dmac->channels[VIF1] ? VIF1 : GIF);
 
-    if ((c->chcr >> 6) & 1) {
-        vif::fifo_write(dmac->hw.vif1, c->tag.data & 0xffffffff);
-        vif::fifo_write(dmac->hw.vif1, c->tag.data >> 32);
+    c->chcr &= ~0x100;
+    c->qwc = 0;
+}
+
+static int mfifo_step(Dmac* dmac) {
+    Channel* c = dmac->mfifo_drain;
+
+    if (!c || !(c->chcr & 0x100))
+        return 0;
+
+    if (c->qwc) {
+        int in_ring = !mfifo_tag_is_ref(c->tag.id);
+
+        if (in_ring && !mfifo_available(dmac, c->madr))
+            return 0;
+
+        mfifo_push_qword(dmac, c, read_qword(dmac, c->madr));
+
+        c->madr += 16;
+
+        if (in_ring)
+            c->madr = mfifo_wrap(dmac, c->madr);
+
+        c->qwc--;
+
+        if (c->qwc)
+            return 1;
     }
 
-    c->tadr = dmac->rbor | (c->tadr & dmac->rbsr);
+    if (channel_is_done(c)) {
+        mfifo_end(dmac, c);
 
-    // iris_debug(dmac, "tadr={:08x} madr={:08x} qwc={} tagid={} end={}", c->tadr, c->madr, c->qwc, c->tag.id, c->tag.end);
-
-    switch (c->tag.id) {
-        case 1:
-        case 2:
-        case 5:
-        case 6:
-        case 7: {
-            c->madr = dmac->rbor | (c->madr & dmac->rbsr);
-        } break;
-
-        default: {
-            mfifo_handle_ref_tag(dmac);
-
-            if (c->tadr == dmac->channels[SPR_FROM].madr) {
-                // iris_debug(dmac, "MFIFO empty");
-
-                set_irq(dmac, MEIS);
-            }
-        } return;
+        return 0;
     }
 
-    if (c->qwc == 0) {
-        if (channel_is_done(c)) {
-            // iris_debug(dmac, "mfifo channel done end={} tte-irq={}", c->tag.end, c->tag.irq && (c->chcr & 0x80));
-            set_irq(dmac, c == &dmac->channels[VIF1] ? VIF1 : GIF);
+    if (c->tag.id == 1)
+        c->tadr = mfifo_wrap(dmac, c->madr);
 
-            c->chcr &= ~0x100;
-            c->qwc = 0;
-
-            return;
-        }
-    }
-
-    if (c->tadr == dmac->channels[SPR_FROM].madr) {
-        // iris_debug(dmac, "MFIFO empty");
-
+    if (!mfifo_available(dmac, c->tadr)) {
         set_irq(dmac, MEIS);
+
+        return 0;
     }
+
+    process_source_tag(dmac, c, read_qword(dmac, c->tadr));
+
+    if ((c->chcr >> 6) & 1)
+        mfifo_push_tag(dmac, c);
+
+    c->tadr = mfifo_wrap(dmac, c->tadr);
+
+    if (!mfifo_tag_is_ref(c->tag.id))
+        c->madr = mfifo_wrap(dmac, c->madr);
+
+    return 1;
+}
+
+void mfifo_run(Dmac* dmac) {
+    int guard = MFIFO_STEP_LIMIT;
+
+    while (guard-- && mfifo_step(dmac));
+
+    if (guard <= 0)
+        iris_warning(dmac, "MFIFO drain hit the step limit, tag chain may be looping");
 }
 
 void send_vif1_read_irq(void* udata, int overshoot) {
@@ -627,7 +620,7 @@ int transfer_vif1_word(Dmac* dmac) {
     if (channel_is_done(&dmac->channels[VIF1])) {
         end_transfer(dmac, VIF1);
 
-        // iris_debug(dmac, "vif1 transfer done");
+        iris_warning(dmac, "vif1 transfer done");
 
         return 0;
     }
@@ -635,15 +628,15 @@ int transfer_vif1_word(Dmac* dmac) {
     if (dmac->channels[VIF1].tag.id == 1) {
         dmac->channels[VIF1].tadr = dmac->channels[VIF1].madr;
 
-        // iris_debug(dmac, "vif1 tag id=1, setting tadr to {:08x}", dmac->channels[VIF1].tadr);
-        // exit(1);
+        // iris_fatal_error(dmac, "vif1 tag id=1, setting tadr to {:08x}", dmac->channels[VIF1].tadr);
     }
 
     uint128_t tag = read_qword(dmac, dmac->channels[VIF1].tadr);
 
     process_source_tag(dmac, &dmac->channels[VIF1], tag);
 
-    // iris_debug(dmac, "vif1 tag tag.qwc={:08x} qwc={:08x} id={} irq={} addr={:08x} data={:016x} end={} tte={}", //     dmac->channels[VIF1].tag.qwc,
+    // iris_warning(dmac, "vif1 tag tag.qwc={:08x} qwc={:08x} id={} irq={} addr={:08x} data={:016x} end={} tte={}",
+    //     dmac->channels[VIF1].tag.qwc,
     //     dmac->channels[VIF1].qwc,
     //     dmac->channels[VIF1].tag.id,
     //     dmac->channels[VIF1].tag.irq,
@@ -651,13 +644,13 @@ int transfer_vif1_word(Dmac* dmac) {
     //     dmac->channels[VIF1].tag.data,
     //     dmac->channels[VIF1].tag.end,
     //     (dmac->channels[VIF1].chcr >> 7) & 1
-    //);
+    // );
 
     if ((dmac->channels[VIF1].chcr >> 6) & 1) {
         vif::fifo_write(dmac->hw.bus->vif1, dmac->channels[VIF1].tag.data & 0xffffffff);
 
         if (!vif::get_dreq(dmac->hw.bus->vif1)) {
-            // iris_debug(dmac, "vif1 dreq cleared while writing tag data");
+            // iris_fatal_error(dmac, "vif1 dreq cleared while writing tag data");
 
             // exit(1);
         }
@@ -665,7 +658,7 @@ int transfer_vif1_word(Dmac* dmac) {
         vif::fifo_write(dmac->hw.bus->vif1, dmac->channels[VIF1].tag.data >> 32);
 
         if (!vif::get_dreq(dmac->hw.bus->vif1)) {
-            // iris_debug(dmac, "vif1 dreq cleared while writing tag data");
+            // iris_fatal_error(dmac, "vif1 dreq cleared while writing tag data");
 
             // exit(1);
         }
@@ -684,7 +677,10 @@ void handle_vif1_transfer(Dmac* dmac) {
     if ((dmac->channels[VIF1].chcr & 0x100) == 0)
         return;
 
-    // iris_debug(dmac, "VIF1 DMA dir={} mode={} tte={} tie={} qwc={} madr={:08x} tadr={:08x} end={} dreq={}", //     dmac->channels[VIF1].chcr & 1,
+    int mfifo_drain = (dmac->ctrl >> 2) & 3;
+
+    // iris_warning(dmac, "VIF1 DMA dir={} mode={} tte={} tie={} qwc={} madr={:08x} tadr={:08x} end={} dreq={} mfifo_drain={}",
+    //     dmac->channels[VIF1].chcr & 1,
     //     (dmac->channels[VIF1].chcr >> 2) & 3,
     //     (dmac->channels[VIF1].chcr >> 6) & 1,
     //     (dmac->channels[VIF1].chcr >> 7) & 1,
@@ -692,12 +688,13 @@ void handle_vif1_transfer(Dmac* dmac) {
     //     dmac->channels[VIF1].madr,
     //     dmac->channels[VIF1].tadr,
     //     dmac->channels[VIF1].tag.end,
-    //     vif::get_dreq(dmac->hw.bus->vif1)
-    //);
-
-    int mfifo_drain = (dmac->ctrl >> 2) & 3;
+    //     vif::get_dreq(dmac->hw.bus->vif1),
+    //     mfifo_drain
+    // );
 
     if (mfifo_drain == 2) {
+        mfifo_run(dmac);
+
         return;
     }
 
@@ -760,8 +757,11 @@ void handle_gif_transfer(Dmac* dmac) {
 
     int mfifo_drain = (dmac->ctrl >> 2) & 3;
 
-    if (mfifo_drain == 3)
+    if (mfifo_drain == 3) {
+        mfifo_run(dmac);
+
         return;
+    }
 
     // iris_debug(dmac, "ee: GIF DMA dir={} mode={} tte={} tie={} qwc={} madr={:08x} tadr={:08x}", //     dmac->channels[GIF].chcr & 1,
     //     (dmac->channels[GIF].chcr >> 2) & 3,
@@ -1150,21 +1150,22 @@ void handle_spr_from_transfer(Dmac* dmac) {
     if (dmac->mfifo_drain) {
         assert(mode == 0);
 
-        dmac->channels[SPR_FROM].madr = dmac->rbor | (dmac->channels[SPR_FROM].madr & dmac->rbsr);
+        Channel* spr = &dmac->channels[SPR_FROM];
 
-        for (int i = 0; i < dmac->channels[SPR_FROM].qwc; i++) {
-            uint128_t q = ram::read128(dmac->hw.spr, dmac->channels[SPR_FROM].sadr & 0x3ff0);
+        spr->madr = mfifo_wrap(dmac, spr->madr);
 
-            ee::bus::write128(dmac->hw.bus, dmac->channels[SPR_FROM].madr, q);
-            
-            mfifo_write_qword(dmac, q);
+        for (int i = 0; i < spr->qwc; i++) {
+            uint128_t q = ram::read128(dmac->hw.spr, spr->sadr & 0x3ff0);
 
-            dmac->channels[SPR_FROM].madr = dmac->rbor | ((dmac->channels[SPR_FROM].madr + 0x10) & dmac->rbsr);
-            dmac->channels[SPR_FROM].sadr += 0x10;
-            dmac->channels[SPR_FROM].sadr &= 0x3ff0;
+            ee::bus::write128(dmac->hw.bus, spr->madr, q);
+
+            spr->madr = mfifo_wrap(dmac, spr->madr + 0x10);
+            spr->sadr = (spr->sadr + 0x10) & 0x3ff0;
         }
 
-        dmac->channels[SPR_FROM].qwc = 0;
+        spr->qwc = 0;
+
+        mfifo_run(dmac);
 
         return;
     }
@@ -1448,10 +1449,14 @@ void write32(Dmac* dmac, uint32_t addr, uint64_t data) {
                     handle_channel_start(dmac, addr);
                 }
             } else {
-                // iris_debug(dmac, "channel {} value={:08x} chcr={:08x}", get_channel_name(dmac, addr), data, c->chcr);
+                // if (c == &dmac->channels[VIF1]) {
+                //     iris_fatal_error(dmac, "channel {} value={:08x} chcr={:08x}", get_channel_name(dmac, addr), data, c->chcr);
+                // }
+
                 c->chcr &= (data & 0x100) | 0xfffffeff;
             }
         } return;
+
         case 0x10: {
             c->madr = data;
 

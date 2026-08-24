@@ -15,7 +15,13 @@ Dvrp* create(logger::Logger* logger) {
 }
 
 void init(Dvrp* dvrp, Speed* speed) {
+    logger::Logger* logger = dvrp->logger;
+    size_t logger_id = dvrp->logger_id;
+
     new (dvrp) Dvrp();
+
+    dvrp->logger = logger;
+    dvrp->logger_id = logger_id;
 
     dvrp->speed = speed;
 

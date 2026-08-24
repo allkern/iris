@@ -296,7 +296,13 @@ Smap* create(logger::Logger* logger) {
 }
 
 int init(Smap* smap, Speed* speed) {
+    logger::Logger* logger = smap->logger;
+    size_t logger_id = smap->logger_id;
+
     new (smap) Smap();
+
+    smap->logger = logger;
+    smap->logger_id = logger_id;
 
     smap->speed = speed;
 

@@ -9,6 +9,8 @@
 #include "fs/mkfs.hpp"
 #include "fs/fs.hpp"
 #include "fs/blk.hpp"
+#include "shared/ata/disc.hpp"
+#include "kp2/p2io.hpp"
 
 #include <filesystem>
 #include <vector>
@@ -289,6 +291,9 @@ struct ArcadeFiles {
     std::filesystem::path loader;
     std::filesystem::path sram;
     std::filesystem::path nvram;
+    std::filesystem::path hdd_id;
+    std::filesystem::path dongle_black;
+    std::filesystem::path dongle_white;
 
     int media_type;
 };
@@ -359,6 +364,10 @@ struct ArcadeFileNames {
     std::vector <std::string> dongle;
     std::vector <std::string> media;
     std::vector <std::string> loader;
+    std::vector <std::string> hdd_id;
+    std::vector <std::string> nvram;
+    std::vector <std::string> dongle_black;
+    std::vector <std::string> dongle_white;
 };
 
 struct ArcadeSource {
@@ -377,6 +386,10 @@ struct ArcadeSource {
     int gun_sensor = 0;
     int gun_sensor_active_high = 0;
     int ioboard_mode = 0;
+    int input_type = kp2::p2io::INPUT_THRILL_DRIVE;
+    int dip_switches = 0;
+    int force_31khz = 0;
+    bool needs_white_dongle = false;
 
     ArcadeFileNames names;
 
@@ -431,6 +444,10 @@ static ArcadeFileNames arcade_file_names(const std::string& id) {
     names.dongle = query_arcade_names(id, "dongle", gameid + ".ps2");
     names.media = query_arcade_names(id, "media", gameid + ".chd");
     names.loader = query_arcade_names(id, "loader", "boot.elf");
+    names.hdd_id = query_arcade_names(id, "hdd_id", "ps2_hdd_id.bin");
+    names.nvram = query_arcade_names(id, "nvram", "ps2_nvram.bin");
+    names.dongle_black = query_arcade_names(id, "dongle_black", "ds2430_black.bin");
+    names.dongle_white = query_arcade_names(id, "dongle_white", "ds2430_white.bin");
 
     return names;
 }
@@ -448,6 +465,10 @@ static void load_arcade_definition(ArcadeSource* source) {
     source->gun_sensor = query_arcade_value<int>(source->id, "gun_sensor").value_or(0);
     source->gun_sensor_active_high = query_arcade_value<int>(source->id, "gun_sensor_active_high").value_or(0);
     source->ioboard_mode = query_arcade_value<int>(source->id, "ioboard_mode").value_or(0);
+    source->input_type = query_arcade_value<int>(source->id, "input_type").value_or(kp2::p2io::INPUT_THRILL_DRIVE);
+    source->dip_switches = query_arcade_value<int>(source->id, "dipsw").value_or(0);
+    source->force_31khz = query_arcade_value<int>(source->id, "force_31khz").value_or(0);
+    source->needs_white_dongle = query_arcade_value<int>(source->id, "white_dongle").value_or(0) != 0;
     source->bootprog = query_arcade_value<std::string>(source->id, "bootprog").value_or("");
     source->names = arcade_file_names(source->id);
 }
@@ -542,6 +563,13 @@ static ArcadeFiles resolve_arcade_files(Instance* iris, const ArcadeSource& sour
     files.loader = locate_arcade_file(source, source.names.loader);
     files.sram = pref_path / "acsram" / (source.id + ".bin");
     files.nvram = pref_path / "acnvram" / (source.id + ".nvm");
+    files.hdd_id = locate_arcade_file(source, source.names.hdd_id);
+    files.dongle_black = locate_arcade_file(source, source.names.dongle_black);
+    files.dongle_white = locate_arcade_file(source, source.names.dongle_white);
+
+    if (source.system == ps2::KONAMI_PYTHON2) {
+        files.nvram = locate_arcade_file(source, source.names.nvram);
+    }
 
     files.media_type = source.media_type;
 
@@ -579,6 +607,18 @@ static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& 
     if (source.system == ps2::NAMCO_SYSTEM_147 || source.system == ps2::NAMCO_SYSTEM_148) {
         if (!arcade_file_available(source, source.names.nand))
             return "NAND";
+
+        return nullptr;
+    }
+
+    if (source.system == ps2::KONAMI_PYTHON2) {
+        if (!arcade_file_available(source, source.names.media)) return "HDD image";
+        if (!arcade_file_available(source, source.names.hdd_id)) return "HDD ID";
+        if (!arcade_file_available(source, source.names.nvram)) return "NVRAM";
+        if (!arcade_file_available(source, source.names.dongle_black)) return "black dongle";
+
+        if (source.needs_white_dongle && !arcade_file_available(source, source.names.dongle_white))
+            return "white dongle";
 
         return nullptr;
     }
@@ -1269,6 +1309,61 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
             return true;
         } break;
 
+        case ps2::KONAMI_PYTHON2: {
+            ps2::load_bios(iris->ps2, files.bios.string().c_str());
+            ps2::set_system(iris->ps2, system);
+
+            cdvd::load_nvram(iris->ps2->cdvd, files.nvram.string().c_str());
+
+            if (!speed::load_hdd(iris->ps2->speed, files.media.string().c_str())) {
+                iris_error(&iris->log.emu, "Couldn't read HDD image \"{}\"", files.media.string().c_str());
+
+                push_info(iris, "Couldn't start arcade game (Bad HDD image)");
+
+                return false;
+            }
+
+            if (!speed::load_hdd_id(iris->ps2->speed, files.hdd_id.string().c_str())) {
+                push_info(iris, "Couldn't start arcade game (Bad HDD ID)");
+
+                return false;
+            }
+
+            ps2::reset(iris->ps2);
+
+            if (usb::get_port_device(iris->ps2->usb, 0) != usb::USB_DEVICE_P2IO) {
+                iris_error(&iris->log.emu, "The Python 2 I/O board isn't attached");
+
+                push_info(iris, "Couldn't start arcade game (No I/O board)");
+
+                return false;
+            }
+
+            usb::p2io_set_input_type(iris->ps2->usb, source.input_type);
+            usb::p2io_set_dongle(iris->ps2->usb, kp2::p2io::DONGLE_BLACK, files.dongle_black.string().c_str());
+
+            if (source.needs_white_dongle)
+                usb::p2io_set_dongle(iris->ps2->usb, kp2::p2io::DONGLE_WHITE, files.dongle_white.string().c_str());
+
+            kp2::p2io::P2io* p2io = kp2::p2io::from_device(&iris->ps2->usb->device[0]);
+
+            kp2::p2io::set_dip_switches(p2io, (uint8_t)source.dip_switches);
+            kp2::p2io::set_force_31khz(p2io, source.force_31khz);
+
+            if (!p2io->dongle_loaded[kp2::p2io::DONGLE_BLACK]) {
+                push_info(iris, "Couldn't start arcade game (Bad black dongle)");
+
+                return false;
+            }
+
+            if (ata::disc::is_compressed(files.media.string().c_str()))
+                push_info(iris, "Compressed HDD images are read only, progress won't be saved");
+
+            finish_load(iris, 0, name + " (" + source.id + ")");
+
+            return true;
+        } break;
+
         case ps2::NAMCO_SYSTEM_246:
         case ps2::NAMCO_SYSTEM_256:
         case ps2::NAMCO_SYSTEM_SUPER_256: {
@@ -1367,7 +1462,7 @@ bool is_arcade_file(Instance* iris, std::string path) {
 }
 
 bool load_arcade(Instance* iris, std::string path) {
-    std::optional<ArcadeSource> source = open_arcade_source(iris, path);
+    std::optional <ArcadeSource> source = open_arcade_source(iris, path);
 
     if (!source)
         return false;
@@ -1375,7 +1470,7 @@ bool load_arcade(Instance* iris, std::string path) {
     int system = source->system;
 
     if (system == ps2::NAMCO_SYSTEM_246 || system == ps2::NAMCO_SYSTEM_256 ||
-        system == ps2::NAMCO_SYSTEM_SUPER_256) {
+        system == ps2::NAMCO_SYSTEM_SUPER_256 || system == ps2::KONAMI_PYTHON2) {
         const char* missing = find_missing_arcade_file(iris, *source);
 
         if (missing) {

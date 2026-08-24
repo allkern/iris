@@ -9,6 +9,7 @@ namespace settings {
     void save(Instance* iris);
     void close(Instance* iris);
     void apply_device_maps(Instance* iris);
+    void apply_p2io(Instance* iris);
 }
 
 }

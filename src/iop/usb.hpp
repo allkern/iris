@@ -43,10 +43,13 @@ enum {
     USB_DEVICE_MOUSE,
     USB_DEVICE_MSD,
     USB_DEVICE_AN986,
+    USB_DEVICE_P2IO,
     USB_DEVICE_TYPE_COUNT
 };
 
 inline constexpr auto USB_MSD_PATH_MAX = 512;
+inline constexpr auto USB_P2IO_PATH_MAX = 512;
+inline constexpr auto USB_P2IO_DONGLE_COUNT = 2;
 
 struct Usb {
     struct {
@@ -83,6 +86,10 @@ struct Usb {
 
     int device_type[OHCI_NUM_PORTS];
     char msd_path[OHCI_NUM_PORTS][USB_MSD_PATH_MAX];
+
+    int p2io_input_type;
+    char p2io_dongle_path[USB_P2IO_DONGLE_COUNT][USB_P2IO_PATH_MAX];
+
     int configured;
 
     int frame_scheduled;
@@ -101,6 +108,8 @@ const char* device_type_name(int type);
 int get_port_device(Usb* usb, int port);
 void set_port_device(Usb* usb, int port, int type);
 void msd_set_image(Usb* usb, int port, const char* path);
+void p2io_set_input_type(Usb* usb, int type);
+void p2io_set_dongle(Usb* usb, int which, const char* path);
 void kbd_key(Usb* usb, uint8_t usage, int pressed);
 void mouse_move(Usb* usb, int dx, int dy, int dz);
 void mouse_button(Usb* usb, int button, int pressed);

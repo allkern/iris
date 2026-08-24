@@ -18,7 +18,13 @@ Fw* create(logger::Logger* logger, iop::intc::Intc* intc) {
 void reset(Fw* fw) {
     auto hw = fw->hw;
 
+    logger::Logger* logger = fw->logger;
+    size_t logger_id = fw->logger_id;
+
     new (fw) Fw();
+
+    fw->logger = logger;
+    fw->logger_id = logger_id;
 
     fw->hw = hw;
 }

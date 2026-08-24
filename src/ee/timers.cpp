@@ -48,7 +48,13 @@ void connect(Timers* timers, ee::intc::Intc* intc) {
 void reset(Timers* timers) {
     auto hw = timers->hw;
 
+    logger::Logger* logger = timers->logger;
+    size_t logger_id = timers->logger_id;
+
     new (timers) Timers();
+
+    timers->logger = logger;
+    timers->logger_id = logger_id;
 
     timers->hw = hw;
 

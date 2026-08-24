@@ -1,8 +1,6 @@
 #pragma once
 #include "logger.hpp"
 
-// speed.hpp includes this header, so the parent stays a forward
-// declaration here and is included for real in the .cpp
 namespace iris::speed { struct Speed; }
 
 namespace iris::speed::eeprom {

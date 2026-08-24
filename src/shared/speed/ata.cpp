@@ -5,6 +5,7 @@
 
 #include "shared/ata/isif.hpp"
 #include "shared/ata/raw.hpp"
+#include "shared/ata/disc.hpp"
 
 namespace iris::speed::ata {
 
@@ -62,8 +63,43 @@ void ata_init_security_data(Ata* ata) {
     ata->sce_security_data[0x4f] = 0x01;
 }
 
+int load_security_data(Ata* ata, const char* path) {
+    if (!path || !path[0])
+        return 0;
+
+    FILE* file = fopen(path, "rb");
+
+    if (!file) {
+        iris_error(ata, "Failed to open HDD ID file \"{}\"", path);
+
+        return 0;
+    }
+
+    uint8_t buf[SCE_SECURITY_DATA_SIZE];
+
+    size_t read = fread(buf, 1, sizeof(buf), file);
+
+    fclose(file);
+
+    if (read != sizeof(buf)) {
+        iris_error(ata, "HDD ID file \"{}\" is {} bytes, expected {}", path, read, sizeof(buf));
+
+        return 0;
+    }
+
+    memcpy(ata->sce_security_data, buf, sizeof(buf));
+
+    return 1;
+}
+
 void init(Ata* ata, Speed* speed, scheduler::Scheduler* sched) {
+    logger::Logger* logger = ata->logger;
+    size_t logger_id = ata->logger_id;
+
     new (ata) Ata();
+
+    ata->logger = logger;
+    ata->logger_id = logger_id;
 
     ata->speed = speed;
     ata->sched = sched;
@@ -170,10 +206,35 @@ void ata_create_identify(uint8_t* buf, uint64_t sectors) {
 }
 
 int load(Ata* ata, const char* path) {
-    iris::ata::isif::Isif* isif = iris::ata::isif::open(nullptr, path);
+    if (!path || !path[0])
+        return 0;
+
+    if (iris::ata::disc::is_compressed(path)) {
+        iop::disc::Disc* disc = iris::ata::disc::open(ata->logger, path);
+
+        if (!disc) {
+            iris_error(ata, "Failed to open compressed HDD image \"{}\"", path);
+
+            return 0;
+        }
+
+        ata->hdd.udata = (void*)disc;
+
+        ata->hdd.read_sector = iris::ata::disc::ata_read_sector;
+        ata->hdd.write_sector = iris::ata::disc::ata_write_sector;
+        ata->hdd.get_identify = iris::ata::disc::ata_get_identify;
+        ata->hdd.get_sector_count = iris::ata::disc::ata_get_sector_count;
+        ata->hdd.close = iris::ata::disc::ata_close;
+
+        ata_create_identify(ata->identify, ata->hdd.get_sector_count(ata->hdd.udata));
+
+        return 1;
+    }
+
+    iris::ata::isif::Isif* isif = iris::ata::isif::open(ata->logger, path);
 
     if (!isif) {
-        iris::ata::raw::Raw* raw = iris::ata::raw::open(nullptr, path);
+        iris::ata::raw::Raw* raw = iris::ata::raw::open(ata->logger, path);
 
         if (!raw) {
             iris_debug(ata, "Failed to open HDD image");
@@ -237,7 +298,8 @@ void ata_handle_data_overflow(Ata* ata) {
             ata->status &= ~STAT_DRQ;
         } break;
 
-        case C_WRITE_DMA: {
+        case C_WRITE_DMA:
+        case C_WRITE_SECTOR: {
             ata->hdd.write_sector(ata->hdd.udata, ata->pending_lba++, ata->buf);
 
             ata->pending_sectors--;
@@ -316,6 +378,15 @@ void ata_handle_command(Ata* ata, uint16_t cmd) {
             ata->status |= STAT_DRQ;
             ata->buf_size = 512;
             ata->buf_index = 0;
+        } break;
+
+        case C_WRITE_SECTOR: {
+            iris_debug(ata, "WRITE SECTOR (LBA {} COUNT {})", ata->sector, ata->nsector);
+
+            ata_init_response(ata, 512);
+
+            ata->pending_sectors = ata_get_nsectors(ata);
+            ata->pending_lba = ata_get_lba(ata);
         } break;
 
         case C_READ_SECTOR: {

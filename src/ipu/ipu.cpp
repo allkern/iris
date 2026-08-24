@@ -1436,6 +1436,14 @@ uint128_t Ipu::read_FIFO()
     return quad;
 }
 
+uint128_t Ipu::peek_in_FIFO()
+{
+    if (in_FIFO.f.empty())
+        return { 0 };
+
+    return in_FIFO.f.front();
+}
+
 void Ipu::write_FIFO(uint128_t quad)
 {
     iris_debug(this, "Write FIFO: ${:08x}_{:08x}_{:08x}_{:08x}", quad.u32[3], quad.u32[2], quad.u32[1], quad.u32[0]);
@@ -1523,7 +1531,7 @@ uint128_t read128(Ipu* ipu, uint32_t addr) {
 
     switch (addr) {
         case 0x10007000: return ipu->read_FIFO();
-        case 0x10007010: break; // (W) write_FIFO
+        case 0x10007010: return ipu->peek_in_FIFO();
     }
 
     iris_error(ipu, "Unhandled 128-bit read from address {:08x}", addr);

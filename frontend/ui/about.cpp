@@ -47,7 +47,8 @@ void About::on_render() {
         Text("");
         TextWrapped(
             "Special thanks to: The emudev Discord server, Ziemas, "
-            "refraction, ncarrillo, cakehonolulu, Layle, and "
+            "refraction, ncarrillo, cakehonolulu, Layle, el_isra, "
+            "uyjulian, slimpuggamer, DiscoStarSlayer, PSI, and "
             "the PCSX2 team for their kind support."
         );
         Text("");

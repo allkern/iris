@@ -28,7 +28,13 @@ void connect(Intc* intc, ee::Ee* ee) {
 void reset(Intc* intc) {
     auto hw = intc->hw;
 
+    logger::Logger* logger = intc->logger;
+    size_t logger_id = intc->logger_id;
+
     new (intc) Intc();
+
+    intc->logger = logger;
+    intc->logger_id = logger_id;
 
     intc->hw = hw;
 }

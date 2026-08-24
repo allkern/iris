@@ -85,6 +85,7 @@ void write16(Speed* speed, uint32_t addr, uint64_t data);
 void write32(Speed* speed, uint32_t addr, uint64_t data);
 void send_irq(Speed* speed, uint16_t irq);
 int load_hdd(Speed* speed, const char* path);
+int load_hdd_id(Speed* speed, const char* path);
 int load_flash(Speed* speed, const char* path);
 void set_dvrp_enabled(Speed* speed, int enabled);
 void set_flash_enabled(Speed* speed, int enabled);

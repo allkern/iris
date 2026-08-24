@@ -157,7 +157,13 @@ void reset(Spu2* spu2) {
     auto hw = spu2->hw;
     int sample_rate = spu2->sample_rate;
 
+    logger::Logger* logger = spu2->logger;
+    size_t logger_id = spu2->logger_id;
+
     new (spu2) Spu2();
+
+    spu2->logger = logger;
+    spu2->logger_id = logger_id;
 
     spu2->hw = hw;
     spu2->sample_rate = sample_rate;

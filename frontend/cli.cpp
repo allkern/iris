@@ -146,6 +146,7 @@ static const EnumValue usb_values[] = {
     { "mouse", usb::USB_DEVICE_MOUSE },
     { "msd", usb::USB_DEVICE_MSD },
     { "an986", usb::USB_DEVICE_AN986 },
+    { "p2io", usb::USB_DEVICE_P2IO },
     { nullptr, 0 }
 };
 
@@ -269,6 +270,14 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->paths.flash_path, v.text); } },
     { "hdd", 0, PATH, "FILE", "DEV9 hard disk image",
         [](Instance* i, const Value& v) { set(i, i->paths.hdd_path, v.text); } },
+    { "hdd-id", 0, PATH, "FILE", "SCE drive identity blob (Konami Python 2)",
+        [](Instance* i, const Value& v) { set(i, i->paths.hdd_id_path, v.text); } },
+    { "dongle-black", 0, PATH, "FILE", "DS2430 black dongle dump (Konami Python 2)",
+        [](Instance* i, const Value& v) { set(i, i->paths.dongle_black_path, v.text); } },
+    { "dongle-white", 0, PATH, "FILE", "DS2430 white dongle dump (Konami Python 2)",
+        [](Instance* i, const Value& v) { set(i, i->paths.dongle_white_path, v.text); } },
+    { "p2io-input", 0, INT, "N", "Python 2 I/O devices (0 DM, 1 GF, 2 DDR, 3 Toy's March, 4 Thrill Drive, 5 Dance 86.4)",
+        [](Instance* i, const Value& v) { set(i, i->p2io_input_type, (int)v.integer); } },
     { "gcdb", 0, PATH, "FILE", "Game controller database",
         [](Instance* i, const Value& v) { set(i, i->paths.gcdb_path, v.text); } },
     { "snap", 0, PATH, "DIR", "Directory to write screenshots to",

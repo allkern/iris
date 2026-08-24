@@ -163,46 +163,19 @@ void create_identify(uint8_t* buf, uint64_t sectors) {
     }
 }
 
-static void disc_read_sector(void* udata, uint64_t lba, uint8_t* data) {
-    iop::disc::read_sector((iop::disc::Disc*)udata, data, lba, iop::disc::DISC_SS_DATA);
-}
-
-static void disc_write_sector(void* udata, uint64_t lba, const uint8_t* data) {
-    // Compressed images are read only
-}
-
-static int disc_get_identify(void* udata, uint8_t* buf) {
-    return 0;
-}
-
-static uint64_t disc_get_sector_count(void* udata) {
-    iop::disc::Disc* disc = (iop::disc::Disc*)udata;
-
-    int sector_size = iop::disc::get_sector_size(disc);
-
-    if (sector_size <= 0)
-        sector_size = speed::ata::SECTOR_SIZE;
-
-    return iop::disc::get_size(disc) / sector_size;
-}
-
-static void disc_close(void* udata) {
-    iop::disc::close((iop::disc::Disc*)udata);
-}
-
 static int load_compressed_hdd(Acata* acata, const char* path) {
-    iop::disc::Disc* disc = iop::disc::open(acata->logger, path);
+    iop::disc::Disc* disc = ata::disc::open(acata->logger, path);
 
     if (!disc)
         return 0;
 
     acata->hdd.udata = (void*)disc;
 
-    acata->hdd.read_sector = disc_read_sector;
-    acata->hdd.write_sector = disc_write_sector;
-    acata->hdd.get_identify = disc_get_identify;
-    acata->hdd.get_sector_count = disc_get_sector_count;
-    acata->hdd.close = disc_close;
+    acata->hdd.read_sector = ata::disc::ata_read_sector;
+    acata->hdd.write_sector = ata::disc::ata_write_sector;
+    acata->hdd.get_identify = ata::disc::ata_get_identify;
+    acata->hdd.get_sector_count = ata::disc::ata_get_sector_count;
+    acata->hdd.close = ata::disc::ata_close;
 
     return 1;
 }
@@ -224,9 +197,7 @@ int load(Acata* acata, const char* path, int media) {
         return 1;
     }
 
-    int ext = iop::disc::get_extension(path);
-
-    if (ext == iop::disc::DISC_EXT_CHD || ext == iop::disc::DISC_EXT_CSO || ext == iop::disc::DISC_EXT_ZSO) {
+    if (ata::disc::is_compressed(path)) {
         if (!load_compressed_hdd(acata, path)) {
             iris_error(acata, "Failed to open hard disk image \"{}\"", path);
 

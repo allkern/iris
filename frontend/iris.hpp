@@ -266,6 +266,9 @@ struct Instance {
         std::string ini_path = "";
         std::string gcdb_path = "";
         std::string hdd_path = "";
+        std::string hdd_id_path = "";
+        std::string dongle_black_path = "";
+        std::string dongle_white_path = "";
         bool auto_paths = true;
 
         bool pinned_rom1 = false;
@@ -346,6 +349,8 @@ struct Instance {
     bool autostart = true;
     bool cache_arcade_files = false;
     bool arcade_dongle_boot = false;
+
+    int p2io_input_type = 4;
     int angle = 0;
     bool flip_x = false;
     bool flip_y = false;

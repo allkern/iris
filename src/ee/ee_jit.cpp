@@ -3231,6 +3231,77 @@ static inline void get_thread_list(Ee* ee) {
     }
 }
 
+inline constexpr auto DECI2_TEXT_MAX = 1024;
+
+static void deci2_print(Ee* ee, uint32_t addr, uint32_t size) {
+    if (size > DECI2_TEXT_MAX)
+        size = DECI2_TEXT_MAX;
+
+    for (uint32_t n = 0; n < size; n++) {
+        uint8_t c = bus_read8(ee, addr + n);
+
+        if (!c)
+            break;
+
+        bus_write8(ee, 0x1000f180, c);
+    }
+}
+
+static int64_t deci2_call(Ee* ee, uint32_t call, uint32_t param) {
+    if (call > 0x10)
+        return -1;
+
+    switch (call) {
+        // Open
+        case 1: {
+            if (!param)
+                return 1;
+
+            ee->deci2addr = bus_read32(ee, param + 4);
+            ee->deci2handler = bus_read32(ee, param + 8);
+
+            return 1;
+        } break;
+
+        // Close
+        case 2: {
+            ee->deci2addr = 0;
+            ee->deci2handler = 0;
+
+            return 1;
+        } break;
+
+        // ReqSend
+        case 3: {
+            if (!ee->deci2addr)
+                return 1;
+
+            uint32_t length = bus_read32(ee, ee->deci2addr + 4);
+            uint32_t packet = bus_read32(ee, ee->deci2addr + 16);
+
+            // The packet leads with a 12 byte DECI2 header
+            if (length > 0xc) {
+                deci2_print(ee, packet + 0xc, length - 0xc);
+            }
+
+            return 1;
+        } break;
+
+        // Poll
+        case 4: return 1;
+
+        // kputs
+        case 0x10: {
+            if (param)
+                deci2_print(ee, bus_read32(ee, param), DECI2_TEXT_MAX);
+
+            return 1;
+        } break;
+    }
+
+    return 0;
+}
+
 static inline void i_syscall(Ee* ee, const Instruction& i) {
     uint32_t id = ee->r[3].ul64;
 
@@ -3319,6 +3390,11 @@ static inline void i_syscall(Ee* ee, const Instruction& i) {
             // Note: This prevents keeping stale cache blocks
             //       stored in memory when switching games/software.
             ee->pending_purge = true;
+        } break;
+
+        // Deci2Call
+        case 0x7c: {
+            ee->r[2].ul64 = (uint64_t)deci2_call(ee, ee->r[4].u32[0], ee->r[5].u32[0]);
         } break;
 
         // FlushCache
@@ -3662,6 +3738,8 @@ void reset(Ee* ee) {
     ee->next_pc = ee->pc + 4;
     ee->intc_reads = 0;
     ee->csr_reads = 0;
+    ee->deci2addr = 0;
+    ee->deci2handler = 0;
 
     purge_cache(ee);
 

@@ -167,10 +167,9 @@ static void gif_flush_path3(Gif* gif) {
 uint64_t read32(Gif* gif, uint32_t addr) {
     switch (addr) {
         case 0x10003020: {
-            // Clear FQC when reading STAT
             uint32_t v = gif->stat;
 
-            gif->stat &= ~0x1f000000;
+            gif->stat &= ~(STAT_FQC | STAT_OPH | STAT_APATH);
 
             return v;
         } break;
@@ -399,8 +398,8 @@ void write128(Gif* gif, uint32_t addr, uint128_t data) {
 }
 
 void fifo_write(Gif* gif, uint128_t data, int path) {
-    // Set FQC when getting GIF FIFO writes
-    gif->stat |= 0x1f000000;
+    gif->stat &= ~STAT_APATH;
+    gif->stat |= STAT_FQC | STAT_OPH | ((path + 1) << STAT_APATH_SHIFT);
 
     if (gif->state == State::RECV_TAG) {
         for (int i = 0; i < 4; i++)

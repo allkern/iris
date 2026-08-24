@@ -6,6 +6,8 @@
 #include "usb/msd.hpp"
 #include "usb/an986.hpp"
 
+#include "kp2/p2io.hpp"
+
 namespace iris::usb {
 
 // HcInterruptStatus/HcInterruptEnable/HcInterruptDisable
@@ -393,8 +395,22 @@ static void ohci_port_write(Usb* usb, int port, uint32_t data) {
     if (data & OHCI_PORT_LSDA) // ClearPortPower
         *ps &= ~OHCI_PORT_PPS;
 
-    // Write-1-to-clear change bits
     *ps &= ~(data & (OHCI_PORT_CSC | OHCI_PORT_PESC | OHCI_PORT_PSSC | OHCI_PORT_OCIC | OHCI_PORT_PRSC));
+}
+
+static void p2io_apply_config(Usb* usb, device::Device* dev) {
+    kp2::p2io::P2io* p2io = kp2::p2io::from_device(dev);
+
+    if (!p2io)
+        return;
+
+    kp2::p2io::set_input_type(p2io, usb->p2io_input_type);
+
+    for (int i = 0; i < USB_P2IO_DONGLE_COUNT; i++) {
+        if (usb->p2io_dongle_path[i][0]) {
+            kp2::p2io::load_dongle(p2io, i, usb->p2io_dongle_path[i]);
+        }
+    }
 }
 
 static const struct {
@@ -406,6 +422,7 @@ static const struct {
     { "Mouse", mouse::create },   // USB_DEVICE_MOUSE
     { "Thumb drive", msd::create },
     { "AN986 Pegasus Ethernet", an986::create },
+    { "Konami Python 2 I/O board", kp2::p2io::create },
 };
 
 const char* device_type_name(int type) {
@@ -443,6 +460,9 @@ void set_port_device(Usb* usb, int port, int type) {
         if (type == USB_DEVICE_MSD && usb->msd_path[port][0])
             msd::set_image(dev, usb->msd_path[port]);
 
+        if (type == USB_DEVICE_P2IO)
+            p2io_apply_config(usb, dev);
+
         usb->hc_rh_port_status[port] = OHCI_PORT_CCS | OHCI_PORT_PPS | OHCI_PORT_CSC;
     } else {
         usb->hc_rh_port_status[port] = OHCI_PORT_PPS | OHCI_PORT_CSC;
@@ -468,6 +488,35 @@ void msd_set_image(Usb* usb, int port, const char* path) {
         msd::set_image(&usb->device[port], usb->msd_path[port]);
 }
 
+static void p2io_reapply(Usb* usb) {
+    for (int i = 0; i < OHCI_NUM_PORTS; i++) {
+        if (usb->device_type[i] == USB_DEVICE_P2IO) {
+            p2io_apply_config(usb, &usb->device[i]);
+        }
+    }
+}
+
+void p2io_set_input_type(Usb* usb, int type) {
+    usb->p2io_input_type = type;
+
+    p2io_reapply(usb);
+}
+
+void p2io_set_dongle(Usb* usb, int which, const char* path) {
+    if (which < 0 || which >= USB_P2IO_DONGLE_COUNT)
+        return;
+
+    if (path) {
+        strncpy(usb->p2io_dongle_path[which], path, USB_P2IO_PATH_MAX - 1);
+
+        usb->p2io_dongle_path[which][USB_P2IO_PATH_MAX - 1] = '\0';
+    } else {
+        usb->p2io_dongle_path[which][0] = '\0';
+    }
+
+    p2io_reapply(usb);
+}
+
 Usb* create(logger::Logger* logger, iop::intc::Intc* intc, iop::bus::Bus* bus, scheduler::Scheduler* sched) {
     Usb* usb = new Usb();
 
@@ -486,9 +535,17 @@ Usb* create(logger::Logger* logger, iop::intc::Intc* intc, iop::bus::Bus* bus, s
 void reset(Usb* usb) {
     auto hw = usb->hw;
 
+    logger::Logger* logger = usb->logger;
+    size_t logger_id = usb->logger_id;
+
     int configured = usb->configured;
     int device_type[OHCI_NUM_PORTS];
     char msd_path[OHCI_NUM_PORTS][USB_MSD_PATH_MAX];
+
+    int p2io_input_type = usb->p2io_input_type;
+    char p2io_dongle_path[USB_P2IO_DONGLE_COUNT][USB_P2IO_PATH_MAX];
+
+    memcpy(p2io_dongle_path, usb->p2io_dongle_path, sizeof(p2io_dongle_path));
 
     for (int i = 0; i < OHCI_NUM_PORTS; i++)
         device_type[i] = usb->device_type[i];
@@ -498,6 +555,9 @@ void reset(Usb* usb) {
     new (usb) Usb();
 
     usb->hw = hw;
+
+    usb->logger = logger;
+    usb->logger_id = logger_id;
 
     usb->hc_control = OHCI_USB_RESET;
     usb->hc_fm_interval = 0x2edf;
@@ -518,6 +578,10 @@ void reset(Usb* usb) {
     usb->configured = 1;
 
     memcpy(usb->msd_path, msd_path, sizeof(usb->msd_path));
+
+    usb->p2io_input_type = p2io_input_type;
+
+    memcpy(usb->p2io_dongle_path, p2io_dongle_path, sizeof(usb->p2io_dongle_path));
 
     for (int i = 0; i < OHCI_NUM_PORTS; i++)
         set_port_device(usb, i, device_type[i]);

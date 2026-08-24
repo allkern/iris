@@ -228,6 +228,10 @@ int load_hdd(Speed* speed, const char* path) {
     return ret;
 }
 
+int load_hdd_id(Speed* speed, const char* path) {
+    return ata::load_security_data(speed->ata, path);
+}
+
 void set_mac_address(Speed* speed, const uint8_t* mac) {
     uint16_t data[32] = {
         0x0000, 0x0000, 0x0000, 0x0000,
