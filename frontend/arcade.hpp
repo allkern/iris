@@ -8,6 +8,7 @@
 
 #include "ps2.hpp"
 #include "kp2/p2io.hpp"
+#include "kp1/p1io.hpp"
 
 namespace iris::arcade {
 
@@ -1041,5 +1042,86 @@ const toml::table g_arcade_definitions = toml::table {
         { "nvram_crc", 0xaa83752f },
         { "dongle_black_crc", 0x159f9d8a },
         { "dongle_black_sha1", "95537df111f67478100b10e6095391846a3a71a0" }
+    }},
+
+    // Konami Python 1
+    { "wswe", toml::table {
+        { "system", iris::ps2::KONAMI_PYTHON },
+        { "name", "World Soccer Winning Eleven Arcade Game Style (C18 JAA03)" },
+        { "gameid", "C18JAA03" },
+        { "bootprog", "START" },
+        { "io_mode", iris::kp1::p1io::IO_MODE_JVS },
+        { "nvram", toml::array { "ps2_nvram", "ps2_nvram.bin" } },
+        { "media", toml::array { "c18jaa03.chd", "c18jaa03.img" } },
+        { "io_bootrom", "b22a01.u42" },
+        { "dongle", "kn00002.ic002" },
+        { "dongle_int", "ds2430.u3" },
+        { "bbsram", "m48t58y.u48" },
+        { "media_sha1", "b47190aa38f1f3a499b817758e3f29fac54391bd" },
+        { "dongle_size", 0x800000ll },
+        { "dongle_crc", 0xbd1770aa },
+        { "dongle_sha1", "be217d6d7648e529953ea25caad904394919644c" },
+        { "bbsram_crc", 0xd4181cb5 },
+        { "bbsram_sha1", "c5560d1ac043bfe2527fac3fb1989fa8fc53cf8a" }
+    }},
+    { "wswe2k3", toml::table {
+        { "system", iris::ps2::KONAMI_PYTHON },
+        { "name", "World Soccer Winning Eleven Arcade Game 2003 (C27 JAA03)" },
+        { "gameid", "C27JAA03" },
+        { "bootprog", "START" },
+        { "io_mode", iris::kp1::p1io::IO_MODE_JVS },
+        { "nvram", toml::array { "ps2_nvram", "ps2_nvram.bin" } },
+        { "media", toml::array { "c27jaa03.chd", "c27jaa03.img" } },
+        { "io_bootrom", "b22a01.u42" },
+        { "dongle", "kn00002.ic002" },
+        { "dongle_int", "ds2430.u3" },
+        { "bbsram", "m48t58y.u48" },
+        { "media_sha1", "9b2aa900711d88cf5effb3ba6be18726ea006ac4" },
+        { "dongle_size", 0x800000ll },
+        { "dongle_crc", 0x6f5b7309 },
+        { "dongle_sha1", "5e9d75497c3a3a92af41b20e41991c9c5837d50a" },
+        { "bbsram_crc", 0x76068de0 },
+        { "bbsram_sha1", "5f75b88ad04871fb3799fe904658c87524bad94f" }
+    }},
+    { "pesta", toml::table {
+        { "system", iris::ps2::KONAMI_PYTHON },
+        { "name", "Pro Evolution Soccer The Arcade (ver EAA)" },
+        { "gameid", "C18EAA03" },
+        { "bootprog", "START" },
+        { "io_mode", iris::kp1::p1io::IO_MODE_JVS },
+        { "nvram", toml::array { "ps2_nvram", "ps2_nvram.bin" } },
+        { "media", toml::array { "pes_c18_ea_a03.chd", "pes_c18_ea_a03.img" } },
+        { "io_bootrom", "b22a01.u42" },
+        { "dongle", "kn00002.ic002" },
+        { "dongle_int", "ds2430.u3" },
+        { "bbsram", "m48t58y.u48" },
+        { "media_sha1", "4fe2f0f8e11ac709881e754755d44de5dd8d9fa8" }
+    }},
+    { "popn9", toml::table {
+        { "system", iris::ps2::KONAMI_PYTHON },
+        { "name", "pop'n music 9 (ver JAB)" },
+        { "gameid", "C00JAB" },
+        { "bootprog", "START" },
+        { "io_mode", iris::kp1::p1io::IO_MODE_POPN },
+        { "nvram", toml::array { "ps2_nvram", "ps2_nvram.bin" } },
+        { "media", toml::array { "c00jab.chd", "c00jab.img" } },
+        { "io_bootrom", "b22a01.u42" },
+        { "dongle", "kn00002.ic002" },
+        { "dongle_int", "ds2430.u3" },
+        { "bbsram", "m48t58y.u48" },
+        { "media_sha1", "3763aaded9b45388a664edd84a3f7f8ff4101be4" }
+    }},
+    { "dogstdx", toml::table {
+        { "system", iris::ps2::KONAMI_PYTHON },
+        { "name", "dogstation Deluxe" },
+        { "bootprog", "START" },
+        { "io_mode", iris::kp1::p1io::IO_MODE_DOGSTATIONDX },
+        { "nvram", toml::array { "ps2_nvram", "ps2_nvram.bin" } },
+        { "media", toml::array { "dogstdx.chd", "dogstdx.img" } },
+        { "io_bootrom", "b22a01.u42" },
+        { "dongle", "kn00002.ic002" },
+        { "dongle_int", "ds2430.u3" },
+        { "bbsram", "m48t58y.u48" },
+        { "media_sha1", "e44a5f535d2a925cd907bdfd5b8e98e61899b4fc" }
     }}
 };
