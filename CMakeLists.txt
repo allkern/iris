@@ -392,6 +392,7 @@ target_sources(iris PRIVATE
     src/iop/spu2.cpp
     src/iop/timers.cpp
     src/iop/usb.cpp
+    src/iop/fw/device.cpp
     src/iop/usb/device.cpp
     src/iop/usb/kbd.cpp
     src/iop/usb/mouse.cpp
@@ -450,6 +451,7 @@ target_sources(iris PRIVATE
     src/kp2/p2io.cpp
     src/kp2/acio.cpp
     src/kp2/thrilldrive.cpp
+    src/kp1/p1io.cpp
     deps/imgui/imgui.cpp
     deps/imgui/imgui_demo.cpp
     deps/imgui/imgui_draw.cpp

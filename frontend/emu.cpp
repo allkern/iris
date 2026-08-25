@@ -11,6 +11,7 @@
 #include "fs/blk.hpp"
 #include "shared/ata/disc.hpp"
 #include "kp2/p2io.hpp"
+#include "kp1/p1io.hpp"
 
 #include <filesystem>
 #include <vector>
@@ -283,6 +284,8 @@ int boot_ps2_path(Instance* iris, std::string path) {
 
 static int boot_arcade_thread(Instance* iris, std::string path);
 
+std::filesystem::path get_rom_path(std::filesystem::path filename, std::string ext);
+
 struct ArcadeFiles {
     std::filesystem::path bios;
     std::filesystem::path nand;
@@ -294,6 +297,12 @@ struct ArcadeFiles {
     std::filesystem::path hdd_id;
     std::filesystem::path dongle_black;
     std::filesystem::path dongle_white;
+    std::filesystem::path io_bootrom;
+    std::filesystem::path io_configrom;
+    std::filesystem::path dongle_int;
+    std::filesystem::path dongle_ext;
+    std::filesystem::path bbsram;
+    std::filesystem::path bbsram_seed;
 
     int media_type;
 };
@@ -368,6 +377,11 @@ struct ArcadeFileNames {
     std::vector <std::string> nvram;
     std::vector <std::string> dongle_black;
     std::vector <std::string> dongle_white;
+    std::vector <std::string> io_bootrom;
+    std::vector <std::string> io_configrom;
+    std::vector <std::string> dongle_int;
+    std::vector <std::string> dongle_ext;
+    std::vector <std::string> bbsram;
 };
 
 struct ArcadeSource {
@@ -387,6 +401,7 @@ struct ArcadeSource {
     int gun_sensor_active_high = 0;
     int ioboard_mode = 0;
     int input_type = kp2::p2io::INPUT_THRILL_DRIVE;
+    int io_mode = kp1::p1io::IO_MODE_JVS;
     int dip_switches = 0;
     int force_31khz = 0;
     bool needs_white_dongle = false;
@@ -448,6 +463,11 @@ static ArcadeFileNames arcade_file_names(const std::string& id) {
     names.nvram = query_arcade_names(id, "nvram", "ps2_nvram.bin");
     names.dongle_black = query_arcade_names(id, "dongle_black", "ds2430_black.bin");
     names.dongle_white = query_arcade_names(id, "dongle_white", "ds2430_white.bin");
+    names.io_bootrom = query_arcade_names(id, "io_bootrom", "p1io_bootrom.bin");
+    names.io_configrom = query_arcade_names(id, "io_configrom", "d72872gc.crom");
+    names.dongle_int = query_arcade_names(id, "dongle_int", "ds2430_internal.bin");
+    names.dongle_ext = query_arcade_names(id, "dongle_ext", "ds2430_external.bin");
+    names.bbsram = query_arcade_names(id, "bbsram", "m48t58y.u48");
 
     return names;
 }
@@ -466,6 +486,7 @@ static void load_arcade_definition(ArcadeSource* source) {
     source->gun_sensor_active_high = query_arcade_value<int>(source->id, "gun_sensor_active_high").value_or(0);
     source->ioboard_mode = query_arcade_value<int>(source->id, "ioboard_mode").value_or(0);
     source->input_type = query_arcade_value<int>(source->id, "input_type").value_or(kp2::p2io::INPUT_THRILL_DRIVE);
+    source->io_mode = query_arcade_value<int>(source->id, "io_mode").value_or(kp1::p1io::IO_MODE_JVS);
     source->dip_switches = query_arcade_value<int>(source->id, "dipsw").value_or(0);
     source->force_31khz = query_arcade_value<int>(source->id, "force_31khz").value_or(0);
     source->needs_white_dongle = query_arcade_value<int>(source->id, "white_dongle").value_or(0) != 0;
@@ -566,9 +587,22 @@ static ArcadeFiles resolve_arcade_files(Instance* iris, const ArcadeSource& sour
     files.hdd_id = locate_arcade_file(source, source.names.hdd_id);
     files.dongle_black = locate_arcade_file(source, source.names.dongle_black);
     files.dongle_white = locate_arcade_file(source, source.names.dongle_white);
+    files.io_bootrom = locate_arcade_file(source, source.names.io_bootrom);
+    files.io_configrom = locate_arcade_file(source, source.names.io_configrom);
+    files.dongle_int = locate_arcade_file(source, source.names.dongle_int);
+    files.dongle_ext = locate_arcade_file(source, source.names.dongle_ext);
+    files.bbsram = pref_path / "kp1bbsram" / (source.id + ".bin");
+    files.bbsram_seed = locate_arcade_file(source, source.names.bbsram);
 
     if (source.system == ps2::KONAMI_PYTHON2) {
         files.nvram = locate_arcade_file(source, source.names.nvram);
+    }
+
+    if (source.system == ps2::KONAMI_PYTHON) {
+        std::filesystem::path supplied = locate_arcade_file(source, source.names.nvram);
+
+        if (std::filesystem::exists(supplied))
+            files.nvram = supplied;
     }
 
     files.media_type = source.media_type;
@@ -588,6 +622,7 @@ static bool arcade_boots_from_dongle(Instance* iris, const ArcadeSource& source)
         case ps2::NAMCO_SYSTEM_246:
         case ps2::NAMCO_SYSTEM_256:
         case ps2::NAMCO_SYSTEM_SUPER_256:
+        case ps2::KONAMI_PYTHON:
             break;
 
         default:
@@ -607,6 +642,13 @@ static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& 
     if (source.system == ps2::NAMCO_SYSTEM_147 || source.system == ps2::NAMCO_SYSTEM_148) {
         if (!arcade_file_available(source, source.names.nand))
             return "NAND";
+
+        return nullptr;
+    }
+
+    if (source.system == ps2::KONAMI_PYTHON) {
+        if (!arcade_file_available(source, source.names.media)) return "CF image";
+        if (!arcade_file_available(source, source.names.dongle)) return "memory card dongle";
 
         return nullptr;
     }
@@ -1267,6 +1309,7 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
     std::filesystem::create_directories(files.sram.parent_path(), ec);
     std::filesystem::create_directories(files.nvram.parent_path(), ec);
+    std::filesystem::create_directories(files.bbsram.parent_path(), ec);
 
     switch (system) {
         case ps2::NAMCO_SYSTEM_147:
@@ -1364,6 +1407,118 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
             return true;
         } break;
 
+        case ps2::KONAMI_PYTHON: {
+            if (!std::filesystem::exists(files.bios)) {
+                iris_error(&iris->log.emu, "Couldn't find bootrom file \"{}\"", files.bios.string().c_str());
+
+                push_info(iris, "Couldn't start arcade game (Missing bootrom)");
+
+                return false;
+            }
+
+            ps2::load_bios(iris->ps2, files.bios.string().c_str());
+            ps2::set_system(iris->ps2, system);
+
+            if (!std::filesystem::exists(files.nvram)) {
+                std::filesystem::path bios_stem = files.bios.parent_path() / files.bios.stem();
+                std::filesystem::path sibling = get_rom_path(bios_stem, "nvm");
+
+                if (!sibling.empty()) {
+                    std::filesystem::copy_file(sibling, files.nvram, ec);
+
+                    iris_info(&iris->log.emu, "Seeded NVRAM from \"{}\"", sibling.string().c_str());
+                }
+            }
+
+            cdvd::load_nvram(iris->ps2->cdvd, files.nvram.string().c_str());
+
+            if (fw::get_port_device(iris->ps2->fw, 0) != fw::DEVICE_P1IO) {
+                iris_error(&iris->log.emu, "The Python 1 I/O board isn't attached");
+
+                push_info(iris, "Couldn't start arcade game (No I/O board)");
+
+                return false;
+            }
+
+            kp1::p1io::P1io* p1io = kp1::p1io::from_device(&iris->ps2->fw->device[0]);
+
+            kp1::p1io::set_io_mode(p1io, source.io_mode);
+
+            if (std::filesystem::exists(files.io_configrom)) {
+                kp1::p1io::load_config_rom(p1io, files.io_configrom.string().c_str());
+            } else {
+                iris_warning(&iris->log.emu, "No i.LINK config ROM for \"{}\", bus enumeration will fail", source.id.c_str());
+            }
+
+            if (std::filesystem::exists(files.io_bootrom)) {
+                kp1::p1io::load_bootrom(p1io, files.io_bootrom.string().c_str());
+            } else {
+                iris_warning(&iris->log.emu, "No I/O board boot ROM for \"{}\"", source.id.c_str());
+            }
+
+            if (std::filesystem::exists(files.dongle_int)) {
+                kp1::p1io::load_dongle(p1io, kp1::p1io::DONGLE_INTERNAL, files.dongle_int.string().c_str());
+            }
+
+            if (std::filesystem::exists(files.dongle_ext)) {
+                kp1::p1io::load_dongle(p1io, kp1::p1io::DONGLE_EXTERNAL, files.dongle_ext.string().c_str());
+            }
+
+            if (!std::filesystem::exists(files.bbsram) && std::filesystem::exists(files.bbsram_seed)) {
+                std::filesystem::copy_file(files.bbsram_seed, files.bbsram, ec);
+            }
+
+            if (!std::filesystem::exists(files.bbsram)) {
+                iris_warning(&iris->log.emu, "No timekeeper dump for \"{}\", most games won't boot without one", source.id.c_str());
+            }
+
+            kp1::p1io::load_bbsram(p1io, files.bbsram.string().c_str());
+
+            std::filesystem::path dongle = prepare_dongle(iris, files.dongle);
+
+            std::filesystem::path dongle_files =
+                std::filesystem::path(iris->paths.pref_path) / "arcade" / "dongle" / source.id;
+
+            bool dongle_boot = arcade_boots_from_dongle(iris, source);
+
+            if (dongle_boot && !unpack_dongle(iris, dongle, dongle_files, source.bootprog)) {
+                iris_error(&iris->log.emu, "Dongle \"{}\" doesn't hold boot program \"{}\"",
+                    dongle.string().c_str(), source.bootprog.c_str());
+
+                push_info(iris, "Couldn't start arcade game (Boot program not on dongle)");
+
+                return false;
+            }
+
+            attach_memory_card(iris, 0, dongle.string().c_str());
+
+            if (dongle_boot) {
+                std::filesystem::path program = dongle_files / source.bootprog;
+
+                ps2::iop_map_device(iris->ps2, "mc0", dongle_files.string().c_str());
+                ps2::iop_map_device(iris->ps2, "host", dongle_files.string().c_str());
+                ps2::iop_map_device(iris->ps2, "host0", dongle_files.string().c_str());
+
+                elf::load_symbols_from_file(iris, program.string());
+
+                iris_info(&iris->log.emu, "Booting \"{}\" off the dongle", source.bootprog.c_str());
+
+                ps2::boot_file(iris->ps2, ("host:  " + program.string()).c_str());
+
+                std::string dongle_arg = "mc0:" + source.bootprog;
+
+                const char* boot_args[] = { dongle_arg.c_str(), "DANGLE" };
+
+                ps2::set_boot_args(iris->ps2, boot_args, 2);
+            } else {
+                ps2::reset(iris->ps2);
+            }
+
+            finish_load(iris, 0, name + " (" + source.id + ")");
+
+            return true;
+        } break;
+
         case ps2::NAMCO_SYSTEM_246:
         case ps2::NAMCO_SYSTEM_256:
         case ps2::NAMCO_SYSTEM_SUPER_256: {
@@ -1448,6 +1603,11 @@ bool is_arcade_file(Instance* iris, std::string path) {
     if (is_arcade_manifest(path))
         return true;
 
+    std::error_code ec;
+
+    if (std::filesystem::is_directory(path, ec))
+        return identify_arcade_directory(path).size() != 0;
+
     if (!archive::is_archive(path))
         return false;
 
@@ -1470,7 +1630,8 @@ bool load_arcade(Instance* iris, std::string path) {
     int system = source->system;
 
     if (system == ps2::NAMCO_SYSTEM_246 || system == ps2::NAMCO_SYSTEM_256 ||
-        system == ps2::NAMCO_SYSTEM_SUPER_256 || system == ps2::KONAMI_PYTHON2) {
+        system == ps2::NAMCO_SYSTEM_SUPER_256 || system == ps2::KONAMI_PYTHON2 ||
+        system == ps2::KONAMI_PYTHON) {
         const char* missing = find_missing_arcade_file(iris, *source);
 
         if (missing) {

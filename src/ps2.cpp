@@ -44,7 +44,7 @@ void init(Ps2* ps2) {
     ps2->iop_timers = iop::timers::create(ps2->logger, ps2->iop_intc, ps2->sched);
     ps2->ee_timers = ee::timers::create(ps2->logger, ps2->sched);
     ps2->sbus = sbus::create(ps2->logger, ps2->ee_intc, ps2->iop_intc, ps2->sched);
-    ps2->fw = fw::create(ps2->logger, ps2->iop_intc);
+    ps2->fw = fw::create(ps2->logger, ps2->iop_intc, ps2->iop_bus, ps2->sched);
     ps2->speed = speed::create(ps2->logger, ps2->iop_intc, ps2->sched);
     ps2->usb = usb::create(ps2->logger, ps2->iop_intc, ps2->iop_bus, ps2->sched);
     ps2->gs = gs::create(ps2->logger, ps2->iop_intc, ps2->iop_timers, ps2->sched);
@@ -480,6 +480,12 @@ void set_system(Ps2* ps2, int system) {
         }
     }
 
+    for (int i = 0; i < fw::NUM_PORTS; i++) {
+        if (fw::get_port_device(ps2->fw, i) == fw::DEVICE_P1IO) {
+            fw::set_port_device(ps2->fw, i, fw::DEVICE_NONE);
+        }
+    }
+
     // Destroy optional hardware
     if (ps2->s14x_nand) { s14x::nand::destroy(ps2->s14x_nand); ps2->s14x_nand = NULL; }
     if (ps2->s14x_syscon) { s14x::syscon::destroy(ps2->s14x_syscon); ps2->s14x_syscon = NULL; }
@@ -553,6 +559,8 @@ void set_system(Ps2* ps2, int system) {
             ee_ram_size = ram::Size::_32MB;
             iop_ram_size = ram::Size::_2MB;
             mechacon_model = cdvd::MECHACON_SPC970;
+
+            fw::set_port_device(ps2->fw, 0, fw::DEVICE_P1IO);
         } break;
 
         case KONAMI_PYTHON2: {

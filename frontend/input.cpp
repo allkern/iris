@@ -8,6 +8,7 @@
 #include "stb_image_write.h"
 #include "ps2.hpp"
 #include "kp2/p2io.hpp"
+#include "kp1/p1io.hpp"
 
 constexpr unsigned char g_gamecontrollerdb_data[] = {
 #embed "../deps/SDL_GameControllerDB/gamecontrollerdb.txt"
@@ -338,6 +339,79 @@ static bool handle_p2io_action(Instance* iris, InputAction action, int slot, flo
     return true;
 }
 
+static uint32_t p1io_switch(InputAction action, int slot) {
+    if (slot == 0) {
+        switch (action) {
+            case IRIS_DS_BT_START: return kp1::p1io::JAMMA_P1_START;
+            case IRIS_DS_BT_UP: return kp1::p1io::JAMMA_P1_UP;
+            case IRIS_DS_BT_DOWN: return kp1::p1io::JAMMA_P1_DOWN;
+            case IRIS_DS_BT_LEFT: return kp1::p1io::JAMMA_P1_LEFT;
+            case IRIS_DS_BT_RIGHT: return kp1::p1io::JAMMA_P1_RIGHT;
+            case IRIS_DS_BT_SQUARE: return kp1::p1io::JAMMA_P1_BUTTON1;
+            case IRIS_DS_BT_TRIANGLE: return kp1::p1io::JAMMA_P1_BUTTON2;
+            case IRIS_DS_BT_CIRCLE: return kp1::p1io::JAMMA_P1_BUTTON3;
+            default: return 0;
+        }
+    }
+
+    switch (action) {
+        case IRIS_DS_BT_START: return kp1::p1io::JAMMA_P2_START;
+        case IRIS_DS_BT_UP: return kp1::p1io::JAMMA_P2_UP;
+        case IRIS_DS_BT_DOWN: return kp1::p1io::JAMMA_P2_DOWN;
+        case IRIS_DS_BT_LEFT: return kp1::p1io::JAMMA_P2_LEFT;
+        case IRIS_DS_BT_RIGHT: return kp1::p1io::JAMMA_P2_RIGHT;
+        case IRIS_DS_BT_SQUARE: return kp1::p1io::JAMMA_P2_BUTTON1;
+        case IRIS_DS_BT_TRIANGLE: return kp1::p1io::JAMMA_P2_BUTTON2;
+        case IRIS_DS_BT_CIRCLE: return kp1::p1io::JAMMA_P2_BUTTON3;
+        default: return 0;
+    }
+}
+
+static bool handle_p1io_action(Instance* iris, InputAction action, int slot, float value) {
+    if (!iris->ps2->fw)
+        return false;
+
+    if (fw::get_port_device(iris->ps2->fw, 0) != fw::DEVICE_P1IO)
+        return false;
+
+    kp1::p1io::P1io* p1io = kp1::p1io::from_device(&iris->ps2->fw->device[0]);
+
+    if (!p1io)
+        return false;
+
+    uint32_t mask = 0;
+
+    switch (action) {
+        case IRIS_S2X6_SW_COIN1: mask = kp1::p1io::JAMMA_COIN1; break;
+        case IRIS_S2X6_SW_COIN2: mask = kp1::p1io::JAMMA_COIN2; break;
+        case IRIS_S2X6_SW_TEST: mask = kp1::p1io::JAMMA_TEST; break;
+        case IRIS_DS_BT_SELECT: mask = kp1::p1io::JAMMA_SERVICE; break;
+        default: mask = p1io_switch(action, slot); break;
+    }
+
+    if (!mask)
+        return false;
+
+    bool pressed = value > 0.5f;
+    bool was_pressed = (p1io->jamma & mask) != 0;
+
+    if (pressed) {
+        kp1::p1io::press_switch(p1io, mask);
+    } else {
+        kp1::p1io::release_switch(p1io, mask);
+    }
+
+    if (pressed && !was_pressed) {
+        if (mask == kp1::p1io::JAMMA_COIN1)
+            kp1::p1io::insert_coin(p1io, 0);
+
+        if (mask == kp1::p1io::JAMMA_COIN2)
+            kp1::p1io::insert_coin(p1io, 1);
+    }
+
+    return true;
+}
+
 static bool handle_s2x6_action(Instance* iris, InputAction action, int slot, float value) {
     s2x6::acjv::Acjv* acjv = iris->ps2->s2x6_acjv;
 
@@ -377,6 +451,9 @@ static bool handle_s2x6_action(Instance* iris, InputAction action, int slot, flo
 
 void execute_action(Instance* iris, InputAction action, int slot, float value) {
     if (handle_p2io_action(iris, action, slot, value))
+        return;
+
+    if (handle_p1io_action(iris, action, slot, value))
         return;
 
     if (handle_s2x6_action(iris, action, slot, value))
