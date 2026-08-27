@@ -97,7 +97,30 @@ inline constexpr uint32_t PHY_SELF_ID_PACKET = 0xe1;
 inline constexpr uint32_t NODE_ID_RESET = (0x3ffu << 22) | (LOCAL_PHY_ID << 16) | 1u;
 inline constexpr uint32_t REG_7C_VALUE = 0x10000001;
 
+inline constexpr auto TCODE_WRITEQ = 0;
+inline constexpr auto TCODE_WRITEB = 1;
+inline constexpr auto TCODE_WRITE_RESPONSE = 2;
+inline constexpr auto TCODE_READQ = 4;
+inline constexpr auto TCODE_READB = 5;
+inline constexpr auto TCODE_READQ_RESPONSE = 6;
+
+inline constexpr auto ACK_COMPLETE = 1;
+inline constexpr auto ACK_PEND = 2;
+
+inline constexpr uint32_t RESPONSE_SPEED = 2;
+
 inline constexpr auto DBUF_RX_MAX = 64;
+inline constexpr auto UBUF_TX_MAX = 64;
+inline constexpr auto UBUF_RX_MAX = 64;
+inline constexpr auto PHT_TX_MAX = 2048;
+inline constexpr auto PHT_CHANNELS = 2;
+
+inline constexpr auto PENDING_PACKETS = 32;
+inline constexpr auto PENDING_QUADS = 144;
+
+inline constexpr uint32_t OFFSET_HIGH_IOP_DMA = 0x1000;
+
+inline constexpr uint32_t LOCAL_NODE_ID = 0xffc0 | LOCAL_PHY_ID;
 
 inline constexpr auto NUM_PORTS = 1;
 
@@ -134,6 +157,23 @@ struct Fw {
     int dbuf_rx_head;
     int dbuf_rx_size;
 
+    uint32_t ubuf_tx[UBUF_TX_MAX];
+    int ubuf_tx_size;
+
+    uint32_t ubuf_rx[UBUF_RX_MAX];
+    int ubuf_rx_head;
+    int ubuf_rx_size;
+
+    uint32_t pending[PENDING_PACKETS][PENDING_QUADS];
+    int pending_size[PENDING_PACKETS];
+    int pending_head;
+    int pending_count;
+
+    uint32_t pht_tx[PHT_CHANNELS][PHT_TX_MAX];
+    int pht_tx_size[PHT_CHANNELS];
+    int pht_write_pending[PHT_CHANNELS];
+    uint32_t pht_tx_expected[PHT_CHANNELS];
+
     device::Device device[NUM_PORTS];
     int device_type[NUM_PORTS];
 
@@ -146,6 +186,12 @@ void reset(Fw* fw);
 void destroy(Fw* fw);
 uint64_t read32(Fw* fw, uint32_t addr);
 void write32(Fw* fw, uint32_t addr, uint64_t data);
+
+int write_iop_memory(Fw* fw, uint32_t address, const uint8_t* data, uint32_t size);
+int read_iop_memory(Fw* fw, uint32_t address, uint8_t* data, uint32_t size);
+void queue_remote_write_quad(Fw* fw, uint32_t offset_high, uint32_t offset_low, uint32_t payload);
+void queue_remote_write_bytes(Fw* fw, uint32_t offset_high, uint32_t offset_low, const uint8_t* payload, uint32_t count);
+void queue_remote_write_quads(Fw* fw, uint32_t offset_high, uint32_t offset_low, const uint32_t* payload, uint32_t count);
 
 const char* device_type_name(int type);
 int get_port_device(Fw* fw, int port);

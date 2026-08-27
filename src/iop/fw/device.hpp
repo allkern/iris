@@ -4,6 +4,8 @@
 
 #include "logger.hpp"
 
+namespace iris::fw { struct Fw; }
+
 namespace iris::fw::device {
 
 inline constexpr auto RESP_COMPLETE = 0;
@@ -27,6 +29,8 @@ struct Device {
 
     const Ops* ops;
     void* priv;
+
+    Fw* host;
 
     logger::Logger* logger = nullptr;
 };
