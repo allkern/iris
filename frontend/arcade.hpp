@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <map>
 #include <string>
 
 #include <toml++/toml.hpp>
@@ -39,6 +40,25 @@ struct Match {
     int role = ROLE_NONE;
     int confidence = CONFIDENCE_NONE;
 };
+
+inline constexpr auto EVIDENCE_NAME = 4;
+inline constexpr auto EVIDENCE_SIZE = 4;
+inline constexpr auto EVIDENCE_HINT = 8;
+inline constexpr auto EVIDENCE_HASH = 16;
+
+inline constexpr auto EVIDENCE_ACCEPT = 8;
+
+struct Candidate {
+    int score = 0;
+    int strongest = 0;
+    int role = ROLE_NONE;
+};
+
+using Candidates = std::map <std::string, Candidate>;
+
+void collect_candidates(const Fingerprint& print, const std::string& name, Candidates* out);
+
+bool is_known_set(const std::string& id);
 
 bool probe_file(const std::filesystem::path& path, Fingerprint* out);
 bool probe_size(uint64_t size, Fingerprint* out);

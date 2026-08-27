@@ -12,7 +12,7 @@ static constexpr uint64_t HASH_SIZE_LIMIT = 64ull * 1024 * 1024;
 static constexpr auto CHD_TAG_SIZE = 8;
 static constexpr auto CHD_HEADER_SIZE = 124;
 static constexpr auto CHD_LOGICAL_BYTES_OFFSET = 32;
-static constexpr auto CHD_RAW_SHA1_OFFSET = 64;
+static constexpr auto CHD_SHA1_OFFSET = 84;
 static constexpr auto SHA1_SIZE = 20;
 
 static uint32_t g_crc_table[256];
@@ -76,7 +76,7 @@ static bool read_chd_header(FILE* file, Fingerprint* out) {
         return false;
 
     out->size = read_be64(header + CHD_LOGICAL_BYTES_OFFSET);
-    out->sha1 = to_hex(header + CHD_RAW_SHA1_OFFSET, SHA1_SIZE);
+    out->sha1 = to_hex(header + CHD_SHA1_OFFSET, SHA1_SIZE);
 
     return true;
 }
@@ -211,58 +211,71 @@ static const std::vector <Dump>& dumps() {
     return cached;
 }
 
-Match identify(const Fingerprint& print, const std::string& name) {
-    Match match;
+bool is_known_set(const std::string& id) {
+    return id.size() && g_arcade_definitions.contains(id);
+}
 
+void collect_candidates(const Fingerprint& print, const std::string& name, Candidates* out) {
     std::string key = normalize_key(name);
 
     for (const Dump& dump : dumps()) {
-        if (print.sha1.size() && print.sha1 == dump.sha1) {
-            match.id = dump.id;
-            match.role = dump.role;
-            match.confidence = CONFIDENCE_STRONG;
+        int evidence = 0;
 
-            return match;
+        if (print.sha1.size() && dump.sha1.size() && print.sha1 == dump.sha1) {
+            evidence = EVIDENCE_HASH;
+        } else if (print.has_crc && dump.crc && print.crc == dump.crc && print.size == dump.size) {
+            evidence = EVIDENCE_HASH;
+        } else if (print.size && print.size == dump.size) {
+            evidence = EVIDENCE_SIZE;
         }
 
-        if (print.has_crc && print.crc == dump.crc && print.size == dump.size) {
-            match.id = dump.id;
-            match.role = dump.role;
-            match.confidence = CONFIDENCE_STRONG;
+        int named = 0;
 
-            return match;
-        }
-    }
-
-    for (const Dump& dump : dumps()) {
         for (const std::string& candidate : dump.names) {
             if (key.size() && normalize_key(candidate) == key) {
-                match.id = dump.id;
-                match.role = dump.role;
-                match.confidence = CONFIDENCE_STRONG;
+                named = EVIDENCE_NAME;
 
-                return match;
+                break;
             }
         }
-    }
 
-    const Dump* by_size = nullptr;
+        if (!evidence && !named)
+            continue;
 
-    int size_hits = 0;
+        Candidate& candidate = (*out)[dump.id];
 
-    for (const Dump& dump : dumps()) {
-        if (print.size && print.size == dump.size) {
-            by_size = &dump;
+        candidate.score += evidence + named;
 
-            size_hits++;
+        if (evidence + named > candidate.strongest) {
+            candidate.strongest = evidence + named;
+            candidate.role = dump.role;
         }
     }
+}
 
-    if (size_hits == 1) {
-        match.id = by_size->id;
-        match.role = by_size->role;
-        match.confidence = CONFIDENCE_WEAK;
+Match identify(const Fingerprint& print, const std::string& name) {
+    Candidates candidates;
+
+    collect_candidates(print, name, &candidates);
+
+    Match match;
+
+    int best = 0;
+
+    for (const auto& [id, candidate] : candidates) {
+        if (candidate.score <= best)
+            continue;
+
+        best = candidate.score;
+
+        match.id = id;
+        match.role = candidate.role;
     }
+
+    if (best < EVIDENCE_ACCEPT)
+        return {};
+
+    match.confidence = best >= EVIDENCE_HASH ? CONFIDENCE_STRONG : CONFIDENCE_WEAK;
 
     return match;
 }

@@ -532,14 +532,98 @@ static std::filesystem::path find_extracted_file(const ArcadeSource& source, con
     return {};
 }
 
-static bool arcade_file_available(const ArcadeSource& source, const std::vector <std::string>& names) {
+static constexpr uint64_t MEDIA_MIN_SIZE = 16ull * 1024 * 1024;
+
+static bool is_media_role(const char* prefix) {
+    return prefix && std::string(prefix) == "media";
+}
+
+static std::filesystem::path find_by_fingerprint(const ArcadeSource& source, const char* prefix) {
+    if (!prefix)
+        return {};
+
+    std::optional <std::string> sha1 = query_arcade_value <std::string> (source.id, std::string(prefix) + "_sha1");
+    std::optional <int64_t> crc = query_arcade_value <int64_t> (source.id, std::string(prefix) + "_crc");
+
+    if (!sha1 && !crc)
+        return {};
+
+    std::error_code ec;
+
+    for (const std::filesystem::path& dir : source.search_paths) {
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (ec)
+                break;
+
+            if (!entry.is_regular_file(ec))
+                continue;
+
+            arcade::Fingerprint print;
+
+            if (!arcade::probe_file(entry.path(), &print))
+                continue;
+
+            if (sha1 && print.sha1.size() && print.sha1 == *sha1)
+                return entry.path();
+
+            if (crc && print.has_crc && print.crc == (uint32_t)*crc)
+                return entry.path();
+        }
+    }
+
+    return {};
+}
+
+static std::filesystem::path find_media_by_kind(const ArcadeSource& source) {
+    std::vector <std::filesystem::path> compressed;
+    std::vector <std::filesystem::path> large;
+
+    std::error_code ec;
+
+    for (const std::filesystem::path& dir : source.search_paths) {
+        for (const auto& entry : std::filesystem::directory_iterator(dir, ec)) {
+            if (ec)
+                break;
+
+            if (!entry.is_regular_file(ec))
+                continue;
+
+            arcade::Fingerprint print;
+
+            if (!arcade::probe_file(entry.path(), &print))
+                continue;
+
+            if (print.sha1.size()) {
+                compressed.push_back(entry.path());
+            } else if (print.size >= MEDIA_MIN_SIZE) {
+                large.push_back(entry.path());
+            }
+        }
+    }
+
+    if (compressed.size() == 1)
+        return compressed.front();
+
+    if (compressed.empty() && large.size() == 1)
+        return large.front();
+
+    return {};
+}
+
+static bool arcade_file_available(const ArcadeSource& source, const std::vector <std::string>& names, const char* prefix = nullptr) {
     if (!find_extracted_file(source, names).empty())
         return true;
 
-    return find_archive_with_file(source, names) != nullptr;
+    if (find_archive_with_file(source, names) != nullptr)
+        return true;
+
+    if (!find_by_fingerprint(source, prefix).empty())
+        return true;
+
+    return is_media_role(prefix) && !find_media_by_kind(source).empty();
 }
 
-static std::filesystem::path locate_arcade_file(const ArcadeSource& source, const std::vector <std::string>& names) {
+static std::filesystem::path locate_arcade_file(const ArcadeSource& source, const std::vector <std::string>& names, const char* prefix = nullptr) {
     std::filesystem::path found = find_extracted_file(source, names);
 
     if (!found.empty())
@@ -551,6 +635,18 @@ static std::filesystem::path locate_arcade_file(const ArcadeSource& source, cons
                 return source.extract_path / name;
             }
         }
+    }
+
+    std::filesystem::path by_content = find_by_fingerprint(source, prefix);
+
+    if (!by_content.empty())
+        return by_content;
+
+    if (is_media_role(prefix)) {
+        std::filesystem::path by_kind = find_media_by_kind(source);
+
+        if (!by_kind.empty())
+            return by_kind;
     }
 
     if (names.empty()) {
@@ -585,14 +681,14 @@ static ArcadeFiles resolve_arcade_files(Instance* iris, const ArcadeSource& sour
 
     files.bios = locate_arcade_file(source, source.names.bios);
     files.nand = locate_arcade_file(source, source.names.nand);
-    files.dongle = locate_arcade_file(source, source.names.dongle);
-    files.media = locate_arcade_file(source, source.names.media);
+    files.dongle = locate_arcade_file(source, source.names.dongle, "dongle");
+    files.media = locate_arcade_file(source, source.names.media, "media");
     files.loader = locate_arcade_file(source, source.names.loader);
     files.sram = pref_path / "acsram" / (source.id + ".bin");
     files.nvram = pref_path / "acnvram" / (source.id + ".nvm");
-    files.hdd_id = locate_arcade_file(source, source.names.hdd_id);
-    files.dongle_black = locate_arcade_file(source, source.names.dongle_black);
-    files.dongle_white = locate_arcade_file(source, source.names.dongle_white);
+    files.hdd_id = locate_arcade_file(source, source.names.hdd_id, "hdd_id");
+    files.dongle_black = locate_arcade_file(source, source.names.dongle_black, "dongle_black");
+    files.dongle_white = locate_arcade_file(source, source.names.dongle_white, "dongle_white");
     files.io_bootrom = locate_arcade_file(source, source.names.io_bootrom);
     files.io_configrom = locate_arcade_file(source, source.names.io_configrom);
     files.dongle_int = locate_arcade_file(source, source.names.dongle_int);
@@ -602,7 +698,7 @@ static ArcadeFiles resolve_arcade_files(Instance* iris, const ArcadeSource& sour
     files.mcd_id = locate_arcade_file(source, source.names.mcd_id);
 
     if (source.system == ps2::KONAMI_PYTHON2) {
-        files.nvram = locate_arcade_file(source, source.names.nvram);
+        files.nvram = locate_arcade_file(source, source.names.nvram, "nvram");
     }
 
     if (source.system == ps2::KONAMI_PYTHON) {
@@ -653,19 +749,19 @@ static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& 
     }
 
     if (source.system == ps2::KONAMI_PYTHON) {
-        if (!arcade_file_available(source, source.names.media)) return "CF image";
-        if (!arcade_file_available(source, source.names.dongle)) return "memory card dongle";
+        if (!arcade_file_available(source, source.names.media, "media")) return "CF image";
+        if (!arcade_file_available(source, source.names.dongle, "dongle")) return "memory card dongle";
 
         return nullptr;
     }
 
     if (source.system == ps2::KONAMI_PYTHON2) {
-        if (!arcade_file_available(source, source.names.media)) return "HDD image";
-        if (!arcade_file_available(source, source.names.hdd_id)) return "HDD ID";
-        if (!arcade_file_available(source, source.names.nvram)) return "NVRAM";
-        if (!arcade_file_available(source, source.names.dongle_black)) return "black dongle";
+        if (!arcade_file_available(source, source.names.media, "media")) return "HDD image";
+        if (!arcade_file_available(source, source.names.hdd_id, "hdd_id")) return "HDD ID";
+        if (!arcade_file_available(source, source.names.nvram, "nvram")) return "NVRAM";
+        if (!arcade_file_available(source, source.names.dongle_black, "dongle_black")) return "black dongle";
 
-        if (source.needs_white_dongle && !arcade_file_available(source, source.names.dongle_white))
+        if (source.needs_white_dongle && !arcade_file_available(source, source.names.dongle_white, "dongle_white"))
             return "white dongle";
 
         return nullptr;
@@ -725,39 +821,29 @@ static std::string find_set_by_game_id(const std::string& gameid) {
     return "";
 }
 
-static std::string identify_by_catalog(const std::vector <std::pair <std::string, arcade::Fingerprint>>& files) {
-    std::string strong;
-    std::string weak;
-    int weak_votes = 0;
+static std::string identify_by_catalog(const std::vector <std::pair <std::string, arcade::Fingerprint>>& files, const std::string& hint) {
+    arcade::Candidates candidates;
 
     for (const auto& [name, print] : files) {
-        arcade::Match match = arcade::identify(print, name);
-
-        if (!match.id.size())
-            continue;
-
-        if (match.confidence == arcade::CONFIDENCE_STRONG) {
-            if (match.role == arcade::ROLE_DONGLE) {
-                return match.id;
-            }
-
-            if (!strong.size()) {
-                strong = match.id;
-            }
-
-            continue;
-        }
-
-        if (!weak.size() || weak == match.id) {
-            weak = match.id;
-            weak_votes++;
-        }
+        arcade::collect_candidates(print, name, &candidates);
     }
 
-    if (strong.size())
-        return strong;
+    if (arcade::is_known_set(hint))
+        candidates[hint].score += arcade::EVIDENCE_HINT;
 
-    return weak_votes >= 2 ? weak : "";
+    std::string best_id;
+
+    int best = 0;
+
+    for (const auto& [id, candidate] : candidates) {
+        if (candidate.score <= best)
+            continue;
+
+        best = candidate.score;
+        best_id = id;
+    }
+
+    return best >= arcade::EVIDENCE_ACCEPT ? best_id : "";
 }
 
 static std::string identify_arcade_directory(const std::filesystem::path& path) {
@@ -780,7 +866,7 @@ static std::string identify_arcade_directory(const std::filesystem::path& path) 
         files.push_back({ entry.path().filename().string(), print });
     }
 
-    return identify_by_catalog(files);
+    return identify_by_catalog(files, lowercase(path.stem().string()));
 }
 
 static std::string identify_archive_by_catalog(const ArchiveIndex& index) {
@@ -798,7 +884,7 @@ static std::string identify_archive_by_catalog(const ArchiveIndex& index) {
         files.push_back({ std::filesystem::path(entry.name).filename().string(), print });
     }
 
-    return identify_by_catalog(files);
+    return identify_by_catalog(files, lowercase(index.path.stem().string()));
 }
 
 static std::string identify_by_game_id(const ArchiveIndex& index) {
@@ -820,10 +906,15 @@ static std::string identify_by_game_id(const ArchiveIndex& index) {
 }
 
 static std::string identify_arcade_archive(const ArchiveIndex& index) {
-    std::string stem = lowercase(index.path.stem().string());
+    std::string by_catalog = identify_archive_by_catalog(index);
 
-    if (g_arcade_definitions.contains(stem))
-        return stem;
+    if (by_catalog.size())
+        return by_catalog;
+
+    std::string by_game_id = identify_by_game_id(index);
+
+    if (by_game_id.size())
+        return by_game_id;
 
     std::string best_id;
     int best_score = 0;
@@ -839,15 +930,7 @@ static std::string identify_arcade_archive(const ArchiveIndex& index) {
         }
     }
 
-    if (best_score >= 4)
-        return best_id;
-
-    std::string by_game_id = identify_by_game_id(index);
-
-    if (by_game_id.size())
-        return by_game_id;
-
-    return identify_archive_by_catalog(index);
+    return best_score >= 4 ? best_id : "";
 }
 
 static bool archive_completes_source(const ArcadeSource& source, const ArchiveIndex& index) {
@@ -988,15 +1071,9 @@ static std::optional<ArcadeSource> open_arcade_source(Instance* iris, const std:
     ArcadeSource source;
 
     if (std::filesystem::is_directory(path)) {
-        source.id = lowercase(path.stem().string());
+        source.id = identify_arcade_directory(path);
 
         load_arcade_definition(&source);
-
-        if (!source.name.size()) {
-            source.id = identify_arcade_directory(path);
-
-            load_arcade_definition(&source);
-        }
 
         if (!source.name.size())
             return {};
