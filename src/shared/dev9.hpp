@@ -9,26 +9,15 @@ namespace iris::dev9 {
 
 enum class Model : uint16_t {
     PCMCIA = 0x20, // CXD9566
-    EXPBAY = 0x30  // CXD9611
+    EXPBAY = 0x32  // CXD9611
 };
 
+inline constexpr auto REG_BASE = 0x1f801460;
+inline constexpr auto REG_COUNT = 16;
+
 struct Dev9 {
-    uint16_t r_1460 = 0;
-    uint16_t r_1462 = 0;
-    uint16_t r_1464 = 0;
-    uint16_t r_1466 = 0;
-    uint16_t r_1468 = 0;
-    uint16_t r_146a = 0;
-    uint16_t power = 0;
+    uint16_t regs[REG_COUNT] = { 0 };
     uint16_t rev = 0;
-    uint16_t r_1470 = 0;
-    uint16_t r_1472 = 0;
-    uint16_t r_1474 = 0;
-    uint16_t r_1476 = 0;
-    uint16_t r_1478 = 0;
-    uint16_t r_147a = 0;
-    uint16_t r_147c = 0;
-    uint16_t r_147e = 0;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;

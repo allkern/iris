@@ -38,6 +38,10 @@ inline constexpr auto SECTORS_PER_TRACK = 63;
 inline constexpr auto ATAPI_DVD_SECTOR_SIZE = 2048;
 inline constexpr auto SCE_SECURITY_DATA_SIZE = 0x80;
 
+inline constexpr auto ERR_ABORT = 0x04;
+inline constexpr auto CONTROL_NIEN = 0x02;
+inline constexpr auto CONTROL_SRST = 0x04;
+
 inline constexpr auto STAT_ERR = 0x01;
 inline constexpr auto STAT_INDEX = 0x02;
 inline constexpr auto STAT_CORR = 0x04;
@@ -340,7 +344,7 @@ struct Ata {
     uint16_t command;
     uint16_t control;
 
-    uint8_t* buf;
+    uint8_t buf[SECTOR_SIZE];
     uint32_t buf_index;
     uint32_t buf_size;
 
@@ -348,6 +352,8 @@ struct Ata {
     uint64_t pending_lba;
 
     uint8_t identify[SECTOR_SIZE];
+
+    int last_unhandled_command;
     uint8_t sce_security_data[512];
 
     Speed* speed;

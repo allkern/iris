@@ -283,11 +283,15 @@ int ata_get_drive(Ata* ata) {
 }
 
 void ata_init_response(Ata* ata, int size) {
+    if (size > SECTOR_SIZE)
+        size = SECTOR_SIZE;
+
     ata->status |= STAT_DRQ;
 
     ata->buf_index = 0;
     ata->buf_size = size;
-    ata->buf = (uint8_t *)malloc(size);
+
+    memset(ata->buf, 0, size);
 }
 
 void ata_handle_data_overflow(Ata* ata) {
@@ -335,7 +339,10 @@ void ata_handle_data_overflow(Ata* ata) {
 }
 
 uint64_t ata_get_lba(Ata* ata) {
-    return ata->sector | (ata->lcyl << 8) | (ata->hcyl << 16) | ((ata->select & 0x0f) << 24);
+    return (uint64_t)(ata->sector & 0xff) |
+           ((uint64_t)(ata->lcyl & 0xff) << 8) |
+           ((uint64_t)(ata->hcyl & 0xff) << 16) |
+           ((uint64_t)(ata->select & 0x0f) << 24);
 }
 
 uint64_t ata_get_nsectors(Ata* ata) {
@@ -421,7 +428,7 @@ void ata_handle_command(Ata* ata, uint16_t cmd) {
         } break;
 
         case C_SCE_SECURITY_CONTROL: {
-            iris_debug(ata, "SCE SECURITY CONTROL command subcommand {:02x}", ata->feature);
+            iris_debug(ata, "SCE SECURITY CONTROL subcommand {:02x}", ata->feature);
 
             if (ata->feature == 0xec) {
                 iris_debug(ata, "SCE SECURITY CONTROL - Get security data");
@@ -429,13 +436,22 @@ void ata_handle_command(Ata* ata, uint16_t cmd) {
                 ata_init_response(ata, 512);
 
                 memcpy(ata->buf, ata->sce_security_data, 512);
-            } break;
+
+                break;
+            }
+
+            iris_warning(ata, "Unhandled SCE SECURITY CONTROL subcommand {:02x}", ata->feature);
+
+            ata->error |= ERR_ABORT;
+            ata->status |= STAT_ERR;
         } break;
 
         default: {
-            iris_debug(ata, "Unhandled command {:02x}", cmd);
+            if (cmd != ata->last_unhandled_command) {
+                ata->last_unhandled_command = cmd;
 
-            // exit(1);
+                iris_warning(ata, "Unhandled command {:02x}", cmd);
+            }
         } break;
     }
 }
@@ -527,12 +543,12 @@ void ata_write(Ata* ata, uint32_t addr, uint64_t data) {
 
     switch (addr) {
         case 0x40: ata_handle_data_write(ata, data); return;
-        case 0x42: ata->feature = data; return;
-        case 0x44: ata->nsector = data; return;
-        case 0x46: ata->sector = data; return;
-        case 0x48: ata->lcyl = data; return;
-        case 0x4a: ata->hcyl = data; return;
-        case 0x4c: ata->select = data; return;
+        case 0x42: ata->feature = data & 0xff; return;
+        case 0x44: ata->nsector = data & 0xff; return;
+        case 0x46: ata->sector = data & 0xff; return;
+        case 0x48: ata->lcyl = data & 0xff; return;
+        case 0x4a: ata->hcyl = data & 0xff; return;
+        case 0x4c: ata->select = data & 0xff; return;
         case 0x4e: {
             ata->command = data;
 
@@ -552,12 +568,21 @@ void ata_write(Ata* ata, uint32_t addr, uint64_t data) {
             return;
         } break;
         case 0x005c: {
-            if (data & 2 || data & 4) {
-                iris_debug(ata, "Software reset");
+            ata->control = data & 0xff;
+
+            if (data & CONTROL_SRST) {
+                // iris_debug(ata, "Software reset");
 
                 ata->status = STAT_READY | STAT_SEEK;
+                ata->error = 1;
                 ata->sector = 1;
                 ata->nsector = 1;
+                ata->lcyl = 0;
+                ata->hcyl = 0;
+                ata->buf_index = 0;
+                ata->buf_size = 0;
+                ata->pending_sectors = 0;
+                ata->pending_lba = 0;
             }
 
             return;

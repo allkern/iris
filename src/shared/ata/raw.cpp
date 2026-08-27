@@ -41,11 +41,25 @@ uint64_t get_sector_count(Raw* raw) {
 }
 
 void read_sector(Raw* raw, uint64_t lba, uint8_t* buf) {
+    if (lba >= raw->sector_count) {
+        iris_warning(raw, "Read at sector {} is past the end of the image", lba);
+
+        memset(buf, 0, 512);
+
+        return;
+    }
+
     fseek64(raw->file, lba * 512, SEEK_SET);
     fread(buf, 512, 1, raw->file);
 }
 
 void write_sector(Raw* raw, uint64_t lba, const uint8_t* buf) {
+    if (lba >= raw->sector_count) {
+        iris_warning(raw, "Write at sector {} is past the end of the image", lba);
+
+        return;
+    }
+
     fseek64(raw->file, lba * 512, SEEK_SET);
     fwrite(buf, 512, 1, raw->file);
 }
