@@ -199,7 +199,9 @@ static const std::vector <Dump>& dumps() {
 
             dump.sha1 = *sha1;
             dump.crc = (uint32_t)(*table)[prefix + "crc"].value_or<int64_t>(0);
-            dump.size = role == ROLE_DONGLE ? DONGLE_SIZE : (uint64_t)(*table)["media_size"].value_or<int64_t>(0);
+            dump.size = role == ROLE_DONGLE
+                ? (uint64_t)(*table)["dongle_size"].value_or<int64_t>(DONGLE_SIZE)
+                : (uint64_t)(*table)["media_size"].value_or<int64_t>(0);
             dump.role = role;
 
             cached.push_back(dump);
@@ -213,9 +215,6 @@ Match identify(const Fingerprint& print, const std::string& name) {
     Match match;
 
     std::string key = normalize_key(name);
-
-    const Dump* by_size = nullptr;
-    int size_hits = 0;
 
     for (const Dump& dump : dumps()) {
         if (print.sha1.size() && print.sha1 == dump.sha1) {
@@ -233,25 +232,25 @@ Match identify(const Fingerprint& print, const std::string& name) {
 
             return match;
         }
+    }
 
-        bool named = false;
-
+    for (const Dump& dump : dumps()) {
         for (const std::string& candidate : dump.names) {
             if (key.size() && normalize_key(candidate) == key) {
-                named = true;
+                match.id = dump.id;
+                match.role = dump.role;
+                match.confidence = CONFIDENCE_STRONG;
 
-                break;
+                return match;
             }
         }
+    }
 
-        if (named) {
-            match.id = dump.id;
-            match.role = dump.role;
-            match.confidence = CONFIDENCE_STRONG;
+    const Dump* by_size = nullptr;
 
-            return match;
-        }
+    int size_hits = 0;
 
+    for (const Dump& dump : dumps()) {
         if (print.size && print.size == dump.size) {
             by_size = &dump;
 

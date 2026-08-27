@@ -12,6 +12,7 @@
 #include "shared/ata/disc.hpp"
 #include "kp2/p2io.hpp"
 #include "kp1/p1io.hpp"
+#include "iop/mg.hpp"
 
 #include <filesystem>
 #include <vector>
@@ -302,6 +303,7 @@ struct ArcadeFiles {
     std::filesystem::path dongle_int;
     std::filesystem::path dongle_ext;
     std::filesystem::path bbsram;
+    std::filesystem::path mcd_id;
     std::filesystem::path bbsram_seed;
 
     int media_type;
@@ -382,6 +384,7 @@ struct ArcadeFileNames {
     std::vector <std::string> dongle_int;
     std::vector <std::string> dongle_ext;
     std::vector <std::string> bbsram;
+    std::vector <std::string> mcd_id;
 };
 
 struct ArcadeSource {
@@ -402,6 +405,7 @@ struct ArcadeSource {
     int ioboard_mode = 0;
     int input_type = kp2::p2io::INPUT_THRILL_DRIVE;
     int io_mode = kp1::p1io::IO_MODE_JVS;
+    int media_hdd = 0;
     int dip_switches = 0;
     int force_31khz = 0;
     bool needs_white_dongle = false;
@@ -468,6 +472,7 @@ static ArcadeFileNames arcade_file_names(const std::string& id) {
     names.dongle_int = query_arcade_names(id, "dongle_int", "ds2430_internal.bin");
     names.dongle_ext = query_arcade_names(id, "dongle_ext", "ds2430_external.bin");
     names.bbsram = query_arcade_names(id, "bbsram", "m48t58y.u48");
+    names.mcd_id = query_arcade_names(id, "mcd_id", "kn00002.id");
 
     return names;
 }
@@ -487,6 +492,7 @@ static void load_arcade_definition(ArcadeSource* source) {
     source->ioboard_mode = query_arcade_value<int>(source->id, "ioboard_mode").value_or(0);
     source->input_type = query_arcade_value<int>(source->id, "input_type").value_or(kp2::p2io::INPUT_THRILL_DRIVE);
     source->io_mode = query_arcade_value<int>(source->id, "io_mode").value_or(kp1::p1io::IO_MODE_JVS);
+    source->media_hdd = query_arcade_value<int>(source->id, "media_hdd").value_or(0);
     source->dip_switches = query_arcade_value<int>(source->id, "dipsw").value_or(0);
     source->force_31khz = query_arcade_value<int>(source->id, "force_31khz").value_or(0);
     source->needs_white_dongle = query_arcade_value<int>(source->id, "white_dongle").value_or(0) != 0;
@@ -593,6 +599,7 @@ static ArcadeFiles resolve_arcade_files(Instance* iris, const ArcadeSource& sour
     files.dongle_ext = locate_arcade_file(source, source.names.dongle_ext);
     files.bbsram = pref_path / "kp1bbsram" / (source.id + ".bin");
     files.bbsram_seed = locate_arcade_file(source, source.names.bbsram);
+    files.mcd_id = locate_arcade_file(source, source.names.mcd_id);
 
     if (source.system == ps2::KONAMI_PYTHON2) {
         files.nvram = locate_arcade_file(source, source.names.nvram);
@@ -622,7 +629,6 @@ static bool arcade_boots_from_dongle(Instance* iris, const ArcadeSource& source)
         case ps2::NAMCO_SYSTEM_246:
         case ps2::NAMCO_SYSTEM_256:
         case ps2::NAMCO_SYSTEM_SUPER_256:
-        case ps2::KONAMI_PYTHON:
             break;
 
         default:
@@ -1447,7 +1453,7 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
             if (std::filesystem::exists(files.io_configrom)) {
                 kp1::p1io::load_config_rom(p1io, files.io_configrom.string().c_str());
             } else {
-                iris_warning(&iris->log.emu, "No i.LINK config ROM for \"{}\", bus enumeration will fail", source.id.c_str());
+                iris_info(&iris->log.emu, "No i.LINK config ROM for \"{}\", using the built-in one", source.id.c_str());
             }
 
             if (std::filesystem::exists(files.io_bootrom)) {
@@ -1474,6 +1480,18 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
             kp1::p1io::load_bbsram(p1io, files.bbsram.string().c_str());
 
+            int media_loaded = source.media_hdd
+                ? kp1::p1io::load_hdd(p1io, files.media.string().c_str())
+                : kp1::p1io::load_cf(p1io, files.media.string().c_str());
+
+            if (!media_loaded) {
+                iris_error(&iris->log.emu, "Couldn't read media image \"{}\"", files.media.string().c_str());
+
+                push_info(iris, "Couldn't start arcade game (Bad media image)");
+
+                return false;
+            }
+
             std::filesystem::path dongle = prepare_dongle(iris, files.dongle);
 
             std::filesystem::path dongle_files =
@@ -1490,7 +1508,21 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
                 return false;
             }
 
-            attach_memory_card(iris, 0, dongle.string().c_str());
+            std::filesystem::path card = std::filesystem::path(iris->paths.pref_path) / "arcade" / "card" / (source.id + ".ps2");
+
+            std::filesystem::create_directories(card.parent_path(), ec);
+
+            if (!std::filesystem::exists(card)) {
+                std::filesystem::copy_file(dongle, card, ec);
+
+                iris_info(&iris->log.emu, "Copied dongle to \"{}\"", card.string().c_str());
+            }
+
+            attach_memory_card(iris, 0, card.string().c_str());
+
+            iris->paths.mecha_card_id_path = files.mcd_id.string();
+
+            settings::apply_mg_keys(iris);
 
             if (dongle_boot) {
                 std::filesystem::path program = dongle_files / source.bootprog;
@@ -1737,15 +1769,18 @@ int attach_memory_card(Instance* iris, int slot, const char* path) {
         return 1;
     }
 
-    dev::mcd::attach(iris->logger, iris->ps2->sio2, slot+2, path);
+    iris->input.mcd[slot] = dev::mcd::attach(iris->logger, iris->ps2->sio2, slot+2, path);
 
     iris->input.mcd_slot_type[slot] = 1;
+
+    settings::apply_card_magicgate(iris, slot);
 
     return 1;
 }
 
 void detach_memory_card(Instance* iris, int slot) {
     iris->input.mcd_slot_type[slot] = 0;
+    iris->input.mcd[slot] = nullptr;
 
     sio2::detach_device(iris->ps2->sio2, slot+2);
 }
