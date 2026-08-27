@@ -828,8 +828,10 @@ static std::string identify_by_catalog(const std::vector <std::pair <std::string
         arcade::collect_candidates(print, name, &candidates);
     }
 
-    if (arcade::is_known_set(hint))
-        candidates[hint].score += arcade::EVIDENCE_HINT;
+    std::string named = arcade::resolve_set_name(hint);
+
+    if (named.size())
+        candidates[named].score += arcade::EVIDENCE_HINT;
 
     std::string best_id;
 

@@ -60,6 +60,8 @@ void collect_candidates(const Fingerprint& print, const std::string& name, Candi
 
 bool is_known_set(const std::string& id);
 
+std::string resolve_set_name(const std::string& name);
+
 bool probe_file(const std::filesystem::path& path, Fingerprint* out);
 bool probe_size(uint64_t size, Fingerprint* out);
 
@@ -102,6 +104,7 @@ const toml::table g_arcade_definitions = toml::table {
     { "akaiser", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_147 },
         { "name", "Animal Kaiser: The King of Animals" },
+        { "alias", toml::array { "animalk" } },
         { "nand", "kp005a_ana1004-na-b.ic26" },
         { "bios", "common_system147b_bootrom.ic1" },
         { "boot", "atfile0:main.elf" },
@@ -110,10 +113,11 @@ const toml::table g_arcade_definitions = toml::table {
         { "nand_sha1", "67c751c85eb99fb3cba17832acb38f3b88d54756" }
     }},
     { "akaievo", toml::table {
-        { "system", iris::ps2::NAMCO_SYSTEM_147 },
-        { "name", "Animal Kaiser Evolution" },
+        { "system", iris::ps2::NAMCO_SYSTEM_148 },
+        { "name", "Animal Kaiser Evolution (Evo 8, ANA2004-NA-A)" },
+        { "alias", toml::array { "animalke8" } },
         { "nand", toml::array { "kp012b_k9k8g08u0b.ic31", "kp012b_ana2004-na-a.ic31" } },
-        { "bios", "common_system147b_bootrom.ic1" },
+        { "bios", "common_system148_bootrom.ic1" },
         { "boot", "atfile0:main.elf" },
         { "ioboard_mode", 1 },
         { "nand_crc", 0xe1e7cbaa },
@@ -152,6 +156,7 @@ const toml::table g_arcade_definitions = toml::table {
     { "umilucky", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_148 },
         { "name", "Umimonogatari Lucky Marine Theater" },
+        { "alias", toml::array { "lmarinet" } },
         { "nand", "uls100-1-na-mpro-b01_kp008a.ic31" },
         { "bios", "common_system148_bootrom.ic1" },
         { "boot", "atfile0:prog.elf" },

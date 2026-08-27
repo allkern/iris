@@ -212,7 +212,38 @@ static const std::vector <Dump>& dumps() {
 }
 
 bool is_known_set(const std::string& id) {
-    return id.size() && g_arcade_definitions.contains(id);
+    return resolve_set_name(id).size() != 0;
+}
+
+std::string resolve_set_name(const std::string& name) {
+    if (name.empty())
+        return "";
+
+    if (g_arcade_definitions.contains(name))
+        return name;
+
+    std::string key = normalize_key(name);
+
+    for (auto&& [id, value] : g_arcade_definitions) {
+        const toml::table* table = value.as_table();
+
+        if (!table)
+            continue;
+
+        const toml::array* aliases = (*table)["alias"].as_array();
+
+        if (!aliases)
+            continue;
+
+        for (const toml::node& element : *aliases) {
+            std::optional <std::string> text = element.value<std::string>();
+
+            if (text && normalize_key(*text) == key)
+                return std::string(id.str());
+        }
+    }
+
+    return "";
 }
 
 void collect_candidates(const Fingerprint& print, const std::string& name, Candidates* out) {
