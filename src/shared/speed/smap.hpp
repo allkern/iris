@@ -498,6 +498,7 @@ struct Smap {
     uint32_t rx_bd_index;
 
     uint16_t phy[32];
+    int link;
 
     uint16_t emac3_wstage[32];
 
@@ -524,6 +525,7 @@ void fifo_write(Smap* smap, uint32_t data);
 uint32_t fifo_read(Smap* smap);
 void dma_complete(Smap* smap);
 void set_backend(Smap* smap, tx_fn fn, void* udata);
+void set_link(Smap* smap, int up);
 int receive(Smap* smap, const uint8_t* buf, int len);
 
 }

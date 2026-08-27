@@ -10,6 +10,9 @@
 namespace iris::kp2::p2io {
 
 inline constexpr auto DONGLE_SIZE = 40;
+inline constexpr auto DONGLE_SERIAL_SIZE = 8;
+inline constexpr auto DONGLE_MEMORY_SIZE = 32;
+inline constexpr auto DONGLE_CRC_POLY = 0x8c;
 
 inline constexpr auto DONGLE_BLACK = 0;
 inline constexpr auto DONGLE_WHITE = 1;
@@ -101,6 +104,8 @@ inline constexpr auto WIRE_MAX = (RESPONSE_MAX * 2) + 1;
 struct P2io {
     uint8_t dongle[DONGLE_COUNT][DONGLE_SIZE];
     int dongle_loaded[DONGLE_COUNT];
+    int dongle_warned[DONGLE_COUNT];
+    int requested_dongle;
 
     acio::Port port[PORT_COUNT];
 

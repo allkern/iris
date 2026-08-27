@@ -59,6 +59,8 @@ void log_write_file(Instance* iris, const LogEntry& entry) {
     const char* name = entry.source < sources.size() ? sources[entry.source].name.c_str() : "?";
 
     fmt::print(iris->log_file, "{:<5} {:>8}  {}\n", log_level_name(entry.level), name, entry.text);
+
+    fflush(iris->log_file);
 }
 
 void log_close_file(Instance* iris) {

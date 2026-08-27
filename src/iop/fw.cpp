@@ -129,10 +129,8 @@ static void trigger_bus_reset(Fw* fw) {
 
     fw->dbuf_rx_head = 0;
     fw->dbuf_rx_size = 0;
-
     fw->pending_head = 0;
     fw->pending_count = 0;
-
     fw->ubuf_rx_head = 0;
     fw->ubuf_rx_size = 0;
 

@@ -59,6 +59,24 @@ P2io* from_device(Device* dev) {
     return (P2io*)dev->priv;
 }
 
+static uint8_t dongle_crc8(const uint8_t* data, int size) {
+    uint8_t crc = 0xff;
+
+    for (int i = 0; i < size; i++) {
+        crc ^= data[i];
+
+        for (int bit = 0; bit < 8; bit++) {
+            if (crc & 1) {
+                crc = (crc >> 1) ^ DONGLE_CRC_POLY;
+            } else {
+                crc >>= 1;
+            }
+        }
+    }
+
+    return ~crc;
+}
+
 int load_dongle(P2io* p2io, int which, const char* path) {
     if (which < 0 || which >= DONGLE_COUNT)
         return 0;
@@ -74,12 +92,29 @@ int load_dongle(P2io* p2io, int which, const char* path) {
         return 0;
     }
 
-    size_t read = fread(p2io->dongle[which], 1, DONGLE_SIZE, file);
+    uint8_t data[DONGLE_SIZE];
+
+    size_t read = fread(data, 1, DONGLE_SIZE, file);
 
     fclose(file);
 
     if (read != DONGLE_SIZE) {
         iris_error(p2io, "Dongle \"{}\" is {} bytes, expected {}", path, read, DONGLE_SIZE);
+
+        return 0;
+    }
+
+    uint8_t* serial = p2io->dongle[which];
+    uint8_t* memory = p2io->dongle[which] + DONGLE_SERIAL_SIZE;
+
+    if (dongle_crc8(data, DONGLE_MEMORY_SIZE - 1) == data[DONGLE_MEMORY_SIZE - 1]) {
+        memcpy(serial, data + DONGLE_MEMORY_SIZE, DONGLE_SERIAL_SIZE);
+        memcpy(memory, data, DONGLE_MEMORY_SIZE);
+    } else if (dongle_crc8(data + DONGLE_SERIAL_SIZE, DONGLE_MEMORY_SIZE - 1) == data[DONGLE_SIZE - 1]) {
+        memcpy(serial, data, DONGLE_SERIAL_SIZE);
+        memcpy(memory, data + DONGLE_SERIAL_SIZE, DONGLE_MEMORY_SIZE);
+    } else {
+        iris_error(p2io, "Dongle \"{}\" has a bad CRC", path);
 
         return 0;
     }
@@ -227,23 +262,30 @@ static void finish_response(P2io* p2io) {
 }
 
 static void handle_dallas(P2io* p2io, const uint8_t* payload, int length) {
-    int which = DONGLE_BLACK;
+    // Any other subcommand rereads whichever dongle was selected last
+    if (length > 0 && (payload[0] == DALLAS_READ_BLACK || payload[0] == DALLAS_READ_WHITE))
+        p2io->requested_dongle = payload[0];
 
-    if (length > 0 && payload[0] == DALLAS_READ_WHITE)
-        which = DONGLE_WHITE;
-
+    int which = p2io->requested_dongle;
     int loaded = p2io->dongle_loaded[which];
 
     push_response(p2io, loaded ? 1 : 0);
 
     if (loaded) {
         push_response_buffer(p2io, p2io->dongle[which], DONGLE_SIZE);
-    } else {
-        iris_warning(p2io, "Game read {} dongle but none is loaded", which == DONGLE_BLACK ? "black" : "white");
 
-        for (int i = 0; i < DONGLE_SIZE; i++) {
-            push_response(p2io, 0);
-        }
+        return;
+    }
+
+    if (!p2io->dongle_warned[which]) {
+        p2io->dongle_warned[which] = 1;
+
+        iris_warning(p2io, "Game read the {} dongle but none is loaded", which == DONGLE_BLACK ? "black" : "white");
+    }
+
+    // With nothing to read the board returns its receive buffer
+    for (int i = 0; i < DONGLE_SIZE; i++) {
+        push_response(p2io, i < length ? payload[i] : 0);
     }
 }
 

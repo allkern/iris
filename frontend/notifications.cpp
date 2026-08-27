@@ -204,6 +204,13 @@ void push_notification(Instance* iris, Notification notif) {
 void push_info(Instance* iris, std::string text) {
     using namespace ImGui;
 
+    // Prevent segfaults when throwing notifs during startup
+    if (!iris->window || !GetCurrentContext() || !GetFont()) {
+        iris_info(&iris->log.iris, "{}", text);
+
+        return;
+    }
+
     Notification notif;
 
     int window_width, window_height;

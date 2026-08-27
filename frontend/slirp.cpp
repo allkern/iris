@@ -324,7 +324,7 @@ void smap_tx(void* udata, const uint8_t* buf, int len) {
     slirp_input(g->slirp, buf, len);
 }
 
-bool start(speed::smap::Smap* smap, const Config& cfg, LogSource* log) {
+static bool start_backend(speed::smap::Smap* smap, const Config& cfg, LogSource* log) {
     if (getenv("IRIS_NO_NET")) {
         iris_info(log, "Disabled via IRIS_NO_NET");
 
@@ -400,6 +400,14 @@ bool start(speed::smap::Smap* smap, const Config& cfg, LogSource* log) {
     g->thread = std::thread(poll_loop);
 
     return true;
+}
+
+bool start(speed::smap::Smap* smap, const Config& cfg, LogSource* log) {
+    bool up = start_backend(smap, cfg, log);
+
+    speed::smap::set_link(smap, up);
+
+    return up;
 }
 
 void stop() {

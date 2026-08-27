@@ -7,9 +7,9 @@ namespace iris::speed::smap {
 
 #define SMAP_REGOFF 0x100
 
-// link up, auto-negotiated 100M full duplex, remote-fault clear
+#define SMAP_PHY_BMSR_CAPS (0x7800 | 0x0040 | 0x0008 | 0x0001)
 #define SMAP_PHY_BMSR_VAL \
-    (0x7800 | 0x0040 | 0x0008 | 0x0001 | SMAP_PHY_BMSR_ANCP | SMAP_PHY_BMSR_LINK)
+    (SMAP_PHY_BMSR_CAPS | SMAP_PHY_BMSR_ANCP | SMAP_PHY_BMSR_LINK)
 #define SMAP_PHY_ANLPAR_VAL \
     (0x4000 | 0x0001 | SMAP_PHY_ANAR_TX_FD | SMAP_PHY_ANAR_TX | \
      SMAP_PHY_ANAR_10_FD | SMAP_PHY_ANAR_10)
@@ -20,8 +20,8 @@ static inline uint32_t smap_swap16(uint32_t v) {
     return (v >> 16) | (v << 16);
 }
 
-/* When SMAP_BD_SWAP is set, buffer descriptor fields are byte-swapped on
-   access. The dev9 init self-test uses this; the runtime driver clears it. */
+// When SMAP_BD_SWAP is set, buffer descriptor fields are byte-swapped on
+// access. The dev9 init self-test uses this
 static inline uint16_t smap_bd_swap(Smap* smap, uint16_t v) {
     if (smap->bd_mode & SMAP_BD_SWAP)
         return (uint16_t)((v << 8) | (v >> 8));
@@ -33,12 +33,12 @@ static inline uint16_t smap_bd_swap(Smap* smap, uint16_t v) {
 static uint16_t smap_phy_read(Smap* smap, int reg) {
     switch (reg) {
         case SMAP_DsPHYTER_BMCR: return smap->phy[SMAP_DsPHYTER_BMCR];
-        case SMAP_DsPHYTER_BMSR: return SMAP_PHY_BMSR_VAL;
+        case SMAP_DsPHYTER_BMSR: return smap->link ? SMAP_PHY_BMSR_VAL : SMAP_PHY_BMSR_CAPS;
         case SMAP_DsPHYTER_PHYIDR1: return SMAP_PHY_IDR1_VAL;
         case SMAP_DsPHYTER_PHYIDR2: return SMAP_PHY_IDR2_VAL;
         case SMAP_DsPHYTER_ANAR: return smap->phy[SMAP_DsPHYTER_ANAR];
-        case SMAP_DsPHYTER_ANLPAR: return SMAP_PHY_ANLPAR_VAL;
-        case SMAP_DsPHYTER_PHYSTS: return SMAP_PHY_PHYSTS_VAL;
+        case SMAP_DsPHYTER_ANLPAR: return smap->link ? SMAP_PHY_ANLPAR_VAL : 0;
+        case SMAP_DsPHYTER_PHYSTS: return smap->link ? SMAP_PHY_PHYSTS_VAL : 0;
         case SMAP_DsPHYTER_10BTSCR: return smap->phy[SMAP_DsPHYTER_10BTSCR];
     }
 
@@ -308,6 +308,8 @@ int init(Smap* smap, Speed* speed) {
 
     smap->emac3_sta_ctrl = SMAP_E3_PHY_OP_COMP;
 
+    smap->link = 1;
+
     smap->phy[SMAP_DsPHYTER_BMCR] =
         SMAP_PHY_BMCR_ANEN | SMAP_PHY_BMCR_100M | SMAP_PHY_BMCR_DUPM;
 
@@ -478,6 +480,12 @@ uint32_t fifo_read(Smap* smap) {
 void dma_complete(Smap* smap) {
     smap->txfifo_ctrl &= ~SMAP_TXFIFO_DMAEN;
     smap->rxfifo_ctrl &= ~SMAP_RXFIFO_DMAEN;
+}
+
+void set_link(Smap* smap, int up) {
+    iris_info(smap, "Link {}", up ? "up" : "down");
+
+    smap->link = up;
 }
 
 void set_backend(Smap* smap, tx_fn fn, void* udata) {

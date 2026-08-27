@@ -620,7 +620,7 @@ int transfer_vif1_word(Dmac* dmac) {
     if (channel_is_done(&dmac->channels[VIF1])) {
         end_transfer(dmac, VIF1);
 
-        iris_warning(dmac, "vif1 transfer done");
+        iris_debug(dmac, "vif1 transfer done");
 
         return 0;
     }

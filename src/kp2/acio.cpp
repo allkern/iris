@@ -71,7 +71,7 @@ static void handle_request(Port* port, const Request* request) {
     int index = request->address - 1;
 
     if (index < 0 || index >= port->node_count) {
-        iris_debug(port, "Request for unknown node {:02x} (code {:04x})", request->address, request->code);
+        // iris_debug(port, "Request for unknown node {:02x} (code {:04x})", request->address, request->code);
 
         return;
     }
@@ -79,7 +79,7 @@ static void handle_request(Port* port, const Request* request) {
     const Node* node = &port->nodes[index];
 
     if (!node->handler(node->udata, request, &response)) {
-        iris_debug(port, "Node \"{}\" rejected code {:04x}", node->name, request->code);
+        // iris_debug(port, "Node \"{}\" rejected code {:04x}", node->name, request->code);
 
         return;
     }
