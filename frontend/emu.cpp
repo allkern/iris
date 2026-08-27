@@ -1364,6 +1364,9 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
             cdvd::load_nvram(iris->ps2->cdvd, files.nvram.string().c_str());
 
+            // Read the console and i.Link IDs out of the NVM
+            settings::apply_mg_keys(iris);
+
             if (!speed::load_hdd(iris->ps2->speed, files.media.string().c_str())) {
                 iris_error(&iris->log.emu, "Couldn't read HDD image \"{}\"", files.media.string().c_str());
 

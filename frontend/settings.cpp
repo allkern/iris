@@ -164,8 +164,9 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->log_level = log_level_from_name(debugger["log_level"].value_or(std::string("info")));
 
     for (Applet* a : iris->applets.all) {
-        if (a->persist)
+        if (a->persist) {
             a->open = debugger[std::string("show_") + a->id].value_or(a->open);
+        }
     }
 
     Debugger& dbg = iris->applets.debugger;
@@ -460,7 +461,6 @@ void save(Instance* iris) {
     if (!iris->dump_to_file)
         return;
 
-    // Command line overrides belong to this run, the file keeps its own values
     cli::unapply(iris);
 
     std::ofstream file(iris->paths.settings_path);
