@@ -12,6 +12,9 @@
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
 #include "ps2.hpp"
+#include "settings.hpp"
+#include "imgui.hpp"
+#include "iop/mg.hpp"
 
 namespace iris {
 
@@ -341,6 +344,43 @@ static int mac_address_callback(ImGuiInputTextCallbackData* data) {
     }
 
     return 0;
+}
+
+static void mg_key_input(Instance* iris, const char* label, const char* id, std::string& path) {
+    using namespace ImGui;
+
+    Text("%s", label);
+
+    SetNextItemWidth(400.0);
+
+    InputText(id, &path);
+
+    SameLine();
+
+    PushID(id);
+
+    if (Button(ICON_MS_MORE_HORIZ)) {
+        audio::mute(iris);
+
+        auto f = pfd::open_file("Select " + std::string(label), path, {
+            "Key files (*.bin)", "*.bin",
+            "All Files (*.*)", "*"
+        });
+
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        if (!f.result().empty())
+            path = f.result()[0];
+    }
+
+    SameLine();
+
+    if (Button(ICON_MS_CLOSE))
+        path = "";
+
+    PopID();
 }
 
 void show_system_settings(Instance* iris) {
@@ -2320,6 +2360,33 @@ void show_misc_settings(Instance* iris) {
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     Checkbox(" Include shader processing", &iris->screenshot_shader_processing);
     PopStyleVar();
+
+    imgui::section(iris, "MagicGate");
+
+    Spacing();
+
+    mg_key_input(iris, "Encrypted key store", "##mecha_eks", iris->paths.mecha_eks_path);
+    mg_key_input(iris, "Key store key", "##mecha_kek", iris->paths.mecha_kek_path);
+    mg_key_input(iris, "Card key store", "##mecha_cks", iris->paths.mecha_cks_path);
+    mg_key_input(iris, "Challenge IV", "##mecha_civ", iris->paths.mecha_civ_path);
+    mg_key_input(iris, "Arcade KELF kbit", "##mecha_kbit", iris->paths.mecha_kelf_kbit_path);
+    mg_key_input(iris, "Arcade KELF kc", "##mecha_kc", iris->paths.mecha_kelf_kc_path);
+
+    Spacing();
+
+    if (Button("Apply##magicgate")) {
+        settings::apply_mg_keys(iris);
+    }
+
+    SameLine();
+
+    AlignTextToFramePadding();
+
+    if (cdvd::mg_ready(iris->ps2->cdvd)) {
+        imgui::badge(ICON_MS_CHECK "  Key store ready", ImVec4(0.42f, 0.85f, 0.1f, 1.0f));
+    } else {
+        imgui::badge(ICON_MS_INFO "  Using HLE authentication", ImVec4(0.90f, 0.73f, 0.2f, 1.0f));
+    }
 }
 
 static const char* builtin_shader_names[] = {

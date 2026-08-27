@@ -19,6 +19,35 @@ enum Size : uint32_t {
 
 inline constexpr uint32_t SECTOR_SIZE = 512 + 16;
 
+enum {
+    TERMINATOR_NOT_READY = 0x66,
+    TERMINATOR_READY = 0x55
+};
+
+enum {
+    CARD_KEY_RETAIL = 0,
+    CARD_KEY_ARCADE,
+    CARD_KEY_ARCADE_CEX,
+    CARD_KEY_PROTOTYPE
+};
+
+struct Auth {
+    uint8_t iv[8];
+    uint8_t seed[8];
+    uint8_t nonce[8];
+    uint8_t challenge1[8];
+    uint8_t challenge2[8];
+    uint8_t challenge3[8];
+    uint8_t response1[8];
+    uint8_t response2[8];
+    uint8_t response3[8];
+
+    uint8_t crypt_buf[8];
+    uint8_t crypt_checksum;
+
+    uint32_t random_seed;
+};
+
 struct Mcd {
     int port = 0;
     uint8_t term = 0;
@@ -38,11 +67,19 @@ struct Mcd {
 
     FILE* file = nullptr;
 
+    Auth auth;
+    int key_source = CARD_KEY_RETAIL;
+    int configured_key_source = CARD_KEY_RETAIL;
+    int magicgate = 0;
+    uint8_t challenge_iv[8] = {};
+    uint8_t card_id[8] = { 'M', 'e', 'c', 'h', 'a', 'P', 'w', 'n' };
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
 
 Mcd* attach(logger::Logger* logger, sio2::Sio2* sio2, int port, const char* path);
+void set_magicgate(Mcd* mcd, int enabled, int key_source, const uint8_t* challenge_iv, const char* card_id_path);
 void detach(void* udata);
 
 }

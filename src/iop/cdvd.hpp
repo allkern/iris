@@ -3,6 +3,7 @@
 #include "scheduler.hpp"
 #include "dma.hpp"
 #include "disc.hpp"
+#include "mg.hpp"
 #include "logger.hpp"
 
 namespace iris::cdvd {
@@ -155,6 +156,11 @@ struct Cdvd {
     int mechacon_model;
     NvramLayout layout;
 
+#ifdef IRIS_ENABLE_MAGICGATE
+    mg::Keys mecha_keys;
+    mg::State* mecha_state;
+#endif
+
     // To-do:
     // void (*poweroff_handler)(void* udata)
     // void (*trayctrl_handler)(void* udata, uint8_t ctrl)
@@ -171,6 +177,10 @@ void close(Cdvd* cdvd);
 void power_off(Cdvd* cdvd);
 int load_nvram(Cdvd* cdvd, const char* path);
 void set_mechacon_model(Cdvd* cdvd, int model);
+int load_mg_key(Cdvd* cdvd, int which, const char* path);
+int derive_mg_keys(Cdvd* cdvd, int mode);
+int mg_ready(Cdvd* cdvd);
+const uint8_t* mg_challenge_iv(Cdvd* cdvd);
 uint64_t read8(Cdvd* cdvd, uint32_t addr);
 void write8(Cdvd* cdvd, uint32_t addr, uint64_t data);
 void reset(Cdvd* cdvd);

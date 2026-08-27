@@ -464,6 +464,7 @@ void set_system(Ps2* ps2, int system) {
     ps2->system = system;
 
     int mechacon_model;
+
     ram::Size ee_ram_size, iop_ram_size;
 
     int ee_clock = EE_CLOCK_CONSOLE;
@@ -471,6 +472,7 @@ void set_system(Ps2* ps2, int system) {
     iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_RETAIL);
     speed::set_dvrp_enabled(ps2->speed, 0);
     speed::set_flash_enabled(ps2->speed, 0);
+    speed::set_smap_enabled(ps2->speed, 0);
     iop::bus::set_usb_disabled(ps2->iop_bus, 0);
     iop::set_daemon_suppressed(ps2->iop, 0);
 
@@ -551,7 +553,7 @@ void set_system(Ps2* ps2, int system) {
             ee_ram_size = ram::Size::_128MB;
             iop_ram_size = ram::Size::_8MB;
 
-            // To-do: Separate mechacon model for TOOL/TEST
+            // To-do: Separate mg model for TOOL/TEST
             mechacon_model = cdvd::MECHACON_DRAGON;
         } break;
 
@@ -571,6 +573,7 @@ void set_system(Ps2* ps2, int system) {
             // Python 2 is literally just a retail 50k model PS2
             // with a USB IO board attached and a standard PS2 HDD
             // connected through SPEED.
+            speed::set_flash_enabled(ps2->speed, 1);
             speed::set_smap_enabled(ps2->speed, 1);
 
             usb::set_port_device(ps2->usb, 0, usb::USB_DEVICE_P2IO);

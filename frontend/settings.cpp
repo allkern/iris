@@ -1,4 +1,6 @@
 #include "iris.hpp"
+#include "iop/mg.hpp"
+#include "dev/mcd.hpp"
 #include "config.hpp"
 
 #include "ps2_elf.hpp"
@@ -91,6 +93,12 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->paths.hdd_id_path = paths["hdd_id_path"].value_or("");
     iris->paths.dongle_black_path = paths["dongle_black_path"].value_or("");
     iris->paths.dongle_white_path = paths["dongle_white_path"].value_or("");
+    iris->paths.mecha_civ_path = paths["mecha_civ_path"].value_or("");
+    iris->paths.mecha_cks_path = paths["mecha_cks_path"].value_or("");
+    iris->paths.mecha_eks_path = paths["mecha_eks_path"].value_or("");
+    iris->paths.mecha_kek_path = paths["mecha_kek_path"].value_or("");
+    iris->paths.mecha_kelf_kbit_path = paths["mecha_kelf_kbit_path"].value_or("");
+    iris->paths.mecha_kelf_kc_path = paths["mecha_kelf_kc_path"].value_or("");
 
     if (iris->paths.log_path.empty())
         iris->paths.log_path = iris->paths.pref_path + "iris.log";
@@ -315,6 +323,55 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     return parse_mappings_file(iris);
 }
 
+static int mg_mode_for_system(int system) {
+    switch (system) {
+        case ps2::KONAMI_PYTHON: {
+            return mg::KEY_STORE_MODE_ARCADE;
+        } break;
+    }
+
+    return mg::KEY_STORE_MODE_RETAIL;
+}
+
+static int mg_card_key_source(Instance* iris) {
+    int mode = mg_mode_for_system(iris->ps2->detected_system);
+
+    return mode == mg::KEY_STORE_MODE_ARCADE
+        ? dev::mcd::CARD_KEY_ARCADE
+        : dev::mcd::CARD_KEY_RETAIL;
+}
+
+void apply_card_magicgate(Instance* iris, int slot) {
+    if (slot < 0 || slot >= 2 || !iris->input.mcd[slot])
+        return;
+
+    dev::mcd::set_magicgate(iris->input.mcd[slot], 1, mg_card_key_source(iris),
+        cdvd::mg_challenge_iv(iris->ps2->cdvd), iris->paths.mecha_card_id_path.c_str());
+}
+
+void apply_mg_keys(Instance* iris) {
+    cdvd::Cdvd* cdvd = iris->ps2->cdvd;
+
+    cdvd::load_mg_key(cdvd, mg::KEY_CHALLENGE_IV, iris->paths.mecha_civ_path.c_str());
+    cdvd::load_mg_key(cdvd, mg::KEY_CARD_KEY_STORE, iris->paths.mecha_cks_path.c_str());
+    cdvd::load_mg_key(cdvd, mg::KEY_ENCRYPTED_KEY_STORE, iris->paths.mecha_eks_path.c_str());
+    cdvd::load_mg_key(cdvd, mg::KEY_STORE_KEY, iris->paths.mecha_kek_path.c_str());
+    cdvd::load_mg_key(cdvd, mg::KEY_ARCADE_KELF_KBIT, iris->paths.mecha_kelf_kbit_path.c_str());
+    cdvd::load_mg_key(cdvd, mg::KEY_ARCADE_KELF_KC, iris->paths.mecha_kelf_kc_path.c_str());
+
+    int mode = mg_mode_for_system(iris->ps2->detected_system);
+
+    iris_debug(&iris->log.settings, "MagicGate: system {} selects key store mode {}",
+        iris->ps2->detected_system, mode);
+
+    if (!cdvd::derive_mg_keys(cdvd, mode))
+        return;
+
+    for (int i = 0; i < 2; i++) {
+        apply_card_magicgate(iris, i);
+    }
+}
+
 void apply_p2io(Instance* iris) {
     usb::p2io_set_input_type(iris->ps2->usb, iris->p2io_input_type);
 
@@ -387,6 +444,8 @@ bool init(Instance* iris) {
 
         usb::set_port_device(iris->ps2->usb, i, iris->input.usb_devices[i]);
     }
+
+    apply_mg_keys(iris);
 
     apply_p2io(iris);
 
@@ -550,6 +609,12 @@ void save(Instance* iris) {
             { "hdd_id_path", iris->paths.hdd_id_path },
             { "dongle_black_path", iris->paths.dongle_black_path },
             { "dongle_white_path", iris->paths.dongle_white_path },
+            { "mecha_civ_path", iris->paths.mecha_civ_path },
+            { "mecha_cks_path", iris->paths.mecha_cks_path },
+            { "mecha_eks_path", iris->paths.mecha_eks_path },
+            { "mecha_kek_path", iris->paths.mecha_kek_path },
+            { "mecha_kelf_kbit_path", iris->paths.mecha_kelf_kbit_path },
+            { "mecha_kelf_kc_path", iris->paths.mecha_kelf_kc_path },
             { "auto", iris->paths.auto_paths }
         } },
         { "host", toml::table {

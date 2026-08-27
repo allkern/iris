@@ -242,6 +242,17 @@ elseif (APPLE)
     target_link_libraries(slirp PUBLIC resolv)
 endif()
 
+option(IRIS_ENABLE_MAGICGATE "Build MagicGate support" ON)
+
+if (IRIS_ENABLE_MAGICGATE)
+    target_compile_definitions(iris PRIVATE IRIS_ENABLE_MAGICGATE)
+
+    target_sources(iris PRIVATE
+        src/iop/mg.cpp
+        src/shared/des.cpp
+    )
+endif()
+
 if (NOT APPLE AND IRIS_TARGET_X86)
     target_compile_definitions(iris PRIVATE _EE_USE_INTRINSICS)
     target_compile_options(iris PRIVATE -mssse3 -msse4.1)

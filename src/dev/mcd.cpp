@@ -2,6 +2,10 @@
 
 #include "mcd.hpp"
 
+#ifdef IRIS_ENABLE_MAGICGATE
+#include "shared/des.hpp"
+#endif
+
 namespace iris::dev::mcd {
 
 void flush_block(Mcd* mcd, int addr, int size) {
@@ -201,10 +205,194 @@ void cmd_erase_block(sio2::Sio2* sio2, Mcd* mcd) {
 
     flush_block(mcd, addr, SECTOR_SIZE * 16);
 }
+static const uint8_t card_keys[4][16] = {
+    { 0x06, 0x46, 0x7A, 0x6C, 0x5B, 0x9B, 0x82, 0x77, 0x0D, 0xDF, 0xE9, 0x7E, 0x24, 0x5B, 0x9F, 0xCA },
+    { 0xCE, 0xC2, 0x18, 0x1C, 0x03, 0x6B, 0x0A, 0x9B, 0x87, 0x9F, 0x65, 0x6B, 0x43, 0x28, 0x94, 0xCB },
+    { 0xA9, 0xFB, 0x27, 0x2A, 0x63, 0xCF, 0xED, 0x6F, 0xD0, 0x28, 0xA2, 0x4A, 0x98, 0x11, 0xB8, 0x2E },
+    { 0x8C, 0x4B, 0xEF, 0xA6, 0xF4, 0x9A, 0x23, 0xA0, 0x9C, 0xF1, 0x46, 0xAA, 0x17, 0x1C, 0xFE, 0x75 }
+};
+
+static const uint8_t key_sources[4][8] = {
+    { 0xF5, 0x80, 0x95, 0x3C, 0x4C, 0x84, 0xA9, 0xC0 },
+    { 0x03, 0x13, 0xE4, 0x19, 0x27, 0x01, 0xB9, 0x52 },
+    { 0x03, 0x13, 0xE4, 0x19, 0x27, 0x01, 0xB9, 0x52 },
+    { 0xF5, 0x80, 0x95, 0x3C, 0x4C, 0x84, 0xA9, 0xC0 }
+};
+
+void set_magicgate(Mcd* mcd, int enabled, int key_source, const uint8_t* challenge_iv, const char* card_id_path) {
+    mcd->magicgate = enabled;
+    mcd->key_source = key_source;
+    mcd->configured_key_source = key_source;
+
+    if (challenge_iv)
+        memcpy(mcd->challenge_iv, challenge_iv, 8);
+
+    if (card_id_path && card_id_path[0]) {
+        FILE* file = fopen(card_id_path, "rb");
+
+        if (file) {
+            if (fread(mcd->card_id, 1, 8, file) != 8) {
+                iris_error(mcd, "Card ID \"{}\" is too short", card_id_path);
+            } else {
+                iris_info(mcd, "Loaded card ID from \"{}\"", card_id_path);
+            }
+
+            fclose(file);
+        } else {
+            iris_error(mcd, "Failed to open card ID \"{}\"", card_id_path);
+        }
+    }
+
+    mcd->auth.random_seed = 0x1234abcd;
+}
+
+static uint8_t next_random(Mcd* mcd) {
+    mcd->auth.random_seed = (mcd->auth.random_seed * 1103515245u) + 12345u;
+
+    return (uint8_t)(mcd->auth.random_seed >> 16);
+}
+
+static int key_index(Mcd* mcd) {
+    int source = mcd->key_source;
+
+    if (source < 0 || source > CARD_KEY_PROTOTYPE) {
+        source = CARD_KEY_RETAIL;
+    }
+
+    return source;
+}
+
+static const uint8_t* card_key(Mcd* mcd) {
+    return card_keys[key_index(mcd)];
+}
+
+static void generate_iv_seed_nonce(Mcd* mcd) {
+    const uint8_t* source = key_sources[key_index(mcd)];
+
+    for (int i = 0; i < 8; i++) {
+        mcd->auth.iv[i] = next_random(mcd);
+        mcd->auth.seed[i] = source[i] ^ mcd->auth.iv[i];
+        mcd->auth.nonce[i] = next_random(mcd);
+    }
+}
+
+#ifdef IRIS_ENABLE_MAGICGATE
+static void generate_response(Mcd* mcd) {
+    const uint8_t* key = card_key(mcd);
+
+    des::double_decrypt(key, mcd->auth.challenge1);
+
+    uint8_t random[8];
+
+    des::xor_bytes(mcd->auth.challenge1, mcd->challenge_iv, random, 8);
+
+    des::xor_bytes(mcd->auth.nonce, mcd->challenge_iv, mcd->auth.response1, 8);
+    des::double_encrypt(key, mcd->auth.response1);
+
+    des::xor_bytes(random, mcd->auth.response1, mcd->auth.response2, 8);
+    des::double_encrypt(key, mcd->auth.response2);
+
+    des::xor_bytes(mcd->card_id, mcd->auth.response2, mcd->auth.response3, 8);
+    des::double_encrypt(key, mcd->auth.response3);
+}
+
+static void push_auth_bytes(sio2::Sio2* sio2, Mcd* mcd, const uint8_t* data) {
+    queue::push(sio2->out, 0x00);
+    queue::push(sio2->out, 0x00);
+
+    queue::push(sio2->out, 0x00);
+    queue::push(sio2->out, 0x2b);
+
+    uint8_t checksum = 0;
+
+    for (int i = 0; i < 8; i++) {
+        uint8_t value = data[7 - i];
+
+        checksum ^= value;
+
+        queue::push(sio2->out, value);
+    }
+
+    queue::push(sio2->out, checksum);
+    queue::push(sio2->out, mcd->term);
+}
+
+#endif
+
+static void push_terminator(sio2::Sio2* sio2, Mcd* mcd, int length) {
+    for (int i = 0; i < length - 2; i++) {
+        queue::push(sio2->out, 0x00);
+    }
+
+    queue::push(sio2->out, 0x2b);
+    queue::push(sio2->out, mcd->term);
+}
+
+static void take_auth_bytes(sio2::Sio2* sio2, uint8_t* data) {
+    for (int i = 0; i < 8; i++) {
+        data[7 - i] = sio2->in->buf[i + 3];
+    }
+}
+
+#ifdef IRIS_ENABLE_MAGICGATE
+static int cmd_auth_f0_magicgate(sio2::Sio2* sio2, Mcd* mcd, uint8_t param) {
+    switch (param) {
+        case 0x01: {
+            generate_iv_seed_nonce(mcd);
+
+            push_auth_bytes(sio2, mcd, mcd->auth.iv);
+        } return 1;
+
+        case 0x02: {
+            push_auth_bytes(sio2, mcd, mcd->auth.seed);
+        } return 1;
+
+        case 0x04: {
+            push_auth_bytes(sio2, mcd, mcd->auth.nonce);
+        } return 1;
+
+        case 0x0f: {
+            generate_response(mcd);
+
+            push_auth_bytes(sio2, mcd, mcd->auth.response1);
+        } return 1;
+
+        case 0x11: {
+            push_auth_bytes(sio2, mcd, mcd->auth.response2);
+        } return 1;
+
+        case 0x13: {
+            push_auth_bytes(sio2, mcd, mcd->auth.response3);
+        } return 1;
+
+        case 0x06: {
+            take_auth_bytes(sio2, mcd->auth.challenge3);
+        } return 0;
+
+        case 0x07: {
+            take_auth_bytes(sio2, mcd->auth.challenge2);
+        } return 0;
+
+        case 0x0b: {
+            take_auth_bytes(sio2, mcd->auth.challenge1);
+        } return 0;
+    }
+
+    return 0;
+}
+
+#endif
+
 void cmd_auth_f0(sio2::Sio2* sio2, Mcd* mcd) {
     iris_debug(mcd, "cmd_auth_f0");
 
     uint8_t param = sio2->in->buf[2];
+
+#ifdef IRIS_ENABLE_MAGICGATE
+    if (mcd->magicgate && cmd_auth_f0_magicgate(sio2, mcd, param)) {
+        return;
+    }
+#endif
 
     switch (param) {
         case 0x01:
@@ -262,37 +450,80 @@ void cmd_auth_f0(sio2::Sio2* sio2, Mcd* mcd) {
         } break;
     }
 }
+static int cmd_auth_crypt(sio2::Sio2* sio2, Mcd* mcd, uint8_t param) {
+    switch (param) {
+        case 0x40:
+        case 0x42:
+        case 0x50:
+        case 0x52: {
+            push_terminator(sio2, mcd, 5);
+        } return 1;
+
+        case 0x41:
+        case 0x51: {
+            mcd->auth.crypt_checksum = 0;
+
+            for (int i = 0; i < 8; i++) {
+                uint8_t value = sio2->in->buf[i + 3];
+
+                mcd->auth.crypt_checksum ^= value;
+                mcd->auth.crypt_buf[i] = value;
+            }
+
+            push_terminator(sio2, mcd, 14);
+        } return 1;
+
+        case 0x43:
+        case 0x53: {
+            queue::push(sio2->out, 0x00);
+            queue::push(sio2->out, 0x00);
+
+            queue::push(sio2->out, 0x00);
+            queue::push(sio2->out, 0x2b);
+
+            for (int i = 0; i < 8; i++) {
+                queue::push(sio2->out, mcd->auth.crypt_buf[i]);
+            }
+
+            queue::push(sio2->out, mcd->auth.crypt_checksum);
+            queue::push(sio2->out, mcd->term);
+        } return 1;
+    }
+
+    return 0;
+}
+
 void cmd_auth_f1(sio2::Sio2* sio2, Mcd* mcd) {
-    std::string params;
+    uint8_t param = sio2->in->buf[2];
 
-    for (int i = 0; i < 16; i++)
-        params += fmt::format("{:02x} ", sio2->in->buf[2 + i]);
+    iris_debug(mcd, "cmd_auth_f1({:02x})", param);
 
-    iris_fatal_error(mcd, "cmd_auth_f1 params={}", params);
+    if (cmd_auth_crypt(sio2, mcd, param))
+        return;
 
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x2b);
-    queue::push(sio2->out, mcd->term);
+    iris_warning(mcd, "Unhandled auth crypt parameter {:02x}", param);
+
+    push_terminator(sio2, mcd, 5);
 }
 void cmd_auth_f3(sio2::Sio2* sio2, Mcd* mcd) {
     iris_debug(mcd, "cmd_auth_f3");
 
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x2b);
-    queue::push(sio2->out, mcd->term);
+    if (mcd->magicgate) {
+        mcd->term = TERMINATOR_READY;
+        mcd->key_source = mcd->configured_key_source;
+    }
+
+    push_terminator(sio2, mcd, 5);
 }
 void cmd_auth_f7(sio2::Sio2* sio2, Mcd* mcd) {
-    iris_debug(mcd, "cmd_auth_f7");
+    uint8_t param = sio2->in->buf[2];
 
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x00);
-    queue::push(sio2->out, 0x2b);
-    queue::push(sio2->out, mcd->term);
+    iris_debug(mcd, "cmd_auth_f7({:02x})", param);
+
+    if (mcd->magicgate && param == 0x01)
+        mcd->key_source = CARD_KEY_RETAIL;
+
+    push_terminator(sio2, mcd, 5);
 }
 void cmd_unk_bf(sio2::Sio2* sio2, Mcd* mcd) {
     iris_debug(mcd, "cmd_unk_bf");
@@ -334,6 +565,7 @@ void handle_command(sio2::Sio2* sio2, void* udata, int cmd) {
         case 0x82: cmd_erase_block(sio2, mcd); return;
         case 0xf0: cmd_auth_f0(sio2, mcd); return;
         case 0xf1: cmd_auth_f1(sio2, mcd); return;
+        case 0xf2: cmd_auth_f1(sio2, mcd); return;
         case 0xf3: cmd_auth_f3(sio2, mcd); return;
         case 0xf7: cmd_auth_f7(sio2, mcd); return;
         case 0xbf: cmd_unk_bf(sio2, mcd); return;

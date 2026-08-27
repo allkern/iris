@@ -208,7 +208,11 @@ static inline void s_mechacon_cmd(Cdvd* cdvd) {
         } break;
 
         default: {
-            iris_fatal_error(cdvd, "Unknown S subcommand {:02x}", cdvd->s_params[0]);
+            iris_warning(cdvd, "Unknown S subcommand {:02x}", cdvd->s_params[0]);
+
+            init_s_fifo(cdvd, 1);
+
+            cdvd->s_fifo[0] = 0;
         } break;
     }
 }
@@ -301,6 +305,38 @@ static inline void s_forbid_dvd(Cdvd* cdvd) {
 
     cdvd->s_fifo[0] = 5;
 }
+static inline void s_write_ilink_id(Cdvd* cdvd) {
+    init_s_fifo(cdvd, 1);
+
+    memcpy(&cdvd->nvram[cdvd->layout.ilink_id_offset], cdvd->s_params, 8);
+
+    cdvd->s_fifo[0] = 0;
+}
+
+static inline void s_read_mac(Cdvd* cdvd) {
+    init_s_fifo(cdvd, 9);
+
+    cdvd->s_fifo[0] = 0;
+
+    memcpy(&cdvd->s_fifo[1], &cdvd->nvram[cdvd->layout.mac_offset], 8);
+}
+
+static inline void s_write_mac(Cdvd* cdvd) {
+    init_s_fifo(cdvd, 1);
+
+    memcpy(&cdvd->nvram[cdvd->layout.mac_offset], cdvd->s_params, 8);
+
+    cdvd->s_fifo[0] = 0;
+}
+
+static inline void s_write_region_params(Cdvd* cdvd) {
+    init_s_fifo(cdvd, 1);
+
+    memcpy(&cdvd->nvram[cdvd->layout.regparams_offset], &cdvd->s_params[2], 8);
+
+    cdvd->s_fifo[0] = 0;
+}
+
 static inline void s_read_model(Cdvd* cdvd) {
     init_s_fifo(cdvd, 9);
 
@@ -315,6 +351,14 @@ static inline void s_read_model(Cdvd* cdvd) {
     //     cdvd->s_fifo[1], cdvd->s_fifo[2], cdvd->s_fifo[3], cdvd->s_fifo[4],
     //     cdvd->s_fifo[5], cdvd->s_fifo[6], cdvd->s_fifo[7], cdvd->s_fifo[8]);
 }
+static inline void s_write_model(Cdvd* cdvd) {
+    init_s_fifo(cdvd, 1);
+
+    memcpy(&cdvd->nvram[cdvd->layout.modelnum_offset + cdvd->s_params[0]], &cdvd->s_params[1], 8);
+
+    cdvd->s_fifo[0] = 0;
+}
+
 static inline void s_certify_boot(Cdvd* cdvd) {
     init_s_fifo(cdvd, 1);
 
@@ -445,33 +489,33 @@ static inline void mg_clear(Cdvd* cdvd) {
     memset(cdvd->mg_kcon, 0, sizeof(cdvd->mg_kcon));
 }
 
-static inline void s_mechacon_auth_80(Cdvd* cdvd) {
+static inline void s_mg_auth_80(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 80");
     init_s_fifo(cdvd, 1);
     cdvd->mg_datatype = 0;
     cdvd->s_fifo[0] = 0;
 }
 
-static inline void s_mechacon_auth_81(Cdvd* cdvd) {
+static inline void s_mg_auth_81(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 81");
     init_s_fifo(cdvd, 1);
     cdvd->mg_datatype = 0;
     cdvd->s_fifo[0] = 0;
 }
 
-static inline void s_mechacon_auth_82(Cdvd* cdvd) {
+static inline void s_mg_auth_82(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 82");
     init_s_fifo(cdvd, 1);
     cdvd->s_fifo[0] = 0;
 }
 
-static inline void s_mechacon_auth_83(Cdvd* cdvd) {
+static inline void s_mg_auth_83(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 83");
     init_s_fifo(cdvd, 1);
     cdvd->s_fifo[0] = 0;
 }
 
-static inline void s_mechacon_auth_84(Cdvd* cdvd) {
+static inline void s_mg_auth_84(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 84");
     init_s_fifo(cdvd, 13);
     cdvd->s_fifo[0] = 0;
@@ -490,7 +534,7 @@ static inline void s_mechacon_auth_84(Cdvd* cdvd) {
     cdvd->s_fifo[12] = 0x9b;
 }
 
-static inline void s_mechacon_auth_85(Cdvd* cdvd) {
+static inline void s_mg_auth_85(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 85");
     init_s_fifo(cdvd, 13);
     cdvd->s_fifo[0] = 0;
@@ -509,19 +553,19 @@ static inline void s_mechacon_auth_85(Cdvd* cdvd) {
     cdvd->s_fifo[12] = 0xa3;
 }
 
-static inline void s_mechacon_auth_86(Cdvd* cdvd) {
+static inline void s_mg_auth_86(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 86");
     init_s_fifo(cdvd, 1);
     cdvd->s_fifo[0] = 0;
 }
 
-static inline void s_mechacon_auth_87(Cdvd* cdvd) {
+static inline void s_mg_auth_87(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 87");
     init_s_fifo(cdvd, 1);
     cdvd->s_fifo[0] = 0;
 }
 
-static inline void s_mechacon_auth_88(Cdvd* cdvd) {
+static inline void s_mg_auth_88(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 88");
 
     init_s_fifo(cdvd, 1);
@@ -560,9 +604,9 @@ static inline void s_mechacon_auth_88(Cdvd* cdvd) {
     cdvd->s_fifo[0] = 0;
 }
 
-static inline void s_mechacon_auth_8f(Cdvd* cdvd) {
+static inline void s_mg_auth_8f(Cdvd* cdvd) {
     iris_debug(cdvd, "mg: Auth 8f");
-    s_mechacon_auth_88(cdvd);
+    s_mg_auth_88(cdvd);
 }
 
 static inline void s_mg_write_data(Cdvd* cdvd) {
@@ -776,6 +820,27 @@ static inline void s_get_medium_removal(Cdvd* cdvd) {
 void handle_s_command(Cdvd* cdvd, uint8_t cmd) {
     cdvd->s_cmd = cmd;
 
+#ifdef IRIS_ENABLE_MAGICGATE
+    if (cmd >= 0x80 && cmd <= 0x98 && cdvd->mecha_keys.ready && cdvd->mecha_state) {
+        uint8_t result[16] = {};
+        int size = 0;
+
+        if (mg::command(&cdvd->mecha_keys, cdvd->mecha_state, cmd, cdvd->s_params, cdvd->s_param_index, result, &size)) {
+            // iris_debug(cdvd, "magicgate {:02x} params {} -> {} bytes, state {}, result {:03x}, err {:02x}",
+            //     cmd, cdvd->s_param_index, size, cdvd->mecha_state->state,
+            //     cdvd->mecha_state->result, cdvd->mecha_state->errorcode);
+
+            init_s_fifo(cdvd, size);
+
+            memcpy(cdvd->s_fifo, result, size);
+
+            cdvd->s_param_index = 0;
+
+            return;
+        }
+    }
+#endif
+
     switch (cmd) {
         // Note: Used by CD player to get current playing position
         case 0x02: iris_debug(cdvd, "read_subq"); s_read_subq(cdvd); break;
@@ -788,12 +853,14 @@ void handle_s_command(Cdvd* cdvd, uint8_t cmd) {
         case 0x0b: iris_debug(cdvd, "write_nvram"); s_write_nvram(cdvd); break;
         // case 0x0f: iris_debug(cdvd, "power_off"); s_power_off(cdvd); break;
         case 0x12: iris_debug(cdvd, "read_ilink_id"); s_read_ilink_id(cdvd); break;
+        case 0x13: iris_debug(cdvd, "write_ilink_id"); s_write_ilink_id(cdvd); break;
 
         // Note: Used by CD player
         case 0x14: iris_debug(cdvd, "ctrl_audio_digital_out"); s_ctrl_audio_digital_out(cdvd); break;
         case 0x15: iris_debug(cdvd, "forbid_dvd"); s_forbid_dvd(cdvd); break;
         case 0x16: iris_debug(cdvd, "auto_adjust_ctrl"); s_auto_adjust_ctrl(cdvd); break;
         case 0x17: iris_debug(cdvd, "read_model"); s_read_model(cdvd); break;
+        case 0x18: iris_debug(cdvd, "write_model"); s_write_model(cdvd); break;
         case 0x1a: iris_debug(cdvd, "certify_boot"); s_certify_boot(cdvd); break;
         case 0x1b: iris_debug(cdvd, "cancel_pwoff_ready"); s_cancel_pwoff_ready(cdvd); break;
 
@@ -813,22 +880,25 @@ void handle_s_command(Cdvd* cdvd, uint8_t cmd) {
         case 0x31: iris_debug(cdvd, "set_medium_removal"); s_set_medium_removal(cdvd); break;
         case 0x32: iris_debug(cdvd, "get_medium_removal"); s_get_medium_removal(cdvd); break;
         case 0x36: iris_debug(cdvd, "get_region_params"); s_get_region_params(cdvd); break;
+        case 0x37: iris_debug(cdvd, "read_mac"); s_read_mac(cdvd); break;
+        case 0x38: iris_debug(cdvd, "write_mac"); s_write_mac(cdvd); break;
+        case 0x3e: iris_debug(cdvd, "write_region_params"); s_write_region_params(cdvd); break;
         case 0x40: iris_debug(cdvd, "open_config"); s_open_config(cdvd); break;
         case 0x41: iris_debug(cdvd, "read_config"); s_read_config(cdvd); break;
         case 0x42: iris_debug(cdvd, "write_config"); s_write_config(cdvd); break;
         case 0x43: iris_debug(cdvd, "close_config"); s_close_config(cdvd); break;
-        case 0x80: iris_debug(cdvd, "mechacon_auth_80"); s_mechacon_auth_80(cdvd); break;
-        case 0x81: iris_debug(cdvd, "mechacon_auth_81"); s_mechacon_auth_81(cdvd); break;
-        case 0x82: iris_debug(cdvd, "mechacon_auth_82"); s_mechacon_auth_82(cdvd); break;
-        case 0x83: iris_debug(cdvd, "mechacon_auth_83"); s_mechacon_auth_83(cdvd); break;
-        case 0x84: iris_debug(cdvd, "mechacon_auth_84"); s_mechacon_auth_84(cdvd); break;
-        case 0x85: iris_debug(cdvd, "mechacon_auth_85"); s_mechacon_auth_85(cdvd); break;
-        case 0x86: iris_debug(cdvd, "mechacon_auth_86"); s_mechacon_auth_86(cdvd); break;
-        case 0x87: iris_debug(cdvd, "mechacon_auth_87"); s_mechacon_auth_87(cdvd); break;
-        case 0x88: iris_debug(cdvd, "mechacon_auth_88"); s_mechacon_auth_88(cdvd); break;
+        case 0x80: iris_debug(cdvd, "mg_auth_80"); s_mg_auth_80(cdvd); break;
+        case 0x81: iris_debug(cdvd, "mg_auth_81"); s_mg_auth_81(cdvd); break;
+        case 0x82: iris_debug(cdvd, "mg_auth_82"); s_mg_auth_82(cdvd); break;
+        case 0x83: iris_debug(cdvd, "mg_auth_83"); s_mg_auth_83(cdvd); break;
+        case 0x84: iris_debug(cdvd, "mg_auth_84"); s_mg_auth_84(cdvd); break;
+        case 0x85: iris_debug(cdvd, "mg_auth_85"); s_mg_auth_85(cdvd); break;
+        case 0x86: iris_debug(cdvd, "mg_auth_86"); s_mg_auth_86(cdvd); break;
+        case 0x87: iris_debug(cdvd, "mg_auth_87"); s_mg_auth_87(cdvd); break;
+        case 0x88: iris_debug(cdvd, "mg_auth_88"); s_mg_auth_88(cdvd); break;
         case 0x8d: iris_debug(cdvd, "mg_write_data"); s_mg_write_data(cdvd); break;
         case 0x8E: iris_debug(cdvd, "mg_readdata"); s_mg_read_data(cdvd); break;
-        case 0x8f: iris_debug(cdvd, "mechacon_auth_8f"); s_mechacon_auth_8f(cdvd); break;
+        case 0x8f: iris_debug(cdvd, "mg_auth_8f"); s_mg_auth_8f(cdvd); break;
         case 0x90: iris_debug(cdvd, "mg_write_hdr_start"); s_mg_write_hdr_start(cdvd); break;
         case 0x91: iris_debug(cdvd, "mg_read_bit_length"); s_mg_read_bit_length(cdvd); break;
         case 0x92: iris_debug(cdvd, "mg_write_datain_length"); s_mg_write_datain_length(cdvd); break;
@@ -838,7 +908,11 @@ void handle_s_command(Cdvd* cdvd, uint8_t cmd) {
         case 0x96: iris_debug(cdvd, "mg_read_kcon"); s_mg_read_kcon(cdvd); break;
         case 0x97: iris_debug(cdvd, "mg_read_kcon2"); s_mg_read_kcon2(cdvd); break;
         default: {
-            iris_fatal_error(cdvd, "Unknown S command {:02x}h", cmd);
+            iris_warning(cdvd, "Unknown S command {:02x}h ({} params)", cmd, cdvd->s_param_index);
+
+            init_s_fifo(cdvd, 1);
+
+            cdvd->s_fifo[0] = 0x80;
         } break;
     }
 
@@ -1394,6 +1468,10 @@ Cdvd* create(logger::Logger* logger, iop::intc::Intc* intc, scheduler::Scheduler
     cdvd->logger = logger;
     cdvd->logger_id = logger::register_source(logger, "cdvd");
 
+#ifdef IRIS_ENABLE_MAGICGATE
+    mg::init(&cdvd->mecha_keys, logger);
+#endif
+
     cdvd->hw.intc = intc;
     cdvd->hw.sched = sched;
 
@@ -1607,6 +1685,77 @@ void reset(Cdvd* cdvd) {
     cdvd->buf_size = 0;
 }
 
+#ifdef IRIS_ENABLE_MAGICGATE
+int load_mg_key(Cdvd* cdvd, int which, const char* path) {
+    return mg::load_file(&cdvd->mecha_keys, which, path);
+}
+
+int derive_mg_keys(Cdvd* cdvd, int mode) {
+    cdvd->mecha_keys.ready = 0;
+
+    if (!mg::has_complete_keyset(&cdvd->mecha_keys)) {
+        bool loaded = false;
+
+        for (int i = 0; i < mg::KEY_FILE_COUNT; i++) {
+            if (cdvd->mecha_keys.loaded[i]) {
+                loaded = true;
+
+                break;
+            }
+        }
+
+        if (loaded) {
+            iris_warning(cdvd, "MagicGate keyset incomplete, falling back to HLE");
+        }
+
+        return 0;
+    }
+
+    if (!cdvd->mecha_state) {
+        cdvd->mecha_state = new mg::State();
+    }
+
+    mg::reset(cdvd->mecha_state);
+
+    const uint8_t* console_id = &cdvd->nvram[cdvd->layout.console_id_offset];
+    const uint8_t* ilink_id = &cdvd->nvram[cdvd->layout.ilink_id_offset];
+
+    if (!mg::derive(&cdvd->mecha_keys, mode, console_id, ilink_id)) {
+        iris_error(cdvd, "MagicGate: derive failed (mode {})", mode);
+
+        return 0;
+    }
+
+    iris_info(cdvd, "MagicGate key store ready (mode {})", mode);
+
+    return 1;
+}
+
+int mg_ready(Cdvd* cdvd) {
+    return cdvd->mecha_keys.ready;
+}
+
+const uint8_t* mg_challenge_iv(Cdvd* cdvd) {
+    return cdvd->mecha_keys.store.challenge_iv;
+}
+#else
+int load_mg_key(Cdvd* cdvd, int which, const char* path) {
+    return 0;
+}
+
+int derive_mg_keys(Cdvd* cdvd, int mode) {
+    return 0;
+}
+
+int mg_ready(Cdvd* cdvd) {
+    return 0;
+}
+
+const uint8_t* mg_challenge_iv(Cdvd* cdvd) {
+    return nullptr;
+}
+#endif
+
 void set_mechacon_model(Cdvd* cdvd, int model) {
     cdvd->mechacon_model = model;
 
@@ -1624,8 +1773,6 @@ void set_mechacon_model(Cdvd* cdvd, int model) {
 int load_nvram(Cdvd* cdvd, const char* path) {
     FILE* file = fopen(path, "rb");
 
-    // Claim the path either way, so a first run starts blank and still has
-    // somewhere to persist to
     if (!file) {
         memset(cdvd->nvram, 0, sizeof(cdvd->nvram));
     } else {

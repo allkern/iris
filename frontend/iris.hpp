@@ -269,6 +269,13 @@ struct Instance {
         std::string hdd_id_path = "";
         std::string dongle_black_path = "";
         std::string dongle_white_path = "";
+        std::string mecha_card_id_path = "";
+        std::string mecha_civ_path = "";
+        std::string mecha_cks_path = "";
+        std::string mecha_eks_path = "";
+        std::string mecha_kek_path = "";
+        std::string mecha_kelf_kbit_path = "";
+        std::string mecha_kelf_kc_path = "";
         bool auto_paths = true;
 
         bool pinned_rom1 = false;
