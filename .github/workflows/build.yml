@@ -1,12 +1,49 @@
-name: Ubuntu CI
+name: Build CI
 
 on:
   push:
   pull_request:
 
 jobs:
-  build:
-    name: ${{ matrix.arch }}
+  windows-build:
+    name: windows-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: windows-2025-vs2026
+          - arch: arm64
+            runner: windows-11-arm
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+
+    - name: Configure build for ${{ matrix.arch }}
+      uses: ilammy/msvc-dev-cmd@v1
+      with:
+        arch: ${{ matrix.arch }}
+
+    - name: Build and pack Iris
+      run: |
+        git fetch --all --tags
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=clang-cl -DCMAKE_CXX_COMPILER=clang-cl
+        cmake --build build
+        New-Item -Path "dist" -ItemType Directory
+        Copy-Item -Path ".\build\iris.exe" "dist"
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: iris-latest-windows-${{ matrix.arch }}
+        path: dist/
+
+  linux-build:
+    name: linux-${{ matrix.arch }}
     runs-on: ${{ matrix.runner }}
 
     strategy:
@@ -37,9 +74,6 @@ jobs:
         libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev \
         libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libfuse2t64
 
-    # The runner images ship clang 16-18 and #embed needs 19 or newer. Ubuntu's
-    # own archive carries clang-20 on x86_64; fall back to apt.llvm.org when the
-    # package is missing so the arm64 runner does not depend on that.
     - name: Install clang ${{ env.CLANG_VERSION }}
       run: |
         if ! apt-cache show "clang-${CLANG_VERSION}" > /dev/null 2>&1; then
@@ -79,3 +113,42 @@ jobs:
       with:
         name: iris-latest-linux-${{ matrix.arch }}-appimage
         path: ./appimage
+
+  macos-universal-build:
+    name: macos-universal
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        submodules: 'recursive'
+        fetch-depth: 0
+
+    - name: Install Vulkan SDK
+      uses: jakoch/install-vulkan-sdk-action@v1
+      with:
+        optional_components: com.lunarg.vulkan.volk
+        install_runtime: true
+        cache: true
+        stripdown: true
+
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+
+    - name: Install mbedTLS codegen deps
+      run: pip install -r deps/mbedtls/scripts/basic.requirements.txt
+
+    - name: Build and pack Iris
+      run: |
+        git fetch --all --tags
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake --build build
+        sudo cmake --install build
+        mkdir -p ./build/dist
+        cp -R ./build/iris.app ./build/dist
+
+    - uses: actions/upload-artifact@v7
+      with:
+        name: iris-latest-macos-universal
+        path: ./build/dist
