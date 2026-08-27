@@ -356,9 +356,9 @@ void write_data(Spu2* spu2, int c, uint64_t data) {
 
     check_irq(spu2, spu2->c[c].tsa);
 
-    spu2->ram[spu2->c[c].tsa++] = data;
+    spu2->ram[spu2->c[c].tsa & 0xfffff] = data;
 
-    spu2->c[c].tsa &= 0xfffff;
+    spu2->c[c].tsa = (spu2->c[c].tsa + 1) & 0xfffff;
 }
 
 uint16_t read_data(Spu2* spu2, int c) {
@@ -673,8 +673,8 @@ void write16(Spu2* spu2, uint32_t addr, uint64_t data) {
             case 0x1A2: write_kon(spu2, core, 1, data); return;
             case 0x1A4: write_koff(spu2, core, 0, data); return;
             case 0x1A6: write_koff(spu2, core, 1, data); return;
-            case 0x1A8: WRITEH(core, tsa); return;
-            case 0x1AA: WRITEL(core, tsa); return;
+            case 0x1A8: WRITEH(core, tsa); spu2->c[core].tsa &= 0xfffff; return;
+            case 0x1AA: WRITEL(core, tsa); spu2->c[core].tsa &= 0xfffff; return;
             case 0x1AC: write_data(spu2, core, data); return;
             case 0x1AE: spu2->c[core].ctrl = data; return;
             case 0x1B0: spu2->c[core].admas = data; return;
