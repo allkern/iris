@@ -22,7 +22,7 @@ inline constexpr auto R_SCRATCH = 0x0e;
 inline constexpr auto LINE_CONTROL_DIVISOR = 0x80;
 inline constexpr auto LINE_STATUS_TX_IDLE = 0x60;
 inline constexpr auto INTERRUPT_NONE = 0x01;
-inline constexpr auto LINE_MAX = 256;
+inline constexpr auto LINE_BUFFER_SIZE = 256;
 inline constexpr auto LINE_STATUS_RX_READY = 0x01;
 
 enum {
@@ -41,7 +41,7 @@ struct Acuart {
     uint16_t divisor_low;
     uint16_t divisor_high;
 
-    char line[LINE_MAX];
+    char line[LINE_BUFFER_SIZE];
     int line_size;
 
     uint8_t rx[RX_MAX];

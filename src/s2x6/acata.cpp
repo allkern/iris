@@ -436,7 +436,7 @@ void atapi_handle_command(Acata* acata, AtapiPacket* packet) {
             acata->buf[4] = speed::ata::ATAPI_DVD_SECTOR_SIZE >> 24;
             acata->buf[5] = speed::ata::ATAPI_DVD_SECTOR_SIZE >> 16;
             acata->buf[6] = speed::ata::ATAPI_DVD_SECTOR_SIZE >> 8;
-            acata->buf[7] = speed::ata::ATAPI_DVD_SECTOR_SIZE;
+            acata->buf[7] = speed::ata::ATAPI_DVD_SECTOR_SIZE & 0xff;
         } break;
 
         case ATAPI_MODE_SENSE: {

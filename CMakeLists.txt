@@ -188,6 +188,7 @@ target_compile_definitions(fmt PUBLIC FMT_EXCEPTIONS=0)
 
 add_subdirectory(deps/libdeflate EXCLUDE_FROM_ALL)
 add_subdirectory(deps/parallel-gs EXCLUDE_FROM_ALL)
+add_subdirectory(deps/miniz EXCLUDE_FROM_ALL)
 add_subdirectory(deps/libchdr EXCLUDE_FROM_ALL)
 add_subdirectory(deps/SDL EXCLUDE_FROM_ALL)
 
@@ -206,7 +207,6 @@ if (NOT WIN32)
 endif()
 
 add_subdirectory(deps/curl EXCLUDE_FROM_ALL)
-add_subdirectory(deps/miniz EXCLUDE_FROM_ALL)
 
 set(SLIRP_MAJOR_VERSION 4)
 set(SLIRP_MINOR_VERSION 9)

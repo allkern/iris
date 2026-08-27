@@ -19,6 +19,7 @@
 [submodule "libchdr"]
 	path = deps/libchdr
 	url = https://github.com/rtissera/libchdr
+	branch = master
 [submodule "stb"]
 	path = deps/stb
 	url = https://github.com/nothings/stb

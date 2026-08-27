@@ -91,7 +91,7 @@ static void transmit(Acuart* acuart, uint8_t value) {
     if (acuart->device != DEVICE_NONE)
         return;
 
-    if (value == '\n' || acuart->line_size == LINE_MAX - 1) {
+    if (value == '\n' || acuart->line_size == LINE_BUFFER_SIZE - 1) {
         flush_line(acuart);
 
         if (value == '\n')
