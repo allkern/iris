@@ -328,11 +328,12 @@ void write8(Link* link, uint32_t addr, uint64_t data) {
         case MODEH: {
             // Software reset
             if ((link->modeh & MODEH_INIMODE) != (data & MODEH_INIMODE)) {
-                link->stsl = 0;
+                // Set regs to reset state
+                link->stsl = STSL_TA;
                 link->stsh = 0;
                 link->mskl = 0;
                 link->mskh = 0;
-                link->comr0 = 0;
+                link->comr0 = COMR0_R_RECON;
                 link->comr1 = 0;
             }
 

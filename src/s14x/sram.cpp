@@ -21,9 +21,13 @@ int load(Sram* sram, const char* path) {
 
     // If the file doesn't exist then we'll create it
     if (!file) {
-        fclose(file);
-
         file = fopen(path, "wb");
+
+        if (!file) {
+            iris_error(sram, "Couldn't create SRAM file \"{}\"", path);
+
+            return 0;
+        }
 
         fwrite(sram->buf, 1, SIZE, file);
         fclose(file);
@@ -68,11 +72,15 @@ void write32(Sram* sram, uint32_t addr, uint64_t data) {
 }
 
 void destroy(Sram* sram) {
-    if (sram->path) {
-        FILE* file = fopen(sram->path, "wb");
+    if (sram->path.size()) {
+        FILE* file = fopen(sram->path.c_str(), "wb");
 
-        fwrite(sram->buf, 1, SIZE, file);
-        fclose(file);
+        if (file) {
+            fwrite(sram->buf, 1, SIZE, file);
+            fclose(file);
+        } else {
+            iris_error(sram, "Couldn't write SRAM back to \"{}\"", sram->path);
+        }
     }
 
     delete sram;

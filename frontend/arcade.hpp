@@ -75,16 +75,29 @@ const toml::table g_arcade_definitions = toml::table {
     { "pacmanap", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_147 },
         { "name", "Pac-Man's Arcade Party" },
-        { "nand", "kp007a_k9k8g08u0b_pmaam12-na-c.ic26" },
+        { "nand", toml::array { "kp007a_k9k8g08u0b_pmaam12-na-c.ic26", "kp007a_pmaam12-na-c.ic26" } },
         { "bios", "common_system147b_bootrom.ic1" },
-        { "boot", "atfile0:PMAAC.elf" }
+        { "boot", "atfile0:PMAAC.elf" },
+        { "nand_crc", 0xfb42ddb0 },
+        { "nand_sha1", "d7ec90b2f5c1ed7872f3ca7bd0511dd17427d987" }
     }},
     { "pacmanbr", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_147 },
         { "name", "Pac-Man: Battle Royale" },
         { "nand", "pbr102-2-na-mpro-a13_kp006b.ic26" },
         { "bios", "common_system147b_bootrom.ic1" },
-        { "boot", "atfile0:pacmanBR.elf" }
+        { "boot", "atfile0:pacmanBR.elf" },
+        { "nand_crc", 0xbfd16bae },
+        { "nand_sha1", "fd23030e6b065ce2db18e3f23084f52079082ae3" }
+    }},
+    { "pacmanbrj", toml::table {
+        { "system", iris::ps2::NAMCO_SYSTEM_147 },
+        { "name", "Pac-Man Battle Royale (Japan, PBR101-1-NA-A)" },
+        { "nand", "pbr101-1-na-mpro-a23.ic26" },
+        { "bios", "common_system147b_bootrom.ic1" },
+        { "boot", "atfile0:pacmanBR.elf" },
+        { "nand_crc", 0x51d6d25a },
+        { "nand_sha1", "8ecb1d9d5594954b7aabb08ac5c6d4f11b9e5c4e" }
     }},
     { "akaiser", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_147 },
@@ -92,22 +105,58 @@ const toml::table g_arcade_definitions = toml::table {
         { "nand", "kp005a_ana1004-na-b.ic26" },
         { "bios", "common_system147b_bootrom.ic1" },
         { "boot", "atfile0:main.elf" },
-        { "ioboard_mode", 1 }
+        { "ioboard_mode", 1 },
+        { "nand_crc", 0xc2ee4a79 },
+        { "nand_sha1", "67c751c85eb99fb3cba17832acb38f3b88d54756" }
     }},
     { "akaievo", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_147 },
         { "name", "Animal Kaiser Evolution" },
-        { "nand", "kp012b_k9k8g08u0b.ic31" },
+        { "nand", toml::array { "kp012b_k9k8g08u0b.ic31", "kp012b_ana2004-na-a.ic31" } },
         { "bios", "common_system147b_bootrom.ic1" },
         { "boot", "atfile0:main.elf" },
-        { "ioboard_mode", 1 }
+        { "ioboard_mode", 1 },
+        { "nand_crc", 0xe1e7cbaa },
+        { "nand_sha1", "0b2ea649e94b1ff40fcbd744a2d0c319a2adec94" }
+    }},
+    { "animalke1", toml::table {
+        { "system", iris::ps2::NAMCO_SYSTEM_148 },
+        { "name", "Animal Kaiser Evolution (Evo 1, ANA2004-NA-A)" },
+        { "nand", "kp017b_ana2004-na-a.ic31" },
+        { "bios", "common_system148_bootrom.ic1" },
+        { "boot", "atfile0:main.elf" },
+        { "ioboard_mode", 1 },
+        { "nand_crc", 0x9fb7855f },
+        { "nand_sha1", "f0aaeb8c0c0bd9db5284d01bf59ffd97d04ada88" }
+    }},
+    { "animalke2", toml::table {
+        { "system", iris::ps2::NAMCO_SYSTEM_148 },
+        { "name", "Animal Kaiser Evolution (Evo 2, ANA2004-NA-A)" },
+        { "nand", "kp012b_ana2004-na-a-1.ic31" },
+        { "bios", "common_system148_bootrom.ic1" },
+        { "boot", "atfile0:main.elf" },
+        { "ioboard_mode", 1 },
+        { "nand_crc", 0x1fa8d848 },
+        { "nand_sha1", "d0cdba94aef450b34ddd739fc63b2d82ac72d667" }
+    }},
+    { "animalkeu", toml::table {
+        { "system", iris::ps2::NAMCO_SYSTEM_148 },
+        { "name", "Animal Kaiser Evolution (unknown Evo, ANA2004-NA-A)" },
+        { "nand", "kp017b_ana2004-na-a-1.ic31" },
+        { "bios", "common_system148_bootrom.ic1" },
+        { "boot", "atfile0:main.elf" },
+        { "ioboard_mode", 1 },
+        { "nand_crc", 0x3b8a08c0 },
+        { "nand_sha1", "683282d3aa01d4b3a4f20283e6ad16c067826f91" }
     }},
     { "umilucky", toml::table {
         { "system", iris::ps2::NAMCO_SYSTEM_148 },
         { "name", "Umimonogatari Lucky Marine Theater" },
         { "nand", "uls100-1-na-mpro-b01_kp008a.ic31" },
         { "bios", "common_system148_bootrom.ic1" },
-        { "boot", "atfile0:prog.elf" }
+        { "boot", "atfile0:prog.elf" },
+        { "nand_crc", 0xb200d76f },
+        { "nand_sha1", "212bd7a784fdd1c5639ff31d84982ae8e101b072" }
     }},
 
     // Namco System 246/256/Super 256

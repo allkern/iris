@@ -620,7 +620,7 @@ static bool arcade_file_available(const ArcadeSource& source, const std::vector 
     if (!find_by_fingerprint(source, prefix).empty())
         return true;
 
-    return is_media_role(prefix) && !find_media_by_kind(source).empty();
+    return names.size() && is_media_role(prefix) && !find_media_by_kind(source).empty();
 }
 
 static std::filesystem::path locate_arcade_file(const ArcadeSource& source, const std::vector <std::string>& names, const char* prefix = nullptr) {
@@ -642,7 +642,7 @@ static std::filesystem::path locate_arcade_file(const ArcadeSource& source, cons
     if (!by_content.empty())
         return by_content;
 
-    if (is_media_role(prefix)) {
+    if (names.size() && is_media_role(prefix)) {
         std::filesystem::path by_kind = find_media_by_kind(source);
 
         if (!by_kind.empty())

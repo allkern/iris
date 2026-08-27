@@ -1,4 +1,6 @@
 #pragma once
+
+#include <string>
 #include "logger.hpp"
 
 namespace iris::s14x::sram {
@@ -6,7 +8,7 @@ namespace iris::s14x::sram {
 inline constexpr auto SIZE = 0x8000;
 
 struct Sram {
-    const char* path;
+    std::string path;
     int* write_flag;
     uint8_t buf[SIZE];
 
