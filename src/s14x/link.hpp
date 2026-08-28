@@ -255,6 +255,7 @@ uint64_t read8(Link* link, uint32_t addr);
 void write8(Link* link, uint32_t addr, uint64_t data);
 void register_node(Link* link, int node, packet_handler handler, void* udata);
 void send_packet(Link* link, Packet packet);
+void send_from_node(Link* link, int node, const Packet& packet);
 void destroy(Link* link);
 
 uint8_t calculate_checksum(Packet* packet);

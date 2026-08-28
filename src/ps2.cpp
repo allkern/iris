@@ -593,7 +593,7 @@ void set_system(Ps2* ps2, int system) {
             ps2->s14x_sram = s14x::sram::create(ps2->logger, &ps2->s14x_syscon->sram_write_flag);
             ps2->s14x_link = s14x::link::create(ps2->logger, ps2->iop_intc, ps2->sched);
             ps2->s14x_ioboard = s14x::ioboard::create(ps2->logger, 0);
-            ps2->s14x_aiboard = s14x::aiboard::create(ps2->logger);
+            ps2->s14x_aiboard = s14x::aiboard::create(ps2->logger, ps2->s14x_link, ps2->sched);
 
             ps2->iop_bus->s14x_nand = ps2->s14x_nand;
             ps2->iop_bus->s14x_syscon = ps2->s14x_syscon;
@@ -605,6 +605,10 @@ void set_system(Ps2* ps2, int system) {
             iop::bus::set_usb_disabled(ps2->iop_bus, 1);
 
             s14x::link::register_node(ps2->s14x_link, 2, s14x::ioboard::handle_packet, ps2->s14x_ioboard);
+            
+            // pacmanbr is the only game that actually has the A.I. board connected
+            // but having it in does nothing if the game doesn't actually send something
+            // to it, so it's ok to just always register it
             s14x::link::register_node(ps2->s14x_link, 3, s14x::aiboard::handle_packet, ps2->s14x_aiboard);
 
             iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_NAND);

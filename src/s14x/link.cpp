@@ -208,12 +208,22 @@ void recv_reply(void* udata, int overshoot) {
     }
 
     // Set packet pending flag
-    link->rxfll = 1 << tx->dst_node;
+    link->rxfll |= 1 << tx->dst_node;
 
     // Get response from the requested node
     node->handler(node->udata, tx, rx);
 
     // Send DEV9 IRQ to IOP
+    iop::intc::irq(link->intc, iop::intc::DEV9);
+}
+
+void send_from_node(Link* link, int node, const Packet& packet) {
+    Packet* rx = (Packet*)&link->ram[node * 0x40];
+
+    *rx = packet;
+
+    link->rxfll |= 1 << node;
+
     iop::intc::irq(link->intc, iop::intc::DEV9);
 }
 
