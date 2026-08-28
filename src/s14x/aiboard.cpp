@@ -64,11 +64,21 @@ Aiboard* create(logger::Logger* logger, link::Link* link, scheduler::Scheduler* 
     aiboard->link = link;
     aiboard->sched = sched;
 
+    aiboard->state = 0xffff;
+
     return aiboard;
 }
 
 void destroy(Aiboard* aiboard) {
     delete aiboard;
+}
+
+void press_button(Aiboard* aiboard, uint16_t mask) {
+    aiboard->state &= ~mask;
+}
+
+void release_button(Aiboard* aiboard, uint16_t mask) {
+    aiboard->state |= mask;
 }
 
 void handle_packet(void* udata, link::Packet* in, link::Packet* out) {

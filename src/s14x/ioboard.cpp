@@ -198,9 +198,24 @@ void handle_packet(void* udata, link::Packet* in, link::Packet* out) {
             }
         } break;
 
-        // Used by Animal Kaiser
         case 0x41: {
-            out->data[0] = 0;
+            int record = 0;
+
+            for (int i = 0; i < NUM_COIN_SLOTS; i++) {
+                if (!ioboard->coins[i])
+                    continue;
+
+                out->data[record + 0] = 0x30 + i + 1;
+                out->data[record + 1] = 0;
+                out->data[record + 2] = ioboard->coins[i] & 0xff;
+                out->data[record + 3] = ioboard->coins[i] >> 8;
+
+                ioboard->coins[i] = 0;
+
+                record += 4;
+            }
+
+            out->data[record] = 0;
         } break;
 
         // Used by Animal Kaiser
@@ -241,6 +256,23 @@ void press_button(Ioboard* ioboard, uint16_t mask) {
 
 void release_button(Ioboard* ioboard, uint16_t mask) {
     ioboard->buttons &= ~mask;
+}
+
+void set_coin_switch(Ioboard* ioboard, int slot, int pressed) {
+    if (slot < 0 || slot >= NUM_COIN_SLOTS)
+        return;
+
+    uint16_t mask = 1 << slot;
+
+    if (pressed && !(ioboard->coin_switches & mask)) {
+        ioboard->coins[slot]++;
+    }
+
+    if (pressed) {
+        ioboard->coin_switches |= mask;
+    } else {
+        ioboard->coin_switches &= ~mask;
+    }
 }
 
 }

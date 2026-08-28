@@ -28,6 +28,15 @@
            on the network on its own, and s147iolib counts those. Fewer than
            20 between two of its sweeps and the board is reported missing,
            in which case the test menu reports "3-13 I/O ERROR 4".
+
+           Status word
+           -----------
+           The 16 bits at 3Ch-3Dh of a status frame are the player controls,
+           four nibbles laid out exactly like ioboard::Button, player 4 in the
+           low nibble, then players 2, 3 and 1. pacmanbr reads them with
+           s147iolib id 300h and inverts them, so they are ACTIVE LOW and an
+           idle board reports FFFFh. It pastes them in above the I/O board's
+           own switches, whose bits 8 to 11 are the four start buttons.
 */
 
 #pragma once
@@ -54,7 +63,8 @@ struct Aiboard {
 
 Aiboard* create(logger::Logger* logger, link::Link* link, scheduler::Scheduler* sched);
 void destroy(Aiboard* aiboard);
-
 void handle_packet(void* udata, link::Packet* in, link::Packet* out);
+void press_button(Aiboard* aiboard, uint16_t mask);
+void release_button(Aiboard* aiboard, uint16_t mask);
 
 }

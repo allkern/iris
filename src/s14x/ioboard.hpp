@@ -28,12 +28,28 @@
            18h      Switch (?)
            38h      SCI (?)
            39h      Get switches (?)
+           41h      Coin sensor readout
            48h      Coin sensor (?)
            58h      Mechanical sensor (?)
            A5h      Reset
 
            There are actually more commands but we stub most of them by
            returning the same data that was sent by the main board.
+
+           Coin sensor readout (41h)
+           -------------------------
+           The reply carries a list of four byte records starting at the first
+           payload byte. A record is
+
+           Offset   Description
+           00h      Coin sensor id, 31h to 34h. The low nibble is the 1 based
+                    slot the game files the coins under, and the byte has to be
+                    non zero in its high nibble or the list ends here
+           01h      Error status, non zero fails the coin mech in the diagnostic
+           02h-03h  Coins seen since the last readout
+
+           The game polls this constantly and adds each record's count to its
+           own credit total
 */
 
 #pragma once
@@ -74,10 +90,15 @@ enum Button : uint16_t {
     P1_LEFT = 0x8000
 };
 
+inline constexpr auto NUM_COIN_SLOTS = 4;
+
 struct Ioboard {
     uint16_t version;
     uint16_t switches;
     uint16_t buttons;
+
+    uint16_t coins[NUM_COIN_SLOTS];
+    uint16_t coin_switches;
 
     int mode;
 
@@ -92,6 +113,7 @@ void press_switch(Ioboard* ioboard, uint16_t mask);
 void release_switch(Ioboard* ioboard, uint16_t mask);
 void press_button(Ioboard* ioboard, uint16_t mask);
 void release_button(Ioboard* ioboard, uint16_t mask);
+void set_coin_switch(Ioboard* ioboard, int slot, int pressed);
 
 void handle_packet(void* udata, link::Packet* in, link::Packet* out);
 
