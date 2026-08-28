@@ -21,6 +21,13 @@ void destroy(Ioboard* ioboard) {
     delete ioboard;
 }
 
+// Animal Kaiser vets the IC card reader by XORing the eight bytes command ACh
+// returns, which have to come out zero, and by adding up the sixteen command
+// AFh returns, which have to come out 889h
+inline constexpr auto CERTIFICATE_SIZE = 16;
+inline constexpr auto CERTIFICATE_FILL = 0x88;
+inline constexpr auto CERTIFICATE_SUM = 0x889;
+
 uint8_t link_calculate_checksum(link::Packet* packet) {
     uint8_t checksum = 0;
 
@@ -100,10 +107,22 @@ void process_ic_card(Ioboard* ioboard, link::Packet* in, link::Packet* out) {
         } break;
 
         case 0xAF: {
-            // More key stuff (checksum)? (game expects 16 bytes in payload)
+            // Animal Kaiser adds these 16 bytes up and will not accept
+            // the reader unless they total 889h, and nothing else ever
+            // reads them, so any 16 bytes that add up will do
             out_size = 20;
 
             out->data[base + 3] = 0x00; //Command result?
+
+            uint16_t sum = 0;
+
+            for (int i = 0; i < CERTIFICATE_SIZE - 1; i++) {
+                out->data[base + 4 + i] = CERTIFICATE_FILL;
+
+                sum += CERTIFICATE_FILL;
+            }
+
+            out->data[base + 4 + CERTIFICATE_SIZE - 1] = CERTIFICATE_SUM - sum;
         } break;
 
         default: {
