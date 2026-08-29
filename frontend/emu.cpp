@@ -1430,6 +1430,9 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
             cdvd::load_nvram(iris->ps2->cdvd, files.nvram.string().c_str());
 
+            // Read the console and i.Link IDs out of the NVM
+            settings::apply_mg_keys(iris);
+
             if (iris->ps2->s14x_ioboard) {
                 iris->ps2->s14x_ioboard->mode = source.ioboard_mode;
             }
@@ -1672,6 +1675,9 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
             }
 
             attach_memory_card(iris, 0, dongle.string().c_str());
+
+            // Read the console and i.Link IDs out of the NVM
+            settings::apply_mg_keys(iris);
 
             if (!s2x6::acata::load(iris->ps2->s2x6_acata, files.media.string().c_str(), files.media_type)) {
                 iris_error(&iris->log.emu, "Couldn't read media image \"{}\"", files.media.string().c_str());

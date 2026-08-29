@@ -327,7 +327,15 @@ bool parse_toml_settings(Instance* iris, bool reset) {
 
 static int mg_mode_for_system(int system) {
     switch (system) {
-        case ps2::KONAMI_PYTHON: {
+        case ps2::KONAMI_PYTHON:
+
+        // Python 2 is a retail system
+        // case ps2::KONAMI_PYTHON2:
+        case ps2::NAMCO_SYSTEM_147:
+        case ps2::NAMCO_SYSTEM_148:
+        case ps2::NAMCO_SYSTEM_246:
+        case ps2::NAMCO_SYSTEM_256:
+        case ps2::NAMCO_SYSTEM_SUPER_256: {
             return mg::KEY_STORE_MODE_ARCADE;
         } break;
     }

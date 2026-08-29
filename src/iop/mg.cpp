@@ -239,7 +239,8 @@ static int verify_card_challenge(Keys* keys, State* state) {
     des::xor_bytes(response, keys->store.challenge_iv, response, 8);
 
     if (memcmp(state->memcard_nonce, response, 8) != 0) {
-        iris_error(keys, "Invalid card response 1");
+        iris_error(keys, "Invalid card response 1 (key store mode {}, card key index {})",
+            keys->mode, state->card_key_index);
 
         return MECHA_RESULT_FAILED;
     }
@@ -250,7 +251,8 @@ static int verify_card_challenge(Keys* keys, State* state) {
     des::xor_bytes(response, state->memcard_response1, response, 8);
 
     if (memcmp(state->memcard_random, response, 8) != 0) {
-        iris_error(keys, "Invalid card response 2");
+        iris_error(keys, "Invalid card response 2 (key store mode {}, card key index {})",
+            keys->mode, state->card_key_index);
 
         return MECHA_RESULT_FAILED;
     }
