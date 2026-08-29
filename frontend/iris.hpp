@@ -345,6 +345,8 @@ struct Instance {
     bool open = false;
 
     bool fullscreen = false;
+    bool no_decorations = false;
+    bool remember_window_size = false;
     int aspect_mode = render::AUTO;
     int filter = 1;
     bool integer_scaling = false;

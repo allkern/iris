@@ -147,6 +147,8 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->flip_x = display["flip_x"].value_or(false);
     iris->flip_y = display["flip_y"].value_or(false);
     iris->present_mode = display["present_mode"].value_or(render::FPS_60);
+    iris->no_decorations = display["no_decorations"].value_or(false);
+    iris->remember_window_size = display["remember_window_size"].value_or(false);
 
     auto audio = tbl["audio"];
     iris->audio.mute = audio["mute"].value_or(false);
@@ -576,7 +578,9 @@ void save(Instance* iris) {
             { "angle", iris->angle },
             { "flip_x", iris->flip_x },
             { "flip_y", iris->flip_y },
-            { "present_mode", iris->present_mode }
+            { "present_mode", iris->present_mode },
+            { "no_decorations", iris->no_decorations },
+            { "remember_window_size", iris->remember_window_size }
         } },
         { "ui", toml::table {
             { "theme", iris->ui.theme },

@@ -1866,6 +1866,8 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
     }
 
     {
+        VkClearValue clear = render::background(iris);
+
         VkRenderPassBeginInfo render_pass_info = {};
         render_pass_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         render_pass_info.renderPass = wd->RenderPass;
@@ -1873,7 +1875,7 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
         render_pass_info.renderArea.extent.width = wd->Width;
         render_pass_info.renderArea.extent.height = wd->Height;
         render_pass_info.clearValueCount = 1;
-        render_pass_info.pClearValues = &iris->vk.clear_value;
+        render_pass_info.pClearValues = &clear;
 
         vkCmdBeginRenderPass(fd->CommandBuffer, &render_pass_info, VK_SUBPASS_CONTENTS_INLINE);
     }

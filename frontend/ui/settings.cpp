@@ -954,6 +954,14 @@ void show_graphics_settings(Instance* iris) {
     Checkbox(" Integer scaling", &iris->integer_scaling);
     Checkbox(" Flip horizontally", &iris->flip_x);
     Checkbox(" Flip vertically", &iris->flip_y);
+    Checkbox(" Remember window size", &iris->remember_window_size);
+
+    if (Checkbox(" No decorations", &iris->no_decorations)) {
+        SDL_SetWindowSize(iris->window, iris->window_width, iris->window_height + get_menubar_height(iris));
+    }
+
+    SetItemTooltip("Hides the menu bar and status bar, and paints the background black (F10)");
+
     PopStyleVar();
 
     if (iris->renderer_backend == gs::renderer::BACKEND_HARDWARE) {

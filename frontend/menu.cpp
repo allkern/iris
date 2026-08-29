@@ -38,7 +38,7 @@ static bool take(int index) {
 
 bool begin_bar(Instance* iris) {
     if (!NATIVE) {
-        if (iris->fullscreen)
+        if (iris->fullscreen || iris->no_decorations)
             return false;
 
         ImGui::PushFont(iris->ui.font_icons);

@@ -373,7 +373,7 @@ void update_window(Instance* iris) {
 
     applets::render(iris);
 
-    if (iris->ui.show_status_bar && !iris->fullscreen) show_status_bar(iris);
+    if (iris->ui.show_status_bar && !iris->fullscreen && !iris->no_decorations) show_status_bar(iris);
     if (iris->ui.show_imgui_demo) ShowDemoWindow(&iris->ui.show_imgui_demo);
     if (iris->ui.show_overlay) show_overlay(iris);
     if (iris->fatal_error) show_fatal_error(iris);
@@ -834,6 +834,15 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
             return SDL_APP_SUCCESS;
         } break;
 
+        case SDL_EVENT_WINDOW_RESIZED: {
+            int height = event->window.data2 - get_menubar_height(iris);
+
+            if (iris->remember_window_size && !iris->fullscreen && height > 0) {
+                iris->window_width = event->window.data1;
+                iris->window_height = height;
+            }
+        } break;
+
         case SDL_EVENT_MOUSE_BUTTON_DOWN: {
             if (ImGui::GetIO().WantCaptureMouse) {
                 break;
@@ -1031,13 +1040,16 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
 }
 
 int get_menubar_inset(Instance* iris) {
-    if (menu::native() || iris->fullscreen)
+    if (menu::native() || iris->fullscreen || iris->no_decorations)
         return 0;
 
     return iris->ui.menubar_height;
 }
 
 int get_menubar_height(Instance* iris) {
+    if (iris->no_decorations)
+        return 0;
+
     int height = menu::native() ? 0 : iris->ui.menubar_height;
 
     if (iris->ui.show_status_bar)

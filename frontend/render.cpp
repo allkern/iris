@@ -344,7 +344,7 @@ static inline void update_vertex_buffer(Instance* iris, VkCommandBuffer command_
     display.h -= inset;
     display.y += inset;
 
-    if (!iris->fullscreen && iris->ui.show_status_bar) {
+    if (!iris->fullscreen && !iris->no_decorations && iris->ui.show_status_bar) {
         display.h -= iris->ui.menubar_height;
     }
 
@@ -609,6 +609,17 @@ void render_shader_passes(Instance* iris, VkCommandBuffer command_buffer, VkImag
     }
 }
 
+VkClearValue background(Instance* iris) {
+    if (!iris->no_decorations)
+        return iris->vk.clear_value;
+
+    VkClearValue black = {};
+
+    black.color.float32[3] = 1.0f;
+
+    return black;
+}
+
 bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer) {
     gs::renderer::Image image;
 
@@ -649,6 +660,8 @@ bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer 
         render_shader_passes(iris, command_buffer, iris->vk.output_image.view, iris->vk.output_image.image);
     }
 
+    VkClearValue clear = background(iris);
+
     VkRenderPassBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     info.renderPass = iris->vk.main_window_data.RenderPass;
@@ -656,7 +669,7 @@ bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer 
     info.renderArea.extent.width = iris->vk.main_window_data.Width;
     info.renderArea.extent.height = iris->vk.main_window_data.Height;
     info.clearValueCount = 1;
-    info.pClearValues = &iris->vk.clear_value;
+    info.pClearValues = &clear;
 
     if (iris->vk.output_image.view != VK_NULL_HANDLE) {
         const VkDescriptorSet descriptor_set = get_frame_descriptor_set(iris);
@@ -670,7 +683,7 @@ bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer 
     VkClearAttachment clear_attachment = {};
     clear_attachment.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     clear_attachment.colorAttachment = 0;
-    clear_attachment.clearValue = iris->vk.clear_value;
+    clear_attachment.clearValue = clear;
 
     VkClearRect clear_rect = {};
     clear_rect.rect.offset = { 0, 0 };
