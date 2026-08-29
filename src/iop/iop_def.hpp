@@ -164,11 +164,6 @@ struct Iop {
     uint64_t total_cycles = 0;
     uint32_t biu_config = 0;
     int branch = 0, delay_slot = 0, branch_taken = 0;
-    // 32, not the 16 the R3000A implements. rd in MFC0/MTC0 is a five bit
-    // field, and guest code is free to name a register the hardware does not
-    // have. Both the recompiler and the interpreter index this array with it
-    // directly, so a short array turns that encoding into a write past the end
-    // of the struct.
     uint32_t cop0_r[32] = { 0 };
 
     iop::bus::Iface bus = { nullptr };
@@ -183,16 +178,12 @@ struct Iop {
     BlockLutEntry block_lut[IOP_BLOCK_LUT_SIZE] = {};
     uint32_t block_lut_gen = 1;
 
-    // Entry points thbase published, used to park the arcade security
-    // daemon's card checker, see hle/thbase.cpp
     uint32_t thbase_library = 0;
     uint32_t thbase_create_thread = 0;
     uint32_t thbase_start_thread = 0;
     int suppress_daemon = 0;
     int suppress_next_thread_start = 0;
 
-    // Entry point sifcmd published, used to report which RPC servers
-    // register, see hle/sifcmd.cpp
     uint32_t sifcmd_register_rpc = 0;
 
     void (*kputchar)(void*, char) = nullptr;

@@ -3409,14 +3409,20 @@ static inline void i_teq(Ee* ee, const Instruction& i) {
     if (RS == RT) exception_level1(ee, CAUSE_EXC1_TR);
 }
 static inline void i_teqi(Ee* ee, const Instruction& i) {
-    if (RS == SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
+    if (RS == (uint64_t)SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
 }
 static inline void i_tge(Ee* ee, const Instruction& i) {
+    if ((int64_t)RS >= (int64_t)RT) exception_level1(ee, CAUSE_EXC1_TR);
+}
+static inline void i_tgei(Ee* ee, const Instruction& i) {
+    if ((int64_t)RS >= SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
+}
+static inline void i_tgeiu(Ee* ee, const Instruction& i) {
+    if (RS >= (uint64_t)SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
+}
+static inline void i_tgeu(Ee* ee, const Instruction& i) {
     if (RS >= RT) exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void i_tgei(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tgei unimplemented"); }
-static inline void i_tgeiu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tgeiu unimplemented"); }
-static inline void i_tgeu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tgeu unimplemented"); }
 static inline void i_tlbp(Ee* ee, const Instruction& i) {
     int index = ee->index & 0x3f;
 
@@ -3537,14 +3543,24 @@ static inline void i_tlbwr(Ee* ee, const Instruction& i) {
     //     entry->g
     //);
 }
-static inline void i_tlt(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tlt unimplemented"); }
-static inline void i_tlti(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tlti unimplemented"); }
-static inline void i_tltiu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tltiu unimplemented"); }
-static inline void i_tltu(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tltu unimplemented"); }
+static inline void i_tlt(Ee* ee, const Instruction& i) {
+    if ((int64_t)RS < (int64_t)RT) exception_level1(ee, CAUSE_EXC1_TR);
+}
+static inline void i_tlti(Ee* ee, const Instruction& i) {
+    if ((int64_t)RS < SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
+}
+static inline void i_tltiu(Ee* ee, const Instruction& i) {
+    if (RS < (uint64_t)SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
+}
+static inline void i_tltu(Ee* ee, const Instruction& i) {
+    if (RS < RT) exception_level1(ee, CAUSE_EXC1_TR);
+}
 static inline void i_tne(Ee* ee, const Instruction& i) {
     if (RS != RT) exception_level1(ee, CAUSE_EXC1_TR);
 }
-static inline void i_tnei(Ee* ee, const Instruction& i) { iris_fatal_error(ee, "tnei unimplemented"); }
+static inline void i_tnei(Ee* ee, const Instruction& i) {
+    if (RS != (uint64_t)SE6416(D_I16)) exception_level1(ee, CAUSE_EXC1_TR);
+}
 static inline void i_vabs(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(abs) }
 static inline void i_vadd(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(add) }
 static inline void i_vadda(Ee* ee, const Instruction& i) { VU_UPPER_TEMPLATE(adda) }
@@ -4108,7 +4124,7 @@ Instruction decode(uint32_t opcode) {
         case 0x54000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BNEL; i.func = i_bnel; return i;
         case 0x58000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BLEZL; i.func = i_blezl; return i;
         case 0x5C000000 >> 26: i.cycles = CYC_BRANCH; i.branch = 3; i.id = I_BGTZL; i.func = i_bgtzl; return i;
-        case 0x60000000 >> 26: i.cycles = CYC_DEFAULT; i.branch = 4; i.id = I_DADDI; i.func = i_daddi; return i;
+        case 0x60000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_DADDI; i.func = i_daddi; return i;
         case 0x64000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_DADDIU; i.func = i_daddiu; return i;
         case 0x68000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LDL; i.func = i_ldl; return i;
         case 0x6C000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LDR; i.func = i_ldr; return i;
@@ -4950,13 +4966,20 @@ void compile_block(Ee* ee, Block* block) {
 
         uc.j(l_taken, taken);
 
-        if (sb_links()) emit_edge(0, off);
-        else uc.ret();
+        if (sb_links()) {
+            emit_edge(0, off);
+        } else {
+            uc.ret();
+        }
 
         uc.bind(l_taken);
 
-        if (!sb_links()) emit_branch_target(off);
-        else { pending = PEND_TAKEN; pending_off = off; }
+        if (!sb_links()) {
+            emit_branch_target(off);
+        } else {
+            pending = PEND_TAKEN;
+            pending_off = off;
+        }
     };
 
     auto emit_link = [&]() {
@@ -4967,11 +4990,22 @@ void compile_block(Ee* ee, Block* block) {
 
     auto emit_branch_folded = [&](bool taken, bool likely, int32_t off) {
         if (taken) {
-            if (sb_links()) { pending = PEND_TAKEN; pending_off = off; }
-            else emit_branch_target(off);
+            if (sb_links()) { 
+                pending = PEND_TAKEN;
+                pending_off = off;
+            } else {
+                emit_branch_target(off);
+            }
         } else if (likely) {
-            if (sb_links()) { emit_edge(0, off); pending = PEND_DONE; }
-            else { flush_reg_cache(ee, &uc); uc.ret(); }
+            if (sb_links()) {
+                emit_edge(0, off);
+
+                pending = PEND_DONE;
+            } else {
+                flush_reg_cache(ee, &uc);
+
+                uc.ret();
+            }
         }
     };
 
@@ -4988,7 +5022,7 @@ void compile_block(Ee* ee, Block* block) {
             bool taken = op == ZC_LTZ ? v <  0 :
                          op == ZC_GEZ ? v >= 0 :
                          op == ZC_LEZ ? v <= 0 :
-                                           v >  0;
+                                        v >  0;
 
             emit_branch_folded(taken, likely, D_SI16);
 
@@ -5001,12 +5035,12 @@ void compile_block(Ee* ee, Block* block) {
             emit_branch_likely(op == ZC_LTZ ? ujit::scmp_lt(rs.reg, Imm(0)) :
                                op == ZC_GEZ ? ujit::scmp_ge(rs.reg, Imm(0)) :
                                op == ZC_LEZ ? ujit::scmp_le(rs.reg, Imm(0)) :
-                                                 ujit::scmp_gt(rs.reg, Imm(0)), D_SI16);
+                                              ujit::scmp_gt(rs.reg, Imm(0)), D_SI16);
         } else {
             emit_branch(op == ZC_LTZ ? ujit::scmp_ge(rs.reg, Imm(0)) :
                         op == ZC_GEZ ? ujit::scmp_lt(rs.reg, Imm(0)) :
                         op == ZC_LEZ ? ujit::scmp_gt(rs.reg, Imm(0)) :
-                                          ujit::scmp_le(rs.reg, Imm(0)), D_SI16);
+                                       ujit::scmp_le(rs.reg, Imm(0)), D_SI16);
         }
     };
 
@@ -5085,6 +5119,7 @@ void compile_block(Ee* ee, Block* block) {
 
                     if (reg_is_const(ee, i.rs.r, &cs)) {
                         set_const(ee, &uc, i.rt.r, (int64_t)(int32_t)((uint32_t)cs + (int32_t)(int16_t)i.i16));
+
                         continue;
                     }
 
@@ -5113,6 +5148,7 @@ void compile_block(Ee* ee, Block* block) {
 
                     if (reg_is_const(ee, i.rs.r, &cs)) {
                         set_const(ee, &uc, i.rt.r, cs + (int64_t)(int16_t)i.i16);
+
                         continue;
                     }
 
@@ -5155,6 +5191,7 @@ void compile_block(Ee* ee, Block* block) {
 
                     if (reg_is_const(ee, i.rs.r, &cs) && reg_is_const(ee, i.rt.r, &ct)) {
                         set_const(ee, &uc, i.rd.r, (int64_t)(int32_t)((uint32_t)cs - (uint32_t)ct));
+
                         continue;
                     }
 
@@ -5194,6 +5231,7 @@ void compile_block(Ee* ee, Block* block) {
 
                     if (reg_is_const(ee, i.rs.r, &cs)) {
                         uint64_t imm = (uint16_t)i.i16;
+
                         set_const(ee, &uc, i.rt.r, i.id == I_ANDI ? (cs & imm) : (cs ^ imm));
 
                         continue;
