@@ -1348,9 +1348,14 @@ void* read_image(Instance* iris, VkImage src_image, VkFormat format, int width, 
     vkMapMemory(iris->vk.device, dst_image_memory, 0, VK_WHOLE_SIZE, 0, (void**)&data);
     data += subresource_layout.offset;
 
-    void* buf = malloc(width * height * 4);
+    size_t stride = width * 4;
 
-    memcpy(buf, data, width * height * 4);
+    void* buf = malloc(stride * height);
+
+    // Take rowPitch into account, which may be larger than the actual image width
+    for (int y = 0; y < height; y++) {
+        memcpy((char*)buf + y * stride, data + y * subresource_layout.rowPitch, stride);
+    }
 
     // Clean up resources
     vkUnmapMemory(iris->vk.device, dst_image_memory);
@@ -1371,7 +1376,6 @@ void wait_idle(Instance* iris) {
 // Dump GPU fault info after a VK_ERROR_DEVICE_LOST. Requires VK_EXT_device_fault
 // (enabled in init() when supported). Safe to call on an already-lost device.
 void dump_device_fault(Instance* iris) {
-    // Only report once - after a loss every frame hits a device-lost path.
     if (iris->vk.device_fault_dumped)
         return;
 
