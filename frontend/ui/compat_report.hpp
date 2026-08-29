@@ -19,7 +19,8 @@ struct CompatReport : Applet {
 
     int rating = 3;
     char comment[1024] = "";
-    std::string serial = "";
+    std::string id = "";
+    bool arcade = false;
 };
 
 }

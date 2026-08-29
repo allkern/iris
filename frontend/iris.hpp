@@ -380,6 +380,7 @@ struct Instance {
     float fps_cap = 60.0f;
     std::chrono::high_resolution_clock::time_point frame_deadline;
     std::string loaded = "";
+    std::string arcade_id = "";
 
     std::atomic <bool> load_ready = false;
     int load_result = 0;

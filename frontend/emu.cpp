@@ -177,6 +177,8 @@ int insert_disc(Instance* iris, std::string file) {
 int open_file_thread(Instance* iris, std::string file) {
     std::filesystem::path path(file);
 
+    iris->arcade_id = "";
+
     if (archive::is_archive(path)) {
         int res = open_archive(iris, file);
 
@@ -255,6 +257,8 @@ int open_file(Instance* iris, std::string file) {
 }
 
 static int boot_ps2_path_thread(Instance* iris, std::string path) {
+    iris->arcade_id = "";
+
     ps2::set_system(iris->ps2, iris->system);
     emu::load_rom_files(iris);
     ps2::boot_file(iris->ps2, path.c_str());
@@ -1372,6 +1376,10 @@ static int boot_arcade_thread(Instance* iris, std::string path) {
 static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
     const std::string& name = source.name;
 
+    iris->arcade_id = "";
+
+    std::string set = arcade::resolve_set_name(source.id);
+
     std::string gameid = query_arcade_value<std::string>(source.id, "gameid").value_or("");
 
     if (gameid.size()) {
@@ -1427,6 +1435,8 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
             }
 
             ps2::reset(iris->ps2);
+
+            iris->arcade_id = set.size() ? set : source.id;
 
             iris->loaded = name + " (" + source.id + ")";
 
@@ -1489,6 +1499,8 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
             if (ata::disc::is_compressed(files.media.string().c_str()))
                 push_info(iris, "Compressed HDD images are read only, progress won't be saved");
+
+            iris->arcade_id = set.size() ? set : source.id;
 
             finish_load(iris, 0, name + " (" + source.id + ")");
 
@@ -1628,6 +1640,8 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
                 ps2::reset(iris->ps2);
             }
 
+            iris->arcade_id = set.size() ? set : source.id;
+
             finish_load(iris, 0, name + " (" + source.id + ")");
 
             return true;
@@ -1699,6 +1713,8 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
                 ps2::boot_file(iris->ps2, ("host:  " + files.loader.string()).c_str());
             }
+
+            iris->arcade_id = set.size() ? set : source.id;
 
             finish_load(iris, 0, name + " (" + source.id + ")");
 

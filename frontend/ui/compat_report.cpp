@@ -56,7 +56,8 @@ static std::string get_disc_serial(Instance* iris) {
 }
 
 void CompatReport::on_open() {
-    serial = get_disc_serial(iris);
+    arcade = iris->arcade_id.size() != 0;
+    id = arcade ? iris->arcade_id : get_disc_serial(iris);
     rating = 3;
     comment[0] = '\0';
 }
@@ -64,12 +65,12 @@ void CompatReport::on_open() {
 void CompatReport::on_render() {
     using namespace ImGui;
 
-    TextDisabled("Serial");
+    TextDisabled(arcade ? "Arcade set name" : "Serial");
 
-    if (serial.empty()) {
+    if (id.empty()) {
         TextDisabled("No serial detected");
     } else {
-        Text("%s", serial.c_str());
+        Text("%s", id.c_str());
     }
 
     Spacing();
@@ -86,11 +87,12 @@ void CompatReport::on_render() {
     Separator();
     Spacing();
 
-    BeginDisabled(serial.empty());
+    BeginDisabled(id.empty());
 
     if (Button(ICON_MS_SEND " Create report")) {
         std::string url =
-            "https://iris-compat.vercel.app/report?serial=" + url_encode(serial) +
+            "https://iris-compat.vercel.app/report?platform=" + std::string(arcade ? "arcade" : "retail") +
+            "&id=" + url_encode(id) +
             "&rating=" + std::to_string(rating) +
             "&comment=" + url_encode(comment) +
             "&commit=" + url_encode(IRIS_COMMIT);

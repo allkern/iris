@@ -597,7 +597,7 @@ static void show_help_menu(Instance* iris) {
 
         bool disc_loaded = iris->ps2 && iris->ps2->cdvd && iris->ps2->cdvd->disc;
 
-        if (menu::item(ICON_MS_FACT_CHECK " Report compatibility", nullptr, false, disc_loaded)) {
+        if (menu::item(ICON_MS_FACT_CHECK " Report compatibility", nullptr, false, disc_loaded || iris->arcade_id.size())) {
             iris->applets.compat_report.show();
             iris->debug.pause = true;
         }
