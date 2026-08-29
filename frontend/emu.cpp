@@ -1396,6 +1396,13 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
     int system = source.system;
 
+    if (!iris->enable_magicgate && (system == ps2::KONAMI_PYTHON || system == ps2::KONAMI_PYTHON2)) {
+        iris_warning(&iris->log.emu, "MagicGate is disabled, {} games need it to boot",
+            get_system_name(iris, system));
+
+        push_info(iris, "MagicGate is disabled, this arcade game may not work");
+    }
+
     ArcadeFiles files = resolve_arcade_files(iris, source);
 
     std::error_code ec;
