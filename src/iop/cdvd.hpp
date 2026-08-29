@@ -156,6 +156,8 @@ struct Cdvd {
     int mechacon_model;
     NvramLayout layout;
 
+    int mg_enabled = 1;
+
 #ifdef IRIS_ENABLE_MAGICGATE
     mg::Keys mecha_keys;
     mg::State* mecha_state;
@@ -180,6 +182,7 @@ void set_mechacon_model(Cdvd* cdvd, int model);
 int load_mg_key(Cdvd* cdvd, int which, const char* path);
 int derive_mg_keys(Cdvd* cdvd, int mode);
 int mg_ready(Cdvd* cdvd);
+void set_mg_enabled(Cdvd* cdvd, int enabled);
 const uint8_t* mg_challenge_iv(Cdvd* cdvd);
 uint64_t read8(Cdvd* cdvd, uint32_t addr);
 void write8(Cdvd* cdvd, uint32_t addr, uint64_t data);

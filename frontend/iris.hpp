@@ -356,6 +356,7 @@ struct Instance {
     bool autostart = true;
     bool cache_arcade_files = false;
     bool arcade_dongle_boot = false;
+    bool enable_magicgate = true;
 
     int p2io_input_type = 4;
     int angle = 0;

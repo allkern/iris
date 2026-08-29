@@ -2363,7 +2363,17 @@ void show_misc_settings(Instance* iris) {
 
     imgui::section(iris, "MagicGate");
 
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+
+    if (Checkbox(" Enable MagicGate", &iris->enable_magicgate)) {
+        settings::apply_magicgate(iris);
+    }
+
+    PopStyleVar();
+
     Spacing();
+
+    BeginDisabled(!iris->enable_magicgate);
 
     mg_key_input(iris, "Encrypted key store", "##mecha_eks", iris->paths.mecha_eks_path);
     mg_key_input(iris, "Key store key", "##mecha_kek", iris->paths.mecha_kek_path);
@@ -2378,11 +2388,13 @@ void show_misc_settings(Instance* iris) {
         settings::apply_mg_keys(iris);
     }
 
+    EndDisabled();
+
     SameLine();
 
     AlignTextToFramePadding();
 
-    if (cdvd::mg_ready(iris->ps2->cdvd)) {
+    if (iris->enable_magicgate && cdvd::mg_ready(iris->ps2->cdvd)) {
         imgui::badge(ICON_MS_CHECK "  Key store ready", ImVec4(0.42f, 0.85f, 0.1f, 1.0f));
     } else {
         imgui::badge(ICON_MS_INFO "  Using HLE authentication", ImVec4(0.90f, 0.73f, 0.2f, 1.0f));

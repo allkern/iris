@@ -206,6 +206,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->autostart = system["autostart"].value_or(true);
     iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
     iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(false);
+    iris->enable_magicgate = system["enable_magicgate"].value_or(true);
     iris->p2io_input_type = system["p2io_input_type"].value_or(kp2::p2io::INPUT_THRILL_DRIVE);
 
     toml::array* mac_array = system["mac_address"].as_array();
@@ -346,7 +347,7 @@ void apply_card_magicgate(Instance* iris, int slot) {
     if (slot < 0 || slot >= 2 || !iris->input.mcd[slot])
         return;
 
-    dev::mcd::set_magicgate(iris->input.mcd[slot], 1, mg_card_key_source(iris),
+    dev::mcd::set_magicgate(iris->input.mcd[slot], iris->enable_magicgate, mg_card_key_source(iris),
         cdvd::mg_challenge_iv(iris->ps2->cdvd), iris->paths.mecha_card_id_path.c_str());
 }
 
@@ -365,8 +366,13 @@ void apply_mg_keys(Instance* iris) {
     iris_debug(&iris->log.settings, "MagicGate: system {} selects key store mode {}",
         iris->ps2->detected_system, mode);
 
-    if (!cdvd::derive_mg_keys(cdvd, mode))
-        return;
+    cdvd::derive_mg_keys(cdvd, mode);
+
+    apply_magicgate(iris);
+}
+
+void apply_magicgate(Instance* iris) {
+    cdvd::set_mg_enabled(iris->ps2->cdvd, iris->enable_magicgate);
 
     for (int i = 0; i < 2; i++) {
         apply_card_magicgate(iris, i);
@@ -482,6 +488,7 @@ void save(Instance* iris) {
             { "autostart", iris->autostart },
             { "cache_arcade_files", iris->cache_arcade_files },
             { "arcade_dongle_boot", iris->arcade_dongle_boot },
+            { "enable_magicgate", iris->enable_magicgate },
             { "p2io_input_type", iris->p2io_input_type }
         } },
         { "network", toml::table {

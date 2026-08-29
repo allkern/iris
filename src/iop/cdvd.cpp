@@ -821,7 +821,7 @@ void handle_s_command(Cdvd* cdvd, uint8_t cmd) {
     cdvd->s_cmd = cmd;
 
 #ifdef IRIS_ENABLE_MAGICGATE
-    if (cmd >= 0x80 && cmd <= 0x98 && cdvd->mecha_keys.ready && cdvd->mecha_state) {
+    if (cmd >= 0x80 && cmd <= 0x98 && cdvd->mg_enabled && cdvd->mecha_keys.ready && cdvd->mecha_state) {
         uint8_t result[16] = {};
         int size = 0;
 
@@ -1755,6 +1755,10 @@ const uint8_t* mg_challenge_iv(Cdvd* cdvd) {
     return nullptr;
 }
 #endif
+
+void set_mg_enabled(Cdvd* cdvd, int enabled) {
+    cdvd->mg_enabled = enabled;
+}
 
 void set_mechacon_model(Cdvd* cdvd, int model) {
     cdvd->mechacon_model = model;

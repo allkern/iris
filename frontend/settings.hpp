@@ -12,6 +12,7 @@ namespace settings {
     void apply_p2io(Instance* iris);
     void apply_mg_keys(Instance* iris);
     void apply_card_magicgate(Instance* iris, int slot);
+    void apply_magicgate(Instance* iris);
 }
 
 }
