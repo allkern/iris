@@ -18,6 +18,10 @@ Nand* create(logger::Logger* logger) {
 }
 
 int load(Nand* nand, const char* path) {
+    if (nand->file) {
+        fclose(nand->file);
+    }
+
     nand->file = fopen(path, "rb");
 
     if (!nand->file) {
@@ -117,6 +121,10 @@ void write8(Nand* nand, uint32_t addr, uint64_t data) {
 }
 
 void destroy(Nand* nand) {
+    if (nand->file) {
+        fclose(nand->file);
+    }
+
     delete[] nand->buf;
 
     delete nand;

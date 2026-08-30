@@ -467,6 +467,7 @@ bool init(Instance* iris) {
     apply_p2io(iris);
 
     emu::clean_arcade_files(iris);
+    emu::clean_tmp_files(iris);
 
     cli::boot(iris);
 

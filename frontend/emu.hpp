@@ -44,6 +44,7 @@ int insert_disc(Instance* iris, std::string path);
 void start_pending_load(Instance* iris);
 void finalize_load(Instance* iris);
 void clean_arcade_files(Instance* iris);
+void clean_tmp_files(Instance* iris);
 bool is_arcade_file(Instance* iris, std::string path);
 bool load_arcade(Instance* iris, std::string path);
 bool load_arcade_files(Instance* iris, std::string path);

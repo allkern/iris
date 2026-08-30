@@ -92,6 +92,7 @@ void destroy(Instance* iris) {
     if (iris->ps2) ps2::destroy(iris->ps2);
 
     clean_arcade_files(iris);
+    clean_tmp_files(iris);
 }
 
 void clean_arcade_files(Instance* iris) {
@@ -101,6 +102,12 @@ void clean_arcade_files(Instance* iris) {
     std::error_code ec;
 
     std::filesystem::remove_all(std::filesystem::path(iris->paths.pref_path) / "arcade", ec);
+}
+
+void clean_tmp_files(Instance* iris) {
+    std::error_code ec;
+
+    std::filesystem::remove_all(std::filesystem::path(iris->paths.pref_path) / "tmp", ec);
 }
 
 const char* get_extension(const char* path) {
@@ -136,22 +143,118 @@ void finalize_load(Instance* iris) {
 
         iris->loaded = iris->load_pending_name;
 
+        if (iris->arcade_id.empty()) {
+            clean_arcade_files(iris);
+        }
+
         if (iris->autostart)
             iris->debug.pause = false;
     }
 }
 
-int open_archive(Instance* iris, std::string path) {
-    // Decompress everything into pref_path/tmp/
-    std::filesystem::path tmp_path = std::filesystem::path(iris->paths.pref_path) / "tmp";
-
-    if (!archive::extract_all(path, tmp_path)) {
-        iris_error(&iris->log.emu, "Couldn't extract archive \"{}\"", path.c_str());
-
-        return 1;
+static bool paths_equal(const std::string& a, const std::string& b) {
+    if (a.size() != b.size()) {
+        return false;
     }
 
-    return 0;
+    for (size_t i = 0; i < a.size(); i++) {
+        if (tolower(a[i]) != tolower(b[i])) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool has_extension(const std::string& path, const std::string& extension) {
+    if (path.size() < extension.size()) {
+        return false;
+    }
+
+    return paths_equal(path.substr(path.size() - extension.size()), extension);
+}
+
+static std::string replace_extension(const std::string& path, const std::string& extension) {
+    size_t dot = path.find_last_of('.');
+
+    if (dot == std::string::npos) {
+        return path + extension;
+    }
+
+    return path.substr(0, dot) + extension;
+}
+
+static std::string find_archive_path(const std::vector <archive::Entry>& entries, const std::string& path) {
+    for (const archive::Entry& entry : entries) {
+        if (paths_equal(entry.path, path)) {
+            return entry.path;
+        }
+    }
+
+    return "";
+}
+
+static std::string find_disc_image(const std::vector <archive::Entry>& entries) {
+    for (const archive::Entry& entry : entries) {
+        if (entry.directory) {
+            continue;
+        }
+
+        if (!is_disc_image(entry.path)) {
+            continue;
+        }
+
+        if (!has_extension(entry.path, ".bin")) {
+            return entry.path;
+        }
+
+        std::string cue = find_archive_path(entries, replace_extension(entry.path, ".cue"));
+
+        if (cue.size()) {
+            return cue;
+        }
+
+        return entry.path;
+    }
+
+    return "";
+}
+
+std::string open_archive(Instance* iris, std::string path) {
+    std::vector <archive::Entry> entries;
+
+    if (!archive::list(path, &entries)) {
+        iris_error(&iris->log.emu, "Couldn't read archive \"{}\"", path.c_str());
+
+        push_info(iris, "Couldn't open archive (Unreadable)");
+
+        return "";
+    }
+
+    std::string name = find_disc_image(entries);
+
+    if (name.empty()) {
+        iris_error(&iris->log.emu, "Archive \"{}\" doesn't hold a disc image", path.c_str());
+
+        push_info(iris, "Couldn't open archive (No disc image inside)");
+
+        return "";
+    }
+
+    std::filesystem::path extract_path =
+        std::filesystem::path(iris->paths.pref_path) / "tmp" / std::filesystem::path(path).stem();
+
+    iris_info(&iris->log.emu, "Extracting \"{}\" from \"{}\"...", name.c_str(), path.c_str());
+
+    if (!archive::extract_all(path, extract_path)) {
+        iris_error(&iris->log.emu, "Couldn't extract archive \"{}\"", path.c_str());
+
+        push_info(iris, "Couldn't open archive (Extraction failed)");
+
+        return "";
+    }
+
+    return (extract_path / name).string();
 }
 
 bool is_disc_image(const std::string& file) {
@@ -179,12 +282,20 @@ int open_file_thread(Instance* iris, std::string file) {
 
     iris->arcade_id = "";
 
+    std::string display_path = file;
+
     if (archive::is_archive(path)) {
-        int res = open_archive(iris, file);
+        cdvd::close(iris->ps2->cdvd);
 
-        finish_load(iris, res);
+        clean_tmp_files(iris);
 
-        return res;
+        file = open_archive(iris, file);
+
+        if (file.empty()) {
+            finish_load(iris, 1);
+
+            return 1;
+        }
     }
 
     // Load disc image
@@ -209,7 +320,7 @@ int open_file_thread(Instance* iris, std::string file) {
         emu::load_rom_files(iris);
         ps2::boot_file(iris->ps2, boot_file);
 
-        finish_load(iris, 0, file);
+        finish_load(iris, 0, display_path);
 
         return 0;
     }
@@ -1378,6 +1489,10 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
     iris->arcade_id = "";
 
+    cdvd::close(iris->ps2->cdvd);
+
+    clean_tmp_files(iris);
+
     std::string set = arcade::resolve_set_name(source.id);
 
     std::string gameid = query_arcade_value<std::string>(source.id, "gameid").value_or("");
@@ -1448,11 +1563,7 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
             iris->arcade_id = set.size() ? set : source.id;
 
-            iris->loaded = name + " (" + source.id + ")";
-
-            if (iris->autostart) {
-                iris->debug.pause = false;
-            }
+            finish_load(iris, 0, name + " (" + source.id + ")");
 
             return true;
         } break;
@@ -1764,6 +1875,21 @@ bool is_arcade_file(Instance* iris, std::string path) {
     return identify_arcade_archive(index).size() != 0;
 }
 
+static bool arcade_system_supported(int system) {
+    switch (system) {
+        case ps2::NAMCO_SYSTEM_147:
+        case ps2::NAMCO_SYSTEM_148:
+        case ps2::NAMCO_SYSTEM_246:
+        case ps2::NAMCO_SYSTEM_256:
+        case ps2::NAMCO_SYSTEM_SUPER_256:
+        case ps2::KONAMI_PYTHON:
+        case ps2::KONAMI_PYTHON2:
+            return true;
+    }
+
+    return false;
+}
+
 bool load_arcade(Instance* iris, std::string path) {
     std::optional <ArcadeSource> source = open_arcade_source(iris, path);
 
@@ -1772,9 +1898,7 @@ bool load_arcade(Instance* iris, std::string path) {
 
     int system = source->system;
 
-    if (system == ps2::NAMCO_SYSTEM_246 || system == ps2::NAMCO_SYSTEM_256 ||
-        system == ps2::NAMCO_SYSTEM_SUPER_256 || system == ps2::KONAMI_PYTHON2 ||
-        system == ps2::KONAMI_PYTHON) {
+    if (arcade_system_supported(system)) {
         const char* missing = find_missing_arcade_file(iris, *source);
 
         if (missing) {
