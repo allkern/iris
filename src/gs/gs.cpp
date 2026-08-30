@@ -162,6 +162,29 @@ void set_ee_clock(Gs* gs, int hz) {
 }
 
 void reset(Gs* gs) {
+    gs->pmode = 0;
+    gs->smode1 = 0;
+    gs->smode2 = 0;
+    gs->srfsh = 0;
+    gs->synch1 = 0;
+    gs->synch2 = 0;
+    gs->syncv = 0;
+    gs->dispfb1 = 0;
+    gs->display1 = 0;
+    gs->dispfb2 = 0;
+    gs->display2 = 0;
+    gs->extbuf = 0;
+    gs->extdata = 0;
+    gs->extwrite = 0;
+    gs->bgcolor = 0;
+    gs->busdir = 0;
+    gs->siglblid = 0;
+    gs->csr = 0;
+    gs->csr_enable = 0;
+
+    gs->vblank = 0;
+    gs->signal_pending = 0;
+
     gs->ctx = &gs->context[0];
     gs->csr |= 2;
     gs->imr = 0x00007f00;
