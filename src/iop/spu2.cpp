@@ -866,6 +866,8 @@ static const int ps_adpcm_coefs_i[5][2] = {
 };
 
 void decode_adpcm_block(Spu2* spu2, Voice* v) {
+    check_irq(spu2, v->nax);
+
     uint16_t hdr = spu2->ram[v->nax];
 
     // if (v->nax == spu2->c[0].irqa || v->nax == spu2->c[1].irqa)
@@ -1185,8 +1187,6 @@ Sample get_voice_sample(Spu2* spu2, int cr, int vc) {
         v->nax += 8;
         v->nax &= 0xfffff;
 
-        check_irq(spu2, v->nax);
-
         if (v->loop_end) {
             c->endx |= 1u << vc;
 
@@ -1196,8 +1196,6 @@ Sample get_voice_sample(Spu2* spu2, int cr, int vc) {
                 adsr_load_release(spu2, c, v, vc);
             } else {
                 v->nax = v->lsax;
-
-                check_irq(spu2, v->nax);
             }
         }
 
