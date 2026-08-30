@@ -23,12 +23,6 @@ enum PathId : int {
     PATH3
 };
 
-inline constexpr auto STAT_OPH = 1 << 9;
-inline constexpr auto STAT_APATH_SHIFT = 10;
-inline constexpr auto STAT_APATH = 3 << STAT_APATH_SHIFT;
-inline constexpr auto STAT_FQC_SHIFT = 24;
-inline constexpr auto STAT_FQC = 0x1f << STAT_FQC_SHIFT;
-
 struct Tag {
     uint64_t nloop;
     uint32_t prim;
