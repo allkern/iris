@@ -169,7 +169,39 @@ static inline void d_madds(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f
 static inline void d_maddu(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "maddu", cc_r[EE_D_RS], cc_r[EE_D_RT]); }
 static inline void d_maddu1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "maddu1", cc_r[EE_D_RS], cc_r[EE_D_RT]); }
 static inline void d_maxs(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d, $f%d", "max.s", EE_D_RD, EE_D_RS, EE_D_RT); }
-static inline void d_mfc0(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "mfc0", cc_r[EE_D_RT], cop0_r[EE_D_RD]); }
+static const char* cop0_debug_mf[8] = {
+    "mfbpc", nullptr, "mfiab", "mfiabm", "mfdab", "mfdabm", "mfdvb", "mfdvbm"
+};
+
+static const char* cop0_debug_mt[8] = {
+    "mtbpc", nullptr, "mtiab", "mtiabm", "mtdab", "mtdabm", "mtdvb", "mtdvbm"
+};
+
+static inline void d_mfc0(uint32_t opcode) {
+    uint32_t sel = opcode & 0x7ff;
+
+    if (EE_D_RD == 24 && sel < 8 && cop0_debug_mf[sel]) {
+        ptr += sprintf(ptr, "%-8s $%s", cop0_debug_mf[sel], cc_r[EE_D_RT]);
+
+        return;
+    }
+
+    if (EE_D_RD == 25) {
+        if (sel == 0) {
+            ptr += sprintf(ptr, "%-8s $%s", "mfps", cc_r[EE_D_RT]);
+
+            return;
+        }
+
+        if (sel == 1 || sel == 3) {
+            ptr += sprintf(ptr, "%-8s $%s, %d", "mfpc", cc_r[EE_D_RT], sel == 1 ? 0 : 1);
+
+            return;
+        }
+    }
+
+    ptr += sprintf(ptr, "%-8s $%s, $%s", "mfc0", cc_r[EE_D_RT], cop0_r[EE_D_RD]);
+}
 static inline void d_mfc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $f%d", "mfc1", cc_r[EE_D_RT], EE_D_RS); }
 static inline void d_mfhi(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "mfhi", cc_r[EE_D_RD]); }
 static inline void d_mfhi1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "mfhi1", cc_r[EE_D_RD]); }
@@ -182,7 +214,31 @@ static inline void d_movs(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%
 static inline void d_movz(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s, $%s", "movz", cc_r[EE_D_RD], cc_r[EE_D_RS], cc_r[EE_D_RT]); }
 static inline void d_msubas(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d", "msuba.s", EE_D_RS, EE_D_RT); }
 static inline void d_msubs(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $f%d, $f%d, $f%d", "msub.s", EE_D_RD, EE_D_RS, EE_D_RT); }
-static inline void d_mtc0(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $%s", "mtc0", cc_r[EE_D_RT], cop0_r[EE_D_RD]); }
+static inline void d_mtc0(uint32_t opcode) {
+    uint32_t sel = opcode & 0x7ff;
+
+    if (EE_D_RD == 24 && sel < 8 && cop0_debug_mt[sel]) {
+        ptr += sprintf(ptr, "%-8s $%s", cop0_debug_mt[sel], cc_r[EE_D_RT]);
+
+        return;
+    }
+
+    if (EE_D_RD == 25) {
+        if (sel == 0) {
+            ptr += sprintf(ptr, "%-8s $%s", "mtps", cc_r[EE_D_RT]);
+
+            return;
+        }
+
+        if (sel == 1 || sel == 3) {
+            ptr += sprintf(ptr, "%-8s $%s, %d", "mtpc", cc_r[EE_D_RT], sel == 1 ? 0 : 1);
+
+            return;
+        }
+    }
+
+    ptr += sprintf(ptr, "%-8s $%s, $%s", "mtc0", cc_r[EE_D_RT], cop0_r[EE_D_RD]);
+}
 static inline void d_mtc1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s, $f%d", "mtc1", cc_r[EE_D_RT], EE_D_RS); }
 static inline void d_mthi(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "mthi", cc_r[EE_D_RS]); }
 static inline void d_mthi1(uint32_t opcode) { ptr += sprintf(ptr, "%-8s $%s", "mthi1", cc_r[EE_D_RS]); }

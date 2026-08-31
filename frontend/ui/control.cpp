@@ -287,6 +287,14 @@ void show_ee_disassembly_view(Instance* iris) {
                     }
                 }
 
+                Separator();
+
+                if (imgui::MenuItem(ICON_MS_CODE_OFF "  Patch with NOP")) {
+                    ee::bus::write32(iris->ps2->ee_bus, g_ee_dis_state.pc & 0x1fffffff, 0);
+
+                    ee::flush_cache(iris->ps2->ee);
+                }
+
                 PopFont();
                 EndPopup();
             }
@@ -475,6 +483,14 @@ void show_iop_disassembly_view(Instance* iris) {
 
                         iris->debug.breakpoints.push_back(b);
                     }
+                }
+
+                Separator();
+
+                if (imgui::MenuItem(ICON_MS_CODE_OFF "  Patch with NOP")) {
+                    iop::bus::write32(iris->ps2->iop_bus, g_iop_dis_state.addr & 0x1fffffff, 0);
+
+                    iop::flush_cache(iris->ps2->iop);
                 }
 
                 PopFont();

@@ -585,8 +585,8 @@ struct Ee {
             uint32_t unused20;
             uint32_t unused21;
             uint32_t badpaddr;
-            uint32_t debug;
-            uint32_t perf;
+            uint32_t bpc; // Debug
+            uint32_t pccr; // Perf
             uint32_t unused25;
             uint32_t unused26;
             uint32_t taglo;
@@ -596,6 +596,18 @@ struct Ee {
             uint32_t unused31;
         };
     };
+
+    // Debug regs
+    uint32_t dab;
+    uint32_t dabm;
+    uint32_t dvb;
+    uint32_t dvbm;
+    uint32_t iab;
+    uint32_t iabm;
+
+    // Perf counters
+    uint32_t pcr0;
+    uint32_t pcr1;
 
     union FpuReg f[32];
     union FpuReg a;

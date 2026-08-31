@@ -5172,7 +5172,35 @@ void compile_block(Ee* ee, Block* block) {
 
                     CachedReg& rt = get_reg(ee, &uc, i.rt.r, false);
 
-                    uc.load_u32(rt.reg, EE(cop0_r[i.rd.r]));
+                    if (i.rd.r == 24) {
+                        switch (i.opcode & 0x7ff) {
+                            case 0: uc.load_u32(rt.reg, EE(bpc)); break;
+                            case 2: uc.load_u32(rt.reg, EE(iab)); break;
+                            case 3: uc.load_u32(rt.reg, EE(iabm)); break;
+                            case 4: uc.load_u32(rt.reg, EE(dab)); break;
+                            case 5: uc.load_u32(rt.reg, EE(dabm)); break;
+                            case 6: uc.load_u32(rt.reg, EE(dvb)); break;
+                            case 7: uc.load_u32(rt.reg, EE(dvbm)); break;
+                        }
+                    } else if (i.rd.r == 25) {
+                        switch (i.opcode & 0x7ff) {
+                            case 0: uc.load_u32(rt.reg, EE(pccr)); break;
+
+                            // Note: Hack. These should return PCR0 and PCR1
+                            //       respectively, but we don't support the perf
+                            //       counters, so just return Count (increasing)
+                            //       instead.
+                            //       The System 246 version of SoulCalibur II
+                            //       depends on the performance counters returning
+                            //       the elapsed cycle count
+                            //       It configures PCCR to 8008703c: CTE=1, EVENT0=1
+                            //       which simply counts processor cycles.
+                            case 1: uc.load_u32(rt.reg, EE(count)); break;
+                            case 3: uc.load_u32(rt.reg, EE(count)); break;
+                        }
+                    } else {
+                        uc.load_u32(rt.reg, EE(cop0_r[i.rd.r]));
+                    }
 
                     sext32(uc, rt.reg);
                 } break;
@@ -5180,7 +5208,25 @@ void compile_block(Ee* ee, Block* block) {
                 case I_MTC0: {
                     CachedReg& rt = get_reg(ee, &uc, i.rt.r);
 
-                    uc.store_u32(EE(cop0_r[i.rd.r]), rt.reg);
+                    if (i.rd.r == 24) {
+                        switch (i.opcode & 0x7ff) {
+                            case 0: uc.store_u32(EE(bpc), rt.reg); break;
+                            case 2: uc.store_u32(EE(iab), rt.reg); break;
+                            case 3: uc.store_u32(EE(iabm), rt.reg); break;
+                            case 4: uc.store_u32(EE(dab), rt.reg); break;
+                            case 5: uc.store_u32(EE(dabm), rt.reg); break;
+                            case 6: uc.store_u32(EE(dvb), rt.reg); break;
+                            case 7: uc.store_u32(EE(dvbm), rt.reg); break;
+                        }
+                    } else if (i.rd.r == 25) {
+                        switch (i.opcode & 0x7ff) {
+                            case 0: uc.store_u32(EE(pccr), rt.reg); break;
+                            case 1: uc.store_u32(EE(pcr0), rt.reg); break;
+                            case 3: uc.store_u32(EE(pcr1), rt.reg); break;
+                        }
+                    } else {
+                        uc.store_u32(EE(cop0_r[i.rd.r]), rt.reg);
+                    }
                 } break;
 
                 case I_SUB:
