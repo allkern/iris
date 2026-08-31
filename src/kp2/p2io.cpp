@@ -133,6 +133,20 @@ void set_input_type(P2io* p2io, int type) {
         acio::reset(&p2io->port[i]);
     }
 
+    int readers = 0;
+
+    if (type == INPUT_DRUMMANIA || type == INPUT_GUITARFREAKS) {
+        readers = 1;
+    } else if (type == INPUT_DDR) {
+        readers = ICCA_COUNT;
+    }
+
+    for (int i = 0; i < readers; i++) {
+        icca::init(&p2io->icca[i]);
+
+        acio::register_node(&p2io->port[PORT_COM2], icca::handle_packet, &p2io->icca[i], "ICCA");
+    }
+
     if (type == INPUT_THRILL_DRIVE) {
         thrilldrive::init_handle(&p2io->thrilldrive_handle);
         thrilldrive::init_belt(&p2io->thrilldrive_belt);

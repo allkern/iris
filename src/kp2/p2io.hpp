@@ -4,6 +4,7 @@
 
 #include "iop/usb/device.hpp"
 #include "acio.hpp"
+#include "icca.hpp"
 #include "thrilldrive.hpp"
 #include "logger.hpp"
 
@@ -17,6 +18,8 @@ inline constexpr auto DONGLE_CRC_POLY = 0x8c;
 inline constexpr auto DONGLE_BLACK = 0;
 inline constexpr auto DONGLE_WHITE = 1;
 inline constexpr auto DONGLE_COUNT = 2;
+
+inline constexpr auto ICCA_COUNT = 2;
 
 inline constexpr auto PORT_COM1 = 0;
 inline constexpr auto PORT_COM2 = 1;
@@ -113,6 +116,8 @@ struct P2io {
 
     thrilldrive::Handle thrilldrive_handle;
     thrilldrive::Belt thrilldrive_belt;
+
+    icca::Icca icca[ICCA_COUNT];
 
     uint32_t jamma;
     uint16_t analog[ANALOG_COUNT];

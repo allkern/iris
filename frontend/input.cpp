@@ -108,6 +108,8 @@ static void build_default_mapping(Mapping& map, int id) {
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_5     , SDL_KMOD_NONE), IRIS_S2X6_SW_COIN1);
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_6     , SDL_KMOD_NONE), IRIS_S2X6_SW_COIN2);
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_2     , SDL_KMOD_NONE), IRIS_S2X6_SW_TEST);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_P     , SDL_KMOD_NONE), IRIS_P2IO_SW_CARD1);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_O     , SDL_KMOD_NONE), IRIS_P2IO_SW_CARD2);
     } else {
         map.name = "Gamepad (default)";
 
@@ -333,6 +335,8 @@ static bool handle_p2io_action(Instance* iris, InputAction action, int slot, flo
         case IRIS_DS_AX_LEFTH_POS: kp2::p2io::set_axis(p2io, kp2::p2io::AXIS_STEER_RIGHT, value); return true;
         case IRIS_DS_BT_R2: kp2::p2io::set_axis(p2io, kp2::p2io::AXIS_GAS, value); return true;
         case IRIS_DS_BT_L2: kp2::p2io::set_axis(p2io, kp2::p2io::AXIS_BRAKE, value); return true;
+        case IRIS_P2IO_SW_CARD1: kp2::icca::set_card_switch(&p2io->icca[0], pressed); return true;
+        case IRIS_P2IO_SW_CARD2: kp2::icca::set_card_switch(&p2io->icca[1], pressed); return true;
         default: break;
     }
 
@@ -543,6 +547,8 @@ void execute_action(Instance* iris, InputAction action, int slot, float value) {
         case IRIS_S2X6_SW_COIN2: change_s14x_coin(iris, value, 1); break;
 
         case IRIS_S2X6_SW_TEST:
+        case IRIS_P2IO_SW_CARD1:
+        case IRIS_P2IO_SW_CARD2:
         case IRIS_INPUT_ACTION_MAX: break;
     }
 }

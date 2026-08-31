@@ -119,6 +119,9 @@ enum InputAction : uint32_t {
     IRIS_S2X6_SW_COIN1,
     IRIS_S2X6_SW_COIN2,
     IRIS_S2X6_SW_TEST,
+
+    IRIS_P2IO_SW_CARD1,
+    IRIS_P2IO_SW_CARD2,
     IRIS_INPUT_ACTION_MAX
 };
 

@@ -170,6 +170,8 @@ const char* get_input_name(InputAction action) {
 
         case IRIS_S2X6_SW_COIN1: return "Arcade Coin 1";
         case IRIS_S2X6_SW_COIN2: return "Arcade Coin 2";
+        case IRIS_P2IO_SW_CARD1: return "Python 2 Insert Card 1";
+        case IRIS_P2IO_SW_CARD2: return "Python 2 Insert Card 2";
         case IRIS_S2X6_SW_TEST: return "System 246/256 Test";
         case IRIS_INPUT_ACTION_MAX: break;
     }

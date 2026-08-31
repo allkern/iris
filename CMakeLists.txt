@@ -407,6 +407,7 @@ target_sources(iris PRIVATE
     src/s2x6/acuart.cpp
     src/kp2/p2io.cpp
     src/kp2/acio.cpp
+    src/kp2/icca.cpp
     src/kp2/thrilldrive.cpp
     src/kp1/p1io.cpp
     deps/imgui/imgui.cpp
