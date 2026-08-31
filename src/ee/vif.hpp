@@ -9,7 +9,6 @@
 #include "logger.hpp"
 
 namespace iris::vu { struct Vu; }
-
 namespace iris::ee::dmac { struct Dmac; }
 namespace iris::ee::bus { struct Bus; }
 

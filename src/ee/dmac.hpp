@@ -14,8 +14,6 @@ namespace iris::gif { struct Gif; }
 namespace iris::vif { struct Vif; }
 namespace iris::vu { struct Vu; }
 namespace iris::iop::dma { struct Dma; }
-// iop/dma.hpp includes this header in turn
-
 namespace iris::ee::bus { struct Bus; }
 namespace iris::ee { struct Ee; }
 
@@ -62,10 +60,6 @@ struct Channel {
     uint32_t sadr;
 
     int dreq;
-
-    // We need to keep track of the current word index
-    // for VIF transfers, since the channel can be stopped
-    // and restarted in the middle of a qword
     int index;
 
     Tag tag;
@@ -102,11 +96,7 @@ struct Dmac {
 };
 
 Dmac* create(logger::Logger* logger, scheduler::Scheduler* sched, ee::bus::Bus* bus, sif::Sif* sif);
-
-// The DMAC and its peripherals reference each other, so these can only be
-// wired once every component exists.
 void connect(Dmac* dmac, gif::Gif* gif, vif::Vif* vif0, vif::Vif* vif1, ipu::Ipu* ipu, iop::dma::Dma* iop_dma, ee::Ee* ee);
-
 void reset(Dmac* dmac);
 void destroy(Dmac* dmac);
 uint64_t read8(Dmac* dmac, uint32_t addr);

@@ -286,11 +286,12 @@ static void show_display_settings_menu(Instance* iris) {
             const char* filter_names[] = {
                 "Nearest",
                 "Bilinear",
+                "Bilinear (FSR)",
                 "Cubic"
             };
 
-            for (int i = 0; i < 3; i++) {
-                bool enabled = i != 2 || iris->vk.cubic_supported;
+            for (int i = 0; i < 4; i++) {
+                bool enabled = i != render::CUBIC || iris->vk.cubic_supported;
 
                 if (menu::item(filter_names[i], nullptr, iris->filter == i, enabled)) {
                     iris->filter = i;

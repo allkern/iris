@@ -62,6 +62,13 @@ struct VulkanGpu {
 struct PushConstants {
     float resolution[2];
     int frame;
+    int pad;
+
+    // FSR stuff
+    uint32_t con0[4];
+    uint32_t con1[4];
+    uint32_t con2[4];
+    uint32_t con3[4];
 };
 
 namespace vulkan {

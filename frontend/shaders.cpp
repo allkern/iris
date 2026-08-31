@@ -122,6 +122,9 @@ Pass::~Pass() {
 }
 
 bool Pass::rebuild() {
+    if (m_iris->vk.image.format == VK_FORMAT_UNDEFINED)
+        return true;
+
     vulkan::wait_idle(m_iris);
 
     if (m_pipeline_layout) vkDestroyPipelineLayout(m_iris->vk.device, m_pipeline_layout, nullptr);

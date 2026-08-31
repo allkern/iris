@@ -19,6 +19,13 @@ enum AspectMode {
     AUTO
 };
 
+enum ScalingFilter {
+    NEAREST,
+    BILINEAR,
+    FSR,
+    CUBIC
+};
+
 enum ScreenshotFormat {
     PNG,
     BMP,
@@ -50,6 +57,9 @@ enum PresentMode {
 bool init(Instance* iris);
 void destroy(Instance* iris);
 bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer);
+bool init_fsr(Instance* iris);
+void update_fsr(Instance* iris);
+void destroy_fsr(Instance* iris);
 VkClearValue background(Instance* iris);
 bool save_screenshot(Instance* iris, std::string path);
 void switch_backend(Instance* iris, int backend);

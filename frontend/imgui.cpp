@@ -1858,6 +1858,8 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 
+    render::update_fsr(iris);
+
     if ((err = vkBeginCommandBuffer(fd->CommandBuffer, &begin_info)) != VK_SUCCESS)
         return abort_frame(iris, "Failed to begin command buffer", err);
 

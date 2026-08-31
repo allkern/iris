@@ -161,6 +161,273 @@ bool rebuild_framebuffers(Instance* iris) {
     return true;
 }
 
+static void update_descriptor_set(Instance* iris, VkDescriptorSet descriptor_set, VkImageView view, VkSampler sampler);
+static inline VkDescriptorSet get_frame_shader_descriptor_set(Instance* iris, uint32_t pass_index);
+
+static inline VkSampler filter_sampler(Instance* iris) {
+    if (iris->filter < 0 || iris->filter >= render::FSR)
+        return iris->vk.sampler[render::NEAREST];
+
+    return iris->vk.sampler[iris->filter];
+}
+constexpr unsigned char g_fsr_easu_shader_data[] = {
+#embed "../shaders/fsr_easu.spv"
+};
+
+constexpr unsigned char g_fsr_rcas_shader_data[] = {
+#embed "../shaders/fsr_rcas.spv"
+};
+
+static uint32_t f32_bits(float v) {
+    uint32_t u;
+
+    memcpy(&u, &v, sizeof(u));
+
+    return u;
+}
+
+// Ported from ffx_fsr1.h
+static void fsr_easu_con(PushConstants* c, float in_w, float in_h, float out_w, float out_h) {
+    c->con0[0] = f32_bits(in_w / out_w);
+    c->con0[1] = f32_bits(in_h / out_h);
+    c->con0[2] = f32_bits(0.5f * in_w / out_w - 0.5f);
+    c->con0[3] = f32_bits(0.5f * in_h / out_h - 0.5f);
+
+    c->con1[0] = f32_bits(1.0f / in_w);
+    c->con1[1] = f32_bits(1.0f / in_h);
+    c->con1[2] = f32_bits(1.0f / in_w);
+    c->con1[3] = f32_bits(-1.0f / in_h);
+
+    c->con2[0] = f32_bits(-1.0f / in_w);
+    c->con2[1] = f32_bits(2.0f / in_h);
+    c->con2[2] = f32_bits(1.0f / in_w);
+    c->con2[3] = f32_bits(2.0f / in_h);
+
+    c->con3[0] = f32_bits(0.0f);
+    c->con3[1] = f32_bits(4.0f / in_h);
+    c->con3[2] = 0;
+    c->con3[3] = 0;
+}
+
+static void fsr_rcas_con(PushConstants* c, float sharpness) {
+    c->con0[0] = f32_bits(exp2f(-sharpness));
+    c->con0[1] = 0;
+    c->con0[2] = 0;
+    c->con0[3] = 0;
+}
+
+bool init_fsr(Instance* iris) {
+    if (iris->vk.image.format == VK_FORMAT_UNDEFINED)
+        return false;
+
+    if (iris->vk.fsr_easu && iris->vk.fsr_format == iris->vk.image.format)
+        return true;
+
+    destroy_fsr(iris);
+
+    iris->vk.fsr_easu = new shaders::Pass(iris,
+        g_fsr_easu_shader_data, sizeof(g_fsr_easu_shader_data), "fsr-easu");
+
+    iris->vk.fsr_rcas = new shaders::Pass(iris,
+        g_fsr_rcas_shader_data, sizeof(g_fsr_rcas_shader_data), "fsr-rcas");
+
+    if (!iris->vk.fsr_easu->ready() || !iris->vk.fsr_rcas->ready()) {
+        iris_error(&iris->log.render, "Failed to build the FSR passes");
+
+        return false;
+    }
+
+    iris->vk.fsr_format = iris->vk.image.format;
+
+    return true;
+}
+
+void destroy_fsr(Instance* iris) {
+    vulkan::wait_idle(iris);
+
+    for (auto& target : iris->vk.fsr_targets) {
+        if (target.framebuffer) vkDestroyFramebuffer(iris->vk.device, target.framebuffer, nullptr);
+        if (target.view) vkDestroyImageView(iris->vk.device, target.view, nullptr);
+        if (target.image) vkDestroyImage(iris->vk.device, target.image, nullptr);
+        if (target.memory) vkFreeMemory(iris->vk.device, target.memory, nullptr);
+
+        target.framebuffer = VK_NULL_HANDLE;
+        target.view = VK_NULL_HANDLE;
+        target.image = VK_NULL_HANDLE;
+        target.memory = VK_NULL_HANDLE;
+    }
+
+    iris->vk.fsr_width = 0;
+    iris->vk.fsr_height = 0;
+    iris->vk.fsr_format = VK_FORMAT_UNDEFINED;
+
+    delete iris->vk.fsr_easu;
+    delete iris->vk.fsr_rcas;
+
+    iris->vk.fsr_easu = nullptr;
+    iris->vk.fsr_rcas = nullptr;
+}
+
+static bool rebuild_fsr_targets(Instance* iris, int width, int height) {
+    if (iris->vk.fsr_width == width && iris->vk.fsr_height == height)
+        return true;
+
+    vulkan::wait_idle(iris);
+
+    for (auto& target : iris->vk.fsr_targets) {
+        if (target.framebuffer) vkDestroyFramebuffer(iris->vk.device, target.framebuffer, nullptr);
+        if (target.view) vkDestroyImageView(iris->vk.device, target.view, nullptr);
+        if (target.image) vkDestroyImage(iris->vk.device, target.image, nullptr);
+        if (target.memory) vkFreeMemory(iris->vk.device, target.memory, nullptr);
+
+        target.framebuffer = VK_NULL_HANDLE;
+
+        bool res = create_image(iris, width, height, iris->vk.image.format,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            target.image, target.view, target.memory);
+
+        if (!res) {
+            iris_error(&iris->log.render, "Failed to create FSR render target");
+
+            return false;
+        }
+    }
+
+    shaders::Pass* passes[2] = { iris->vk.fsr_easu, iris->vk.fsr_rcas };
+
+    for (int i = 0; i < 2; i++) {
+        VkFramebufferCreateInfo info = {};
+        info.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        info.renderPass = passes[i]->get_render_pass();
+        info.attachmentCount = 1;
+        info.pAttachments = &iris->vk.fsr_targets[i].view;
+        info.width = width;
+        info.height = height;
+        info.layers = 1;
+
+        if (vkCreateFramebuffer(iris->vk.device, &info, nullptr, &iris->vk.fsr_targets[i].framebuffer) != VK_SUCCESS) {
+            iris_error(&iris->log.render, "Failed to create FSR framebuffer");
+
+            return false;
+        }
+    }
+
+    iris->vk.fsr_width = width;
+    iris->vk.fsr_height = height;
+
+    return true;
+}
+
+static void render_fsr_pass(Instance* iris, VkCommandBuffer command_buffer, shaders::Pass* pass,
+    VkImageView input, int index, const PushConstants& constants) {
+    VkDescriptorSet descriptor_set = get_frame_shader_descriptor_set(iris, RENDER_MAX_SHADER_PASSES - 2 + index);
+
+    update_descriptor_set(iris, descriptor_set, input, iris->vk.sampler[render::BILINEAR]);
+
+    VkRenderPassBeginInfo info = {};
+    info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    info.renderPass = pass->get_render_pass();
+    info.framebuffer = iris->vk.fsr_targets[index].framebuffer;
+    info.renderArea.extent.width = iris->vk.fsr_width;
+    info.renderArea.extent.height = iris->vk.fsr_height;
+    info.clearValueCount = 1;
+    info.pClearValues = &iris->vk.clear_value;
+
+    vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
+
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pass->get_pipeline());
+    vkCmdBindIndexBuffer(command_buffer, iris->vk.index_buffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindDescriptorSets(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
+        pass->get_pipeline_layout(), 0, 1, &descriptor_set, 0, nullptr);
+
+    VkViewport viewport = {};
+    viewport.width = (float)iris->vk.fsr_width;
+    viewport.height = (float)iris->vk.fsr_height;
+    viewport.maxDepth = 1.0f;
+
+    vkCmdSetViewport(command_buffer, 0, 1, &viewport);
+
+    VkRect2D scissor = {};
+    scissor.extent = { (uint32_t)iris->vk.fsr_width, (uint32_t)iris->vk.fsr_height };
+
+    vkCmdSetScissor(command_buffer, 0, 1, &scissor);
+
+    vkCmdPushConstants(command_buffer, pass->get_pipeline_layout(),
+        VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(PushConstants), &constants);
+
+    vkCmdDrawIndexed(command_buffer, 6, 1, 0, 0, 0);
+
+    vkCmdEndRenderPass(command_buffer);
+}
+
+static bool fsr_wanted(Instance* iris) {
+    if (iris->filter != render::FSR)
+        return false;
+
+    if (iris->vk.image.format == VK_FORMAT_UNDEFINED)
+        return false;
+
+    if (iris->render_width <= 0 || iris->render_height <= 0)
+        return false;
+
+    if (iris->render_width < (int)iris->vk.image.width)
+        return false;
+
+    if (iris->render_height < (int)iris->vk.image.height)
+        return false;
+
+    return true;
+}
+
+void update_fsr(Instance* iris) {
+    if (!fsr_wanted(iris))
+        return;
+
+    if (!init_fsr(iris))
+        return;
+
+    rebuild_fsr_targets(iris, iris->render_width, iris->render_height);
+}
+
+static void render_fsr(Instance* iris, VkCommandBuffer command_buffer) {
+    if (!fsr_wanted(iris))
+        return;
+
+    if (!iris->vk.fsr_easu || !iris->vk.fsr_rcas)
+        return;
+
+    int width = iris->render_width;
+    int height = iris->render_height;
+
+    if (iris->vk.fsr_width != width || iris->vk.fsr_height != height)
+        return;
+
+    PushConstants easu = {};
+
+    easu.resolution[0] = (float)width;
+    easu.resolution[1] = (float)height;
+
+    fsr_easu_con(&easu,
+        (float)iris->vk.image.width, (float)iris->vk.image.height,
+        (float)width, (float)height);
+
+    render_fsr_pass(iris, command_buffer, iris->vk.fsr_easu, iris->vk.output_image.view, 0, easu);
+
+    PushConstants rcas = {};
+
+    rcas.resolution[0] = (float)width;
+    rcas.resolution[1] = (float)height;
+
+    fsr_rcas_con(&rcas, iris->fsr_sharpness);
+
+    render_fsr_pass(iris, command_buffer, iris->vk.fsr_rcas, iris->vk.fsr_targets[0].view, 1, rcas);
+
+    iris->vk.output_image.view = iris->vk.fsr_targets[1].view;
+    iris->vk.output_image.image = iris->vk.fsr_targets[1].image;
+    iris->vk.output_image.width = width;
+    iris->vk.output_image.height = height;
+}
+
 bool init(Instance* iris) {
     // Initialize our renderer
     iris->renderer = gs::renderer::create();
@@ -559,7 +826,7 @@ void render_shader_passes(Instance* iris, VkCommandBuffer command_buffer, VkImag
         VkDescriptorImageInfo image_info = {};
         image_info.imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
         image_info.imageView = input_view;
-        image_info.sampler = iris->vk.sampler[iris->filter];
+        image_info.sampler = filter_sampler(iris);
 
         VkWriteDescriptorSet descriptor_write = {};
         descriptor_write.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
@@ -660,6 +927,10 @@ bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer 
         render_shader_passes(iris, command_buffer, iris->vk.output_image.view, iris->vk.output_image.image);
     }
 
+    if (iris->vk.output_image.view != VK_NULL_HANDLE) {
+        render_fsr(iris, command_buffer);
+    }
+
     VkClearValue clear = background(iris);
 
     VkRenderPassBeginInfo info = {};
@@ -675,7 +946,7 @@ bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer 
         const VkDescriptorSet descriptor_set = get_frame_descriptor_set(iris);
 
         update_vertex_buffer(iris, command_buffer);
-        update_descriptor_set(iris, descriptor_set, iris->vk.output_image.view, iris->vk.sampler[iris->filter]);
+        update_descriptor_set(iris, descriptor_set, iris->vk.output_image.view, filter_sampler(iris));
     }
 
     vkCmdBeginRenderPass(command_buffer, &info, VK_SUBPASS_CONTENTS_INLINE);
@@ -852,6 +1123,8 @@ void destroy(Instance* iris) {
         return;
 
     vulkan::wait_idle(iris);
+
+    destroy_fsr(iris);
 
     for (auto& pass_framebuffers : iris->vk.shader_pass_framebuffers) {
         for (VkFramebuffer& framebuffer : pass_framebuffers) {

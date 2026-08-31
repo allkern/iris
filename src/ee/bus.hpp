@@ -23,8 +23,6 @@ namespace iris::cdvd { struct Cdvd; }
 
 namespace iris::ee::bus {
 
-// cdvd.hpp includes the buses in turn
-
 struct Bus {
     // EE-only
     ram::Ram* ee_ram;

@@ -9,9 +9,6 @@ namespace iris::ee::bus {
 
 struct Bus;
 
-// The interface the CPU core uses to reach the bus, kept here so ee.hpp can
-// take it without pulling in the whole bus header.
-
 Bus* create(logger::Logger* logger);
 void destroy(Bus* bus);
 

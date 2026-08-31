@@ -121,6 +121,19 @@ struct Instance {
             VkImageView view = VK_NULL_HANDLE;
         } shader_framebuffers[2];
         std::vector <std::array <VkFramebuffer, 2>> shader_pass_framebuffers = {};
+
+        struct {
+            VkImage image = VK_NULL_HANDLE;
+            VkDeviceMemory memory = VK_NULL_HANDLE;
+            VkImageView view = VK_NULL_HANDLE;
+            VkFramebuffer framebuffer = VK_NULL_HANDLE;
+        } fsr_targets[2];
+
+        VkFormat fsr_format = VK_FORMAT_UNDEFINED;
+        int fsr_width = 0;
+        int fsr_height = 0;
+        shaders::Pass* fsr_easu = nullptr;
+        shaders::Pass* fsr_rcas = nullptr;
         int vulkan_physical_device = -1;
         int vulkan_selected_device_index = 0;
         bool vulkan_enable_validation_layers = false;
@@ -348,8 +361,9 @@ struct Instance {
     bool no_decorations = false;
     bool remember_window_size = false;
     int aspect_mode = render::AUTO;
-    int filter = 1;
+    int filter = render::BILINEAR;
     bool integer_scaling = false;
+    float fsr_sharpness = 0.25f;
     float scale = 1.5f;
     int window_mode = 0;
     bool skip_fmv = false;

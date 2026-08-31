@@ -892,12 +892,13 @@ void show_graphics_settings(Instance* iris) {
     const char* filter_names[] = {
         "Nearest",
         "Bilinear",
+        "Bilinear (FSR)",
         "Cubic"
     };
 
     if (BeginCombo("##scalingfilter", filter_names[iris->filter])) {
-        for (int i = 0; i < 3; i++) {
-            BeginDisabled(i == 2 && !iris->vk.cubic_supported);
+        for (int i = 0; i < 4; i++) {
+            BeginDisabled(i == render::CUBIC && !iris->vk.cubic_supported);
             if (imgui::Selectable(filter_names[i], iris->filter == i)) {
                 iris->filter = i;
             }

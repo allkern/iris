@@ -85,6 +85,14 @@ static const EnumValue renderer_values[] = {
     { nullptr, 0 }
 };
 
+static const EnumValue filter_values[] = {
+    { "nearest", render::NEAREST },
+    { "bilinear", render::BILINEAR },
+    { "fsr", render::FSR },
+    { "cubic", render::CUBIC },
+    { nullptr, 0 }
+};
+
 static const EnumValue aspect_values[] = {
     { "native", render::NATIVE },
     { "stretch", render::STRETCH },
@@ -339,8 +347,10 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->present_mode, (int)v.integer); }, present_values },
     { "scale", 0, NUMBER, "F", "Output scale factor",
         [](Instance* i, const Value& v) { set(i, i->scale, (float)v.number); } },
-    { "filter", 0, FLAG, nullptr, "Bilinear filtering of the final image",
-        [](Instance* i, const Value& v) { set(i, i->filter, (int)v.flag); } },
+    { "filter", 0, ENUM, "MODE", "Scaling filter for the final image",
+        [](Instance* i, const Value& v) { set(i, i->filter, (int)v.integer); }, filter_values },
+    { "fsr-sharpness", 0, NUMBER, "F", "FSR sharpness in stops, 0 is sharpest",
+        [](Instance* i, const Value& v) { set(i, i->fsr_sharpness, (float)v.number); } },
     { "integer-scaling", 0, FLAG, nullptr, "Round the output scale to whole pixels",
         [](Instance* i, const Value& v) { set(i, i->integer_scaling, v.flag); } },
     { "angle", 0, INT, "DEG", "Rotate the output by DEG degrees",
