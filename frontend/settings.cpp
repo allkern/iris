@@ -346,19 +346,29 @@ static int mg_mode_for_system(int system) {
     return mg::KEY_STORE_MODE_RETAIL;
 }
 
-static int mg_card_key_source(Instance* iris) {
-    int mode = mg_mode_for_system(iris->ps2->detected_system);
+static int mg_card_key_source(Instance* iris, int slot) {
+    int system = iris->ps2->detected_system;
 
-    return mode == mg::KEY_STORE_MODE_ARCADE
-        ? dev::mcd::CARD_KEY_ARCADE
-        : dev::mcd::CARD_KEY_RETAIL;
+    if (mg_mode_for_system(system) != mg::KEY_STORE_MODE_ARCADE)
+        return dev::mcd::CARD_KEY_RETAIL;
+
+    switch (system) {
+        case ps2::NAMCO_SYSTEM_246:
+        case ps2::NAMCO_SYSTEM_256:
+        case ps2::NAMCO_SYSTEM_SUPER_256: {
+            // Slot 1 uses the arcade key store, slot 2 uses the CEX key store
+            return slot ? dev::mcd::CARD_KEY_ARCADE_CEX : dev::mcd::CARD_KEY_ARCADE;
+        } break;
+    }
+
+    return dev::mcd::CARD_KEY_ARCADE;
 }
 
 void apply_card_magicgate(Instance* iris, int slot) {
     if (slot < 0 || slot >= 2 || !iris->input.mcd[slot])
         return;
 
-    dev::mcd::set_magicgate(iris->input.mcd[slot], iris->enable_magicgate, mg_card_key_source(iris),
+    dev::mcd::set_magicgate(iris->input.mcd[slot], iris->enable_magicgate, mg_card_key_source(iris, slot),
         cdvd::mg_challenge_iv(iris->ps2->cdvd), iris->paths.mecha_card_id_path.c_str());
 }
 
