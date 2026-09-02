@@ -209,6 +209,9 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->autostart = system["autostart"].value_or(true);
     iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
     iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(false);
+    iris->system_2x6_rgb_level = system["system_2x6_rgb_level"].value_or(false);
+    iris->system_2x6_monitor_frequency = system["system_2x6_monitor_frequency"].value_or(false);
+    iris->system_2x6_video_sync = system["system_2x6_video_sync"].value_or(false);
     iris->enable_magicgate = system["enable_magicgate"].value_or(true);
     iris->p2io_input_type = system["p2io_input_type"].value_or(kp2::p2io::INPUT_THRILL_DRIVE);
 
@@ -392,6 +395,19 @@ void apply_mg_keys(Instance* iris) {
     apply_magicgate(iris);
 }
 
+void apply_arcade_dip_switches(Instance* iris) {
+    if (!iris->ps2 || !iris->ps2->s2x6_acjv)
+        return;
+
+    uint8_t dip = 0;
+
+    if (iris->system_2x6_rgb_level) dip |= s2x6::acjv::DIP_VIDEO_VOLTAGE;
+    if (iris->system_2x6_monitor_frequency) dip |= s2x6::acjv::DIP_MONITOR_FREQUENCY;
+    if (iris->system_2x6_video_sync) dip |= s2x6::acjv::DIP_VIDEO_SYNC;
+
+    s2x6::acjv::set_dip_switches(iris->ps2->s2x6_acjv, dip);
+}
+
 void apply_magicgate(Instance* iris) {
     cdvd::set_mg_enabled(iris->ps2->cdvd, iris->enable_magicgate);
 
@@ -510,6 +526,9 @@ void save(Instance* iris) {
             { "autostart", iris->autostart },
             { "cache_arcade_files", iris->cache_arcade_files },
             { "arcade_dongle_boot", iris->arcade_dongle_boot },
+            { "system_2x6_rgb_level", iris->system_2x6_rgb_level },
+            { "system_2x6_monitor_frequency", iris->system_2x6_monitor_frequency },
+            { "system_2x6_video_sync", iris->system_2x6_video_sync },
             { "enable_magicgate", iris->enable_magicgate },
             { "p2io_input_type", iris->p2io_input_type }
         } },

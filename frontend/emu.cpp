@@ -1809,6 +1809,8 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
             s2x6::acjv::set_mode(iris->ps2->s2x6_acjv, source.jvs_mode, source.wheel_style);
 
+            settings::apply_arcade_dip_switches(iris);
+
             s2x6::acjv::set_gun_buttons(iris->ps2->s2x6_acjv, source.gun_trigger, source.gun_pedal);
             s2x6::acjv::set_gun_board(iris->ps2->s2x6_acjv, source.gun_board, source.gun_sensor, source.gun_sensor_active_high);
 

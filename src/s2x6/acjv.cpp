@@ -116,6 +116,10 @@ void set_test_switch(Acjv* acjv, int pressed) {
     acjv->test_held = pressed != 0;
 }
 
+void set_dip_switches(Acjv* acjv, uint8_t value) {
+    acjv->dip_switches = (acjv->dip_switches & DIP_TEST) | (value & DIP_CONFIGURABLE);
+}
+
 void set_mode(Acjv* acjv, int mode, int wheel_style) {
     acjv->mode = mode;
     acjv->wheel_style = wheel_style;

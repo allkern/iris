@@ -650,8 +650,23 @@ void show_system_settings(Instance* iris) {
     Checkbox("Skip FMVs", &iris->skip_fmv);
     Checkbox("Keep arcade files extracted from archives", &iris->cache_arcade_files);
     SetItemTooltip("Loads archived arcade games faster, at the cost of keeping a second copy of their files");
-    Checkbox("Always boot System 246/256 games off the dongle", &iris->arcade_dongle_boot);
+    Checkbox("Fastboot System 246/256 games", &iris->arcade_dongle_boot);
     SetItemTooltip("Runs the game's own boot program on the dongle even when a boot.elf is there to chainload it. Games without a boot.elf take this route regardless");
+
+    imgui::section(iris, "DIP Switches");
+
+    Text("System 246/256 (SW1)");
+
+    bool dip_changed = false;
+
+    dip_changed |= Checkbox("RGB level 0.7Vp-p", &iris->system_2x6_rgb_level);
+    dip_changed |= Checkbox("31kHz output", &iris->system_2x6_monitor_frequency);
+    dip_changed |= Checkbox("Separate sync", &iris->system_2x6_video_sync);
+
+    if (dip_changed) {
+        settings::apply_arcade_dip_switches(iris);
+    }
+
     PopStyleVar();
 }
 

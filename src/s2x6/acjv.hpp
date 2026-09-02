@@ -154,6 +154,7 @@ enum {
 };
 
 inline constexpr auto DIP_DEFAULT = DIP_VIDEO_VOLTAGE | DIP_MONITOR_FREQUENCY | DIP_VIDEO_SYNC;
+inline constexpr auto DIP_CONFIGURABLE = DIP_VIDEO_VOLTAGE | DIP_MONITOR_FREQUENCY | DIP_VIDEO_SYNC;
 
 enum {
     BTN_START = 0x0080,
@@ -223,6 +224,7 @@ void release_switch(Acjv* acjv, int player, uint16_t mask);
 void set_coin_switch(Acjv* acjv, int slot, int pressed);
 void set_test_switch(Acjv* acjv, int pressed);
 void set_mode(Acjv* acjv, int mode, int wheel_style);
+void set_dip_switches(Acjv* acjv, uint8_t value);
 void set_axis(Acjv* acjv, int axis, float value);
 void set_gun_position(Acjv* acjv, int player, float x, float y);
 void set_gun_off_screen(Acjv* acjv, int player);

@@ -185,8 +185,6 @@ struct Instance {
         bool dim_active = false;
         bool drop_file_active = false;
 
-        // Window-relative. drop_pos comes from SDL during the drag, the rect
-        // is published by the overlay each frame for the drop handler to test
         ImVec2 drop_pos = ImVec2(-1.0f, -1.0f);
         ImVec2 drop_insert_min = ImVec2(0.0f, 0.0f);
         ImVec2 drop_insert_max = ImVec2(0.0f, 0.0f);
@@ -372,6 +370,10 @@ struct Instance {
     bool autostart = true;
     bool cache_arcade_files = false;
     bool arcade_dongle_boot = false;
+
+    bool system_2x6_rgb_level = false;
+    bool system_2x6_monitor_frequency = false;
+    bool system_2x6_video_sync = false;
     bool enable_magicgate = true;
 
     int p2io_input_type = 4;
