@@ -165,10 +165,13 @@ static void update_descriptor_set(Instance* iris, VkDescriptorSet descriptor_set
 static inline VkDescriptorSet get_frame_shader_descriptor_set(Instance* iris, uint32_t pass_index);
 
 static inline VkSampler filter_sampler(Instance* iris) {
-    if (iris->filter < 0 || iris->filter >= render::FSR)
-        return iris->vk.sampler[render::NEAREST];
+    if (iris->filter == render::BILINEAR)
+        return iris->vk.sampler[render::SAMPLER_BILINEAR];
 
-    return iris->vk.sampler[iris->filter];
+    if (iris->filter == render::CUBIC && iris->vk.cubic_supported)
+        return iris->vk.sampler[render::SAMPLER_CUBIC];
+
+    return iris->vk.sampler[render::SAMPLER_NEAREST];
 }
 constexpr unsigned char g_fsr_easu_shader_data[] = {
 #embed "../shaders/fsr_easu.spv"
@@ -322,7 +325,7 @@ static void render_fsr_pass(Instance* iris, VkCommandBuffer command_buffer, shad
     VkImageView input, int index, const PushConstants& constants) {
     VkDescriptorSet descriptor_set = get_frame_shader_descriptor_set(iris, RENDER_MAX_SHADER_PASSES - 2 + index);
 
-    update_descriptor_set(iris, descriptor_set, input, iris->vk.sampler[render::BILINEAR]);
+    update_descriptor_set(iris, descriptor_set, input, iris->vk.sampler[render::SAMPLER_BILINEAR]);
 
     VkRenderPassBeginInfo info = {};
     info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -467,7 +470,7 @@ bool init(Instance* iris) {
     nearest_sampler_info.maxLod = 1000;
     nearest_sampler_info.maxAnisotropy = 1.0f;
 
-    if (vkCreateSampler(iris->vk.device, &nearest_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[0]) != VK_SUCCESS) {
+    if (vkCreateSampler(iris->vk.device, &nearest_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[render::SAMPLER_NEAREST]) != VK_SUCCESS) {
         iris_error(&iris->log.render, "Failed to create nearest texture sampler");
 
         return false;
@@ -485,7 +488,7 @@ bool init(Instance* iris) {
     bilinear_sampler_info.maxLod = 1000;
     bilinear_sampler_info.maxAnisotropy = 1.0f;
 
-    if (vkCreateSampler(iris->vk.device, &bilinear_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[1]) != VK_SUCCESS) {
+    if (vkCreateSampler(iris->vk.device, &bilinear_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[render::SAMPLER_BILINEAR]) != VK_SUCCESS) {
         iris_error(&iris->log.render, "Failed to create bilinear texture sampler");
 
         return false;
@@ -504,7 +507,7 @@ bool init(Instance* iris) {
         cubic_sampler_info.maxLod = 1000;
         cubic_sampler_info.maxAnisotropy = 1.0f;
 
-        if (vkCreateSampler(iris->vk.device, &cubic_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[2]) != VK_SUCCESS) {
+        if (vkCreateSampler(iris->vk.device, &cubic_sampler_info, VK_NULL_HANDLE, &iris->vk.sampler[render::SAMPLER_CUBIC]) != VK_SUCCESS) {
             iris_error(&iris->log.render, "Failed to create cubic texture sampler");
 
             return false;

@@ -136,7 +136,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
 
     auto display = tbl["display"];
     iris->aspect_mode = display["aspect_mode"].value_or(render::AUTO);
-    iris->filter = display["filter"].value_or(true);
+    iris->filter = display["filter"].value_or(render::BILINEAR);
     iris->fsr_sharpness = display["fsr_sharpness"].value_or(0.25f);
     iris->integer_scaling = display["integer_scaling"].value_or(false);
     iris->scale = display["scale"].value_or(1.5f);

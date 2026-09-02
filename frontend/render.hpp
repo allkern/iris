@@ -26,6 +26,12 @@ enum ScalingFilter {
     CUBIC
 };
 
+enum SamplerIndex {
+    SAMPLER_NEAREST,
+    SAMPLER_BILINEAR,
+    SAMPLER_CUBIC
+};
+
 enum ScreenshotFormat {
     PNG,
     BMP,
