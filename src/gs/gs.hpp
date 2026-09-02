@@ -125,6 +125,8 @@ inline constexpr auto EE_CLOCKS_PER_VFRAME = (EE_CLOCKS_PER_SCAN_NTSC * 240);
 inline constexpr auto EE_CLOCKS_PER_VBLANK = (EE_CLOCKS_PER_SCAN_NTSC * 22);
 inline constexpr auto FRAME_NTSC = 4502400;// (240 * 9370)
 inline constexpr auto VBLANK_NTSC = 412720;// (22 * 9370)
+inline constexpr auto PMODE_EN1 = 1;
+inline constexpr auto PMODE_EN2 = 2;
 inline constexpr auto FRAME_PAL = (286 * 9476);
 inline constexpr auto VBLANK_PAL = (26 * 9476);
 
@@ -381,6 +383,7 @@ void destroy(Gs* gs);
 uint64_t read64(Gs* gs, uint32_t addr);
 void write64(Gs* gs, uint32_t addr, uint64_t data);
 int is_vblank(Gs* gs);
+int is_display_enabled(const Gs* gs);
 
 struct PrivilegedState {
     uint64_t pmode;

@@ -161,7 +161,7 @@ void set_ee_clock(Gs* gs, int hz) {
     gs->scanline_cycles = (int)(((int64_t)SCANLINE_NTSC * hz) / EE_CLOCK);
 }
 
-void reset(Gs* gs) {
+void soft_reset(Gs* gs) {
     gs->pmode = 0;
     gs->smode1 = 0;
     gs->smode2 = 0;
@@ -191,6 +191,10 @@ void reset(Gs* gs) {
 
     // Note: Dokapon Kingdom relies on this, don't ask me why
     gs->stall_sigid = 0xffffffff;
+}
+
+void reset(Gs* gs) {
+    soft_reset(gs);
 
     // Schedule Vblank event
     scheduler::Event vblank_event;
@@ -208,8 +212,6 @@ void reset(Gs* gs) {
     hblank_event.udata = gs;
 
     scheduler::schedule(gs->hw.sched, hblank_event);
-
-    memset(gs->vram, 0, 0x400000);
 }
 
 // void switch_context(Gs* gs, int c) {
@@ -218,6 +220,7 @@ void reset(Gs* gs) {
 
 void destroy(Gs* gs) {
     free(gs->vram);
+
     delete gs;
 }
 
@@ -435,6 +438,12 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
         case 0x120000D0: gs->extwrite = data; return;
         case 0x120000E0: gs->bgcolor = data; return;
         case 0x12001000: {
+            // GS Reset
+            if (data & 0x200) {
+                // Clear all regs
+                soft_reset(gs);
+            }
+
             if (data & 8) {
                 // Game is requesting vsync
                 // gs->vblank |= 1;
@@ -874,6 +883,10 @@ void get_privileged_state(Gs* gs, PrivilegedState* state) {
     state->imr = gs->imr;
     state->busdir = gs->busdir;
     state->siglblid = gs->siglblid;
+}
+
+int is_display_enabled(const Gs* gs) {
+    return (gs->pmode & (PMODE_EN1 | PMODE_EN2)) != 0;
 }
 
 int is_vblank(Gs* gs) {
