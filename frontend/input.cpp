@@ -2,6 +2,7 @@
 #include <string>
 
 #include "iris.hpp"
+#include "imgui.hpp"
 #include "ee/vu_def.hpp"
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -775,6 +776,26 @@ void handle_keydown_event(Instance* iris, SDL_Event* event) {
         case SDLK_F2: {
             iris->ps2->vu0->disable = !iris->ps2->vu0->disable;
             iris->ps2->vu1->disable = !iris->ps2->vu1->disable;
+        } break;
+
+        case SDLK_GRAVE: {
+            if (ImGui::GetIO().WantCaptureKeyboard)
+                break;
+
+            bool was_vsync = iris->present_mode == render::VSYNC;
+
+            if (iris->present_mode == render::UNCAPPED) {
+                iris->present_mode = iris->capped_present_mode;
+            } else {
+                iris->capped_present_mode = iris->present_mode;
+                iris->present_mode = render::UNCAPPED;
+            }
+
+            if (was_vsync != (iris->present_mode == render::VSYNC)) {
+                imgui::set_vsync(iris, iris->present_mode == render::VSYNC);
+
+                iris->vk.swapchain_rebuild = true;
+            }
         } break;
     }
 

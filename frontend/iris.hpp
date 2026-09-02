@@ -389,6 +389,7 @@ struct Instance {
     unsigned int ticks = 0;
     int timescale = 1;
     int present_mode = render::FPS_60;
+    int capped_present_mode = render::FPS_60;
     int screenshot_format = render::PNG;
     int screenshot_jpg_quality_mode = render::MAXIMUM;
     int screenshot_jpg_quality = 50;
