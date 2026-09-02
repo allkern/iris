@@ -37,13 +37,12 @@ struct Sif {
 Sif* create(logger::Logger* logger);
 void connect(Sif* sif, iop::intc::Intc* iop_intc);
 void destroy(Sif* sif);
-
 uint64_t read32(Sif* sif, uint32_t addr);
 void write32(Sif* sif, uint32_t addr, uint64_t data);
-
 void fifo_write(Fifo& fifo, uint128_t data);
 uint128_t fifo_read(Fifo& fifo);
 void fifo_reset(Fifo& fifo);
+void reset(Sif* sif);
 bool fifo_is_empty(const Fifo& fifo);
 
 }

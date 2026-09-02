@@ -91,6 +91,18 @@ void fifo_reset(Fifo& fifo) {
     fifo.write_index = 0;
 }
 
+void reset(Sif* sif) {
+    sif->mscom = 0;
+    sif->smcom = 0;
+    sif->msflg = 0;
+    sif->smflg = 0;
+    sif->ctrl = 0;
+    sif->bd6 = 0;
+
+    fifo_reset(sif->sif0);
+    fifo_reset(sif->sif1);
+}
+
 bool fifo_is_empty(const Fifo& fifo) {
     return fifo.read_index == fifo.write_index;
 }

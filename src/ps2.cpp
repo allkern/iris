@@ -309,6 +309,7 @@ void reset(Ps2* ps2) {
     usb::reset(ps2->usb);
     fw::reset(ps2->fw);
     sbus::reset(ps2->sbus);
+    sif::reset(ps2->sif);
     cdvd::reset(ps2->cdvd);
 
     gif::reset(ps2->gif);

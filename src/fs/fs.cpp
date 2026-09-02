@@ -129,7 +129,6 @@ bool sanitize_name(const char* in, std::string* out) {
         *out += (char)c;
     }
 
-    // Windows drops these silently, which would let "a. " land on top of "a"
     while (out->size() && (out->back() == '.' || out->back() == ' '))
         out->pop_back();
 

@@ -397,8 +397,6 @@ Device* open_disc(logger::Logger* logger, iop::disc::Disc* disc) {
     if (sector_size <= 0)
         sector_size = DISC_DATA_SIZE;
 
-    // get_size reports the backing image, which counts raw sectors on CD
-    // formats; the browsable space is the user area of each one
     uint64_t sectors = iop::disc::get_size(disc) / (uint64_t)sector_size;
 
     if (!sectors)
