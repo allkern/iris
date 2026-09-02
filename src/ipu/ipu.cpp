@@ -297,10 +297,25 @@ bool Ipu::process_IDEC()
                 idec.state = IDEC_STATE::MACRO_I_TYPE;
                 break;
             case IDEC_STATE::MACRO_I_TYPE:
+            {
                 iris_debug(this, "Decode macroblock I type");
-                if (!macroblock_I_pic.get_symbol(in_FIFO, idec.macro_type))
-                    return false;
+
+                bool invalid = false;
+
+                if (!macroblock_I_pic.get_symbol(in_FIFO, idec.macro_type, &invalid))
+                {
+                    if (!invalid)
+                        return false;
+
+                    iris_warning(this, "IDEC: no macroblock type matches the stream, aborting the command");
+
+                    ctrl.error_code = true;
+
+                    return true;
+                }
+
                 idec.state = IDEC_STATE::DCT_TYPE;
+            }
                 break;
             case IDEC_STATE::DCT_TYPE:
                 iris_debug(this, "Decode DCT");

@@ -10,9 +10,12 @@ VLC_Table::VLC_Table(VLC_Entry* table, int table_size, int max_bits, unsigned in
 
 }
 
-bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry)
+bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry, bool* invalid)
 {
     uint32_t window;
+
+    if (invalid)
+        *invalid = false;
 
     if (FIFO.get_bits(window, max_bits))
     {
@@ -33,6 +36,9 @@ bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry)
                 }
             }
         }
+
+        if (invalid)
+            *invalid = true;
 
         return false;
     }
@@ -60,10 +66,10 @@ bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry)
     return false;
 }
 
-bool VLC_Table::get_symbol(IPU_FIFO& FIFO, uint32_t &result)
+bool VLC_Table::get_symbol(IPU_FIFO& FIFO, uint32_t &result, bool* invalid)
 {
     VLC_Entry entry;
-    if (!peek_symbol(FIFO, entry))
+    if (!peek_symbol(FIFO, entry, invalid))
         return false;
 
     FIFO.advance_stream(entry.bits);

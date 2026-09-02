@@ -21,8 +21,8 @@ class VLC_Table
     protected:
         VLC_Table(VLC_Entry* table, int table_size, int max_bits, unsigned int* index_table);
     public:
-        bool peek_symbol(IPU_FIFO& FIFO, VLC_Entry& entry);
-        bool get_symbol(IPU_FIFO& FIFO, uint32_t& result);
+        bool peek_symbol(IPU_FIFO& FIFO, VLC_Entry& entry, bool* invalid = nullptr);
+        bool get_symbol(IPU_FIFO& FIFO, uint32_t& result, bool* invalid = nullptr);
 };
 
 }
