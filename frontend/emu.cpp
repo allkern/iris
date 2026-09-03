@@ -783,7 +783,7 @@ static bool arcade_bios_available(Instance* iris, const ArcadeSource& source) {
     if (std::filesystem::exists(configured))
         return true;
 
-    iris_error(&iris->log.emu, "Configured {} bootrom \"{}\" is missing",
+    iris_error(&iris->log.emu, "Configured {} board BIOS \"{}\" is missing",
         get_system_name(iris, source.system), configured.c_str());
 
     return false;
@@ -854,7 +854,7 @@ static bool arcade_boots_from_dongle(Instance* iris, const ArcadeSource& source)
 
 static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& source, bool want_loader = false) {
     if (!arcade_bios_available(iris, source))
-        return "bootrom";
+        return "board BIOS";
 
     if (source.system == ps2::NAMCO_SYSTEM_147 || source.system == ps2::NAMCO_SYSTEM_148) {
         if (!arcade_file_available(source, source.names.nand))

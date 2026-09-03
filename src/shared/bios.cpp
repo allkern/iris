@@ -1,10 +1,38 @@
 #include <cstdio>
+#include <cstring>
 
 #include "bios.hpp"
 
 namespace iris::bios {
 
 inline constexpr size_t DUMMY_SIZE = 0x400000;
+
+inline constexpr const char* ROMDIR_MAGIC = "ROMDIR";
+inline constexpr size_t ROMDIR_SEARCH_SIZE = 0x20000;
+
+static bool check_romdir(FILE* file, size_t size) {
+    if (size < ROMDIR_SEARCH_SIZE)
+        return false;
+
+    uint8_t head[ROMDIR_SEARCH_SIZE];
+
+    fseek(file, 0, SEEK_SET);
+
+    bool read = fread(head, 1, ROMDIR_SEARCH_SIZE, file) == ROMDIR_SEARCH_SIZE;
+
+    fseek(file, 0, SEEK_SET);
+
+    if (!read)
+        return false;
+
+    for (size_t i = 0; i + sizeof(ROMDIR_MAGIC) - 1 <= ROMDIR_SEARCH_SIZE; i++) {
+        if (!memcmp(head + i, ROMDIR_MAGIC, sizeof(ROMDIR_MAGIC) - 1)) {
+            return true;
+        }
+    }
+
+    return false;
+}
 
 static size_t get_file_size(FILE* file) {
     fseek(file, 0, SEEK_END);
@@ -44,10 +72,24 @@ bool load(Bios* bios, const char* path) {
 
     size_t size = get_file_size(file);
 
+    if (!check_romdir(file, size)) {
+        iris_error(bios, "'{}' is not a PlayStation 2 ROM, it has no ROMDIR", path);
+
+        fclose(file);
+
+        return false;
+    }
+
+    size_t capacity = DUMMY_SIZE;
+
+    while (capacity < size) {
+        capacity *= 2;
+    }
+
     delete[] bios->buf;
 
-    bios->buf = new uint8_t[size]();
-    bios->size = size - 1;
+    bios->buf = new uint8_t[capacity]();
+    bios->size = capacity - 1;
 
     bool ok = fread(bios->buf, 1, size, file) == size;
 

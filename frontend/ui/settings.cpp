@@ -1791,13 +1791,14 @@ void show_paths_settings(Instance* iris) {
 
         SetNextItemWidth(300);
 
-        imgui::text_input("##arcadebios", &arcade_buf, "No bootrom selected");
+        imgui::text_input("##arcadebios", &arcade_buf, "No board BIOS selected");
+
         SameLine();
 
         if (Button(ICON_MS_FOLDER "##arcadebios")) {
             audio::mute(iris);
 
-            auto f = pfd::open_file("Select bootrom file", "", {
+            auto f = pfd::open_file("Select board BIOS file", "", {
                 "Bootrom dumps (*.bin; *.ic1; *.7d; *.8g)", "*.bin *.ic1 *.7d *.8g",
                 "All Files (*.*)", "*"
             });
