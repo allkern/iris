@@ -282,9 +282,9 @@ bool parse_toml_settings(Instance* iris, bool reset) {
         iris->vk.clear_value.color.float32[1] = (float)bgcolor->at(1).as_floating_point()->get();
         iris->vk.clear_value.color.float32[2] = (float)bgcolor->at(2).as_floating_point()->get();
     } else {
-        iris->vk.clear_value.color.float32[0] = 0.11f;
-        iris->vk.clear_value.color.float32[1] = 0.11f;
-        iris->vk.clear_value.color.float32[2] = 0.11f;
+        iris->vk.clear_value.color.float32[0] = 11 / 255.0f;
+        iris->vk.clear_value.color.float32[1] = 11 / 255.0f;
+        iris->vk.clear_value.color.float32[2] = 13 / 255.0f;
     }
 
 #ifdef _WIN32

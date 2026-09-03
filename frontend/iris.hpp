@@ -97,7 +97,7 @@ struct Instance {
         VkPipelineLayout pipeline_layout = VK_NULL_HANDLE;
         VkRenderPass render_pass = VK_NULL_HANDLE;
         VkPipeline pipeline = VK_NULL_HANDLE;
-        VkClearValue clear_value = { 0.11, 0.11, 0.11, 1.0 };
+        VkClearValue clear_value = { 11 / 255.0f, 11 / 255.0f, 13 / 255.0f, 1.0 };
         VkBuffer vertex_buffer = VK_NULL_HANDLE;
         VkDeviceMemory vertex_buffer_memory = VK_NULL_HANDLE;
         VkBuffer vertex_staging_buffer = VK_NULL_HANDLE;
@@ -139,7 +139,7 @@ struct Instance {
         bool vulkan_enable_validation_layers = false;
     } vk;
 
-    // ImGui fonts, colours, textures and window visibility
+    // ImGui fonts, colors, textures and window visibility
     struct {
         Texture ps2_memory_card_icon = {};
         Texture ps1_memory_card_icon = {};
