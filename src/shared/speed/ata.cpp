@@ -156,7 +156,7 @@ void ata_create_identify(uint8_t* buf, uint64_t sectors) {
 
     // Multi-sector setting is valid
     identify->multi_sector_capabilities = 0x0080;
-    identify->user_addressable_sectors = sectors;
+    identify->user_addressable_sectors = sectors > LBA28_MAX_SECTORS ? LBA28_MAX_SECTORS : sectors;
 
     // MWDMA modes supported (0,1,2) and active mode (2)
     identify->mwdma_support_active = 0x0407; // or 0x0007
@@ -173,27 +173,23 @@ void ata_create_identify(uint8_t* buf, uint64_t sectors) {
     identify->minor_revision = 0x0018;
 
     // SMART, Write cache, NOP, FLUSH CACHE, FLUSH CACHE EXT
+    // 48-bit address feature set (word 83/86 bit 10)
     // SMART error logging
     // SMART self-test
     identify->feature_sets_supported[0] = 0x4021;
-    identify->feature_sets_supported[1] = 0x7000;
+    identify->feature_sets_supported[1] = 0x7400;
     identify->feature_sets_supported[2] = 0x0003;
     identify->feature_sets_active[0] = 0x4021;
-    identify->feature_sets_active[1] = 0x3000;
+    identify->feature_sets_active[1] = 0x3400;
     identify->feature_sets_active[2] = 0x0003;
 
     identify->udma_support_active = 0x007f;
 
-    // if (lba48_supported)
-    //    identify->feature_sets_supported |= (1 << 26); // LBA48
-
     // Drive 0 passed diagnostic
     identify->hardware_reset_result = 0x4009;
 
-    // if (lba48_supported) {
-    //     identify->max_48bit_lba[0] = sectors & 0xffffffff;
-    //     identify->max_48bit_lba[1] = (sectors >> 32) & 0xffffffff;
-    // }
+    identify->max_48bit_lba[0] = sectors & 0xffffffff;
+    identify->max_48bit_lba[1] = (sectors >> 32) & 0xffffffff;
 
     identify->physical_logical_sector_size = 0x4000;
 
@@ -303,7 +299,9 @@ void ata_handle_data_overflow(Ata* ata) {
         } break;
 
         case C_WRITE_DMA:
-        case C_WRITE_SECTOR: {
+        case C_WRITE_DMA_EXT:
+        case C_WRITE_SECTOR:
+        case C_WRITE_SECTOR_EXT: {
             ata->hdd.write_sector(ata->hdd.udata, ata->pending_lba++, ata->buf);
 
             ata->pending_sectors--;
@@ -317,7 +315,9 @@ void ata_handle_data_overflow(Ata* ata) {
         } break;
 
         case C_READ_DMA:
-        case C_READ_SECTOR: {
+        case C_READ_DMA_EXT:
+        case C_READ_SECTOR:
+        case C_READ_SECTOR_EXT: {
             if (ata->pending_sectors == 0) {
                 ata->status &= ~STAT_DRQ;
 
@@ -345,12 +345,63 @@ uint64_t ata_get_lba(Ata* ata) {
            ((uint64_t)(ata->select & 0x0f) << 24);
 }
 
+uint64_t ata_get_lba48(Ata* ata) {
+    return (uint64_t)(ata->sector & 0xff) |
+           ((uint64_t)(ata->lcyl & 0xff) << 8) |
+           ((uint64_t)(ata->hcyl & 0xff) << 16) |
+           ((uint64_t)(ata->sector_hob & 0xff) << 24) |
+           ((uint64_t)(ata->lcyl_hob & 0xff) << 32) |
+           ((uint64_t)(ata->hcyl_hob & 0xff) << 40);
+}
+
 uint64_t ata_get_nsectors(Ata* ata) {
     if (ata->nsector == 0) {
         return 0x100;
     }
 
     return ata->nsector;
+}
+
+uint64_t ata_get_nsectors48(Ata* ata) {
+    uint64_t nsectors = (ata->nsector & 0xff) | ((ata->nsector_hob & 0xff) << 8);
+
+    if (nsectors == 0) {
+        return LBA48_MAX_NSECTORS;
+    }
+
+    return nsectors;
+}
+
+void ata_set_lba28_result(Ata* ata, uint64_t lba) {
+    ata->sector = lba & 0xff;
+    ata->lcyl = (lba >> 8) & 0xff;
+    ata->hcyl = (lba >> 16) & 0xff;
+    ata->select = (ata->select & 0xf0) | ((lba >> 24) & 0x0f);
+}
+
+void ata_set_lba48_result(Ata* ata, uint64_t lba) {
+    ata->sector = lba & 0xff;
+    ata->lcyl = (lba >> 8) & 0xff;
+    ata->hcyl = (lba >> 16) & 0xff;
+    ata->sector_hob = (lba >> 24) & 0xff;
+    ata->lcyl_hob = (lba >> 32) & 0xff;
+    ata->hcyl_hob = (lba >> 40) & 0xff;
+}
+
+void ata_start_read(Ata* ata, uint64_t lba, uint64_t nsectors) {
+    ata_init_response(ata, SECTOR_SIZE);
+
+    ata->pending_lba = lba;
+    ata->pending_sectors = nsectors - 1;
+
+    ata->hdd.read_sector(ata->hdd.udata, ata->pending_lba++, ata->buf);
+}
+
+void ata_start_write(Ata* ata, uint64_t lba, uint64_t nsectors) {
+    ata_init_response(ata, SECTOR_SIZE);
+
+    ata->pending_lba = lba;
+    ata->pending_sectors = nsectors;
 }
 
 void ata_handle_command(Ata* ata, uint16_t cmd) {
@@ -363,52 +414,61 @@ void ata_handle_command(Ata* ata, uint16_t cmd) {
             memcpy(ata->buf, ata->identify, SECTOR_SIZE);
         } break;
 
-        case C_READ_DMA: {
-            iris_debug(ata, "READ DMA (LBA {} COUNT {})", ata->sector, ata->nsector);
-
-            ata->pending_sectors = ata_get_nsectors(ata) - 1;
-            ata->pending_lba = ata_get_lba(ata);
-
-            ata->status |= STAT_DRQ;
-            ata->buf_size = 512;
-            ata->buf_index = 0;
-
-            ata->hdd.read_sector(ata->hdd.udata, ata->pending_lba++, ata->buf);
-        } break;
-
-        case C_WRITE_DMA: {
-            iris_debug(ata, "WRITE DMA (LBA {} COUNT {})", ata->sector, ata->nsector);
-
-            ata->pending_sectors = ata_get_nsectors(ata);
-            ata->pending_lba = ata_get_lba(ata);
-
-            ata->status |= STAT_DRQ;
-            ata->buf_size = 512;
-            ata->buf_index = 0;
-        } break;
-
-        case C_WRITE_SECTOR: {
-            iris_debug(ata, "WRITE SECTOR (LBA {} COUNT {})", ata->sector, ata->nsector);
-
-            ata_init_response(ata, 512);
-
-            ata->pending_sectors = ata_get_nsectors(ata);
-            ata->pending_lba = ata_get_lba(ata);
-        } break;
-
+        case C_READ_DMA:
         case C_READ_SECTOR: {
-            iris_debug(ata, "READ SECTOR (LBA {} COUNT {})", ata->sector, ata->nsector);
+            uint64_t lba = ata_get_lba(ata);
+            uint64_t nsectors = ata_get_nsectors(ata);
 
-            ata_init_response(ata, 512);
+            iris_debug(ata, "{} (LBA {} COUNT {})", cmd == C_READ_DMA ? "READ DMA" : "READ SECTOR", lba, nsectors);
 
-            ata->pending_sectors = ata_get_nsectors(ata) - 1;
-            ata->pending_lba = ata_get_lba(ata);
+            ata_start_read(ata, lba, nsectors);
+        } break;
 
-            ata->status |= STAT_DRQ;
-            ata->buf_size = 512;
-            ata->buf_index = 0;
+        case C_READ_DMA_EXT:
+        case C_READ_SECTOR_EXT: {
+            uint64_t lba = ata_get_lba48(ata);
+            uint64_t nsectors = ata_get_nsectors48(ata);
 
-            ata->hdd.read_sector(ata->hdd.udata, ata->pending_lba++, ata->buf);
+            iris_debug(ata, "{} (LBA {} COUNT {})", cmd == C_READ_DMA_EXT ? "READ DMA EXT" : "READ SECTOR EXT", lba, nsectors);
+
+            ata_start_read(ata, lba, nsectors);
+        } break;
+
+        case C_WRITE_DMA:
+        case C_WRITE_SECTOR: {
+            uint64_t lba = ata_get_lba(ata);
+            uint64_t nsectors = ata_get_nsectors(ata);
+
+            iris_debug(ata, "{} (LBA {} COUNT {})", cmd == C_WRITE_DMA ? "WRITE DMA" : "WRITE SECTOR", lba, nsectors);
+
+            ata_start_write(ata, lba, nsectors);
+        } break;
+
+        case C_WRITE_DMA_EXT:
+        case C_WRITE_SECTOR_EXT: {
+            uint64_t lba = ata_get_lba48(ata);
+            uint64_t nsectors = ata_get_nsectors48(ata);
+
+            iris_debug(ata, "{} (LBA {} COUNT {})", cmd == C_WRITE_DMA_EXT ? "WRITE DMA EXT" : "WRITE SECTOR EXT", lba, nsectors);
+
+            ata_start_write(ata, lba, nsectors);
+        } break;
+
+        case C_READ_NATIVE_MAX_ADDRESS: {
+            uint64_t sectors = ata->hdd.get_sector_count(ata->hdd.udata);
+            uint64_t max = sectors > LBA28_MAX_SECTORS ? LBA28_MAX_SECTORS : sectors;
+
+            iris_debug(ata, "READ NATIVE MAX ADDRESS ({})", max);
+
+            ata_set_lba28_result(ata, max ? max - 1 : 0);
+        } break;
+
+        case C_READ_NATIVE_MAX_ADDRESS_EXT: {
+            uint64_t sectors = ata->hdd.get_sector_count(ata->hdd.udata);
+
+            iris_debug(ata, "READ NATIVE MAX ADDRESS EXT ({})", sectors);
+
+            ata_set_lba48_result(ata, sectors ? sectors - 1 : 0);
         } break;
 
         case C_IDLE: {
@@ -419,7 +479,8 @@ void ata_handle_command(Ata* ata, uint16_t cmd) {
             iris_debug(ata, "SMART command subcommand {}", ata->feature);
         } break;
 
-        case C_FLUSH_CACHE: {
+        case C_FLUSH_CACHE:
+        case C_FLUSH_CACHE_EXT: {
             iris_debug(ata, "FLUSH CACHE");
         } break;
 
@@ -497,13 +558,16 @@ uint16_t ata_read(Ata* ata, uint32_t addr) {
     // Only allow reads from the SELECT reg when slave is selected
     if (ata_get_drive(ata) && addr != 0x4c) return 0;
 
+    // High Order Byte
+    int hob = ata->control & CONTROL_HOB;
+
     switch (addr) {
         case 0x40: return ata_handle_data_read(ata);
         case 0x42: /* iris_debug(ata, "error read {:04x}", ata->error); */ return ata->error;
-        case 0x44: /* iris_debug(ata, "nsector read {:04x}", ata->nsector); */ return ata->nsector;
-        case 0x46: /* iris_debug(ata, "sector read {:04x}", ata->sector); */ return ata->sector;
-        case 0x48: /* iris_debug(ata, "lcyl read {:04x}", ata->lcyl); */ return ata->lcyl;
-        case 0x4a: /* iris_debug(ata, "hcyl read {:04x}", ata->hcyl); */ return ata->hcyl;
+        case 0x44: return hob ? ata->nsector_hob : ata->nsector;
+        case 0x46: return hob ? ata->sector_hob : ata->sector;
+        case 0x48: return hob ? ata->lcyl_hob : ata->lcyl;
+        case 0x4a: return hob ? ata->hcyl_hob : ata->hcyl;
         case 0x4c: /* iris_debug(ata, "select read {:04x}", ata->select); */ return ata->select;
 
         // Note: This is the status reg offset, reading from this reg
@@ -544,10 +608,10 @@ void ata_write(Ata* ata, uint32_t addr, uint64_t data) {
     switch (addr) {
         case 0x40: ata_handle_data_write(ata, data); return;
         case 0x42: ata->feature = data & 0xff; return;
-        case 0x44: ata->nsector = data & 0xff; return;
-        case 0x46: ata->sector = data & 0xff; return;
-        case 0x48: ata->lcyl = data & 0xff; return;
-        case 0x4a: ata->hcyl = data & 0xff; return;
+        case 0x44: ata->nsector_hob = ata->nsector; ata->nsector = data & 0xff; return;
+        case 0x46: ata->sector_hob = ata->sector; ata->sector = data & 0xff; return;
+        case 0x48: ata->lcyl_hob = ata->lcyl; ata->lcyl = data & 0xff; return;
+        case 0x4a: ata->hcyl_hob = ata->hcyl; ata->hcyl = data & 0xff; return;
         case 0x4c: ata->select = data & 0xff; return;
         case 0x4e: {
             ata->command = data;
@@ -579,6 +643,10 @@ void ata_write(Ata* ata, uint32_t addr, uint64_t data) {
                 ata->nsector = 1;
                 ata->lcyl = 0;
                 ata->hcyl = 0;
+                ata->sector_hob = 0;
+                ata->nsector_hob = 0;
+                ata->lcyl_hob = 0;
+                ata->hcyl_hob = 0;
                 ata->buf_index = 0;
                 ata->buf_size = 0;
                 ata->pending_sectors = 0;

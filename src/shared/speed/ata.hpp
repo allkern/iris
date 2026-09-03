@@ -35,12 +35,16 @@ inline constexpr auto PIO_MODE = 4;
 inline constexpr auto NUM_HEADS = 16;
 inline constexpr auto SECTORS_PER_TRACK = 63;
 
+inline constexpr auto LBA28_MAX_SECTORS = 0x0fffffffull;
+inline constexpr auto LBA48_MAX_NSECTORS = 0x10000ull;
+
 inline constexpr auto ATAPI_DVD_SECTOR_SIZE = 2048;
 inline constexpr auto SCE_SECURITY_DATA_SIZE = 0x80;
 
 inline constexpr auto ERR_ABORT = 0x04;
 inline constexpr auto CONTROL_NIEN = 0x02;
 inline constexpr auto CONTROL_SRST = 0x04;
+inline constexpr auto CONTROL_HOB = 0x80;
 
 inline constexpr auto STAT_ERR = 0x01;
 inline constexpr auto STAT_INDEX = 0x02;
@@ -343,6 +347,11 @@ struct Ata {
     uint16_t status;
     uint16_t command;
     uint16_t control;
+
+    uint16_t nsector_hob;
+    uint16_t sector_hob;
+    uint16_t lcyl_hob;
+    uint16_t hcyl_hob;
 
     uint8_t buf[SECTOR_SIZE];
     uint32_t buf_index;
