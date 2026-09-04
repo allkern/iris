@@ -1,10 +1,11 @@
 #include <new>
+#include <cstring>
 
 #include "sio2.hpp"
 
 namespace iris::sio2 {
 
-static inline void reset(Sio2* sio2) {
+static inline void reset_transfer(Sio2* sio2) {
     queue::clear(sio2->in);
 
     sio2->send3_index = 0;
@@ -41,6 +42,29 @@ void dma_reset(Sio2* sio2) {
 
 void connect(Sio2* sio2, iop::dma::Dma* dma) {
     sio2->hw.dma = dma;
+}
+
+void reset(Sio2* sio2) {
+    reset_transfer(sio2);
+
+    queue::clear(sio2->out);
+
+    sio2->ctrl = 0;
+    sio2->recv1 = 0x1d100;
+    sio2->recv2 = 0;
+    sio2->recv3 = 0;
+    sio2->istat = 0;
+
+    memset(sio2->send1, 0, sizeof(sio2->send1));
+    memset(sio2->send2, 0, sizeof(sio2->send2));
+    memset(sio2->send3, 0, sizeof(sio2->send3));
+
+    for (int i = 0; i < 4; i++) {
+        Device* dev = &sio2->port[i];
+
+        if (dev->reset)
+            dev->reset(dev->udata);
+    }
 }
 
 void destroy(Sio2* sio2) {
@@ -255,7 +279,7 @@ void write32(Sio2* sio2, uint32_t addr, uint64_t data) {
 
                 sio2->send3[index] = data;
 
-                if (!index) reset(sio2);
+                if (!index) reset_transfer(sio2);
 
                 // iris_debug(sio2, "32-bit SEND3 write {:08x}", data);
 
@@ -284,6 +308,7 @@ void detach_device(Sio2* sio2, int port) {
 
     dev->handle_command = 0;
     dev->detach = 0;
+    dev->reset = 0;
     dev->udata = NULL;
 }
 

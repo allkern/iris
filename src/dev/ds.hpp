@@ -58,6 +58,7 @@ Ds* attach(logger::Logger* logger, sio2::Sio2* sio2, int port);
 void button_press(Ds* ds, uint32_t mask);
 void button_release(Ds* ds, uint32_t mask);
 void analog_change(Ds* ds, int axis, uint8_t value);
+void reset(void* udata);
 void detach(void* udata);
 
 }

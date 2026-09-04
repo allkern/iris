@@ -26,6 +26,7 @@ struct Ps1Mcd {
 
 Ps1Mcd* attach(logger::Logger* logger, sio2::Sio2* sio2, int port, const char* path);
 void set_type(Ps1Mcd* mcd, int type);
+void reset(void* udata);
 void detach(void* udata);
 
 }

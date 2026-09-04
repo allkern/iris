@@ -34,6 +34,7 @@ Guncon* attach(logger::Logger* logger, sio2::Sio2* sio2, int port);
 void button_press(Guncon* guncon, uint16_t mask);
 void button_release(Guncon* guncon, uint16_t mask);
 void analog_change(Guncon* guncon, int axis, uint8_t value);
+void reset(void* udata);
 void detach(void* udata);
 
 }

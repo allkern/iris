@@ -613,12 +613,27 @@ Mcd* attach(logger::Logger* logger, sio2::Sio2* sio2, int port, const char* path
         mcd->checksum);
 
     dev.detach = detach;
+    dev.reset = reset;
     dev.handle_command = handle_command;
     dev.udata = mcd;
 
     sio2::attach_device(sio2, dev, port);
 
     return mcd;
+}
+
+void reset(void* udata) {
+    Mcd* mcd = (Mcd*)udata;
+
+    mcd->term = 0x55;
+    mcd->config_mode = 0;
+    mcd->act_index = 0;
+    mcd->mode_index = 0;
+    mcd->checksum = 0;
+    mcd->addr = 0;
+
+    mcd->auth = {};
+    mcd->key_source = mcd->configured_key_source;
 }
 
 void detach(void* udata) {

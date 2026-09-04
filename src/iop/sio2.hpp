@@ -16,9 +16,10 @@ inline constexpr auto DEV_MCD = 0x81;
 
 struct Sio2;
 struct Device {
-    void (*handle_command)(Sio2*, void*, int);
-    void (*detach)(void*);
-    void* udata;
+    void (*handle_command)(Sio2*, void*, int) = nullptr;
+    void (*detach)(void*) = nullptr;
+    void (*reset)(void*) = nullptr;
+    void* udata = nullptr;
 };
 
 struct Sio2 {
@@ -50,6 +51,7 @@ struct Sio2 {
 
 Sio2* create(logger::Logger* logger, iop::intc::Intc* intc, scheduler::Scheduler* sched);
 void connect(Sio2* sio2, iop::dma::Dma* dma);
+void reset(Sio2* sio2);
 void destroy(Sio2* sio2);
 uint64_t read8(Sio2* sio2, uint32_t addr);
 uint64_t read32(Sio2* sio2, uint32_t addr);

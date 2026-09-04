@@ -283,6 +283,7 @@ Ds* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
     sio2::Device dev;
 
     dev.detach = detach;
+    dev.reset = reset;
     dev.handle_command = handle_command;
     dev.udata = ds;
 
@@ -304,6 +305,21 @@ Ds* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
     sio2::attach_device(sio2, dev, port);
 
     return ds;
+}
+
+void reset(void* udata) {
+    Ds* ds = (Ds*)udata;
+
+    ds->config_mode = 0;
+    ds->act_index = 0;
+    ds->mode_index = 0;
+    ds->mode = 0;
+    ds->lock = 0;
+
+    ds->vibration[0] = 0xff;
+    ds->vibration[1] = 0xff;
+    ds->mask[0] = 0xff;
+    ds->mask[1] = 0xff;
 }
 
 void button_press(Ds* ds, uint32_t mask) {

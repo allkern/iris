@@ -311,6 +311,7 @@ void reset(Ps2* ps2) {
     sbus::reset(ps2->sbus);
     sif::reset(ps2->sif);
     cdvd::reset(ps2->cdvd);
+    sio2::reset(ps2->sio2);
 
     gif::reset(ps2->gif);
     gs::reset(ps2->gs);

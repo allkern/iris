@@ -166,12 +166,19 @@ Ps1Mcd* attach(logger::Logger* logger, sio2::Sio2* sio2, int port, const char* p
     iris_debug(mcd, "Memory card at \'{}\' initialized.", path);
 
     dev.detach = detach;
+    dev.reset = reset;
     dev.handle_command = handle_command;
     dev.udata = mcd;
 
     sio2::attach_device(sio2, dev, port);
 
     return mcd;
+}
+
+void reset(void* udata) {
+    Ps1Mcd* mcd = (Ps1Mcd*)udata;
+
+    mcd->flag = 0x08;
 }
 
 void detach(void* udata) {

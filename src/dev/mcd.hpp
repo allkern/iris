@@ -80,6 +80,7 @@ struct Mcd {
 
 Mcd* attach(logger::Logger* logger, sio2::Sio2* sio2, int port, const char* path);
 void set_magicgate(Mcd* mcd, int enabled, int key_source, const uint8_t* challenge_iv, const char* card_id_path);
+void reset(void* udata);
 void detach(void* udata);
 
 }

@@ -217,6 +217,7 @@ Guncon* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
     sio2::Device dev;
 
     dev.detach = detach;
+    dev.reset = reset;
     dev.handle_command = handle_command;
     dev.udata = guncon;
 
@@ -229,6 +230,12 @@ Guncon* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
     sio2::attach_device(sio2, dev, port);
 
     return guncon;
+}
+
+void reset(void* udata) {
+    Guncon* guncon = (Guncon*)udata;
+
+    guncon->config_mode = 0;
 }
 
 void button_press(Guncon* guncon, uint16_t mask) {
