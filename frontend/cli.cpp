@@ -3,6 +3,7 @@
 
 #include "ps2.hpp"
 #include "ps2_elf.hpp"
+#include "ee/vu.hpp"
 #include "ps2_iso9660.hpp"
 
 #include <algorithm>
@@ -75,6 +76,12 @@ static const EnumValue system_values[] = {
     { "system256", ps2::NAMCO_SYSTEM_256 },
     { "super256", ps2::NAMCO_SYSTEM_SUPER_256 },
     { "hvx", ps2::WEGA_HVX },
+    { nullptr, 0 }
+};
+
+static const EnumValue vu_engine_values[] = {
+    { "interp", vu::VU_ENGINE_INTERP },
+    { "jit", vu::VU_ENGINE_JIT },
     { nullptr, 0 }
 };
 
@@ -305,6 +312,18 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->autostart, v.flag); } },
     { "cache-arcade-files", 0, FLAG, nullptr, "Keep arcade files extracted from archives between runs",
         [](Instance* i, const Value& v) { set(i, i->cache_arcade_files, v.flag); } },
+    { "vu-engine", 0, ENUM, "ENGINE", "Engine for both vector units",
+        [](Instance* i, const Value& v) { i->vu_engine[0] = (int)v.integer; i->vu_engine[1] = (int)v.integer; }, vu_engine_values },
+    { "vu0-engine", 0, ENUM, "ENGINE", "Engine for VU0, overrides --vu-engine",
+        [](Instance* i, const Value& v) { i->vu_engine[0] = (int)v.integer; }, vu_engine_values },
+    { "vu1-engine", 0, ENUM, "ENGINE", "Engine for VU1, overrides --vu-engine",
+        [](Instance* i, const Value& v) { i->vu_engine[1] = (int)v.integer; }, vu_engine_values },
+    { "vu-region-limit", 0, INT, "N", "Blocks a compiled VU region may span, 1 for single blocks",
+        [](Instance* i, const Value& v) { i->vu_region_limit = (int)v.integer; }, nullptr },
+    { "vu-jit-threshold", 0, INT, "RUNS", "Runs a VU block needs before it is compiled, 200 by default",
+        [](Instance* i, const Value& v) { i->vu_jit_threshold = (int)v.integer; }, nullptr },
+    { "vu-max-cycles", 0, INT, "N", "Give up on a microprogram after N cycles, 0 to never give up :)",
+        [](Instance* i, const Value& v) { i->vu_max_cycles = (uint64_t)v.integer; } },
     { "timescale", 0, INT, "N", "Run the machine N times faster than real time",
         [](Instance* i, const Value& v) { set(i, i->timescale, std::clamp((int)v.integer, 1, 16)); } },
     { "skip-fmv", 0, FLAG, nullptr, "Skip full motion videos",
@@ -797,8 +816,9 @@ void boot(Instance* iris) {
         }
     }
 
-    if (disc.empty() && executable.empty() && boot_path.empty())
+    if (disc.empty() && executable.empty() && boot_path.empty()) {
         return;
+    }
 
     if (disc.size()) {
         if (cdvd::open(iris->ps2->cdvd, disc.c_str(), 0)) {

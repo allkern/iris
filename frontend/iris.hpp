@@ -21,6 +21,7 @@
 #include "imgui_impl_vulkan.h"
 
 #include "ps2_decl.hpp"
+#include "ee/vu.hpp"
 #include "iop/spu2_decl.hpp"
 #include "iop/usb.hpp"
 #include "config.hpp"
@@ -408,6 +409,11 @@ struct Instance {
     bool load_pending_boot = false;
     bool load_pending_arcade = false;
     std::string load_pending_file = "";
+
+    int vu_engine[2] = { vu::VU_ENGINE_JIT, vu::VU_ENGINE_JIT };
+    uint64_t vu_max_cycles = 1ull << 28;
+    int vu_region_limit = 1;
+    int vu_jit_threshold = 200;
 
     float avg_fps;
     float avg_frames;

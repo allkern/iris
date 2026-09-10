@@ -28,6 +28,18 @@ static std::string dump_file_name(const char* label) {
     return name + ".bin";
 }
 
+static void write_micro_mem_byte(ImU8* mem, size_t off, ImU8 d, void* user_data) {
+    vu::Vu* vu = (vu::Vu*)user_data;
+
+    uint64_t* words = (uint64_t*)mem;
+    uint32_t index = (uint32_t)(off >> 3);
+    int shift = (int)(off & 7) * 8;
+
+    uint64_t value = words[index] & ~((uint64_t)0xff << shift);
+
+    vu::write_micro_mem(vu, index, value | ((uint64_t)d << shift));
+}
+
 static void save_memory(const char* label, void* buf, size_t size) {
     pfd::save_file file(std::string("Save ") + label, dump_file_name(label), {
         "Binary files (*.bin)", "*.bin",
@@ -68,11 +80,14 @@ void MemoryViewer::on_render() {
         EndMenuBar();
     }
 
-    auto draw_memory_tab = [&](const char* label, void* buf, size_t size) {
+    auto draw_memory_tab = [&](const char* label, void* buf, size_t size, vu::Vu* imem_owner = nullptr) {
         if (BeginTabItem(label)) {
             selected_label = label;
             selected_buf = buf;
             selected_size = size;
+
+            editor.WriteFn = imem_owner ? write_micro_mem_byte : nullptr;
+            editor.UserData = imem_owner;
 
             PushFont(iris->ui.font_code);
 
@@ -91,9 +106,9 @@ void MemoryViewer::on_render() {
         draw_memory_tab("IOP SPR", ps2->iop_spr->buf, ps2->iop_spr->size);
         draw_memory_tab("VRAM", ps2->gs->vram, 0x400000);
         draw_memory_tab("SPU2", ps2->spu2->ram, 0x200000);
-        draw_memory_tab("VU0 IMEM", ps2->vu0->micro_mem, 0x1000);
+        draw_memory_tab("VU0 IMEM", ps2->vu0->micro_mem, 0x1000, ps2->vu0);
         draw_memory_tab("VU0 DMEM", ps2->vu0->vu_mem, 0x1000);
-        draw_memory_tab("VU1 IMEM", ps2->vu1->micro_mem, 0x4000);
+        draw_memory_tab("VU1 IMEM", ps2->vu1->micro_mem, 0x4000, ps2->vu1);
         draw_memory_tab("VU1 DMEM", ps2->vu1->vu_mem, 0x4000);
 
         if (ps2->s14x_sram) {

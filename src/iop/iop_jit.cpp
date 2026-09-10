@@ -2271,7 +2271,7 @@ static inline bool has_breakpoint(Iop* iop, uint32_t addr) {
     return false;
 }
 
-Block* find_block(Iop* iop, uint32_t pc) {
+static Block* find_block(Iop* iop, uint32_t pc) {
     BlockLutEntry& lut = iop->block_lut[(pc >> 2) & IOP_BLOCK_LUT_MASK];
 
     if (lut.pc == pc && lut.gen == iop->block_lut_gen) {
@@ -2280,10 +2280,6 @@ Block* find_block(Iop* iop, uint32_t pc) {
 
     uint32_t addr = translate_addr(pc);
 
-    // translate_addr leaves KUSEG and KSEG2 alone, so addr can be anything a
-    // wild jump put in pc, while block_cache only covers the low 512 MB. Without
-    // this the index runs off the end of the array and reads whatever follows
-    // the Iop struct.
     if (!is_executable_region(addr))
         return nullptr;
 
@@ -2323,8 +2319,6 @@ Block* find_block(Iop* iop, uint32_t pc) {
 Block* cache_block(Iop* iop, uint32_t addr, int max_cycles) {
     uint32_t translated = translate_addr(addr);
 
-    // See the same check in find_block: block_cache only covers the low 512 MB
-    // and translated can be any address the guest jumped to.
     if (!is_executable_region(translated))
         return nullptr;
 
@@ -2408,10 +2402,15 @@ Block* cache_block(Iop* iop, uint32_t addr, int max_cycles) {
 
     // iris_debug(iop, "Caching block at pc={:08x} page={} min={:08x} max={:08x} max_cycles={}", addr, page, iop->block_cache[page].min_code_addr, iop->block_cache[page].max_code_addr, max_cycles);
 
+    // Idle loop detection
+    block.idle = (block.end_pc - addr) == 8
+              && bus_read32(iop, addr) == (0x08000000 | ((addr & 0x0fffffff) >> 2))
+              && bus_read32(iop, addr + 4) == 0;
+
     return &block;
 }
 
-int execute_block(Iop* iop, Block* block) {
+static inline int execute_block(Iop* iop, Block* block) {
     if (!block->func) return 0;
 
     iop->delay_slot = 0;
@@ -2473,13 +2472,14 @@ int run_block(Iop* iop, int max_cycles) {
             }
         }
 
-        Block* block = find_block(iop, iop->pc);
+        BlockLutEntry& lut = iop->block_lut[(iop->pc >> 2) & IOP_BLOCK_LUT_MASK];
+
+        Block* block = (lut.pc == iop->pc && lut.gen == iop->block_lut_gen) ? lut.block : find_block(iop, iop->pc);
 
         if (!block) {
             block = cache_block(iop, iop->pc, max_cycles);
 
-            // Nothing is cached outside RAM and BIOS, so a jump anywhere else
-            // is the end of the road for this timeslice.
+            // Nothing is cached outside RAM and BIOS, just crash
             if (!block) {
                 iris_fatal_error(iop, "No executable memory at PC={:08x}", iop->pc);
 
@@ -2489,31 +2489,19 @@ int run_block(Iop* iop, int max_cycles) {
             compile_block(iop, block);
         }
 
-        // A block the recompiler could not encode has a null func, and
-        // execute_block reports zero cycles for it. Without this the loop never
-        // reaches max_cycles and the core spins here forever - a codegen failure
-        // presents as a hang instead of as the fatal error it already logged.
-        // The EE loop already leaves on the same condition.
         if (!block->func)
             break;
 
         cycles += execute_block(iop, block);
+
+        if (block->idle && cycles < max_cycles && iop->pc == block->start_pc) {
+            int passes = (max_cycles - cycles + block->cycles - 1) / block->cycles;
+
+            iop->total_cycles += (uint64_t)passes * block->cycles;
+
+            cycles += passes * block->cycles;
+        }
     }
-
-    // if (iop->deferred_invalidate_page != 0xffffffff) {
-    //     uint32_t page = iop->deferred_invalidate_page;
-
-    //     if (iop->block_cache[page]) {
-    //         delete[] iop->block_cache[page];
-    //         iop->block_cache[page] = nullptr;
-    //     }
-
-    //     if (iop->last_cached_block && ((iop->last_cached_block_pc / _IOP_CACHE_PAGESIZE) == page)) {
-    //         iop->last_cached_block = nullptr;
-    //     }
-
-    //     iop->deferred_invalidate_page = 0xffffffff;
-    // }
 
     return cycles;
 }

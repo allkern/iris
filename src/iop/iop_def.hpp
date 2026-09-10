@@ -111,6 +111,7 @@ typedef void (*compiled_block)(Iop*);
 struct Block {
     compiled_block func = nullptr;
     uint32_t cycles = 0;
+    bool idle = false;
     uint32_t start_pc = 0;
     uint32_t end_pc = 0;
 };

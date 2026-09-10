@@ -71,6 +71,10 @@ struct Gif {
     int mask_m3r;
     int mask_m3p;
     int path3_mask_enable;
+
+    int p3_stall_enable;
+    int p3_resuming;
+
     uint8_t* p3_defer_buf;
     size_t p3_defer_size;
     size_t p3_defer_cap;
@@ -93,8 +97,9 @@ void fifo_write(Gif* gif, uint128_t data, int path);
 uint128_t fifo_read(Gif* gif);
 void set_backend(Gif* gif, void* udata, void (*transfer)(void*, int, const void*, size_t), void (*readback)(void*, void*, size_t));
 void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, size_t));
-
 void set_path3_mask(Gif* gif, int mask);
 int get_path3_mask(Gif* gif);
+int can_accept(Gif* gif, int path);
+
 
 }

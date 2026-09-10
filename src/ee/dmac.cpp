@@ -618,16 +618,24 @@ int transfer_vif1_word(Dmac* dmac) {
     }
 
     if (dmac->channels[VIF1].qwc) {
-        uint32_t w = read_word(dmac, dmac->channels[VIF1].madr);
+        Channel* c = &dmac->channels[VIF1];
 
-        vif::fifo_write(dmac->hw.bus->vif1, w);
+        uint32_t base = c->madr & ~0xfu;
 
-        dmac->channels[VIF1].madr += 4;
-        dmac->channels[VIF1].index++;
+        if (!c->qword_valid || c->qword_addr != base) {
+            c->qword = read_qword(dmac, base);
+            c->qword_addr = base;
+            c->qword_valid = true;
+        }
 
-        if (dmac->channels[VIF1].index == 4) {
-            dmac->channels[VIF1].index = 0;
-            dmac->channels[VIF1].qwc--;
+        vif::fifo_write(dmac->hw.bus->vif1, c->qword.u32[(c->madr >> 2) & 3]);
+
+        c->madr += 4;
+        c->index++;
+
+        if (c->index == 4) {
+            c->index = 0;
+            c->qwc--;
         }
 
         return 1;
@@ -738,6 +746,8 @@ void handle_vif1_transfer(Dmac* dmac) {
         return;
     }
 
+    dmac->channels[VIF1].qword_valid = false;
+
     while (transfer_vif1_word(dmac)) {
         // Transfer words until we run out of data or DREQ is cleared
     }
@@ -750,6 +760,16 @@ void send_gif_irq(void* udata, int overshoot) {
 
     dmac->channels[GIF].chcr &= ~0x100;
     dmac->channels[GIF].qwc = 0;
+}
+
+void handle_gif_transfer(Dmac* dmac);
+
+void resume_gif(Dmac* dmac) {
+    if ((dmac->channels[GIF].chcr & 0x100) == 0) {
+        return;
+    }
+
+    handle_gif_transfer(dmac);
 }
 
 void handle_gif_transfer(Dmac* dmac) {
@@ -784,18 +804,27 @@ void handle_gif_transfer(Dmac* dmac) {
     //     dmac->channels[GIF].tadr
     //);
 
-    for (int i = 0; i < dmac->channels[GIF].qwc; i++) {
-        uint128_t q = read_qword(dmac, dmac->channels[GIF].madr);
+    int sent = 0;
 
-        // fprintf(file, "ee: Sending %016lx%016lx from %08x to GIF FIFO (burst)\n",
-        //     q.u64[1], q.u64[0],
-        //     dmac->channels[GIF].madr
-        // );
+    for (int i = 0; i < dmac->channels[GIF].qwc; i++) {
+        if (!gif::can_accept(dmac->hw.bus->gif, gif::PATH3)) {
+            break;
+        }
+
+        uint128_t q = read_qword(dmac, dmac->channels[GIF].madr);
 
         // GIF FIFO address
         gif::fifo_write(dmac->hw.bus->gif, q, gif::PATH3);
 
         dmac->channels[GIF].madr += 16;
+
+        sent++;
+    }
+
+    dmac->channels[GIF].qwc -= sent;
+
+    if (dmac->channels[GIF].qwc) {
+        return;
     }
 
     if (dmac->channels[GIF].tag.end) {
@@ -816,24 +845,34 @@ void handle_gif_transfer(Dmac* dmac) {
 
         process_source_tag(dmac, &dmac->channels[GIF], tag);
 
+        if (dmac->channels[GIF].tag.id == 1) {
+            dmac->channels[GIF].tadr = dmac->channels[GIF].madr + dmac->channels[GIF].qwc * 16;
+        }
+
         // iris_debug(dmac, "ee: gif tag qwc={:08x} madr={:08x} tadr={:08x} mem={}", dmac->channels[GIF].qwc, dmac->channels[GIF].madr, dmac->channels[GIF].tadr, dmac->channels[GIF].tag.mem);
 
-        for (int i = 0; i < dmac->channels[GIF].qwc; i++) {
-            uint128_t q = read_qword(dmac, dmac->channels[GIF].madr);
+        int chain_sent = 0;
 
-            // fprintf(file, "ee: Sending %016lx%016lx from %08x to GIF FIFO (chain)\n",
-            //     q.u64[1], q.u64[0],
-            //     dmac->channels[GIF].madr
-            // );
+        for (int i = 0; i < dmac->channels[GIF].qwc; i++) {
+            if (!gif::can_accept(dmac->hw.bus->gif, gif::PATH3)) {
+                break;
+            }
+
+            uint128_t q = read_qword(dmac, dmac->channels[GIF].madr);
 
             gif::fifo_write(dmac->hw.bus->gif, q, gif::PATH3);
 
             dmac->channels[GIF].madr += 16;
+
+            chain_sent++;
         }
 
-        if (dmac->channels[GIF].tag.id == 1) {
-            dmac->channels[GIF].tadr = dmac->channels[GIF].madr;
+        dmac->channels[GIF].qwc -= chain_sent;
+
+        if (dmac->channels[GIF].qwc) {
+            return;
         }
+
     } while (!channel_is_done(&dmac->channels[GIF]));
 
     end_transfer(dmac, GIF);

@@ -8,8 +8,11 @@
 
 namespace iris::gif { struct Gif; }
 namespace iris::vif { struct Vif; }
+namespace iris::vu::jit { struct Jit; }
 
 namespace iris::vu {
+
+inline constexpr int VF_LATENCY = 4;
 
 struct BlockEntry {
     Instruction upper, lower;
@@ -30,11 +33,30 @@ struct BlockEntry {
     uint8_t lower_is_nop;
 };
 
+struct RegionDep {
+    uint32_t tpc;
+    uint32_t len;
+    uint64_t hash;
+    const void* entries;
+};
+
 struct Block {
     std::vector <BlockEntry> entries;
 
     uint32_t tpc;
     int cycles = 0;
+
+    void (*func)(Vu*) = nullptr;
+    uint32_t code_size = 0;
+    bool jit_failed = false;
+    bool compile_pending = false;
+    uint64_t src_hash = 0;
+    uint32_t src_len = 0;
+    uint16_t region_blocks = 0;
+    uint32_t region_epoch = 0;
+    std::vector <RegionDep> region_deps;
+    uint16_t region_churn = 0;
+    uint32_t runs = 0;
 };
 
 struct Vu {
@@ -48,9 +70,6 @@ struct Vu {
     // Single-entry block cache for fast lookup (avoid hash computation)
     uint32_t last_block_lookup_tpc;
     Block* last_block_ptr;
-
-    uint64_t cache_hits;
-    uint64_t cache_misses;
 
     Instruction upper, lower;
 
@@ -71,6 +90,9 @@ struct Vu {
     uint32_t delay_branch_pc;
 
     bool waiting_for_interlock;
+
+    uint32_t upload_lo;
+    uint32_t upload_hi;
 
     uint64_t micro_mem[0x800];
     uint128_t vu_mem[0x400];
@@ -124,6 +146,19 @@ struct Vu {
 
     bool disable;
 
+    int engine;
+    int jit_exit;
+
+    uint128_t jit_quad;
+    int jit_threshold;
+    uint64_t max_cycles;
+    int region_limit;
+    uint64_t run_deadline;
+    uint32_t region_epoch;
+
+    jit::Jit* jit;
+
+
     gif::Gif* gif;
     vif::Vif* vif;
     Vu* vu1;
@@ -131,6 +166,25 @@ struct Vu {
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
+
+Block* find_block(Vu* vu, uint32_t tpc);
+Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles);
+void jit_execute_entry(Vu* vu, const BlockEntry* entry);
+void jit_entry_prologue(Vu* vu, const BlockEntry* entry);
+void jit_entry_epilogue(Vu* vu, const BlockEntry* entry);
+void jit_execute_upper(Vu* vu, const BlockEntry* entry);
+void jit_execute_lower(Vu* vu, const BlockEntry* entry);
+void jit_entry_stall(Vu* vu, const BlockEntry* entry);
+void jit_xgkick(Vu* vu, uint32_t start);
+void jit_mem_load(Vu* vu, uint32_t addr);
+void jit_mem_store(Vu* vu, uint32_t addr, uint32_t field);
+const uint32_t* jit_vif_top(Vu* vu);
+const uint32_t* jit_vif_itop(Vu* vu);
+uint32_t jit_efu_scalar(uint32_t key, uint32_t sb);
+uint32_t jit_efu_vector(uint32_t key, uint32_t xb, uint32_t yb, uint32_t zb, uint32_t wb);
+uint64_t jit_div_math(uint32_t nb, uint32_t db);
+uint64_t jit_sqrt_math(uint32_t tb);
+uint64_t jit_rsqrt_math(uint32_t nb, uint32_t db);
 
 // Upper pipeline
 template <uint32_t di> void i_abs(Vu* vu, const Instruction* ins);

@@ -40,47 +40,60 @@ namespace iris::ee {
 #endif
 
 // file = fopen("vu.dump", "a"); fprintf(file, #ins "\n"); fclose(file);
-#define VU_LOWER(ins) { vu::decode_lower(ee->vu0, i.opcode); vu::i_ ## ins(ee->vu0, &ee->vu0->lower); }
-#define VU_UPPER(ins) { vu::decode_upper(ee->vu0, i.opcode); vu::i_ ## ins(ee->vu0, &ee->vu0->upper); }
+#define VU_DECODE_LOWER() \
+    if (!i.vu_decoded) { \
+        vu::decode_lower(ee->vu0, i.opcode); \
+        i.vu_ins = ee->vu0->lower; \
+        i.vu_decoded = 1; \
+    }
+#define VU_DECODE_UPPER() \
+    if (!i.vu_decoded) { \
+        vu::decode_upper(ee->vu0, i.opcode); \
+        i.vu_ins = ee->vu0->upper; \
+        i.vu_decoded = 1; \
+    }
+
+#define VU_LOWER(ins) { VU_DECODE_LOWER() vu::i_ ## ins(ee->vu0, &i.vu_ins); }
+#define VU_UPPER(ins) { VU_DECODE_UPPER() vu::i_ ## ins(ee->vu0, &i.vu_ins); }
 #define VU_LOWER_TEMPLATE(ins) { \
-    vu::decode_lower(ee->vu0, i.opcode); \
+    VU_DECODE_LOWER() \
     switch ((i.opcode >> 21) & 0xf) { \
-        case 0: vu::i_ ## ins <0>(ee->vu0, &ee->vu0->lower); break; \
-        case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 2: vu::i_ ## ins <vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 3: vu::i_ ## ins <vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 4: vu::i_ ## ins <vu::D_Y>(ee->vu0, &ee->vu0->lower); break; \
-        case 5: vu::i_ ## ins <vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 6: vu::i_ ## ins <vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 7: vu::i_ ## ins <vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 8: vu::i_ ## ins <vu::D_X>(ee->vu0, &ee->vu0->lower); break; \
-        case 9: vu::i_ ## ins <vu::D_X | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 10: vu::i_ ## ins <vu::D_X | vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 11: vu::i_ ## ins <vu::D_X | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 12: vu::i_ ## ins <vu::D_X | vu::D_Y>(ee->vu0, &ee->vu0->lower); break; \
-        case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
-        case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->lower); break; \
-        case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->lower); break; \
+        case 0: vu::i_ ## ins <0>(ee->vu0, &i.vu_ins); break; \
+        case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 2: vu::i_ ## ins <vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 3: vu::i_ ## ins <vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 4: vu::i_ ## ins <vu::D_Y>(ee->vu0, &i.vu_ins); break; \
+        case 5: vu::i_ ## ins <vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 6: vu::i_ ## ins <vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 7: vu::i_ ## ins <vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 8: vu::i_ ## ins <vu::D_X>(ee->vu0, &i.vu_ins); break; \
+        case 9: vu::i_ ## ins <vu::D_X | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 10: vu::i_ ## ins <vu::D_X | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 11: vu::i_ ## ins <vu::D_X | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 12: vu::i_ ## ins <vu::D_X | vu::D_Y>(ee->vu0, &i.vu_ins); break; \
+        case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
     } }
 #define VU_UPPER_TEMPLATE(ins) { \
-    vu::decode_upper(ee->vu0, i.opcode); \
+    VU_DECODE_UPPER() \
     switch ((i.opcode >> 21) & 0xf) { \
-        case 0: vu::i_ ## ins <0>(ee->vu0, &ee->vu0->upper); break; \
-        case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 2: vu::i_ ## ins <vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 3: vu::i_ ## ins <vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 4: vu::i_ ## ins <vu::D_Y>(ee->vu0, &ee->vu0->upper); break; \
-        case 5: vu::i_ ## ins <vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 6: vu::i_ ## ins <vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 7: vu::i_ ## ins <vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 8: vu::i_ ## ins <vu::D_X>(ee->vu0, &ee->vu0->upper); break; \
-        case 9: vu::i_ ## ins <vu::D_X | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 10: vu::i_ ## ins <vu::D_X | vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 11: vu::i_ ## ins <vu::D_X | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 12: vu::i_ ## ins <vu::D_X | vu::D_Y>(ee->vu0, &ee->vu0->upper); break; \
-        case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
-        case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &ee->vu0->upper); break; \
-        case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &ee->vu0->upper); break; \
+        case 0: vu::i_ ## ins <0>(ee->vu0, &i.vu_ins); break; \
+        case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 2: vu::i_ ## ins <vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 3: vu::i_ ## ins <vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 4: vu::i_ ## ins <vu::D_Y>(ee->vu0, &i.vu_ins); break; \
+        case 5: vu::i_ ## ins <vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 6: vu::i_ ## ins <vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 7: vu::i_ ## ins <vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 8: vu::i_ ## ins <vu::D_X>(ee->vu0, &i.vu_ins); break; \
+        case 9: vu::i_ ## ins <vu::D_X | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 10: vu::i_ ## ins <vu::D_X | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 11: vu::i_ ## ins <vu::D_X | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 12: vu::i_ ## ins <vu::D_X | vu::D_Y>(ee->vu0, &i.vu_ins); break; \
+        case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
+        case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
+        case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
     } }
 
 static inline int fast_abs32(int a) {
@@ -3791,6 +3804,7 @@ Instruction decode(uint32_t opcode) {
 
     i.branch = 0;
     i.cycles = 0;
+    i.vu_decoded = 0;
 
     switch ((opcode & 0xFC000000) >> 26) {
         case 0x00000000 >> 26: { // special

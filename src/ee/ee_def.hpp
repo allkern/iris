@@ -465,6 +465,9 @@ struct Instruction {
     int id;
 
     void (*func)(Ee*, const Instruction&);
+
+    mutable vu::Instruction vu_ins;
+    mutable int vu_decoded;
 };
 
 typedef void (*CompiledBlock)(Ee*);

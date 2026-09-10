@@ -5,6 +5,7 @@
 #include "slirp.hpp"
 
 #include "ps2.hpp"
+#include "ee/vu_def.hpp"
 #include "ps2_elf.hpp"
 #include "fs/mkfs.hpp"
 #include "fs/fs.hpp"

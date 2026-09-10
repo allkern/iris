@@ -51,6 +51,13 @@ void destroy(Vif* vif) {
 }
 
 static inline void vif_emit_vu_mem(Vif* vif, uint128_t data, int is_fill) {
+    // Fastpath the most common case
+    if (!vif->unpack_mask && !is_fill && vif->mode == 0) {
+        *vu::get_vu_mem_ptr(vif->hw.vu, vif->addr++) = data;
+
+        return;
+    }
+
     if (vif->unpack_mask) {
         int cycle = (vif->unpack_cycle > 3) ? 3 : vif->unpack_cycle;
         int m[4], shift = (cycle & 3) * 8;
@@ -300,6 +307,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                     vif->tops += vif->ofst;
                 }
 
+                vu::end_micro_upload(vif->hw.vu);
                 vu::execute_program(vif->hw.vu, data & 0xffff);
             } break;
             case CMD_MSCALF: {
@@ -316,6 +324,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                     vif->tops += vif->ofst;
                 }
 
+                vu::end_micro_upload(vif->hw.vu);
                 vu::execute_program(vif->hw.vu, data & 0xffff);
             } break;
             case CMD_MSCNT: {
@@ -332,6 +341,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                     vif->tops += vif->ofst;
                 }
 
+                vu::end_micro_upload(vif->hw.vu);
                 vu::execute_program_tpc(vif->hw.vu);
             } break;
             case CMD_STMASK: {
@@ -364,7 +374,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                 vif->pending_words = num * 2;
                 vif->shift = 0;
 
-                vu::invalidate_range(vif->hw.vu, vif->addr << 3, num << 3);
+                vu::begin_micro_upload(vif->hw.vu);
             } break;
             case CMD_DIRECT: {
                 // iris_debug(vif, "vif{}: DIRECT({:04x})", vif->id, data & 0xffff);
@@ -492,12 +502,14 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
 
                     // iris_debug(vif, "vif{}: Writing {:08x} {:08x} to MicroMem addr={:04x}", vif->id, vif->data.u32[0], vif->data.u32[1], vif->addr);
 
-                    *vu::get_micro_mem_ptr(vif->hw.vu, vif->addr++) = vif->data.u64[0];
+                    vu::upload_micro_word(vif->hw.vu, vif->addr++, vif->data.u64[0]);
 
                     vif->shift = 0;
                 }
 
                 if (!(--vif->pending_words)) {
+                    vu::end_micro_upload(vif->hw.vu);
+
                     vif->state = VIF_IDLE;
                 }
             } break;

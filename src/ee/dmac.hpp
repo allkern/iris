@@ -62,6 +62,10 @@ struct Channel {
     int dreq;
     int index;
 
+    uint128_t qword;
+    uint32_t qword_addr;
+    bool qword_valid;
+
     Tag tag;
 };
 
@@ -109,6 +113,7 @@ void write32(Dmac* dmac, uint32_t addr, uint64_t data);
 void handle_vif0_transfer(Dmac* dmac);
 void handle_vif1_transfer(Dmac* dmac);
 void handle_gif_transfer(Dmac* dmac);
+void resume_gif(Dmac* dmac);
 void handle_ipu_from_transfer(Dmac* dmac);
 void handle_ipu_to_transfer(Dmac* dmac);
 void handle_sif0_transfer(Dmac* dmac);

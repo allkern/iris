@@ -83,6 +83,10 @@ Gif* create(logger::Logger* logger) {
 
     gif->path3_mask_enable = (e && e[0] == '1') ? 1 : 0;
 
+    const char* st = getenv("IRIS_PATH3_STALL");
+
+    gif->p3_stall_enable = (st && st[0] == '1') ? 1 : 0;
+
     // A queue for each PATH
     for (int i = 0; i < 3; i++)
         gif->queue[i] = queue::create();
@@ -142,7 +146,17 @@ static void gif_defer_path3(Gif* gif, const void* buf, size_t size) {
         while (gif->p3_defer_size + size > cap)
             cap *= 2;
 
-        gif->p3_defer_buf = (uint8_t *)realloc(gif->p3_defer_buf, cap);
+        uint8_t* grown = (uint8_t *)realloc(gif->p3_defer_buf, cap);
+
+        if (!grown) {
+            iris_error(gif, "path3: cannot hold {} more bytes, dropping {} held", size, gif->p3_defer_size);
+
+            gif->p3_defer_size = 0;
+
+            return;
+        }
+
+        gif->p3_defer_buf = grown;
         gif->p3_defer_cap = cap;
     }
 
@@ -150,6 +164,24 @@ static void gif_defer_path3(Gif* gif, const void* buf, size_t size) {
 
     gif->p3_defer_size += size;
 }
+
+int can_accept(Gif* gif, int path) {
+    if (path != PATH3 || !gif->p3_stall_enable) {
+        return 1;
+    }
+
+    if (!gif_path3_masked(gif)) {
+        return 1;
+    }
+
+    if (gif->state != State::RECV_TAG) {
+        return 1;
+    }
+
+    return 0;
+}
+
+static void gif_path3_lifted(Gif* gif);
 
 static void gif_flush_path3(Gif* gif) {
     if (!gif->p3_defer_size)
@@ -162,6 +194,24 @@ static void gif_flush_path3(Gif* gif) {
         gif->dump_transfer(gif->dump_udata, PATH3, gif->p3_defer_buf, gif->p3_defer_size);
 
     gif->p3_defer_size = 0;
+}
+
+static void gif_path3_lifted(Gif* gif) {
+    if (!gif->p3_stall_enable) {
+        gif_flush_path3(gif);
+
+        return;
+    }
+
+    if (gif->p3_resuming) {
+        return;
+    }
+
+    gif->p3_resuming = 1;
+
+    ee::dmac::resume_gif(gif->hw.dmac);
+
+    gif->p3_resuming = 0;
 }
 
 uint64_t read32(Gif* gif, uint32_t addr) {
@@ -196,7 +246,7 @@ void write32(Gif* gif, uint32_t addr, uint64_t data) {
         case 0x10003010: {
             gif->mode = data;
 
-            int was = gif_path3_masked(gif);
+            int prev = gif_path3_masked(gif);
 
             gif->mask_m3r = data & 1;
 
@@ -206,8 +256,9 @@ void write32(Gif* gif, uint32_t addr, uint64_t data) {
                 gif->stat &= ~1;
             }
 
-            if (was && !gif_path3_masked(gif))
-                gif_flush_path3(gif);
+            if (prev && !gif_path3_masked(gif)) {
+                gif_path3_lifted(gif);
+            }
         } return;
     }
 }
@@ -403,8 +454,7 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
     gif->stat |= 0x1f000000;
 
     if (gif->state == State::RECV_TAG) {
-        for (int i = 0; i < 4; i++)
-            queue::push(gif->queue[path], data.u32[i]);
+        queue::push128(gif->queue[path], data);
 
         gif_handle_tag(gif, data);
 
@@ -414,8 +464,7 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
     if (gif->tag.qwc) {
         queue::Queue* queue = gif->queue[path];
 
-        for (int i = 0; i < 4; i++)
-            queue::push(queue, data.u32[i]);
+        queue::push128(queue, data);
 
         gif->tag.qwc--;
 
@@ -428,7 +477,7 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
             // mask's falling edge so PATH1/PATH2 draws that sample the target
             // region see the pre-upload contents (double-buffered texture
             // streaming in OutRun2 SP, SSX On Tour, etc).
-            int deferred = path == PATH3 && gif_path3_masked(gif);
+            int deferred = path == PATH3 && gif_path3_masked(gif) && !gif->p3_stall_enable;
 
             if (deferred) {
                 gif_defer_path3(gif, queue->buf.data(), bytes);
@@ -457,7 +506,7 @@ void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, si
 }
 
 void set_path3_mask(Gif* gif, int mask) {
-    int was = gif_path3_masked(gif);
+    int prev = gif_path3_masked(gif);
 
     gif->mask_m3p = mask ? 1 : 0;
 
@@ -467,8 +516,9 @@ void set_path3_mask(Gif* gif, int mask) {
         gif->stat &= ~2;
     }
 
-    if (was && !gif_path3_masked(gif))
-        gif_flush_path3(gif);
+    if (prev && !gif_path3_masked(gif)) {
+        gif_path3_lifted(gif);
+    }
 }
 
 int get_path3_mask(Gif* gif) {

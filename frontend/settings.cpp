@@ -6,6 +6,8 @@
 #include "ps2_elf.hpp"
 #include "ps2_iso9660.hpp"
 #include "ps2.hpp"
+#include "ee/vu_def.hpp"
+#include "ee/vu_jit.hpp"
 #include "kp2/p2io.hpp"
 
 #define TOML_EXCEPTIONS 0
@@ -207,6 +209,9 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     auto system = tbl["system"];
     iris->system = system["model"].value_or(ps2::AUTO);
     iris->autostart = system["autostart"].value_or(true);
+    iris->vu_engine[0] = system["vu0_engine"].value_or((int)vu::VU_ENGINE_JIT);
+    iris->vu_engine[1] = system["vu1_engine"].value_or((int)vu::VU_ENGINE_JIT);
+    iris->vu_jit_threshold = system["vu_jit_threshold"].value_or(200);
     iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
     iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(false);
     iris->system_2x6_rgb_level = system["system_2x6_rgb_level"].value_or(false);
@@ -468,6 +473,16 @@ bool init(Instance* iris) {
 
     ps2::set_timescale(iris->ps2, iris->timescale);
 
+    iris->ps2->vu0->engine = iris->vu_engine[0];
+    iris->ps2->vu1->engine = iris->vu_engine[1];
+    iris->ps2->vu0->jit_threshold = iris->vu_jit_threshold;
+    iris->ps2->vu1->jit_threshold = iris->vu_jit_threshold;
+    iris->ps2->vu0->region_limit = iris->vu_region_limit;
+    iris->ps2->vu1->region_limit = iris->vu_region_limit;
+    iris->ps2->vu0->max_cycles = iris->vu_max_cycles;
+    iris->ps2->vu1->max_cycles = iris->vu_max_cycles;
+
+
     apply_device_maps(iris);
 
     ee::set_fmv_skip(iris->ps2->ee, iris->skip_fmv);
@@ -524,6 +539,9 @@ void save(Instance* iris) {
                 iris->mac_address[5]
             } },
             { "autostart", iris->autostart },
+            { "vu0_engine", iris->vu_engine[0] },
+            { "vu1_engine", iris->vu_engine[1] },
+            { "vu_jit_threshold", iris->vu_jit_threshold },
             { "cache_arcade_files", iris->cache_arcade_files },
             { "arcade_dongle_boot", iris->arcade_dongle_boot },
             { "system_2x6_rgb_level", iris->system_2x6_rgb_level },

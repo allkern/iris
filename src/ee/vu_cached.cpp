@@ -1,15 +1,24 @@
+#include <cmath>
 #include <math.h>
 #include <fenv.h>
+#include <chrono>
+#include <cstdio>
+#include <cstdlib>
 #include <algorithm>
 #include <utility>
 
+#if !defined(IRIS_VU_NO_SIMD)
 #if defined(__SSE2__) || defined(_M_X64) || defined(__x86_64__) || defined(__amd64__)
 #include <immintrin.h>
 #define FMAC_SIMD 1
 #endif
+#endif
+
+#include <cstring>
 
 #include "vu.hpp"
 #include "vu_def.hpp"
+#include "vu_jit.hpp"
 #include "vu_dis.hpp"
 #include <cstdint>
 #include "gif.hpp"
@@ -28,9 +37,9 @@ namespace iris::vu {
 #define LD_IMM12 (ins->ld_imm12)
 #define LD_IMM15 (ins->ld_imm15)
 #define LD_IMM24 (ins->ld_imm24)
-#define ID vu->vi[LD_D]
-#define IS vu->vi[LD_S]
-#define IT vu->vi[LD_T]
+#define ID vu->vi[LD_D & 0xf]
+#define IS vu->vi[LD_S & 0xf]
+#define IT vu->vi[LD_T & 0xf]
 #define UD_DI(i) (ins->ud_di[i])
 #define UD_D (ins->ud_d)
 #define UD_S (ins->ud_s)
@@ -59,6 +68,15 @@ Vu* create(logger::Logger* logger, int id) {
     vu->logger_id = logger::register_source(logger, id ? "vu1" : "vu0");
     vu->id = id;
 
+    vu->engine = VU_ENGINE_INTERP;
+    vu->jit_threshold = 1000;
+    vu->max_cycles = 1 << 28;
+
+    vu->region_limit = 1;
+    vu->region_epoch = 0;
+
+    vu->jit = jit::create();
+
     if (!id) {
         vu->micro_mem_size = 0x1ff;
         vu->vu_mem_size = 0xff;
@@ -79,6 +97,8 @@ void connect(Vu* vu, gif::Gif* gif, vif::Vif* vif, Vu* vu1) {
 }
 
 void destroy(Vu* vu) {
+    jit::destroy(vu->jit);
+
     delete vu;
 }
 
@@ -210,30 +230,37 @@ int32_t cvti(float value) {
 }
 
 static inline double ps2_to_double(uint32_t bits) {
-    int e = (bits >> 23) & 0xff;
+    uint32_t e = (bits >> 23) & 0xff;
 
-    if (e == 0) {
+    if (!e) {
         return (bits & 0x80000000) ? -0.0 : 0.0;
     }
 
-    double m = 1.0 + (double)(bits & 0x7fffff) / 8388608.0;
-    double v = ldexp(m, e - 127);
+    uint64_t d = ((uint64_t)(bits >> 31) << 63)
+               | ((uint64_t)(e + (1023 - 127)) << 52)
+               | ((uint64_t)(bits & 0x7fffff) << 29);
 
-    return (bits & 0x80000000) ? -v : v;
+    double out;
+
+    memcpy(&out, &d, sizeof(out));
+
+    return out;
 }
 
 static inline uint32_t ps2_pack_double(double v) {
-    uint32_t sign = signbit(v) ? 0x80000000u : 0u;
+    uint64_t d;
 
-    double a = fabs(v);
+    memcpy(&d, &v, sizeof(d));
 
-    if (a == 0.0) {
+    uint32_t sign = (uint32_t)(d >> 63) << 31;
+
+    uint64_t a = d & 0x7fffffffffffffffull;
+
+    if (!a) {
         return sign;
     }
 
-    int e;
-    double m = frexp(a, &e);
-    int biased = e - 1 + 127;
+    int biased = (int)((a >> 52) - 1023 + 127);
 
     if (biased > 255) {
         return sign | 0x7fffffff;
@@ -243,10 +270,11 @@ static inline uint32_t ps2_pack_double(double v) {
         return sign;
     }
 
-    uint32_t mantissa = (uint32_t)((m * 2.0 - 1.0) * 8388608.0 + 0.5);
+    uint32_t mantissa = (uint32_t)(((a & 0xfffffffffffffull) + (1ull << 28)) >> 29);
 
     if (mantissa > 0x7fffff) {
         mantissa = 0;
+
         if (++biased > 255) {
             return sign | 0x7fffffff;
         }
@@ -294,6 +322,10 @@ static inline void set_vi(Vu* vu, int r, uint16_t v) {
     r &= 0xf;
 
     if (r) vu->vi[r] = v;
+}
+
+static inline uint16_t get_vi(Vu* vu, int r) {
+    return vu->vi[r & 0xf];
 }
 
 static inline float vf_i(Vu* vu, int r, int i) {
@@ -419,7 +451,7 @@ static inline uint128_t mem_read(Vu* vu, uint32_t addr) {
 //       VU branches in delay slots are fairly common. Crazy Taxi and 18 Wheeler need
 //       this, otherwise you get flickering geometry and the VU might eventually hang.
 static inline void branch(Vu* vu, uint32_t target) {
-    target &= 0x7ff;
+    target &= vu->micro_mem_size;
 
     if (vu->branch_delay) {
         vu->delay_branch = true;
@@ -433,10 +465,12 @@ static inline void branch(Vu* vu, uint32_t target) {
 }
 
 static inline uint32_t delay_slot_link(Vu* vu) {
-    return ((vu->branch_delay ? vu->branch_pc : vu->tpc) + 1) & 0x7ff;
+    return ((vu->branch_delay ? vu->branch_pc : vu->tpc) + 1) & vu->micro_mem_size;
 }
 
 static inline void write_branch_pipeline(Vu* vu, int dst) {
+    dst &= 0xf;
+
     if (!dst)
         return;
 
@@ -457,6 +491,8 @@ static inline void write_branch_pipeline(Vu* vu, int dst) {
 }
 
 static inline uint16_t get_branch_register(Vu* vu, int reg) {
+    reg &= 0xf;
+
     if (vu->vi_backup_cycles && (vu->vi_backup_reg == reg)) {
         return vu->vi_backup_value;
     }
@@ -1062,155 +1098,205 @@ void i_bal(Vu* vu, const Instruction* ins) {
 
     branch(vu, vu->tpc + LD_IMM11);
 }
-void i_div(Vu* vu, const Instruction* ins) {
-    int t = LD_T;
-    int s = LD_S;
-    int tf = LD_TF;
-    int sf = LD_SF;
 
-    uint32_t nb = vu->vf[s].u32[sf];
-    uint32_t db = vu->vf[t].u32[tf];
+uint64_t jit_div_math(uint32_t nb, uint32_t db) {
     uint32_t sign = (nb ^ db) & 0x80000000;
-
-    vu->status &= ~0x30u;
 
     double num = ps2_to_double(nb);
     double den = ps2_to_double(db);
 
-    uint32_t result;
+    if (den == 0.0) {
+        uint64_t flag = num == 0.0 ? (uint64_t)STATUS_I : (uint64_t)STATUS_D;
+
+        return (flag << 32) | (sign | 0x7fffffff);
+    }
+
+    return ps2_pack_double(num / den);
+}
+uint64_t jit_sqrt_math(uint32_t tb) {
+    uint64_t flags = (tb & 0x80000000) ? (uint64_t)STATUS_I : 0;
+
+    double v = ps2_to_double(tb & 0x7fffffff);
+
+    return (flags << 32) | ps2_pack_double(sqrt(v));
+}
+uint64_t jit_rsqrt_math(uint32_t nb, uint32_t db) {
+    uint64_t flags = (db & 0x80000000) ? (uint64_t)STATUS_I : 0;
+
+    double num = ps2_to_double(nb);
+    double den = ps2_to_double(db & 0x7fffffff);
 
     if (den == 0.0) {
-        if (num == 0.0) {
-            vu->status |= STATUS_I;
-        } else {
-            vu->status |= STATUS_D;
+        if (num != 0.0) {
+            flags |= STATUS_D;
         }
 
-        result = sign | 0x7fffffff;
-    } else {
-        result = ps2_pack_double(num / den);
+        return (flags << 32) | ((nb & 0x80000000) | 0x7fffffff);
     }
 
-    set_q_u32(vu, result, 7);
+    return (flags << 32) | ps2_pack_double(num / sqrt(den));
 }
-void i_eatan(Vu* vu, const Instruction* ins) {
-    float x = vf_i(vu, LD_S, LD_SF);
+void i_div(Vu* vu, const Instruction* ins) {
+    uint64_t r = jit_div_math(vu->vf[LD_S].u32[LD_SF], vu->vf[LD_T].u32[LD_TF]);
 
-    if (x == -1.0f) {
-        vu->p.u32 = 0xFF7FFFFF;
-    } else {
-        x = (x - 1.0f) / (x + 1.0f);
+    vu->status &= ~0x30u;
+    vu->status |= (uint32_t)(r >> 32);
 
-        vu->p.f = atan(x);
+    set_q_u32(vu, (uint32_t)r, 7);
+}
+
+static inline uint32_t clamp_p(float v) {
+    if (std::isnan(v)) {
+        return 0x7f7fffff;
     }
+
+    if (std::isinf(v)) {
+        return 0x7f7fffff | (std::signbit(v) ? 0x80000000u : 0u);
+    }
+
+    Reg32 p;
+
+    p.f = v;
+
+    return p.u32;
+}
+
+static inline uint32_t raw_p(float v) {
+    Reg32 p;
+
+    p.f = v;
+
+    return p.u32;
+}
+
+uint32_t jit_efu_scalar(uint32_t key, uint32_t sb) {
+    float s = cvtf(sb);
+
+    switch (key) {
+        case 0x78: return clamp_p(sqrtf(fabsf(s)));
+        case 0x79: return clamp_p(1.0f / sqrtf(fabsf(s)));
+        case 0x7a: return clamp_p(1.0f / s);
+        case 0x7c: return raw_p(sinf(s));
+
+        case 0x7d: {
+            if (s == -1.0f) {
+                return 0xFF7FFFFF;
+            }
+
+            return raw_p(atan((s - 1.0f) / (s + 1.0f)));
+        }
+
+        case 0x7e: {
+            const static float coeffs[] = {
+                0.249998688697815f, 0.031257584691048f,
+                0.002591371303424f, 0.000171562001924f,
+                0.000005430199963f, 0.000000690600018f
+            };
+
+            if (sb & 0x80000000) {
+                return raw_p(s);
+            }
+
+            float value = 1;
+
+            for (int exp = 1; exp <= 6; exp++)
+                value += coeffs[exp - 1] * pow(s, exp);
+
+            return raw_p(1.0 / value);
+        }
+    }
+
+    return 0;
+}
+
+uint32_t jit_efu_vector(uint32_t key, uint32_t xb, uint32_t yb, uint32_t zb, uint32_t wb) {
+    float x = cvtf(xb);
+    float y = cvtf(yb);
+    float z = cvtf(zb);
+
+    float x2 = x * x;
+    float y2 = y * y;
+    float z2 = z * z;
+
+    switch (key) {
+        case 0x70: return raw_p(x2 + y2 + z2);
+        case 0x71: return raw_p(1.0f / (x2 + y2 + z2));
+        case 0x72: return clamp_p(sqrtf(x2 + y2 + z2));
+        case 0x73: return clamp_p(1.0f / sqrtf(x2 + y2 + z2));
+
+        case 0x74: {
+            if (y + x == 0.0f) {
+                return 0x7F7FFFFF | (yb & 0x80000000);
+            }
+
+            return raw_p(atan((y - 1.0f) / (y + x)));
+        }
+
+        // P = atan(z/x)
+        case 0x75: {
+            if (z + x == 0.0f) {
+                return 0x7F7FFFFF | (zb & 0x80000000);
+            }
+
+            return raw_p(atan((z - x) / (z + x)));
+        }
+
+        case 0x76: return clamp_p(x + y + z + cvtf(wb));
+    }
+
+    return 0;
+}
+
+static inline void efu_scalar(Vu* vu, uint32_t key, int s, int sf) {
+    vu->p.u32 = jit_efu_scalar(key, vu->vf[s].u32[sf]);
+}
+
+static inline void efu_vector(Vu* vu, uint32_t key, int s) {
+    vu->p.u32 = jit_efu_vector(key, vu->vf[s].u32[0], vu->vf[s].u32[1],
+                                    vu->vf[s].u32[2], vu->vf[s].u32[3]);
+}
+
+void i_eatan(Vu* vu, const Instruction* ins) {
+    efu_scalar(vu, 0x7d, LD_S, LD_SF);
 }
 void i_eatanxy(Vu* vu, const Instruction* ins) {
-    int s = LD_S;
-    float x = vf_x(vu, s);
-    float y = vf_y(vu, s);
-
-    if (y + x == 0.0f) {
-        vu->p.u32 = 0x7F7FFFFF | (vu->vf[s].u32[1] & 0x80000000);
-    } else {
-        x = (y - 1.0f) / (y + x);
-
-        vu->p.f = atan(x);
-    }
+    efu_vector(vu, 0x74, LD_S);
 }
 void i_eatanxz(Vu* vu, const Instruction* ins) {
-    int s = LD_S;
-    float x = vf_x(vu, s);
-    float z = vf_z(vu, s);
-
-    //P = atan(z/x)
-    if (z + x == 0.0f) {
-        vu->p.u32 = 0x7F7FFFFF | (vu->vf[s].u32[2] & 0x80000000);
-    } else {
-        x = (z - x) / (z + x);
-
-        vu->p.f = atan(x);
-    }
+    efu_vector(vu, 0x75, LD_S);
 }
 void i_eexp(Vu* vu, const Instruction* ins) {
-    const static float coeffs[] = {
-        0.249998688697815f, 0.031257584691048f,
-        0.002591371303424f, 0.000171562001924f,
-        0.000005430199963f, 0.000000690600018f
-    };
-
-    int s = LD_S;
-    int sf = LD_SF;
-
-    if (vu->vf[s].u32[sf] & 0x80000000) {
-        vu->p.f = vf_i(vu, s, sf);
-
-        return;
-    }
-
-    float value = 1;
-    float x = vf_i(vu, s, sf);
-
-    for (int exp = 1; exp <= 6; exp++)
-        value += coeffs[exp - 1] * pow(x, exp);
-
-    vu->p.f = 1.0 / value;
+    efu_scalar(vu, 0x7e, LD_S, LD_SF);
 }
 void i_eleng(Vu* vu, const Instruction* ins) {
-    int s = LD_S;
-
-    float x2 = vf_x(vu, s) * vf_x(vu, s);
-    float y2 = vf_y(vu, s) * vf_y(vu, s);
-    float z2 = vf_z(vu, s) * vf_z(vu, s);
-
-    vu->p.f = sqrtf(x2 + y2 + z2);
+    efu_vector(vu, 0x72, LD_S);
 }
 void i_ercpr(Vu* vu, const Instruction* ins) {
-    vu->p.f = 1.0f / vf_i(vu, LD_S, LD_SF);
+    efu_scalar(vu, 0x7a, LD_S, LD_SF);
 }
 void i_erleng(Vu* vu, const Instruction* ins) {
-    int s = LD_S;
-
-    float x2 = vf_x(vu, s) * vf_x(vu, s);
-    float y2 = vf_y(vu, s) * vf_y(vu, s);
-    float z2 = vf_z(vu, s) * vf_z(vu, s);
-
-    vu->p.f = 1.0f / sqrtf(x2 + y2 + z2);
+    efu_vector(vu, 0x73, LD_S);
 }
 void i_ersadd(Vu* vu, const Instruction* ins) {
-    int s = LD_S;
-
-    float x2 = vf_x(vu, s) * vf_x(vu, s);
-    float y2 = vf_y(vu, s) * vf_y(vu, s);
-    float z2 = vf_z(vu, s) * vf_z(vu, s);
-
-    vu->p.f = 1.0f / (x2 + y2 + z2);
+    efu_vector(vu, 0x71, LD_S);
 }
 void i_ersqrt(Vu* vu, const Instruction* ins) {
-    vu->p.f = 1.0f / sqrtf(vf_i(vu, LD_S, LD_SF));
+    efu_scalar(vu, 0x79, LD_S, LD_SF);
 }
 void i_esadd(Vu* vu, const Instruction* ins) {
-    int s = LD_S;
-
-    float x2 = vf_x(vu, s) * vf_x(vu, s);
-    float y2 = vf_y(vu, s) * vf_y(vu, s);
-    float z2 = vf_z(vu, s) * vf_z(vu, s);
-
-    vu->p.f = x2 + y2 + z2;
+    efu_vector(vu, 0x70, LD_S);
 }
 void i_esin(Vu* vu, const Instruction* ins) {
-    vu->p.f = sinf(vf_i(vu, LD_S, LD_SF));
+    efu_scalar(vu, 0x7c, LD_S, LD_SF);
 }
 void i_esqrt(Vu* vu, const Instruction* ins) {
-    vu->p.f = sqrtf(vf_i(vu, LD_S, LD_SF));
+    efu_scalar(vu, 0x78, LD_S, LD_SF);
 }
 void i_esum(Vu* vu, const Instruction* ins) {
-    int s = LD_S;
-
-    vu->p.f = vf_x(vu, s) + vf_y(vu, s) + vf_z(vu, s) + vf_w(vu, s);
+    efu_vector(vu, 0x76, LD_S);
 }
 
 #define CLIP_DELAY 3
-#define VF_LATENCY 4
 #define CLIP_FLAGS(vu) ((vu)->clip_pipeline[CLIP_DELAY])
 
 void i_fcand(Vu* vu, const Instruction* ins) {
@@ -1220,11 +1306,7 @@ void i_fceq(Vu* vu, const Instruction* ins) {
     vu->vi[1] = (CLIP_FLAGS(vu) & 0xffffff) == LD_IMM24;
 }
 void i_fcget(Vu* vu, const Instruction* ins) {
-    int t = LD_T;
-
-    if (!t) return;
-
-    vu->vi[LD_T] = CLIP_FLAGS(vu) & 0xfff;
+    set_vi(vu, LD_T, CLIP_FLAGS(vu) & 0xfff);
 }
 void i_fcor(Vu* vu, const Instruction* ins) {
     vu->vi[1] = ((CLIP_FLAGS(vu) & 0xffffff) | LD_IMM24) == 0xffffff;
@@ -1270,7 +1352,7 @@ void i_iaddiu(Vu* vu, const Instruction* ins) {
     set_vi(vu, LD_T, IS + LD_IMM15);
 }
 void i_iand(Vu* vu, const Instruction* ins) {
-    write_branch_pipeline(vu, LD_T);
+    write_branch_pipeline(vu, LD_D);
 
     set_vi(vu, LD_D, IS & IT);
 }
@@ -1304,8 +1386,6 @@ void i_ibne(Vu* vu, const Instruction* ins) {
     uint16_t t = get_branch_register(vu, LD_T);
     uint16_t s = get_branch_register(vu, LD_S);
 
-    // iris_debug(vu, "ibne vi{} ({:04x}), vi{} ({:04x}), 0x{:08x}", LD_T, t, LD_S, s, vu->tpc + LD_IMM11);
-
     if (t != s) branch(vu, vu->tpc + LD_IMM11);
 }
 template <uint32_t di>
@@ -1319,7 +1399,7 @@ void i_ilw(Vu* vu, const Instruction* ins) {
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (D_X >> i)) {
-            vu->vi[t] = data.u32[i];
+            set_vi(vu, t, data.u32[i]);
         }
     });
 }
@@ -1330,12 +1410,12 @@ void i_ilwr(Vu* vu, const Instruction* ins) {
 
     if (!t) return;
 
-    uint32_t addr = vu->vi[s];
+    uint32_t addr = get_vi(vu, s);
     uint128_t data = mem_read(vu, addr);
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (D_X >> i)) {
-            vu->vi[t] = data.u32[i];
+            set_vi(vu, t, data.u32[i]);
         }
     });
 }
@@ -1359,11 +1439,11 @@ void i_isw(Vu* vu, const Instruction* ins) {
     int s = LD_S;
     int t = LD_T;
 
-    uint32_t addr = vu->vi[s] + LD_IMM11;
+    uint32_t addr = get_vi(vu, s) + LD_IMM11;
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (D_X >> i)) {
-            mem_write(vu, addr, vu->vi[t], i);
+            mem_write(vu, addr, get_vi(vu, t), i);
         }
     });
 }
@@ -1372,11 +1452,11 @@ void i_iswr(Vu* vu, const Instruction* ins) {
     int s = LD_S;
     int t = LD_T;
 
-    uint32_t addr = vu->vi[s];
+    uint32_t addr = get_vi(vu, s);
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (D_X >> i)) {
-            mem_write(vu, addr, vu->vi[t], i);
+            mem_write(vu, addr, get_vi(vu, t), i);
         }
     });
 }
@@ -1395,7 +1475,7 @@ void i_lq(Vu* vu, const Instruction* ins) {
     int s = LD_S;
     int t = LD_T;
 
-    uint32_t addr = vu->vi[s] + LD_IMM11;
+    uint32_t addr = get_vi(vu, s) + LD_IMM11;
     uint128_t data = mem_read(vu, addr);
 
     if (!t) return;
@@ -1413,9 +1493,9 @@ void i_lqd(Vu* vu, const Instruction* ins) {
 
     write_branch_pipeline(vu, s);
 
-    set_vi(vu, s, vu->vi[s] - 1);
+    set_vi(vu, s, get_vi(vu, s) - 1);
 
-    uint32_t addr = vu->vi[s];
+    uint32_t addr = get_vi(vu, s);
     uint128_t data = mem_read(vu, addr);
 
     if (!t) return;
@@ -1434,7 +1514,7 @@ void i_lqi(Vu* vu, const Instruction* ins) {
     write_branch_pipeline(vu, s);
 
     if (t) {
-        uint32_t addr = vu->vi[s];
+        uint32_t addr = get_vi(vu, s);
         uint128_t data = mem_read(vu, addr);
 
         template_seq<4>([&](auto i) {
@@ -1444,7 +1524,7 @@ void i_lqi(Vu* vu, const Instruction* ins) {
         });
     }
 
-    set_vi(vu, s, vu->vi[s] + 1);
+    set_vi(vu, s, get_vi(vu, s) + 1);
 }
 template <uint32_t di>
 void i_mfir(Vu* vu, const Instruction* ins) {
@@ -1492,12 +1572,6 @@ void i_mr32(Vu* vu, const Instruction* ins) {
     int s = LD_S;
 
     uint32_t x = vu->vf[s].u32[0];
-
-    // template_seq<4>([&](auto i) {
-    //     if constexpr (di & (D_X >> i)) {
-    //         vu->vf[t].u32[i] = vu->vf[s].u32[(i + 1) & 3];
-    //     }
-    // });
 
     if constexpr (di & D_X) {
         vu->vf[t].u32[0] = vu->vf[s].u32[1];
@@ -1558,31 +1632,12 @@ void i_rnext(Vu* vu, const Instruction* ins) {
     });
 }
 void i_rsqrt(Vu* vu, const Instruction* ins) {
-    uint32_t nb = vu->vf[LD_S].u32[LD_SF];
-    uint32_t db = vu->vf[LD_T].u32[LD_TF];
+    uint64_t r = jit_rsqrt_math(vu->vf[LD_S].u32[LD_SF], vu->vf[LD_T].u32[LD_TF]);
 
     vu->status &= ~0x30u;
+    vu->status |= (uint32_t)(r >> 32);
 
-    if (db & 0x80000000) {
-        vu->status |= STATUS_I;
-    }
-
-    double num = ps2_to_double(nb);
-    double den = ps2_to_double(db & 0x7fffffff);
-
-    uint32_t result;
-
-    if (den == 0.0) {
-        if (num != 0.0) {
-            vu->status |= STATUS_D;
-        }
-
-        result = (nb & 0x80000000) | 0x7fffffff;
-    } else {
-        result = ps2_pack_double(num / sqrt(den));
-    }
-
-    set_q_u32(vu, result, 13);
+    set_q_u32(vu, (uint32_t)r, 13);
 }
 void i_rxor(Vu* vu, const Instruction* ins) {
     vu->r.u32 = 0x3F800000 | ((vu->r.u32 ^ vu->vf[LD_S].u32[LD_SF]) & 0x007FFFFF);
@@ -1592,7 +1647,7 @@ void i_sq(Vu* vu, const Instruction* ins) {
     int s = LD_S;
     int t = LD_T;
 
-    uint32_t addr = vu->vi[t] + LD_IMM11;
+    uint32_t addr = get_vi(vu, t) + LD_IMM11;
 
     // iris_debug(vu, "sq addr={:08x} vf{}={:08x} {:08x} {:08x} {:08x}", addr, s, vu->vf[s].u32[3], vu->vf[s].u32[2], vu->vf[s].u32[1], vu->vf[s].u32[0]);
 
@@ -1609,9 +1664,9 @@ void i_sqd(Vu* vu, const Instruction* ins) {
 
     write_branch_pipeline(vu, t);
 
-    set_vi(vu, t, vu->vi[t] - 1);
+    set_vi(vu, t, get_vi(vu, t) - 1);
 
-    uint32_t addr = vu->vi[t];
+    uint32_t addr = get_vi(vu, t);
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (D_X >> i)) {
@@ -1626,7 +1681,7 @@ void i_sqi(Vu* vu, const Instruction* ins) {
 
     write_branch_pipeline(vu, t);
 
-    uint32_t addr = vu->vi[t];
+    uint32_t addr = get_vi(vu, t);
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (D_X >> i)) {
@@ -1634,20 +1689,15 @@ void i_sqi(Vu* vu, const Instruction* ins) {
         }
     });
 
-    set_vi(vu, t, vu->vi[t] + 1);
+    set_vi(vu, t, get_vi(vu, t) + 1);
 }
 void i_sqrt(Vu* vu, const Instruction* ins) {
-    uint32_t tb = vu->vf[LD_T].u32[LD_TF];
+    uint64_t r = jit_sqrt_math(vu->vf[LD_T].u32[LD_TF]);
 
     vu->status &= ~0x30u;
+    vu->status |= (uint32_t)(r >> 32);
 
-    if (tb & 0x80000000) {
-        vu->status |= STATUS_I;
-    }
-
-    double v = ps2_to_double(tb & 0x7fffffff);
-
-    set_q_u32(vu, ps2_pack_double(sqrt(v)), 7);
+    set_q_u32(vu, (uint32_t)r, 7);
 }
 void i_waitp(Vu* vu, const Instruction* ins) {
     // No operation
@@ -1656,14 +1706,20 @@ void i_waitq(Vu* vu, const Instruction* ins) {
     vu->q_delay = 0;
 }
 
-void i_xgkick(Vu* vu, const Instruction* ins) {
-    // xgkick(vu);
-    // vu->xgkick_pending = 3;
-    // vu->xgkick_addr = IS;
+void jit_mem_load(Vu* vu, uint32_t addr) {
+    vu->jit_quad = mem_read(vu, addr);
+}
 
-    // return;
+void jit_mem_store(Vu* vu, uint32_t addr, uint32_t field) {
+    for (int i = 0; i < 4; i++) {
+        if (field & (8u >> i)) {
+            mem_write(vu, (uint16_t)addr, vu->jit_quad.u32[i], i);
+        }
+    }
+}
 
-    uint16_t addr = IS;
+void jit_xgkick(Vu* vu, uint32_t start) {
+    uint16_t addr = start;
 
     int eop = 1;
 
@@ -1737,6 +1793,18 @@ void i_xgkick(Vu* vu, const Instruction* ins) {
         }
     } while (!eop);
 }
+const uint32_t* jit_vif_top(Vu* vu) {
+    return &vu->vif->top;
+}
+
+const uint32_t* jit_vif_itop(Vu* vu) {
+    return &vu->vif->itop;
+}
+
+void i_xgkick(Vu* vu, const Instruction* ins) {
+    jit_xgkick(vu, IS);
+}
+
 void i_xitop(Vu* vu, const Instruction* ins) {
     set_vi(vu, LD_T, vu->vif->itop);
 }
@@ -2403,7 +2471,7 @@ Block* find_block(Vu* vu, uint32_t tpc) {
 
     Block* block = &vu->block_cache[tpc & vu->micro_mem_size];
 
-    if (!block->cycles) {
+    if (!block->cycles || block->tpc != tpc) {
         return nullptr;
     }
 
@@ -2418,23 +2486,49 @@ static int c = 0;
 
 static inline int vf_write_mask(const Instruction& ins);
 
+static inline uint64_t hash_micro_mem(Vu* vu, uint32_t tpc, uint32_t words) {
+    uint64_t h = 0xcbf29ce484222325ull;
+
+    for (uint32_t i = 0; i < words; i++) {
+        h ^= vu->micro_mem[(tpc + i) & vu->micro_mem_size];
+        h *= 0x100000001b3ull;
+    }
+
+    return h;
+}
+
 Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
     Block* block = &vu->block_cache[tpc & vu->micro_mem_size];
+
+    if (block->src_len && block->tpc == tpc && block->src_hash == hash_micro_mem(vu, tpc, block->src_len)) {
+        block->cycles = (int)block->src_len;
+
+        vu->block_cache_size++;
+
+        vu->last_block_lookup_tpc = tpc;
+        vu->last_block_ptr = block;
+
+        return block;
+    }
+
+    jit::stash_block(vu, block);
 
     vu->block_cache_size++;
 
     block->tpc = tpc;
     block->cycles = 0;
+    block->runs = 0;
     block->entries.clear();
 
     // iris_debug(vu, "caching block at {:04x}", tpc);
 
     bool delay_slot = false;
+    bool terminate = false;
 
     for (int i = 0; i < max_cycles; i++) {
         BlockEntry entry = { 0 };
 
-        uint64_t liw = vu->micro_mem[tpc++ & 0x7ff];
+        uint64_t liw = vu->micro_mem[tpc++ & vu->micro_mem_size];
         uint32_t upper = liw >> 32;
         uint32_t lower = liw & 0xffffffff;
 
@@ -2471,44 +2565,24 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
         entry.uw_reg = (entry.upper.dst.reg && entry.upper.dst.reg < 32) ? entry.upper.dst.reg : 0;
         entry.uw_mask = entry.uw_reg ? vf_write_mask(entry.upper) : 0;
 
-        // If this entry is a branch or has the E bit set, we end the block here
-        if (entry.branch || entry.e_bit) {
-            i = max_cycles - 2;
+        if (terminate) {
+            block->cycles++;
+            block->entries.push_back(entry);
+
+            break;
         }
 
-        // if (entry.branch) {
-        //     // if (delay_slot) {
-        //     //     iris_debug(vu, "vu{}: warning: branch in delay slot at {:04x}", vu->id, (tpc - 1) & 0x7ff);
-        //     // }
-
-        //     delay_slot = true;
-        // } else {
-        //     delay_slot = false;
-        // }
-
+        terminate = entry.branch || entry.e_bit;
         block->cycles++;
 
         block->entries.push_back(entry);
     }
 
-    // Dis ds;
 
-    // ds.addr = block->tpc;
-    // ds.print_address = 0;
-    // ds.print_opcode = 0;
+    block->src_len = (uint32_t)block->cycles;
+    block->src_hash = hash_micro_mem(vu, block->tpc, block->src_len);
 
-    // for (const BlockEntry& entry : block->entries) {
-    //     char upper_buf[512];
-    //     char lower_buf[512];
-
-    //     iris_debug(vu, "{} {:04x}: {:08x} {:08x} {} {}", //         entry.i_bit ? "I" : entry.e_bit ? "E" : " ",
-    //         ds.addr++,
-    //         entry.upper.opcode,
-    //         entry.lower.opcode,
-    //         disassemble_upper(upper_buf, entry.upper.opcode, &ds),
-    //         disassemble_lower(lower_buf, entry.lower.opcode, &ds)
-    //);
-    // }
+    jit::adopt_block(vu, block);
 
     // Prime fast lookup with a pointer known to be valid after this insertion.
     vu->last_block_lookup_tpc = block->tpc;
@@ -2575,7 +2649,7 @@ static inline void record_vf_writes(Vu* vu, const BlockEntry& entry) {
     }
 }
 
-void execute_block_entry(Vu* vu, const BlockEntry& entry) {
+static inline void entry_prologue(Vu* vu, const BlockEntry& entry) {
     for (int stall = interlock_stall(vu, entry); stall--; ) {
         if (vu->q_delay)
             vu->q_delay--;
@@ -2589,6 +2663,27 @@ void execute_block_entry(Vu* vu, const BlockEntry& entry) {
         vu->q_delay--;
 
     update_status(vu);
+}
+
+static inline void entry_epilogue(Vu* vu, const BlockEntry& entry) {
+    shift_flag_pipeline(vu);
+
+    if (vu->vi_backup_cycles) {
+        vu->vi_backup_cycles--;
+
+        if (!vu->vi_backup_cycles) {
+            vu->vi_backup_reg = 0;
+            vu->vi_backup_value = 0;
+        }
+    }
+
+    record_vf_writes(vu, entry);
+
+    vu->vu_cycle++;
+}
+
+void execute_block_entry(Vu* vu, const BlockEntry& entry) {
+    entry_prologue(vu, entry);
 
     if (entry.i_bit) {
         entry.upper.func(vu, &entry.upper);
@@ -2633,28 +2728,58 @@ void execute_block_entry(Vu* vu, const BlockEntry& entry) {
         }
     }
 
-    shift_flag_pipeline(vu);
+    entry_epilogue(vu, entry);
+}
 
-    if (vu->vi_backup_cycles) {
-        vu->vi_backup_cycles--;
+void jit_execute_entry(Vu* vu, const BlockEntry* entry) {
+    execute_block_entry(vu, *entry);
+}
 
-        if (!vu->vi_backup_cycles) {
-            vu->vi_backup_reg = 0;
-            vu->vi_backup_value = 0;
-        }
+void jit_entry_prologue(Vu* vu, const BlockEntry* entry) {
+    entry_prologue(vu, *entry);
+}
+
+void jit_entry_epilogue(Vu* vu, const BlockEntry* entry) {
+    entry_epilogue(vu, *entry);
+}
+
+void jit_entry_stall(Vu* vu, const BlockEntry* entry) {
+    for (int stall = interlock_stall(vu, *entry); stall--; ) {
+        if (vu->q_delay)
+            vu->q_delay--;
+
+        shift_flag_pipeline(vu);
+
+        vu->vu_cycle++;
     }
+}
 
-    record_vf_writes(vu, entry);
+void jit_execute_upper(Vu* vu, const BlockEntry* entry) {
+    // if (!entry->upper.func) {
+    //     fprintf(stderr, "jit_execute_upper: null handler, tpc=%04x opcode=%08x" "\n",
+    //         vu->tpc, entry->upper.opcode);
+    //     fflush(stderr);
+    //     abort();
+    // }
 
-    vu->vu_cycle++;
+    entry->upper.func(vu, &entry->upper);
+}
+
+void jit_execute_lower(Vu* vu, const BlockEntry* entry) {
+    // if (!entry->lower.func) {
+    //     fprintf(stderr, "jit_execute_lower: null handler, tpc=%04x opcode=%08x i_bit=%d" "\n",
+    //         vu->tpc, entry->lower.opcode, entry->i_bit);
+    //     fflush(stderr);
+    //     abort();
+    // }
+
+    entry->lower.func(vu, &entry->lower);
 }
 
 bool execute_block(Vu* vu, Block* block) {
     // iris_debug(vu, "Input TPC {:04x}", vu->tpc);
 
     for (const BlockEntry& entry : block->entries) {
-        // Immediately end execution. TPC still points at this instruction, so the
-        // interlock resume re-runs it with any pending branch intact.
         if (entry.m_bit) {
             vu->waiting_for_interlock = true;
 
@@ -2664,7 +2789,7 @@ bool execute_block(Vu* vu, Block* block) {
         if (entry.e_bit)
             vu->e_bit = 2;
 
-        vu->tpc = (vu->tpc + 1) & 0x7ff;
+        vu->tpc = (vu->tpc + 1) & vu->micro_mem_size;
 
         execute_block_entry(vu, entry);
 
@@ -2673,8 +2798,6 @@ bool execute_block(Vu* vu, Block* block) {
         if (vu->branch_delay && !--vu->branch_delay) {
             vu->tpc = vu->branch_pc;
 
-            // A branch fired in this branch's delay slot. Its own delay slot is the
-            // instruction we just jumped to, so arm it for exactly one more instruction.
             if (vu->delay_branch) {
                 vu->branch_delay = 1;
                 vu->branch_pc = vu->delay_branch_pc;
@@ -2687,7 +2810,6 @@ bool execute_block(Vu* vu, Block* block) {
         if (vu->e_bit && !--vu->e_bit)
             return true;
 
-        // The rest of this block is no longer the instruction stream we're executing.
         if (taken)
             break;
     }
@@ -2697,20 +2819,102 @@ bool execute_block(Vu* vu, Block* block) {
     return false;
 }
 
-static void run(Vu* vu) {
-    while (true) {
-        Block* block = find_block(vu, vu->tpc);
+static bool run_block(Vu* vu, Block* block) {
+    if (vu->engine != VU_ENGINE_JIT) {
+        return execute_block(vu, block);
+    }
 
-        if (!block) {
-            vu->cache_misses++;
+    if (block->func && block->region_blocks > 1 && block->region_epoch != vu->region_epoch) {
+        bool intact = true;
 
-            block = cache_block(vu, vu->tpc, 64);
-        } else {
-            vu->cache_hits++;
+        bool moved = false;
+        bool content = false;
+
+        for (const RegionDep& dep : block->region_deps) {
+            const Block& member = vu->block_cache[dep.tpc & vu->micro_mem_size];
+
+            if (member.tpc != dep.tpc
+                || (const void*)member.entries.data() != dep.entries) {
+                moved = true;
+            }
+
+            if (member.src_hash != dep.hash
+                || hash_micro_mem(vu, dep.tpc, dep.len) != dep.hash) {
+                content = true;
+            }
+
+            if (moved || content) {
+                intact = false;
+
+                break;
+            }
         }
 
-        if (execute_block(vu, block))
+        if (intact) {
+            block->region_epoch = vu->region_epoch;
+        } else {
+            if (content && block->region_churn < 0xffff) {
+                block->region_churn++;
+            }
+
+            jit::release_block(vu->jit, block);
+
+            block->jit_failed = false;
+        }
+    }
+
+    if (!block->func && !block->jit_failed) {
+        if ((int)block->runs < vu->jit_threshold) {
+            block->runs++;
+
+            return execute_block(vu, block);
+        }
+
+        if (!block->compile_pending) {
+            jit::compile_block(vu, block);
+        }
+    }
+
+    if (!block->func) {
+        return execute_block(vu, block);
+    }
+
+
+    block->func(vu);
+
+
+    return vu->jit_exit != VU_JIT_CONTINUE;
+}
+
+static void run(Vu* vu) {
+    if (vu->engine == VU_ENGINE_JIT) {
+        jit::flush_if_needed(vu);
+        jit::drain_blocks(vu);
+    }
+
+    const uint64_t deadline = vu->vu_cycle + vu->max_cycles;
+
+    vu->run_deadline = vu->max_cycles ? deadline : ~0ull;
+
+    while (true) {
+        Block* block = &vu->block_cache[vu->tpc & vu->micro_mem_size];
+
+        if (!block->cycles || block->tpc != vu->tpc) {
+            block = cache_block(vu, vu->tpc, 64);
+        }
+
+        if (run_block(vu, block)) {
             break;
+        }
+
+        if (vu->max_cycles && vu->vu_cycle >= deadline) {
+            iris_fatal_error(vu,
+                "Microprogram ran for {} cycles without reaching an E bit, tpc={:04x}",
+                vu->max_cycles, vu->tpc
+            );
+
+            break;
+        }
     }
 }
 
@@ -2721,17 +2925,13 @@ void execute_program(Vu* vu, uint32_t addr) {
     // Clear VU0 interlock
     vu->waiting_for_interlock = false;
 
-    vu->tpc = addr & 0x7ff;
+    vu->tpc = addr & vu->micro_mem_size;
     vu->i_bit = 0;
     vu->e_bit = 0;
     vu->branch_delay = 0;
     vu->delay_branch = false;
 
-    vu->vu_cycle = 0;
-
-    for (int i = 0; i < 32; i++)
-        for (int c = 0; c < 4; c++)
-            vu->vf_ready[i][c] = 0;
+    vu->vu_cycle += VF_LATENCY + 1;
 
     run(vu);
 }
@@ -2871,6 +3071,11 @@ void reset(Vu* vu) {
     vu->last_block_lookup_tpc = ~0u;
     vu->last_block_ptr = nullptr;
 
+    vu->upload_lo = ~0u;
+    vu->upload_hi = 0;
+
+    jit::flush_blocks(vu);
+
     vu->block_cache_size = 0;
     vu->block_cache.clear();
     vu->block_cache.resize(vu->micro_mem_size+1);
@@ -2898,6 +3103,49 @@ uint64_t* get_micro_mem_ptr(Vu* vu, uint32_t addr) {
     return &vu->micro_mem[addr & vu->micro_mem_size];
 }
 
+void begin_micro_upload(Vu* vu) {
+    vu->upload_lo = ~0u;
+    vu->upload_hi = 0;
+}
+
+void upload_micro_word(Vu* vu, uint32_t word_addr, uint64_t data) {
+    word_addr &= vu->micro_mem_size;
+
+    if (vu->micro_mem[word_addr] == data) {
+        return;
+    }
+
+    vu->micro_mem[word_addr] = data;
+
+    if (word_addr < vu->upload_lo) {
+        vu->upload_lo = word_addr;
+    }
+
+    if (word_addr > vu->upload_hi) {
+        vu->upload_hi = word_addr;
+    }
+}
+
+void end_micro_upload(Vu* vu) {
+    if (vu->upload_lo > vu->upload_hi) {
+        return;
+    }
+
+
+    invalidate_range(vu, vu->upload_lo << 3, (vu->upload_hi - vu->upload_lo + 1) << 3);
+
+    vu->upload_lo = ~0u;
+    vu->upload_hi = 0;
+}
+
+void write_micro_mem(Vu* vu, uint32_t word_addr, uint64_t data) {
+    word_addr &= vu->micro_mem_size;
+
+    vu->micro_mem[word_addr] = data;
+
+    invalidate_range(vu, word_addr << 3, 8);
+}
+
 uint32_t get_tpc(Vu* vu) {
     return vu->tpc;
 }
@@ -2915,6 +3163,8 @@ void execute_upper(Vu* vu, uint32_t opcode) {
 }
 
 void clear_block_cache(Vu* vu) {
+    jit::flush_blocks(vu);
+
     vu->block_cache_size = 0;
     vu->block_cache.clear();
     vu->block_cache.resize(vu->micro_mem_size+1);
@@ -2940,12 +3190,12 @@ void invalidate_range(Vu* vu, uint32_t addr, uint32_t size) {
             }
 
             block.cycles = 0;
-            block.entries.clear();
         }
 
         vu->block_cache_size = 0;
         vu->last_block_lookup_tpc = ~0u;
         vu->last_block_ptr = nullptr;
+        vu->region_epoch++;
 
         return;
     }
@@ -2964,6 +3214,7 @@ void invalidate_range(Vu* vu, uint32_t addr, uint32_t size) {
 
         bool intersects = false;
 
+
         for (int i = 0; i < block.cycles; i++) {
             const uint32_t block_word = (block.tpc + (uint32_t)i) & word_mask;
             const uint32_t rel = (block_word - start_word) & word_mask;
@@ -2979,7 +3230,6 @@ void invalidate_range(Vu* vu, uint32_t addr, uint32_t size) {
         }
 
         block.cycles = 0;
-        block.entries.clear();
         invalidated++;
     }
 
@@ -2995,6 +3245,7 @@ void invalidate_range(Vu* vu, uint32_t addr, uint32_t size) {
 
     vu->last_block_lookup_tpc = ~0u;
     vu->last_block_ptr = nullptr;
+    vu->region_epoch++;
 }
 
 int is_interlocked(Vu* vu) {

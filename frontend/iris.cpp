@@ -10,10 +10,13 @@
 
 // Iris includes
 #include "iris.hpp"
+#include "ee/vu_def.hpp"
+#include "ee/vu_jit.hpp"
 #include "config.hpp"
 #include "ee/ee_def.hpp"
 #include "ee/vu_def.hpp"
 #include "iop/iop_def.hpp"
+#include "ee/gif.hpp"
 #include "net.hpp"
 #include "slirp.hpp"
 

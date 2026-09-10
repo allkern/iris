@@ -17,6 +17,16 @@ inline constexpr uint32_t D_Y   = 0x00800000;
 inline constexpr uint32_t D_Z   = 0x00400000;
 inline constexpr uint32_t D_W   = 0x00200000;
 
+enum {
+    VU_ENGINE_INTERP,
+    VU_ENGINE_JIT
+};
+
+enum {
+    VU_JIT_CONTINUE,
+    VU_JIT_STOP
+};
+
 struct Reg128 {
     union {
         uint128_t u128;
@@ -110,6 +120,10 @@ void execute_program(Vu* vu, uint32_t addr);
 void execute_program_tpc(Vu* vu);
 uint128_t* get_vu_mem_ptr(Vu* vu, uint32_t addr);
 uint64_t* get_micro_mem_ptr(Vu* vu, uint32_t addr);
+void write_micro_mem(Vu* vu, uint32_t word_addr, uint64_t data);
+void begin_micro_upload(Vu* vu);
+void upload_micro_word(Vu* vu, uint32_t word_addr, uint64_t data);
+void end_micro_upload(Vu* vu);
 uint32_t get_tpc(Vu* vu);
 void clear_block_cache(Vu* vu);
 void invalidate_range(Vu* vu, uint32_t addr, uint32_t size);

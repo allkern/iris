@@ -318,6 +318,7 @@ target_sources(iris PRIVATE
     src/ee/timers.cpp
     src/ee/vif.cpp
     src/ee/vu_cached.cpp
+    src/ee/vu_jit.cpp
     src/ee/vu_dis.cpp
     src/fs/apa.cpp
     src/fs/blk.cpp
