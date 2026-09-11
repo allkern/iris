@@ -62,7 +62,7 @@ constexpr unsigned char g_pocketstation_icon_data[] = {
 constexpr unsigned int g_pocketstation_icon_size = sizeof(g_pocketstation_icon_data);
 
 constexpr unsigned char g_iris_icon_data[] = {
-#embed "../res/iris.png"
+#embed "../res/iris-desktop.png"
 };
 constexpr unsigned int g_iris_icon_size = sizeof(g_iris_icon_data);
 

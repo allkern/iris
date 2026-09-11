@@ -578,8 +578,8 @@ if (CMAKE_SYSTEM_NAME MATCHES "Linux")
             ARCH \"${IRIS_APPIMAGE_ARCH}\"
             EXE \"${CMAKE_CURRENT_SOURCE_DIR}/build/iris\"
             NAME \"Iris\"
-            ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
-            DIR_ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris.png\"
+            ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris-desktop.png\"
+            DIR_ICON \"${CMAKE_CURRENT_SOURCE_DIR}/res/iris-desktop.png\"
             OUTPUT_NAME \"${CMAKE_CURRENT_SOURCE_DIR}/build/Iris-${GIT_VERSION_STRING}.AppImage\"
         )
         "
