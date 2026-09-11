@@ -850,10 +850,10 @@ static bool arcade_boots_from_dongle(Instance* iris, const ArcadeSource& source)
     if (source.bootprog.empty())
         return false;
 
-    return iris->arcade_dongle_boot || !arcade_file_available(source, source.names.loader);
+    return iris->arcade_dongle_boot;
 }
 
-static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& source, bool want_loader = false) {
+static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& source) {
     if (!arcade_bios_available(iris, source))
         return "board BIOS";
 
@@ -885,8 +885,6 @@ static const char* find_missing_arcade_file(Instance* iris, const ArcadeSource& 
 
     if (!arcade_file_available(source, source.names.dongle)) return "dongle";
     if (!arcade_file_available(source, source.names.media)) return "media image";
-    if ((want_loader || !arcade_boots_from_dongle(iris, source)) &&
-        !arcade_file_available(source, source.names.loader)) return "loader";
 
     return nullptr;
 }
@@ -1069,7 +1067,7 @@ static bool archive_completes_source(const ArcadeSource& source, const ArchiveIn
 }
 
 static void index_sibling_archives(Instance* iris, ArcadeSource* source) {
-    if (!find_missing_arcade_file(iris, *source, true))
+    if (!find_missing_arcade_file(iris, *source))
         return;
 
     std::error_code ec;
@@ -1100,7 +1098,7 @@ static void index_sibling_archives(Instance* iris, ArcadeSource* source) {
 
         source->archives.push_back(std::move(index));
 
-        if (!find_missing_arcade_file(iris, *source, true))
+        if (!find_missing_arcade_file(iris, *source))
             return;
     }
 }
@@ -1818,6 +1816,7 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
             if (dongle_boot) {
                 std::filesystem::path program = dongle_files / source.bootprog;
 
+                ps2::iop_map_device(iris->ps2, "ac0", dongle_files.string().c_str());
                 ps2::iop_map_device(iris->ps2, "mc0", dongle_files.string().c_str());
                 ps2::iop_map_device(iris->ps2, "host", dongle_files.string().c_str());
                 ps2::iop_map_device(iris->ps2, "host0", dongle_files.string().c_str());
@@ -1828,17 +1827,14 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
 
                 ps2::boot_file(iris->ps2, ("host:  " + program.string()).c_str());
 
-                std::string dongle_arg = "mc0:" + source.bootprog;
+                std::string dongle_arg = "ac0:" + source.bootprog;
 
                 const char* boot_args[] = { dongle_arg.c_str(), "DANGLE" };
 
                 ps2::set_boot_args(iris->ps2, boot_args, 2);
             } else {
-                ps2::iop_map_device(iris->ps2, "host", files.loader.parent_path().string().c_str());
-
-                elf::load_symbols_from_file(iris, files.loader.string());
-
-                ps2::boot_file(iris->ps2, ("host:  " + files.loader.string()).c_str());
+                // Boot BIOS directly
+                ps2::reset(iris->ps2);
             }
 
             iris->arcade_id = set.size() ? set : source.id;

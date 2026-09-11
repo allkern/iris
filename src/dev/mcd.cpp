@@ -508,10 +508,8 @@ void cmd_auth_f1(sio2::Sio2* sio2, Mcd* mcd) {
 void cmd_auth_f3(sio2::Sio2* sio2, Mcd* mcd) {
     iris_debug(mcd, "cmd_auth_f3");
 
-    if (mcd->magicgate) {
-        mcd->term = TERMINATOR_READY;
+    if (mcd->magicgate)
         mcd->key_source = mcd->configured_key_source;
-    }
 
     push_terminator(sio2, mcd, 5);
 }
@@ -629,7 +627,6 @@ void reset(void* udata) {
     mcd->config_mode = 0;
     mcd->act_index = 0;
     mcd->mode_index = 0;
-    mcd->checksum = 0;
     mcd->addr = 0;
 
     mcd->auth = {};

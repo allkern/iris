@@ -80,6 +80,10 @@ void eeprom_step(Eeprom* eeprom) {
             {
                 eeprom->state = EEPROM_S_TRANSMIT;
                 eeprom->sequence = 0;
+
+                // DO drives a dummy 0 before the first data bit, drivers
+                // check it and bail out if it's set
+                eeprom->dout = 0;
             }
         } break;
 
@@ -114,6 +118,8 @@ void write(Eeprom* eeprom, uint64_t data) {
     if (!csel) {
         eeprom->sequence = 0;
         eeprom->addr = 0;
+        eeprom->cmd = 0;
+        eeprom->dout = 0;
         eeprom->state = EEPROM_S_CMD_START;
         eeprom->clk = 0;
 
