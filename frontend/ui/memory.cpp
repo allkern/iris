@@ -81,7 +81,7 @@ void MemoryViewer::on_render() {
     }
 
     auto draw_memory_tab = [&](const char* label, void* buf, size_t size, vu::Vu* imem_owner = nullptr) {
-        if (BeginTabItem(label)) {
+        if (imgui::BeginTabItem(label)) {
             selected_label = label;
             selected_buf = buf;
             selected_size = size;

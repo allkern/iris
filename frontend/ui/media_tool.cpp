@@ -397,25 +397,25 @@ void MediaTool::on_render() {
     };
 
     if (BeginTabBar("##mediatabs")) {
-        if (BeginTabItem(ICON_MS_SD_CARD " Memory card", nullptr, tab_flags(MEDIA_MEMORY_CARD))) {
+        if (imgui::BeginTabItem(ICON_MS_SD_CARD " Memory card", nullptr, tab_flags(MEDIA_MEMORY_CARD))) {
             show_memory_card_tab();
 
             EndTabItem();
         }
 
-        if (BeginTabItem(ICON_MS_HARD_DRIVE " HDD", nullptr, tab_flags(MEDIA_HDD))) {
+        if (imgui::BeginTabItem(ICON_MS_HARD_DRIVE " HDD", nullptr, tab_flags(MEDIA_HDD))) {
             show_hdd_tab();
 
             EndTabItem();
         }
 
-        if (BeginTabItem(ICON_MS_USB " USB drive", nullptr, tab_flags(MEDIA_USB_DRIVE))) {
+        if (imgui::BeginTabItem(ICON_MS_USB " USB drive", nullptr, tab_flags(MEDIA_USB_DRIVE))) {
             show_usb_drive_tab();
 
             EndTabItem();
         }
 
-        if (BeginTabItem(ICON_MS_SYNC_ALT " Convert", nullptr, tab_flags(MEDIA_CONVERT))) {
+        if (imgui::BeginTabItem(ICON_MS_SYNC_ALT " Convert", nullptr, tab_flags(MEDIA_CONVERT))) {
             Text("This tool is a work in progress and doesn't do anything yet.");
 
             EndTabItem();

@@ -148,7 +148,7 @@ static void show_iop_toolbar(Instance* iris) {
 static void show_tab(const char* label, const char* id, Applet& applet) {
     using namespace ImGui;
 
-    if (!BeginTabItem(label))
+    if (!imgui::BeginTabItem(label))
         return;
 
     if (BeginChild(id)) {

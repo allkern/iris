@@ -1223,7 +1223,7 @@ static void show_preview(Instance* iris, FileExplorer* fe) {
     const fs::Entry* e =
         fe->selected >= 0 && fe->selected < (int)fe->visible.size() ? &fe->entries[fe->visible[fe->selected]] : nullptr;
 
-    if (BeginTabItem("Info")) {
+    if (imgui::BeginTabItem("Info")) {
         FileExplorer::SaveIcon* icon = e ? fe->save_icon() : nullptr;
 
         if (icon) {
@@ -1283,7 +1283,7 @@ static void show_preview(Instance* iris, FileExplorer* fe) {
 
         EndTabItem();
     }
-    if (BeginTabItem("Hex")) {
+    if (imgui::BeginTabItem("Hex")) {
         if (!e) {
             imgui::TextDisabledCentered("Select a file.");
         } else if (e->flags & fs::ENTRY_DIRECTORY) {

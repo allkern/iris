@@ -60,6 +60,7 @@ bool MenuItem(const char* label, const char* shortcut, bool* p_selected, bool en
 bool BeginMenu(const char* label, bool enabled = true);
 bool Selectable(const char* label, bool selected = false, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
 bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags = 0, const ImVec2& size = ImVec2(0, 0));
+bool BeginTabItem(const char* label, bool* p_open = nullptr, ImGuiTabItemFlags flags = 0);
 
 void TextDisabledCentered(const char* fmt, ...) IM_FMTARGS(1);
 

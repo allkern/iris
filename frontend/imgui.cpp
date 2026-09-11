@@ -436,6 +436,71 @@ bool Selectable(const char* label, bool* p_selected, ImGuiSelectableFlags flags,
     return selectable_rounded(label, false, p_selected, flags, size);
 }
 
+static ImDrawListSplitter tab_splitter;
+
+bool BeginTabItem(const char* label, bool* p_open, ImGuiTabItemFlags flags) {
+    ImGuiContext& g = *GImGui;
+    ImGuiTabBar* tab_bar = g.CurrentTabBar;
+
+    if (!tab_bar || g.CurrentWindow->SkipItems)
+        return ImGui::BeginTabItem(label, p_open, flags);
+
+    ImDrawList* draw_list = ImGui::GetWindowDrawList();
+
+    tab_splitter.Split(draw_list, 2);
+    tab_splitter.SetCurrentChannel(draw_list, 1);
+
+    ImGui::PushStyleColor(ImGuiCol_Tab, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_TabHovered, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_TabSelected, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_TabDimmed, IM_COL32(0, 0, 0, 0));
+    ImGui::PushStyleColor(ImGuiCol_TabDimmedSelected, IM_COL32(0, 0, 0, 0));
+
+    bool open = ImGui::BeginTabItem(label, p_open, flags);
+
+    ImGui::PopStyleColor(5);
+
+    if (g.LastItemData.StatusFlags & ImGuiItemStatusFlags_Visible) {
+        const ImGuiStyle& style = ImGui::GetStyle();
+        const ImRect& bb = g.LastItemData.Rect;
+
+        bool hovered = ImGui::IsItemHovered();
+        bool held = ImGui::IsItemActive();
+        bool focused = (tab_bar->Flags & ImGuiTabBarFlags_IsFocused) != 0;
+
+        ImGuiCol col = (hovered || held) ? ImGuiCol_TabHovered
+            : open ? (focused ? ImGuiCol_TabSelected : ImGuiCol_TabDimmedSelected)
+            : (focused ? ImGuiCol_Tab : ImGuiCol_TabDimmed);
+
+        bool clip = !(flags & ImGuiTabItemFlags_SectionMask_) &&
+            (bb.Min.x < tab_bar->ScrollingRectMinX || bb.Max.x > tab_bar->ScrollingRectMaxX);
+
+        tab_splitter.SetCurrentChannel(draw_list, 0);
+
+        if (clip) {
+            draw_list->PushClipRect(
+                ImVec2(ImMax(bb.Min.x, tab_bar->ScrollingRectMinX), bb.Min.y - 1.0f),
+                ImVec2(tab_bar->ScrollingRectMaxX, bb.Max.y),
+                true
+            );
+        }
+
+        draw_list->AddRectFilled(
+            ImVec2(bb.Min.x, bb.Min.y + 1.0f),
+            ImVec2(bb.Max.x, bb.Max.y - style.TabBarBorderSize),
+            ImGui::GetColorU32(col),
+            style.TabRounding
+        );
+
+        if (clip)
+            draw_list->PopClipRect();
+    }
+
+    tab_splitter.Merge(draw_list);
+
+    return open;
+}
+
 void TextDisabledCentered(const char* fmt, ...) {
     char buf[1024];
 

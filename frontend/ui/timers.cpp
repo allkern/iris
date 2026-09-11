@@ -52,19 +52,19 @@ void Timers::on_render() {
     using namespace ImGui;
 
     if (BeginTabBar("##timers_tab_bar")) {
-        if (BeginTabItem("EE timers")) {
+        if (imgui::BeginTabItem("EE timers")) {
             show_ee_timers(iris);
 
             EndTabItem();
         }
 
-        if (BeginTabItem("IOP timers")) {
+        if (imgui::BeginTabItem("IOP timers")) {
             show_iop_timers(iris);
 
             EndTabItem();
         }
 
-        if (BeginTabItem("Scheduler")) {
+        if (imgui::BeginTabItem("Scheduler")) {
             show_scheduler(iris);
 
             EndTabItem();

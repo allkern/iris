@@ -133,13 +133,13 @@ void Spu2Debugger::on_render() {
     const spu2::Spu2* spu2 = iris->ps2->spu2;
 
     if (BeginTabBar("##spu2tabbar")) {
-        if (BeginTabItem("CORE0")) {
+        if (imgui::BeginTabItem("CORE0")) {
             show_spu2_tab(iris, 0);
 
             EndTabItem();
         }
 
-        if (BeginTabItem("CORE1")) {
+        if (imgui::BeginTabItem("CORE1")) {
             show_spu2_tab(iris, 1);
 
             EndTabItem();

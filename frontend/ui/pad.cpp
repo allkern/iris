@@ -13,7 +13,7 @@ void PadDebugger::on_render() {
     using namespace ImGui;
 
     if (BeginTabBar("##padtabbar")) {
-        if (BeginTabItem("Slot 1")) {
+        if (imgui::BeginTabItem("Slot 1")) {
             dev::ds::Ds* ds = (dev::ds::Ds*)iris->ps2->sio2->port[0].udata;
 
             if (!ds) {
@@ -38,7 +38,7 @@ void PadDebugger::on_render() {
             EndTabItem();
         }
 
-        if (BeginTabItem("Slot 2")) {
+        if (imgui::BeginTabItem("Slot 2")) {
             dev::ds::Ds* ds = (dev::ds::Ds*)iris->ps2->sio2->port[1].udata;
 
             if (!ds) {
