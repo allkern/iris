@@ -129,5 +129,18 @@ uint32_t fifo_read(Vif* vif);
 void fifo_write(Vif* vif, uint32_t data);
 
 int get_dreq(Vif* vif);
+void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last);
+
+inline uint32_t direct_qwords_pending(const Vif* vif) {
+    if (vif->state != VIF_RECV_DATA || vif->shift || !vif->dreq) {
+        return 0;
+    }
+
+    if (vif->cmd != CMD_DIRECT && vif->cmd != CMD_DIRECTHL) {
+        return 0;
+    }
+
+    return (uint32_t)vif->pending_words / 4;
+}
 
 }

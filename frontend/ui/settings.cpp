@@ -651,7 +651,7 @@ void show_system_settings(Instance* iris) {
     Checkbox("Keep arcade files extracted from archives", &iris->cache_arcade_files);
     SetItemTooltip("Loads archived arcade games faster, at the cost of keeping a second copy of their files");
     Checkbox("Fastboot System 246/256 games", &iris->arcade_dongle_boot);
-    SetItemTooltip("Runs the game's own boot program on the dongle even when a boot.elf is there to chainload it. Games without a boot.elf take this route regardless");
+    SetItemTooltip("Runs the game's boot program straight off the dongle instead of booting it through the board BIOS");
 
     imgui::section(iris, "DIP Switches");
 

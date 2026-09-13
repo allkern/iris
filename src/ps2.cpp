@@ -6,6 +6,7 @@
 #include "ps2.hpp"
 #include "rom.hpp"
 #include "iop/hle/ioman.hpp"
+#include "profile_counters.hpp"
 
 namespace iris::ps2 {
 
@@ -330,6 +331,8 @@ void reset(Ps2* ps2) {
 }
 
 void cycle(Ps2* ps2) {
+    profile::count(profile::PS2_CYCLES);
+
     int64_t next = scheduler::cycles_to_next(ps2->sched);
 
     int64_t max_block_cycles = next < 16*64 ? next : 16*64;

@@ -227,13 +227,12 @@ bool parse_toml_settings(Instance* iris, bool reset) {
             iris->mac_address[i] = static_cast<uint8_t>(mac_array->at(i).as_integer()->get());
         }
     } else {
-        // Default MAC address
         iris->mac_address[0] = 0x00;
-        iris->mac_address[1] = 0x1A;
-        iris->mac_address[2] = 0x2B;
-        iris->mac_address[3] = 0x3C;
-        iris->mac_address[4] = 0x4D;
-        iris->mac_address[5] = 0x5E;
+        iris->mac_address[1] = 0x04;
+        iris->mac_address[2] = 0x1F;
+        iris->mac_address[3] = 0x82;
+        iris->mac_address[4] = 0x30;
+        iris->mac_address[5] = 0x31;
     }
 
     auto network = tbl["network"];

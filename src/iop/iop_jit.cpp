@@ -9,6 +9,9 @@
 #include "iop_export.hpp"
 #include "hle/sifcmd.hpp"
 
+#include "profile_tag.hpp"
+#include "profile_counters.hpp"
+
 #include <functional>
 #include <type_traits>
 
@@ -41,6 +44,8 @@ void invalidate_cache_page(Iop* iop, uint32_t addr) {
         return;
 
     // iris_debug(iop, "Invalidating page at addr={:08x} page={} ({:08x}) min={:08x} max={:08x}", addr, page, (addr / _IOP_CACHE_PAGESIZE) * _IOP_CACHE_PAGESIZE, iop->block_cache[page].min_code_addr, iop->block_cache[page].max_code_addr);
+
+    profile::count(profile::IOP_STORE_INVALIDATIONS);
 
     iop->block_cache[page].dirty = true;
     iop->block_lut_gen++;
@@ -1069,6 +1074,8 @@ static inline asmjit::ujit::Gp value_to_gp32(asmjit::ujit::UniCompiler& uc, cons
 
 void compile_block(Iop* iop, Block* block) {
     using namespace asmjit;
+
+    profile::count(profile::IOP_BLOCKS_COMPILED);
 
     CodeHolder code;
 
@@ -2290,6 +2297,8 @@ static Block* find_block(Iop* iop, uint32_t pc) {
     }
 
     if (iop->block_cache[page].dirty) {
+        profile::count(profile::IOP_PAGES_DISCARDED);
+
         iop->block_cache[page].blocks = nullptr;
         iop->block_cache[page].dirty = false;
         iop->block_cache[page].valid = false;
@@ -2425,7 +2434,11 @@ static inline int execute_block(Iop* iop, Block* block) {
     iop->next_pc = block->end_pc;
     iop->pc = iop->next_pc - 4;
 
+    profile::active_jit = profile::JIT_IOP;
+
     block->func(iop);
+
+    profile::active_jit = profile::JIT_NONE;
 
     iop->total_cycles += block->cycles;
     iop->pc = iop->next_pc;
@@ -2507,6 +2520,8 @@ int run_block(Iop* iop, int max_cycles) {
 }
 
 void flush_cache(Iop* iop) {
+    profile::count(profile::IOP_CACHE_FLUSHES);
+
     for (CachePage& page : iop->block_cache) {
         page.dirty = true;
     }
@@ -2524,6 +2539,8 @@ void invalidate_block(Iop* iop, uint32_t addr) {
     uint32_t page = addr / _IOP_CACHE_PAGESIZE;
 
     if (is_executable_region(addr) && iop->block_cache[page].valid) {
+        profile::count(profile::IOP_EE_WRITE_INVALIDATIONS);
+
         iop->block_cache[page].dirty = true;
         iop->block_lut_gen++;
     }

@@ -4,6 +4,8 @@
 #include "vif.hpp"
 #include "gif.hpp"
 
+#include "profile_counters.hpp"
+
 namespace iris::vif {
 
 Vif* create(logger::Logger* logger, int id, scheduler::Scheduler* sched, ee::bus::Bus* bus) {
@@ -207,7 +209,35 @@ static inline bool vif_is_fifo(uint32_t addr) {
     return page == VIF0_FIFO_BASE || page == VIF1_FIFO_BASE;
 }
 
+static inline void count_vif_word(Vif* vif) {
+    if (!vif->id) {
+        profile::count(profile::VIF0_WORDS);
+
+        return;
+    }
+
+    if (vif->state == VIF_IDLE) {
+        profile::count(profile::VIF1_COMMAND_WORDS);
+
+        return;
+    }
+
+    int command = vif->cmd & 0x7f;
+
+    if (command == CMD_DIRECT || command == CMD_DIRECTHL) {
+        profile::count(profile::VIF1_DIRECT_WORDS);
+    } else if (command == CMD_MPG) {
+        profile::count(profile::VIF1_MPG_WORDS);
+    } else if ((command & 0x60) == 0x60) {
+        profile::count(profile::VIF1_UNPACK_WORDS);
+    } else {
+        profile::count(profile::VIF1_REGISTER_WORDS);
+    }
+}
+
 static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
+    count_vif_word(vif);
+
     if (vif->state == VIF_IDLE) {
         vif->cmd = (data >> 24) & 0xff;
 
@@ -1059,6 +1089,17 @@ void fifo_write(Vif* vif, uint32_t data) {
 
 int get_dreq(Vif* vif) {
     return vif->dreq;
+}
+
+void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last) {
+    profile::count(profile::VIF1_DIRECT_WORDS, (uint64_t)qwords * 4);
+
+    vif->data = last;
+    vif->pending_words -= (int)(qwords * 4);
+
+    if (!vif->pending_words) {
+        vif->state = VIF_IDLE;
+    }
 }
 
 #undef printf

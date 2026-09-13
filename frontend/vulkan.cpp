@@ -893,6 +893,7 @@ bool init(Instance* iris, bool enable_validation) {
     //        and features.
 
     device_create_info device_info = {};
+
     device_info.enabled_extensions = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,

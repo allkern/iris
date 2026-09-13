@@ -5,7 +5,9 @@
 #include "gif.hpp"
 #include "vif.hpp"
 #include "bus.hpp"
+#include "profile_counters.hpp"
 #include <cassert>
+#include <cstring>
 
 namespace iris::ee::dmac {
 
@@ -604,6 +606,75 @@ void handle_vif1_read_transfer(Dmac* dmac) {
     end_transfer(dmac, VIF1);
 }
 
+static inline const uint8_t* dma_source_span(Dmac* dmac, uint32_t addr, uint32_t qwords) {
+    uint64_t bytes = (uint64_t)qwords * 16;
+
+    if (addr & 0x80000000) {
+        uint64_t offset = addr & 0x3ff0;
+
+        if (offset + bytes > dmac->hw.spr->size) {
+            return nullptr;
+        }
+
+        return dmac->hw.spr->buf + offset;
+    }
+
+    ram::Ram* ram = dmac->hw.bus->ee_ram;
+
+    if ((uint64_t)addr + bytes > ram->size) {
+        return nullptr;
+    }
+
+    return ram->buf + addr;
+}
+
+static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac) {
+    Channel* c = &dmac->channels[VIF1];
+
+    if ((c->chcr & 0x100) == 0 || !c->qwc || c->index || (c->madr & 0xf)) {
+        return 0;
+    }
+
+    vif::Vif* vif = dmac->hw.bus->vif1;
+
+    uint32_t pending = vif::direct_qwords_pending(vif);
+
+    if (!pending) {
+        return 0;
+    }
+
+    uint32_t count = pending < c->qwc ? pending : c->qwc;
+
+    gif::Gif* gif = dmac->hw.bus->gif;
+
+    const uint8_t* source = dma_source_span(dmac, c->madr, count);
+
+    uint128_t last;
+
+    if (source) {
+        memcpy(&last, source + (size_t)(count - 1) * 16, sizeof(last));
+
+        gif::fifo_write_qwords(gif, source, count, gif::PATH2);
+    } else {
+        for (uint32_t index = 0; index < count; index++) {
+            last = read_qword(dmac, c->madr + index * 16);
+
+            gif::fifo_write(gif, last, gif::PATH2);
+        }
+    }
+
+    vif::consume_direct_qwords(vif, count, last);
+
+    c->madr += count * 16;
+    c->qwc -= count;
+    c->qword_valid = false;
+
+    profile::count(profile::VIF1_DMA_QWORDS, count);
+    profile::count(profile::VIF1_DIRECT_BULK_QWORDS, count);
+
+    return count;
+}
+
 int transfer_vif1_word(Dmac* dmac) {
     if ((dmac->channels[VIF1].chcr & 0x100) == 0) {
         iris_debug(dmac, "vif1 channel not started");
@@ -636,6 +707,8 @@ int transfer_vif1_word(Dmac* dmac) {
         if (c->index == 4) {
             c->index = 0;
             c->qwc--;
+
+            profile::count(profile::VIF1_DMA_QWORDS);
         }
 
         return 1;
@@ -746,10 +819,27 @@ void handle_vif1_transfer(Dmac* dmac) {
         return;
     }
 
-    dmac->channels[VIF1].qword_valid = false;
+    Channel* channel = &dmac->channels[VIF1];
 
-    while (transfer_vif1_word(dmac)) {
-        // Transfer words until we run out of data or DREQ is cleared
+    uint32_t kick_address = mode ? channel->tadr : channel->madr;
+
+    profile::count(profile::VIF1_DMA_KICKS);
+
+    if (kick_address == channel->kick_address) {
+        profile::count(profile::VIF1_DMA_REPEATED_KICKS);
+    }
+
+    channel->kick_address = kick_address;
+    channel->qword_valid = false;
+
+    while (true) {
+        if (transfer_vif1_direct_qwords(dmac)) {
+            continue;
+        }
+
+        if (!transfer_vif1_word(dmac)) {
+            break;
+        }
     }
 }
 

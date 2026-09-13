@@ -94,6 +94,7 @@ uint64_t read32(Gif* gif, uint32_t addr);
 void write32(Gif* gif, uint32_t addr, uint64_t data);
 void write128(Gif* gif, uint32_t addr, uint128_t data);
 void fifo_write(Gif* gif, uint128_t data, int path);
+void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path);
 uint128_t fifo_read(Gif* gif);
 void set_backend(Gif* gif, void* udata, void (*transfer)(void*, int, const void*, size_t), void (*readback)(void*, void*, size_t));
 void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, size_t));

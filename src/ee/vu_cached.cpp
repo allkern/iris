@@ -24,6 +24,9 @@
 #include "gif.hpp"
 #include "vif.hpp"
 
+#include "profile_tag.hpp"
+#include "profile_counters.hpp"
+
 namespace iris::vu {
 
 #define LD_DI(i) (ins->ld_di[i])
@@ -2511,6 +2514,7 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
         return block;
     }
 
+    jit::save_runs(vu, block);
     jit::stash_block(vu, block);
 
     vu->block_cache_size++;
@@ -2583,6 +2587,7 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
     block->src_hash = hash_micro_mem(vu, block->tpc, block->src_len);
 
     jit::adopt_block(vu, block);
+    jit::restore_runs(vu, block);
 
     // Prime fast lookup with a pointer known to be valid after this insertion.
     vu->last_block_lookup_tpc = block->tpc;
@@ -2819,8 +2824,28 @@ bool execute_block(Vu* vu, Block* block) {
     return false;
 }
 
+static inline void count_block_run(Vu* vu, Block* block, bool compiled) {
+    uint64_t entries = block->entries.size();
+
+    if (vu->id && compiled) {
+        profile::count(profile::VU1_BLOCKS_COMPILED_RUN);
+        profile::count(profile::VU1_ENTRIES_COMPILED_RUN, entries);
+    } else if (vu->id) {
+        profile::count(profile::VU1_BLOCKS_INTERPRETED_RUN);
+        profile::count(profile::VU1_ENTRIES_INTERPRETED_RUN, entries);
+    } else if (compiled) {
+        profile::count(profile::VU0_BLOCKS_COMPILED_RUN);
+        profile::count(profile::VU0_ENTRIES_COMPILED_RUN, entries);
+    } else {
+        profile::count(profile::VU0_BLOCKS_INTERPRETED_RUN);
+        profile::count(profile::VU0_ENTRIES_INTERPRETED_RUN, entries);
+    }
+}
+
 static bool run_block(Vu* vu, Block* block) {
     if (vu->engine != VU_ENGINE_JIT) {
+        count_block_run(vu, block, false);
+
         return execute_block(vu, block);
     }
 
@@ -2867,6 +2892,8 @@ static bool run_block(Vu* vu, Block* block) {
         if ((int)block->runs < vu->jit_threshold) {
             block->runs++;
 
+            count_block_run(vu, block, false);
+
             return execute_block(vu, block);
         }
 
@@ -2876,17 +2903,33 @@ static bool run_block(Vu* vu, Block* block) {
     }
 
     if (!block->func) {
+        count_block_run(vu, block, false);
+
         return execute_block(vu, block);
     }
 
+    count_block_run(vu, block, true);
 
     block->func(vu);
-
 
     return vu->jit_exit != VU_JIT_CONTINUE;
 }
 
 static void run(Vu* vu) {
+    if (vu->id) {
+        profile::count(profile::VU1_PROGRAMS);
+    } else {
+        profile::count(profile::VU0_PROGRAMS);
+    }
+
+    int previous_jit = profile::active_jit;
+
+    if (vu->id) {
+        profile::active_jit = profile::JIT_VU1;
+    } else {
+        profile::active_jit = profile::JIT_VU0;
+    }
+
     if (vu->engine == VU_ENGINE_JIT) {
         jit::flush_if_needed(vu);
         jit::drain_blocks(vu);
@@ -2916,6 +2959,8 @@ static void run(Vu* vu) {
             break;
         }
     }
+
+    profile::active_jit = previous_jit;
 }
 
 void execute_program(Vu* vu, uint32_t addr) {
@@ -2982,12 +3027,16 @@ void write_vi(Vu* vu, int index, uint32_t value) {
 
             if (value & 2) {
                 // Reset VU0
-                reset(vu);
+                profile::count(profile::VU0_RESETS);
+
+                reset_registers(vu);
             }
 
             if (value & 0x200) {
                 // Reset VU1
-                reset(vu->vu1);
+                profile::count(profile::VU1_RESETS);
+
+                reset_registers(vu->vu1);
             }
         } break;
         case 29: return; // VU VPU-STAT register, read-only
@@ -3019,7 +3068,7 @@ uint32_t read_vi(Vu* vu, int index) {
     }
 }
 
-void reset(Vu* vu) {
+void reset_registers(Vu* vu) {
     vu->disable = false;
 
     for (int i = 0; i < 16; i++)
@@ -3074,15 +3123,19 @@ void reset(Vu* vu) {
     vu->upload_lo = ~0u;
     vu->upload_hi = 0;
 
+    vu->vf[0].w = 1.0;
+
+    fesetround(FE_TOWARDZERO);
+}
+
+void reset(Vu* vu) {
+    reset_registers(vu);
+
     jit::flush_blocks(vu);
 
     vu->block_cache_size = 0;
     vu->block_cache.clear();
     vu->block_cache.resize(vu->micro_mem_size+1);
-
-    vu->vf[0].w = 1.0;
-
-    fesetround(FE_TOWARDZERO);
 }
 
 void execute_program_tpc(Vu* vu) {
@@ -3131,6 +3184,7 @@ void end_micro_upload(Vu* vu) {
         return;
     }
 
+    profile::count(profile::VU_MICRO_UPLOADS);
 
     invalidate_range(vu, vu->upload_lo << 3, (vu->upload_hi - vu->upload_lo + 1) << 3);
 
@@ -3139,6 +3193,8 @@ void end_micro_upload(Vu* vu) {
 }
 
 void write_micro_mem(Vu* vu, uint32_t word_addr, uint64_t data) {
+    profile::count(profile::VU_MICRO_WRITES);
+
     word_addr &= vu->micro_mem_size;
 
     vu->micro_mem[word_addr] = data;

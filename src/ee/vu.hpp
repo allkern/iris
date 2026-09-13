@@ -110,6 +110,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data);
 void write_vi(Vu* vu, int index, uint32_t value);
 uint32_t read_vi(Vu* vu, int index);
 void reset(Vu* vu);
+void reset_registers(Vu* vu);
 void decode_upper(Vu* vu, uint32_t opcode);
 void decode_lower(Vu* vu, uint32_t opcode);
 void execute_lower(Vu* vu, uint32_t opcode);

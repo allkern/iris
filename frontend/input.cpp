@@ -768,6 +768,9 @@ void handle_keydown_event(Instance* iris, SDL_Event* event) {
 
             SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? true : false);
         } break;
+        case SDLK_F10: {
+            toggle_profiling(iris);
+        } break;
         case SDLK_F1: {
             iris_info(&iris->log.input, "Sending poweroff signal");
             cdvd::power_off(iris->ps2->cdvd);

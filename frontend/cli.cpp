@@ -328,7 +328,7 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->timescale, std::clamp((int)v.integer, 1, 16)); } },
     { "skip-fmv", 0, FLAG, nullptr, "Skip full motion videos",
         [](Instance* i, const Value& v) { set(i, i->skip_fmv, v.flag); } },
-    { "mac", 0, TEXT, "ADDR", "SMAP MAC address, e.g. 00:1A:2B:3C:4D:5E",
+    { "mac", 0, TEXT, "ADDR", "SMAP MAC address, e.g. 00:04:1F:82:30:31",
         [](Instance* i, const Value& v) {
             uint8_t mac[6];
 

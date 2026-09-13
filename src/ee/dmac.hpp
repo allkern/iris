@@ -66,6 +66,8 @@ struct Channel {
     uint32_t qword_addr;
     bool qword_valid;
 
+    uint32_t kick_address;
+
     Tag tag;
 };
 

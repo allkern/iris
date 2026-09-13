@@ -19,6 +19,9 @@
 #include "ee_fpu.hpp"
 #include "ee_lsw.hpp"
 
+#include "profile_tag.hpp"
+#include "profile_counters.hpp"
+
 #include "../jit_invoke.hpp"
 
 namespace iris::ee {
@@ -509,6 +512,8 @@ static inline int translate_virt(Ee* ee, uint32_t virt, uint32_t* phys) {
 void vfast_clear(Ee* ee);
 
 void purge_cache(Ee* ee) {
+    profile::count(profile::EE_CACHE_PURGES);
+
     vfast_clear(ee);
 
     for (int i = 0; i < CACHE_PAGECOUNT; i++) {
@@ -546,6 +551,8 @@ static inline void invalidate_page(Ee* ee, uint32_t addr) {
         return;
 
     // iris_debug(ee, "Invalidating page at addr={:08x} page={}", addr, page);
+
+    profile::count(profile::EE_STORE_INVALIDATIONS);
 
     ee->block_cache[page].dirty = true;
     ee->block_lut_gen++;
@@ -731,11 +738,37 @@ static inline asmjit::ujit::Gp fold_base(asmjit::ujit::UniCompiler& uc, void* ho
     return base;
 }
 
+static inline uint32_t fmv_probe_read32(Ee* ee, uint32_t addr) {
+    if (!ee->vfast_r || (addr & 0xfff) > 0xffc) {
+        return (uint32_t)bus_read32(ee, addr);
+    }
+
+    void* base = ee->vfast_r[addr >> 12];
+
+    if (!base) {
+        uint32_t page;
+
+        base = vfast_page_base(ee, addr, 0, &page);
+
+        if (!base) {
+            return (uint32_t)bus_read32(ee, addr);
+        }
+
+        ee->vfast_r[addr >> 12] = base;
+    }
+
+    uint32_t value;
+
+    memcpy(&value, (uint8_t*)base + (addr & 0xfff), sizeof(value));
+
+    return value;
+}
+
 static inline int skip_fmv(Ee* ee, uint32_t addr) {
-    if (bus_read32(ee, addr + 4) != 0x03E00008)
+    if (fmv_probe_read32(ee, addr + 4) != 0x03E00008)
         return 0;
 
-    uint32_t code = bus_read32(ee, addr);
+    uint32_t code = fmv_probe_read32(ee, addr);
     uint32_t p1 = 0x8c800040;
     uint32_t p2 = 0x8c020000 | (code & 0x1f0000) << 5;
 
@@ -743,7 +776,7 @@ static inline int skip_fmv(Ee* ee, uint32_t addr) {
         return 0;
     }
 
-    if (bus_read32(ee, addr + 8) != p2) {
+    if (fmv_probe_read32(ee, addr + 8) != p2) {
         return 0;
     }
 
@@ -3488,6 +3521,8 @@ static inline void write_pagetable(Ee* ee, const VtlbEntry* entry) {
         ee->pagetable[vpn1+i].global = entry->g;
     }
 
+    profile::count(profile::EE_TLB_WRITES);
+
     flush_cache(ee);
 }
 static inline void i_tlbwi(Ee* ee, const Instruction& i) {
@@ -4575,6 +4610,8 @@ static inline Block* find_block(Ee* ee, uint32_t pc) {
         return lut.block;
     }
 
+    profile::count(profile::EE_LOOKUP_MISSES);
+
     uint32_t phys;
 
     translate_virt(ee, ee->pc, &phys);
@@ -4586,6 +4623,8 @@ static inline Block* find_block(Ee* ee, uint32_t pc) {
     }
 
     if (ee->block_cache[page].dirty) {
+        profile::count(profile::EE_PAGES_DISCARDED);
+
         // Invalidate entire page if it's dirty (code was modified)
         delete[] ee->block_cache[page].blocks;
 
@@ -4889,6 +4928,8 @@ static int n = 0;
 
 void compile_block(Ee* ee, Block* block) {
     using namespace asmjit;
+
+    profile::count(profile::EE_BLOCKS_COMPILED);
 
     CodeHolder code;
 
@@ -8037,7 +8078,13 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
         ee->cycles_left = given;
         ee->exit_req = 0;
 
+        profile::count(profile::EE_DISPATCHES);
+
+        profile::active_jit = profile::JIT_EE;
+
         block->func(ee);
+
+        profile::active_jit = profile::JIT_NONE;
 
         int cycles = given - ee->cycles_left;
 
@@ -8146,6 +8193,8 @@ int step(Ee* ee) {
 }
 
 void flush_cache(Ee* ee) {
+    profile::count(profile::EE_CACHE_FLUSHES);
+
     vfast_clear(ee);
 
     if (ee->block_cache.empty())
@@ -8218,6 +8267,14 @@ void invalidate_block(Ee* ee, uint32_t addr) {
     // if (ee->block_cache[page].valid && !ee->block_cache[page].dirty) {
     //     iris_debug(ee, "Invalidating block at address 0x{:08x}", addr);
     // }
+
+    profile::count(profile::EE_DMA_INVALIDATIONS);
+
+    if (!ee->block_cache[page].valid || ee->block_cache[page].dirty) {
+        return;
+    }
+
+    profile::count(profile::EE_DMA_CODE_INVALIDATIONS);
 
     ee->block_cache[page].dirty = true;
     ee->block_lut_gen++;

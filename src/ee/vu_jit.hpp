@@ -22,6 +22,8 @@ void flush_if_needed(Vu* vu);
 void drain_blocks(Vu* vu);
 void stash_block(Vu* vu, Block* block);
 bool adopt_block(Vu* vu, Block* block);
+void save_runs(Vu* vu, Block* block);
+void restore_runs(Vu* vu, Block* block);
 uint64_t blocks_compiled(Jit* jit);
 uint64_t blocks_failed(Jit* jit);
 

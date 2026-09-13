@@ -6,6 +6,7 @@
 #include "vu_emit.hpp"
 
 #include "jit_call.hpp"
+#include "profile_counters.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -56,6 +57,7 @@ struct Victim {
 };
 
 constexpr size_t VICTIM_MAX = 8192;
+constexpr size_t HOT_RUNS_MAX = 16384;
 
 struct Jit {
     JitRuntime rt;
@@ -82,6 +84,7 @@ struct Jit {
     int in_flight = 0;
 
     std::unordered_map <uint64_t, Victim> victims;
+    std::unordered_map <uint64_t, uint32_t> hot_runs;
 };
 
 #define VU(m) ujit::mem_ptr(jit->state, offsetof(Vu, m))
@@ -198,6 +201,38 @@ static uint64_t victim_key(uint32_t tpc, uint64_t src_hash) {
     return ((uint64_t)tpc << 48) ^ src_hash;
 }
 
+void save_runs(Vu* vu, Block* block) {
+    Jit* jit = vu->jit;
+
+    if (!jit || block->func || !block->src_len || !block->runs) {
+        return;
+    }
+
+    if (jit->hot_runs.size() >= HOT_RUNS_MAX) {
+        jit->hot_runs.clear();
+    }
+
+    jit->hot_runs[victim_key(block->tpc, block->src_hash)] = block->runs;
+}
+
+void restore_runs(Vu* vu, Block* block) {
+    Jit* jit = vu->jit;
+
+    if (!jit || block->func || !block->src_len) {
+        return;
+    }
+
+    auto it = jit->hot_runs.find(victim_key(block->tpc, block->src_hash));
+
+    if (it == jit->hot_runs.end()) {
+        return;
+    }
+
+    block->runs = it->second;
+
+    jit->hot_runs.erase(it);
+}
+
 void stash_block(Vu* vu, Block* block) {
     Jit* jit = vu->jit;
 
@@ -305,6 +340,7 @@ void flush_blocks(Vu* vu) {
     }
 
     jit->victims.clear();
+    jit->hot_runs.clear();
     jit->rt.reset(ResetPolicy::kHard);
 
     jit->code_size = 0;
@@ -313,6 +349,8 @@ void flush_blocks(Vu* vu) {
 
 void flush_if_needed(Vu* vu) {
     if (vu->jit && vu->jit->wants_flush) {
+        profile::count(profile::VU_JIT_BUDGET_FLUSHES);
+
         flush_blocks(vu);
     }
 }
@@ -615,7 +653,11 @@ static void publish_block(Vu* vu, Block* block, Block** members, const uint32_t*
 void compile_block(Vu* vu, Block* block) {
     Jit* jit = vu->jit;
 
+    profile::count(profile::VU_COMPILE_REQUESTS);
+
     if (adopt_block(vu, block)) {
+        profile::count(profile::VU_COMPILES_ADOPTED);
+
         return;
     }
 

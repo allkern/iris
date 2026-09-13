@@ -19,6 +19,7 @@
 #include "ee/gif.hpp"
 #include "net.hpp"
 #include "slirp.hpp"
+#include "profiler.hpp"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
@@ -663,6 +664,10 @@ SDL_AppResult update(Instance* iris) {
         }
     }
 
+    if (profiler::is_running()) {
+        iris->profiling.frames++;
+    }
+
     // printf("ee_stats: cache: hits=%d misses=%d idle skips=%d\n", iris->ps2->ee->cache_hits, iris->ps2->ee->cache_misses, iris->ps2->ee->idle_skips);
 
     iris->ps2->ee->cache_hits = 0;
@@ -1061,9 +1066,150 @@ int get_menubar_height(Instance* iris) {
     return height;
 }
 
+static const char* profiling_present_mode_name(int mode) {
+    switch (mode) {
+        case render::FPS_30: return "30 fps";
+        case render::FPS_60: return "60 fps";
+        case render::VSYNC: return "VSync";
+        case render::UNCAPPED: return "Uncapped";
+    }
+
+    return "Unknown";
+}
+
+static const char* profiling_vu_engine_name(int engine) {
+    switch (engine) {
+        case vu::VU_ENGINE_INTERP: return "interpreter";
+        case vu::VU_ENGINE_JIT: return "jit";
+    }
+
+    return "unknown";
+}
+
+static std::string profiling_session_name(Instance* iris) {
+    if (iris->loaded.empty()) {
+        return "bios";
+    }
+
+    return std::filesystem::path(iris->loaded).stem().string();
+}
+
+static std::string profiling_timestamp() {
+    SDL_Time time;
+    SDL_DateTime date;
+
+    SDL_GetCurrentTime(&time);
+    SDL_TimeToDateTime(time, &date, true);
+
+    char buf[64];
+
+    sprintf(buf, "%04d%02d%02d-%02d%02d%02d",
+        date.year, date.month, date.day,
+        date.hour, date.minute, date.second
+    );
+
+    return buf;
+}
+
+static void write_profiling_header(Instance* iris, FILE* file) {
+    double seconds = profiling_elapsed_seconds(iris);
+    double fps = 0.0;
+
+    if (seconds > 0.0) {
+        fps = (double)iris->profiling.frames / seconds;
+    }
+
+    fprintf(file, "game: %s\n", iris->profiling.name.c_str());
+    fprintf(file, "file: %s\n", iris->loaded.c_str());
+    fprintf(file, "duration: %.2f s\n", seconds);
+    fprintf(file, "frames: %llu\n", (unsigned long long)iris->profiling.frames);
+    fprintf(file, "average fps: %.2f (measured with the profiler running)\n", fps);
+    fprintf(file, "present mode: %s\n", profiling_present_mode_name(iris->present_mode));
+    fprintf(file, "render resolution: %ux%u\n", (unsigned)iris->render_width, (unsigned)iris->render_height);
+
+    fprintf(file, "vu0: %s, vu1: %s, jit threshold %d, region limit %d\n",
+        profiling_vu_engine_name(iris->vu_engine[0]),
+        profiling_vu_engine_name(iris->vu_engine[1]),
+        iris->vu_jit_threshold,
+        iris->vu_region_limit
+    );
+
+    fprintf(file, "\n");
+}
+
+void start_profiling(Instance* iris) {
+    if (profiler::is_running()) {
+        return;
+    }
+
+    iris->profiling.name = profiling_session_name(iris);
+    iris->profiling.frames = 0;
+    iris->profiling.start = std::chrono::steady_clock::now();
+
+    profiler::start();
+
+    push_info(iris, "Profiling started, press F10 to stop");
+}
+
+void stop_profiling(Instance* iris) {
+    if (!profiler::is_running()) {
+        return;
+    }
+
+    std::filesystem::path directory = std::filesystem::path(iris->paths.pref_path) / "profiles";
+
+    std::error_code error;
+
+    std::filesystem::create_directories(directory, error);
+
+    std::string filename = iris->profiling.name + "-" + profiling_timestamp() + ".txt";
+
+    std::filesystem::path path = directory / filename;
+
+    FILE* file = fopen(path.string().c_str(), "w");
+
+    if (!file) {
+        profiler::stop_and_report(stdout, 60, iris->profiling.frames);
+
+        push_info(iris, "Couldn't write profile to " + path.string());
+
+        return;
+    }
+
+    write_profiling_header(iris, file);
+
+    profiler::stop_and_report(file, 60, iris->profiling.frames);
+
+    fclose(file);
+
+    push_info(iris, "Profile saved to " + path.string());
+}
+
+void toggle_profiling(Instance* iris) {
+    if (profiler::is_running()) {
+        stop_profiling(iris);
+    } else {
+        start_profiling(iris);
+    }
+}
+
+bool is_profiling(Instance* iris) {
+    return profiler::is_running();
+}
+
+double profiling_elapsed_seconds(Instance* iris) {
+    auto elapsed = std::chrono::steady_clock::now() - iris->profiling.start;
+
+    return std::chrono::duration <double> (elapsed).count();
+}
+
 void destroy(Instance* iris) {
     if (!iris)
         return;
+
+    if (profiler::is_running()) {
+        stop_profiling(iris);
+    }
 
     log_close_file(iris);
 

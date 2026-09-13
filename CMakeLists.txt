@@ -260,6 +260,7 @@ target_sources(iris PRIVATE
     frontend/shaders.cpp
     frontend/input.cpp
     frontend/iris.cpp
+    frontend/profiler.cpp
     frontend/elf.cpp
     frontend/net.cpp
     frontend/slirp.cpp
@@ -476,7 +477,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 endif()
 
 if (WIN32)
-    target_link_libraries(iris PRIVATE dwmapi)
+    target_link_libraries(iris PRIVATE dwmapi dbghelp winmm)
     target_sources(iris PRIVATE frontend/platform/windows.cpp)
 elseif (APPLE)
     set_source_files_properties(frontend/platform/macos.mm PROPERTIES

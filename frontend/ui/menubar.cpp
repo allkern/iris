@@ -540,6 +540,16 @@ static void show_debug_menu(Instance* iris) {
         menu::item(ICON_MS_GAMEPAD " DualShock debugger", NULL, &iris->applets.pad_debugger.open);
         menu::item(ICON_MS_TIMER " Timers", NULL, &iris->applets.timers.open);
         menu::item(ICON_MS_BUG_REPORT " Performance overlay", NULL, &iris->ui.show_overlay);
+
+        if (is_profiling(iris)) {
+            if (menu::item(ICON_MS_STOP_CIRCLE " Stop profiling", "F10")) {
+                stop_profiling(iris);
+            }
+        } else {
+            if (menu::item(ICON_MS_MONITORING " Start profiling", "F10")) {
+                start_profiling(iris);
+            }
+        }
         menu::item(ICON_MS_TERMINAL " Logs", NULL, &iris->applets.logs.open);
         menu::item(ICON_MS_LIST_ALT " Console", NULL, &iris->applets.console.open);
 

@@ -54,6 +54,17 @@ int get_format_bpp(int psm) {
     return 0;
 }
 
+static void show_profiling_status(Instance* iris) {
+    using namespace ImGui;
+
+    if (!is_profiling(iris)) {
+        return;
+    }
+
+    SeparatorEx(ImGuiSeparatorFlags_Vertical);
+    Text("Profiling %.1f s", profiling_elapsed_seconds(iris));
+}
+
 void show_status_bar(Instance* iris) {
     using namespace ImGui;
 
@@ -95,6 +106,8 @@ void show_status_bar(Instance* iris) {
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
             Text("%.1f fps", GetIO().Framerate);
 
+            show_profiling_status(iris);
+
             SetCursorPosX(GetWindowWidth() - width - 5);
             Text("%s", buf);
         } else {
@@ -108,6 +121,8 @@ void show_status_bar(Instance* iris) {
             Text("%s", modes[iris->ps2->gs->smode2 & 3]);
             SeparatorEx(ImGuiSeparatorFlags_Vertical);
             Text("%.1f fps", GetIO().Framerate);
+
+            show_profiling_status(iris);
 
             SetCursorPosX(GetWindowWidth() - width - 5);
             Text("%s", buf);

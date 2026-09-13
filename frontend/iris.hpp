@@ -415,6 +415,12 @@ struct Instance {
     int vu_region_limit = 1;
     int vu_jit_threshold = 200;
 
+    struct {
+        std::chrono::steady_clock::time_point start;
+        uint64_t frames = 0;
+        std::string name = "";
+    } profiling;
+
     float avg_fps;
     float avg_frames;
     int screenshot_counter = 0;
@@ -461,6 +467,12 @@ void init_logger(Instance* iris);
 void handle_animations(Instance* iris);
 
 void push_info(Instance* iris, std::string text);
+
+void start_profiling(Instance* iris);
+void stop_profiling(Instance* iris);
+void toggle_profiling(Instance* iris);
+bool is_profiling(Instance* iris);
+double profiling_elapsed_seconds(Instance* iris);
 
 void add_recent(Instance* iris, std::string file, RecentType type);
 int open_file(Instance* iris, std::string file);

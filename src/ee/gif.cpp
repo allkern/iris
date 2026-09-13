@@ -5,12 +5,13 @@
 #include "vu.hpp"
 #include "dmac.hpp"
 
+#include "profile_counters.hpp"
+
 namespace iris::gif {
 
 // Burnout games need the FQC field on STAT to change on
 // GIF DMA transfers, otherwise they'll hang on the initial
 // loading screen.
-
 
 static inline const char* gif_get_reg_name(uint8_t r) {
     switch (r) {
@@ -449,10 +450,9 @@ void write128(Gif* gif, uint32_t addr, uint128_t data) {
     fifo_write(gif, data, PATH3);
 }
 
-void fifo_write(Gif* gif, uint128_t data, int path) {
-    // Set FQC when getting GIF FIFO writes
-    gif->stat |= 0x1f000000;
+constexpr uint64_t GIF_BULK_MIN_QWORDS = 8;
 
+static inline void gif_write_qword(Gif* gif, uint128_t data, int path) {
     if (gif->state == State::RECV_TAG) {
         queue::push128(gif->queue[path], data);
 
@@ -491,6 +491,53 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
 
             queue::clear(queue);
         }
+    }
+}
+
+void fifo_write(Gif* gif, uint128_t data, int path) {
+    profile::count((profile::Counter)(profile::GIF_PATH1_QWORDS + path));
+
+    gif->stat |= 0x1f000000;
+
+    gif_write_qword(gif, data, path);
+}
+
+void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) {
+    profile::count((profile::Counter)(profile::GIF_PATH1_QWORDS + path), count);
+
+    gif->stat |= 0x1f000000;
+
+    uint32_t index = 0;
+
+    while (index < count) {
+        uint64_t remaining = count - index;
+
+        bool bulk = gif->state == State::PROCESSING
+                 && gif->tag.qwc > GIF_BULK_MIN_QWORDS
+                 && remaining > GIF_BULK_MIN_QWORDS;
+
+        if (bulk) {
+            uint64_t run = gif->tag.qwc - 1;
+
+            if (run > remaining) {
+                run = remaining;
+            }
+
+            queue::push_words(gif->queue[path], data + (size_t)index * 16, (size_t)run * 4);
+
+            gif->tag.qwc -= run;
+            index += (uint32_t)run;
+
+            continue;
+        }
+
+        uint128_t qword;
+
+        memcpy(&qword, data + (size_t)index * 16, sizeof(qword));
+
+        gif_write_qword(gif, qword, path);
+
+        index++;
     }
 }
 
