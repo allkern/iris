@@ -1721,6 +1721,30 @@ void jit_mem_store(Vu* vu, uint32_t addr, uint32_t field) {
     }
 }
 
+static inline uint16_t xgkick_send_data(Vu* vu, uint16_t addr, int qwc) {
+    if (qwc <= 0) {
+        return addr;
+    }
+
+    uint32_t index = addr & 0x3ff;
+    uint32_t remaining = (uint32_t)qwc;
+
+    while (remaining) {
+        uint32_t run = 0x400 - index;
+
+        if (run > remaining) {
+            run = remaining;
+        }
+
+        gif::fifo_write_qwords(vu->gif, (const uint8_t*)&vu->vu_mem[index], run, gif::PATH1);
+
+        remaining -= run;
+        index = (index + run) & 0x3ff;
+    }
+
+    return (uint16_t)index;
+}
+
 void jit_xgkick(Vu* vu, uint32_t start) {
     uint16_t addr = start;
 
@@ -1776,6 +1800,12 @@ void jit_xgkick(Vu* vu, uint32_t start) {
         }
 
         gif::fifo_write(vu->gif, tag, gif::PATH1);
+
+        if (vu->id) {
+            addr = xgkick_send_data(vu, addr, qwc);
+
+            continue;
+        }
 
         for (int i = 0; i < qwc; i++) {
             // iris_debug(vu, "{:08x}: {:08x} {:08x} {:08x} {:08x}", //     addr,
@@ -3150,6 +3180,10 @@ void execute_program_tpc(Vu* vu) {
 
 uint128_t* get_vu_mem_ptr(Vu* vu, uint32_t addr) {
     return &vu->vu_mem[addr & vu->vu_mem_size];
+}
+
+uint32_t get_vu_mem_size(Vu* vu) {
+    return (uint32_t)vu->vu_mem_size;
 }
 
 uint64_t* get_micro_mem_ptr(Vu* vu, uint32_t addr) {

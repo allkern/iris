@@ -1,5 +1,8 @@
 #include <new>
 #include <math.h>
+#include <cstdlib>
+#include <cstring>
+#include <vector>
 
 #include "vif.hpp"
 #include "gif.hpp"
@@ -1100,6 +1103,267 @@ void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last) {
     if (!vif->pending_words) {
         vif->state = VIF_IDLE;
     }
+}
+
+static bool vif_bulk_check_enabled() {
+    static const char* setting = getenv("IRIS_VIF_BULK_CHECK");
+    static const bool enabled = setting && setting[0] == '1';
+
+    return enabled;
+}
+
+static inline uint32_t vif_unpack_vertex_words(uint32_t fmt) {
+    switch (fmt) {
+        case UNPACK_V2_32: return 2;
+        case UNPACK_V2_16: return 1;
+        case UNPACK_V3_32: return 3;
+        case UNPACK_V4_32: return 4;
+        case UNPACK_V4_16: return 2;
+        case UNPACK_V4_8: return 1;
+    }
+
+    return 0;
+}
+
+static inline bool vif_unpack_counts_vertices(uint32_t fmt) {
+    return fmt == UNPACK_V2_32 || fmt == UNPACK_V2_16 || fmt == UNPACK_V3_32;
+}
+
+static inline bool vif_unpack_is_simple(const Vif* vif) {
+    if (vif->unpack_mask || vif->mode != 0) {
+        return false;
+    }
+
+    if (vif->unpack_cl != vif->unpack_wl || vif->unpack_wl == 0) {
+        return false;
+    }
+
+    return vif_unpack_vertex_words(vif->unpack_fmt) != 0;
+}
+
+static inline uint32_t vif_extend16(uint32_t value, bool sign_extend) {
+    if (!sign_extend) {
+        return value;
+    }
+
+    return (uint32_t)(int32_t)(int16_t)value;
+}
+
+static inline uint32_t vif_extend8(uint32_t value, bool sign_extend) {
+    if (!sign_extend) {
+        return value;
+    }
+
+    return (uint32_t)(int32_t)(int8_t)value;
+}
+
+static inline uint128_t vif_decode_vertex(uint32_t fmt, const uint8_t* source, bool sign_extend) {
+    uint128_t q = { 0 };
+
+    switch (fmt) {
+        case UNPACK_V2_32: {
+            memcpy(&q.u32[0], source, 8);
+        } break;
+
+        case UNPACK_V3_32: {
+            memcpy(&q.u32[0], source, 12);
+        } break;
+
+        case UNPACK_V4_32: {
+            memcpy(&q.u32[0], source, 16);
+        } break;
+
+        case UNPACK_V2_16: {
+            uint32_t word;
+
+            memcpy(&word, source, sizeof(word));
+
+            q.u32[0] = vif_extend16(word & 0xffff, sign_extend);
+            q.u32[1] = vif_extend16(word >> 16, sign_extend);
+        } break;
+
+        case UNPACK_V4_16: {
+            uint32_t words[2];
+
+            memcpy(words, source, sizeof(words));
+
+            q.u32[0] = vif_extend16(words[0] & 0xffff, sign_extend);
+            q.u32[1] = vif_extend16(words[0] >> 16, sign_extend);
+            q.u32[2] = vif_extend16(words[1] & 0xffff, sign_extend);
+            q.u32[3] = vif_extend16(words[1] >> 16, sign_extend);
+        } break;
+
+        case UNPACK_V4_8: {
+            q.u32[0] = vif_extend8(source[0], sign_extend);
+            q.u32[1] = vif_extend8(source[1], sign_extend);
+            q.u32[2] = vif_extend8(source[2], sign_extend);
+            q.u32[3] = vif_extend8(source[3], sign_extend);
+        } break;
+    }
+
+    return q;
+}
+
+static uint32_t vif_unpack_simple(Vif* vif, const uint8_t* data, uint32_t words) {
+    uint32_t per_vertex = vif_unpack_vertex_words(vif->unpack_fmt);
+    uint32_t vertices = words / per_vertex;
+
+    if (!vertices) {
+        return 0;
+    }
+
+    uint128_t* vu_mem = vu::get_vu_mem_ptr(vif->hw.vu, 0);
+    uint32_t mask = vu::get_vu_mem_size(vif->hw.vu);
+    uint32_t addr = vif->addr;
+    uint32_t fmt = vif->unpack_fmt;
+    bool sign_extend = !vif->unpack_usn;
+
+    for (uint32_t vertex = 0; vertex < vertices; vertex++) {
+        const uint8_t* source = data + (size_t)vertex * per_vertex * 4;
+
+        vu_mem[addr & mask] = vif_decode_vertex(fmt, source, sign_extend);
+
+        addr++;
+    }
+
+    uint32_t consumed = vertices * per_vertex;
+
+    if (per_vertex > 1) {
+        memcpy(vif->unpack_buf, data + (size_t)(consumed - per_vertex) * 4, (size_t)per_vertex * 4);
+    }
+
+    vif->addr = addr;
+    vif->unpack_cycle = (int)(((uint32_t)vif->unpack_cycle + vertices) % vif->unpack_wl);
+    vif->unpack_wcount -= (int)vertices;
+
+    if (vif_unpack_counts_vertices(fmt)) {
+        vif->unpack_num -= vertices;
+    }
+
+    vif->pending_words -= (int)consumed;
+
+    if (!vif->pending_words) {
+        vif->state = VIF_IDLE;
+    }
+
+    return consumed;
+}
+
+static void vif_unpack_span(Vif* vif, const uint8_t* data, uint32_t count) {
+    bool simple = vif_unpack_is_simple(vif);
+
+    uint32_t index = 0;
+
+    while (index < count) {
+        if (simple && !vif->shift) {
+            uint32_t consumed = vif_unpack_simple(vif, data + (size_t)index * 4, count - index);
+
+            if (consumed) {
+                profile::count(profile::VIF1_UNPACK_WORDS, consumed);
+
+                index += consumed;
+
+                continue;
+            }
+        }
+
+        uint32_t word;
+
+        memcpy(&word, data + (size_t)index * 4, sizeof(word));
+
+        vif_handle_fifo_write(vif, word);
+
+        index++;
+    }
+}
+
+static void vif_unpack_span_by_word(Vif* vif, const uint8_t* data, uint32_t count) {
+    for (uint32_t index = 0; index < count; index++) {
+        uint32_t word;
+
+        memcpy(&word, data + (size_t)index * 4, sizeof(word));
+
+        vif_handle_fifo_write(vif, word);
+    }
+}
+
+static bool vif_unpack_states_match(const Vif* a, const Vif* b) {
+    if (a->addr != b->addr || a->pending_words != b->pending_words || a->state != b->state) {
+        return false;
+    }
+
+    if (a->unpack_cycle != b->unpack_cycle || a->unpack_wcount != b->unpack_wcount || a->unpack_num != b->unpack_num) {
+        return false;
+    }
+
+    if (a->shift != b->shift || a->unpack_shift != b->unpack_shift || a->unpack_data != b->unpack_data) {
+        return false;
+    }
+
+    if (memcmp(a->unpack_buf, b->unpack_buf, sizeof(a->unpack_buf))) {
+        return false;
+    }
+
+    return memcmp(a->r, b->r, sizeof(a->r)) == 0;
+}
+
+static void vif_unpack_span_checked(Vif* vif, const uint8_t* data, uint32_t count) {
+    static std::vector <uint8_t> memory_before;
+    static std::vector <uint8_t> memory_bulk;
+    static int warnings = 0;
+
+    uint128_t* memory = vu::get_vu_mem_ptr(vif->hw.vu, 0);
+    size_t bytes = ((size_t)vu::get_vu_mem_size(vif->hw.vu) + 1) * sizeof(uint128_t);
+
+    memory_before.resize(bytes);
+    memory_bulk.resize(bytes);
+
+    Vif before = *vif;
+
+    memcpy(memory_before.data(), memory, bytes);
+
+    vif_unpack_span(vif, data, count);
+
+    Vif bulk = *vif;
+
+    memcpy(memory_bulk.data(), memory, bytes);
+
+    *vif = before;
+
+    memcpy(memory, memory_before.data(), bytes);
+
+    uint64_t counted = profile::counters[profile::VIF1_UNPACK_WORDS];
+
+    vif_unpack_span_by_word(vif, data, count);
+
+    profile::counters[profile::VIF1_UNPACK_WORDS] = counted;
+
+    bool same_state = vif_unpack_states_match(&bulk, vif);
+    bool same_memory = memcmp(memory_bulk.data(), memory, bytes) == 0;
+
+    if (same_state && same_memory) {
+        return;
+    }
+
+    profile::count(profile::VIF1_BULK_CHECK_MISMATCHES);
+
+    if (warnings < 16) {
+        warnings++;
+
+        iris_warning(vif, "vif1: bulk unpack differs from the word path fmt={:x} words={} state_matches={} memory_matches={}",
+            before.unpack_fmt, count, same_state, same_memory
+        );
+    }
+}
+
+void unpack_words(Vif* vif, const uint8_t* data, uint32_t count) {
+    if (vif_bulk_check_enabled()) {
+        vif_unpack_span_checked(vif, data, count);
+
+        return;
+    }
+
+    vif_unpack_span(vif, data, count);
 }
 
 #undef printf

@@ -48,6 +48,8 @@ enum Counter : int {
     VIF1_DMA_REPEATED_KICKS,
     VIF1_DMA_QWORDS,
     VIF1_DIRECT_BULK_QWORDS,
+    VIF1_UNPACK_BULK_QWORDS,
+    VIF1_BULK_CHECK_MISMATCHES,
     GIF_PATH1_QWORDS,
     GIF_PATH2_QWORDS,
     GIF_PATH3_QWORDS,
@@ -115,6 +117,8 @@ inline const char* counter_name(int counter) {
         case VIF1_DMA_REPEATED_KICKS: return "vif1 dma kicks at the previous start address";
         case VIF1_DMA_QWORDS: return "vif1 dma qwords";
         case VIF1_DIRECT_BULK_QWORDS: return "vif1 direct qwords taken in bulk";
+        case VIF1_UNPACK_BULK_QWORDS: return "vif1 unpack qwords taken in bulk";
+        case VIF1_BULK_CHECK_MISMATCHES: return "vif1 bulk unpack check mismatches";
         case GIF_PATH1_QWORDS: return "gif path1 qwords";
         case GIF_PATH2_QWORDS: return "gif path2 qwords";
         case GIF_PATH3_QWORDS: return "gif path3 qwords";

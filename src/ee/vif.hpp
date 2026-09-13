@@ -143,4 +143,18 @@ inline uint32_t direct_qwords_pending(const Vif* vif) {
     return (uint32_t)vif->pending_words / 4;
 }
 
+void unpack_words(Vif* vif, const uint8_t* data, uint32_t count);
+
+inline uint32_t unpack_words_pending(const Vif* vif) {
+    if (vif->state != VIF_RECV_DATA || !vif->dreq) {
+        return 0;
+    }
+
+    if ((vif->cmd & 0xe0) != 0x60) {
+        return 0;
+    }
+
+    return (uint32_t)vif->pending_words;
+}
+
 }

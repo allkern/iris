@@ -120,6 +120,7 @@ void cycle(Vu* vu);
 void execute_program(Vu* vu, uint32_t addr);
 void execute_program_tpc(Vu* vu);
 uint128_t* get_vu_mem_ptr(Vu* vu, uint32_t addr);
+uint32_t get_vu_mem_size(Vu* vu);
 uint64_t* get_micro_mem_ptr(Vu* vu, uint32_t addr);
 void write_micro_mem(Vu* vu, uint32_t word_addr, uint64_t data);
 void begin_micro_upload(Vu* vu);

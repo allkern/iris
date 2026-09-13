@@ -418,10 +418,16 @@ static inline uint32_t mfifo_wrap(Dmac* dmac, uint32_t addr) {
     return dmac->rbor | (addr & dmac->rbsr);
 }
 
+static inline uint32_t transfer_vif1_qwords(Dmac* dmac);
+
 void mfifo_handle_ref_tag(Dmac* dmac) {
     Channel* c = dmac->mfifo_drain;
 
     while (c->qwc) {
+        if (c == &dmac->channels[VIF1] && transfer_vif1_qwords(dmac)) {
+            continue;
+        }
+
         uint128_t q = read_qword(dmac, c->madr);
 
         if (c == &dmac->channels[VIF1]) {
@@ -628,7 +634,34 @@ static inline const uint8_t* dma_source_span(Dmac* dmac, uint32_t addr, uint32_t
     return ram->buf + addr;
 }
 
-static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac) {
+static inline uint32_t transfer_vif1_unpack_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending) {
+    uint32_t count = pending < c->qwc ? pending : c->qwc;
+
+    const uint8_t* source = dma_source_span(dmac, c->madr, count);
+
+    if (source) {
+        vif::unpack_words(vif, source, count * 4);
+    } else {
+        for (uint32_t index = 0; index < count; index++) {
+            uint128_t qword = read_qword(dmac, c->madr + index * 16);
+
+            vif::unpack_words(vif, (const uint8_t*)&qword, 4);
+        }
+    }
+
+    c->madr += count * 16;
+    c->qwc -= count;
+    c->qword_valid = false;
+
+    profile::count(profile::VIF1_DMA_QWORDS, count);
+    profile::count(profile::VIF1_UNPACK_BULK_QWORDS, count);
+
+    return count;
+}
+
+static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending);
+
+static inline uint32_t transfer_vif1_qwords(Dmac* dmac) {
     Channel* c = &dmac->channels[VIF1];
 
     if ((c->chcr & 0x100) == 0 || !c->qwc || c->index || (c->madr & 0xf)) {
@@ -637,12 +670,22 @@ static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac) {
 
     vif::Vif* vif = dmac->hw.bus->vif1;
 
-    uint32_t pending = vif::direct_qwords_pending(vif);
+    uint32_t direct = vif::direct_qwords_pending(vif);
 
-    if (!pending) {
-        return 0;
+    if (direct) {
+        return transfer_vif1_direct_qwords(dmac, c, vif, direct);
     }
 
+    uint32_t unpack = vif::unpack_words_pending(vif) / 4;
+
+    if (unpack) {
+        return transfer_vif1_unpack_qwords(dmac, c, vif, unpack);
+    }
+
+    return 0;
+}
+
+static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending) {
     uint32_t count = pending < c->qwc ? pending : c->qwc;
 
     gif::Gif* gif = dmac->hw.bus->gif;
@@ -833,7 +876,7 @@ void handle_vif1_transfer(Dmac* dmac) {
     channel->qword_valid = false;
 
     while (true) {
-        if (transfer_vif1_direct_qwords(dmac)) {
+        if (transfer_vif1_qwords(dmac)) {
             continue;
         }
 
