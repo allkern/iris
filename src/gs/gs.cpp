@@ -916,7 +916,7 @@ int write_signal(Gs* gs, uint64_t data) {
 
     test_gs_irq(gs);
 
-    return 1;
+    return 0;
 }
 
 int write_finish(Gs* gs, uint64_t data) {
@@ -925,7 +925,7 @@ int write_finish(Gs* gs, uint64_t data) {
 
     test_gs_irq(gs);
 
-    return 1;
+    return 0;
 }
 
 int write_label(Gs* gs, uint64_t data) {
@@ -936,7 +936,7 @@ int write_label(Gs* gs, uint64_t data) {
     gs->siglblid &= (~mask) << 32;
     gs->siglblid |= (data & mask) << 32;
 
-    return 1;
+    return 0;
 }
 
 }
