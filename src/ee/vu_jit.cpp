@@ -84,6 +84,7 @@ struct Jit {
     int in_flight = 0;
 
     std::unordered_map <uint64_t, Victim> victims;
+    std::unordered_map <uint32_t, std::vector <uint32_t>> victim_lengths_by_tpc;
     std::unordered_map <uint64_t, uint32_t> hot_runs;
 };
 
@@ -201,6 +202,46 @@ static uint64_t victim_key(uint32_t tpc, uint64_t src_hash) {
     return ((uint64_t)tpc << 48) ^ src_hash;
 }
 
+static void remember_victim_length(Jit* jit, uint32_t tpc, uint32_t src_len) {
+    std::vector <uint32_t>& lengths = jit->victim_lengths_by_tpc[tpc];
+
+    for (uint32_t length : lengths) {
+        if (length == src_len) {
+            return;
+        }
+    }
+
+    lengths.push_back(src_len);
+}
+
+uint32_t victim_lengths(Vu* vu, uint32_t tpc, uint32_t* lengths, uint32_t capacity) {
+    Jit* jit = vu->jit;
+
+    if (!jit || jit->victims.empty()) {
+        return 0;
+    }
+
+    auto it = jit->victim_lengths_by_tpc.find(tpc);
+
+    if (it == jit->victim_lengths_by_tpc.end()) {
+        return 0;
+    }
+
+    uint32_t count = 0;
+
+    for (uint32_t length : it->second) {
+        if (count == capacity) {
+            break;
+        }
+
+        lengths[count] = length;
+
+        count++;
+    }
+
+    return count;
+}
+
 void save_runs(Vu* vu, Block* block) {
     Jit* jit = vu->jit;
 
@@ -265,6 +306,8 @@ void stash_block(Vu* vu, Block* block) {
     v.entries = std::move(block->entries);
 
     jit->victims.emplace(key, std::move(v));
+
+    remember_victim_length(jit, block->tpc, block->src_len);
 
     block->func = nullptr;
     block->code_size = 0;
@@ -340,6 +383,7 @@ void flush_blocks(Vu* vu) {
     }
 
     jit->victims.clear();
+    jit->victim_lengths_by_tpc.clear();
     jit->hot_runs.clear();
     jit->rt.reset(ResetPolicy::kHard);
 
@@ -1043,6 +1087,8 @@ void drain_blocks(Vu* vu) {
                 v.entries = std::move(r.entries);
 
                 jit->victims.emplace(key, std::move(v));
+
+                remember_victim_length(jit, r.tpc, r.src_len);
 
                 jit->code_size += r.code_size;
                 jit->compiled++;

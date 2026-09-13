@@ -66,6 +66,7 @@ struct Vu {
 
     std::vector <Block> block_cache;
     int block_cache_size;
+    uint32_t longest_block;
 
     // Single-entry block cache for fast lookup (avoid hash computation)
     uint32_t last_block_lookup_tpc;

@@ -37,11 +37,9 @@ inline void push128(Queue* queue, uint128_t value) {
 }
 
 inline void push_words(Queue* queue, const uint8_t* data, size_t words) {
-    size_t size = queue->buf.size();
+    const uint32_t* first = (const uint32_t*)data;
 
-    queue->buf.resize(size + words);
-
-    memcpy(queue->buf.data() + size, data, words * sizeof(uint32_t));
+    queue->buf.insert(queue->buf.end(), first, first + words);
 }
 
 inline uint32_t pop(Queue* queue) {

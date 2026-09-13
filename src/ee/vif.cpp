@@ -1114,6 +1114,7 @@ static bool vif_bulk_check_enabled() {
 
 static inline uint32_t vif_unpack_vertex_words(uint32_t fmt) {
     switch (fmt) {
+        case UNPACK_S_32: return 1;
         case UNPACK_V2_32: return 2;
         case UNPACK_V2_16: return 1;
         case UNPACK_V3_32: return 3;
@@ -1161,6 +1162,17 @@ static inline uint128_t vif_decode_vertex(uint32_t fmt, const uint8_t* source, b
     uint128_t q = { 0 };
 
     switch (fmt) {
+        case UNPACK_S_32: {
+            uint32_t word;
+
+            memcpy(&word, source, sizeof(word));
+
+            q.u32[0] = word;
+            q.u32[1] = word;
+            q.u32[2] = word;
+            q.u32[3] = word;
+        } break;
+
         case UNPACK_V2_32: {
             memcpy(&q.u32[0], source, 8);
         } break;
@@ -1204,6 +1216,30 @@ static inline uint128_t vif_decode_vertex(uint32_t fmt, const uint8_t* source, b
     return q;
 }
 
+static void vif_unpack_finish_span(Vif* vif, const uint8_t* data, uint32_t vertices, const uint128_t& last) {
+    uint32_t fmt = vif->unpack_fmt;
+    uint32_t per_vertex = vif_unpack_vertex_words(fmt);
+    uint32_t consumed = vertices * per_vertex;
+
+    if (per_vertex > 1) {
+        memcpy(vif->unpack_buf, data + (size_t)(consumed - per_vertex) * 4, (size_t)per_vertex * 4);
+    }
+
+    if (fmt == UNPACK_S_32) {
+        vif->data = last;
+    }
+
+    if (vif_unpack_counts_vertices(fmt)) {
+        vif->unpack_num -= vertices;
+    }
+
+    vif->pending_words -= (int)consumed;
+
+    if (!vif->pending_words) {
+        vif->state = VIF_IDLE;
+    }
+}
+
 static uint32_t vif_unpack_simple(Vif* vif, const uint8_t* data, uint32_t words) {
     uint32_t per_vertex = vif_unpack_vertex_words(vif->unpack_fmt);
     uint32_t vertices = words / per_vertex;
@@ -1218,45 +1254,71 @@ static uint32_t vif_unpack_simple(Vif* vif, const uint8_t* data, uint32_t words)
     uint32_t fmt = vif->unpack_fmt;
     bool sign_extend = !vif->unpack_usn;
 
+    uint128_t last = { 0 };
+
     for (uint32_t vertex = 0; vertex < vertices; vertex++) {
         const uint8_t* source = data + (size_t)vertex * per_vertex * 4;
 
-        vu_mem[addr & mask] = vif_decode_vertex(fmt, source, sign_extend);
+        last = vif_decode_vertex(fmt, source, sign_extend);
+
+        vu_mem[addr & mask] = last;
 
         addr++;
-    }
-
-    uint32_t consumed = vertices * per_vertex;
-
-    if (per_vertex > 1) {
-        memcpy(vif->unpack_buf, data + (size_t)(consumed - per_vertex) * 4, (size_t)per_vertex * 4);
     }
 
     vif->addr = addr;
     vif->unpack_cycle = (int)(((uint32_t)vif->unpack_cycle + vertices) % vif->unpack_wl);
     vif->unpack_wcount -= (int)vertices;
 
-    if (vif_unpack_counts_vertices(fmt)) {
-        vif->unpack_num -= vertices;
+    vif_unpack_finish_span(vif, data, vertices, last);
+
+    return vertices * per_vertex;
+}
+
+static uint32_t vif_unpack_general(Vif* vif, const uint8_t* data, uint32_t words) {
+    uint32_t per_vertex = vif_unpack_vertex_words(vif->unpack_fmt);
+    uint32_t vertices = words / per_vertex;
+
+    if (!vertices) {
+        return 0;
     }
 
-    vif->pending_words -= (int)consumed;
+    uint32_t fmt = vif->unpack_fmt;
+    bool sign_extend = !vif->unpack_usn;
 
-    if (!vif->pending_words) {
-        vif->state = VIF_IDLE;
+    uint128_t last = { 0 };
+
+    for (uint32_t vertex = 0; vertex < vertices; vertex++) {
+        const uint8_t* source = data + (size_t)vertex * per_vertex * 4;
+
+        last = vif_decode_vertex(fmt, source, sign_extend);
+
+        vif_write_vu_mem(vif, last);
     }
 
-    return consumed;
+    vif_unpack_finish_span(vif, data, vertices, last);
+
+    return vertices * per_vertex;
 }
 
 static void vif_unpack_span(Vif* vif, const uint8_t* data, uint32_t count) {
+    bool bulk = vif_unpack_vertex_words(vif->unpack_fmt) != 0;
     bool simple = vif_unpack_is_simple(vif);
 
     uint32_t index = 0;
 
     while (index < count) {
-        if (simple && !vif->shift) {
-            uint32_t consumed = vif_unpack_simple(vif, data + (size_t)index * 4, count - index);
+        if (bulk && !vif->shift) {
+            const uint8_t* source = data + (size_t)index * 4;
+
+            uint32_t remaining = count - index;
+            uint32_t consumed = 0;
+
+            if (simple) {
+                consumed = vif_unpack_simple(vif, source, remaining);
+            } else {
+                consumed = vif_unpack_general(vif, source, remaining);
+            }
 
             if (consumed) {
                 profile::count(profile::VIF1_UNPACK_WORDS, consumed);
@@ -1301,6 +1363,10 @@ static bool vif_unpack_states_match(const Vif* a, const Vif* b) {
     }
 
     if (memcmp(a->unpack_buf, b->unpack_buf, sizeof(a->unpack_buf))) {
+        return false;
+    }
+
+    if (memcmp(&a->data, &b->data, sizeof(a->data))) {
         return false;
     }
 

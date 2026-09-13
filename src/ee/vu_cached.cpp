@@ -2530,11 +2530,46 @@ static inline uint64_t hash_micro_mem(Vu* vu, uint32_t tpc, uint32_t words) {
     return h;
 }
 
+static inline void note_block_length(Vu* vu, const Block* block) {
+    if ((uint32_t)block->cycles > vu->longest_block) {
+        vu->longest_block = (uint32_t)block->cycles;
+    }
+}
+
+static inline bool adopt_victim_without_decoding(Vu* vu, Block* block, int max_cycles) {
+    uint32_t lengths[8];
+    uint32_t count = jit::victim_lengths(vu, block->tpc, lengths, 8);
+
+    for (uint32_t index = 0; index < count; index++) {
+        if (lengths[index] > (uint32_t)max_cycles) {
+            continue;
+        }
+
+        block->src_len = lengths[index];
+        block->src_hash = hash_micro_mem(vu, block->tpc, lengths[index]);
+
+        if (jit::adopt_block(vu, block)) {
+            block->cycles = (int)block->src_len;
+
+            note_block_length(vu, block);
+
+            return true;
+        }
+    }
+
+    block->src_len = 0;
+    block->src_hash = 0;
+
+    return false;
+}
+
 Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
     Block* block = &vu->block_cache[tpc & vu->micro_mem_size];
 
     if (block->src_len && block->tpc == tpc && block->src_hash == hash_micro_mem(vu, tpc, block->src_len)) {
         block->cycles = (int)block->src_len;
+
+        note_block_length(vu, block);
 
         vu->block_cache_size++;
 
@@ -2553,6 +2588,13 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
     block->cycles = 0;
     block->runs = 0;
     block->entries.clear();
+
+    if (adopt_victim_without_decoding(vu, block, max_cycles)) {
+        vu->last_block_lookup_tpc = block->tpc;
+        vu->last_block_ptr = block;
+
+        return block;
+    }
 
     // iris_debug(vu, "caching block at {:04x}", tpc);
 
@@ -2615,6 +2657,8 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
 
     block->src_len = (uint32_t)block->cycles;
     block->src_hash = hash_micro_mem(vu, block->tpc, block->src_len);
+
+    note_block_length(vu, block);
 
     jit::adopt_block(vu, block);
     jit::restore_runs(vu, block);
@@ -3263,6 +3307,25 @@ void clear_block_cache(Vu* vu) {
     vu->last_block_ptr = nullptr;
 }
 
+static inline bool invalidate_intersecting_block(Block& block, uint32_t start_word, uint32_t invalid_word_count, uint32_t word_mask) {
+    if (!block.cycles) {
+        return false;
+    }
+
+    for (int i = 0; i < block.cycles; i++) {
+        const uint32_t block_word = (block.tpc + (uint32_t)i) & word_mask;
+        const uint32_t rel = (block_word - start_word) & word_mask;
+
+        if (rel < invalid_word_count) {
+            block.cycles = 0;
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
 void invalidate_range(Vu* vu, uint32_t addr, uint32_t size) {
     if (!size || vu->block_cache_size == 0) {
         return;
@@ -3297,30 +3360,25 @@ void invalidate_range(Vu* vu, uint32_t addr, uint32_t size) {
 
     int invalidated = 0;
 
-    for (Block& block : vu->block_cache) {
-        if (!block.cycles) {
-            continue;
-        }
+    const uint32_t longest = vu->longest_block;
+    const uint32_t window = longest ? invalid_word_count + longest - 1 : word_count;
 
-        bool intersects = false;
+    if (window < word_count) {
+        const uint32_t first_slot = (start_word - (longest - 1)) & word_mask;
 
+        for (uint32_t index = 0; index < window; index++) {
+            Block& block = vu->block_cache[(first_slot + index) & word_mask];
 
-        for (int i = 0; i < block.cycles; i++) {
-            const uint32_t block_word = (block.tpc + (uint32_t)i) & word_mask;
-            const uint32_t rel = (block_word - start_word) & word_mask;
-
-            if (rel < invalid_word_count) {
-                intersects = true;
-                break;
+            if (invalidate_intersecting_block(block, start_word, invalid_word_count, word_mask)) {
+                invalidated++;
             }
         }
-
-        if (!intersects) {
-            continue;
+    } else {
+        for (Block& block : vu->block_cache) {
+            if (invalidate_intersecting_block(block, start_word, invalid_word_count, word_mask)) {
+                invalidated++;
+            }
         }
-
-        block.cycles = 0;
-        invalidated++;
     }
 
     if (!invalidated) {
