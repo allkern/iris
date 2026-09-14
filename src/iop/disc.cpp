@@ -240,6 +240,10 @@ int detect_media(Disc* disc) {
         path_table_lba, path_table_lba,
         size, size);
 
+    if (sector_size != 2048) {
+        return DISC_MEDIA_CD;
+    }
+
     // DVD is dual-layer
     if ((volume_size * sector_size) < size) {
         disc->layer2_lba = volume_size;
