@@ -350,6 +350,8 @@ int open(iop::Iop* iop, int iomanx) {
 
         return 0;
     }
+
+    iris_info(iop, "{} opened \"{}\" (slot={})", iomanx ? "iomanx" : "ioman", absolute.string(), slot);
     
     // Return file handle
     iop::set_return(iop, IOMAN_HLE_FD_START + slot);

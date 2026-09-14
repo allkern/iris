@@ -360,6 +360,24 @@ static void ohci_soft_reset(Usb* usb) {
     usb->done_queue = 0;
 }
 
+static void ohci_roothub_reset(Usb* usb) {
+    for (int i = 0; i < OHCI_NUM_PORTS; i++) {
+        device::Device* dev = &usb->device[i];
+
+        if (!dev->connected) {
+            usb->hc_rh_port_status[i] = OHCI_PORT_PPS;
+
+            continue;
+        }
+
+        device::reset(dev);
+
+        usb->hc_rh_port_status[i] = OHCI_PORT_CCS | OHCI_PORT_PPS | OHCI_PORT_CSC;
+    }
+
+    ohci_update_rhsc(usb);
+}
+
 static void ohci_port_write(Usb* usb, int port, uint32_t data) {
     uint32_t* ps = &usb->hc_rh_port_status[port];
 
@@ -451,6 +469,7 @@ void set_port_device(Usb* usb, int port, int type) {
     device::free(dev);
 
     dev->logger = usb->logger;
+    dev->logger_id = usb->logger_id;
 
     usb->device_type[port] = type;
 
@@ -653,6 +672,10 @@ void write32(Usb* usb, uint32_t addr, uint64_t data) {
                 // iris_debug(usb, "HcControl={:08x} state->{} (PLE={} CLE={} BLE={} IE={})", //     v, names[new_state >> 6],
                 //     !!(v & OHCI_CTL_PLE), !!(v & OHCI_CTL_CLE),
                 //     !!(v & OHCI_CTL_BLE), !!(v & OHCI_CTL_IE));
+
+                if (new_state == OHCI_USB_RESET) {
+                    ohci_roothub_reset(usb);
+                }
 
                 if (new_state == OHCI_USB_OPERATIONAL)
                     ohci_update_rhsc(usb);

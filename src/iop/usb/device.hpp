@@ -32,6 +32,7 @@ struct Device {
 
     // Set by the host controller so port devices can log
     logger::Logger* logger = nullptr;
+    size_t logger_id = 0;
 };
 
 int transfer(Device* dev, int pid, int ep, uint8_t* buf, int len);

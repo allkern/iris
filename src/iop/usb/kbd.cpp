@@ -391,6 +391,9 @@ static const device::Ops ops = {
 void create(device::Device* dev) {
     Kbd* kbd = new Kbd();
 
+    kbd->logger = dev->logger;
+    kbd->logger_id = dev->logger_id;
+
     kbd->protocol = 1; // HID devices default to report protocol
 
     dev->connected = 1;

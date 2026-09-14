@@ -550,6 +550,9 @@ static const device::Ops ops = {
 void create(device::Device* dev) {
     An986* an986 = new An986();
 
+    an986->logger = dev->logger;
+    an986->logger_id = dev->logger_id;
+
     memcpy(an986->mac, default_mac, sizeof(an986->mac));
 
     dev->connected = 1;

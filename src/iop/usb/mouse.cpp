@@ -408,6 +408,9 @@ static const device::Ops ops = {
 void create(device::Device* dev) {
     Mouse* mouse = new Mouse();
 
+    mouse->logger = dev->logger;
+    mouse->logger_id = dev->logger_id;
+
     mouse->protocol = 1; // HID devices default to report protocol
 
     dev->connected = 1;

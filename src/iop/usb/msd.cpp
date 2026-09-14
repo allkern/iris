@@ -647,6 +647,9 @@ static const device::Ops ops = {
 void create(device::Device* dev) {
     Msd* msd = new Msd();
 
+    msd->logger = dev->logger;
+    msd->logger_id = dev->logger_id;
+
     msd->phase = PHASE_CBW;
 
     dev->connected = 1;
