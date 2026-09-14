@@ -340,6 +340,15 @@ size_t get_file_size(FILE* file) {
 
 int prev_pregap = 0;
 
+int get_mode_sector_size(int mode) {
+    switch (mode) {
+        case CUE_MODE1_2048: return 2048;
+        case CUE_MODE2_2336: return 2336;
+    }
+
+    return 2352;
+}
+
 int init_tracks(File* file, uint64_t* lba) {
     // 1 track per file case
     if (file->tracks.size() == 1) {
@@ -351,7 +360,7 @@ int init_tracks(File* file, uint64_t* lba) {
             data->pregap = data->index[1];
 
         data->start = *lba + data->pregap;
-        data->end = data->start + (file->size / 0x930);
+        data->end = data->start + (file->size / get_mode_sector_size(data->mode));
 
         *lba = data->end;
 
@@ -490,13 +499,7 @@ int read(Cue* cue, uint64_t lba, void* buf, int* sector_size) {
 
     Track* track = get_sector_track(cue, lba);
 
-    *sector_size = 2352;
-
-    switch (track->mode) {
-        case CUE_MODE1_2048: *sector_size = 2048; break;
-        case CUE_MODE2_2336: *sector_size = 2336; break;
-        case CUE_MODE2_2352: *sector_size = 2352; break;
-    }
+    *sector_size = get_mode_sector_size(track->mode);
 
     // If the LBA isn't too far but the track wasn't found
     // then we are being requested a pregap sector. Clear buffer
@@ -590,7 +593,7 @@ int read_sector(void* udata, unsigned char* buf, uint64_t lba, int size) {
 uint64_t get_size(void* udata) {
     Cue* cue = (Cue*)udata;
 
-    unsigned int size = 0;
+    uint64_t size = 0;
 
     for (File* file : cue->files)
         size += file->size;
@@ -599,7 +602,9 @@ uint64_t get_size(void* udata) {
 }
 
 int get_sector_size(void* udata) {
-    return 2352;
+    Cue* cue = (Cue*)udata;
+
+    return get_mode_sector_size(cue->tracks.front()->mode);
 }
 
 int init(Cue* cue, const char* path) {
