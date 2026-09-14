@@ -17,7 +17,18 @@ struct Config {
     std::string nameserver = "10.0.2.3";
 };
 
-bool valid_ipv4(const std::string& s);
+inline constexpr auto FIELD_NETWORK = 1 << 0;
+inline constexpr auto FIELD_NETMASK = 1 << 1;
+inline constexpr auto FIELD_GATEWAY = 1 << 2;
+inline constexpr auto FIELD_DHCP_START = 1 << 3;
+inline constexpr auto FIELD_NAMESERVER = 1 << 4;
+
+struct Validation {
+    int fields = 0;
+    const char* reason = nullptr;
+};
+
+Validation validate(const Config& cfg);
 bool start(speed::smap::Smap* smap, const Config& cfg, LogSource* log);
 void stop();
 void restart(speed::smap::Smap* smap, const Config& cfg, LogSource* log);

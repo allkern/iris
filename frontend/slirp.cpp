@@ -81,10 +81,63 @@ static bool parse_ipv4(const std::string& s, uint32_t* out) {
     return true;
 }
 
-bool valid_ipv4(const std::string& s) {
-    uint32_t tmp;
+Validation validate(const Config& cfg) {
+    Validation result;
 
-    return parse_ipv4(s, &tmp);
+    uint32_t network, netmask, gateway, dhcp, nameserver;
+
+    if (!parse_ipv4(cfg.network, &network)) {
+        result.fields |= FIELD_NETWORK;
+    }
+
+    if (!parse_ipv4(cfg.netmask, &netmask)) {
+        result.fields |= FIELD_NETMASK;
+    }
+
+    if (!parse_ipv4(cfg.gateway, &gateway)) {
+        result.fields |= FIELD_GATEWAY;
+    }
+
+    if (!parse_ipv4(cfg.dhcp_start, &dhcp)) {
+        result.fields |= FIELD_DHCP_START;
+    }
+
+    if (!parse_ipv4(cfg.nameserver, &nameserver)) {
+        result.fields |= FIELD_NAMESERVER;
+    }
+
+    if (result.fields) {
+        result.reason = "Not a valid IPv4 address";
+
+        return result;
+    }
+
+    uint32_t host_bits = ~netmask;
+
+    if (host_bits & (host_bits + 1)) {
+        result.fields = FIELD_NETMASK;
+        result.reason = "Netmask bits must be contiguous";
+    } else if (network & host_bits) {
+        result.fields = FIELD_NETWORK;
+        result.reason = "Network address has host bits set";
+    } else if ((gateway & netmask) != network) {
+        result.fields = FIELD_GATEWAY;
+        result.reason = "Gateway must be inside the network";
+    } else if ((nameserver & netmask) != network) {
+        result.fields = FIELD_NAMESERVER;
+        result.reason = "DNS server must be inside the network";
+    } else if (nameserver == gateway) {
+        result.fields = FIELD_NAMESERVER;
+        result.reason = "DNS server must be different from the gateway";
+    } else if ((dhcp & netmask) != network) {
+        result.fields = FIELD_DHCP_START;
+        result.reason = "DHCP start must be inside the network";
+    } else if ((dhcp == gateway) || (dhcp == nameserver)) {
+        result.fields = FIELD_DHCP_START;
+        result.reason = "DHCP start must be different from the gateway and DNS server";
+    }
+
+    return result;
 }
 
 slirp_ssize_t cb_send_packet(const void* buf, size_t len, void* opaque) {

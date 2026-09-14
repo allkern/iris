@@ -494,14 +494,12 @@ void show_system_settings(Instance* iris) {
 
     Spacing();
 
-    bool valid = true;
+    slirp::Validation validation = slirp::validate(iris->slirp_config);
 
-    auto ip_input = [&](const char* label, const char* id, std::string& value) {
+    auto ip_input = [&](const char* label, const char* id, std::string& value, int field) {
         TableNextRow();
 
-        bool ok = slirp::valid_ipv4(value);
-
-        valid = valid && ok;
+        bool ok = !(validation.fields & field);
 
         TableSetColumnIndex(0);
         AlignTextToFramePadding();
@@ -572,16 +570,22 @@ void show_system_settings(Instance* iris) {
             ps2::set_mac_address(iris->ps2, iris->mac_address);
         }
 
-        ip_input("Network",    "##network", iris->slirp_config.network);
-        ip_input("Netmask",    "##netmask", iris->slirp_config.netmask);
-        ip_input("Gateway",    "##gateway", iris->slirp_config.gateway);
-        ip_input("DHCP start", "##dhcp_start", iris->slirp_config.dhcp_start);
-        ip_input("DNS server", "##nameserver", iris->slirp_config.nameserver);
+        ip_input("Network",    "##network", iris->slirp_config.network, slirp::FIELD_NETWORK);
+        ip_input("Netmask",    "##netmask", iris->slirp_config.netmask, slirp::FIELD_NETMASK);
+        ip_input("Gateway",    "##gateway", iris->slirp_config.gateway, slirp::FIELD_GATEWAY);
+        ip_input("DHCP start", "##dhcp_start", iris->slirp_config.dhcp_start, slirp::FIELD_DHCP_START);
+        ip_input("DNS server", "##nameserver", iris->slirp_config.nameserver, slirp::FIELD_NAMESERVER);
 
         EndTable();
     }
 
-    BeginDisabled(!valid);
+    if (validation.reason) {
+        TextColored(ImVec4(230.0/255.0, 90.0/255.0, 90.0/255.0, 1.0), ICON_MS_ERROR " %s", validation.reason);
+
+        Spacing();
+    }
+
+    BeginDisabled(validation.fields != 0);
 
     if (Button("Apply##slirp")) {
         slirp::restart(iris->ps2->speed->smap, iris->slirp_config, &iris->log.slirp);
