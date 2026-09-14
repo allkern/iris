@@ -1341,6 +1341,17 @@ static inline void n_get_toc(Cdvd* cdvd) {
     }
 
     cdvd->buf_size = 2064;
+
+    switch (cdvd->disc_type) {
+        case iop::disc::CDVD_DISC_PSX_CD:
+        case iop::disc::CDVD_DISC_PSX_CDDA:
+        case iop::disc::CDVD_DISC_PS2_CD:
+        case iop::disc::CDVD_DISC_PS2_CDDA:
+        case iop::disc::CDVD_DISC_CDDA: {
+            cdvd->buf_size = 1024;
+        } break;
+    }
+
     cdvd->n_stat = 0x40;
 
     iop::dma::handle_cdvd_transfer(cdvd->hw.dma);
