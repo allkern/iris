@@ -2,6 +2,8 @@
 #include "profile_tag.hpp"
 #include "profile_counters.hpp"
 
+#include "ee/ee_dis.hpp"
+
 #if defined(_WIN32) && (defined(_M_X64) || defined(__x86_64__))
 
 #include <windows.h>
@@ -54,6 +56,8 @@ constexpr uint32_t NO_CALLERS = 0xffffffff;
 constexpr uint64_t STACK_SCAN_BYTES = 16 * 1024;
 constexpr int OTHER_THREAD_TOP = 10;
 constexpr double OTHER_THREAD_MIN_SHARE = 2.0;
+constexpr int DISPATCH_SITE_TOP = 30;
+constexpr int DISPATCH_SITE_DISASSEMBLED = 12;
 
 enum class CodeKind {
     IRIS,
@@ -654,6 +658,90 @@ void print_counters(FILE* out, uint64_t frames) {
     fprintf(out, "\n");
 }
 
+bool has_more_dispatches(const profile::DispatchSite* a, const profile::DispatchSite* b) {
+    return a->dispatches > b->dispatches;
+}
+
+void print_dispatch_site_words(FILE* out, const profile::DispatchSite& site) {
+    ee::dis::Dis dis = {};
+
+    dis.print_address = 1;
+    dis.print_opcode = 1;
+    dis.pseudo_instructions = 1;
+
+    for (uint32_t index = 0; index < site.word_count; index++) {
+        char buffer[512];
+
+        dis.pc = site.pc + index * 4;
+
+        ee::dis::disassemble(buffer, site.words[index], &dis);
+
+        fprintf(out, "dispatch:              %s\n", buffer);
+    }
+}
+
+void print_dispatch_sites(FILE* out, uint64_t frames) {
+    std::vector <const profile::DispatchSite*> sites;
+
+    uint64_t dispatches = 0;
+
+    for (const profile::DispatchSite& site : profile::dispatch_sites) {
+        if (!site.dispatches) {
+            continue;
+        }
+
+        sites.push_back(&site);
+
+        dispatches += site.dispatches;
+    }
+
+    if (sites.empty()) {
+        return;
+    }
+
+    std::sort(sites.begin(), sites.end(), has_more_dispatches);
+
+    fprintf(out, "dispatch: %zu ee block entry pcs, %llu dispatches tracked, %llu untracked\n",
+        sites.size(),
+        (unsigned long long)dispatches,
+        (unsigned long long)profile::dispatch_sites_untracked
+    );
+
+    fprintf(out, "dispatch: top %d entry pcs: dispatches per frame, share of tracked, guest cycles per dispatch, last exit pc\n", DISPATCH_SITE_TOP);
+
+    int shown = 0;
+
+    for (const profile::DispatchSite* site : sites) {
+        if (shown == DISPATCH_SITE_TOP) {
+            break;
+        }
+
+        double per_frame = 0.0;
+
+        if (frames) {
+            per_frame = (double)site->dispatches / (double)frames;
+        }
+
+        double cycles_per_dispatch = (double)site->cycles / (double)site->dispatches;
+
+        fprintf(out, "dispatch: %08x %12.1f/frame %6.2f%% %8.1f cycles  exit %08x\n",
+            site->pc,
+            per_frame,
+            percent(site->dispatches, dispatches),
+            cycles_per_dispatch,
+            site->last_exit_pc
+        );
+
+        if (shown < DISPATCH_SITE_DISASSEMBLED) {
+            print_dispatch_site_words(out, *site);
+        }
+
+        shown++;
+    }
+
+    fprintf(out, "\n");
+}
+
 std::vector <std::pair <uint32_t, uint64_t>> threads_by_busy(const std::unordered_map <uint32_t, ThreadProfile>& threads) {
     std::vector <std::pair <uint32_t, uint64_t>> sorted;
 
@@ -767,6 +855,9 @@ void start() {
     find_image_ranges();
 
     profile::reset_counters();
+    profile::reset_dispatch_sites();
+
+    profile::dispatch_sites_enabled = true;
 
     g_samples.clear();
     g_samples.reserve(1 << 20);
@@ -792,7 +883,10 @@ void stop_and_report(FILE* out, int top, uint64_t frames) {
 
     g_thread.join();
 
+    profile::dispatch_sites_enabled = false;
+
     print_counters(out, frames);
+    print_dispatch_sites(out, frames);
 
     if (g_samples.empty()) {
         fprintf(out, "profile: no samples\n");

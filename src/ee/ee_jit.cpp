@@ -713,14 +713,19 @@ void vfast_clear(Ee* ee) {
     if (ee->vfast_r) {
         memset(ee->vfast_r, 0, VFAST_ENTRIES * sizeof(void*));
     }
+
+    if (ee->vfast_w) {
+        memset(ee->vfast_w, 0, VFAST_ENTRIES * sizeof(void*));
+    }
 }
 
-#define VFAST_READ_FUNC(b)                                                     \
+#define VFAST_READ_FUNC(b)                                        \
     static uint64_t vfast_read ## b(Ee* ee, uint32_t addr) {      \
-        uint32_t pp;                                                              \
-        void* base = vfast_page_base(ee, addr, 0, &pp);                        \
-        if (base) ee->vfast_r[addr >> 12] = base;                                 \
-        return bus_read ## b(ee, addr);                                           \
+        uint32_t pp;                                              \
+        void* base = vfast_page_base(ee, addr, 0, &pp);           \
+        if (base) ee->vfast_r[addr >> 12] = base;                 \
+        else ee->uncached_reads++;                                \
+        return bus_read ## b(ee, addr);                           \
     }
 
 VFAST_READ_FUNC(8)
@@ -730,12 +735,113 @@ VFAST_READ_FUNC(64)
 
 #undef VFAST_READ_FUNC
 
+static const CachePage vfast_page_without_code = {};
+
+static inline void vfast_remember_write_page(Ee* ee, uint32_t addr) {
+    uint32_t physical_page;
+
+    void* base = vfast_page_base(ee, addr, 1, &physical_page);
+
+    if (!base) {
+        return;
+    }
+
+    if (physical_page == VFAST_SPR_PAGE) {
+        ee->vfast_w_page[addr >> 12] = &vfast_page_without_code;
+    } else {
+        ee->vfast_w_page[addr >> 12] = &ee->block_cache[physical_page];
+    }
+
+    ee->vfast_w[addr >> 12] = base;
+}
+
+#define VFAST_WRITE_FUNC(b)                                                    \
+    static void vfast_write ## b(Ee* ee, uint32_t addr, uint64_t data) {       \
+        vfast_remember_write_page(ee, addr);                                   \
+        bus_write ## b(ee, addr, data);                                        \
+    }
+
+VFAST_WRITE_FUNC(8)
+VFAST_WRITE_FUNC(16)
+VFAST_WRITE_FUNC(32)
+VFAST_WRITE_FUNC(64)
+
+#undef VFAST_WRITE_FUNC
+
+static void vfast_read128(Ee* ee, uint32_t addr, uint128_t* out) {
+    uint32_t physical_page;
+
+    void* base = vfast_page_base(ee, addr, 0, &physical_page);
+
+    if (base) {
+        ee->vfast_r[addr >> 12] = base;
+    } else {
+        ee->uncached_reads++;
+    }
+
+    *out = bus_read128(ee, addr);
+}
+
+static void vfast_write128(Ee* ee, uint32_t addr, const uint128_t* in) {
+    vfast_remember_write_page(ee, addr);
+
+    bus_write128(ee, addr, *in);
+}
+
 static inline asmjit::ujit::Gp fold_base(asmjit::ujit::UniCompiler& uc, void* host) {
     asmjit::ujit::Gp base = uc.new_gp_ptr();
 
     uc.mov(base, asmjit::Imm((uint64_t)(uintptr_t)host));
 
     return base;
+}
+
+static_assert(offsetof(CachePage, dirty) == offsetof(CachePage, valid) + 1);
+
+static constexpr uint32_t VFAST_PAGE_VALID_AND_CLEAN = 0x0001;
+
+struct VfastTarget {
+    asmjit::ujit::Gp index;
+    asmjit::ujit::Gp base;
+    asmjit::ujit::Gp offset;
+};
+
+static inline VfastTarget emit_vfast_lookup(asmjit::ujit::UniCompiler& uc, void** table, const asmjit::ujit::Gp& addr, asmjit::Label slow) {
+    VfastTarget target;
+
+    asmjit::ujit::Gp page = uc.new_gp32();
+    asmjit::ujit::Gp table_base = uc.new_gp_ptr();
+
+    target.index = uc.new_gp64();
+    target.base = uc.new_gp_ptr();
+    target.offset = uc.new_gp64();
+
+    uc.shr(page, addr, asmjit::Imm(12));
+    uc.mov(target.index.r32(), page);
+    uc.mov(table_base, asmjit::Imm((uint64_t)(uintptr_t)table));
+
+    uc.load_u64(target.base, asmjit::ujit::mem_ptr(table_base, target.index, 3));
+    uc.j(slow, asmjit::ujit::test_z(target.base));
+
+    uc.mov(target.offset.r32(), addr);
+    uc.and_(target.offset, target.offset, asmjit::Imm(0xfff));
+
+    return target;
+}
+
+static inline VfastTarget emit_vfast_write_lookup(asmjit::ujit::UniCompiler& uc, Ee* ee, const asmjit::ujit::Gp& addr, asmjit::Label slow) {
+    VfastTarget target = emit_vfast_lookup(uc, ee->vfast_w, addr, slow);
+
+    asmjit::ujit::Gp page_table = uc.new_gp_ptr();
+    asmjit::ujit::Gp page = uc.new_gp_ptr();
+    asmjit::ujit::Gp page_flags = uc.new_gp32();
+
+    uc.mov(page_table, asmjit::Imm((uint64_t)(uintptr_t)ee->vfast_w_page));
+    uc.load_u64(page, asmjit::ujit::mem_ptr(page_table, target.index, 3));
+    uc.load_u16(page_flags, asmjit::ujit::mem_ptr(page, offsetof(CachePage, valid)));
+    uc.j(slow, asmjit::ujit::cmp_eq(page_flags, asmjit::Imm(VFAST_PAGE_VALID_AND_CLEAN)));
+
+    return target;
 }
 
 static inline uint32_t fmv_probe_read32(Ee* ee, uint32_t addr) {
@@ -3751,6 +3857,8 @@ Ee* create(logger::Logger* logger, int ram_size) {
     ee->ram_size = ram_size - 1;
 
     ee->vfast_r = (void**)calloc(VFAST_ENTRIES, sizeof(void*));
+    ee->vfast_w = (void**)calloc(VFAST_ENTRIES, sizeof(void*));
+    ee->vfast_w_page = (const CachePage**)calloc(VFAST_ENTRIES, sizeof(const CachePage*));
 
     ee->spr = ram::create(logger, 0x4000);
     ee->block_cache.resize(CACHE_PAGECOUNT);
@@ -3820,6 +3928,8 @@ void destroy(Ee* ee) {
     ram::destroy(ee->spr);
 
     free(ee->vfast_r);
+    free(ee->vfast_w);
+    free(ee->vfast_w_page);
 
     delete ee->jit_logger;
     delete ee;
@@ -4471,6 +4581,38 @@ static inline void successors(const Block& block, SubBlock& sb) {
     }
 }
 
+static inline bool is_idle_safe_instruction(const Instruction& i) {
+    switch (i.id) {
+        case I_ADDIU: case I_DADDIU: case I_ADDU: case I_DADDU: case I_SUBU: case I_DSUBU:
+        case I_AND: case I_ANDI: case I_OR: case I_ORI: case I_XOR: case I_XORI: case I_NOR: case I_LUI:
+        case I_SLT: case I_SLTI: case I_SLTU: case I_SLTIU:
+        case I_SLL: case I_SRL: case I_SRA: case I_SLLV: case I_SRLV: case I_SRAV:
+        case I_DSLL: case I_DSRL: case I_DSRA: case I_DSLL32: case I_DSRL32: case I_DSRA32:
+        case I_DSLLV: case I_DSRLV: case I_DSRAV:
+        case I_MOVZ: case I_MOVN:
+        case I_BEQ: case I_BNE: case I_BLEZ: case I_BGTZ: case I_BLTZ: case I_BGEZ:
+        case I_BEQL: case I_BNEL: case I_BLEZL: case I_BGTZL: case I_BLTZL: case I_BGEZL:
+        case I_BLTZAL: case I_BGEZAL: case I_BLTZALL: case I_BGEZALL:
+        case I_J: case I_JAL: case I_JR: case I_JALR:
+            return true;
+
+        case I_LB: case I_LBU: case I_LH: case I_LHU: case I_LW: case I_LWU: case I_LD:
+            return i.rt.r != 0;
+    }
+
+    return false;
+}
+
+static inline bool is_idle_safe_block(const Block& block) {
+    for (const Instruction& i : block.instructions) {
+        if (!is_idle_safe_instruction(i)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 static inline Block* cache_block(Ee* ee, int max_cycles) {
     uint32_t phys;
 
@@ -4488,6 +4630,14 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
     }
 
     Block& block = ee->block_cache[page].blocks[offset];
+
+    if (block.region_interior) {
+        profile::count(profile::EE_COMPILES_AT_REGION_INTERIOR);
+    }
+
+    if (max_cycles < BLOCK_MAX_INSTRS) {
+        profile::count(profile::EE_COMPILES_FOR_IRQ_ENTRY);
+    }
 
 #ifdef _EE_DISABLE_CACHE
     block.instructions.clear();
@@ -4593,6 +4743,16 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
             ee->block_cache[page].min_code_addr = s.start_pc;
         }
     }
+
+    for (size_t k = 1; k < ee->sub_blocks.size(); k++) {
+        uint32_t interior_offset = (ee->sub_blocks[k].start_pc & (MIN_PAGESIZE - 1)) >> 2;
+
+        ee->block_cache[page].blocks[interior_offset].region_interior = true;
+    }
+
+    profile::count(profile::EE_COMPILED_INSTRUCTIONS, (uint64_t)block.instructions.size());
+
+    block.idle_safe = is_idle_safe_block(block);
 
     return &block;
 }
@@ -4974,6 +5134,8 @@ void compile_block(Ee* ee, Block* block) {
     PendKind pending = PEND_NONE;
     int32_t pending_off = 0;
 
+    bool delay_slot_nullified = false;
+
     auto sb_links = [&]() { return cur_sb->succ[0] >= 0 || cur_sb->succ[1] >= 0; };
 
     auto emit_branch_target = [&](int32_t off) {
@@ -5052,6 +5214,8 @@ void compile_block(Ee* ee, Block* block) {
                 emit_branch_target(off);
             }
         } else if (likely) {
+            delay_slot_nullified = true;
+
             if (sb_links()) {
                 emit_edge(0, off);
 
@@ -5131,6 +5295,7 @@ void compile_block(Ee* ee, Block* block) {
         cur_sb = &sb;
         cur_sb_i = sb_i;
         pending = PEND_NONE;
+        delay_slot_nullified = false;
 
         flush_reg_cache(ee, &uc);
 
@@ -5163,6 +5328,10 @@ void compile_block(Ee* ee, Block* block) {
         sub_imm32(uc, EE(cycles_left), sb.cycles);
 
         for (uint32_t sb_n = 0; sb_n < sb.count; sb_n++) {
+            if (delay_slot_nullified) {
+                break;
+            }
+
             const Instruction& i = block->instructions[sb.first + sb_n];
 
             switch (i.id) {
@@ -6146,6 +6315,32 @@ void compile_block(Ee* ee, Block* block) {
                     uc.add(addr, addr, rs.reg.r32());
                     uc.load_u32(val, EE(f[i.rt.r]));
 
+                    if (ee->vfast_w) {
+                        asmjit::Label slow = uc.new_label();
+                        asmjit::Label done = uc.new_label();
+
+                        VfastTarget target = emit_vfast_write_lookup(uc, ee, addr, slow);
+
+                        uc.store_u32(ujit::mem_ptr(target.base, target.offset, 0), val);
+
+                        uc.j(done);
+                        uc.bind(slow);
+
+                        InvokeNode* miss_node = jit_invoke(
+                            uc,
+                            (uintptr_t)vfast_write32,
+                            FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
+                        );
+
+                        miss_node->set_arg(0, ee->state_ptr);
+                        miss_node->set_arg(1, addr);
+                        miss_node->set_arg(2, val);
+
+                        uc.bind(done);
+
+                        break;
+                    }
+
                     InvokeNode* invoke_node = jit_invoke(
                         uc,
                         (uintptr_t)bus_write32,
@@ -6717,6 +6912,39 @@ void compile_block(Ee* ee, Block* block) {
                         ee->reg_cache[rt].constant = false;
                     }
 
+                    if (ee->vfast_r && rt) {
+                        asmjit::Label slow = uc.new_label();
+                        asmjit::Label done = uc.new_label();
+
+                        VfastTarget source = emit_vfast_lookup(uc, ee->vfast_r, addr, slow);
+
+                        ujit::Vec value = uc.new_vec128();
+
+                        uc.v_loadu128(value, ujit::mem_ptr(source.base, source.offset, 0));
+                        uc.v_storeu128(ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + rt * sizeof(uint128_t)), value);
+
+                        uc.j(done);
+                        uc.bind(slow);
+
+                        ujit::Gp destination = uc.new_gp_ptr();
+
+                        uc.lea(destination, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + rt * sizeof(uint128_t)));
+
+                        InvokeNode* miss_node = jit_invoke(
+                            uc,
+                            (uintptr_t)vfast_read128,
+                            FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
+                        );
+
+                        miss_node->set_arg(0, ee->state_ptr);
+                        miss_node->set_arg(1, addr);
+                        miss_node->set_arg(2, destination);
+
+                        uc.bind(done);
+
+                        break;
+                    }
+
                     ujit::Gp ptr = uc.new_gp_ptr();
 
                     uc.lea(ptr, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + rt * sizeof(uint128_t)));
@@ -6742,13 +6970,14 @@ void compile_block(Ee* ee, Block* block) {
                 case I_SW:
                 case I_SD: {
                     uintptr_t func;
+                    uintptr_t miss_func;
                     int bytes;
 
                     switch (i.id) {
-                        case I_SB: func = (uintptr_t)bus_write8; bytes = 1; break;
-                        case I_SH: func = (uintptr_t)bus_write16; bytes = 2; break;
-                        case I_SW: func = (uintptr_t)bus_write32; bytes = 4; break;
-                        case I_SD: func = (uintptr_t)bus_write64; bytes = 8; break;
+                        case I_SB: func = (uintptr_t)bus_write8; miss_func = (uintptr_t)vfast_write8; bytes = 1; break;
+                        case I_SH: func = (uintptr_t)bus_write16; miss_func = (uintptr_t)vfast_write16; bytes = 2; break;
+                        case I_SW: func = (uintptr_t)bus_write32; miss_func = (uintptr_t)vfast_write32; bytes = 4; break;
+                        case I_SD: func = (uintptr_t)bus_write64; miss_func = (uintptr_t)vfast_write64; bytes = 8; break;
                     }
 
                     {
@@ -6796,6 +7025,45 @@ void compile_block(Ee* ee, Block* block) {
 
                             continue;
                         }
+                    }
+
+                    if (ee->vfast_w) {
+                        CachedReg& frt = get_reg(ee, &uc, i.rt.r);
+                        CachedReg& frs = get_reg(ee, &uc, i.rs.r);
+
+                        ujit::Gp addr = uc.new_gp32();
+
+                        uc.mov(addr, Imm((int32_t)(int16_t)i.i16));
+                        uc.add(addr, addr, frs.reg.r32());
+
+                        asmjit::Label slow = uc.new_label();
+                        asmjit::Label done = uc.new_label();
+
+                        VfastTarget target = emit_vfast_write_lookup(uc, ee, addr, slow);
+
+                        switch (i.id) {
+                            case I_SB: uc.store_u8(ujit::mem_ptr(target.base, target.offset, 0), frt.reg); break;
+                            case I_SH: uc.store_u16(ujit::mem_ptr(target.base, target.offset, 0), frt.reg); break;
+                            case I_SW: uc.store_u32(ujit::mem_ptr(target.base, target.offset, 0), frt.reg); break;
+                            case I_SD: uc.store_u64(ujit::mem_ptr(target.base, target.offset, 0), frt.reg); break;
+                        }
+
+                        uc.j(done);
+                        uc.bind(slow);
+
+                        InvokeNode* miss_node = jit_invoke(
+                            uc,
+                            miss_func,
+                            FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
+                        );
+
+                        miss_node->set_arg(0, ee->state_ptr);
+                        miss_node->set_arg(1, addr);
+                        miss_node->set_arg(2, frt.reg);
+
+                        uc.bind(done);
+
+                        break;
                     }
 
                     CachedReg& rt = get_reg(ee, &uc, i.rt.r);
@@ -6902,6 +7170,39 @@ void compile_block(Ee* ee, Block* block) {
 
                     sync_reg_to_mem(ee, uc, i.rt.r);
 
+                    if (ee->vfast_w) {
+                        asmjit::Label slow = uc.new_label();
+                        asmjit::Label done = uc.new_label();
+
+                        VfastTarget target = emit_vfast_write_lookup(uc, ee, addr, slow);
+
+                        ujit::Vec value = uc.new_vec128();
+
+                        uc.v_loadu128(value, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i.rt.r * sizeof(uint128_t)));
+                        uc.v_storeu128(ujit::mem_ptr(target.base, target.offset, 0), value);
+
+                        uc.j(done);
+                        uc.bind(slow);
+
+                        ujit::Gp source = uc.new_gp_ptr();
+
+                        uc.lea(source, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i.rt.r * sizeof(uint128_t)));
+
+                        InvokeNode* miss_node = jit_invoke(
+                            uc,
+                            (uintptr_t)vfast_write128,
+                            FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
+                        );
+
+                        miss_node->set_arg(0, ee->state_ptr);
+                        miss_node->set_arg(1, addr);
+                        miss_node->set_arg(2, source);
+
+                        uc.bind(done);
+
+                        break;
+                    }
+
                     ujit::Gp ptr = uc.new_gp_ptr();
 
                     uc.lea(ptr, ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + i.rt.r * sizeof(uint128_t)));
@@ -6935,6 +7236,35 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u64(ptr, EE(vu0));
                     uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + rt * sizeof(vu::Reg128))));
 
+                    if (ee->vfast_r) {
+                        asmjit::Label slow = uc.new_label();
+                        asmjit::Label done = uc.new_label();
+
+                        VfastTarget source = emit_vfast_lookup(uc, ee->vfast_r, addr, slow);
+
+                        ujit::Vec value = uc.new_vec128();
+
+                        uc.v_loadu128(value, ujit::mem_ptr(source.base, source.offset, 0));
+                        uc.v_storeu128(ujit::mem_ptr(ptr, 0), value);
+
+                        uc.j(done);
+                        uc.bind(slow);
+
+                        InvokeNode* miss_node = jit_invoke(
+                            uc,
+                            (uintptr_t)vfast_read128,
+                            FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
+                        );
+
+                        miss_node->set_arg(0, ee->state_ptr);
+                        miss_node->set_arg(1, addr);
+                        miss_node->set_arg(2, ptr);
+
+                        uc.bind(done);
+
+                        break;
+                    }
+
                     InvokeNode* invoke_node = jit_invoke(
                         uc,
                         (uintptr_t)jit_read128,
@@ -6959,6 +7289,35 @@ void compile_block(Ee* ee, Block* block) {
 
                     uc.load_u64(ptr, EE(vu0));
                     uc.lea(ptr, ujit::mem_ptr(ptr, (int)(offsetof(vu::Vu, vf) + i.rt.r * sizeof(vu::Reg128))));
+
+                    if (ee->vfast_w) {
+                        asmjit::Label slow = uc.new_label();
+                        asmjit::Label done = uc.new_label();
+
+                        VfastTarget target = emit_vfast_write_lookup(uc, ee, addr, slow);
+
+                        ujit::Vec value = uc.new_vec128();
+
+                        uc.v_loadu128(value, ujit::mem_ptr(ptr, 0));
+                        uc.v_storeu128(ujit::mem_ptr(target.base, target.offset, 0), value);
+
+                        uc.j(done);
+                        uc.bind(slow);
+
+                        InvokeNode* miss_node = jit_invoke(
+                            uc,
+                            (uintptr_t)vfast_write128,
+                            FuncSignature::build<void, Ee*, uint32_t, uint128_t*>()
+                        );
+
+                        miss_node->set_arg(0, ee->state_ptr);
+                        miss_node->set_arg(1, addr);
+                        miss_node->set_arg(2, ptr);
+
+                        uc.bind(done);
+
+                        break;
+                    }
 
                     InvokeNode* invoke_node = jit_invoke(
                         uc,
@@ -8038,8 +8397,219 @@ static inline bool is_irq_pending(Ee* ee) {
     return irq_enabled && (int0_pending || int1_pending);
 }
 
+static inline uint32_t read_dispatch_site_words(Ee* ee, uint32_t pc, uint32_t* words) {
+    uint32_t count = 0;
+
+    while (count < profile::DISPATCH_SITE_WORDS) {
+        uint32_t addr = pc + count * 4;
+        uint32_t physical_page;
+
+        void* base = vfast_page_base(ee, addr, 0, &physical_page);
+
+        if (!base) {
+            break;
+        }
+
+        memcpy(&words[count], (uint8_t*)base + (addr & 0xfff), sizeof(uint32_t));
+
+        count++;
+    }
+
+    return count;
+}
+
+static inline void record_dispatch_site(Ee* ee, uint32_t pc, int cycles) {
+    profile::DispatchSite* site = profile::find_dispatch_site(pc);
+
+    if (!site) {
+        return;
+    }
+
+    if (!site->dispatches) {
+        site->pc = pc;
+        site->word_count = read_dispatch_site_words(ee, pc, site->words);
+    }
+
+    site->dispatches++;
+    site->cycles += (uint64_t)cycles;
+    site->last_exit_pc = ee->pc;
+}
+
+enum IdleLoopMode {
+    IDLE_LOOP_OFF,
+    IDLE_LOOP_SKIP,
+    IDLE_LOOP_CHECK
+};
+
+static IdleLoopMode read_idle_loop_mode() {
+    const char* setting = getenv("IRIS_EE_IDLE_LOOP");
+
+    if (!setting) {
+        return IDLE_LOOP_SKIP;
+    }
+
+    if (!strcmp(setting, "0")) {
+        return IDLE_LOOP_OFF;
+    }
+
+    if (!strcmp(setting, "check")) {
+        return IDLE_LOOP_CHECK;
+    }
+
+    return IDLE_LOOP_SKIP;
+}
+
+static const IdleLoopMode configured_idle_loop_mode = read_idle_loop_mode();
+
+static inline IdleLoopMode idle_loop_mode() {
+    return configured_idle_loop_mode;
+}
+
+static inline bool idle_loop_state_matches(const Ee* ee) {
+    const IdleLoop& loop = ee->idle_loop;
+
+    if (memcmp(loop.r, ee->r, sizeof(loop.r))) {
+        return false;
+    }
+
+    if (memcmp(&loop.hi, &ee->hi, sizeof(loop.hi))) {
+        return false;
+    }
+
+    return memcmp(&loop.lo, &ee->lo, sizeof(loop.lo)) == 0;
+}
+
+static inline void arm_idle_loop(Ee* ee) {
+    IdleLoop& loop = ee->idle_loop;
+
+    loop.armed = true;
+    loop.verified = false;
+    loop.head_pc = ee->pc;
+    loop.blocks = 1;
+    loop.head_total_cycles = ee->total_cycles;
+    loop.head_uncached_reads = ee->uncached_reads;
+
+    memcpy(loop.r, ee->r, sizeof(loop.r));
+    memcpy(&loop.hi, &ee->hi, sizeof(loop.hi));
+    memcpy(&loop.lo, &ee->lo, sizeof(loop.lo));
+}
+
+static inline void reject_idle_loop(IdleLoop& loop) {
+    loop.armed = false;
+    loop.rejected_pc = loop.head_pc;
+    loop.rejection_cooldown = IDLE_LOOP_REJECTION_COOLDOWN;
+}
+
+static inline bool dispatched_recently(const IdleLoop& loop, uint32_t pc) {
+    for (int index = 0; index < IDLE_LOOP_MAX_BLOCKS; index++) {
+        if (loop.recent_pcs[index] == pc) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static inline void remember_dispatch(IdleLoop& loop, uint32_t pc) {
+    loop.recent_pcs[loop.recent_next] = pc;
+    loop.recent_next = (loop.recent_next + 1) % IDLE_LOOP_MAX_BLOCKS;
+}
+
+static inline void report_idle_loop_misprediction(Ee* ee) {
+    static int warnings = 0;
+
+    profile::count(profile::EE_IDLE_LOOP_MISPREDICTIONS);
+
+    if (warnings < 16) {
+        warnings++;
+
+        iris_warning(ee, "ee: idle loop at {:08x} changed state after it was verified", ee->pc);
+    }
+}
+
+static inline int complete_idle_loop_iteration(Ee* ee, int remaining) {
+    IdleLoop& loop = ee->idle_loop;
+
+    uint64_t iteration_cycles = ee->total_cycles - loop.head_total_cycles;
+
+    bool idle = iteration_cycles > 0
+        && iteration_cycles <= IDLE_LOOP_MAX_CYCLES
+        && ee->uncached_reads == loop.head_uncached_reads
+        && idle_loop_state_matches(ee);
+
+    if (!idle) {
+        if (loop.verified) {
+            report_idle_loop_misprediction(ee);
+        }
+
+        reject_idle_loop(loop);
+
+        return 0;
+    }
+
+    profile::count(profile::EE_IDLE_LOOP_ITERATIONS_VERIFIED);
+
+    loop.verified = true;
+    loop.blocks = 1;
+    loop.head_total_cycles = ee->total_cycles;
+
+    if (idle_loop_mode() != IDLE_LOOP_SKIP) {
+        return 0;
+    }
+
+    if ((uint64_t)remaining <= iteration_cycles) {
+        return 0;
+    }
+
+    uint64_t iterations = ((uint64_t)remaining - 1) / iteration_cycles;
+    int skipped = (int)(iterations * iteration_cycles);
+
+    ee->count += skipped;
+    ee->total_cycles += skipped;
+
+    loop.head_total_cycles = ee->total_cycles;
+
+    profile::count(profile::EE_IDLE_LOOP_SKIPS);
+    profile::count(profile::EE_IDLE_LOOP_SKIPPED_CYCLES, (uint64_t)skipped);
+
+    return skipped;
+}
+
+static inline int observe_idle_loop(Ee* ee, const Block* block, int remaining) {
+    IdleLoop& loop = ee->idle_loop;
+
+    uint32_t pc = ee->pc;
+    int skipped = 0;
+
+    if (loop.armed) {
+        if (pc == loop.head_pc) {
+            skipped = complete_idle_loop_iteration(ee, remaining);
+        } else {
+            loop.blocks++;
+
+            if (!block->idle_safe || loop.blocks > IDLE_LOOP_MAX_BLOCKS) {
+                reject_idle_loop(loop);
+            }
+        }
+    }
+
+    if (!loop.armed && block->idle_safe && dispatched_recently(loop, pc)) {
+        if (loop.rejection_cooldown && loop.rejected_pc == pc) {
+            loop.rejection_cooldown--;
+        } else {
+            arm_idle_loop(ee);
+        }
+    }
+
+    remember_dispatch(loop, pc);
+
+    return skipped;
+}
+
 static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
     int total = 0;
+
+    ee->idle_loop.armed = false;
 
     while (true) {
         if (ee->breakpoint_count) {
@@ -8066,6 +8636,10 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
         }
 
         if (!block->func) break;
+
+        if (idle_loop_mode() != IDLE_LOOP_OFF && !ee->breakpoint_count) {
+            total += observe_idle_loop(ee, block, budget - total);
+        }
 
         ee->block_pc = ee->pc;
         ee->pc = block->end_pc - 4;
@@ -8095,6 +8669,10 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
         ee->pc = ee->next_pc;
 
         total += cycles;
+
+        if (profile::dispatch_sites_enabled) {
+            record_dispatch_site(ee, ee->block_pc, cycles);
+        }
 
         if (ee->pending_purge) {
             iris_debug(ee, "Purging cache");

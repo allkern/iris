@@ -479,6 +479,8 @@ struct Block {
     uint32_t end_pc = 0;
     CompiledBlock func;
     uint64_t hits;
+    bool region_interior = false;
+    bool idle_safe = false;
 };
 
 enum BlockTerm {
@@ -552,6 +554,30 @@ struct BlockLutEntry {
 };
 
 constexpr int EE_MAX_BREAKPOINTS = 64;
+
+inline constexpr auto IDLE_LOOP_MAX_BLOCKS = 4;
+inline constexpr auto IDLE_LOOP_MAX_CYCLES = 256;
+inline constexpr auto IDLE_LOOP_REJECTION_COOLDOWN = 64;
+
+struct IdleLoop {
+    uint32_t recent_pcs[IDLE_LOOP_MAX_BLOCKS];
+    uint32_t recent_next;
+
+    bool armed;
+    bool verified;
+
+    uint32_t head_pc;
+    uint32_t blocks;
+    uint64_t head_total_cycles;
+    uint64_t head_uncached_reads;
+
+    uint32_t rejected_pc;
+    uint32_t rejection_cooldown;
+
+    uint128_t r[32];
+    uint128_t hi;
+    uint128_t lo;
+};
 
 struct Ee {
     EE_ALIGNED16 uint128_t r[32];
@@ -665,6 +691,8 @@ struct Ee {
     uint32_t block_lut_gen;
 
     void** vfast_r;
+    void** vfast_w;
+    const CachePage** vfast_w_page;
 
     // ASMJIT stuff
     asmjit::JitRuntime rt;
@@ -697,6 +725,9 @@ struct Ee {
     uint64_t cache_misses;
     uint64_t cache_hits;
     uint64_t idle_skips;
+    uint64_t uncached_reads;
+
+    IdleLoop idle_loop;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;

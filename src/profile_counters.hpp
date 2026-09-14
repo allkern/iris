@@ -16,6 +16,13 @@ enum Counter : int {
     EE_CACHE_FLUSHES,
     EE_CACHE_PURGES,
     EE_PAGES_DISCARDED,
+    EE_COMPILES_AT_REGION_INTERIOR,
+    EE_COMPILES_FOR_IRQ_ENTRY,
+    EE_COMPILED_INSTRUCTIONS,
+    EE_IDLE_LOOP_ITERATIONS_VERIFIED,
+    EE_IDLE_LOOP_SKIPS,
+    EE_IDLE_LOOP_SKIPPED_CYCLES,
+    EE_IDLE_LOOP_MISPREDICTIONS,
     IOP_BLOCKS_COMPILED,
     IOP_STORE_INVALIDATIONS,
     IOP_EE_WRITE_INVALIDATIONS,
@@ -85,6 +92,13 @@ inline const char* counter_name(int counter) {
         case EE_CACHE_FLUSHES: return "ee whole cache flushes";
         case EE_CACHE_PURGES: return "ee whole cache purges";
         case EE_PAGES_DISCARDED: return "ee code pages discarded";
+        case EE_COMPILES_AT_REGION_INTERIOR: return "ee compiles at a sub-block inside a region";
+        case EE_COMPILES_FOR_IRQ_ENTRY: return "ee compiles with the short irq entry hint";
+        case EE_COMPILED_INSTRUCTIONS: return "ee instructions compiled";
+        case EE_IDLE_LOOP_ITERATIONS_VERIFIED: return "ee idle loop iterations verified";
+        case EE_IDLE_LOOP_SKIPS: return "ee idle loop skips";
+        case EE_IDLE_LOOP_SKIPPED_CYCLES: return "ee idle loop cycles skipped";
+        case EE_IDLE_LOOP_MISPREDICTIONS: return "ee idle loop mispredictions";
         case IOP_BLOCKS_COMPILED: return "iop blocks compiled";
         case IOP_STORE_INVALIDATIONS: return "iop code pages dirtied by stores";
         case IOP_EE_WRITE_INVALIDATIONS: return "iop code pages dirtied by ee writes";
@@ -125,6 +139,48 @@ inline const char* counter_name(int counter) {
     }
 
     return "unknown";
+}
+
+inline constexpr uint32_t DISPATCH_SITE_BITS = 16;
+inline constexpr uint32_t DISPATCH_SITE_COUNT = 1u << DISPATCH_SITE_BITS;
+inline constexpr uint32_t DISPATCH_SITE_WORDS = 16;
+inline constexpr uint32_t DISPATCH_SITE_PROBES = 8;
+
+struct DispatchSite {
+    uint32_t pc;
+    uint32_t last_exit_pc;
+    uint64_t dispatches;
+    uint64_t cycles;
+    uint32_t word_count;
+    uint32_t words[DISPATCH_SITE_WORDS];
+};
+
+inline bool dispatch_sites_enabled = false;
+inline DispatchSite dispatch_sites[DISPATCH_SITE_COUNT] = {};
+inline uint64_t dispatch_sites_untracked = 0;
+
+inline void reset_dispatch_sites() {
+    for (DispatchSite& site : dispatch_sites) {
+        site = {};
+    }
+
+    dispatch_sites_untracked = 0;
+}
+
+inline DispatchSite* find_dispatch_site(uint32_t pc) {
+    uint32_t hash = ((pc >> 2) * 0x9e3779b1u) >> (32 - DISPATCH_SITE_BITS);
+
+    for (uint32_t probe = 0; probe < DISPATCH_SITE_PROBES; probe++) {
+        DispatchSite& site = dispatch_sites[(hash + probe) & (DISPATCH_SITE_COUNT - 1)];
+
+        if (!site.dispatches || site.pc == pc) {
+            return &site;
+        }
+    }
+
+    dispatch_sites_untracked++;
+
+    return nullptr;
 }
 
 }
