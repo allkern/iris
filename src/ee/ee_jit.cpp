@@ -3492,13 +3492,13 @@ static inline void i_syscall(Ee* ee, const Instruction& i) {
         // RFU060
         case 0x3c: {
             if (ee->r[5].u32[0] == 0xffffffff) {
-                ee->r[5].u32[0] = (ee->ram_size + 1) - ee->r[6].s32[0];
+                ee->r[5].ul64 = SE6432((ee->ram_size + 1) - ee->r[6].s32[0]);
             }
         } break;
 
         // GetMemorySize
         case 0x7f: {
-            ee->r[2].u32[0] = ee->ram_size + 1;
+            ee->r[2].ul64 = SE6432(ee->ram_size + 1);
 
             return;
         } break;
@@ -3533,7 +3533,7 @@ static inline void i_syscall(Ee* ee, const Instruction& i) {
                         at += (uint32_t)strlen(ee->boot_args[k]) + 1;
                     }
 
-                    ee->r[6].u32[0] = ee->boot_argc;
+                    ee->r[6].ul64 = SE6432(ee->boot_argc);
                 }
 
                 ee->boot_args_pending = 0;
@@ -4625,8 +4625,8 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
         ee->block_cache[page].blocks = new Block[MIN_PAGESIZE >> 2];
         ee->block_cache[page].dirty = false;
         ee->block_cache[page].valid = true;
-        ee->block_cache[page].min_code_addr = ee->pc;
-        ee->block_cache[page].max_code_addr = ee->pc;
+        ee->block_cache[page].min_code_addr = phys;
+        ee->block_cache[page].max_code_addr = phys;
     }
 
     Block& block = ee->block_cache[page].blocks[offset];
@@ -4644,8 +4644,8 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
     block.func = nullptr;
 #endif
 
-    if (ee->pc < ee->block_cache[page].min_code_addr) {
-        ee->block_cache[page].min_code_addr = ee->pc;
+    if (phys < ee->block_cache[page].min_code_addr) {
+        ee->block_cache[page].min_code_addr = phys;
     }
 
     block.instructions.clear();
@@ -4734,13 +4734,18 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
     block.end_pc = ee->sub_blocks.front().end_pc;
     block.cycles = ee->sub_blocks.front().cycles;
 
+    uint32_t physical_page_base = phys & ~(uint32_t)(MIN_PAGESIZE - 1);
+
     for (const SubBlock& s : ee->sub_blocks) {
-        if (ee->block_cache[page].max_code_addr < s.end_pc) {
-            ee->block_cache[page].max_code_addr = s.end_pc;
+        uint32_t physical_start = physical_page_base + (s.start_pc - page_base);
+        uint32_t physical_end = physical_page_base + (s.end_pc - page_base);
+
+        if (ee->block_cache[page].max_code_addr < physical_end) {
+            ee->block_cache[page].max_code_addr = physical_end;
         }
 
-        if (ee->block_cache[page].min_code_addr > s.start_pc) {
-            ee->block_cache[page].min_code_addr = s.start_pc;
+        if (ee->block_cache[page].min_code_addr > physical_start) {
+            ee->block_cache[page].min_code_addr = physical_start;
         }
     }
 
