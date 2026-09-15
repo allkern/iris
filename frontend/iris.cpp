@@ -695,7 +695,7 @@ SDL_AppResult update(Instance* iris) {
             auto now = high_resolution_clock::now();
 
             if (iris->frame_deadline.time_since_epoch().count() == 0 || iris->frame_deadline < now - 2 * target)
-                iris->frame_deadline = now;
+                iris->frame_deadline = now - target;
 
             iris->frame_deadline += target;
 
