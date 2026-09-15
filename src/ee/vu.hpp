@@ -125,6 +125,7 @@ uint64_t* get_micro_mem_ptr(Vu* vu, uint32_t addr);
 void write_micro_mem(Vu* vu, uint32_t word_addr, uint64_t data);
 void begin_micro_upload(Vu* vu);
 void upload_micro_word(Vu* vu, uint32_t word_addr, uint64_t data);
+void upload_micro_words(Vu* vu, uint32_t word_addr, const uint8_t* data, uint32_t count);
 void end_micro_upload(Vu* vu);
 uint32_t get_tpc(Vu* vu);
 void clear_block_cache(Vu* vu);

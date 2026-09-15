@@ -659,6 +659,30 @@ static inline uint32_t transfer_vif1_unpack_qwords(Dmac* dmac, Channel* c, vif::
     return count;
 }
 
+static inline uint32_t transfer_vif1_mpg_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending) {
+    uint32_t count = pending < c->qwc ? pending : c->qwc;
+
+    const uint8_t* source = dma_source_span(dmac, c->madr, count);
+
+    if (source) {
+        vif::upload_micro_qwords(vif, source, count);
+    } else {
+        for (uint32_t index = 0; index < count; index++) {
+            uint128_t qword = read_qword(dmac, c->madr + index * 16);
+
+            vif::upload_micro_qwords(vif, (const uint8_t*)&qword, 1);
+        }
+    }
+
+    c->madr += count * 16;
+    c->qwc -= count;
+    c->qword_valid = false;
+
+    profile::count(profile::VIF1_DMA_QWORDS, count);
+
+    return count;
+}
+
 static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending);
 
 static inline uint32_t transfer_vif1_qwords(Dmac* dmac) {
@@ -680,6 +704,12 @@ static inline uint32_t transfer_vif1_qwords(Dmac* dmac) {
 
     if (unpack) {
         return transfer_vif1_unpack_qwords(dmac, c, vif, unpack);
+    }
+
+    uint32_t mpg = vif::mpg_qwords_pending(vif);
+
+    if (mpg) {
+        return transfer_vif1_mpg_qwords(dmac, c, vif, mpg);
     }
 
     return 0;

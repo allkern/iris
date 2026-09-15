@@ -144,6 +144,19 @@ inline uint32_t direct_qwords_pending(const Vif* vif) {
 }
 
 void unpack_words(Vif* vif, const uint8_t* data, uint32_t count);
+void upload_micro_qwords(Vif* vif, const uint8_t* data, uint32_t qwords);
+
+inline uint32_t mpg_qwords_pending(const Vif* vif) {
+    if (vif->state != VIF_RECV_DATA || vif->shift || !vif->dreq) {
+        return 0;
+    }
+
+    if (vif->cmd != CMD_MPG) {
+        return 0;
+    }
+
+    return (uint32_t)vif->pending_words / 4;
+}
 
 inline uint32_t unpack_words_pending(const Vif* vif) {
     if (vif->state != VIF_RECV_DATA || !vif->dreq) {

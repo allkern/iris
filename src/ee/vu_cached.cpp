@@ -3257,6 +3257,16 @@ void upload_micro_word(Vu* vu, uint32_t word_addr, uint64_t data) {
     }
 }
 
+void upload_micro_words(Vu* vu, uint32_t word_addr, const uint8_t* data, uint32_t count) {
+    for (uint32_t index = 0; index < count; index++) {
+        uint64_t word;
+
+        memcpy(&word, data + (size_t)index * sizeof(word), sizeof(word));
+
+        upload_micro_word(vu, word_addr + index, word);
+    }
+}
+
 void end_micro_upload(Vu* vu) {
     if (vu->upload_lo > vu->upload_hi) {
         return;

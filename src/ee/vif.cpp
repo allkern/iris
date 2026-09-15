@@ -125,6 +125,15 @@ static inline void vif_emit_vu_mem(Vif* vif, uint128_t data, int is_fill) {
     *vu::get_vu_mem_ptr(vif->hw.vu, vif->addr++) = data;
 }
 
+static inline void vif_fill_rest_of_cycle(Vif* vif) {
+    while (vif->unpack_cycle < (int)vif->unpack_wl && vif->unpack_wcount > 0) {
+        vif_emit_vu_mem(vif, (uint128_t){ 0 }, 1);
+
+        vif->unpack_cycle++;
+        vif->unpack_wcount--;
+    }
+}
+
 static inline void vif_write_vu_mem(Vif* vif, uint128_t data) {
     vif_emit_vu_mem(vif, data, 0);
 
@@ -138,12 +147,7 @@ static inline void vif_write_vu_mem(Vif* vif, uint128_t data) {
         }
     } else {
         if (vif->unpack_cycle == (int)vif->unpack_cl) {
-            while (vif->unpack_cycle < (int)vif->unpack_wl && vif->unpack_wcount > 0) {
-                vif_emit_vu_mem(vif, (uint128_t){ 0 }, 1);
-
-                vif->unpack_cycle++;
-                vif->unpack_wcount--;
-            }
+            vif_fill_rest_of_cycle(vif);
 
             vif->unpack_cycle = 0;
         }
@@ -157,11 +161,134 @@ static inline void vif_unpack_flush_fills(Vif* vif) {
         vif->unpack_cycle++;
         vif->unpack_wcount--;
 
-        if (vif->unpack_cycle == (int)vif->unpack_wl)
+        if (vif->unpack_cycle == (int)vif->unpack_wl) {
             vif->unpack_cycle = 0;
+        }
     }
 
     vif->state = VIF_IDLE;
+}
+
+enum VifComponentSource : uint8_t {
+    VIF_COMPONENT_DATA,
+    VIF_COMPONENT_ROW,
+    VIF_COMPONENT_COLUMN,
+    VIF_COMPONENT_KEEP
+};
+
+struct VifVertexWriter {
+    uint128_t* memory;
+    uint32_t memory_mask;
+    uint8_t sources[4][4];
+};
+
+static inline VifVertexWriter vif_begin_vertices(Vif* vif) {
+    VifVertexWriter writer;
+
+    writer.memory = vu::get_vu_mem_ptr(vif->hw.vu, 0);
+    writer.memory_mask = vu::get_vu_mem_size(vif->hw.vu);
+
+    for (int key = 0; key < 4; key++) {
+        uint32_t mask = (vif->mask >> (key * 8)) & 0xff;
+
+        for (int i = 0; i < 4; i++) {
+            uint32_t source = VIF_COMPONENT_DATA;
+
+            if (vif->unpack_mask) {
+                source = (mask >> (i * 2)) & 3;
+            }
+
+            writer.sources[key][i] = (uint8_t)source;
+        }
+    }
+
+    return writer;
+}
+
+static inline uint32_t vif_apply_mode(Vif* vif, int component, uint32_t value) {
+    switch (vif->mode) {
+        case 1: {
+            return vif->r[component] + value;
+        }
+
+        case 2: {
+            vif->r[component] = vif->r[component] + value;
+
+            return vif->r[component];
+        }
+
+        case 3: {
+            vif->r[component] = value;
+
+            return value;
+        }
+    }
+
+    return value;
+}
+
+static inline void vif_store_vertex(Vif* vif, const VifVertexWriter& writer, const uint128_t& data) {
+    uint128_t& slot = writer.memory[vif->addr & writer.memory_mask];
+
+    vif->addr++;
+
+    if (!vif->unpack_mask && vif->mode == 0) {
+        slot = data;
+
+        return;
+    }
+
+    int key = 0;
+
+    if (vif->unpack_mask) {
+        key = vif->unpack_cycle > 3 ? 3 : vif->unpack_cycle;
+    }
+
+    const uint8_t* sources = writer.sources[key];
+
+    uint128_t value = data;
+
+    for (int i = 0; i < 4; i++) {
+        switch (sources[i]) {
+            case VIF_COMPONENT_DATA: {
+                value.u32[i] = vif_apply_mode(vif, i, data.u32[i]);
+            } break;
+
+            case VIF_COMPONENT_ROW: {
+                value.u32[i] = vif->r[i];
+            } break;
+
+            case VIF_COMPONENT_COLUMN: {
+                value.u32[i] = vif->c[key];
+            } break;
+
+            case VIF_COMPONENT_KEEP: {
+                value.u32[i] = slot.u32[i];
+            } break;
+        }
+    }
+
+    slot = value;
+}
+
+static inline void vif_write_data_vertex(Vif* vif, const VifVertexWriter& writer, const uint128_t& data) {
+    vif_store_vertex(vif, writer, data);
+
+    vif->unpack_cycle++;
+    vif->unpack_wcount--;
+
+    if (vif->unpack_cl >= vif->unpack_wl) {
+        if (vif->unpack_cycle == (int)vif->unpack_wl) {
+            vif->addr += vif->unpack_skip;
+            vif->unpack_cycle = 0;
+        }
+    } else {
+        if (vif->unpack_cycle == (int)vif->unpack_cl) {
+            vif_fill_rest_of_cycle(vif);
+
+            vif->unpack_cycle = 0;
+        }
+    }
 }
 
 void vif0_send_irq(void* udata, int overshoot) {
@@ -1105,11 +1232,16 @@ void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last) {
     }
 }
 
-static bool vif_bulk_check_enabled() {
-    static const char* setting = getenv("IRIS_VIF_BULK_CHECK");
-    static const bool enabled = setting && setting[0] == '1';
+static bool read_vif_bulk_check_setting() {
+    const char* setting = getenv("IRIS_VIF_BULK_CHECK");
 
-    return enabled;
+    return setting && setting[0] == '1';
+}
+
+static const bool configured_vif_bulk_check = read_vif_bulk_check_setting();
+
+static inline bool vif_bulk_check_enabled() {
+    return configured_vif_bulk_check;
 }
 
 static inline uint32_t vif_unpack_vertex_words(uint32_t fmt) {
@@ -1286,6 +1418,8 @@ static uint32_t vif_unpack_general(Vif* vif, const uint8_t* data, uint32_t words
     uint32_t fmt = vif->unpack_fmt;
     bool sign_extend = !vif->unpack_usn;
 
+    VifVertexWriter writer = vif_begin_vertices(vif);
+
     uint128_t last = { 0 };
 
     for (uint32_t vertex = 0; vertex < vertices; vertex++) {
@@ -1293,8 +1427,10 @@ static uint32_t vif_unpack_general(Vif* vif, const uint8_t* data, uint32_t words
 
         last = vif_decode_vertex(fmt, source, sign_extend);
 
-        vif_write_vu_mem(vif, last);
+        vif_write_data_vertex(vif, writer, last);
     }
+
+    profile::count(profile::VIF1_UNPACK_GENERAL_VERTICES, vertices);
 
     vif_unpack_finish_span(vif, data, vertices, last);
 
@@ -1419,6 +1555,26 @@ static void vif_unpack_span_checked(Vif* vif, const uint8_t* data, uint32_t coun
         iris_warning(vif, "vif1: bulk unpack differs from the word path fmt={:x} words={} state_matches={} memory_matches={}",
             before.unpack_fmt, count, same_state, same_memory
         );
+    }
+}
+
+void upload_micro_qwords(Vif* vif, const uint8_t* data, uint32_t qwords) {
+    profile::count(profile::VIF1_MPG_WORDS, (uint64_t)qwords * 4);
+    profile::count(profile::VIF1_MPG_BULK_QWORDS, qwords);
+
+    uint32_t micro_words = qwords * 2;
+
+    vu::upload_micro_words(vif->hw.vu, vif->addr, data, micro_words);
+
+    memcpy(&vif->data.u64[0], data + (size_t)(micro_words - 1) * sizeof(uint64_t), sizeof(uint64_t));
+
+    vif->addr += micro_words;
+    vif->pending_words -= (int)(qwords * 4);
+
+    if (!vif->pending_words) {
+        vu::end_micro_upload(vif->hw.vu);
+
+        vif->state = VIF_IDLE;
     }
 }
 
