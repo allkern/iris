@@ -4434,7 +4434,7 @@ Instruction decode(uint32_t opcode) {
         case 0xB0000000 >> 26: i.cycles = CYC_STORE; i.id = I_SDL; i.func = i_sdl; return i;
         case 0xB4000000 >> 26: i.cycles = CYC_STORE; i.id = I_SDR; i.func = i_sdr; return i;
         case 0xB8000000 >> 26: i.cycles = CYC_STORE; i.id = I_SWR; i.func = i_swr; return i;
-        case 0xBC000000 >> 26: i.cycles = CYC_DEFAULT; i.branch = 2; i.id = I_CACHE; i.func = i_cache; return i;
+        case 0xBC000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_CACHE; i.func = i_cache; return i;
         case 0xC4000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LWC1; i.func = i_lwc1; return i;
         case 0xCC000000 >> 26: i.cycles = CYC_DEFAULT; i.id = I_PREF; i.func = i_pref; return i;
         case 0xD8000000 >> 26: i.cycles = CYC_LOAD; i.id = I_LQC2; i.func = i_lqc2; return i;
