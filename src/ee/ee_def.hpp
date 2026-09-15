@@ -481,6 +481,7 @@ struct Block {
     uint64_t hits;
     bool region_interior = false;
     bool idle_safe = false;
+    uint32_t written_gprs = 0;
 };
 
 enum BlockTerm {
@@ -558,6 +559,7 @@ constexpr int EE_MAX_BREAKPOINTS = 64;
 inline constexpr auto IDLE_LOOP_MAX_BLOCKS = 4;
 inline constexpr auto IDLE_LOOP_MAX_CYCLES = 256;
 inline constexpr auto IDLE_LOOP_REJECTION_COOLDOWN = 64;
+inline constexpr uint32_t IDLE_LOOP_ALL_REGISTERS = 0xffffffffu;
 
 struct IdleLoop {
     uint32_t recent_pcs[IDLE_LOOP_MAX_BLOCKS];
@@ -574,9 +576,12 @@ struct IdleLoop {
     uint32_t rejected_pc;
     uint32_t rejection_cooldown;
 
-    uint128_t r[32];
-    uint128_t hi;
-    uint128_t lo;
+    uint32_t written_mask;
+    uint32_t snapshot_mask;
+    uint32_t verified_head_pc;
+    uint32_t verified_mask;
+
+    uint64_t snapshot[32];
 };
 
 struct Ee {
@@ -683,6 +688,7 @@ struct Ee {
     bool bp_hit = false;
 
     std::vector <SubBlock> sub_blocks;
+    std::vector <uint32_t> region_pending;
 
     // JIT stuff
     uint32_t last_block_lookup_pc;

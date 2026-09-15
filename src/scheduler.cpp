@@ -21,6 +21,10 @@ void reset(Scheduler* sched) {
     sched->now = 0;
 }
 
+static bool fires_later_than(const Scheduler::Entry& entry, int64_t deadline) {
+    return entry.deadline > deadline;
+}
+
 void schedule(Scheduler* sched, const Event& event) {
     Scheduler::Entry entry = {
         .callback = event.callback,
@@ -29,14 +33,11 @@ void schedule(Scheduler* sched, const Event& event) {
         .udata = event.udata
     };
 
-    // upper_bound, not lower_bound: ties fire in scheduling order.
-    auto pos = std::upper_bound(
+    auto pos = std::lower_bound(
         sched->events.begin(),
         sched->events.end(),
         entry.deadline,
-        [](int64_t deadline, const Scheduler::Entry& e) {
-            return deadline < e.deadline;
-        }
+        fires_later_than
     );
 
     sched->events.insert(pos, entry);
@@ -48,14 +49,12 @@ int tick(Scheduler* sched, int64_t cycles) {
     if (sched->events.empty())
         return 0;
 
-    if (sched->events.front().deadline > sched->now)
+    if (sched->events.back().deadline > sched->now)
         return 0;
 
-    // Copy and erase before dispatching. The callback may reschedule,
-    // which can reallocate the vector.
-    Scheduler::Entry entry = sched->events.front();
+    Scheduler::Entry entry = sched->events.back();
 
-    sched->events.erase(sched->events.begin());
+    sched->events.pop_back();
 
     entry.callback(entry.udata, (int)(entry.deadline - sched->now));
 
@@ -66,7 +65,7 @@ int64_t cycles_to_next(const Scheduler* sched) {
     if (sched->events.empty())
         return NO_EVENT;
 
-    return sched->events.front().deadline - sched->now;
+    return sched->events.back().deadline - sched->now;
 }
 
 void destroy(Scheduler* sched) {

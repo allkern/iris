@@ -3,6 +3,8 @@
 #include <math.h>
 #include <fenv.h>
 
+#include <bit>
+
 #ifdef _EE_USE_INTRINSICS
 #include <immintrin.h>
 #include <tmmintrin.h>
@@ -4581,31 +4583,55 @@ static inline void successors(const Block& block, SubBlock& sb) {
     }
 }
 
-static inline bool is_idle_safe_instruction(const Instruction& i) {
+static inline bool classify_idle_instruction(const Instruction& i, uint32_t* written) {
     switch (i.id) {
-        case I_ADDIU: case I_DADDIU: case I_ADDU: case I_DADDU: case I_SUBU: case I_DSUBU:
-        case I_AND: case I_ANDI: case I_OR: case I_ORI: case I_XOR: case I_XORI: case I_NOR: case I_LUI:
-        case I_SLT: case I_SLTI: case I_SLTU: case I_SLTIU:
+        case I_ADDU: case I_DADDU: case I_SUBU: case I_DSUBU:
+        case I_AND: case I_OR: case I_XOR: case I_NOR:
+        case I_SLT: case I_SLTU:
         case I_SLL: case I_SRL: case I_SRA: case I_SLLV: case I_SRLV: case I_SRAV:
         case I_DSLL: case I_DSRL: case I_DSRA: case I_DSLL32: case I_DSRL32: case I_DSRA32:
         case I_DSLLV: case I_DSRLV: case I_DSRAV:
         case I_MOVZ: case I_MOVN:
+        case I_JALR: {
+            *written |= 1u << i.rd.r;
+
+            return true;
+        }
+
+        case I_ADDIU: case I_DADDIU: case I_ANDI: case I_ORI: case I_XORI: case I_LUI:
+        case I_SLTI: case I_SLTIU: {
+            *written |= 1u << i.rt.r;
+
+            return true;
+        }
+
+        case I_LB: case I_LBU: case I_LH: case I_LHU: case I_LW: case I_LWU: case I_LD: {
+            *written |= 1u << i.rt.r;
+
+            return i.rt.r != 0;
+        }
+
+        case I_JAL: case I_BLTZAL: case I_BGEZAL: case I_BLTZALL: case I_BGEZALL: {
+            *written |= 1u << 31;
+
+            return true;
+        }
+
         case I_BEQ: case I_BNE: case I_BLEZ: case I_BGTZ: case I_BLTZ: case I_BGEZ:
         case I_BEQL: case I_BNEL: case I_BLEZL: case I_BGTZL: case I_BLTZL: case I_BGEZL:
-        case I_BLTZAL: case I_BGEZAL: case I_BLTZALL: case I_BGEZALL:
-        case I_J: case I_JAL: case I_JR: case I_JALR:
+        case I_J: case I_JR: {
             return true;
-
-        case I_LB: case I_LBU: case I_LH: case I_LHU: case I_LW: case I_LWU: case I_LD:
-            return i.rt.r != 0;
+        }
     }
 
     return false;
 }
 
-static inline bool is_idle_safe_block(const Block& block) {
+static inline bool is_idle_safe_block(const Block& block, uint32_t* written) {
+    *written = 0;
+
     for (const Instruction& i : block.instructions) {
-        if (!is_idle_safe_instruction(i)) {
+        if (!classify_idle_instruction(i, written)) {
             return false;
         }
     }
@@ -4657,8 +4683,9 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
 
     uint32_t page_base = ee->pc & ~(uint32_t)(MIN_PAGESIZE - 1);
 
-    std::vector <uint32_t> pending;
+    std::vector <uint32_t>& pending = ee->region_pending;
 
+    pending.clear();
     pending.push_back(ee->pc);
 
     while (!pending.empty()) {
@@ -4757,7 +4784,7 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
 
     profile::count(profile::EE_COMPILED_INSTRUCTIONS, (uint64_t)block.instructions.size());
 
-    block.idle_safe = is_idle_safe_block(block);
+    block.idle_safe = is_idle_safe_block(block, &block.written_gprs);
 
     return &block;
 }
@@ -8470,33 +8497,52 @@ static inline IdleLoopMode idle_loop_mode() {
     return configured_idle_loop_mode;
 }
 
-static inline bool idle_loop_state_matches(const Ee* ee) {
-    const IdleLoop& loop = ee->idle_loop;
+static inline void snapshot_idle_loop_registers(Ee* ee, uint32_t mask) {
+    IdleLoop& loop = ee->idle_loop;
 
-    if (memcmp(loop.r, ee->r, sizeof(loop.r))) {
-        return false;
+    loop.snapshot_mask = mask;
+
+    while (mask) {
+        int index = std::countr_zero(mask);
+
+        loop.snapshot[index] = ee->r[index].u64[0];
+
+        mask &= mask - 1;
     }
-
-    if (memcmp(&loop.hi, &ee->hi, sizeof(loop.hi))) {
-        return false;
-    }
-
-    return memcmp(&loop.lo, &ee->lo, sizeof(loop.lo)) == 0;
 }
 
-static inline void arm_idle_loop(Ee* ee) {
+static inline bool idle_loop_registers_match(const Ee* ee, uint32_t mask) {
+    const IdleLoop& loop = ee->idle_loop;
+
+    while (mask) {
+        int index = std::countr_zero(mask);
+
+        if (loop.snapshot[index] != ee->r[index].u64[0]) {
+            return false;
+        }
+
+        mask &= mask - 1;
+    }
+
+    return true;
+}
+
+static inline void arm_idle_loop(Ee* ee, const Block* block) {
     IdleLoop& loop = ee->idle_loop;
 
     loop.armed = true;
     loop.verified = false;
     loop.head_pc = ee->pc;
     loop.blocks = 1;
+    loop.written_mask = block->written_gprs;
     loop.head_total_cycles = ee->total_cycles;
     loop.head_uncached_reads = ee->uncached_reads;
 
-    memcpy(loop.r, ee->r, sizeof(loop.r));
-    memcpy(&loop.hi, &ee->hi, sizeof(loop.hi));
-    memcpy(&loop.lo, &ee->lo, sizeof(loop.lo));
+    if (loop.verified_head_pc == ee->pc && loop.verified_mask) {
+        snapshot_idle_loop_registers(ee, loop.verified_mask);
+    } else {
+        snapshot_idle_loop_registers(ee, IDLE_LOOP_ALL_REGISTERS);
+    }
 }
 
 static inline void reject_idle_loop(IdleLoop& loop) {
@@ -8515,7 +8561,7 @@ static inline bool dispatched_recently(const IdleLoop& loop, uint32_t pc) {
     return false;
 }
 
-static inline void remember_dispatch(IdleLoop& loop, uint32_t pc) {
+static inline void restore_dispatch(IdleLoop& loop, uint32_t pc) {
     loop.recent_pcs[loop.recent_next] = pc;
     loop.recent_next = (loop.recent_next + 1) % IDLE_LOOP_MAX_BLOCKS;
 }
@@ -8532,15 +8578,26 @@ static inline void report_idle_loop_misprediction(Ee* ee) {
     }
 }
 
-static inline int complete_idle_loop_iteration(Ee* ee, int remaining) {
+static inline int complete_idle_loop_iteration(Ee* ee, const Block* block, int remaining) {
     IdleLoop& loop = ee->idle_loop;
+
+    bool snapshot_covers_writes = (loop.written_mask & ~loop.snapshot_mask) == 0;
+
+    if (!snapshot_covers_writes && !loop.verified) {
+        loop.verified_head_pc = 0;
+
+        arm_idle_loop(ee, block);
+
+        return 0;
+    }
 
     uint64_t iteration_cycles = ee->total_cycles - loop.head_total_cycles;
 
-    bool idle = iteration_cycles > 0
+    bool idle = snapshot_covers_writes
+        && iteration_cycles > 0
         && iteration_cycles <= IDLE_LOOP_MAX_CYCLES
         && ee->uncached_reads == loop.head_uncached_reads
-        && idle_loop_state_matches(ee);
+        && idle_loop_registers_match(ee, loop.written_mask);
 
     if (!idle) {
         if (loop.verified) {
@@ -8555,7 +8612,10 @@ static inline int complete_idle_loop_iteration(Ee* ee, int remaining) {
     profile::count(profile::EE_IDLE_LOOP_ITERATIONS_VERIFIED);
 
     loop.verified = true;
+    loop.verified_head_pc = loop.head_pc;
+    loop.verified_mask = loop.written_mask;
     loop.blocks = 1;
+    loop.written_mask = block->written_gprs;
     loop.head_total_cycles = ee->total_cycles;
 
     if (idle_loop_mode() != IDLE_LOOP_SKIP) {
@@ -8588,9 +8648,10 @@ static inline int observe_idle_loop(Ee* ee, const Block* block, int remaining) {
 
     if (loop.armed) {
         if (pc == loop.head_pc) {
-            skipped = complete_idle_loop_iteration(ee, remaining);
+            skipped = complete_idle_loop_iteration(ee, block, remaining);
         } else {
             loop.blocks++;
+            loop.written_mask |= block->written_gprs;
 
             if (!block->idle_safe || loop.blocks > IDLE_LOOP_MAX_BLOCKS) {
                 reject_idle_loop(loop);
@@ -8602,11 +8663,11 @@ static inline int observe_idle_loop(Ee* ee, const Block* block, int remaining) {
         if (loop.rejection_cooldown && loop.rejected_pc == pc) {
             loop.rejection_cooldown--;
         } else {
-            arm_idle_loop(ee);
+            arm_idle_loop(ee, block);
         }
     }
 
-    remember_dispatch(loop, pc);
+    restore_dispatch(loop, pc);
 
     return skipped;
 }
@@ -8753,8 +8814,6 @@ int step(Ee* ee) {
     ee->delay_slot = ee->branch;
     ee->branch = 0;
 
-    // Would check for interrupts here, but we do this outside of the core
-    // to reduce overhead
     check_irq(ee);
 
     ee->prev_pc = ee->pc;
