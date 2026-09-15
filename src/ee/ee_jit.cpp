@@ -3933,6 +3933,7 @@ void destroy(Ee* ee) {
     free(ee->vfast_w);
     free(ee->vfast_w_page);
 
+    delete ee->bc;
     delete ee->jit_logger;
     delete ee;
 }
@@ -5118,14 +5119,26 @@ static inline bool fits_imm32(uint64_t c) {
 
 static int n = 0;
 
+static asmjit::CodeHolder& prepare_code_holder(Ee* ee) {
+    if (!ee->bc) {
+        ee->code.init(ee->rt.environment(), ee->rt.cpu_features());
+
+        ee->bc = new asmjit::ujit::BackendCompiler(&ee->code);
+
+        return ee->code;
+    }
+
+    ee->code.reinit();
+
+    return ee->code;
+}
+
 void compile_block(Ee* ee, Block* block) {
     using namespace asmjit;
 
     profile::count(profile::EE_BLOCKS_COMPILED);
 
-    CodeHolder code;
-
-    code.init(ee->rt.environment(), ee->rt.cpu_features());
+    CodeHolder& code = prepare_code_holder(ee);
 
     // if (logger::get_level(ee->logger) == logger::LEVEL_DEBUG)
     //     code.set_logger(ee->jit_logger);
@@ -5134,8 +5147,7 @@ void compile_block(Ee* ee, Block* block) {
     //     iris_debug(ee, "---------------------------------- Block at PC={:08x}, {} sub-blocks, {} instructions", block->start_pc, ee->sub_blocks.size(), block->instructions.size());
     // }
 
-    ujit::BackendCompiler bc(&code);
-    ujit::UniCompiler uc(&bc, ee->rt.cpu_features(), ee->rt.cpu_hints());
+    ujit::UniCompiler uc(ee->bc, ee->rt.cpu_features(), ee->rt.cpu_hints());
 
     FuncNode* func = uc.add_func(FuncSignature::build<void, Ee*>());
 
@@ -8501,6 +8513,14 @@ static inline void snapshot_idle_loop_registers(Ee* ee, uint32_t mask) {
     IdleLoop& loop = ee->idle_loop;
 
     loop.snapshot_mask = mask;
+
+    if (mask == IDLE_LOOP_ALL_REGISTERS) {
+        for (int index = 0; index < 32; index++) {
+            loop.snapshot[index] = ee->r[index].u64[0];
+        }
+
+        return;
+    }
 
     while (mask) {
         int index = std::countr_zero(mask);
