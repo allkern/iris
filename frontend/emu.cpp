@@ -127,6 +127,8 @@ static void finish_load(Instance* iris, int result, std::string name = "") {
 }
 
 void finalize_load(Instance* iris) {
+    mtvu::sync(iris->ps2->mtvu, mtvu::SYNC_OTHER);
+
     vulkan::wait_idle(iris);
 
     gs::renderer::hotswap(iris->renderer, iris->renderer_backend);
