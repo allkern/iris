@@ -182,6 +182,10 @@ int can_accept(Gif* gif, int path) {
     return 0;
 }
 
+int path3_stall_enabled(Gif* gif) {
+    return gif->p3_stall_enable;
+}
+
 static void gif_path3_lifted(Gif* gif);
 
 static void gif_flush_path3(Gif* gif) {

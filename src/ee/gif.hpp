@@ -101,6 +101,7 @@ void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, si
 void set_path3_mask(Gif* gif, int mask);
 int get_path3_mask(Gif* gif);
 int can_accept(Gif* gif, int path);
+int path3_stall_enabled(Gif* gif);
 
 
 }

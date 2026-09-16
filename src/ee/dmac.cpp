@@ -927,6 +927,45 @@ void send_gif_irq(void* udata, int overshoot) {
 
 void handle_gif_transfer(Dmac* dmac);
 
+static inline void transfer_gif_qwords(Dmac* dmac, Channel* c) {
+    gif::Gif* gif = dmac->hw.bus->gif;
+
+    if (!c->qwc) {
+        return;
+    }
+
+    if (!gif::path3_stall_enabled(gif)) {
+        const uint8_t* source = dma_source_span(dmac, c->madr, c->qwc);
+
+        if (source) {
+            gif::fifo_write_qwords(gif, source, c->qwc, gif::PATH3);
+
+            c->madr += c->qwc * 16;
+            c->qwc = 0;
+
+            return;
+        }
+    }
+
+    uint32_t sent = 0;
+
+    while (sent < c->qwc) {
+        if (!gif::can_accept(gif, gif::PATH3)) {
+            break;
+        }
+
+        uint128_t q = read_qword(dmac, c->madr);
+
+        gif::fifo_write(gif, q, gif::PATH3);
+
+        c->madr += 16;
+
+        sent++;
+    }
+
+    c->qwc -= sent;
+}
+
 void resume_gif(Dmac* dmac) {
     if ((dmac->channels[GIF].chcr & 0x100) == 0) {
         return;
@@ -967,24 +1006,7 @@ void handle_gif_transfer(Dmac* dmac) {
     //     dmac->channels[GIF].tadr
     //);
 
-    int sent = 0;
-
-    for (int i = 0; i < dmac->channels[GIF].qwc; i++) {
-        if (!gif::can_accept(dmac->hw.bus->gif, gif::PATH3)) {
-            break;
-        }
-
-        uint128_t q = read_qword(dmac, dmac->channels[GIF].madr);
-
-        // GIF FIFO address
-        gif::fifo_write(dmac->hw.bus->gif, q, gif::PATH3);
-
-        dmac->channels[GIF].madr += 16;
-
-        sent++;
-    }
-
-    dmac->channels[GIF].qwc -= sent;
+    transfer_gif_qwords(dmac, &dmac->channels[GIF]);
 
     if (dmac->channels[GIF].qwc) {
         return;
@@ -1014,23 +1036,7 @@ void handle_gif_transfer(Dmac* dmac) {
 
         // iris_debug(dmac, "ee: gif tag qwc={:08x} madr={:08x} tadr={:08x} mem={}", dmac->channels[GIF].qwc, dmac->channels[GIF].madr, dmac->channels[GIF].tadr, dmac->channels[GIF].tag.mem);
 
-        int chain_sent = 0;
-
-        for (int i = 0; i < dmac->channels[GIF].qwc; i++) {
-            if (!gif::can_accept(dmac->hw.bus->gif, gif::PATH3)) {
-                break;
-            }
-
-            uint128_t q = read_qword(dmac, dmac->channels[GIF].madr);
-
-            gif::fifo_write(dmac->hw.bus->gif, q, gif::PATH3);
-
-            dmac->channels[GIF].madr += 16;
-
-            chain_sent++;
-        }
-
-        dmac->channels[GIF].qwc -= chain_sent;
+        transfer_gif_qwords(dmac, &dmac->channels[GIF]);
 
         if (dmac->channels[GIF].qwc) {
             return;
