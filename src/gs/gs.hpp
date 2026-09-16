@@ -300,6 +300,7 @@ struct Gs {
     uint64_t busdir;
     uint64_t siglblid;
     uint64_t csr_enable;
+    uint64_t csr_raised;
 
     // Internal registers
     uint64_t prim;

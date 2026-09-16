@@ -35,6 +35,7 @@ static inline void test_gs_irq(Gs* gs) {
 static inline int assert_vblank(Gs* gs) {
     if ((gs->csr & 8) == 0) {
         gs->csr |= 8;
+        gs->csr_raised |= 8;
 
         return ((gs->imr >> 8) & 8) == 0;
     }
@@ -44,8 +45,10 @@ static inline int assert_vblank(Gs* gs) {
 
 static inline int assert_hblank(Gs* gs) {
     if ((gs->csr & 4) == 0) {
-        if (gs->csr_enable & 4)
+        if (gs->csr_enable & 4) {
             gs->csr |= 4;
+            gs->csr_raised |= 4;
+        }
 
         // iris_debug(gs, "Asserting Hblank imr.hsync={}", (gs->imr >> 8) & 4);
 
@@ -181,6 +184,7 @@ void soft_reset(Gs* gs) {
     gs->siglblid = 0;
     gs->csr = 0;
     gs->csr_enable = 0;
+    gs->csr_raised = 0;
 
     gs->vblank = 0;
     gs->signal_pending = 0;
@@ -450,6 +454,7 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
             }
 
             gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
+            gs->csr_raised &= ~(data & 0xf);
             gs->csr_enable = data;
 
             if (data & 1) {
@@ -463,11 +468,19 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
             int prev_signal = (gs->imr >> 8) & 1;
             int new_signal = (data >> 8) & 1;
 
+            uint64_t prev_mask = (gs->imr >> 8) & 0x1f;
+
             gs->imr = data;
 
             if (gs->signal_pending && (prev_signal && !new_signal)) {
                 gs->signal_pending--;
 
+                ee::intc::irq(gs->hw.ee_intc, ee::intc::GS);
+            }
+
+            uint64_t unmasked = prev_mask & ~(data >> 8) & 0x1e;
+
+            if (gs->csr & gs->csr_raised & unmasked) {
                 ee::intc::irq(gs->hw.ee_intc, ee::intc::GS);
             }
         } return;
@@ -922,6 +935,7 @@ int write_signal(Gs* gs, uint64_t data) {
 int write_finish(Gs* gs, uint64_t data) {
     // Trigger FINISH event
     gs->csr |= 2;
+    gs->csr_raised |= 2;
 
     test_gs_irq(gs);
 
