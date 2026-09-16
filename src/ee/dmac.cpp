@@ -718,25 +718,17 @@ static inline uint32_t transfer_vif1_qwords(Dmac* dmac) {
 static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending) {
     uint32_t count = pending < c->qwc ? pending : c->qwc;
 
-    gif::Gif* gif = dmac->hw.bus->gif;
-
     const uint8_t* source = dma_source_span(dmac, c->madr, count);
 
-    uint128_t last;
-
     if (source) {
-        memcpy(&last, source + (size_t)(count - 1) * 16, sizeof(last));
-
-        gif::fifo_write_qwords(gif, source, count, gif::PATH2);
+        vif::write_direct_qwords(vif, source, count);
     } else {
         for (uint32_t index = 0; index < count; index++) {
-            last = read_qword(dmac, c->madr + index * 16);
+            uint128_t qword = read_qword(dmac, c->madr + index * 16);
 
-            gif::fifo_write(gif, last, gif::PATH2);
+            vif::write_direct_qwords(vif, (const uint8_t*)&qword, 1);
         }
     }
-
-    vif::consume_direct_qwords(vif, count, last);
 
     c->madr += count * 16;
     c->qwc -= count;

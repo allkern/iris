@@ -10,6 +10,7 @@
 #include "ee/intc.hpp"
 #include "ee/timers.hpp"
 #include "ee/vu.hpp"
+#include "ee/mtvu.hpp"
 #include "iop/bus.hpp"
 #include "iop/bus_decl.hpp"
 #include "iop/iop.hpp"
@@ -87,6 +88,7 @@ struct Ps2 {
     ram::Ram* ee_ram;
     ee::intc::Intc* ee_intc;
     ee::timers::Timers* ee_timers;
+    mtvu::Mtvu* mtvu;
 
     // IOP-only
     iop::bus::Bus* iop_bus;

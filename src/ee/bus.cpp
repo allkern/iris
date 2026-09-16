@@ -1,6 +1,7 @@
 #include <new>
 
 #include "bus.hpp"
+#include "mtvu.hpp"
 #include "gs/gs.hpp"
 #include "iop/cdvd.hpp"
 #include "bus_decl.hpp"
@@ -92,6 +93,42 @@ void destroy(Bus* bus) {
 // - VU    11000000-1100FFFF -> 8800-8807 (8)
 // - IOP   1C000000-1C1FFFFF -> e000-e0ff (100)
 
+static inline void sync_vu1_memory_access(Bus* bus, uint32_t addr) {
+    if (!bus->mtvu) {
+        return;
+    }
+
+    if (addr < 0x11008000 || addr > 0x1100FFFF) {
+        return;
+    }
+
+    mtvu::sync(bus->mtvu, mtvu::SYNC_VU1_MEMORY);
+}
+
+static inline void sync_gs_register_read(Bus* bus, uint32_t addr) {
+    if (!bus->mtvu) {
+        return;
+    }
+
+    if (addr < 0x12000000 || addr > 0x12001FFF) {
+        return;
+    }
+
+    mtvu::sync(bus->mtvu, mtvu::SYNC_GS_REGISTERS);
+}
+
+static inline void sync_gs_register_write(Bus* bus, uint32_t addr) {
+    if (!bus->mtvu) {
+        return;
+    }
+
+    if (addr < 0x12001000 || addr > 0x12002000) {
+        return;
+    }
+
+    mtvu::sync(bus->mtvu, mtvu::SYNC_GS_REGISTERS);
+}
+
 uint64_t read8(void* udata, uint32_t addr) {
     Bus* bus = (Bus*)udata;
 
@@ -105,12 +142,14 @@ uint64_t read8(void* udata, uint32_t addr) {
     // MAP_MEM_READ_NS(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ_NS(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_READ_NS(8, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_READ_NS(8, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_READ_NS(8, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ_NS(8, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_READ_NS(8, 0x1F402004, 0x1F402018, cdvd, cdvd);
     MAP_MEM_READ_NS(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
+    sync_gs_register_read(bus, addr);
     MAP_REG_READ_NS(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
     MAP_REG_READ_NS(8, 0x1F801460, 0x1F80147F, dev9, dev9);
     MAP_REG_READ_NS(8, 0x14000000, 0x1400FFFF, speed, speed);
@@ -137,6 +176,7 @@ uint64_t read16(void* udata, uint32_t addr) {
     MAP_REG_READ_NS(16, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ_NS(16, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_READ_NS(16, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_READ_NS(16, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_READ_NS(32, 0x10003800, 0x10003BFF, vif, vif0);
     MAP_REG_READ_NS(32, 0x10003C00, 0x10003FFF, vif, vif1);
@@ -217,9 +257,11 @@ uint64_t read32(void* udata, uint32_t addr) {
     MAP_REG_READ_NS(32, 0x10004000, 0x10004FFF, vif, vif0);
     MAP_REG_READ_NS(32, 0x10005000, 0x10005FFF, vif, vif1);
     MAP_REG_READ_NS(32, 0x1000F000, 0x1000F01F, intc, intc);
+    sync_gs_register_read(bus, addr);
     MAP_REG_READ_NS(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
     MAP_REG_READ_NS(32, 0x10000000, 0x10001FFF, timers, timers);
     MAP_MEM_READ_NS(32, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_READ_NS(32, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_READ_NS(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
@@ -281,6 +323,7 @@ uint64_t read64(void* udata, uint32_t addr) {
     // MAP_MEM_READ_NS(64, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_READ_NS(64, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ_NS(64, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    sync_gs_register_read(bus, addr);
     MAP_REG_READ_NS(64, 0x12000000, 0x12001FFF, gs, gs);
     MAP_REG_READ_NS(64, 0x10002000, 0x1000203F, ipu, ipu);
     MAP_REG_READ_NS(64, 0x10007000, 0x1000701F, ipu, ipu);
@@ -288,6 +331,7 @@ uint64_t read64(void* udata, uint32_t addr) {
     MAP_REG_READ_NS(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_READ_NS(32, 0x10000000, 0x10001FFF, timers, timers); // Reuse 32-bit function
     MAP_MEM_READ_NS(64, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_READ_NS(64, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_READ_NS(64, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(64, 0x1E400000, 0x1E7FFFFF, bios, rom2);
@@ -313,6 +357,7 @@ uint128_t read128(void* udata, uint32_t addr) {
     MAP_REG_READ_NS(128, 0x10005000, 0x10005FFF, vif, vif1);
     MAP_REG_READ_NS(128, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_MEM_READ_NS(128, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_READ_NS(128, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_READ_NS(128, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(128, 0x1E400000, 0x1E7FFFFF, bios, rom2);
@@ -344,6 +389,7 @@ void write8(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE_NS(8, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_WRITE_NS(8, 0x1F402004, 0x1F402018, cdvd, cdvd);
     MAP_MEM_WRITE_NS(8, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_WRITE_NS(8, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_WRITE_NS(8, 0x1000F000, 0x1000F01F, intc, intc);
     MAP_REG_WRITE_NS(8, 0x1F801460, 0x1F80147F, dev9, dev9);
@@ -381,6 +427,7 @@ void write16(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE_NS(16, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_WRITE_NS(16, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_WRITE_NS(16, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_WRITE_NS(16, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_WRITE_NS(16, 0x1000F000, 0x1000F01F, intc, intc);
     MAP_REG_WRITE_NS(16, 0x10000000, 0x10001FFF, timers, timers);
@@ -432,8 +479,10 @@ void write32(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE_NS(32, 0x10004000, 0x10004FFF, vif, vif0);
     MAP_REG_WRITE_NS(32, 0x10005000, 0x10005FFF, vif, vif1);
     MAP_REG_WRITE_NS(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
+    sync_gs_register_write(bus, addr);
     MAP_REG_WRITE_NS(64, 0x12000000, 0x12001FFF, gs, gs); // Reuse 64-bit function
     MAP_MEM_WRITE_NS(32, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_WRITE_NS(32, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_REG_WRITE_NS(32, 0x1F801600, 0x1F8016FF, usb, usb);
     MAP_REG_WRITE_NS(32, 0x1F801460, 0x1F80147F, dev9, dev9);
@@ -495,6 +544,7 @@ void write64(void* udata, uint32_t addr, uint64_t data) {
     // MAP_MEM_WRITE_NS(64, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_WRITE_NS(64, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE_NS(64, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    sync_gs_register_write(bus, addr);
     MAP_REG_WRITE_NS(64, 0x12000000, 0x12002000, gs, gs);
     MAP_REG_WRITE_NS(64, 0x10002000, 0x1000203F, ipu, ipu);
     MAP_REG_WRITE_NS(64, 0x10007000, 0x1000701F, ipu, ipu);
@@ -502,6 +552,7 @@ void write64(void* udata, uint32_t addr, uint64_t data) {
     MAP_REG_WRITE_NS(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_WRITE_NS(32, 0x10000000, 0x10001FFF, timers, timers); // Reuse 32-bit function
     MAP_MEM_WRITE_NS(64, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_WRITE_NS(64, 0x11008000, 0x1100FFFF, vu, vu1);
     MAP_MEM_WRITE_NS(64, 0x1000F000, 0x1000F01F, intc, intc);
 
@@ -537,6 +588,7 @@ void write128(void* udata, uint32_t addr, uint128_t data) {
     MAP_REG_WRITE_NS(128, 0x10004000, 0x10004FFF, vif, vif0);
     MAP_REG_WRITE_NS(128, 0x10005000, 0x10005FFF, vif, vif1);
     MAP_MEM_WRITE_NS(128, 0x11000000, 0x11007FFF, vu, vu0);
+    sync_vu1_memory_access(bus, addr);
     MAP_MEM_WRITE_NS(128, 0x11008000, 0x1100FFFF, vu, vu1);
 
     if (addr >= 0x1C000000 && addr < 0x1C000000 + bus->iop_ram->size) {

@@ -906,7 +906,7 @@ int is_vblank(Gs* gs) {
     return gs->vblank;
 }
 
-int write_signal(Gs* gs, uint64_t data) {
+int apply_signal(Gs* gs, uint64_t data) {
     uint64_t mask = data >> 32;
     uint64_t value = data & mask;
 
@@ -932,7 +932,7 @@ int write_signal(Gs* gs, uint64_t data) {
     return 0;
 }
 
-int write_finish(Gs* gs, uint64_t data) {
+int apply_finish(Gs* gs, uint64_t data) {
     // Trigger FINISH event
     gs->csr |= 2;
     gs->csr_raised |= 2;
@@ -942,7 +942,7 @@ int write_finish(Gs* gs, uint64_t data) {
     return 0;
 }
 
-int write_label(Gs* gs, uint64_t data) {
+int apply_label(Gs* gs, uint64_t data) {
     gs->label = data;
 
     uint64_t mask = data >> 32;
@@ -951,6 +951,41 @@ int write_label(Gs* gs, uint64_t data) {
     gs->siglblid |= (data & mask) << 32;
 
     return 0;
+}
+
+int write_signal(Gs* gs, uint64_t data) {
+    if (gs->event_sink) {
+        gs->event_sink(gs->event_udata, SIGNAL_EVENT_SIGNAL, data);
+
+        return 0;
+    }
+
+    return apply_signal(gs, data);
+}
+
+int write_finish(Gs* gs, uint64_t data) {
+    if (gs->event_sink) {
+        gs->event_sink(gs->event_udata, SIGNAL_EVENT_FINISH, data);
+
+        return 0;
+    }
+
+    return apply_finish(gs, data);
+}
+
+int write_label(Gs* gs, uint64_t data) {
+    if (gs->event_sink) {
+        gs->event_sink(gs->event_udata, SIGNAL_EVENT_LABEL, data);
+
+        return 0;
+    }
+
+    return apply_label(gs, data);
+}
+
+void set_event_sink(Gs* gs, void (*sink)(void*, int, uint64_t), void* udata) {
+    gs->event_sink = sink;
+    gs->event_udata = udata;
 }
 
 }

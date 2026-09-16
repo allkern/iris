@@ -11,12 +11,19 @@
 namespace iris::vu { struct Vu; }
 namespace iris::ee::dmac { struct Dmac; }
 namespace iris::ee::bus { struct Bus; }
+namespace iris::mtvu { struct Mtvu; }
 
 namespace iris::vif {
 
 enum {
     VIF_IDLE,
     VIF_RECV_DATA
+};
+
+enum {
+    VIF_ROLE_SERIAL,
+    VIF_ROLE_FRONT,
+    VIF_ROLE_WORKER
 };
 
 inline constexpr auto ERR_MII = 0x1;
@@ -70,6 +77,7 @@ struct Vif {
         gif::Gif* gif;
         ee::intc::Intc* intc;
         ee::bus::Bus* bus;
+        mtvu::Mtvu* mtvu;
     } hw;
 
     uint32_t stat;
@@ -112,6 +120,7 @@ struct Vif {
     int unpack_cycle;
 
     int id;
+    int role;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -129,7 +138,9 @@ uint32_t fifo_read(Vif* vif);
 void fifo_write(Vif* vif, uint32_t data);
 
 int get_dreq(Vif* vif);
-void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last);
+void write_direct_qwords(Vif* vif, const uint8_t* data, uint32_t qwords);
+void write_words(Vif* vif, const uint8_t* data, uint32_t count);
+void reset_command_state(Vif* vif, uint32_t data);
 
 inline uint32_t direct_qwords_pending(const Vif* vif) {
     if (vif->state != VIF_RECV_DATA || vif->shift || !vif->dreq) {

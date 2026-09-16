@@ -59,6 +59,7 @@ void init(Ps2* ps2) {
     ps2->gif = gif::create(ps2->logger);
     ps2->vif0 = vif::create(ps2->logger, 0, ps2->sched, ps2->ee_bus);
     ps2->vif1 = vif::create(ps2->logger, 1, ps2->sched, ps2->ee_bus);
+    ps2->mtvu = mtvu::create(ps2->logger);
 
     // Initialize EE
 
@@ -147,6 +148,8 @@ void init(Ps2* ps2) {
     ps2->ee_bus->speed = ps2->speed;
     ps2->ee_bus->ee_ram = ps2->ee_ram;
     ps2->ee_bus->iop = ps2->iop;
+
+    mtvu::connect(ps2->mtvu, ps2->vu0, ps2->vu1, ps2->vif1, ps2->gif, ps2->gs, ps2->ee_bus);
 
     iop::dma::set_dev9_mode(ps2->iop_dma, iop::dma::DEV9_MODE_RETAIL);
 
@@ -290,6 +293,8 @@ int load_rom2(Ps2* ps2, const char* path) {
 }
 
 void reset(Ps2* ps2) {
+    mtvu::sync(ps2->mtvu, mtvu::SYNC_OTHER);
+
     scheduler::reset(ps2->sched);
 
     int iop_dev9_mode = ps2->iop_dma->dev9_mode;
@@ -316,6 +321,7 @@ void reset(Ps2* ps2) {
 
     gif::reset(ps2->gif);
     gs::reset(ps2->gs);
+    mtvu::reset(ps2->mtvu);
     ram::reset(ps2->ee_ram);
     ram::reset(ps2->iop_ram);
 
@@ -332,6 +338,8 @@ void reset(Ps2* ps2) {
 
 void cycle(Ps2* ps2) {
     profile::count(profile::PS2_CYCLES);
+
+    mtvu::poll(ps2->mtvu);
 
     int64_t next = scheduler::cycles_to_next(ps2->sched);
 
@@ -421,6 +429,7 @@ void destroy(Ps2* ps2) {
     iop::destroy(ps2->iop);
     ee::bus::destroy(ps2->ee_bus);
     iop::bus::destroy(ps2->iop_bus);
+    mtvu::destroy(ps2->mtvu);
     gif::destroy(ps2->gif);
     gs::destroy(ps2->gs);
     ipu::destroy(ps2->ipu);

@@ -23,6 +23,7 @@
 #include <cstdint>
 #include "gif.hpp"
 #include "vif.hpp"
+#include "mtvu.hpp"
 
 #include "profile_tag.hpp"
 #include "profile_counters.hpp"
@@ -360,6 +361,10 @@ static inline void mem_write(Vu* vu, uint16_t addr, uint32_t data, int i) {
         if (addr <= 0x3ff) {
             vu->vu_mem[addr & 0xff].u32[i] = data;
         } else {
+            if (vu->mtvu) {
+                mtvu::sync(vu->mtvu, mtvu::SYNC_VU1_REGISTERS);
+            }
+
             if ((addr >= 0x400) && (addr <= 0x41f)) {
                 vu->vu1->vf[addr & 0x1f].u32[i] = data;
             } else if ((addr >= 0x420) && (addr <= 0x42f)) {
@@ -398,6 +403,10 @@ static inline uint128_t mem_read(Vu* vu, uint32_t addr) {
         if (addr <= 0x3ff) {
             return vu->vu_mem[addr & 0xff];
         } else {
+            if (vu->mtvu) {
+                mtvu::sync(vu->mtvu, mtvu::SYNC_VU1_REGISTERS);
+            }
+
             if ((addr >= 0x400) && (addr <= 0x41f)) {
                 return vu->vu1->vf[addr & 0x1f].u128;
             } else if ((addr >= 0x420) && (addr <= 0x42f)) {
@@ -3110,7 +3119,11 @@ void write_vi(Vu* vu, int index, uint32_t value) {
                 // Reset VU1
                 profile::count(profile::VU1_RESETS);
 
-                reset_registers(vu->vu1);
+                if (vu->mtvu) {
+                    mtvu::push_vu1_reset(vu->mtvu);
+                } else {
+                    reset_registers(vu->vu1);
+                }
             }
         } break;
         case 29: return; // VU VPU-STAT register, read-only
@@ -3118,7 +3131,11 @@ void write_vi(Vu* vu, int index, uint32_t value) {
         case 31: {
             vu->cmsar1 = value & 0xffff;
 
-            execute_program(vu->vu1, vu->cmsar1 >> 3);
+            if (vu->mtvu) {
+                mtvu::push_vu1_execute(vu->mtvu, vu->cmsar1 >> 3);
+            } else {
+                execute_program(vu->vu1, vu->cmsar1 >> 3);
+            }
         } break;
     }
 }

@@ -4,6 +4,7 @@
 #include "gs/gs.hpp"
 #include "vu.hpp"
 #include "dmac.hpp"
+#include "mtvu.hpp"
 
 #include "profile_counters.hpp"
 
@@ -74,8 +75,54 @@ static inline const char* gif_get_reg_name(uint8_t r) {
     return "<unknown>";
 }
 
+constexpr uint64_t GIF_HASH_OFFSET_BASIS = 0xcbf29ce484222325ull;
+constexpr uint64_t GIF_HASH_PRIME = 0x100000001b3ull;
+
+static bool read_gif_hash_setting() {
+    const char* setting = getenv("IRIS_GIF_HASH");
+
+    return setting && setting[0];
+}
+
+static const bool gif_hash_enabled = read_gif_hash_setting();
+
+static inline void gif_fold_transfer_hash(Gif* gif, int path, const void* data, size_t size) {
+    const uint8_t* bytes = (const uint8_t*)data;
+
+    uint64_t hash = gif->transfer_hash;
+
+    hash = (hash ^ (uint64_t)path) * GIF_HASH_PRIME;
+    hash = (hash ^ (uint64_t)size) * GIF_HASH_PRIME;
+
+    for (size_t offset = 0; offset + 4 <= size; offset += 4) {
+        uint32_t word;
+
+        memcpy(&word, bytes + offset, sizeof(word));
+
+        hash = (hash ^ word) * GIF_HASH_PRIME;
+    }
+
+    gif->transfer_hash = hash;
+}
+
+static inline void gif_send_transfer(Gif* gif, int path, const void* data, size_t size) {
+    if (gif_hash_enabled) {
+        gif_fold_transfer_hash(gif, path, data, size);
+    }
+
+    if (gif->transfer) {
+        gif->transfer(gif->udata, path, data, size);
+    }
+
+    if (gif->dump_transfer) {
+        gif->dump_transfer(gif->dump_udata, path, data, size);
+    }
+}
+
 Gif* create(logger::Logger* logger) {
     Gif* gif = new Gif();
+
+    gif->transfer_hash = GIF_HASH_OFFSET_BASIS;
 
     gif->logger = logger;
     gif->logger_id = logger::register_source(logger, "gif");
@@ -119,6 +166,8 @@ void reset(Gif* gif) {
     gif->mask_m3p = 0;
     gif->p3_defer_size = 0;
     gif->stat &= ~3;
+
+    gif->fifo_activity.store(0);
 
     memset(&gif->tag, 0, sizeof(Tag));
 
@@ -192,11 +241,7 @@ static void gif_flush_path3(Gif* gif) {
     if (!gif->p3_defer_size)
         return;
 
-    if (gif->transfer)
-        gif->transfer(gif->udata, PATH3, gif->p3_defer_buf, gif->p3_defer_size);
-
-    if (gif->dump_transfer)
-        gif->dump_transfer(gif->dump_udata, PATH3, gif->p3_defer_buf, gif->p3_defer_size);
+    gif_send_transfer(gif, PATH3, gif->p3_defer_buf, gif->p3_defer_size);
 
     gif->p3_defer_size = 0;
 }
@@ -225,6 +270,10 @@ uint64_t read32(Gif* gif, uint32_t addr) {
             // Clear FQC when reading STAT
             uint32_t v = gif->stat;
 
+            if (gif->hw.mtvu) {
+                v |= mtvu::take_gif_fifo_activity(gif->hw.mtvu);
+            }
+
             gif->stat &= ~0x1f000000;
 
             return v;
@@ -247,6 +296,10 @@ void write32(Gif* gif, uint32_t addr, uint64_t data) {
             if (data & 1) {
                 reset(gif);
             }
+
+            if (gif->hw.mtvu) {
+                mtvu::push_gif_write32(gif->hw.mtvu, addr, (uint32_t)data);
+            }
         } return;
         case 0x10003010: {
             gif->mode = data;
@@ -259,6 +312,12 @@ void write32(Gif* gif, uint32_t addr, uint64_t data) {
                 gif->stat |= 1;
             } else {
                 gif->stat &= ~1;
+            }
+
+            if (gif->hw.mtvu) {
+                mtvu::push_gif_write32(gif->hw.mtvu, addr, (uint32_t)data);
+
+                return;
             }
 
             if (prev && !gif_path3_masked(gif)) {
@@ -486,11 +545,7 @@ static inline void gif_write_qword(Gif* gif, uint128_t data, int path) {
             if (deferred) {
                 gif_defer_path3(gif, queue->buf.data(), bytes);
             } else {
-                if (gif->transfer)
-                    gif->transfer(gif->udata, path, queue->buf.data(), bytes);
-
-                if (gif->dump_transfer)
-                    gif->dump_transfer(gif->dump_udata, path, queue->buf.data(), bytes);
+                gif_send_transfer(gif, path, queue->buf.data(), bytes);
             }
 
             queue::clear(queue);
@@ -498,18 +553,46 @@ static inline void gif_write_qword(Gif* gif, uint128_t data, int path) {
     }
 }
 
+static inline void gif_note_fifo_activity(Gif* gif) {
+    gif->stat |= 0x1f000000;
+
+    if (!gif->report_fifo_activity) {
+        return;
+    }
+
+    if (!gif->fifo_activity.load(std::memory_order_relaxed)) {
+        gif->fifo_activity.store(0x1f000000, std::memory_order_relaxed);
+    }
+}
+
 void fifo_write(Gif* gif, uint128_t data, int path) {
+    if (gif->hw.mtvu) {
+        gif->stat |= 0x1f000000;
+
+        mtvu::push_gif_qwords(gif->hw.mtvu, path, (const uint8_t*)&data, 1);
+
+        return;
+    }
+
     profile::count((profile::Counter)(profile::GIF_PATH1_QWORDS + path));
 
-    gif->stat |= 0x1f000000;
+    gif_note_fifo_activity(gif);
 
     gif_write_qword(gif, data, path);
 }
 
 void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) {
+    if (gif->hw.mtvu) {
+        gif->stat |= 0x1f000000;
+
+        mtvu::push_gif_qwords(gif->hw.mtvu, path, data, count);
+
+        return;
+    }
+
     profile::count((profile::Counter)(profile::GIF_PATH1_QWORDS + path), count);
 
-    gif->stat |= 0x1f000000;
+    gif_note_fifo_activity(gif);
 
     uint32_t index = 0;
 
@@ -549,11 +632,19 @@ void set_backend(Gif* gif, void* udata, void (*transfer)(void*, int, const void*
     gif->udata = udata;
     gif->transfer = transfer;
     gif->readback = readback;
+
+    if (gif->hw.mtvu) {
+        mtvu::update_gif_backend(gif->hw.mtvu);
+    }
 }
 
 void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, size_t)) {
     gif->dump_udata = udata;
     gif->dump_transfer = tap;
+
+    if (gif->hw.mtvu) {
+        mtvu::update_gif_backend(gif->hw.mtvu);
+    }
 }
 
 void set_path3_mask(Gif* gif, int mask) {
@@ -567,9 +658,21 @@ void set_path3_mask(Gif* gif, int mask) {
         gif->stat &= ~2;
     }
 
+    if (gif->hw.mtvu) {
+        return;
+    }
+
     if (prev && !gif_path3_masked(gif)) {
         gif_path3_lifted(gif);
     }
+}
+
+uint64_t get_transfer_hash(Gif* gif) {
+    if (gif->hw.mtvu) {
+        return mtvu::get_gif_transfer_hash(gif->hw.mtvu);
+    }
+
+    return gif->transfer_hash;
 }
 
 int get_path3_mask(Gif* gif) {

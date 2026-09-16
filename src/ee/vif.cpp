@@ -6,6 +6,7 @@
 
 #include "vif.hpp"
 #include "gif.hpp"
+#include "mtvu.hpp"
 
 #include "profile_counters.hpp"
 
@@ -36,6 +37,7 @@ void connect(Vif* vif, vu::Vu* vu, gif::Gif* gif, ee::intc::Intc* intc, ee::dmac
 void reset(Vif* vif) {
     auto hw = vif->hw;
     int id = vif->id;
+    int role = vif->role;
 
     logger::Logger* logger = vif->logger;
     size_t logger_id = vif->logger_id;
@@ -47,6 +49,7 @@ void reset(Vif* vif) {
 
     vif->hw = hw;
     vif->id = id;
+    vif->role = role;
 
     vif->dreq = 1;
 }
@@ -339,7 +342,55 @@ static inline bool vif_is_fifo(uint32_t addr) {
     return page == VIF0_FIFO_BASE || page == VIF1_FIFO_BASE;
 }
 
+static inline bool vif_command_carries_bulk_data(uint32_t cmd) {
+    if (cmd == CMD_MPG || cmd == CMD_DIRECT || cmd == CMD_DIRECTHL) {
+        return true;
+    }
+
+    return (cmd & 0xe0) == 0x60;
+}
+
+static inline void vif_front_skip_words(Vif* vif, uint32_t words) {
+    vif->pending_words -= (int)words;
+
+    if (!vif->pending_words) {
+        vif->state = VIF_IDLE;
+    }
+}
+
+static inline void vif_start_program(Vif* vif, uint32_t addr) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        return;
+    }
+
+    vu::end_micro_upload(vif->hw.vu);
+    vu::execute_program(vif->hw.vu, addr);
+}
+
+static inline void vif_continue_program(Vif* vif) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        return;
+    }
+
+    vu::end_micro_upload(vif->hw.vu);
+    vu::execute_program_tpc(vif->hw.vu);
+}
+
+static inline void vif_finish_empty_unpack(Vif* vif) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        vif->state = VIF_IDLE;
+
+        return;
+    }
+
+    vif_unpack_flush_fills(vif);
+}
+
 static inline void count_vif_word(Vif* vif) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        return;
+    }
+
     if (!vif->id) {
         profile::count(profile::VIF0_WORDS);
 
@@ -375,7 +426,9 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
 
         int mark = vif->cmd == CMD_MARK;
 
-        if ((vif->cmd & 0x80) && !(vif->err & ERR_MII)) {
+        bool raises_irq = (vif->cmd & 0x80) && !(vif->err & ERR_MII);
+
+        if (raises_irq && vif->role != VIF_ROLE_WORKER) {
             ee::intc::irq(vif->hw.intc, vif->id ? ee::intc::VIF1 : ee::intc::VIF0);
 
             // iris_debug(vif, "vif{}: Requested IRQ command={:02x}", vif->id, vif->cmd);
@@ -467,8 +520,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                     vif->tops += vif->ofst;
                 }
 
-                vu::end_micro_upload(vif->hw.vu);
-                vu::execute_program(vif->hw.vu, data & 0xffff);
+                vif_start_program(vif, data & 0xffff);
             } break;
             case CMD_MSCALF: {
                 // iris_debug(vif, "vif{}: MSCALF({:04x})", vif->id, data & 0xffff);
@@ -484,8 +536,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                     vif->tops += vif->ofst;
                 }
 
-                vu::end_micro_upload(vif->hw.vu);
-                vu::execute_program(vif->hw.vu, data & 0xffff);
+                vif_start_program(vif, data & 0xffff);
             } break;
             case CMD_MSCNT: {
                 // iris_debug(vif, "vif{}: MSCNT({:08x})", vif->id, vu::get_tpc(vif->hw.vu));
@@ -501,8 +552,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                     vif->tops += vif->ofst;
                 }
 
-                vu::end_micro_upload(vif->hw.vu);
-                vu::execute_program_tpc(vif->hw.vu);
+                vif_continue_program(vif);
             } break;
             case CMD_STMASK: {
                 // iris_debug(vif, "vif{}: STMASK({:04x})", vif->id, data & 0xffff);
@@ -534,7 +584,9 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                 vif->pending_words = num * 2;
                 vif->shift = 0;
 
-                vu::begin_micro_upload(vif->hw.vu);
+                if (vif->role != VIF_ROLE_FRONT) {
+                    vu::begin_micro_upload(vif->hw.vu);
+                }
             } break;
             case CMD_DIRECT: {
                 // iris_debug(vif, "vif{}: DIRECT({:04x})", vif->id, data & 0xffff);
@@ -624,7 +676,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
                 // iris_debug(vif, "vif{}: UNPACK {:02x} fmt={:02x} flg={} num={:02x} read={} addr={:08x} tops={:08x} usn={} wr={} cl={} wl={} mode={}", vif->id, data >> 24, vif->unpack_fmt, flg, num, read_num, addr, vif->tops, vif->unpack_usn, vif->pending_words, cl, wl, vif->mode);
 
                 if (vif->pending_words == 0) {
-                    vif_unpack_flush_fills(vif);
+                    vif_finish_empty_unpack(vif);
                 } else {
                     vif->state = VIF_RECV_DATA;
                 }
@@ -635,6 +687,12 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
             } break;
         }
     } else {
+        if (vif->role == VIF_ROLE_FRONT && vif_command_carries_bulk_data(vif->cmd)) {
+            vif_front_skip_words(vif, 1);
+
+            return;
+        }
+
         switch (vif->cmd) {
             case CMD_STMASK: {
                 vif->mask = data;
@@ -1068,6 +1126,35 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
     }
 }
 
+static inline void vif_write_word(Vif* vif, uint32_t data) {
+    vif_handle_fifo_write(vif, data);
+
+    if (vif->role == VIF_ROLE_FRONT) {
+        mtvu::push_vif_words(vif->hw.mtvu, (const uint8_t*)&data, 1);
+    }
+}
+
+static inline uint32_t vif_read_row(Vif* vif, int index) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        return mtvu::read_vif1_row(vif->hw.mtvu, index);
+    }
+
+    return vif->r[index];
+}
+
+void reset_command_state(Vif* vif, uint32_t data) {
+    vif->fbrst = data;
+    vif->state = VIF_IDLE;
+    vif->pending_words = 0;
+    vif->unpack_shift = 0;
+    vif->shift = 0;
+    vif->dreq = 1;
+
+    if (data & 8) {
+        vif->stat &= ~0x3f00;
+    }
+}
+
 uint64_t read32(Vif* vif, uint32_t addr) {
     switch (addr) {
         // VIF0 registers
@@ -1111,10 +1198,10 @@ uint64_t read32(Vif* vif, uint32_t addr) {
         case 0x10003cc0: return vif->tops;
         case 0x10003cd0: return vif->itop;
         case 0x10003ce0: return vif->top;
-        case 0x10003d00: return vif->r[0];
-        case 0x10003d10: return vif->r[1];
-        case 0x10003d20: return vif->r[2];
-        case 0x10003d30: return vif->r[3];
+        case 0x10003d00: return vif_read_row(vif, 0);
+        case 0x10003d10: return vif_read_row(vif, 1);
+        case 0x10003d20: return vif_read_row(vif, 2);
+        case 0x10003d30: return vif_read_row(vif, 3);
         case 0x10003d40: return vif->c[0];
         case 0x10003d50: return vif->c[1];
         case 0x10003d60: return vif->c[2];
@@ -1135,17 +1222,7 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
     switch (addr) {
         // VIF0 registers
         case 0x10003810: {
-            vif->fbrst = data;
-            vif->state = VIF_IDLE;
-            vif->pending_words = 0;
-            vif->unpack_shift = 0;
-            vif->shift = 0;
-            vif->dreq = 1;
-
-            // Clear VSS, VFS, VIS, INT, ER0, ER1
-            if (data & 8) {
-                vif->stat &= ~0x3f00;
-            }
+            reset_command_state(vif, data);
 
             ee::dmac::handle_vif0_transfer(vif->hw.dmac);
         } break;
@@ -1157,16 +1234,10 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
         // Only FDR is writable, the rest of the status is owned by the VIF
         case 0x10003c00: vif->stat = (vif->stat & ~STAT_FDR) | (data & STAT_FDR); break;
         case 0x10003c10: {
-            vif->fbrst = data;
-            vif->state = VIF_IDLE;
-            vif->pending_words = 0;
-            vif->unpack_shift = 0;
-            vif->shift = 0;
-            vif->dreq = 1;
+            reset_command_state(vif, data);
 
-            // Clear VSS, VFS, VIS, INT, ER0, ER1
-            if (data & 8) {
-                vif->stat &= ~0x3f00;
+            if (vif->role == VIF_ROLE_FRONT) {
+                mtvu::push_vif_fbrst(vif->hw.mtvu, (uint32_t)data);
             }
 
             ee::dmac::handle_vif1_transfer(vif->hw.dmac);
@@ -1178,7 +1249,7 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
 
         default: {
             if (vif_is_fifo(addr)) {
-                vif_handle_fifo_write(vif, data);
+                vif_write_word(vif, data);
 
                 break;
             }
@@ -1205,6 +1276,10 @@ void write128(Vif* vif, uint32_t addr, uint128_t data) {
     for (int i = 0; i < 4; i++) {
         vif_handle_fifo_write(vif, data.u32[i]);
     }
+
+    if (vif->role == VIF_ROLE_FRONT) {
+        mtvu::push_vif_words(vif->hw.mtvu, (const uint8_t*)&data, 4);
+    }
 }
 
 uint32_t fifo_read(Vif* vif) {
@@ -1214,14 +1289,14 @@ uint32_t fifo_read(Vif* vif) {
 }
 
 void fifo_write(Vif* vif, uint32_t data) {
-    vif_handle_fifo_write(vif, data);
+    vif_write_word(vif, data);
 }
 
 int get_dreq(Vif* vif) {
     return vif->dreq;
 }
 
-void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last) {
+static void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last) {
     profile::count(profile::VIF1_DIRECT_WORDS, (uint64_t)qwords * 4);
 
     vif->data = last;
@@ -1230,6 +1305,24 @@ void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last) {
     if (!vif->pending_words) {
         vif->state = VIF_IDLE;
     }
+}
+
+void write_direct_qwords(Vif* vif, const uint8_t* data, uint32_t qwords) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        vif_front_skip_words(vif, qwords * 4);
+
+        mtvu::push_vif_words(vif->hw.mtvu, data, qwords * 4);
+
+        return;
+    }
+
+    uint128_t last;
+
+    memcpy(&last, data + (size_t)(qwords - 1) * 16, sizeof(last));
+
+    gif::fifo_write_qwords(vif->hw.gif, data, qwords, gif::PATH2);
+
+    consume_direct_qwords(vif, qwords, last);
 }
 
 static bool read_vif_bulk_check_setting() {
@@ -1559,6 +1652,14 @@ static void vif_unpack_span_checked(Vif* vif, const uint8_t* data, uint32_t coun
 }
 
 void upload_micro_qwords(Vif* vif, const uint8_t* data, uint32_t qwords) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        vif_front_skip_words(vif, qwords * 4);
+
+        mtvu::push_vif_words(vif->hw.mtvu, data, qwords * 4);
+
+        return;
+    }
+
     profile::count(profile::VIF1_MPG_WORDS, (uint64_t)qwords * 4);
     profile::count(profile::VIF1_MPG_BULK_QWORDS, qwords);
 
@@ -1579,6 +1680,14 @@ void upload_micro_qwords(Vif* vif, const uint8_t* data, uint32_t qwords) {
 }
 
 void unpack_words(Vif* vif, const uint8_t* data, uint32_t count) {
+    if (vif->role == VIF_ROLE_FRONT) {
+        vif_front_skip_words(vif, count);
+
+        mtvu::push_vif_words(vif->hw.mtvu, data, count);
+
+        return;
+    }
+
     if (vif_bulk_check_enabled()) {
         vif_unpack_span_checked(vif, data, count);
 
@@ -1586,6 +1695,72 @@ void unpack_words(Vif* vif, const uint8_t* data, uint32_t count) {
     }
 
     vif_unpack_span(vif, data, count);
+}
+
+void write_words(Vif* vif, const uint8_t* data, uint32_t count) {
+    uint32_t index = 0;
+
+    while (index < count) {
+        const uint8_t* source = data + (size_t)index * 4;
+
+        uint32_t remaining = count - index;
+
+        uint32_t direct = direct_qwords_pending(vif);
+
+        if (direct && remaining >= 4) {
+            uint32_t qwords = remaining / 4;
+
+            if (qwords > direct) {
+                qwords = direct;
+            }
+
+            write_direct_qwords(vif, source, qwords);
+
+            index += qwords * 4;
+
+            continue;
+        }
+
+        uint32_t unpack = unpack_words_pending(vif);
+
+        if (unpack) {
+            uint32_t words = remaining;
+
+            if (words > unpack) {
+                words = unpack;
+            }
+
+            unpack_words(vif, source, words);
+
+            index += words;
+
+            continue;
+        }
+
+        uint32_t mpg = mpg_qwords_pending(vif);
+
+        if (mpg && remaining >= 4) {
+            uint32_t qwords = remaining / 4;
+
+            if (qwords > mpg) {
+                qwords = mpg;
+            }
+
+            upload_micro_qwords(vif, source, qwords);
+
+            index += qwords * 4;
+
+            continue;
+        }
+
+        uint32_t word;
+
+        memcpy(&word, source, sizeof(word));
+
+        vif_handle_fifo_write(vif, word);
+
+        index++;
+    }
 }
 
 #undef printf

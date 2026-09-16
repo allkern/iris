@@ -15,6 +15,7 @@
 #include "ee.hpp"
 #include "bus.hpp"
 #include "vu.hpp"
+#include "mtvu.hpp"
 #include "ee_dis.hpp"
 #include "ee_def.hpp"
 #include "ee_mmi.hpp"
@@ -8598,6 +8599,14 @@ static inline void report_idle_loop_misprediction(Ee* ee) {
     }
 }
 
+static inline void catch_up_vu1_worker(Ee* ee) {
+    if (!ee->vu0 || !ee->vu0->mtvu) {
+        return;
+    }
+
+    mtvu::sync(ee->vu0->mtvu, mtvu::SYNC_EE_IDLE);
+}
+
 static inline int complete_idle_loop_iteration(Ee* ee, const Block* block, int remaining) {
     IdleLoop& loop = ee->idle_loop;
 
@@ -8643,6 +8652,12 @@ static inline int complete_idle_loop_iteration(Ee* ee, const Block* block, int r
     }
 
     if ((uint64_t)remaining <= iteration_cycles) {
+        return 0;
+    }
+
+    catch_up_vu1_worker(ee);
+
+    if (is_irq_pending(ee)) {
         return 0;
     }
 
@@ -8815,6 +8830,12 @@ int run_block(Ee* ee, int max_cycles) {
     }
 
     if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
+        catch_up_vu1_worker(ee);
+
+        if (is_irq_pending(ee)) {
+            return 0;
+        }
+
         ee->total_cycles += 16*64;
         ee->count += 16*64;
         // ee->eenull_counter += 8 * 64;

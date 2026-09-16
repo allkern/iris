@@ -9,6 +9,7 @@
 namespace iris::gif { struct Gif; }
 namespace iris::vif { struct Vif; }
 namespace iris::vu::jit { struct Jit; }
+namespace iris::mtvu { struct Mtvu; }
 
 namespace iris::vu {
 
@@ -163,6 +164,7 @@ struct Vu {
     gif::Gif* gif;
     vif::Vif* vif;
     Vu* vu1;
+    mtvu::Mtvu* mtvu = nullptr;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;

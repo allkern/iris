@@ -252,6 +252,12 @@ struct Context {
 inline constexpr auto EVENT_VBLANK = 0;
 inline constexpr auto EVENT_SCISSOR = 1;
 
+enum SignalEvent : int {
+    SIGNAL_EVENT_SIGNAL,
+    SIGNAL_EVENT_FINISH,
+    SIGNAL_EVENT_LABEL
+};
+
 struct Gs {
     struct {
         scheduler::Scheduler* sched;
@@ -269,6 +275,9 @@ struct Gs {
     int signal_pending;
     int signal_stall;
     uint32_t stall_sigid;
+
+    void (*event_sink)(void* udata, int event, uint64_t data);
+    void* event_udata;
 
     // 1KB CLUT cache
     uint32_t clut_cache[0x100];
@@ -413,5 +422,9 @@ void get_privileged_state(Gs* gs, PrivilegedState* state);
 int write_signal(Gs* gs, uint64_t data);
 int write_finish(Gs* gs, uint64_t data);
 int write_label(Gs* gs, uint64_t data);
+int apply_signal(Gs* gs, uint64_t data);
+int apply_finish(Gs* gs, uint64_t data);
+int apply_label(Gs* gs, uint64_t data);
+void set_event_sink(Gs* gs, void (*sink)(void*, int, uint64_t), void* udata);
 
 }

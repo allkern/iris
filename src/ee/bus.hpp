@@ -20,6 +20,7 @@
 
 namespace iris::gs { struct Gs; }
 namespace iris::cdvd { struct Cdvd; }
+namespace iris::mtvu { struct Mtvu; }
 
 namespace iris::ee::bus {
 
@@ -35,6 +36,7 @@ struct Bus {
     vif::Vif* vif1;
     vu::Vu* vu0;
     vu::Vu* vu1;
+    mtvu::Mtvu* mtvu;
     timers::Timers* timers;
     
     // EE/IOP

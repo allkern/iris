@@ -62,6 +62,15 @@ enum Counter : int {
     GIF_PATH1_QWORDS,
     GIF_PATH2_QWORDS,
     GIF_PATH3_QWORDS,
+    MTVU_OPS_PUBLISHED,
+    MTVU_RING_FULL_WAITS,
+    MTVU_FRAME_SYNC_WAITS,
+    MTVU_VU1_MEMORY_SYNC_WAITS,
+    MTVU_VU1_REGISTER_SYNC_WAITS,
+    MTVU_VIF1_ROW_SYNC_WAITS,
+    MTVU_GS_REGISTER_SYNC_WAITS,
+    MTVU_EE_IDLE_SYNC_WAITS,
+    MTVU_OTHER_SYNC_WAITS,
     COUNTER_COUNT
 };
 
@@ -140,6 +149,15 @@ inline const char* counter_name(int counter) {
         case GIF_PATH1_QWORDS: return "gif path1 qwords";
         case GIF_PATH2_QWORDS: return "gif path2 qwords";
         case GIF_PATH3_QWORDS: return "gif path3 qwords";
+        case MTVU_OPS_PUBLISHED: return "mtvu ops published to the worker";
+        case MTVU_RING_FULL_WAITS: return "mtvu waits for ring space";
+        case MTVU_FRAME_SYNC_WAITS: return "mtvu frame syncs that waited for the worker";
+        case MTVU_VU1_MEMORY_SYNC_WAITS: return "mtvu vu1 memory accesses that waited for the worker";
+        case MTVU_VU1_REGISTER_SYNC_WAITS: return "mtvu vu0 access to vu1 registers that waited for the worker";
+        case MTVU_VIF1_ROW_SYNC_WAITS: return "mtvu vif1 row reads that waited for the worker";
+        case MTVU_GS_REGISTER_SYNC_WAITS: return "mtvu gs register accesses that waited for the worker";
+        case MTVU_EE_IDLE_SYNC_WAITS: return "mtvu ee idle skips that waited for the worker";
+        case MTVU_OTHER_SYNC_WAITS: return "mtvu other syncs that waited for the worker";
     }
 
     return "unknown";

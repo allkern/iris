@@ -1,6 +1,20 @@
 #include "hardware.hpp"
 
+#include "Granite/util/thread_id.hpp"
+
 namespace iris::gs::renderer::hardware {
+
+static thread_local bool thread_index_registered = false;
+
+static inline void register_calling_thread() {
+    if (thread_index_registered) {
+        return;
+    }
+
+    Util::register_thread_index(0);
+
+    thread_index_registered = true;
+}
 
 void* create() {
     return new state();
@@ -229,11 +243,15 @@ Image get_frame(void* udata) {
 void transfer(void* udata, int path, const void* data, size_t size) {
     state* ctx = static_cast<state*>(udata);
 
+    register_calling_thread();
+
     ctx->iface.gif_transfer(path, data, size);
 }
 
 void readback(void* udata, void* data, size_t size) {
     state* ctx = static_cast<state*>(udata);
+
+    register_calling_thread();
 
     ctx->iface.read_transfer_fifo((void*)data, size / 16);
 }

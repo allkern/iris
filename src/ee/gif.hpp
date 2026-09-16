@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "u128.h"
 #include "queue.hpp"
 #include "logger.hpp"
@@ -9,6 +11,8 @@ namespace iris::gs { struct Gs; }
 namespace iris::vu { struct Vu; }
 
 namespace iris::ee::dmac { struct Dmac; }
+
+namespace iris::mtvu { struct Mtvu; }
 
 namespace iris::gif {
 
@@ -42,6 +46,7 @@ struct Gif {
         ee::dmac::Dmac* dmac;
         gs::Gs* gs;
         vu::Vu* vu1;
+        mtvu::Mtvu* mtvu;
     } hw;
 
     uint64_t ctrl;
@@ -82,6 +87,11 @@ struct Gif {
     // From ST(Q) to RGBA(Q)
     uint64_t q;
 
+    bool report_fifo_activity;
+    std::atomic <uint32_t> fifo_activity;
+
+    uint64_t transfer_hash;
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
@@ -102,6 +112,7 @@ void set_path3_mask(Gif* gif, int mask);
 int get_path3_mask(Gif* gif);
 int can_accept(Gif* gif, int path);
 int path3_stall_enabled(Gif* gif);
+uint64_t get_transfer_hash(Gif* gif);
 
 
 }
