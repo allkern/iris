@@ -815,6 +815,12 @@ void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords)
     }
 }
 
+void sync_backend(Gif* gif) {
+    if (gif->hw.mtvu) {
+        mtvu::sync(gif->hw.mtvu, mtvu::SYNC_OTHER);
+    }
+}
+
 void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, size_t)) {
     gif->dump_udata = udata;
     gif->dump_transfer = tap;

@@ -133,6 +133,7 @@ void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path);
 uint128_t fifo_read(Gif* gif);
 void set_backend(Gif* gif, void* udata, void (*transfer)(void*, int, const void*, size_t), void (*readback)(void*, void*, size_t));
 void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, size_t));
+void sync_backend(Gif* gif);
 void enable_front_scan(Gif* gif);
 void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords);
 uint64_t get_transfer_hash(Gif* gif);

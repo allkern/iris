@@ -86,6 +86,8 @@ struct Renderer {
 
     CreateInfo info = {};
 
+    int active_backend = BACKEND_NULL;
+
     void* (*create)();
     bool (*init)(void* udata, const CreateInfo& info);
     void (*reset)(void* udata);

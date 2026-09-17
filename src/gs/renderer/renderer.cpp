@@ -10,7 +10,21 @@ Renderer* create() {
     return new Renderer;
 }
 
+static void sync_emulation(Renderer* renderer) {
+    if (renderer->active_backend == BACKEND_NULL) {
+        return;
+    }
+
+    if (!renderer->info.gif) {
+        return;
+    }
+
+    gif::sync_backend(renderer->info.gif);
+}
+
 void init_callbacks(Renderer* renderer, int backend) {
+    renderer->active_backend = backend;
+
     switch (backend) {
         case BACKEND_NULL: {
             renderer->create = null::create;
@@ -67,6 +81,8 @@ bool set_backend(Renderer* renderer, int backend, void* config) {
     if (backend == renderer->info.backend)
         return true;
 
+    sync_emulation(renderer);
+
     renderer->destroy(renderer->udata);
 
     CreateInfo info = renderer->info;
@@ -77,6 +93,8 @@ bool set_backend(Renderer* renderer, int backend, void* config) {
 }
 
 void hotswap(Renderer* renderer, int backend) {
+    sync_emulation(renderer);
+
     init_callbacks(renderer, backend);
 
     // Re-point the GIF backend at the newly-selected callbacks. Without this the
@@ -87,24 +105,34 @@ void hotswap(Renderer* renderer, int backend) {
 }
 
 void destroy(Renderer* renderer) {
+    sync_emulation(renderer);
+
     renderer->destroy(renderer->udata);
 
     delete renderer;
 }
 
 void reset(Renderer* renderer) {
+    sync_emulation(renderer);
+
     renderer->reset(renderer->udata);
 }
 
 Image get_frame(Renderer* renderer) {
+    sync_emulation(renderer);
+
     return renderer->get_frame(renderer->udata);
 }
 
 void read_vram(Renderer* renderer, void* dst, size_t size) {
+    sync_emulation(renderer);
+
     renderer->read_vram(renderer->udata, dst, size);
 }
 
 void set_config(Renderer* renderer, void* config) {
+    sync_emulation(renderer);
+
     renderer->set_config(renderer->udata, config);
 }
 

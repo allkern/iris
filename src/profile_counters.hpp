@@ -71,6 +71,8 @@ enum Counter : int {
     MTVU_GS_REGISTER_SYNC_WAITS,
     MTVU_EE_IDLE_SYNC_WAITS,
     MTVU_OTHER_SYNC_WAITS,
+    GS_ASYNC_TRANSFERS,
+    GS_ASYNC_RING_FULL_WAITS,
     COUNTER_COUNT
 };
 
@@ -158,6 +160,8 @@ inline const char* counter_name(int counter) {
         case MTVU_GS_REGISTER_SYNC_WAITS: return "mtvu gs register accesses that waited for the worker";
         case MTVU_EE_IDLE_SYNC_WAITS: return "mtvu ee idle skips that waited for the worker";
         case MTVU_OTHER_SYNC_WAITS: return "mtvu other syncs that waited for the worker";
+        case GS_ASYNC_TRANSFERS: return "gs thread transfers queued";
+        case GS_ASYNC_RING_FULL_WAITS: return "gs thread waits for ring space";
     }
 
     return "unknown";

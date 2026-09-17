@@ -317,6 +317,7 @@ target_sources(iris PRIVATE
     src/ee/gif.cpp
     src/ee/intc.cpp
     src/ee/mtvu.cpp
+    src/gs/gs_async.cpp
     src/ee/timers.cpp
     src/ee/vif.cpp
     src/ee/vu_cached.cpp
