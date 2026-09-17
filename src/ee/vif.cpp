@@ -688,6 +688,16 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
         }
     } else {
         if (vif->role == VIF_ROLE_FRONT && vif_command_carries_bulk_data(vif->cmd)) {
+            if (vif->cmd == CMD_DIRECT || vif->cmd == CMD_DIRECTHL) {
+                vif->data.u32[vif->shift++] = data;
+
+                if (vif->shift == 4) {
+                    gif::scan_front_qwords(vif->hw.gif, gif::PATH2, (const uint8_t*)&vif->data, 1);
+
+                    vif->shift = 0;
+                }
+            }
+
             vif_front_skip_words(vif, 1);
 
             return;
@@ -1309,6 +1319,8 @@ static void consume_direct_qwords(Vif* vif, uint32_t qwords, uint128_t last) {
 
 void write_direct_qwords(Vif* vif, const uint8_t* data, uint32_t qwords) {
     if (vif->role == VIF_ROLE_FRONT) {
+        gif::scan_front_qwords(vif->hw.gif, gif::PATH2, data, qwords);
+
         vif_front_skip_words(vif, qwords * 4);
 
         mtvu::push_vif_words(vif->hw.mtvu, data, qwords * 4);

@@ -41,6 +41,28 @@ struct Tag {
     int remaining;
 };
 
+inline constexpr int FRONT_SCAN_EVENTS = 8;
+
+struct FrontScanEvent {
+    int type;
+    uint64_t data;
+};
+
+struct FrontScan {
+    int enabled;
+    int state;
+    int fmt;
+    int scannable;
+    int nregs;
+    int index;
+    uint64_t regs;
+    uint64_t qwc;
+    int path;
+
+    int events;
+    FrontScanEvent event[FRONT_SCAN_EVENTS];
+};
+
 struct Gif {
     struct {
         ee::dmac::Dmac* dmac;
@@ -92,6 +114,9 @@ struct Gif {
 
     uint64_t transfer_hash;
 
+    FrontScan scan;
+    int flushing_deferred_path3;
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
@@ -108,11 +133,13 @@ void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path);
 uint128_t fifo_read(Gif* gif);
 void set_backend(Gif* gif, void* udata, void (*transfer)(void*, int, const void*, size_t), void (*readback)(void*, void*, size_t));
 void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, size_t));
+void enable_front_scan(Gif* gif);
+void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords);
+uint64_t get_transfer_hash(Gif* gif);
+int flushing_deferred_path3(Gif* gif);
 void set_path3_mask(Gif* gif, int mask);
 int get_path3_mask(Gif* gif);
 int can_accept(Gif* gif, int path);
 int path3_stall_enabled(Gif* gif);
-uint64_t get_transfer_hash(Gif* gif);
-
 
 }

@@ -22,6 +22,7 @@
 #include "gs/gs.hpp"
 
 #include "profile_counters.hpp"
+#include "profile_tag.hpp"
 
 namespace iris::mtvu {
 
@@ -72,6 +73,14 @@ struct Mtvu {
 
     vif::Vif* vif;
     gif::Gif* gif;
+
+    void* backend_udata = nullptr;
+    void (*backend_transfer)(void*, int, const void*, size_t) = nullptr;
+    void (*backend_readback)(void*, void*, size_t) = nullptr;
+
+    bool front_scan = false;
+    bool processing_front_gif = false;
+    std::atomic <uint32_t> events_kept = 1;
 
     std::vector <uint32_t> ring;
 
@@ -173,6 +182,10 @@ static inline void pause_briefly() {
 static void queue_gs_event(void* udata, int type, uint64_t data) {
     Mtvu* mtvu = (Mtvu*)udata;
 
+    if (!mtvu->events_kept.load(std::memory_order_relaxed)) {
+        return;
+    }
+
     std::lock_guard <std::mutex> lock(mtvu->events_mutex);
 
     mtvu->events.push_back({ type, data });
@@ -269,7 +282,11 @@ static inline uint32_t process_op(Mtvu* mtvu, uint32_t read) {
             int path = (int)op[1];
             uint32_t qwords = op[2];
 
+            mtvu->processing_front_gif = true;
+
             gif::fifo_write_qwords(mtvu->gif, (const uint8_t*)&op[3], qwords, path);
+
+            mtvu->processing_front_gif = false;
 
             return read + 3 + qwords * 4;
         }
@@ -354,6 +371,8 @@ static void sleep_until_work(Mtvu* mtvu) {
 }
 
 static void worker_main(Mtvu* mtvu) {
+    profile::name_this_thread(L"MTVU worker");
+
     fesetenv(&mtvu->fp_env);
     fesetround(FE_TOWARDZERO);
 
@@ -665,6 +684,14 @@ static profile::Counter sync_wait_counter(SyncReason reason) {
     return profile::MTVU_OTHER_SYNC_WAITS;
 }
 
+static bool pipeline_is_idle(Mtvu* mtvu) {
+    if (!worker_is_idle(mtvu)) {
+        return false;
+    }
+
+    return true;
+}
+
 void sync(Mtvu* mtvu, SyncReason reason) {
     if (mtvu->mode == MODE_OFF) {
         return;
@@ -672,7 +699,7 @@ void sync(Mtvu* mtvu, SyncReason reason) {
 
     flush_staged(mtvu);
 
-    if (mtvu->mode != MODE_INLINE && !worker_is_idle(mtvu)) {
+    if (mtvu->mode != MODE_INLINE && !pipeline_is_idle(mtvu)) {
         profile::count(sync_wait_counter(reason));
     }
 
@@ -710,12 +737,56 @@ uint64_t get_gif_transfer_hash(Mtvu* mtvu) {
     return gif::get_transfer_hash(mtvu->gif);
 }
 
+static bool transfer_keeps_events(Mtvu* mtvu, int path) {
+    if (!mtvu->front_scan) {
+        return true;
+    }
+
+    if (gif::flushing_deferred_path3(mtvu->gif)) {
+        return true;
+    }
+
+    return path == gif::PATH1 && !mtvu->processing_front_gif;
+}
+
+static void run_backend_transfer(Mtvu* mtvu, int path, const void* data, size_t size, uint32_t flags) {
+    mtvu->events_kept.store(flags, std::memory_order_relaxed);
+
+    if (!mtvu->backend_transfer) {
+        return;
+    }
+
+    mtvu->backend_transfer(mtvu->backend_udata, path, data, size);
+}
+
+static void worker_gif_transfer(void* udata, int path, const void* data, size_t size) {
+    Mtvu* mtvu = (Mtvu*)udata;
+
+    uint32_t flags = transfer_keeps_events(mtvu, path) ? 1 : 0;
+
+    run_backend_transfer(mtvu, path, data, size, flags);
+}
+
+static void worker_gif_readback(void* udata, void* data, size_t size) {
+    Mtvu* mtvu = (Mtvu*)udata;
+
+    if (!mtvu->backend_readback) {
+        return;
+    }
+
+    mtvu->backend_readback(mtvu->backend_udata, data, size);
+}
+
 void update_gif_backend(Mtvu* mtvu) {
     sync(mtvu, SYNC_OTHER);
 
     gif::Gif* front = mtvu->hw.gif;
 
-    gif::set_backend(mtvu->gif, front->udata, front->transfer, front->readback);
+    mtvu->backend_udata = front->udata;
+    mtvu->backend_transfer = front->transfer;
+    mtvu->backend_readback = front->readback;
+
+    gif::set_backend(mtvu->gif, mtvu, worker_gif_transfer, worker_gif_readback);
     gif::set_dump_tap(mtvu->gif, front->dump_udata, front->dump_transfer);
 }
 
@@ -792,6 +863,12 @@ void connect(Mtvu* mtvu, vu::Vu* vu0, vu::Vu* vu1, vif::Vif* vif1, gif::Gif* gif
     bus->mtvu = mtvu;
 
     gs::set_event_sink(gs, queue_gs_event, mtvu);
+
+    if (mtvu->mode == MODE_THREAD) {
+        mtvu->front_scan = true;
+
+        gif::enable_front_scan(gif);
+    }
 
     update_gif_backend(mtvu);
 

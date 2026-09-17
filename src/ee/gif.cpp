@@ -169,6 +169,10 @@ void reset(Gif* gif) {
 
     gif->fifo_activity.store(0);
 
+    gif->scan.state = State::RECV_TAG;
+    gif->scan.qwc = 0;
+    gif->scan.events = 0;
+
     memset(&gif->tag, 0, sizeof(Tag));
 
     for (int i = 0; i < 3; i++)
@@ -241,7 +245,11 @@ static void gif_flush_path3(Gif* gif) {
     if (!gif->p3_defer_size)
         return;
 
+    gif->flushing_deferred_path3 = 1;
+
     gif_send_transfer(gif, PATH3, gif->p3_defer_buf, gif->p3_defer_size);
+
+    gif->flushing_deferred_path3 = 0;
 
     gif->p3_defer_size = 0;
 }
@@ -569,6 +577,8 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
     if (gif->hw.mtvu) {
         gif->stat |= 0x1f000000;
 
+        scan_front_qwords(gif, path, (const uint8_t*)&data, 1);
+
         mtvu::push_gif_qwords(gif->hw.mtvu, path, (const uint8_t*)&data, 1);
 
         return;
@@ -584,6 +594,8 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
 void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) {
     if (gif->hw.mtvu) {
         gif->stat |= 0x1f000000;
+
+        scan_front_qwords(gif, path, data, count);
 
         mtvu::push_gif_qwords(gif->hw.mtvu, path, data, count);
 
@@ -635,6 +647,171 @@ void set_backend(Gif* gif, void* udata, void (*transfer)(void*, int, const void*
 
     if (gif->hw.mtvu) {
         mtvu::update_gif_backend(gif->hw.mtvu);
+    }
+}
+
+constexpr uint64_t GIF_AD_DESCRIPTOR = 0xe;
+constexpr uint64_t GIF_REG_SIGNAL = 0x60;
+constexpr uint64_t GIF_REG_FINISH = 0x61;
+constexpr uint64_t GIF_REG_LABEL = 0x62;
+
+static void scan_apply_events(Gif* gif) {
+    int events = gif->scan.events;
+
+    gif->scan.events = 0;
+
+    if (gif->scan.path == PATH3 && gif_path3_masked(gif)) {
+        return;
+    }
+
+    for (int index = 0; index < events; index++) {
+        const FrontScanEvent& event = gif->scan.event[index];
+
+        switch (event.type) {
+            case gs::SIGNAL_EVENT_SIGNAL: {
+                gs::apply_signal(gif->hw.gs, event.data);
+            } break;
+
+            case gs::SIGNAL_EVENT_FINISH: {
+                gs::apply_finish(gif->hw.gs, event.data);
+            } break;
+
+            case gs::SIGNAL_EVENT_LABEL: {
+                gs::apply_label(gif->hw.gs, event.data);
+            } break;
+        }
+    }
+}
+
+static void scan_record_event(Gif* gif, int type, uint64_t data) {
+    if (gif->scan.events == FRONT_SCAN_EVENTS) {
+        scan_apply_events(gif);
+    }
+
+    gif->scan.event[gif->scan.events].type = type;
+    gif->scan.event[gif->scan.events].data = data;
+
+    gif->scan.events++;
+}
+
+static void scan_packed_qword(Gif* gif, const uint128_t& qword) {
+    uint64_t descriptor = (gif->scan.regs >> (gif->scan.index * 4)) & 0xf;
+
+    gif->scan.index++;
+
+    if (gif->scan.index == gif->scan.nregs) {
+        gif->scan.index = 0;
+    }
+
+    if (descriptor != GIF_AD_DESCRIPTOR) {
+        return;
+    }
+
+    switch (qword.u64[1] & 0x7f) {
+        case GIF_REG_SIGNAL: {
+            scan_record_event(gif, gs::SIGNAL_EVENT_SIGNAL, qword.u64[0]);
+        } break;
+
+        case GIF_REG_FINISH: {
+            scan_record_event(gif, gs::SIGNAL_EVENT_FINISH, qword.u64[0]);
+        } break;
+
+        case GIF_REG_LABEL: {
+            scan_record_event(gif, gs::SIGNAL_EVENT_LABEL, qword.u64[0]);
+        } break;
+    }
+}
+
+static bool scan_tag_has_ad(uint64_t regs, int nregs) {
+    for (int index = 0; index < nregs; index++) {
+        if (((regs >> (index * 4)) & 0xf) == GIF_AD_DESCRIPTOR) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static void scan_tag(Gif* gif, const uint128_t& qword, int path) {
+    uint64_t nloop = qword.u64[0] & 0x7fff;
+    uint64_t nregs = (qword.u64[0] >> 60) & 0xf;
+
+    if (!nregs) {
+        nregs = 16;
+    }
+
+    gif->scan.fmt = (int)((qword.u64[0] >> 58) & 3);
+    gif->scan.nregs = (int)nregs;
+    gif->scan.regs = qword.u64[1];
+    gif->scan.index = 0;
+    gif->scan.path = path;
+
+    switch (gif->scan.fmt) {
+        case 0: {
+            gif->scan.qwc = nloop * nregs;
+        } break;
+
+        case 1: {
+            gif->scan.qwc = (nloop * nregs + 1) / 2;
+        } break;
+
+        default: {
+            gif->scan.qwc = nloop;
+        } break;
+    }
+
+    gif->scan.scannable = !gif->scan.fmt && scan_tag_has_ad(gif->scan.regs, gif->scan.nregs);
+    gif->scan.state = gif->scan.qwc ? State::PROCESSING : State::RECV_TAG;
+}
+
+void enable_front_scan(Gif* gif) {
+    gif->scan.enabled = 1;
+}
+
+int flushing_deferred_path3(Gif* gif) {
+    return gif->flushing_deferred_path3;
+}
+
+void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords) {
+    if (!gif->scan.enabled) {
+        return;
+    }
+
+    for (uint32_t index = 0; index < qwords; index++) {
+        uint128_t qword;
+
+        memcpy(&qword, data + (size_t)index * 16, sizeof(qword));
+
+        if (gif->scan.state == State::RECV_TAG) {
+            scan_tag(gif, qword, path);
+
+            if (gif->scan.state == State::RECV_TAG) {
+                scan_apply_events(gif);
+            }
+
+            continue;
+        }
+
+        if (!gif->scan.scannable) {
+            uint64_t remaining = qwords - index;
+
+            if (remaining > gif->scan.qwc) {
+                remaining = gif->scan.qwc;
+            }
+
+            gif->scan.qwc -= remaining;
+            index += (uint32_t)remaining - 1;
+        } else {
+            scan_packed_qword(gif, qword);
+
+            gif->scan.qwc--;
+        }
+
+        if (!gif->scan.qwc) {
+            gif->scan.state = State::RECV_TAG;
+
+            scan_apply_events(gif);
+        }
     }
 }
 
