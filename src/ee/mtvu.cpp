@@ -137,7 +137,7 @@ Mtvu* create(logger::Logger* logger) {
     mtvu->logger = logger;
     mtvu->logger_id = logger::register_source(logger, "mtvu");
 
-    mtvu->mode = MODE_OFF;
+    mtvu->mode = MODE_THREAD;
 
     if (mtvu->mode == MODE_OFF) {
         return mtvu;
