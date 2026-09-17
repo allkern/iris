@@ -8755,11 +8755,11 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
 
         profile::count(profile::EE_DISPATCHES);
 
-        profile::active_jit = profile::JIT_EE;
+        profile::set_active_jit(profile::JIT_EE);
 
         block->func(ee);
 
-        profile::active_jit = profile::JIT_NONE;
+        profile::set_active_jit(profile::JIT_NONE);
 
         int cycles = given - ee->cycles_left;
 

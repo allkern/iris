@@ -2434,11 +2434,11 @@ static inline int execute_block(Iop* iop, Block* block) {
     iop->next_pc = block->end_pc;
     iop->pc = iop->next_pc - 4;
 
-    profile::active_jit = profile::JIT_IOP;
+    profile::set_active_jit(profile::JIT_IOP);
 
     block->func(iop);
 
-    profile::active_jit = profile::JIT_NONE;
+    profile::set_active_jit(profile::JIT_NONE);
 
     iop->total_cycles += block->cycles;
     iop->pc = iop->next_pc;

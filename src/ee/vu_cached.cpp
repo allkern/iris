@@ -3005,12 +3005,12 @@ static void run(Vu* vu) {
         profile::count(profile::VU0_PROGRAMS);
     }
 
-    int previous_jit = profile::active_jit;
+    int previous_jit = profile::get_active_jit();
 
     if (vu->id) {
-        profile::active_jit = profile::JIT_VU1;
+        profile::set_active_jit(profile::JIT_VU1);
     } else {
-        profile::active_jit = profile::JIT_VU0;
+        profile::set_active_jit(profile::JIT_VU0);
     }
 
     if (vu->engine == VU_ENGINE_JIT) {
@@ -3043,7 +3043,7 @@ static void run(Vu* vu) {
         }
     }
 
-    profile::active_jit = previous_jit;
+    profile::set_active_jit(previous_jit);
 }
 
 void execute_program(Vu* vu, uint32_t addr) {

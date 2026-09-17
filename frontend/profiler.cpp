@@ -54,7 +54,7 @@ namespace {
 constexpr int MAX_CALLERS = 4;
 constexpr uint32_t NO_CALLERS = 0xffffffff;
 constexpr uint64_t STACK_SCAN_BYTES = 16 * 1024;
-constexpr int OTHER_THREAD_TOP = 10;
+constexpr int OTHER_THREAD_TOP = 30;
 constexpr double OTHER_THREAD_MIN_SHARE = 2.0;
 constexpr int DISPATCH_SITE_TOP = 30;
 constexpr int DISPATCH_SITE_DISASSEMBLED = 12;
@@ -304,7 +304,7 @@ void sample_thread(Target& target) {
 
     bool captured = GetThreadContext(target.handle, &context);
 
-    int jit = profile::active_jit;
+    int jit = profile::find_active_jit(target.tid);
 
     Callers callers = {};
 
