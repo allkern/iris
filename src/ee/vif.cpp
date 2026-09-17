@@ -1337,16 +1337,8 @@ void write_direct_qwords(Vif* vif, const uint8_t* data, uint32_t qwords) {
     consume_direct_qwords(vif, qwords, last);
 }
 
-static bool read_vif_bulk_check_setting() {
-    const char* setting = getenv("IRIS_VIF_BULK_CHECK");
-
-    return setting && setting[0] == '1';
-}
-
-static const bool configured_vif_bulk_check = read_vif_bulk_check_setting();
-
 static inline bool vif_bulk_check_enabled() {
-    return configured_vif_bulk_check;
+    return false;
 }
 
 static inline uint32_t vif_unpack_vertex_words(uint32_t fmt) {

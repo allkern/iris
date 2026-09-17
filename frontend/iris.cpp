@@ -144,31 +144,6 @@ static void resume_breakpoints(Instance* iris) {
     }
 }
 
-static void record_gif_transfer_hash(Instance* iris) {
-    static const char* path = getenv("IRIS_GIF_HASH");
-    static FILE* file = nullptr;
-    static uint64_t frame = 0;
-
-    if (!path || !path[0]) {
-        return;
-    }
-
-    if (!file) {
-        file = fopen(path, "w");
-
-        if (!file) {
-            return;
-        }
-    }
-
-    uint64_t hash = gif::get_transfer_hash(iris->ps2->gif);
-
-    fprintf(file, "%llu %016llx\n", (unsigned long long)frame, (unsigned long long)hash);
-    fflush(file);
-
-    frame++;
-}
-
 static inline void do_cycle(Instance* iris) {
     ps2::cycle(iris->ps2);
     if (iris->debug.step_out) {
@@ -680,8 +655,6 @@ SDL_AppResult update(Instance* iris) {
 
     // Record a GS dump frame boundary
     render::gs_dump_tick(iris);
-
-    record_gif_transfer_hash(iris);
 
     // Draw frame
     update_window(iris);

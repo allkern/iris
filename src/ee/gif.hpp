@@ -112,8 +112,6 @@ struct Gif {
     bool report_fifo_activity;
     std::atomic <uint32_t> fifo_activity;
 
-    uint64_t transfer_hash;
-
     FrontScan scan;
     int flushing_deferred_path3;
 
@@ -136,7 +134,6 @@ void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, si
 void sync_backend(Gif* gif);
 void enable_front_scan(Gif* gif);
 void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords);
-uint64_t get_transfer_hash(Gif* gif);
 int flushing_deferred_path3(Gif* gif);
 void set_path3_mask(Gif* gif, int mask);
 int get_path3_mask(Gif* gif);

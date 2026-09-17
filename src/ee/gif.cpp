@@ -75,41 +75,7 @@ static inline const char* gif_get_reg_name(uint8_t r) {
     return "<unknown>";
 }
 
-constexpr uint64_t GIF_HASH_OFFSET_BASIS = 0xcbf29ce484222325ull;
-constexpr uint64_t GIF_HASH_PRIME = 0x100000001b3ull;
-
-static bool read_gif_hash_setting() {
-    const char* setting = getenv("IRIS_GIF_HASH");
-
-    return setting && setting[0];
-}
-
-static const bool gif_hash_enabled = read_gif_hash_setting();
-
-static inline void gif_fold_transfer_hash(Gif* gif, int path, const void* data, size_t size) {
-    const uint8_t* bytes = (const uint8_t*)data;
-
-    uint64_t hash = gif->transfer_hash;
-
-    hash = (hash ^ (uint64_t)path) * GIF_HASH_PRIME;
-    hash = (hash ^ (uint64_t)size) * GIF_HASH_PRIME;
-
-    for (size_t offset = 0; offset + 4 <= size; offset += 4) {
-        uint32_t word;
-
-        memcpy(&word, bytes + offset, sizeof(word));
-
-        hash = (hash ^ word) * GIF_HASH_PRIME;
-    }
-
-    gif->transfer_hash = hash;
-}
-
 static inline void gif_send_transfer(Gif* gif, int path, const void* data, size_t size) {
-    if (gif_hash_enabled) {
-        gif_fold_transfer_hash(gif, path, data, size);
-    }
-
     if (gif->transfer) {
         gif->transfer(gif->udata, path, data, size);
     }
@@ -122,18 +88,11 @@ static inline void gif_send_transfer(Gif* gif, int path, const void* data, size_
 Gif* create(logger::Logger* logger) {
     Gif* gif = new Gif();
 
-    gif->transfer_hash = GIF_HASH_OFFSET_BASIS;
-
     gif->logger = logger;
     gif->logger_id = logger::register_source(logger, "gif");
 
-    const char* e = getenv("IRIS_PATH3_MASK");
-
-    gif->path3_mask_enable = (e && e[0] == '1') ? 1 : 0;
-
-    const char* st = getenv("IRIS_PATH3_STALL");
-
-    gif->p3_stall_enable = (st && st[0] == '1') ? 1 : 0;
+    gif->path3_mask_enable = 0;
+    gif->p3_stall_enable = 0;
 
     // A queue for each PATH
     for (int i = 0; i < 3; i++)
@@ -848,14 +807,6 @@ void set_path3_mask(Gif* gif, int mask) {
     if (prev && !gif_path3_masked(gif)) {
         gif_path3_lifted(gif);
     }
-}
-
-uint64_t get_transfer_hash(Gif* gif) {
-    if (gif->hw.mtvu) {
-        return mtvu::get_gif_transfer_hash(gif->hw.mtvu);
-    }
-
-    return gif->transfer_hash;
 }
 
 int get_path3_mask(Gif* gif) {

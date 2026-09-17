@@ -378,12 +378,6 @@ void smap_tx(void* udata, const uint8_t* buf, int len) {
 }
 
 static bool start_backend(speed::smap::Smap* smap, const Config& cfg, LogSource* log) {
-    if (getenv("IRIS_NO_NET")) {
-        iris_info(log, "Disabled via IRIS_NO_NET");
-
-        return false;
-    }
-
     if (!cfg.enabled) {
         iris_info(log, "Networking disabled");
 

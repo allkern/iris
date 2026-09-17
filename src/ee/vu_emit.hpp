@@ -32,34 +32,7 @@ enum {
 };
 
 inline uint32_t emit_disabled() {
-    static const uint32_t mask = [] {
-        const char* spec = getenv("IRIS_VU_JIT_OFF");
-
-        if (!spec) {
-            return 0u;
-        }
-
-        struct { const char* name; uint32_t bit; } groups[] = {
-            { "minmax", EMIT_MINMAX }, { "conv", EMIT_CONV }, { "move", EMIT_MOVE },
-            { "branch", EMIT_BRANCH }, { "flags", EMIT_FLAGS }, { "int", EMIT_INT },
-            { "mem", EMIT_MEM }, { "waitq", EMIT_WAITQ }, { "nop", EMIT_NOP },
-            { "clamp", EMIT_CLAMP }, { "fmac", EMIT_FMAC }, { "clipw", EMIT_CLIPW },
-            { "qdiv", EMIT_QDIV }, { "rand", EMIT_RAND }, { "efu", EMIT_EFU },
-            { "gif", EMIT_GIF }
-        };
-
-        uint32_t m = 0;
-
-        for (auto& g : groups) {
-            if (strstr(spec, g.name)) {
-                m |= g.bit;
-            }
-        }
-
-        return m;
-    }();
-
-    return mask;
+    return 0;
 }
 
 inline bool emit_off(uint32_t group) {

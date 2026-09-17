@@ -48,7 +48,6 @@ void poll(Mtvu* mtvu);
 
 uint32_t read_vif1_row(Mtvu* mtvu, int index);
 uint32_t take_gif_fifo_activity(Mtvu* mtvu);
-uint64_t get_gif_transfer_hash(Mtvu* mtvu);
 void update_gif_backend(Mtvu* mtvu);
 
 }

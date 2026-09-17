@@ -8486,28 +8486,8 @@ enum IdleLoopMode {
     IDLE_LOOP_CHECK
 };
 
-static IdleLoopMode read_idle_loop_mode() {
-    const char* setting = getenv("IRIS_EE_IDLE_LOOP");
-
-    if (!setting) {
-        return IDLE_LOOP_SKIP;
-    }
-
-    if (!strcmp(setting, "0")) {
-        return IDLE_LOOP_OFF;
-    }
-
-    if (!strcmp(setting, "check")) {
-        return IDLE_LOOP_CHECK;
-    }
-
-    return IDLE_LOOP_SKIP;
-}
-
-static const IdleLoopMode configured_idle_loop_mode = read_idle_loop_mode();
-
 static inline IdleLoopMode idle_loop_mode() {
-    return configured_idle_loop_mode;
+    return IDLE_LOOP_SKIP;
 }
 
 static inline void snapshot_idle_loop_registers(Ee* ee, uint32_t mask) {

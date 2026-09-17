@@ -782,7 +782,6 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
 
     code.init(jit->rt.environment(), jit->rt.cpu_features());
 
-    // static int dumps_left = getenv("IRIS_VU_JIT_DUMP") ? atoi(getenv("IRIS_VU_JIT_DUMP")) : 0;
     // static FileLogger dump_logger(stdout);
 
     // bool dumping = dumps_left > 0;

@@ -121,38 +121,6 @@ struct Mtvu {
     size_t logger_id = 0;
 };
 
-static int read_mode_setting() {
-    const char* setting = getenv("IRIS_MTVU");
-
-    if (!setting) {
-        return MODE_OFF;
-    }
-
-    if (strcmp(setting, "inline") == 0) {
-        return MODE_INLINE;
-    }
-
-    if (strcmp(setting, "thread") == 0) {
-        return MODE_THREAD;
-    }
-
-    if (strcmp(setting, "strict") == 0) {
-        return MODE_STRICT;
-    }
-
-    return MODE_OFF;
-}
-
-static bool read_gs_thread_setting() {
-    const char* setting = getenv("IRIS_GS_THREAD");
-
-    if (!setting) {
-        return true;
-    }
-
-    return strcmp(setting, "0") != 0;
-}
-
 static const char* mode_name(int mode) {
     switch (mode) {
         case MODE_INLINE: return "inline";
@@ -169,7 +137,7 @@ Mtvu* create(logger::Logger* logger) {
     mtvu->logger = logger;
     mtvu->logger_id = logger::register_source(logger, "mtvu");
 
-    mtvu->mode = read_mode_setting();
+    mtvu->mode = MODE_OFF;
 
     if (mtvu->mode == MODE_OFF) {
         return mtvu;
@@ -180,9 +148,7 @@ Mtvu* create(logger::Logger* logger) {
 
     mtvu->ring.resize(RING_WORDS);
 
-    bool threaded = mtvu->mode == MODE_THREAD || mtvu->mode == MODE_STRICT;
-
-    if (threaded && read_gs_thread_setting()) {
+    if (mtvu->mode == MODE_THREAD || mtvu->mode == MODE_STRICT) {
         mtvu->gs_async = gs::async::create();
     }
 
@@ -755,12 +721,6 @@ uint32_t read_vif1_row(Mtvu* mtvu, int index) {
 
 uint32_t take_gif_fifo_activity(Mtvu* mtvu) {
     return mtvu->gif->fifo_activity.exchange(0);
-}
-
-uint64_t get_gif_transfer_hash(Mtvu* mtvu) {
-    sync(mtvu, SYNC_OTHER);
-
-    return gif::get_transfer_hash(mtvu->gif);
 }
 
 static bool transfer_keeps_events(Mtvu* mtvu, int path) {
