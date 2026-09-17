@@ -246,7 +246,7 @@ static void show_display_settings_menu(Instance* iris) {
     if (menu::begin(ICON_MS_MONITOR " Display")) {
         if (menu::begin(ICON_MS_BRUSH " Renderer")) {
             for (int i = 0; i < 3; i++) {
-                bool enabled = i != gs::renderer::BACKEND_SOFTWARE;
+                bool enabled = i != gs::renderer::BACKEND_SOFTWARE && !iris->ui.loading_file_active;
 
                 if (menu::item(renderer_names[i], nullptr, i == iris->renderer_backend, enabled)) {
                     render::switch_backend(iris, i);

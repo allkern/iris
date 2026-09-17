@@ -1008,6 +1008,12 @@ void switch_backend(Instance* iris, int backend) {
     if (iris->renderer_backend == backend)
         return;
 
+    if (iris->ui.loading_file_active) {
+        push_info(iris, "Can't switch renderer while a game is loading");
+
+        return;
+    }
+
     vulkan::wait_idle(iris);
 
     gs::renderer::destroy(iris->renderer);

@@ -860,7 +860,7 @@ void show_graphics_settings(Instance* iris) {
 
     if (BeginCombo("##renderer", settings_renderer_names[iris->renderer_backend], ImGuiComboFlags_HeightSmall)) {
         for (int i = 0; i < 3; i++) {
-            BeginDisabled(i == gs::renderer::BACKEND_SOFTWARE);
+            BeginDisabled(i == gs::renderer::BACKEND_SOFTWARE || iris->ui.loading_file_active);
 
             if (imgui::Selectable(settings_renderer_names[i], i == iris->renderer_backend)) {
                 render::switch_backend(iris, i);

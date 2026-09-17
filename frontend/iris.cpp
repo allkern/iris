@@ -197,7 +197,7 @@ static inline void do_cycle(Instance* iris) {
 void update_window(Instance* iris) {
     using namespace ImGui;
 
-    if (iris->ps2) {
+    if (iris->ps2 && !iris->ui.loading_file_active) {
         mtvu::sync(iris->ps2->mtvu, mtvu::SYNC_FRAME);
     }
 
