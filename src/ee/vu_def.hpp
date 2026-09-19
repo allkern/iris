@@ -92,6 +92,7 @@ struct Vu {
     uint32_t delay_branch_pc;
 
     bool waiting_for_interlock;
+    int wait_vi;
 
     uint32_t upload_lo;
     uint32_t upload_hi;
@@ -172,6 +173,7 @@ struct Vu {
 
 Block* find_block(Vu* vu, uint32_t tpc);
 Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles);
+int get_poll_register(const Vu* vu, uint32_t tpc);
 void jit_execute_entry(Vu* vu, const BlockEntry* entry);
 void jit_entry_prologue(Vu* vu, const BlockEntry* entry);
 void jit_entry_epilogue(Vu* vu, const BlockEntry* entry);
