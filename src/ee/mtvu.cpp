@@ -32,6 +32,7 @@ constexpr uint32_t CHUNK_WORDS = 1u << 16;
 constexpr uint32_t STAGE_LIMIT_WORDS = 1u << 12;
 constexpr uint32_t STAGE_SPAN_WORDS = 64;
 constexpr int SPIN_ITERATIONS = 20000;
+constexpr int GS_READ_SPIN_LIMIT = 4;
 
 enum Op : uint32_t {
     OP_WRAP,
@@ -81,6 +82,9 @@ struct Mtvu {
     void (*backend_readback)(void*, void*, size_t) = nullptr;
 
     bool front_scan = false;
+    uint64_t pushes = 0;
+    uint64_t pushes_at_gs_read = 0;
+    int gs_reads_without_pushes = 0;
     bool processing_front_gif = false;
     std::atomic <uint32_t> events_kept = 1;
 
@@ -466,6 +470,8 @@ static uint32_t reserve_words(Mtvu* mtvu, uint32_t words) {
 static void publish(Mtvu* mtvu, uint32_t start, uint32_t words) {
     mtvu->write_pos.store(start + words);
 
+    mtvu->pushes++;
+
     mtvu->published = true;
 
     profile::count(profile::MTVU_OPS_PUBLISHED);
@@ -689,6 +695,7 @@ void sync(Mtvu* mtvu, SyncReason reason) {
         return;
     }
 
+
     flush_staged(mtvu);
 
     if (mtvu->mode != MODE_INLINE && !pipeline_is_idle(mtvu)) {
@@ -696,6 +703,69 @@ void sync(Mtvu* mtvu, SyncReason reason) {
     }
 
     drain(mtvu);
+
+}
+
+void log_pipeline_state(Mtvu* mtvu, const char* reason) {
+    if (mtvu->mode == MODE_OFF) {
+        return;
+    }
+
+    gs::Gs* gs = mtvu->hw.gs;
+    vif::Vif* front_vif = mtvu->hw.vif1;
+    gif::Gif* front_gif = mtvu->hw.gif;
+
+    iris_warning(mtvu, "{}: csr={:08x} imr={:08x} events={} worker_idle={} gs_idle={}",
+        reason,
+        (uint32_t)gs->csr,
+        (uint32_t)gs->imr,
+        mtvu->events_queued.load(),
+        worker_is_idle(mtvu),
+        !mtvu->gs_async || gs::async::is_idle(mtvu->gs_async)
+    );
+
+    iris_warning(mtvu, "{}: front vif state={} cmd={:02x} pending={} dreq={} stat={:08x}",
+        reason,
+        front_vif->state,
+        front_vif->cmd,
+        front_vif->pending_words,
+        front_vif->dreq,
+        front_vif->stat
+    );
+
+    iris_warning(mtvu, "{}: worker vif state={} cmd={:02x} pending={} front gif state={} qwc={} worker gif state={} qwc={}",
+        reason,
+        mtvu->vif->state,
+        mtvu->vif->cmd,
+        mtvu->vif->pending_words,
+        front_gif->state,
+        front_gif->tag.qwc,
+        mtvu->gif->state,
+        mtvu->gif->tag.qwc
+    );
+}
+
+void sync_gs_registers(Mtvu* mtvu) {
+    if (mtvu->mode == MODE_OFF) {
+        return;
+    }
+
+    if (mtvu->pushes != mtvu->pushes_at_gs_read) {
+        mtvu->pushes_at_gs_read = mtvu->pushes;
+        mtvu->gs_reads_without_pushes = 0;
+    } else {
+        mtvu->gs_reads_without_pushes++;
+    }
+
+    if (mtvu->front_scan && mtvu->gs_reads_without_pushes < GS_READ_SPIN_LIMIT) {
+        poll(mtvu);
+
+        return;
+    }
+
+    mtvu->gs_reads_without_pushes = 0;
+
+    sync(mtvu, SYNC_GS_REGISTERS);
 }
 
 void poll(Mtvu* mtvu) {

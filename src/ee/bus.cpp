@@ -114,7 +114,7 @@ static inline void sync_gs_register_read(Bus* bus, uint32_t addr) {
         return;
     }
 
-    mtvu::sync(bus->mtvu, mtvu::SYNC_GS_REGISTERS);
+    mtvu::sync_gs_registers(bus->mtvu);
 }
 
 static inline void sync_gs_register_write(Bus* bus, uint32_t addr) {
@@ -126,7 +126,7 @@ static inline void sync_gs_register_write(Bus* bus, uint32_t addr) {
         return;
     }
 
-    mtvu::sync(bus->mtvu, mtvu::SYNC_GS_REGISTERS);
+    mtvu::sync_gs_registers(bus->mtvu);
 }
 
 uint64_t read8(void* udata, uint32_t addr) {
