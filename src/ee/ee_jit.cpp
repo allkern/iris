@@ -8692,6 +8692,8 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
 
     ee->idle_loop.armed = false;
 
+    profile::set_active_jit(profile::JIT_EE);
+
     while (true) {
         if (ee->breakpoint_count) {
             if (ee->pc == ee->bp_skip_pc) {
@@ -8735,11 +8737,9 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
 
         profile::count(profile::EE_DISPATCHES);
 
-        profile::set_active_jit(profile::JIT_EE);
 
         block->func(ee);
 
-        profile::set_active_jit(profile::JIT_NONE);
 
         int cycles = given - ee->cycles_left;
 
@@ -8774,6 +8774,8 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
         if (is_irq_pending(ee))
             break;
     }
+
+    profile::set_active_jit(profile::JIT_NONE);
 
     return total;
 }
