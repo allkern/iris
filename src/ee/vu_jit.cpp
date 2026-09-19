@@ -885,24 +885,22 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
 
     uc.bind(trampoline);
 
-    if (member_count > 1) {
-        ujit::Gp jexit = uc.new_gp32();
+    ujit::Gp jexit = uc.new_gp32();
 
-        uc.load_i32(jexit, VU(jit_exit));
-        uc.j(region_exit, ujit::test_nz(jexit));
+    uc.load_i32(jexit, VU(jit_exit));
+    uc.j(region_exit, ujit::test_nz(jexit));
 
-        ujit::Gp cyc = uc.new_gp64();
+    ujit::Gp cyc = uc.new_gp64();
 
-        uc.load_u64(cyc, VU(vu_cycle));
-        uc.j(region_exit, ujit::ucmp_ge(cyc, VU(run_deadline)));
+    uc.load_u64(cyc, VU(vu_cycle));
+    uc.j(region_exit, ujit::ucmp_ge(cyc, VU(run_deadline)));
 
-        ujit::Gp t = uc.new_gp32();
+    ujit::Gp t = uc.new_gp32();
 
-        uc.load_u32(t, VU(tpc));
+    uc.load_u32(t, VU(tpc));
 
-        for (int m = 0; m < member_count; m++) {
-            uc.j(labels[m], ujit::cmp_eq(t, Imm(member_tpc[m])));
-        }
+    for (int m = 0; m < member_count; m++) {
+        uc.j(labels[m], ujit::cmp_eq(t, Imm(member_tpc[m])));
     }
 
     uc.bind(region_exit);
