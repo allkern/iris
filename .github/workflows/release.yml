@@ -99,7 +99,7 @@ jobs:
         sudo apt-get install -y "clang-${CLANG_VERSION}"
         clang-${CLANG_VERSION} --version
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7
       with:
         python-version: '3.12'
 
@@ -155,7 +155,7 @@ jobs:
         cache: true
         stripdown: true
 
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v7
       with:
         python-version: '3.12'
 
