@@ -2,6 +2,7 @@
 #include <cstdint>
 #include <queue>
 #include <bit>
+#include <cstring>
 
 #include "u128.h"
 
@@ -16,6 +17,7 @@ struct IPU_FIFO
     uint32_t fifo_word(int byte_offset) const;
     bool get_bits(uint32_t& data, int bits);
     bool advance_stream(uint8_t amount);
+    int read_bytes(uint8_t* dst, int count);
 
     void reset();
     void byte_align();
@@ -82,6 +84,48 @@ inline bool IPU_FIFO::advance_stream(uint8_t amount)
         bit_cache_dirty = true;
     }
     return true;
+}
+
+
+
+inline int IPU_FIFO::read_bytes(uint8_t* dst, int count)
+{
+    if (bit_pointer & 7)
+        return 0;
+
+    const int available = (static_cast<int>(f.size()) * 128 - bit_pointer) / 8;
+
+    if (available < count)
+        count = available;
+
+    int copied = 0;
+
+    while (copied < count)
+    {
+        const int byte_offset = bit_pointer >> 3;
+        const int room = 16 - byte_offset;
+
+        int chunk = count - copied;
+
+        if (chunk > room)
+            chunk = room;
+
+        memcpy(dst + copied, &f.front().u8[byte_offset], static_cast<size_t>(chunk));
+
+        copied += chunk;
+        bit_pointer += chunk * 8;
+
+        if (bit_pointer >= 128)
+        {
+            bit_pointer -= 128;
+            f.pop_front();
+        }
+    }
+
+    if (copied)
+        bit_cache_dirty = true;
+
+    return copied;
 }
 
 }

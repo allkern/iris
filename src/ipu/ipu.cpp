@@ -1033,14 +1033,18 @@ bool Ipu::process_CSC()
                     csc.state = CSC_STATE::CONVERT;
                 else
                 {
-                    do {
+                    csc.block_index += in_FIFO.read_bytes(&csc.block[csc.block_index],
+                        RAW_BLOCK_SIZE - csc.block_index);
+
+                    while (csc.block_index < RAW_BLOCK_SIZE)
+                    {
                         uint32_t value;
                         if (!in_FIFO.get_bits(value, 8))
                             return false;
                         in_FIFO.advance_stream(8);
                         csc.block[csc.block_index] = value & 0xFF;
                         csc.block_index++;
-                    } while (csc.block_index < RAW_BLOCK_SIZE);
+                    }
                 }
                 break;
             case CSC_STATE::CONVERT:
