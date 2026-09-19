@@ -2998,6 +2998,41 @@ static bool run_block(Vu* vu, Block* block) {
     return vu->jit_exit != VU_JIT_CONTINUE;
 }
 
+int get_poll_register(const Vu* vu, uint32_t tpc) {
+    if (vu->id) return 0;
+
+    // Ratchet & Clank streams data from the EE while VU0 polls a VI register:
+    //   NOP | IBEQ viN, vi0, ready
+    //   NOP | NOP
+    //   NOP | B -3
+    //   NOP | NOP
+    constexpr uint32_t UPPER_NOP = 0x000002ff;
+    constexpr uint64_t NOP_NOP = 0x000002ff8000033cull;
+    constexpr uint64_t NOP_B_BACK3 = 0x000002ff400007fdull;
+
+    // IBEQ opcode with is == vi0 and it < 16
+    constexpr uint32_t IBEQ_VI0_MASK = 0xfff0f800;
+    constexpr uint32_t IBEQ_VI0 = 0x50000000;
+
+    const uint32_t mask = vu->micro_mem_size;
+    const uint64_t branch = vu->micro_mem[tpc & mask];
+    const uint32_t lower = (uint32_t)branch;
+
+    if ((branch >> 32) != UPPER_NOP || (lower & IBEQ_VI0_MASK) != IBEQ_VI0
+        || vu->micro_mem[(tpc + 1) & mask] != NOP_NOP
+        || vu->micro_mem[(tpc + 2) & mask] != NOP_B_BACK3
+        || vu->micro_mem[(tpc + 3) & mask] != NOP_NOP) {
+        return 0;
+    }
+
+    const int offset = (int32_t)(lower << 21) >> 21;
+    const uint32_t target = (tpc + 1 + offset) & mask;
+
+    if (((target - tpc) & mask) < 4) return 0;
+
+    return (lower >> 16) & 0xf;
+}
+
 static void run(Vu* vu) {
     if (vu->id) {
         profile::count(profile::VU1_PROGRAMS);
@@ -3022,6 +3057,8 @@ static void run(Vu* vu) {
 
     vu->run_deadline = vu->max_cycles ? deadline : ~0ull;
 
+    uint32_t poll_tpc = ~0u;
+
     while (true) {
         Block* block = &vu->block_cache[vu->tpc & vu->micro_mem_size];
 
@@ -3029,7 +3066,23 @@ static void run(Vu* vu) {
             block = cache_block(vu, vu->tpc, 64);
         }
 
-        if (run_block(vu, block)) {
+        const int poll_reg = get_poll_register(vu, vu->tpc);
+
+        if (poll_reg && !vu->branch_delay && !vu->e_bit) {
+            // Do 1 lap first? TODO: not sure if needed or maybe even too little?
+            if (poll_tpc == vu->tpc && !vu->q_delay && !vu->vi_backup_cycles
+                && vu->vi[poll_reg]) {
+                vu->wait_vi = poll_reg;
+
+                break;
+            }
+
+            poll_tpc = vu->tpc;
+        } else if (vu->tpc != ((poll_tpc + 2) & vu->micro_mem_size)) {
+            poll_tpc = ~0u;
+        }
+
+        if (poll_reg ? execute_block(vu, block) : run_block(vu, block)) {
             break;
         }
 
@@ -3052,6 +3105,7 @@ void execute_program(Vu* vu, uint32_t addr) {
 
     // Clear VU0 interlock
     vu->waiting_for_interlock = false;
+    vu->wait_vi = 0;
 
     vu->tpc = addr & vu->micro_mem_size;
     vu->i_bit = 0;
@@ -3072,6 +3126,10 @@ void write_vi(Vu* vu, int index, uint32_t value) {
         case 8: case 9: case 10: case 11:
         case 12: case 13: case 14: case 15: {
             vu->vi[index] = value & 0xffff;
+
+            if (vu->wait_vi == index && !vu->vi[index]) {
+                execute_program_tpc(vu);
+            }
         } break;
 
         case 16: {
@@ -3161,6 +3219,7 @@ uint32_t read_vi(Vu* vu, int index) {
 
 void reset_registers(Vu* vu) {
     vu->disable = false;
+    vu->wait_vi = 0;
 
     for (int i = 0; i < 16; i++)
         vu->vi[i] = 0;
@@ -3235,6 +3294,7 @@ void execute_program_tpc(Vu* vu) {
 
     // Clear VU0 interlock
     vu->waiting_for_interlock = false;
+    vu->wait_vi = 0;
 
     run(vu);
 }

@@ -735,7 +735,8 @@ void compile_block(Vu* vu, Block* block) {
                 }
             }
 
-            if (seen) {
+            // Polling loops must return to run() so the EE can supply data.
+            if (seen || get_poll_register(vu, succ[k])) {
                 continue;
             }
 
