@@ -163,8 +163,6 @@ struct Vu {
     uint32_t region_epoch;
 
     jit::Jit* jit;
-
-
     gif::Gif* gif;
     vif::Vif* vif;
     Vu* vu1;

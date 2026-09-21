@@ -86,8 +86,6 @@ inline bool IPU_FIFO::advance_stream(uint8_t amount)
     return true;
 }
 
-
-
 inline int IPU_FIFO::read_bytes(uint8_t* dst, int count)
 {
     if (bit_pointer & 7)

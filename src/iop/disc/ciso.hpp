@@ -2,7 +2,6 @@
 
 #include "../disc.hpp"
 
-
 #include <libdeflate.h>
 #include <lz4.h>
 #include "logger.hpp"

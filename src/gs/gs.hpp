@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include "u128.h"
 #include "scheduler.hpp"
 #include "ee/timers.hpp"
@@ -378,7 +376,6 @@ struct Gs {
 
     // DIMX
     int dither[4][4];
-
 
     int frame_cycles = FRAME_NTSC;
     int vblank_cycles = VBLANK_NTSC;

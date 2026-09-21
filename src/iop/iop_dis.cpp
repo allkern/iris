@@ -7,7 +7,6 @@
  * @author Allkern (https://github.com/allkern)
  */
 
-
 #include "iop_dis.hpp"
 
 namespace iris::iop::dis {

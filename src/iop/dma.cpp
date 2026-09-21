@@ -731,7 +731,6 @@ void handle_sif0_transfer(Dma* dma) {
     dma->channels[SIF0].chcr &= ~0x1000000;
 }
 
-
 void handle_sif1_transfer(Dma* dma) {
     int madr_increment = ((dma->channels[SIF1].chcr >> 1) & 1) ? -4 : 4;
 

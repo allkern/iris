@@ -35,7 +35,6 @@ void set_config(void* udata, void* config) {
     // Nothing
 }
 
-
 void transfer(void* udata, int path, const void* data, size_t size) {
     // Do nothing
 }

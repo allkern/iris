@@ -385,7 +385,6 @@ void draw_table(Instance* iris) {
                 TextDisabled("%s", entry.region.c_str());
             } EndChild();
 
-
             TableNextColumn();
             if (BeginChild(("format" + std::to_string(i)).c_str(), ImVec2(0, height), 0, ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_NoInputs)) {
                 SetCursorPosY(height2 - subtitle_height / 2);

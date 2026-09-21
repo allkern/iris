@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include "u128.h"
 #include "scheduler.hpp"
 #include "logger.hpp"

@@ -75,7 +75,6 @@ void end_bar(Instance* iris) {
         platform::set_menubar(iris, g_published);
     }
 
-    // Anything the walk did not claim was aimed at a menu that has since moved
     g_pending.clear();
 }
 

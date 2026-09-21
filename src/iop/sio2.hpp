@@ -44,7 +44,6 @@ struct Sio2 {
 
     int send3_index;
 
-
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };

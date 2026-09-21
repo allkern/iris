@@ -274,7 +274,6 @@ int create_image(logger::Logger* logger, const char* path, uint64_t block_count,
 
     uint64_t bat_size = block_count * bat_entry_size;
 
-
     uint64_t* empty_bat = (uint64_t *)calloc(block_count, bat_entry_size);
     fwrite(empty_bat, bat_entry_size, block_count, file);
     free(empty_bat);

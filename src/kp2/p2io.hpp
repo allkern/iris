@@ -100,7 +100,6 @@ enum {
     JAMMA_COIN2 = 0x08000000
 };
 
-
 inline constexpr auto RESPONSE_MAX = 256;
 inline constexpr auto WIRE_MAX = (RESPONSE_MAX * 2) + 1;
 

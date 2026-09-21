@@ -748,7 +748,6 @@ Texture upload_texture(Instance* iris, void* pixels, int width, int height, int 
             return {};
         }
 
-
         if (vkQueueSubmit(iris->vk.queue, 1, &end_info, VK_NULL_HANDLE) != VK_SUCCESS) {
             iris_error(&iris->log.vulkan, "Failed to submit queue");
 
@@ -1321,7 +1320,6 @@ void* read_image(Instance* iris, VkImage src_image, VkFormat format, int width, 
 
             return {};
         }
-
 
         if (vkQueueSubmit(iris->vk.queue, 1, &end_info, VK_NULL_HANDLE) != VK_SUCCESS) {
             iris_error(&iris->log.vulkan, "Failed to submit queue");

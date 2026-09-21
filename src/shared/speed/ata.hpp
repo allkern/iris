@@ -22,7 +22,6 @@
     1X00005c - CONTROL
 */
 
-
 #include "logger.hpp"
 #include "scheduler.hpp"
 

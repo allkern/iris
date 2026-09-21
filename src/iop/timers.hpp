@@ -57,7 +57,6 @@ struct Timers {
     uint64_t scheduler_advanced_cycles;
     int irq_event_pending;
 
-
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };

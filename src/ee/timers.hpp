@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include "scheduler.hpp"
 #include "intc.hpp"
 #include "logger.hpp"

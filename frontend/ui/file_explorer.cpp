@@ -1311,7 +1311,6 @@ static void show_preview(Instance* iris, FileExplorer* fe) {
         EndTabItem();
     }
 
-
     EndTabBar();
 }
 
