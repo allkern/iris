@@ -270,8 +270,8 @@ static inline uint32_t ps2_pack_double(double v) {
 
     int biased = (int)((a >> 52) - 1023 + 127);
 
-    if (biased > 255) {
-        return sign | 0x7fffffff;
+    if (biased > 254) {
+        return sign | 0x7f7fffff;
     }
 
     if (biased < 1) {
@@ -283,8 +283,8 @@ static inline uint32_t ps2_pack_double(double v) {
     if (mantissa > 0x7fffff) {
         mantissa = 0;
 
-        if (++biased > 255) {
-            return sign | 0x7fffffff;
+        if (++biased > 254) {
+            return sign | 0x7f7fffff;
         }
     }
 
@@ -1124,7 +1124,7 @@ uint64_t jit_div_math(uint32_t nb, uint32_t db) {
     if (den == 0.0) {
         uint64_t flag = num == 0.0 ? (uint64_t)STATUS_I : (uint64_t)STATUS_D;
 
-        return (flag << 32) | (sign | 0x7fffffff);
+        return (flag << 32) | (sign | 0x7f7fffff);
     }
 
     return ps2_pack_double(num / den);
@@ -1147,7 +1147,7 @@ uint64_t jit_rsqrt_math(uint32_t nb, uint32_t db) {
             flags |= STATUS_D;
         }
 
-        return (flags << 32) | ((nb & 0x80000000) | 0x7fffffff);
+        return (flags << 32) | ((nb & 0x80000000) | 0x7f7fffff);
     }
 
     return (flags << 32) | ps2_pack_double(num / sqrt(den));
