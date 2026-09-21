@@ -311,6 +311,9 @@ struct Gs {
     uint64_t csr_enable;
     uint64_t csr_raised;
 
+    int finish_pending;
+    int finish_cleared;
+
     // Internal registers
     uint64_t prim;
     uint64_t rgbaq;

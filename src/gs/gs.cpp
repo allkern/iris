@@ -32,6 +32,25 @@ static inline void test_gs_irq(Gs* gs) {
     }
 }
 
+static void assert_finish(Gs* gs) {
+    gs->finish_pending = 0;
+    gs->finish_cleared = 0;
+    gs->csr |= 2;
+    gs->csr_raised |= 2;
+
+    test_gs_irq(gs);
+}
+
+static void handle_finish(void* udata, int overshoot) {
+    Gs* gs = (Gs*)udata;
+
+    if (!gs->finish_pending) {
+        return;
+    }
+
+    assert_finish(gs);
+}
+
 static inline int assert_vblank(Gs* gs) {
     if ((gs->csr & 8) == 0) {
         gs->csr |= 8;
@@ -185,6 +204,8 @@ void soft_reset(Gs* gs) {
     gs->csr = 0;
     gs->csr_enable = 0;
     gs->csr_raised = 0;
+    gs->finish_pending = 0;
+    gs->finish_cleared = 0;
 
     gs->vblank = 0;
     gs->signal_pending = 0;
@@ -399,6 +420,10 @@ uint64_t read64(Gs* gs, uint32_t addr) {
         case 0x12001000:
         case 0x12001010:
         case 0x12001040: {
+            if (gs->finish_pending && gs->finish_cleared) {
+                assert_finish(gs);
+            }
+
             return gs->csr | 0x551b0000;
         }
 
@@ -451,6 +476,10 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
             if (data & 8) {
                 // Game is requesting vsync
                 // gs->vblank |= 1;
+            }
+
+            if ((data & 2) && gs->finish_pending) {
+                gs->finish_cleared = 1;
             }
 
             gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
@@ -933,11 +962,20 @@ int apply_signal(Gs* gs, uint64_t data) {
 }
 
 int apply_finish(Gs* gs, uint64_t data) {
-    // Trigger FINISH event
-    gs->csr |= 2;
-    gs->csr_raised |= 2;
+    if (gs->finish_pending) {
+        return 0;
+    }
 
-    test_gs_irq(gs);
+    gs->finish_pending = 1;
+
+    scheduler::Event finish_event;
+
+    finish_event.callback = handle_finish;
+    finish_event.cycles = gs->scanline_cycles;
+    finish_event.name = "GS finish event";
+    finish_event.udata = gs;
+
+    scheduler::schedule(gs->hw.sched, finish_event);
 
     return 0;
 }
