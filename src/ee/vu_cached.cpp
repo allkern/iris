@@ -132,15 +132,19 @@ static inline float atan(float t) {
     return result;
 }
 
-static inline void update_status(Vu* vu) {
+static inline void fold_status(Vu* vu, uint32_t mac) {
     vu->status &= ~0x3f;
 
-    vu->status |= (vu->mac_pipeline[3] & 0x000f) ? 1 : 0;
-    vu->status |= (vu->mac_pipeline[3] & 0x00f0) ? 2 : 0;
-    vu->status |= (vu->mac_pipeline[3] & 0x0f00) ? 4 : 0;
-    vu->status |= (vu->mac_pipeline[3] & 0xf000) ? 8 : 0;
+    vu->status |= (mac & 0x000f) ? 1 : 0;
+    vu->status |= (mac & 0x00f0) ? 2 : 0;
+    vu->status |= (mac & 0x0f00) ? 4 : 0;
+    vu->status |= (mac & 0xf000) ? 8 : 0;
 
     vu->status |= (vu->status & 0x3f) << 6;
+}
+
+static inline void update_status(Vu* vu) {
+    fold_status(vu, vu->mac_pipeline[3]);
 }
 
 static inline void set_q(Vu* vu, float value, int delay) {
@@ -3163,6 +3167,12 @@ void write_vi(Vu* vu, int index, uint32_t value) {
             }
         } break;
     }
+}
+
+void macro_step(Vu* vu, uint32_t status) {
+    vu->status = status;
+
+    fold_status(vu, vu->mac);
 }
 
 uint32_t read_vi(Vu* vu, int index) {

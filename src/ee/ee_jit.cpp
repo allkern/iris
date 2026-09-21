@@ -59,10 +59,11 @@ namespace iris::ee {
         i.vu_decoded = 1; \
     }
 
-#define VU_LOWER(ins) { VU_DECODE_LOWER() vu::i_ ## ins(ee->vu0, &i.vu_ins); }
-#define VU_UPPER(ins) { VU_DECODE_UPPER() vu::i_ ## ins(ee->vu0, &i.vu_ins); }
+#define VU_LOWER(ins) { VU_DECODE_LOWER() uint32_t status = ee->vu0->status; vu::i_ ## ins(ee->vu0, &i.vu_ins); vu::macro_step(ee->vu0, status); }
+#define VU_UPPER(ins) { VU_DECODE_UPPER() uint32_t status = ee->vu0->status; vu::i_ ## ins(ee->vu0, &i.vu_ins); vu::macro_step(ee->vu0, status); }
 #define VU_LOWER_TEMPLATE(ins) { \
     VU_DECODE_LOWER() \
+    uint32_t status = ee->vu0->status; \
     switch ((i.opcode >> 21) & 0xf) { \
         case 0: vu::i_ ## ins <0>(ee->vu0, &i.vu_ins); break; \
         case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &i.vu_ins); break; \
@@ -80,9 +81,11 @@ namespace iris::ee {
         case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
         case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
         case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
-    } }
+    } \
+    vu::macro_step(ee->vu0, status); }
 #define VU_UPPER_TEMPLATE(ins) { \
     VU_DECODE_UPPER() \
+    uint32_t status = ee->vu0->status; \
     switch ((i.opcode >> 21) & 0xf) { \
         case 0: vu::i_ ## ins <0>(ee->vu0, &i.vu_ins); break; \
         case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &i.vu_ins); break; \
@@ -100,7 +103,8 @@ namespace iris::ee {
         case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
         case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
         case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
-    } }
+    } \
+    vu::macro_step(ee->vu0, status); }
 
 static inline int fast_abs32(int a) {
     uint32_t m = a >> 31;
