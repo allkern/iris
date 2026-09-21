@@ -2638,6 +2638,19 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
             entry.hazard2 = vu->upper.dst.reg == vu->lower.dst.reg;
             entry.hazard3 = vu->lower.dst.reg == REG_Q;
 
+            const int lower_written = vu->lower.dst.reg;
+
+            const bool lower_writes_vf = lower_written > 0
+                && lower_written < 32
+                && lower_written != vu->upper.dst.reg;
+
+            const bool upper_reads_lower_dst = lower_written == vu->upper.src[0].reg
+                || lower_written == vu->upper.src[1].reg;
+
+            entry.swap_hazard = (entry.hazard0 || entry.hazard1)
+                && lower_writes_vf
+                && upper_reads_lower_dst;
+
             entry.lw_reg = (entry.lower.dst.reg && entry.lower.dst.reg < 32) ? entry.lower.dst.reg : 0;
             entry.lw_mask = entry.lw_reg ? vf_write_mask(entry.lower) : 0;
             entry.is_mtir = (entry.lower.func == i_mtir) && (entry.lower.src[0].reg != 0);
@@ -2785,6 +2798,18 @@ void execute_block_entry(Vu* vu, const BlockEntry& entry) {
             entry.upper.func(vu, &entry.upper);
 
             if (!entry.lower_is_nop) entry.lower.func(vu, &entry.lower);
+        } else if (entry.swap_hazard) {
+            Reg128 kept = vu->vf[entry.lower.dst.reg];
+
+            entry.lower.func(vu, &entry.lower);
+
+            Reg128 written = vu->vf[entry.lower.dst.reg];
+
+            vu->vf[entry.lower.dst.reg] = kept;
+
+            entry.upper.func(vu, &entry.upper);
+
+            vu->vf[entry.lower.dst.reg] = written;
         } else if (entry.hazard0 || entry.hazard1 || entry.is_waitq) {
             // Upper instruction writes to a register that the lower
             // instruction reads from. In this case the lower instruction

@@ -24,6 +24,7 @@ struct BlockEntry {
     int hazard1;
     int hazard2;
     int hazard3;
+    int swap_hazard;
     int branch;
 
     uint8_t uw_reg, uw_mask;

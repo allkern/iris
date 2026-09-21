@@ -500,6 +500,30 @@ static void emit_entry(Jit* jit, Emitter& e, const BlockEntry* entry, uint32_t n
             if (!entry->lower_is_nop) {
                 lower();
             }
+        } else if (entry->swap_hazard) {
+            ujit::Vec kept = uc.new_vec128();
+
+            uc.v_mov(kept, e.get(entry->lower.dst.reg));
+
+            uint8_t kept_clean = e.clean[entry->lower.dst.reg];
+
+            lower();
+
+            ujit::Vec written = uc.new_vec128();
+
+            uc.v_mov(written, e.get(entry->lower.dst.reg));
+
+            uint8_t written_clean = e.clean[entry->lower.dst.reg];
+
+            e.set(entry->lower.dst.reg, kept);
+
+            e.clean[entry->lower.dst.reg] = kept_clean;
+
+            upper(true);
+
+            e.set(entry->lower.dst.reg, written);
+
+            e.clean[entry->lower.dst.reg] = written_clean;
         } else if (entry->hazard0 || entry->hazard1 || entry->is_waitq) {
             lower();
             upper(true);
