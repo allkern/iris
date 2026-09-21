@@ -420,14 +420,14 @@ static void emit_entry(Jit* jit, Emitter& e, const BlockEntry* entry, uint32_t n
         return arg;
     };
 
+    emit_prologue(e, entry->stall);
+
     if (entry->is_mtir) {
         e.drop_flags();
         e.drop_scalars();
 
         jit_function_call(&uc, &vu::jit_entry_stall, e.state, entry_arg());
     }
-
-    emit_prologue(e);
 
     auto upper = [&](bool after_lower) {
         if (upper_key(entry->upper.opcode) == UPPER_NOP && !emit_off(EMIT_NOP)) {

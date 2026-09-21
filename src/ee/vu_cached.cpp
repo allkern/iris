@@ -1993,8 +1993,10 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
 #define DEC_UD_S_SRC_T_BROADCAST(bc, f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].mask = (opcode >> 21) & 0xf; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = bc; \
+    vu->upper.src[1].mask = 8 >> (bc); \
     vu->upper.func = f;
 
 #define DEC_UD_D_DST_S_SRC_T_BROADCAST(bc, f) \
@@ -2002,8 +2004,10 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[0].mask = vu->upper.dst.field; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = bc; \
+    vu->upper.src[1].mask = 8 >> (bc); \
     vu->upper.func = f;
 
 #define DEC_UD_D_DST_S_SRC_T_SRC(f) \
@@ -2011,8 +2015,10 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[0].mask = vu->upper.dst.field; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = vu->upper.dst.field; \
+    vu->upper.src[1].mask = vu->upper.dst.field; \
     vu->upper.func = f;
 
 #define DEC_UD_D_DST_S_SRC(f) \
@@ -2020,6 +2026,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[0].mask = vu->upper.dst.field; \
     vu->upper.func = f;
 
 #define DEC_UD_D_DST_S_SRC_Q_SRC(f) \
@@ -2027,6 +2034,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[0].mask = vu->upper.dst.field; \
     vu->upper.src[1].reg = REG_Q; \
     vu->upper.func = f;
 
@@ -2035,31 +2043,38 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->upper.dst.field = (opcode >> 21) & 0xf; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[0].mask = vu->upper.dst.field; \
     vu->upper.func = f;
 
 #define DEC_UD_S_SRC_T_SRC(f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].mask = (opcode >> 21) & 0xf; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = vu->upper.src[0].field; \
+    vu->upper.src[1].mask = vu->upper.src[0].field; \
     vu->upper.func = f;
 
 #define DEC_UD_S_SRC(f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].mask = (opcode >> 21) & 0xf; \
     vu->upper.func = f;
 
 #define DEC_UD_S_SRC_Q_SRC(f) \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = (opcode >> 21) & 0xf; \
+    vu->upper.src[0].mask = (opcode >> 21) & 0xf; \
     vu->upper.src[1].reg = REG_Q; \
     vu->upper.func = f;
 
 #define DEC_OPMULA() \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = FLD_X | FLD_Y | FLD_Z; \
+    vu->upper.src[0].mask = FLD_X | FLD_Y | FLD_Z; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = vu->upper.src[0].field; \
+    vu->upper.src[1].mask = vu->upper.src[0].field; \
     vu->upper.func = i_opmula;
 
 #define DEC_OPMSUB() \
@@ -2067,15 +2082,19 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->upper.dst.field = FLD_X | FLD_Y | FLD_Z; \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = vu->upper.dst.field; \
+    vu->upper.src[0].mask = vu->upper.dst.field; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = vu->upper.dst.field; \
+    vu->upper.src[1].mask = vu->upper.dst.field; \
     vu->upper.func = i_opmsub;
 
 #define DEC_CLIP() \
     vu->upper.src[0].reg = vu->upper.ud_s; \
     vu->upper.src[0].field = FLD_X | FLD_Y | FLD_Z; \
+    vu->upper.src[0].mask = FLD_X | FLD_Y | FLD_Z; \
     vu->upper.src[1].reg = vu->upper.ud_t; \
     vu->upper.src[1].field = FLD_W; \
+    vu->upper.src[1].mask = FLD_W; \
     vu->upper.func = i_clip;
 
 #define DEC_LD_NONE(f) \
@@ -2100,6 +2119,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
 #define DEC_LD_S_SRC_T_VISRC_T_VIDST(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = (opcode >> 21) & 0xf; \
+    vu->lower.src[0].mask = (opcode >> 21) & 0xf; \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.vi_src[0] = vu->lower.vi_dst; \
     vu->lower.func = f;
@@ -2107,22 +2127,27 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
 #define DEC_LD_S_SF_SRC_T_TF_SRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.src[0].mask = 8 >> (vu->lower.ld_sf); \
     vu->lower.src[1].reg = vu->lower.ld_t; \
     vu->lower.src[1].field = vu->lower.ld_tf; \
+    vu->lower.src[1].mask = 8 >> (vu->lower.ld_tf); \
     vu->lower.func = f;
 
 #define DEC_LD_Q_DST_S_SF_SRC_T_TF_SRC(f) \
     vu->lower.dst.reg = REG_Q; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.src[0].mask = 8 >> (vu->lower.ld_sf); \
     vu->lower.src[1].reg = vu->lower.ld_t; \
     vu->lower.src[1].field = vu->lower.ld_tf; \
+    vu->lower.src[1].mask = 8 >> (vu->lower.ld_tf); \
     vu->lower.func = f;
 
 #define DEC_LD_T_VIDST_S_SF_SRC(f) \
     vu->lower.vi_dst = vu->lower.ld_t; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.src[0].mask = 8 >> (vu->lower.ld_sf); \
     vu->lower.func = f;
 
 #define DEC_LD_T_DST_S_VISRC(f) \
@@ -2134,17 +2159,20 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
 #define DEC_LD_T_TF_SRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_t; \
     vu->lower.src[0].field = vu->lower.ld_tf; \
+    vu->lower.src[0].mask = 8 >> (vu->lower.ld_tf); \
     vu->lower.func = f;
 
 #define DEC_LD_Q_DST_T_TF_SRC(f) \
     vu->lower.dst.reg = REG_Q; \
     vu->lower.src[0].reg = vu->lower.ld_t; \
     vu->lower.src[0].field = vu->lower.ld_tf; \
+    vu->lower.src[0].mask = 8 >> (vu->lower.ld_tf); \
     vu->lower.func = f;
 
 #define DEC_LD_S_SRC_T_VISRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = (opcode >> 21) & 0xf; \
+    vu->lower.src[0].mask = (opcode >> 21) & 0xf; \
     vu->lower.vi_src[0] = vu->lower.ld_t; \
     vu->lower.func = f;
 
@@ -2183,6 +2211,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
 #define DEC_LD_S_FLD_SRC(fld, f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = fld; \
+    vu->lower.src[0].mask = fld; \
     vu->lower.func = f;
 
 #define DEC_LD_D_VIDST_S_VISRC_T_VISRC(f) \
@@ -2196,6 +2225,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.dst.field; \
+    vu->lower.src[0].mask = vu->lower.dst.field; \
     vu->lower.func = f;
 
 #define DEC_LD_T_DST(f) \
@@ -2206,6 +2236,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
 #define DEC_LD_S_SF_SRC(f) \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = vu->lower.ld_sf; \
+    vu->lower.src[0].mask = 8 >> (vu->lower.ld_sf); \
     vu->lower.func = f;
 
 #define DEC_MR32(f) \
@@ -2213,6 +2244,7 @@ void write128(Vu* vu, uint32_t addr, uint128_t data) {
     vu->lower.dst.field = (opcode >> 21) & 0xf; \
     vu->lower.src[0].reg = vu->lower.ld_s; \
     vu->lower.src[0].field = (vu->lower.dst.field >> 1) | ((vu->lower.dst.field & 1) << 3); \
+    vu->lower.src[0].mask = (vu->lower.dst.field >> 1) | ((vu->lower.dst.field & 1) << 3); \
     vu->lower.func = f;
 
 #define GET_TEMPLATE_FN(i) \
@@ -2252,8 +2284,10 @@ void decode_upper(Vu* vu, uint32_t opcode) {
     vu->upper.dst.field = 0;
     vu->upper.src[0].reg = 0;
     vu->upper.src[0].field = 0;
+    vu->upper.src[0].mask = 0;
     vu->upper.src[1].reg = 0;
     vu->upper.src[1].field = 0;
+    vu->upper.src[1].mask = 0;
 
     // Decode 000007FF style instruction
     if ((opcode & 0x3c) == 0x3c) {
@@ -2390,8 +2424,10 @@ void decode_lower(Vu* vu, uint32_t opcode) {
     vu->lower.dst.field = 0;
     vu->lower.src[0].reg = 0;
     vu->lower.src[0].field = 0;
+    vu->lower.src[0].mask = 0;
     vu->lower.src[1].reg = 0;
     vu->lower.src[1].field = 0;
+    vu->lower.src[1].mask = 0;
     vu->lower.vi_src[0] = 0;
     vu->lower.vi_src[1] = 0;
     vu->lower.vi_dst = 0;
@@ -2532,6 +2568,62 @@ static int c = 0;
 
 static inline int vf_write_mask(const Instruction& ins);
 
+static inline void set_read_operand(BlockEntry& entry, int slot, int reg, int field) {
+    if (reg <= 0 || reg >= 32 || !field) {
+        entry.read_reg[slot] = 0;
+        entry.read_mask[slot] = 0;
+
+        return;
+    }
+
+    uint8_t mask = 0;
+
+    for (int c = 0; c < 4; c++) {
+        if (field & (0x8 >> c)) {
+            mask |= (uint8_t)(1 << c);
+        }
+    }
+
+    entry.read_reg[slot] = (uint8_t)reg;
+    entry.read_mask[slot] = mask;
+}
+
+static inline int decode_stall(const BlockEntry& entry, const uint64_t ready[32][4], uint64_t cycle) {
+    uint64_t wait = cycle;
+
+    for (int i = 0; i < 4; i++) {
+        int reg = entry.read_reg[i];
+
+        if (!reg) {
+            continue;
+        }
+
+        for (int c = 0; c < 4; c++) {
+            if (!(entry.read_mask[i] & (1 << c))) {
+                continue;
+            }
+
+            if (ready[reg][c] > wait) {
+                wait = ready[reg][c];
+            }
+        }
+    }
+
+    return (int)(wait - cycle);
+}
+
+static inline void record_decode_writes(const BlockEntry& entry, uint64_t ready[32][4], uint64_t issue) {
+    if (!entry.lw_reg) {
+        return;
+    }
+
+    for (int c = 0; c < 4; c++) {
+        if (entry.lw_mask & (1 << c)) {
+            ready[entry.lw_reg][c] = issue + VF_LATENCY;
+        }
+    }
+}
+
 static inline uint64_t hash_micro_mem(Vu* vu, uint32_t tpc, uint32_t words) {
     uint64_t h = 0xcbf29ce484222325ull;
 
@@ -2614,6 +2706,9 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
     bool delay_slot = false;
     bool terminate = false;
 
+    uint64_t ready[32][4] = {};
+    uint64_t cycle = 0;
+
     for (int i = 0; i < max_cycles; i++) {
         BlockEntry entry = { 0 };
 
@@ -2655,6 +2750,9 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
                 && lower_writes_vf
                 && upper_reads_lower_dst;
 
+            set_read_operand(entry, 0, vu->lower.src[0].reg, vu->lower.src[0].mask);
+            set_read_operand(entry, 1, vu->lower.src[1].reg, vu->lower.src[1].mask);
+
             entry.lw_reg = (entry.lower.dst.reg && entry.lower.dst.reg < 32) ? entry.lower.dst.reg : 0;
             entry.lw_mask = entry.lw_reg ? vf_write_mask(entry.lower) : 0;
             entry.is_mtir = (entry.lower.func == i_mtir) && (entry.lower.src[0].reg != 0);
@@ -2664,8 +2762,21 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
             entry.lower_is_nop = entry.lower.func == i_nop;
         }
 
+        set_read_operand(entry, 2, vu->upper.src[0].reg, vu->upper.src[0].mask);
+        set_read_operand(entry, 3, vu->upper.src[1].reg, vu->upper.src[1].mask);
+
         entry.uw_reg = (entry.upper.dst.reg && entry.upper.dst.reg < 32) ? entry.upper.dst.reg : 0;
         entry.uw_mask = entry.uw_reg ? vf_write_mask(entry.upper) : 0;
+
+        int stall = decode_stall(entry, ready, cycle);
+
+        entry.stall = (uint8_t)(stall > 255 ? 255 : stall);
+
+        cycle += entry.stall;
+
+        record_decode_writes(entry, ready, cycle);
+
+        cycle++;
 
         if (terminate) {
             block->cycles++;
@@ -2724,16 +2835,17 @@ static inline int vf_write_mask(const Instruction& ins) {
 }
 
 static inline int interlock_stall(Vu* vu, const BlockEntry& entry) {
-    if (!entry.is_mtir)
-        return 0;
+    int stall = entry.stall;
 
-    uint64_t ready = vu->vf_ready[entry.mtir_reg][entry.mtir_comp];
+    if (entry.is_mtir) {
+        uint64_t ready = vu->vf_ready[entry.mtir_reg][entry.mtir_comp];
 
-    if (ready <= vu->vu_cycle) {
-        return 0;
+        if (ready > vu->vu_cycle + stall) {
+            stall = (int)(ready - vu->vu_cycle);
+        }
     }
 
-    return (int)(ready - vu->vu_cycle);
+    return stall;
 }
 
 static inline void record_vf_writes(Vu* vu, const BlockEntry& entry) {
@@ -2861,7 +2973,15 @@ void jit_entry_epilogue(Vu* vu, const BlockEntry* entry) {
 }
 
 void jit_entry_stall(Vu* vu, const BlockEntry* entry) {
-    for (int stall = interlock_stall(vu, *entry); stall--; ) {
+    if (!entry->is_mtir) {
+        return;
+    }
+
+    uint64_t ready = vu->vf_ready[entry->mtir_reg][entry->mtir_comp];
+
+    int excess = ready > vu->vu_cycle ? (int)(ready - vu->vu_cycle) : 0;
+
+    for (int stall = excess; stall--; ) {
         if (vu->q_delay)
             vu->q_delay--;
 

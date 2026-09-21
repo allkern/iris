@@ -27,6 +27,9 @@ struct BlockEntry {
     int swap_hazard;
     int branch;
 
+    uint8_t read_reg[4];
+    uint8_t read_mask[4];
+    uint8_t stall;
     uint8_t uw_reg, uw_mask;
     uint8_t lw_reg, lw_mask;
     uint8_t is_mtir;

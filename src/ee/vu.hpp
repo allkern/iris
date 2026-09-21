@@ -84,6 +84,7 @@ struct Instruction {
     struct {
         int reg;
         int field;
+        int mask;
     } dst, src[2];
 
     int vi_dst;

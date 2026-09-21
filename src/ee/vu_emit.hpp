@@ -706,16 +706,28 @@ inline void emit_epilogue(Emitter& e, const BlockEntry* entry, bool vi_shadow_li
     uc.add(e.cycle_reg, e.cycle_reg, Imm(1));
 }
 
-inline void emit_prologue(Emitter& e) {
+inline void emit_prologue(Emitter& e, int stall) {
     ujit::UniCompiler& uc = *e.uc;
 
     e.load_scalars();
 
+    if (stall) {
+        uc.add(e.cycle_reg, e.cycle_reg, Imm(stall));
+
+        for (int i = 0; i < stall; i++) {
+            e.shift_flags();
+        }
+    }
+
+    ujit::Gp waiting = uc.new_gp32();
     ujit::Gp less = uc.new_gp32();
 
-    uc.mov(less, e.q_delay_reg);
-    uc.sub(less, less, Imm(1));
-    uc.cmov(e.q_delay_reg, less, ujit::test_nz(e.q_delay_reg));
+    uc.mov(waiting, e.q_delay_reg);
+    uc.mov(less, waiting);
+    uc.sub(less, less, Imm(stall + 1));
+
+    uc.mov(e.q_delay_reg, Imm(0));
+    uc.cmov(e.q_delay_reg, less, ujit::scmp_gt(waiting, Imm(stall)));
 
     emit_update_status(e);
 }
