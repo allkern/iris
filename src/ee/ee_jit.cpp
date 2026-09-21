@@ -1307,6 +1307,38 @@ static inline void i_div1(Ee* ee, const Instruction& i) {
         LO1 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
     }
 }
+static inline float sqrt_nearest(float value) {
+#if !defined(ASMJIT_UJIT_AARCH64)
+    uint32_t saved = _mm_getcsr();
+
+    _mm_setcsr(saved & ~0x6000u);
+
+    float result = sqrtf(value);
+
+    _mm_setcsr(saved);
+
+    return result;
+#else
+    return sqrtf(value);
+#endif
+}
+
+static inline float divide_nearest(float a, float b) {
+#if !defined(ASMJIT_UJIT_AARCH64)
+    uint32_t saved = _mm_getcsr();
+
+    _mm_setcsr(saved & ~0x6000u);
+
+    float result = a / b;
+
+    _mm_setcsr(saved);
+
+    return result;
+#else
+    return a / b;
+#endif
+}
+
 static inline void i_divs(Ee* ee, const Instruction& i) {
     int t = D_RT;
     int d = D_FD;
@@ -1328,7 +1360,7 @@ static inline void i_divs(Ee* ee, const Instruction& i) {
         return;
     }
 
-    ee->f[d].f = FS / FT;
+    ee->f[d].f = divide_nearest(FS, FT);
 
     if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
         return;
@@ -3196,9 +3228,9 @@ static inline void i_rsqrts(Ee* ee, const Instruction& i) {
     } else if (ee->f[t].u32 & 0x80000000) {
         ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
 
-        ee->f[d].f = FS / sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
+        ee->f[d].f = divide_nearest(FS, sqrt_nearest(fabsf(fpu_cvtf(ee->f[t].f))));
     } else {
-        ee->f[d].f = FS / sqrtf(fpu_cvtf(ee->f[t].f));
+        ee->f[d].f = divide_nearest(FS, sqrt_nearest(fpu_cvtf(ee->f[t].f)));
     }
 
     if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
@@ -3276,9 +3308,9 @@ static inline void i_sqrts(Ee* ee, const Instruction& i) {
     } else if (ee->f[t].u32 & 0x80000000) {
         ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
 
-        ee->f[d].f = sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
+        ee->f[d].f = sqrt_nearest(fabsf(fpu_cvtf(ee->f[t].f)));
     } else {
-        ee->f[d].f = sqrtf(fpu_cvtf(ee->f[t].f));
+        ee->f[d].f = sqrt_nearest(fpu_cvtf(ee->f[t].f));
     }
 }
 static inline void i_sra(Ee* ee, const Instruction& i) {
@@ -3925,6 +3957,11 @@ void reset(Ee* ee) {
     ee->rt.reset(asmjit::ResetPolicy::kHard);
 
     fesetround(FE_TOWARDZERO);
+
+#if !defined(ASMJIT_UJIT_AARCH64)
+    ee->mxcsr_chop = (_mm_getcsr() & ~0x6000u) | 0x6000u;
+    ee->mxcsr_nearest = _mm_getcsr() & ~0x6000u;
+#endif
 
     ram::reset(ee->spr);
 
@@ -4907,6 +4944,18 @@ static inline CachedReg& get_reg(Ee* ee, asmjit::ujit::UniCompiler* uc, int i, b
     if (!sync) ee->reg_cache[i].constant = false;
 
     return ee->reg_cache[i];
+}
+
+static inline void emit_round_nearest(asmjit::ujit::UniCompiler& uc, Ee* ee) {
+#if !defined(ASMJIT_UJIT_AARCH64)
+    uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_nearest)));
+#endif
+}
+
+static inline void emit_round_chop(asmjit::ujit::UniCompiler& uc, Ee* ee) {
+#if !defined(ASMJIT_UJIT_AARCH64)
+    uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_chop)));
+#endif
 }
 
 static inline void flush_reg_cache(Ee* ee, asmjit::ujit::UniCompiler* uc) {
@@ -6454,11 +6503,19 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u32(ft, EE(f[i.rt.r]));
                     uc.load_u32(fcr, EE(fcr));
 
+                    if (i.id == I_DIVS) {
+                        emit_round_nearest(uc, ee);
+                    }
+
                     switch (i.id) {
                         case I_ADDS: fpu::adds(uc, out, fcr, fs, ft); break;
                         case I_SUBS: fpu::subs(uc, out, fcr, fs, ft); break;
                         case I_MULS: fpu::muls(uc, out, fcr, fs, ft); break;
                         case I_DIVS: fpu::divs(uc, out, fcr, fs, ft); break;
+                    }
+
+                    if (i.id == I_DIVS) {
+                        emit_round_chop(uc, ee);
                     }
 
                     uc.store_u32(EE(f[i.sa]), out);
@@ -6514,8 +6571,8 @@ void compile_block(Ee* ee, Block* block) {
                         case I_ADDAS: fpu::adds(uc, out, fcr, fs, ft); break;
                         case I_SUBAS: fpu::subs(uc, out, fcr, fs, ft); break;
                         case I_MULAS: fpu::muls(uc, out, fcr, fs, ft); break;
-                        case I_SQRTS: fpu::sqrts(uc, out, fcr, ft); break;
-                        case I_RSQRTS: fpu::rsqrts(uc, out, fcr, fs, ft); break;
+                        case I_SQRTS: emit_round_nearest(uc, ee); fpu::sqrts(uc, out, fcr, ft); emit_round_chop(uc, ee); break;
+                        case I_RSQRTS: emit_round_nearest(uc, ee); fpu::rsqrts(uc, out, fcr, fs, ft); emit_round_chop(uc, ee); break;
 
                         default: {
                             ujit::Gp acc = uc.new_gp32(); uc.load_u32(acc, EE(a));
