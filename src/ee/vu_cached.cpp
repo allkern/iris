@@ -900,7 +900,7 @@ static inline void minmax(Vu* vu, int d, int s, int t) {
     __m128i agtb = _mm_cmpgt_epi32(sm_key(a), sm_key(b));
     __m128i res = IS_MAX ? sel(agtb, a, b) : sel(agtb, b, a);
 
-    write_masked<di>(&vu->vf[d], res);
+    if (d) write_masked<di>(&vu->vf[d], res);
 }
 #else
 template <uint32_t di, bool IS_MAX, src_kind TK>
