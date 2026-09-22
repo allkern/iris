@@ -12,6 +12,11 @@
 #include <smmintrin.h>
 #endif
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#define _EE_HOST_MXCSR
+#include <xmmintrin.h>
+#endif
+
 #include "ee.hpp"
 #include "bus.hpp"
 #include "vu.hpp"
@@ -1308,7 +1313,7 @@ static inline void i_div1(Ee* ee, const Instruction& i) {
     }
 }
 static inline float sqrt_nearest(float value) {
-#if !defined(ASMJIT_UJIT_AARCH64)
+#ifdef _EE_HOST_MXCSR
     uint32_t saved = _mm_getcsr();
 
     _mm_setcsr(saved & ~0x6000u);
@@ -1324,7 +1329,7 @@ static inline float sqrt_nearest(float value) {
 }
 
 static inline float divide_nearest(float a, float b) {
-#if !defined(ASMJIT_UJIT_AARCH64)
+#ifdef _EE_HOST_MXCSR
     uint32_t saved = _mm_getcsr();
 
     _mm_setcsr(saved & ~0x6000u);
@@ -3958,7 +3963,7 @@ void reset(Ee* ee) {
 
     fesetround(FE_TOWARDZERO);
 
-#if !defined(ASMJIT_UJIT_AARCH64)
+#ifdef _EE_HOST_MXCSR
     ee->mxcsr_chop = (_mm_getcsr() & ~0x6000u) | 0x6000u;
     ee->mxcsr_nearest = _mm_getcsr() & ~0x6000u;
 #endif
