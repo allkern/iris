@@ -625,6 +625,20 @@ static void emit_retire(Jit* jit, Emitter& e, ujit::UniCompiler& uc, const Label
 
         store_imm32(uc, VU(jit_exit), VU_JIT_STOP);
 
+        {
+            Label no_park = uc.new_label();
+
+            ujit::Gp pending = uc.new_gp32();
+
+            uc.load_i32(pending, VU(m_bit_pending));
+            uc.j(no_park, ujit::test_z(pending));
+
+            store_imm8(uc, VU(waiting_for_interlock), 1);
+            store_imm32(uc, VU(m_bit_pending), 0);
+
+            uc.bind(no_park);
+        }
+
         if (need_branch) {
             Label keep = uc.new_label();
 
@@ -862,23 +876,12 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
 
         int vi_shadow = 1;
 
-        bool interlocked = false;
-
         for (size_t i = 0; i < count; i++) {
             const BlockEntry& entry = b->entries[i];
 
             if (entry.m_bit) {
-                store_imm8(uc, VU(waiting_for_interlock), 1);
-                store_imm32(uc, VU(jit_exit), VU_JIT_STOP);
-                store_imm32(uc, VU(tpc), (b->tpc + (uint32_t)i) & mask);
-
-                e.store_dirty();
-
-                uc.j(trampoline);
-
-                interlocked = true;
-
-                break;
+                store_imm32(uc, VU(e_bit), 2);
+                store_imm32(uc, VU(m_bit_pending), 1);
             }
 
             if (entry.e_bit) {
@@ -890,21 +893,19 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
             emit_entry(jit, e, &entry, next_tpc, mask, i == 0 || prev_branch, &vi_shadow);
 
             bool need_branch = i == 0 || entry.branch || prev_branch;
-            bool need_end = i == 0 || entry.e_bit || prev_end;
+            bool need_end = i == 0 || entry.e_bit || entry.m_bit || prev_end;
 
             emit_retire(jit, e, uc, trampoline, need_branch, need_end, next_tpc);
 
             prev_branch = entry.branch != 0;
-            prev_end = entry.e_bit != 0;
+            prev_end = entry.e_bit != 0 || entry.m_bit != 0;
         }
 
-        if (!interlocked) {
-            store_imm32(uc, VU(tpc), (b->tpc + (uint32_t)count) & mask);
+        store_imm32(uc, VU(tpc), (b->tpc + (uint32_t)count) & mask);
 
-            e.store_dirty();
+        e.store_dirty();
 
-            uc.j(trampoline);
-        }
+        uc.j(trampoline);
     }
 
     uc.bind(trampoline);

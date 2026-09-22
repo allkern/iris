@@ -3018,9 +3018,9 @@ bool execute_block(Vu* vu, Block* block) {
 
     for (const BlockEntry& entry : block->entries) {
         if (entry.m_bit) {
-            vu->waiting_for_interlock = true;
+            vu->m_bit_pending = 1;
 
-            return true;
+            vu->e_bit = 2;
         }
 
         if (entry.e_bit)
@@ -3044,8 +3044,14 @@ bool execute_block(Vu* vu, Block* block) {
             taken = true;
         }
 
-        if (vu->e_bit && !--vu->e_bit)
+        if (vu->e_bit && !--vu->e_bit) {
+            if (vu->m_bit_pending) {
+                vu->m_bit_pending = 0;
+                vu->waiting_for_interlock = true;
+            }
+
             return true;
+        }
 
         if (taken)
             break;
@@ -3201,6 +3207,7 @@ void execute_program(Vu* vu, uint32_t addr) {
 
     // Clear VU0 interlock
     vu->waiting_for_interlock = false;
+    vu->m_bit_pending = 0;
 
     vu->tpc = addr & vu->micro_mem_size;
     vu->i_bit = 0;

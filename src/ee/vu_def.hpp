@@ -96,6 +96,7 @@ struct Vu {
     uint32_t delay_branch_pc;
 
     bool waiting_for_interlock;
+    int m_bit_pending;
 
     uint32_t upload_lo;
     uint32_t upload_hi;
@@ -144,6 +145,8 @@ struct Vu {
             uint32_t tpc;
             uint32_t cmsar0;
             uint32_t fbrst;
+
+            // To-do: Return busy when interlocked by M-bit
             uint32_t vpu_stat;
             uint32_t rsv4;
             uint32_t cmsar1;
