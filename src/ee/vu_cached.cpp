@@ -524,12 +524,11 @@ void xgkick(Vu* vu) {
     do {
         uint128_t tag = mem_read(vu, addr++);
 
-        if ((tag.u64[0] | tag.u64[1]) == 0)
+        addr &= 0x3ff;
+
+        if (addr == 0) {
             break;
-
-        // addr &= 0x3ff;
-
-        // if (addr == 0) break;
+        }
 
         // iris_debug(vu, "tag: addr={:08x} {:08x} {:08x} {:08x} {:08x}", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
@@ -1766,12 +1765,11 @@ void jit_xgkick(Vu* vu, uint32_t start) {
     do {
         uint128_t tag = mem_read(vu, addr++);
 
-        if ((tag.u64[0] | tag.u64[1]) == 0)
+        addr &= 0x3ff;
+
+        if (addr == 0) {
             break;
-
-        // addr &= 0x3ff;
-
-        // if (addr == 0) break;
+        }
 
         // iris_debug(vu, "tag: addr={:08x} {:08x} {:08x} {:08x} {:08x}", addr - 1, tag.u32[3], tag.u32[2], tag.u32[1], tag.u32[0]);
 
