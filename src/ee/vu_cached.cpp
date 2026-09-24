@@ -2586,6 +2586,8 @@ static inline void set_read_operand(BlockEntry& entry, int slot, int reg, int fi
     entry.read_mask[slot] = mask;
 }
 
+static constexpr int MTIR_LATENCY = VF_LATENCY + 1;
+
 static inline int decode_stall(const BlockEntry& entry, const uint64_t ready[32][4], uint64_t cycle) {
     uint64_t wait = cycle;
 
@@ -2596,13 +2598,15 @@ static inline int decode_stall(const BlockEntry& entry, const uint64_t ready[32]
             continue;
         }
 
+        uint64_t bias = (entry.is_mtir && i == 0) ? (uint64_t)(MTIR_LATENCY - VF_LATENCY) : 0;
+
         for (int c = 0; c < 4; c++) {
             if (!(entry.read_mask[i] & (1 << c))) {
                 continue;
             }
 
-            if (ready[reg][c] > wait) {
-                wait = ready[reg][c];
+            if (ready[reg][c] + bias > wait) {
+                wait = ready[reg][c] + bias;
             }
         }
     }
@@ -2611,6 +2615,14 @@ static inline int decode_stall(const BlockEntry& entry, const uint64_t ready[32]
 }
 
 static inline void record_decode_writes(const BlockEntry& entry, uint64_t ready[32][4], uint64_t issue) {
+    if (entry.uw_reg) {
+        for (int c = 0; c < 4; c++) {
+            if (entry.uw_mask & (1 << c)) {
+                ready[entry.uw_reg][c] = issue + VF_LATENCY;
+            }
+        }
+    }
+
     if (!entry.lw_reg) {
         return;
     }
@@ -2836,7 +2848,8 @@ static inline int interlock_stall(Vu* vu, const BlockEntry& entry) {
     int stall = entry.stall;
 
     if (entry.is_mtir) {
-        uint64_t ready = vu->vf_ready[entry.mtir_reg][entry.mtir_comp];
+        uint64_t ready = vu->vf_ready[entry.mtir_reg][entry.mtir_comp]
+            + (uint64_t)(MTIR_LATENCY - VF_LATENCY);
 
         if (ready > vu->vu_cycle + stall) {
             stall = (int)(ready - vu->vu_cycle);
@@ -2975,7 +2988,8 @@ void jit_entry_stall(Vu* vu, const BlockEntry* entry) {
         return;
     }
 
-    uint64_t ready = vu->vf_ready[entry->mtir_reg][entry->mtir_comp];
+    uint64_t ready = vu->vf_ready[entry->mtir_reg][entry->mtir_comp]
+        + (uint64_t)(MTIR_LATENCY - VF_LATENCY);
 
     int excess = ready > vu->vu_cycle ? (int)(ready - vu->vu_cycle) : 0;
 
