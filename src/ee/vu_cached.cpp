@@ -140,7 +140,9 @@ static inline void fold_status(Vu* vu, uint32_t mac) {
     vu->status |= (mac & 0x0f00) ? 4 : 0;
     vu->status |= (mac & 0xf000) ? 8 : 0;
 
-    vu->status |= (vu->status & 0x3f) << 6;
+    if (!vu->fsset_guard) {
+        vu->status |= (vu->status & 0x3f) << 6;
+    }
 }
 
 static inline void update_status(Vu* vu) {
@@ -1350,6 +1352,7 @@ void i_fsor(Vu* vu, const Instruction* ins) {
 void i_fsset(Vu* vu, const Instruction* ins) {
     vu->status &= 0x3f;
     vu->status |= LD_IMM12 & 0xfc0;
+    vu->fsset_guard = 4;
 }
 void i_iadd(Vu* vu, const Instruction* ins) {
     write_branch_pipeline(vu, LD_D);
@@ -2891,6 +2894,10 @@ static inline void entry_prologue(Vu* vu, const BlockEntry& entry) {
         vu->q_delay--;
 
     update_status(vu);
+
+    if (vu->fsset_guard) {
+        vu->fsset_guard--;
+    }
 }
 
 static inline void entry_epilogue(Vu* vu, const BlockEntry& entry) {

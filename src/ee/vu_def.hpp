@@ -122,6 +122,7 @@ struct Vu {
     uint64_t vf_ready[32][4];
 
     int q_delay;
+    int fsset_guard;
     Reg32 prev_q;
     Reg32 p;
 
