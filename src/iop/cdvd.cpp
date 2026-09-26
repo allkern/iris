@@ -1254,7 +1254,7 @@ static inline void n_read_dvd(Cdvd* cdvd) {
     event.name = "CDVD ReadDvd";
     event.udata = cdvd;
     event.callback = do_read;
-    event.cycles = get_read_timing(cdvd, 1, prev_lba) >> 3;
+    event.cycles = get_read_timing(cdvd, 1, prev_lba);
 
     scheduler::schedule(cdvd->hw.sched, event);
 
