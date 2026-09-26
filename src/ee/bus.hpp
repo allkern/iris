@@ -1,5 +1,7 @@
 #pragma once
 
+#include <unordered_map>
+
 #include "u128.h"
 #include "logger.hpp"
 
@@ -65,11 +67,15 @@ struct Bus {
     void (*kputchar)(void*, char);
     void* kputchar_udata;
 
+    std::unordered_map <uint32_t, uint32_t> patches;
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
 
 void init_kputchar(Bus* bus, void (*kputchar)(void*, char), void* udata);
 void init_fastmem(Bus* bus, int ee_ram_size, int iop_ram_size);
+void set_patch(Bus* bus, uint32_t addr, uint32_t value);
+void clear_patches(Bus* bus);
 
 }

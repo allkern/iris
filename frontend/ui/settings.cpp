@@ -100,6 +100,8 @@ static void draw_reset_prompt(Instance* iris) {
         reset_prompt.commit();
         reset_prompt.apply();
 
+        patches::reapply(iris);
+
         ps2::reset(iris->ps2);
 
         CloseCurrentPopup();
@@ -656,6 +658,18 @@ void show_system_settings(Instance* iris) {
     SetItemTooltip("Loads archived arcade games faster, at the cost of keeping a second copy of their files");
     Checkbox("Fastboot System 246/256 games", &iris->arcade_dongle_boot);
     SetItemTooltip("Runs the game's boot program straight off the dongle instead of booting it through the board BIOS");
+
+    imgui::section(iris, "Patches");
+
+    Checkbox("Enable patches", &iris->enable_patches);
+    SetItemTooltip("Applies built-in fixes for games that need them to run. Takes effect the next time a game boots");
+
+    BeginDisabled(!iris->enable_patches);
+
+    Checkbox("Apply patches when inserting discs", &iris->apply_patches_on_insert);
+    SetItemTooltip("Switches to the patches for a disc as soon as it is inserted, instead of waiting for the next reset");
+
+    EndDisabled();
 
     imgui::section(iris, "DIP Switches");
 

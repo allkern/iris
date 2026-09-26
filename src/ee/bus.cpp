@@ -63,17 +63,29 @@ void init_kputchar(Bus* bus, void (*kputchar)(void*, char), void* udata) {
     bus->kputchar_udata = udata;
 }
 
+void set_patch(Bus* bus, uint32_t addr, uint32_t value) {
+    bus->patches[addr] = value;
+}
+
+void clear_patches(Bus* bus) {
+    bus->patches.clear();
+}
+
 void destroy(Bus* bus) {
     delete bus;
 }
 
-#define MAP_MEM_READ_NS(b, l, u, d, n)     if ((addr >= l) && (addr <= u)) return d::read ## b (bus->n, addr - l);
+#define MAP_MEM_READ_NS(b, l, u, d, n) \
+    if ((addr >= l) && (addr <= u)) return d::read ## b (bus->n, addr - l);
 
-#define MAP_REG_READ_NS(b, l, u, d, n)     if ((addr >= l) && (addr <= u)) return d::read ## b (bus->n, addr);
+#define MAP_REG_READ_NS(b, l, u, d, n) \
+    if ((addr >= l) && (addr <= u)) return d::read ## b (bus->n, addr);
 
-#define MAP_MEM_WRITE_NS(b, l, u, d, n)     if ((addr >= l) && (addr <= u)) { d::write ## b (bus->n, addr - l, data); return; }
+#define MAP_MEM_WRITE_NS(b, l, u, d, n) \
+    if ((addr >= l) && (addr <= u)) { d::write ## b (bus->n, addr - l, data); return; }
 
-#define MAP_REG_WRITE_NS(b, l, u, d, n)     if ((addr >= l) && (addr <= u)) { d::write ## b (bus->n, addr, data); return; }
+#define MAP_REG_WRITE_NS(b, l, u, d, n) \
+    if ((addr >= l) && (addr <= u)) { d::write ## b (bus->n, addr, data); return; }
 
 #define MAP_MEM_READ(b, l, u, d, n) \
     if ((addr >= l) && (addr <= u)) return ps2_ ## d ## _read ## b(bus->n, addr - l);
@@ -204,6 +216,14 @@ uint64_t read16(void* udata, uint32_t addr) {
 
 uint64_t read32(void* udata, uint32_t addr) {
     Bus* bus = (Bus*)udata;
+
+    if (unlikely(!bus->patches.empty())) {
+        auto it = bus->patches.find(addr);
+
+        if (unlikely(it != bus->patches.end())) {
+            return it->second;
+        }
+    }
 
     // pacmanbr
     // if (addr == 0x00189A40) return 0x34630009;

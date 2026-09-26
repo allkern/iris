@@ -842,6 +842,8 @@ void boot(Instance* iris) {
 
         iris->loaded = executable;
     } else if (boot_path.size()) {
+        patches::apply(iris, boot_path.c_str());
+
         ps2::boot_file(iris->ps2, boot_path.c_str());
 
         iris->loaded = boot_path;
@@ -855,6 +857,7 @@ void boot(Instance* iris) {
         }
 
         elf::load_symbols_from_disc(iris);
+        patches::apply(iris, file);
 
         ps2::boot_file(iris->ps2, file);
     }

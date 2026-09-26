@@ -44,6 +44,8 @@ void show_fatal_error(Instance* iris) {
         if (Button("Reset", ImVec2(120.0, 0.0))) {
             iris->fatal_error = false;
 
+            patches::reapply(iris);
+
             ps2::reset(iris->ps2);
         }
     } End();

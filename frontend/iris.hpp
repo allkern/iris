@@ -33,6 +33,7 @@
 #include "debug.hpp"
 #include "notifications.hpp"
 #include "elf.hpp"
+#include "patches.hpp"
 #include "emu.hpp"
 #include "input.hpp"
 #include "vulkan.hpp"
@@ -371,6 +372,8 @@ struct Instance {
     bool autostart = true;
     bool cache_arcade_files = false;
     bool arcade_dongle_boot = false;
+    bool enable_patches = true;
+    bool apply_patches_on_insert = true;
 
     bool system_2x6_rgb_level = false;
     bool system_2x6_monitor_frequency = false;

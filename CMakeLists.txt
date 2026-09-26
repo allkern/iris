@@ -265,6 +265,7 @@ target_sources(iris PRIVATE
     frontend/net.cpp
     frontend/slirp.cpp
     frontend/notifications.cpp
+    frontend/patches.cpp
     frontend/menu.cpp
     frontend/settings.cpp
     frontend/ui/about.cpp

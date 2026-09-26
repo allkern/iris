@@ -277,6 +277,8 @@ int insert_disc(Instance* iris, std::string file) {
 
     iris->loaded = file;
 
+    patches::insert(iris);
+
     return 0;
 }
 
@@ -284,6 +286,8 @@ int open_file_thread(Instance* iris, std::string file) {
     std::filesystem::path path(file);
 
     iris->arcade_id = "";
+
+    patches::clear(iris);
 
     std::string display_path = file;
 
@@ -318,6 +322,7 @@ int open_file_thread(Instance* iris, std::string file) {
         }
 
         elf::load_symbols_from_disc(iris);
+        patches::apply(iris, boot_file);
 
         ps2::set_system(iris->ps2, iris->system);
         emu::load_rom_files(iris);
@@ -372,6 +377,8 @@ int open_file(Instance* iris, std::string file) {
 
 static int boot_ps2_path_thread(Instance* iris, std::string path) {
     iris->arcade_id = "";
+
+    patches::apply(iris, path.c_str());
 
     ps2::set_system(iris->ps2, iris->system);
     emu::load_rom_files(iris);
@@ -1488,6 +1495,8 @@ static bool load_arcade_source(Instance* iris, const ArcadeSource& source) {
     const std::string& name = source.name;
 
     iris->arcade_id = "";
+
+    patches::clear(iris);
 
     cdvd::close(iris->ps2->cdvd);
 

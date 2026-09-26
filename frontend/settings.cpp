@@ -214,6 +214,8 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->vu_jit_threshold = system["vu_jit_threshold"].value_or(200);
     iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
     iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(false);
+    iris->enable_patches = system["enable_patches"].value_or(true);
+    iris->apply_patches_on_insert = system["apply_patches_on_insert"].value_or(true);
     iris->system_2x6_rgb_level = system["system_2x6_rgb_level"].value_or(false);
     iris->system_2x6_monitor_frequency = system["system_2x6_monitor_frequency"].value_or(false);
     iris->system_2x6_video_sync = system["system_2x6_video_sync"].value_or(false);
@@ -542,6 +544,8 @@ void save(Instance* iris) {
             { "vu_jit_threshold", iris->vu_jit_threshold },
             { "cache_arcade_files", iris->cache_arcade_files },
             { "arcade_dongle_boot", iris->arcade_dongle_boot },
+            { "enable_patches", iris->enable_patches },
+            { "apply_patches_on_insert", iris->apply_patches_on_insert },
             { "system_2x6_rgb_level", iris->system_2x6_rgb_level },
             { "system_2x6_monitor_frequency", iris->system_2x6_monitor_frequency },
             { "system_2x6_video_sync", iris->system_2x6_video_sync },

@@ -195,6 +195,8 @@ static void show_iris_menu(Instance* iris) {
 
         // To-do: Show confirm dialog maybe?
         if (menu::item(ICON_MS_REFRESH " Reset")) {
+            patches::reapply(iris);
+
             ps2::reset(iris->ps2);
         }
 
@@ -221,6 +223,8 @@ static void show_iris_menu(Instance* iris) {
                 // 2-second delay to allow the disc to spin up
                 if (!cdvd::open(iris->ps2->cdvd, f.result().at(0).c_str(), 38860800*2)) {
                     iris->loaded = f.result().at(0);
+
+                    patches::insert(iris);
                 }
             }
         }
@@ -229,6 +233,8 @@ static void show_iris_menu(Instance* iris) {
             iris->loaded = "";
 
             cdvd::close(iris->ps2->cdvd);
+
+            patches::clear(iris);
         }
 
         if (menu::item(ICON_MS_CLOSE " Close")) {

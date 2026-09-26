@@ -18,8 +18,11 @@ static void show_run_controls(Instance* iris) {
 
     SameLine();
 
-    if (Button(ICON_MS_REFRESH))
+    if (Button(ICON_MS_REFRESH)) {
+        patches::reapply(iris);
+
         ps2::reset(iris->ps2);
+    }
 
     SameLine();
     SeparatorEx(ImGuiSeparatorFlags_Vertical);
