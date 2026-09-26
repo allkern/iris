@@ -28,16 +28,18 @@ inline static void set_dicr_flag(Dma* dma, uint32_t ch) {
     if (ch < 7) {
         uint32_t m = 0x10000 << ch;
 
-        if (dma->dicr & m)
+        if (dma->dicr & m) {
             dma->dicr |= 0x1000000 << ch;
+        }
 
         return;
     }
 
     uint32_t m = 0x10000 << (ch - 7);
 
-    if (dma->dicr2 & m)
+    if ((dma->dicr2 & m) || ch == SIF0 || ch == SIF1) {
         dma->dicr2 |= 0x1000000 << (ch - 7);
+    }
 }
 
 inline static void check_irq(Dma* dma) {
