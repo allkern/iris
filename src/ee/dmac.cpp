@@ -4,10 +4,12 @@
 #include "dmac.hpp"
 #include "gif.hpp"
 #include "vif.hpp"
+#include "../gs/gs.hpp"
 #include "bus.hpp"
 #include "profile_counters.hpp"
 #include <cassert>
 #include <cstring>
+#include <cstdlib>
 
 namespace iris::ee::dmac {
 
@@ -835,9 +837,183 @@ void send_vif1_irq(void* udata, int overshoot) {
     end_transfer(dmac, VIF1);
 }
 
+static int64_t dma_pace() {
+    static int64_t pace = -1;
+
+    if (pace < 0) {
+        const char* setting = getenv("IRIS_DMA_PACE");
+
+        pace = setting ? atoll(setting) : 0;
+
+        if (pace < 0) {
+            pace = 0;
+        }
+    }
+
+    return pace;
+}
+
+constexpr int64_t VIF1_PACE_CHUNK_QWORDS = 128;
+constexpr int64_t VIF1_PATH3_WAIT_CYCLES = 128;
+
+static void run_vif1_transfer(Dmac* dmac);
+
+static void resume_vif1_transfer(void* udata, int overshoot) {
+    Dmac* dmac = (Dmac*)udata;
+
+    dmac->vif1_pace_pending = false;
+
+    if ((dmac->channels[VIF1].chcr & 0x100) == 0) {
+        return;
+    }
+
+    run_vif1_transfer(dmac);
+}
+
+static void schedule_vif1_resume(Dmac* dmac, int64_t cycles) {
+    scheduler::Event event;
+
+    event.name = "vif1_pace";
+    event.callback = resume_vif1_transfer;
+    event.cycles = cycles;
+    event.udata = dmac;
+
+    dmac->vif1_pace_pending = true;
+
+    scheduler::schedule(dmac->hw.sched, event);
+}
+
+static void credit_vif1_budget(Dmac* dmac) {
+    int64_t pace = dma_pace();
+    int64_t qwords = (dmac->hw.sched->now - dmac->vif1_credit_time) / pace;
+
+    if (qwords <= 0) {
+        return;
+    }
+
+    dmac->vif1_budget += qwords * 4;
+    dmac->vif1_credit_time += qwords * pace;
+}
+
+static bool vif1_word_needs_gif(uint32_t word) {
+    switch ((word >> 24) & 0x7f) {
+        case 0x14:
+        case 0x15:
+        case 0x17:
+        case 0x50:
+        case 0x51: {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+static uint32_t peek_vif1_word(Dmac* dmac) {
+    Channel* c = &dmac->channels[VIF1];
+
+    uint32_t base = c->madr & ~0xfu;
+
+    if (!c->qword_valid || c->qword_addr != base) {
+        c->qword = read_qword(dmac, base);
+        c->qword_addr = base;
+        c->qword_valid = true;
+    }
+
+    return c->qword.u32[(c->madr >> 2) & 3];
+}
+
+static bool vif1_next_command_needs_gif(Dmac* dmac) {
+    Channel* c = &dmac->channels[VIF1];
+
+    if (c->qwc) {
+        return vif1_word_needs_gif(peek_vif1_word(dmac));
+    }
+
+    if (channel_is_done(c) || ((c->chcr >> 6) & 1) == 0) {
+        return false;
+    }
+
+    uint32_t tadr = c->tag.id == 1 ? c->madr : c->tadr;
+    uint128_t tag = read_qword(dmac, tadr);
+
+    return vif1_word_needs_gif(tag.u32[2]) || vif1_word_needs_gif(tag.u32[3]);
+}
+
+static bool vif1_must_wait(Dmac* dmac) {
+    int64_t pace = dma_pace();
+
+    if (!pace) {
+        return false;
+    }
+
+    if (dmac->hw.bus->vif1->state != vif::VIF_IDLE) {
+        return false;
+    }
+
+    Channel* c = &dmac->channels[VIF1];
+
+    if (!c->qwc && channel_is_done(c)) {
+        return false;
+    }
+
+    if (gs::signal_stalled(dmac->hw.bus->gs)) {
+        schedule_vif1_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
+
+        return true;
+    }
+
+    if (gif::path3_packet_open(dmac->hw.bus->gif) && vif1_next_command_needs_gif(dmac)) {
+        schedule_vif1_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
+
+        return true;
+    }
+
+    if (dmac->vif1_budget > 0) {
+        return false;
+    }
+
+    credit_vif1_budget(dmac);
+
+    if (dmac->vif1_budget > 0) {
+        return false;
+    }
+
+    schedule_vif1_resume(dmac, VIF1_PACE_CHUNK_QWORDS * pace);
+
+    return true;
+}
+
+static void run_vif1_transfer(Dmac* dmac) {
+    while (true) {
+        uint32_t qwords = transfer_vif1_qwords(dmac);
+
+        if (qwords) {
+            dmac->vif1_budget -= (int64_t)qwords * 4;
+
+            continue;
+        }
+
+        if (vif1_must_wait(dmac)) {
+            return;
+        }
+
+        if (!transfer_vif1_word(dmac)) {
+            break;
+        }
+
+        dmac->vif1_budget--;
+    }
+}
+
+
 void handle_vif1_transfer(Dmac* dmac) {
     if ((dmac->channels[VIF1].chcr & 0x100) == 0)
         return;
+
+    if (dmac->vif1_pace_pending) {
+        return;
+    }
 
     int mfifo_drain = (dmac->ctrl >> 2) & 3;
 
@@ -897,15 +1073,10 @@ void handle_vif1_transfer(Dmac* dmac) {
     channel->kick_address = kick_address;
     channel->qword_valid = false;
 
-    while (true) {
-        if (transfer_vif1_qwords(dmac)) {
-            continue;
-        }
+    dmac->vif1_budget = VIF1_PACE_CHUNK_QWORDS * 4;
+    dmac->vif1_credit_time = dmac->hw.sched->now;
 
-        if (!transfer_vif1_word(dmac)) {
-            break;
-        }
-    }
+    run_vif1_transfer(dmac);
 }
 
 void send_gif_irq(void* udata, int overshoot) {
@@ -966,22 +1137,120 @@ void resume_gif(Dmac* dmac) {
     handle_gif_transfer(dmac);
 }
 
-void handle_gif_transfer(Dmac* dmac) {
+static void run_gif_transfer(Dmac* dmac);
+
+static void resume_gif_transfer(void* udata, int overshoot) {
+    Dmac* dmac = (Dmac*)udata;
+
+    dmac->gif_pace_pending = false;
+
+    if ((dmac->channels[GIF].chcr & 0x100) == 0) {
+        return;
+    }
+
+    handle_gif_transfer(dmac);
+}
+
+static void schedule_gif_resume(Dmac* dmac, int64_t cycles) {
     scheduler::Event event;
 
-    int mode = (dmac->channels[GIF].chcr >> 2) & 3;
+    event.name = "gif_pace";
+    event.callback = resume_gif_transfer;
+    event.cycles = cycles;
+    event.udata = dmac;
 
-    // iris_debug(dmac, "GIF DMA dir={} mode={} tte={} tie={} qwc={} madr={:08x} tadr={:08x}", //     dmac->channels[GIF].chcr & 1,
-    //     (dmac->channels[GIF].chcr >> 2) & 3,
-    //     (dmac->channels[GIF].chcr >> 6) & 1,
-    //     (dmac->channels[GIF].chcr >> 7) & 1,
-    //     dmac->channels[GIF].qwc,
-    //     dmac->channels[GIF].madr,
-    //     dmac->channels[GIF].tadr,
-    //     dmac->rbor,
-    //     dmac->rbsr,
-    //     dmac->channels[SPR_FROM].madr
-    //);
+    dmac->gif_pace_pending = true;
+
+    scheduler::schedule(dmac->hw.sched, event);
+}
+
+static bool gif_must_wait(Dmac* dmac) {
+    int64_t pace = dma_pace();
+
+    if (!pace) {
+        return false;
+    }
+
+    if (gs::signal_stalled(dmac->hw.bus->gs)) {
+        schedule_gif_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
+
+        return true;
+    }
+
+    if (gif::path3_packet_open(dmac->hw.bus->gif)) {
+        return false;
+    }
+
+    if (dmac->gif_budget > 0) {
+        return false;
+    }
+
+    int64_t qwords = (dmac->hw.sched->now - dmac->gif_credit_time) / pace;
+
+    if (qwords > 0) {
+        dmac->gif_budget += qwords;
+        dmac->gif_credit_time += qwords * pace;
+    }
+
+    if (dmac->gif_budget > 0) {
+        return false;
+    }
+
+    schedule_gif_resume(dmac, VIF1_PACE_CHUNK_QWORDS * pace);
+
+    return true;
+}
+
+static inline bool transfer_gif_payload(Dmac* dmac, Channel* c) {
+    uint32_t before = c->qwc;
+
+    transfer_gif_qwords(dmac, c);
+
+    dmac->gif_budget -= before - c->qwc;
+
+    return c->qwc == 0;
+}
+
+static void run_gif_transfer(Dmac* dmac) {
+    Channel* c = &dmac->channels[GIF];
+
+    if (!transfer_gif_payload(dmac, c)) {
+        return;
+    }
+
+    if (c->tag.end) {
+        end_transfer(dmac, GIF);
+
+        return;
+    }
+
+    do {
+        if (gif_must_wait(dmac)) {
+            return;
+        }
+
+        uint128_t tag = read_qword(dmac, c->tadr);
+
+        process_source_tag(dmac, c, tag);
+
+        if (c->tag.id == 1) {
+            c->tadr = c->madr + c->qwc * 16;
+        }
+
+        dmac->gif_budget--;
+
+        if (!transfer_gif_payload(dmac, c)) {
+            return;
+        }
+    } while (!channel_is_done(c));
+
+    end_transfer(dmac, GIF);
+}
+
+void handle_gif_transfer(Dmac* dmac) {
+    if (dmac->gif_pace_pending) {
+        return;
+    }
 
     int mfifo_drain = (dmac->ctrl >> 2) & 3;
 
@@ -989,55 +1258,9 @@ void handle_gif_transfer(Dmac* dmac) {
         return;
     }
 
-    // iris_debug(dmac, "ee: GIF DMA dir={} mode={} tte={} tie={} qwc={} madr={:08x} tadr={:08x}", //     dmac->channels[GIF].chcr & 1,
-    //     (dmac->channels[GIF].chcr >> 2) & 3,
-    //     (dmac->channels[GIF].chcr >> 6) & 1,
-    //     (dmac->channels[GIF].chcr >> 7) & 1,
-    //     dmac->channels[GIF].qwc,
-    //     dmac->channels[GIF].madr,
-    //     dmac->channels[GIF].tadr
-    //);
-
-    transfer_gif_qwords(dmac, &dmac->channels[GIF]);
-
-    if (dmac->channels[GIF].qwc) {
-        return;
-    }
-
-    if (dmac->channels[GIF].tag.end) {
-        end_transfer(dmac, GIF);
-
-        return;
-    }
-
-    // int id = (dmac->channels[GIF].chcr >> 28) & 7;
-
-    // if ((mode == 1) && (id == 0 || id == 7) && dmac->channels[GIF].qwc) {
-    //     return;
-    // }
-
-    // Chain mode
-    do {
-        uint128_t tag = read_qword(dmac, dmac->channels[GIF].tadr);
-
-        process_source_tag(dmac, &dmac->channels[GIF], tag);
-
-        if (dmac->channels[GIF].tag.id == 1) {
-            dmac->channels[GIF].tadr = dmac->channels[GIF].madr + dmac->channels[GIF].qwc * 16;
-        }
-
-        // iris_debug(dmac, "ee: gif tag qwc={:08x} madr={:08x} tadr={:08x} mem={}", dmac->channels[GIF].qwc, dmac->channels[GIF].madr, dmac->channels[GIF].tadr, dmac->channels[GIF].tag.mem);
-
-        transfer_gif_qwords(dmac, &dmac->channels[GIF]);
-
-        if (dmac->channels[GIF].qwc) {
-            return;
-        }
-
-    } while (!channel_is_done(&dmac->channels[GIF]));
-
-    end_transfer(dmac, GIF);
+    run_gif_transfer(dmac);
 }
+
 
 void handle_ipu_from_transfer(Dmac* dmac) {
     if ((dmac->channels[IPU_FROM].chcr & 0x100) == 0) {
@@ -1593,7 +1816,12 @@ static inline void handle_channel_start(Dmac* dmac, uint32_t addr) {
     switch (addr & 0xff00) {
         case 0x8000: handle_vif0_transfer(dmac); return;
         case 0x9000: handle_vif1_transfer(dmac); return;
-        case 0xA000: handle_gif_transfer(dmac); return;
+        case 0xA000: {
+            dmac->gif_budget = VIF1_PACE_CHUNK_QWORDS;
+            dmac->gif_credit_time = dmac->hw.sched->now;
+
+            handle_gif_transfer(dmac);
+        } return;
         case 0xB000: handle_ipu_from_transfer(dmac); return;
         case 0xB400: handle_ipu_to_transfer(dmac); return;
         case 0xC000: handle_sif0_transfer(dmac); return;

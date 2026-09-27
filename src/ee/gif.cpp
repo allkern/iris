@@ -120,6 +120,8 @@ void reset(Gif* gif) {
     gif->p3tag = 0;
     gif->state = 0;
     gif->q = 0;
+    gif->p3_left = 0;
+    gif->p3_eop = 1;
 
     gif->mask_m3r = 0;
     gif->mask_m3p = 0;
@@ -532,7 +534,63 @@ static inline void gif_note_fifo_activity(Gif* gif) {
     }
 }
 
+static void track_path3(Gif* gif, const uint8_t* data, uint32_t count) {
+    uint32_t index = 0;
+
+    while (index < count) {
+        if (gif->p3_left) {
+            uint64_t take = count - index;
+
+            if (take > gif->p3_left) {
+                take = gif->p3_left;
+            }
+
+            gif->p3_left -= take;
+            index += (uint32_t)take;
+
+            continue;
+        }
+
+        uint64_t tag;
+
+        memcpy(&tag, data + (size_t)index * 16, sizeof(tag));
+
+        uint64_t nloop = tag & 0x7fff;
+        uint64_t nreg = (tag >> 60) & 0xf;
+
+        if (!nreg) {
+            nreg = 16;
+        }
+
+        switch ((tag >> 58) & 3) {
+            case 0: {
+                gif->p3_left = nloop * nreg;
+            } break;
+
+            case 1: {
+                gif->p3_left = (nloop * nreg + 1) / 2;
+            } break;
+
+            default: {
+                gif->p3_left = nloop;
+            } break;
+        }
+
+        gif->p3_eop = (int)((tag >> 15) & 1);
+
+        index++;
+    }
+}
+
+bool path3_packet_open(Gif* gif) {
+    return gif->p3_left || !gif->p3_eop;
+}
+
 void fifo_write(Gif* gif, uint128_t data, int path) {
+    if (path == PATH3) {
+        track_path3(gif, (const uint8_t*)&data, 1);
+    }
+
     if (gif->hw.mtvu) {
         gif->stat |= 0x1f000000;
 
@@ -551,6 +609,10 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
 }
 
 void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) {
+    if (path == PATH3) {
+        track_path3(gif, data, count);
+    }
+
     if (gif->hw.mtvu) {
         gif->stat |= 0x1f000000;
 

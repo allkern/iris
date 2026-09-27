@@ -115,6 +115,9 @@ struct Gif {
     FrontScan scan;
     int flushing_deferred_path3;
 
+    uint64_t p3_left;
+    int p3_eop;
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };
@@ -139,5 +142,6 @@ void set_path3_mask(Gif* gif, int mask);
 int get_path3_mask(Gif* gif);
 int can_accept(Gif* gif, int path);
 int path3_stall_enabled(Gif* gif);
+bool path3_packet_open(Gif* gif);
 
 }

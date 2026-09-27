@@ -423,6 +423,7 @@ int write_signal(Gs* gs, uint64_t data);
 int write_finish(Gs* gs, uint64_t data);
 int write_label(Gs* gs, uint64_t data);
 int apply_signal(Gs* gs, uint64_t data);
+bool signal_stalled(Gs* gs);
 int apply_finish(Gs* gs, uint64_t data);
 int apply_label(Gs* gs, uint64_t data);
 void set_event_sink(Gs* gs, void (*sink)(void*, int, uint64_t), void* udata);

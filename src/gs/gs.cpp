@@ -32,6 +32,18 @@ static inline void test_gs_irq(Gs* gs) {
     }
 }
 
+static bool queued_signal_mode() {
+    static int mode = -1;
+
+    if (mode < 0) {
+        const char* setting = getenv("IRIS_DMA_PACE");
+
+        mode = setting && atoi(setting) > 0;
+    }
+
+    return mode != 0;
+}
+
 static void assert_finish(Gs* gs) {
     gs->finish_pending = 0;
     gs->finish_cleared = 0;
@@ -209,6 +221,7 @@ void soft_reset(Gs* gs) {
 
     gs->vblank = 0;
     gs->signal_pending = 0;
+    gs->signal_stall = 0;
 
     gs->ctx = &gs->context[0];
     gs->csr |= 2;
@@ -486,7 +499,19 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
             gs->csr_raised &= ~(data & 0xf);
             gs->csr_enable = data;
 
-            if (data & 1) {
+            if ((data & 1) && queued_signal_mode()) {
+                if (gs->signal_stall) {
+                    gs->signal_stall = 0;
+
+                    gs->siglblid &= ~0xffffffffull;
+                    gs->siglblid |= gs->stall_sigid;
+                    gs->csr |= 1;
+
+                    test_gs_irq(gs);
+                }
+            } else if (data & 1) {
+                gs->signal_stall = 0;
+
                 if (gs->signal_pending) {
                     gs->siglblid &= ~0xffffffffull;
                     gs->siglblid |= gs->stall_sigid;
@@ -941,6 +966,7 @@ int apply_signal(Gs* gs, uint64_t data) {
 
     if (gs->csr & 1) {
         gs->signal_pending++;
+        gs->signal_stall = 1;
 
         gs->stall_sigid = gs->siglblid & 0xffffffff;
         gs->stall_sigid &= ~mask;
@@ -959,6 +985,10 @@ int apply_signal(Gs* gs, uint64_t data) {
     test_gs_irq(gs);
 
     return 0;
+}
+
+bool signal_stalled(Gs* gs) {
+    return gs->signal_stall != 0;
 }
 
 int apply_finish(Gs* gs, uint64_t data) {
