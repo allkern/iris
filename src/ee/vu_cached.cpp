@@ -1242,20 +1242,20 @@ uint32_t jit_efu_vector(uint32_t key, uint32_t xb, uint32_t yb, uint32_t zb, uin
         case 0x73: return clamp_p(1.0f / sqrtf(x2 + y2 + z2));
 
         case 0x74: {
-            if (y + x == 0.0f) {
-                return 0x7F7FFFFF | (yb & 0x80000000);
+            if (x == 0.0) {
+                return raw_p(y < 0.0 ? -1.5707963267948966 : 1.5707963267948966);
             }
 
-            return raw_p(atan((y - 1.0f) / (y + x)));
+            return raw_p(atan(y / x));
         }
 
         // P = atan(z/x)
         case 0x75: {
-            if (z + x == 0.0f) {
-                return 0x7F7FFFFF | (zb & 0x80000000);
+            if (x == 0.0) {
+                return raw_p(z < 0.0 ? -1.5707963267948966 : 1.5707963267948966);
             }
 
-            return raw_p(atan((z - x) / (z + x)));
+            return raw_p(atan(z / x));
         }
 
         case 0x76: return clamp_p(x + y + z + cvtf(wb));
