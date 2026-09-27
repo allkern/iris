@@ -123,6 +123,8 @@ struct Vu {
 
     int q_delay;
     int fsset_guard;
+    int p_delay;
+    Reg32 prev_p;
     Reg32 prev_q;
     Reg32 p;
 

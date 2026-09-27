@@ -224,12 +224,19 @@ struct Emitter {
 
     bool scalars_loaded = false;
     ujit::Gp q_delay_reg;
+    ujit::Gp p_delay_reg;
     ujit::Gp cycle_reg;
 
+    int p_steps = 0;
+
     bool status_pending = false;
-    int fsset_guard = 0;
     ujit::Gp status_or;
     ujit::Gp status_last;
+
+    int guard_known = -1;
+    int guard_steps = 0;
+    bool guard_loaded = false;
+    ujit::Gp guard_reg;
 
     int shadow_left = 1;
     int shadow_reg = -1;
@@ -252,10 +259,44 @@ struct Emitter {
         scalars_loaded = true;
 
         q_delay_reg = uc->new_gp32();
+        p_delay_reg = uc->new_gp32();
         cycle_reg = uc->new_gp64();
 
+        p_steps = 0;
+
         uc->load_i32(q_delay_reg, mem(offsetof(Vu, q_delay)));
+        uc->load_i32(p_delay_reg, mem(offsetof(Vu, p_delay)));
         uc->load_u64(cycle_reg, mem(offsetof(Vu, vu_cycle)));
+    }
+
+    ujit::Gp countdown(const ujit::Gp& value, int steps) {
+        ujit::Gp less = uc->new_gp32();
+        ujit::Gp out = uc->new_gp32();
+
+        uc->mov(less, value);
+        uc->sub(less, less, Imm(steps));
+        uc->mov(out, Imm(0));
+        uc->cmov(out, less, ujit::scmp_gt(value, Imm(steps)));
+
+        return out;
+    }
+
+    ujit::Gp p_delay_now() {
+        if (!p_steps) {
+            return p_delay_reg;
+        }
+
+        return countdown(p_delay_reg, p_steps);
+    }
+
+    void settle_p() {
+        if (!p_steps) {
+            return;
+        }
+
+        uc->mov(p_delay_reg, countdown(p_delay_reg, p_steps));
+
+        p_steps = 0;
     }
 
     void store_scalars() {
@@ -264,6 +305,7 @@ struct Emitter {
         }
 
         uc->store_u32(mem(offsetof(Vu, q_delay)), q_delay_reg);
+        uc->store_u32(mem(offsetof(Vu, p_delay)), p_delay_now());
         uc->store_u64(mem(offsetof(Vu, vu_cycle)), cycle_reg);
     }
 
@@ -281,8 +323,14 @@ struct Emitter {
         flags_loaded = true;
 
         mac_reg = uc->new_gp32();
+        status_or = uc->new_gp32();
+
+        guard_known = -1;
+        guard_steps = 0;
+        guard_loaded = false;
 
         uc->load_u32(mac_reg, mem(offsetof(Vu, mac)));
+        uc->mov(status_or, Imm(0));
 
         for (int i = 0; i < 4; i++) {
             mac_ring[i] = uc->new_gp32();
@@ -333,6 +381,25 @@ struct Emitter {
         for (int i = 0; i < 4; i++) {
             uc->store_u32(mem(offsetof(Vu, mac_pipeline) + (size_t)i * 4), mac_ring[i]);
         }
+
+        store_guard();
+    }
+
+    void store_guard() {
+        if (guard_known >= 0) {
+            ujit::Gp value = uc->new_gp32();
+
+            uc->mov(value, Imm(guard_known));
+            uc->store_u32(mem(offsetof(Vu, fsset_guard)), value);
+
+            return;
+        }
+
+        if (!guard_steps) {
+            return;
+        }
+
+        uc->store_u32(mem(offsetof(Vu, fsset_guard)), countdown(guard_reg, guard_steps));
     }
 
     void drop_flags() {
@@ -420,19 +487,38 @@ struct Emitter {
         clamped_valid[i] = false;
     }
 
-    void mark_status(const ujit::Gp& ring3, bool sticky) {
-        if (sticky) {
-            if (!status_pending) {
-                status_or = uc->new_gp32();
+    void mark_status(const ujit::Gp& ring3, bool decrement) {
+        if (guard_known < 0) {
+            if (!guard_loaded) {
+                guard_reg = uc->new_gp32();
 
-                uc->mov(status_or, ring3);
-            } else {
-                uc->or_(status_or, status_or, ring3);
+                uc->load_i32(guard_reg, mem(offsetof(Vu, fsset_guard)));
+
+                guard_loaded = true;
             }
-        } else if (!status_pending) {
-            status_or = uc->new_gp32();
 
-            uc->mov(status_or, Imm(0));
+            ujit::Gp contrib = uc->new_gp32();
+            ujit::Gp zero = uc->new_gp32();
+
+            uc->mov(zero, Imm(0));
+            uc->mov(contrib, ring3);
+            uc->cmov(contrib, zero, ujit::scmp_gt(guard_reg, Imm(guard_steps)));
+
+            uc->or_(status_or, status_or, contrib);
+        } else if (guard_known == 0) {
+            uc->or_(status_or, status_or, ring3);
+        }
+
+        if (decrement) {
+            if (guard_known < 0) {
+                guard_steps++;
+
+                if (guard_steps >= 4) {
+                    guard_known = 0;
+                }
+            } else if (guard_known > 0) {
+                guard_known--;
+            }
         }
 
         status_last = ring3;
@@ -475,6 +561,8 @@ struct Emitter {
         uc->store_u32(mem(offsetof(Vu, status)), st);
 
         if (consume) {
+            uc->mov(status_or, Imm(0));
+
             status_pending = false;
         }
     }
@@ -648,15 +736,13 @@ inline ujit::Vec emit_flags4(Emitter& e, const ujit::Vec& v, uint32_t field) {
 inline void emit_update_status(Emitter& e) {
     e.load_flags();
 
-    bool sticky = true;
+    e.mark_status(e.mac_ring[3], false);
+}
 
-    if (e.fsset_guard > 0) {
-        sticky = false;
+inline void emit_update_status_entry(Emitter& e) {
+    e.load_flags();
 
-        e.fsset_guard--;
-    }
-
-    e.mark_status(e.mac_ring[3], sticky);
+    e.mark_status(e.mac_ring[3], true);
 }
 
 inline void emit_epilogue(Emitter& e, const BlockEntry* entry, bool vi_shadow_live) {
@@ -745,7 +831,9 @@ inline void emit_prologue(Emitter& e, int stall) {
     uc.mov(e.q_delay_reg, Imm(0));
     uc.cmov(e.q_delay_reg, less, ujit::scmp_gt(waiting, Imm(stall)));
 
-    emit_update_status(e);
+    e.p_steps += stall + 1;
+
+    emit_update_status_entry(e);
 }
 
 inline bool emit_move(Emitter& e, const Instruction& ins) {
@@ -1520,7 +1608,9 @@ inline bool emit_status_op(Emitter& e, const Instruction& ins, uint32_t key) {
         uc.or_(st, st, Imm(ins.ld_imm12 & 0xfc0));
         uc.store_u32(e.mem(offsetof(Vu, status)), st);
 
-        e.fsset_guard = 4;
+        e.load_flags();
+
+        e.guard_known = 4;
 
         return true;
     }
@@ -1656,13 +1746,16 @@ inline bool emit_qdiv(Emitter& e, const Instruction& ins, uint32_t key) {
     uc.or_(st, st, flags.r32());
     uc.store_u32(e.mem(offsetof(Vu, status)), st);
 
+    e.load_scalars();
+
     ujit::Gp old_q = uc.new_gp32();
+    ujit::Gp kept_q = uc.new_gp32();
 
     uc.load_u32(old_q, e.mem(offsetof(Vu, q)));
+    uc.load_u32(kept_q, e.mem(offsetof(Vu, prev_q)));
+    uc.cmov(old_q, kept_q, ujit::scmp_gt(e.q_delay_reg, Imm(0)));
     uc.store_u32(e.mem(offsetof(Vu, prev_q)), old_q);
     uc.store_u32(e.mem(offsetof(Vu, q)), result.r32());
-
-    e.load_scalars();
 
     uc.mov(e.q_delay_reg, Imm(key == 0x3a ? 13 : 7));
 
@@ -1680,9 +1773,15 @@ inline bool emit_mfp(Emitter& e, const Instruction& ins) {
         return true;
     }
 
+    e.load_scalars();
+    e.settle_p();
+
     ujit::Gp p = uc.new_gp32();
+    ujit::Gp pending = uc.new_gp32();
 
     uc.load_u32(p, e.mem(offsetof(Vu, p)));
+    uc.load_u32(pending, e.mem(offsetof(Vu, prev_p)));
+    uc.cmov(p, pending, ujit::scmp_gt(e.p_delay_reg, Imm(0)));
 
     emit_broadcast_write(e, t, field, p);
 
@@ -1825,6 +1924,12 @@ inline bool emit_efu(Emitter& e, const Instruction& ins, uint32_t key) {
     ujit::UniCompiler& uc = *e.uc;
 
     if (key == 0x7b) {
+        e.load_scalars();
+
+        uc.mov(e.p_delay_reg, Imm(0));
+
+        e.p_steps = 0;
+
         return true;
     }
 
@@ -1870,7 +1975,18 @@ inline bool emit_efu(Emitter& e, const Instruction& ins, uint32_t key) {
 
     call->set_ret(0, result);
 
+    e.load_scalars();
+    e.settle_p();
+
+    ujit::Gp old_p = uc.new_gp32();
+    ujit::Gp kept_p = uc.new_gp32();
+
+    uc.load_u32(old_p, e.mem(offsetof(Vu, p)));
+    uc.load_u32(kept_p, e.mem(offsetof(Vu, prev_p)));
+    uc.cmov(old_p, kept_p, ujit::scmp_gt(e.p_delay_reg, Imm(0)));
+    uc.store_u32(e.mem(offsetof(Vu, prev_p)), old_p);
     uc.store_u32(e.mem(offsetof(Vu, p)), result);
+    uc.mov(e.p_delay_reg, Imm(efu_latency(key)));
 
     return true;
 }

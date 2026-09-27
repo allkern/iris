@@ -1264,13 +1264,50 @@ uint32_t jit_efu_vector(uint32_t key, uint32_t xb, uint32_t yb, uint32_t zb, uin
     return 0;
 }
 
+int efu_latency(uint32_t key) {
+    switch (key) {
+        case 0x70: return 11;
+        case 0x71: return 18;
+        case 0x72: return 18;
+        case 0x73: return 24;
+        case 0x74: return 54;
+        case 0x75: return 54;
+        case 0x76: return 12;
+        case 0x78: return 12;
+        case 0x79: return 18;
+        case 0x7a: return 12;
+        case 0x7c: return 29;
+        case 0x7d: return 54;
+        case 0x7e: return 44;
+    }
+
+    return 12;
+}
+
+static inline void set_p(Vu* vu, uint32_t bits, uint32_t key) {
+    if (vu->p_delay == 0) {
+        vu->prev_p = vu->p;
+    }
+
+    vu->p.u32 = bits;
+    vu->p_delay = efu_latency(key);
+}
+
+static inline Reg32 get_p(Vu* vu) {
+    if (!vu->p_delay) {
+        return vu->p;
+    }
+
+    return vu->prev_p;
+}
+
 static inline void efu_scalar(Vu* vu, uint32_t key, int s, int sf) {
-    vu->p.u32 = jit_efu_scalar(key, vu->vf[s].u32[sf]);
+    set_p(vu, jit_efu_scalar(key, vu->vf[s].u32[sf]), key);
 }
 
 static inline void efu_vector(Vu* vu, uint32_t key, int s) {
-    vu->p.u32 = jit_efu_vector(key, vu->vf[s].u32[0], vu->vf[s].u32[1],
-                                    vu->vf[s].u32[2], vu->vf[s].u32[3]);
+    set_p(vu, jit_efu_vector(key, vu->vf[s].u32[0], vu->vf[s].u32[1],
+                                  vu->vf[s].u32[2], vu->vf[s].u32[3]), key);
 }
 
 void i_eatan(Vu* vu, const Instruction* ins) {
@@ -1564,7 +1601,7 @@ void i_mfp(Vu* vu, const Instruction* ins) {
 
     template_seq<4>([&](auto i) {
         if constexpr (di & (D_X >> i)) {
-            vu->vf[t].u32[i] = vu->p.u32;
+            vu->vf[t].u32[i] = get_p(vu).u32;
         }
     });
 }
@@ -1718,7 +1755,7 @@ void i_sqrt(Vu* vu, const Instruction* ins) {
     set_q_u32(vu, (uint32_t)r, 7);
 }
 void i_waitp(Vu* vu, const Instruction* ins) {
-    // No operation
+    vu->p_delay = 0;
 }
 void i_waitq(Vu* vu, const Instruction* ins) {
     vu->q_delay = 0;
@@ -2885,6 +2922,9 @@ static inline void entry_prologue(Vu* vu, const BlockEntry& entry) {
         if (vu->q_delay)
             vu->q_delay--;
 
+        if (vu->p_delay)
+            vu->p_delay--;
+
         shift_flag_pipeline(vu);
 
         vu->vu_cycle++;
@@ -2892,6 +2932,9 @@ static inline void entry_prologue(Vu* vu, const BlockEntry& entry) {
 
     if (vu->q_delay)
         vu->q_delay--;
+
+    if (vu->p_delay)
+        vu->p_delay--;
 
     update_status(vu);
 
@@ -3003,6 +3046,9 @@ void jit_entry_stall(Vu* vu, const BlockEntry* entry) {
     for (int stall = excess; stall--; ) {
         if (vu->q_delay)
             vu->q_delay--;
+
+        if (vu->p_delay)
+            vu->p_delay--;
 
         shift_flag_pipeline(vu);
 
@@ -3377,9 +3423,11 @@ void reset_registers(Vu* vu) {
     vu->d_bit = 0;
     vu->t_bit = 0;
     vu->q_delay = 0;
+    vu->p_delay = 0;
     vu->branch_delay = 0;
     vu->delay_branch = false;
     vu->prev_q.u32 = 0;
+    vu->prev_p.u32 = 0;
 
     vu->vu_cycle = 0;
 
