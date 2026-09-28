@@ -197,7 +197,7 @@ static inline void process_source_tag(Dmac* dmac, Channel* c, uint128_t tag) {
 
         case 1: {
             c->madr = c->tadr + 16;
-            c->tadr = c->madr;
+            c->tadr = c->madr + c->qwc * 16;
         } break;
 
         case 2: {
@@ -347,13 +347,6 @@ int transfer_vif0_word(Dmac* dmac) {
         // iris_debug(dmac, "vif0 transfer done");
 
         return 0;
-    }
-
-    if (dmac->channels[VIF0].tag.id == 1) {
-        dmac->channels[VIF0].tadr = dmac->channels[VIF0].madr;
-
-        // iris_debug(dmac, "vif0 tag id=1, setting tadr to {:08x}", dmac->channels[VIF0].tadr);
-        // exit(1);
     }
 
     uint128_t tag = read_qword(dmac, dmac->channels[VIF0].tadr);
@@ -789,12 +782,6 @@ int transfer_vif1_word(Dmac* dmac) {
         return 0;
     }
 
-    if (dmac->channels[VIF1].tag.id == 1) {
-        dmac->channels[VIF1].tadr = dmac->channels[VIF1].madr;
-
-        // iris_fatal_error(dmac, "vif1 tag id=1, setting tadr to {:08x}", dmac->channels[VIF1].tadr);
-    }
-
     uint128_t tag = read_qword(dmac, dmac->channels[VIF1].tadr);
 
     process_source_tag(dmac, &dmac->channels[VIF1], tag);
@@ -934,8 +921,7 @@ static bool vif1_next_command_needs_gif(Dmac* dmac) {
         return false;
     }
 
-    uint32_t tadr = c->tag.id == 1 ? c->madr : c->tadr;
-    uint128_t tag = read_qword(dmac, tadr);
+    uint128_t tag = read_qword(dmac, c->tadr);
 
     return vif1_word_needs_gif(tag.u32[2]) || vif1_word_needs_gif(tag.u32[3]);
 }
