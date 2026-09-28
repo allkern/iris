@@ -91,8 +91,12 @@ Gif* create(logger::Logger* logger) {
     gif->logger = logger;
     gif->logger_id = logger::register_source(logger, "gif");
 
-    gif->path3_mask_enable = 0;
+    const char* mask = getenv("IRIS_PATH3_MASK");
+    const char* pace = getenv("IRIS_DMA_PACE");
+
+    gif->path3_mask_enable = (mask && mask[0] == '1') ? 1 : 0;
     gif->p3_stall_enable = 0;
+    gif->p3_refuse = gif->path3_mask_enable && pace && atoi(pace) > 0;
 
     // A queue for each PATH
     for (int i = 0; i < 3; i++)
@@ -122,6 +126,10 @@ void reset(Gif* gif) {
     gif->q = 0;
     gif->p3_left = 0;
     gif->p3_eop = 1;
+    gif->p2_left = 0;
+    gif->p2_eop = 1;
+    gif->p3_fifo_qwords = 0;
+    gif->p3_draining = 0;
 
     gif->mask_m3r = 0;
     gif->mask_m3p = 0;
@@ -200,6 +208,53 @@ int path3_stall_enabled(Gif* gif) {
     return gif->p3_stall_enable;
 }
 
+int path3_refusal(Gif* gif) {
+    return gif->p3_refuse && gif_path3_masked(gif);
+}
+
+uint32_t path3_fifo_space(Gif* gif) {
+    return 16 - gif->p3_fifo_qwords;
+}
+
+static void track_path3(Gif* gif, const uint8_t* data, uint32_t count);
+
+bool path3_fifo_holding(Gif* gif) {
+    return gif->p3_fifo_qwords != 0;
+}
+
+bool path3_packet_started(Gif* gif) {
+    return (gif->p3_left || !gif->p3_eop) && !gif->p3_fifo_qwords;
+}
+
+void path3_fifo_push(Gif* gif, const uint8_t* data, uint32_t qwords) {
+    memcpy(gif->p3_fifo + (size_t)gif->p3_fifo_qwords * 16, data, (size_t)qwords * 16);
+
+    gif->p3_fifo_qwords += qwords;
+
+    track_path3(gif, data, qwords);
+}
+
+void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path);
+
+static void drain_path3_fifo(Gif* gif) {
+    uint32_t qwords = gif->p3_fifo_qwords;
+
+    if (!qwords) {
+        return;
+    }
+
+    uint8_t data[16 * 16];
+
+    memcpy(data, gif->p3_fifo, (size_t)qwords * 16);
+
+    gif->p3_fifo_qwords = 0;
+    gif->p3_draining = 1;
+
+    fifo_write_qwords(gif, data, qwords, PATH3);
+
+    gif->p3_draining = 0;
+}
+
 static void gif_path3_lifted(Gif* gif);
 
 static void gif_flush_path3(Gif* gif) {
@@ -216,6 +271,22 @@ static void gif_flush_path3(Gif* gif) {
 }
 
 static void gif_path3_lifted(Gif* gif) {
+    if (gif->p3_refuse) {
+        if (gif->p3_resuming || !gif->hw.dmac) {
+            return;
+        }
+
+        gif->p3_resuming = 1;
+
+        drain_path3_fifo(gif);
+
+        ee::dmac::resume_gif(gif->hw.dmac);
+
+        gif->p3_resuming = 0;
+
+        return;
+    }
+
     if (!gif->p3_stall_enable) {
         gif_flush_path3(gif);
 
@@ -244,6 +315,10 @@ uint64_t read32(Gif* gif, uint32_t addr) {
             }
 
             gif->stat &= ~0x1f000000;
+
+            if (gif->p3_fifo_qwords) {
+                v = (v & ~0x1f000000) | (gif->p3_fifo_qwords << 24) | 0x40;
+            }
 
             return v;
         } break;
@@ -285,6 +360,10 @@ void write32(Gif* gif, uint32_t addr, uint64_t data) {
 
             if (gif->hw.mtvu) {
                 mtvu::push_gif_write32(gif->hw.mtvu, addr, (uint32_t)data);
+
+                if (gif->p3_refuse && prev && !gif_path3_masked(gif)) {
+                    gif_path3_lifted(gif);
+                }
 
                 return;
             }
@@ -509,7 +588,7 @@ static inline void gif_write_qword(Gif* gif, uint128_t data, int path) {
             // mask's falling edge so PATH1/PATH2 draws that sample the target
             // region see the pre-upload contents (double-buffered texture
             // streaming in OutRun2 SP, SSX On Tour, etc).
-            int deferred = path == PATH3 && gif_path3_masked(gif) && !gif->p3_stall_enable;
+            int deferred = path == PATH3 && gif_path3_masked(gif) && !gif->p3_stall_enable && !gif->p3_refuse;
 
             if (deferred) {
                 gif_defer_path3(gif, queue->buf.data(), bytes);
@@ -534,18 +613,18 @@ static inline void gif_note_fifo_activity(Gif* gif) {
     }
 }
 
-static void track_path3(Gif* gif, const uint8_t* data, uint32_t count) {
+static void track_packet(uint64_t& left, int& eop, const uint8_t* data, uint32_t count) {
     uint32_t index = 0;
 
     while (index < count) {
-        if (gif->p3_left) {
+        if (left) {
             uint64_t take = count - index;
 
-            if (take > gif->p3_left) {
-                take = gif->p3_left;
+            if (take > left) {
+                take = left;
             }
 
-            gif->p3_left -= take;
+            left -= take;
             index += (uint32_t)take;
 
             continue;
@@ -564,31 +643,51 @@ static void track_path3(Gif* gif, const uint8_t* data, uint32_t count) {
 
         switch ((tag >> 58) & 3) {
             case 0: {
-                gif->p3_left = nloop * nreg;
+                left = nloop * nreg;
             } break;
 
             case 1: {
-                gif->p3_left = (nloop * nreg + 1) / 2;
+                left = (nloop * nreg + 1) / 2;
             } break;
 
             default: {
-                gif->p3_left = nloop;
+                left = nloop;
             } break;
         }
 
-        gif->p3_eop = (int)((tag >> 15) & 1);
+        eop = (int)((tag >> 15) & 1);
 
         index++;
     }
+}
+
+static void track_path3(Gif* gif, const uint8_t* data, uint32_t count) {
+    track_packet(gif->p3_left, gif->p3_eop, data, count);
+}
+
+static void track_path2(Gif* gif, const uint8_t* data, uint32_t count) {
+    track_packet(gif->p2_left, gif->p2_eop, data, count);
 }
 
 bool path3_packet_open(Gif* gif) {
     return gif->p3_left || !gif->p3_eop;
 }
 
+bool path2_packet_open(Gif* gif) {
+    return gif->p2_left || !gif->p2_eop;
+}
+
+uint64_t path3_packet_qwords(Gif* gif) {
+    return gif->p3_left;
+}
+
 void fifo_write(Gif* gif, uint128_t data, int path) {
     if (path == PATH3) {
         track_path3(gif, (const uint8_t*)&data, 1);
+    }
+
+    if (path == PATH2) {
+        track_path2(gif, (const uint8_t*)&data, 1);
     }
 
     if (gif->hw.mtvu) {
@@ -609,8 +708,12 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
 }
 
 void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) {
-    if (path == PATH3) {
+    if (path == PATH3 && !gif->p3_draining) {
         track_path3(gif, data, count);
+    }
+
+    if (path == PATH2) {
+        track_path2(gif, data, count);
     }
 
     if (gif->hw.mtvu) {
@@ -681,7 +784,7 @@ static void scan_apply_events(Gif* gif) {
 
     gif->scan.events = 0;
 
-    if (gif->scan.path == PATH3 && gif_path3_masked(gif)) {
+    if (gif->scan.path == PATH3 && gif_path3_masked(gif) && !gif->p3_refuse) {
         return;
     }
 
@@ -798,6 +901,10 @@ void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords)
         return;
     }
 
+    if (path == PATH2) {
+        track_path2(gif, data, qwords);
+    }
+
     for (uint32_t index = 0; index < qwords; index++) {
         uint128_t qword;
 
@@ -862,7 +969,7 @@ void set_path3_mask(Gif* gif, int mask) {
         gif->stat &= ~2;
     }
 
-    if (gif->hw.mtvu) {
+    if (gif->hw.mtvu && !gif->p3_refuse) {
         return;
     }
 

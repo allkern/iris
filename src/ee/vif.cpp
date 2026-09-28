@@ -1246,6 +1246,10 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
         case 0x10003c10: {
             reset_command_state(vif, data);
 
+            if (data & 1) {
+                gif::set_path3_mask(vif->hw.gif, 0);
+            }
+
             if (vif->role == VIF_ROLE_FRONT) {
                 mtvu::push_vif_fbrst(vif->hw.mtvu, (uint32_t)data);
             }

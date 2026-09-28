@@ -101,6 +101,10 @@ struct Gif {
 
     int p3_stall_enable;
     int p3_resuming;
+    int p3_refuse;
+    uint8_t p3_fifo[16 * 16];
+    uint32_t p3_fifo_qwords;
+    int p3_draining;
 
     uint8_t* p3_defer_buf;
     size_t p3_defer_size;
@@ -117,6 +121,8 @@ struct Gif {
 
     uint64_t p3_left;
     int p3_eop;
+    uint64_t p2_left;
+    int p2_eop;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -143,5 +149,12 @@ int get_path3_mask(Gif* gif);
 int can_accept(Gif* gif, int path);
 int path3_stall_enabled(Gif* gif);
 bool path3_packet_open(Gif* gif);
+bool path2_packet_open(Gif* gif);
+uint64_t path3_packet_qwords(Gif* gif);
+int path3_refusal(Gif* gif);
+uint32_t path3_fifo_space(Gif* gif);
+bool path3_fifo_holding(Gif* gif);
+bool path3_packet_started(Gif* gif);
+void path3_fifo_push(Gif* gif, const uint8_t* data, uint32_t qwords);
 
 }

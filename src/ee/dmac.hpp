@@ -89,10 +89,12 @@ struct Dmac {
     Channel channels[10];
 
     bool vif1_pace_pending = false;
+    bool vif1_flusha_wait = false;
     int64_t vif1_budget = 0;
     int64_t vif1_credit_time = 0;
 
     bool gif_pace_pending = false;
+    bool gif_unmask_run = false;
     int64_t gif_budget = 0;
     int64_t gif_credit_time = 0;
 
