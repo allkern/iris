@@ -1191,6 +1191,16 @@ uint64_t read32(Vif* vif, uint32_t addr) {
         // VIF1 registers
         case 0x10003c00: {
             uint32_t stat = vif->stat; vif->stat = 0;
+
+            if (vif->fdr) {
+                uint32_t fqc = gif::download_remaining(vif->hw.gif);
+
+                if (fqc > 16) {
+                    fqc = 16;
+                }
+
+                stat |= STAT_FDR | (fqc << 24);
+            }
             
             return stat; 
         } break;
@@ -1242,7 +1252,17 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
 
         // VIF1 registers
         // Only FDR is writable, the rest of the status is owned by the VIF
-        case 0x10003c00: vif->stat = (vif->stat & ~STAT_FDR) | (data & STAT_FDR); break;
+        case 0x10003c00: {
+            int fdr = (data & STAT_FDR) != 0;
+
+            vif->stat = (vif->stat & ~STAT_FDR) | (data & STAT_FDR);
+
+            if (vif->fdr && !fdr && vif->hw.dmac) {
+                ee::dmac::vif1_read_abort(vif->hw.dmac);
+            }
+
+            vif->fdr = fdr;
+        } break;
         case 0x10003c10: {
             reset_command_state(vif, data);
 
@@ -1277,7 +1297,13 @@ uint128_t read128(Vif* vif, uint32_t addr) {
     if (!vif_is_fifo(addr))
         iris_fatal_error(vif, "vif{}: Unhandled 128-bit read to {:08x}", vif->id, addr);
 
-    return uint128_t{};
+    uint128_t data = {};
+
+    if (vif->id == 1 && vif->fdr) {
+        gif::read_download(vif->hw.gif, &data, 1);
+    }
+
+    return data;
 }
 
 void write128(Vif* vif, uint32_t addr, uint128_t data) {

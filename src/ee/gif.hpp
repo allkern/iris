@@ -106,6 +106,11 @@ struct Gif {
     uint32_t p3_fifo_qwords;
     int p3_draining;
 
+    uint64_t trx_bitbltbuf;
+    uint64_t trx_trxreg;
+    uint32_t download_qwords;
+    int download_notify;
+
     uint8_t* p3_defer_buf;
     size_t p3_defer_size;
     size_t p3_defer_cap;
@@ -153,6 +158,8 @@ bool path2_packet_open(Gif* gif);
 uint64_t path3_packet_qwords(Gif* gif);
 int path3_refusal(Gif* gif);
 uint32_t path3_fifo_space(Gif* gif);
+uint32_t download_remaining(Gif* gif);
+uint32_t read_download(Gif* gif, void* dst, uint32_t qwords);
 bool path3_fifo_holding(Gif* gif);
 bool path3_packet_started(Gif* gif);
 void path3_fifo_push(Gif* gif, const uint8_t* data, uint32_t qwords);

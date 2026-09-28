@@ -290,9 +290,10 @@ static inline void test_irq(Dmac* dmac) {
     test_cpcond0(dmac);
 
     int meis = ((dmac->stat >> 14) & 1) & ((dmac->stat >> 30) & 1);
+    int beis = (dmac->stat >> 15) & 1;
     int chirq = (dmac->stat & 0x3ff) & ((dmac->stat >> 16) & 0x3ff);
 
-    ee::set_int1(dmac->hw.ee, chirq || meis);
+    ee::set_int1(dmac->hw.ee, chirq || meis || beis);
 }
 
 static inline void set_irq(Dmac* dmac, int ch) {
@@ -548,63 +549,139 @@ void mfifo_write_qword(Dmac* dmac, uint128_t q) {
     }
 }
 
-void send_vif1_read_irq(void* udata, int overshoot) {
+static inline bool vif1_reading(Dmac* dmac) {
+    Channel* c = &dmac->channels[VIF1];
+
+    return (c->chcr & 0x100) && (c->chcr & 1) == 0;
+}
+
+static void finish_vif1_read(void* udata, int overshoot) {
     Dmac* dmac = (Dmac*)udata;
+
+    dmac->vif1_read_pending = false;
+
+    if (!vif1_reading(dmac)) {
+        return;
+    }
+
+    end_transfer(dmac, VIF1);
+}
+
+enum DmaTarget {
+    TARGET_RAM,
+    TARGET_SPR,
+    TARGET_SINK,
+    TARGET_ERROR
+};
+
+static DmaTarget dma_write_target(Dmac* dmac, uint32_t addr) {
+    if (addr & 0x80000000) {
+        return TARGET_SPR;
+    }
+
+    uint32_t phys = addr & 0x1ffffff0;
+
+    if (phys < dmac->hw.bus->ee_ram->size) {
+        return TARGET_RAM;
+    }
+
+    if (phys < 0x10000000) {
+        return TARGET_SINK;
+    }
+
+    if (phys < 0x10004000) {
+        return TARGET_SPR;
+    }
+
+    return TARGET_ERROR;
+}
+
+static void dma_write_qword(Dmac* dmac, uint32_t addr, uint128_t value) {
+    switch (dma_write_target(dmac, addr)) {
+        case TARGET_RAM: {
+            write_qword(dmac, addr & 0x1ffffff0, 0, value);
+        } break;
+
+        case TARGET_SPR: {
+            write_qword(dmac, addr & 0x3ff0, 1, value);
+        } break;
+
+        default: {
+        } break;
+    }
+}
+
+static void pump_vif1_read(Dmac* dmac) {
+    Channel* c = &dmac->channels[VIF1];
+    gif::Gif* gif = dmac->hw.bus->gif;
+
+    if (!vif1_reading(dmac) || !c->qwc || dmac->vif1_read_pending) {
+        return;
+    }
+
+    if (dma_write_target(dmac, c->madr) == TARGET_ERROR) {
+        dmac->stat |= 1 << 15;
+        c->qwc = 0;
+
+        end_transfer(dmac, VIF1);
+
+        return;
+    }
+
+    uint32_t size = gif::download_remaining(gif);
+
+    if (size > c->qwc) {
+        size = c->qwc;
+    }
+
+    uint32_t left = size;
+
+    while (left) {
+        uint128_t chunk[64];
+
+        uint32_t count = left < 64 ? left : 64;
+
+        gif::read_download(gif, chunk, count);
+
+        for (uint32_t index = 0; index < count; index++) {
+            dma_write_qword(dmac, c->madr, chunk[index]);
+
+            c->madr += 16;
+        }
+
+        left -= count;
+    }
+
+    c->qwc -= size;
+
+    scheduler::Event event;
+
+    event.name = "vif1_read_end";
+    event.callback = finish_vif1_read;
+    event.cycles = size ? (int64_t)size * 2 : 4;
+    event.udata = dmac;
+
+    dmac->vif1_read_pending = true;
+
+    scheduler::schedule(dmac->hw.sched, event);
+}
+
+void vif1_download_ready(Dmac* dmac) {
+    pump_vif1_read(dmac);
+}
+
+void vif1_read_abort(Dmac* dmac) {
+    if (!vif1_reading(dmac) || dmac->vif1_read_pending) {
+        return;
+    }
+
+    dmac->channels[VIF1].qwc = 0;
 
     end_transfer(dmac, VIF1);
 }
 
 void handle_vif1_read_transfer(Dmac* dmac) {
-    // Gran Turismo 3 sends a VIF1 read with QWC=0, presumably to
-    // wait until the GIF FIFO is actually full, so we shouldn't send
-    // an interrupt there.
-    if (dmac->channels[VIF1].qwc == 0)
-        return;
-
-    iris_debug(dmac, "Handling VIF1 read transfer with QWC={} MADR={:08x}", dmac->channels[VIF1].qwc, dmac->channels[VIF1].madr);
-
-    // uint32_t qwc = dmac->channels[VIF1].qwc;
-
-    // dmac->channels[VIF1].chcr &= ~0x100;
-    // dmac->channels[VIF1].madr += dmac->channels[VIF1].qwc * 16;
-    // dmac->channels[VIF1].qwc = 0;
-
-    // Note: Huge Gran Turismo 4 hack, it sends a VIF1 read transfer and crashes if an interrupt is sent!
-    //       Works for Gran Turismo 4, Armored Core 2/3 and Ibara.
-    if (dmac->channels[VIF1].qwc == 32773) {
-        dmac->channels[VIF1].chcr &= ~0x100;
-        dmac->channels[VIF1].madr += dmac->channels[VIF1].qwc * 16;
-        dmac->channels[VIF1].qwc = 0;
-
-        return;
-    }
-
-    // if (qwc >= 0x4000 && qwc < 0xe000)
-    //     return;
-
-    // Trash GS readback implementation, whatever...
-    // uint128_t* buf = (uint128_t*)malloc(qwc * 16);
-
-    // dmac->hw.gif->readback(dmac->hw.gif, buf, qwc * 16);
-
-    // for (int i = 0; i < qwc; i++) {
-    //     uint128_t q = { 0 };
-
-    //     write_qword(dmac, dmac->channels[VIF1].madr, 0, q);
-
-    //     dmac->channels[VIF1].madr += 16;
-    // }
-
-    scheduler::Event event;
-
-    event.name = "vif1_read_transfer_end";
-    event.callback = send_vif1_read_irq;
-    event.cycles = dmac->channels[VIF1].qwc * 2;
-    event.udata = dmac;
-
-    scheduler::schedule(dmac->hw.sched, event);
-
-    end_transfer(dmac, VIF1);
+    pump_vif1_read(dmac);
 }
 
 static inline const uint8_t* dma_source_span(Dmac* dmac, uint32_t addr, uint32_t qwords) {
@@ -854,6 +931,12 @@ static void resume_vif1_transfer(void* udata, int overshoot) {
         return;
     }
 
+    if ((dmac->channels[VIF1].chcr & 1) == 0) {
+        handle_vif1_read_transfer(dmac);
+
+        return;
+    }
+
     run_vif1_transfer(dmac);
 }
 
@@ -1029,6 +1112,12 @@ static void run_vif1_transfer(Dmac* dmac) {
 void handle_vif1_transfer(Dmac* dmac) {
     if ((dmac->channels[VIF1].chcr & 0x100) == 0)
         return;
+
+    if ((dmac->channels[VIF1].chcr & 1) == 0) {
+        handle_vif1_read_transfer(dmac);
+
+        return;
+    }
 
     if (dmac->vif1_pace_pending) {
         return;

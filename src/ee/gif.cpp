@@ -75,9 +75,144 @@ static inline const char* gif_get_reg_name(uint8_t r) {
     return "<unknown>";
 }
 
+static void note_gs_register(Gif* gif, uint64_t reg, uint64_t data) {
+    switch (reg) {
+        case 0x50: {
+            gif->trx_bitbltbuf = data;
+        } break;
+
+        case 0x52: {
+            gif->trx_trxreg = data;
+        } break;
+
+        case 0x53: {
+            if ((data & 3) != 1) {
+                break;
+            }
+
+            uint64_t bpp = 32;
+
+            switch ((gif->trx_bitbltbuf >> 24) & 7) {
+                case 1: {
+                    bpp = 24;
+                } break;
+
+                case 2: {
+                    bpp = 16;
+                } break;
+
+                case 3: {
+                    bpp = 8;
+                } break;
+            }
+
+            uint64_t rrw = gif->trx_trxreg & 0xfff;
+            uint64_t rrh = (gif->trx_trxreg >> 32) & 0xfff;
+
+            gif->download_qwords = (uint32_t)((rrw * rrh * bpp) >> 7);
+            gif->download_notify = 1;
+        } break;
+    }
+}
+
+static bool scan_tag_has_ad(uint64_t regs, int nregs);
+
+static void track_transfer_registers(Gif* gif, const void* data, size_t size) {
+    size_t qwords = size / 16;
+
+    if (!qwords) {
+        return;
+    }
+
+    const uint8_t* bytes = (const uint8_t*)data;
+
+    uint64_t tag[2];
+
+    memcpy(tag, bytes, sizeof(tag));
+
+    if ((tag[0] >> 58) & 3) {
+        return;
+    }
+
+    int nregs = (int)((tag[0] >> 60) & 0xf);
+
+    if (!nregs) {
+        nregs = 16;
+    }
+
+    if (!scan_tag_has_ad(tag[1], nregs)) {
+        return;
+    }
+
+    uint64_t nloop = tag[0] & 0x7fff;
+    size_t index = 1;
+
+    for (uint64_t loop = 0; loop < nloop; loop++) {
+        for (int reg = 0; reg < nregs; reg++) {
+            if (index >= qwords) {
+                return;
+            }
+
+            if (((tag[1] >> (reg * 4)) & 0xf) == 0xe) {
+                uint64_t qword[2];
+
+                memcpy(qword, bytes + index * 16, sizeof(qword));
+
+                note_gs_register(gif, qword[1] & 0xff, qword[0]);
+            }
+
+            index++;
+        }
+    }
+}
+
+static void notify_download(Gif* gif) {
+    if (!gif->download_notify) {
+        return;
+    }
+
+    gif->download_notify = 0;
+
+    if (gif->hw.dmac) {
+        ee::dmac::vif1_download_ready(gif->hw.dmac);
+    }
+}
+
+uint32_t download_remaining(Gif* gif) {
+    return gif->download_qwords;
+}
+
+uint32_t read_download(Gif* gif, void* dst, uint32_t qwords) {
+    if (qwords > gif->download_qwords) {
+        qwords = gif->download_qwords;
+    }
+
+    if (!qwords) {
+        return 0;
+    }
+
+    if (gif->hw.mtvu) {
+        mtvu::sync(gif->hw.mtvu, mtvu::SYNC_OTHER);
+    }
+
+    if (gif->readback) {
+        gif->readback(gif->udata, dst, (size_t)qwords * 16);
+    } else {
+        memset(dst, 0, (size_t)qwords * 16);
+    }
+
+    gif->download_qwords -= qwords;
+
+    return qwords;
+}
+
 static inline void gif_send_transfer(Gif* gif, int path, const void* data, size_t size) {
     if (gif->transfer) {
         gif->transfer(gif->udata, path, data, size);
+    }
+
+    if (gif->hw.dmac) {
+        track_transfer_registers(gif, data, size);
     }
 
     if (gif->dump_transfer) {
@@ -130,6 +265,10 @@ void reset(Gif* gif) {
     gif->p2_eop = 1;
     gif->p3_fifo_qwords = 0;
     gif->p3_draining = 0;
+    gif->trx_bitbltbuf = 0;
+    gif->trx_trxreg = 0;
+    gif->download_qwords = 0;
+    gif->download_notify = 0;
 
     gif->mask_m3r = 0;
     gif->mask_m3p = 0;
@@ -697,6 +836,8 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
 
         mtvu::push_gif_qwords(gif->hw.mtvu, path, (const uint8_t*)&data, 1);
 
+        notify_download(gif);
+
         return;
     }
 
@@ -705,6 +846,8 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
     gif_note_fifo_activity(gif);
 
     gif_write_qword(gif, data, path);
+
+    notify_download(gif);
 }
 
 void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) {
@@ -722,6 +865,8 @@ void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) 
         scan_front_qwords(gif, path, data, count);
 
         mtvu::push_gif_qwords(gif->hw.mtvu, path, data, count);
+
+        notify_download(gif);
 
         return;
     }
@@ -762,6 +907,8 @@ void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) 
 
         index++;
     }
+
+    notify_download(gif);
 }
 
 void set_backend(Gif* gif, void* udata, void (*transfer)(void*, int, const void*, size_t), void (*readback)(void*, void*, size_t)) {
@@ -842,6 +989,10 @@ static void scan_packed_qword(Gif* gif, const uint128_t& qword) {
 
         case GIF_REG_LABEL: {
             scan_record_event(gif, gs::SIGNAL_EVENT_LABEL, qword.u64[0]);
+        } break;
+
+        default: {
+            note_gs_register(gif, qword.u64[1] & 0xff, qword.u64[0]);
         } break;
     }
 }

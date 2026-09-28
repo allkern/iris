@@ -81,6 +81,7 @@ struct Vif {
     } hw;
 
     uint32_t stat;
+    int fdr = 0;
     uint32_t fbrst;
     uint32_t err;
     uint32_t mark;
