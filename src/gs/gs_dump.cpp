@@ -28,6 +28,8 @@ enum {
     PACKET_PRIVREGISTERS = 3
 };
 
+inline constexpr uint8_t TRANSFER_PATH1 = 3;
+
 struct Header {
     uint32_t version;
     uint32_t state_size;
@@ -225,7 +227,7 @@ void transfer(Dump* dump, int path, const void* data, size_t size) {
         return;
 
     write_u8(dump, PACKET_TRANSFER);
-    write_u8(dump, (uint8_t)path);
+    write_u8(dump, path == 0 ? TRANSFER_PATH1 : (uint8_t)path);
     write_u32(dump, (uint32_t)size);
     write_data(dump, data, size);
 }
