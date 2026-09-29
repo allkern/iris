@@ -993,6 +993,19 @@ static uint32_t peek_vif1_word(Dmac* dmac) {
     return c->qword.u32[(c->madr >> 2) & 3];
 }
 
+static bool vif1_word_slices_path3(uint32_t word) {
+    switch ((word >> 24) & 0x7f) {
+        case 0x14:
+        case 0x15:
+        case 0x17:
+        case 0x50: {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 static bool vif1_word_is_flusha(uint32_t word) {
     return ((word >> 24) & 0x7f) == 0x13;
 }
@@ -1059,9 +1072,13 @@ static bool vif1_must_wait(Dmac* dmac) {
     }
 
     if (gif::path3_packet_started(dmac->hw.bus->gif) && vif1_next_command_matches(dmac, vif1_word_needs_gif)) {
-        schedule_vif1_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
+        bool slice = gif::path3_image_slice(dmac->hw.bus->gif) && vif1_next_command_matches(dmac, vif1_word_slices_path3);
 
-        return true;
+        if (!slice) {
+            schedule_vif1_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
+
+            return true;
+        }
     }
 
     if (vif1_next_command_matches(dmac, vif1_word_is_flusha) && path3_busy(dmac)) {
@@ -1386,11 +1403,13 @@ static bool gif_must_wait(Dmac* dmac) {
         return true;
     }
 
-    if (gif::path3_packet_open(dmac->hw.bus->gif)) {
+    gif::Gif* gif = dmac->hw.bus->gif;
+
+    if (gif::path3_packet_open(gif) && !gif::path3_image_slice(gif)) {
         return false;
     }
 
-    if (gif::path2_packet_open(dmac->hw.bus->gif)) {
+    if (gif::path2_packet_open(gif)) {
         schedule_gif_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
 
         return true;
@@ -1452,7 +1471,9 @@ static void step_gif_transfer(Dmac* dmac) {
     Channel* c = &dmac->channels[GIF];
     gif::Gif* gif = dmac->hw.bus->gif;
 
-    if (dma_pace() && c->qwc && !gif::path3_packet_open(gif) && gif::path2_packet_open(gif)) {
+    bool path3_yields = !gif::path3_packet_open(gif) || gif::path3_image_slice(gif);
+
+    if (dma_pace() && c->qwc && path3_yields && gif::path2_packet_open(gif)) {
         schedule_gif_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
 
         return;

@@ -126,8 +126,10 @@ struct Gif {
 
     uint64_t p3_left;
     int p3_eop;
+    int p3_fmt;
     uint64_t p2_left;
     int p2_eop;
+    int p2_fmt;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -156,6 +158,7 @@ int path3_stall_enabled(Gif* gif);
 bool path3_packet_open(Gif* gif);
 bool path2_packet_open(Gif* gif);
 uint64_t path3_packet_qwords(Gif* gif);
+bool path3_image_slice(Gif* gif);
 int path3_refusal(Gif* gif);
 uint32_t path3_fifo_space(Gif* gif);
 uint32_t download_remaining(Gif* gif);

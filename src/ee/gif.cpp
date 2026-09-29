@@ -261,8 +261,10 @@ void reset(Gif* gif) {
     gif->q = 0;
     gif->p3_left = 0;
     gif->p3_eop = 1;
+    gif->p3_fmt = 0;
     gif->p2_left = 0;
     gif->p2_eop = 1;
+    gif->p2_fmt = 0;
     gif->p3_fifo_qwords = 0;
     gif->p3_draining = 0;
     gif->trx_bitbltbuf = 0;
@@ -752,7 +754,7 @@ static inline void gif_note_fifo_activity(Gif* gif) {
     }
 }
 
-static void track_packet(uint64_t& left, int& eop, const uint8_t* data, uint32_t count) {
+static void track_packet(uint64_t& left, int& eop, int& fmt, const uint8_t* data, uint32_t count) {
     uint32_t index = 0;
 
     while (index < count) {
@@ -780,7 +782,9 @@ static void track_packet(uint64_t& left, int& eop, const uint8_t* data, uint32_t
             nreg = 16;
         }
 
-        switch ((tag >> 58) & 3) {
+        fmt = (int)((tag >> 58) & 3);
+
+        switch (fmt) {
             case 0: {
                 left = nloop * nreg;
             } break;
@@ -801,11 +805,11 @@ static void track_packet(uint64_t& left, int& eop, const uint8_t* data, uint32_t
 }
 
 static void track_path3(Gif* gif, const uint8_t* data, uint32_t count) {
-    track_packet(gif->p3_left, gif->p3_eop, data, count);
+    track_packet(gif->p3_left, gif->p3_eop, gif->p3_fmt, data, count);
 }
 
 static void track_path2(Gif* gif, const uint8_t* data, uint32_t count) {
-    track_packet(gif->p2_left, gif->p2_eop, data, count);
+    track_packet(gif->p2_left, gif->p2_eop, gif->p2_fmt, data, count);
 }
 
 bool path3_packet_open(Gif* gif) {
@@ -818,6 +822,18 @@ bool path2_packet_open(Gif* gif) {
 
 uint64_t path3_packet_qwords(Gif* gif) {
     return gif->p3_left;
+}
+
+bool path3_image_slice(Gif* gif) {
+    if (!gif->p3_refuse || (gif->mode & 4) == 0) {
+        return false;
+    }
+
+    if (gif->p3_left || gif->p3_eop || gif->p3_fifo_qwords) {
+        return false;
+    }
+
+    return gif->p3_fmt >= 2;
 }
 
 void fifo_write(Gif* gif, uint128_t data, int path) {
