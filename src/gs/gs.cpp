@@ -217,13 +217,38 @@ void set_ee_clock(Gs* gs, int hz) {
     update_timings(gs);
 }
 
-void set_video_mode(Gs* gs, int mode) {
+static void update_video_mode(Gs* gs) {
+    int mode = gs->forced_video_mode;
+
+    if (mode == VIDEO_MODE_AUTO)
+        mode = gs->detected_video_mode;
+
     if (gs->video_mode == mode)
         return;
 
     gs->video_mode = mode;
 
     update_timings(gs);
+}
+
+static void set_detected_video_mode(Gs* gs, int mode) {
+    gs->detected_video_mode = mode;
+
+    update_video_mode(gs);
+}
+
+void set_forced_video_mode(Gs* gs, int mode) {
+    gs->forced_video_mode = mode;
+
+    update_video_mode(gs);
+}
+
+int get_video_mode(const Gs* gs) {
+    return gs->video_mode;
+}
+
+int get_detected_video_mode(const Gs* gs) {
+    return gs->detected_video_mode;
 }
 
 void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd) {
@@ -235,7 +260,7 @@ void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd) {
         case 0x72: {
             iris_info(gs, "SetGsCrt NTSC {} {}", interlaced ? "interlaced" : "progressive", ffmd ? "frame" : "field");
 
-            set_video_mode(gs, VIDEO_MODE_NTSC);
+            set_detected_video_mode(gs, VIDEO_MODE_NTSC);
         } break;
 
         // PAL, DVD PAL
@@ -243,14 +268,14 @@ void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd) {
         case 0x82: {
             iris_info(gs, "SetGsCrt PAL {} {}", interlaced ? "interlaced" : "progressive", ffmd ? "frame" : "field");
 
-            set_video_mode(gs, VIDEO_MODE_PAL);
+            set_detected_video_mode(gs, VIDEO_MODE_PAL);
         } break;
 
         // To-do: VESA/SDTV/HDTV timings, using NTSC for now
         default: {
             iris_info(gs, "SetGsCrt Unhandled mode {:02x}, using NTSC timings", mode);
 
-            set_video_mode(gs, VIDEO_MODE_NTSC);
+            set_detected_video_mode(gs, VIDEO_MODE_NTSC);
         } break;
     }
 }
@@ -299,7 +324,8 @@ void soft_reset(Gs* gs) {
 void reset(Gs* gs) {
     soft_reset(gs);
 
-    gs->video_mode = VIDEO_MODE_NTSC;
+    gs->detected_video_mode = VIDEO_MODE_NTSC;
+    gs->video_mode = gs->forced_video_mode == VIDEO_MODE_AUTO ? VIDEO_MODE_NTSC : gs->forced_video_mode;
 
     update_timings(gs);
 

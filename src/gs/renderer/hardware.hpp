@@ -109,6 +109,8 @@ struct state {
     AnalogVideoFilter analog_video_filter;
     CRTFilter crt_filter;
 
+    int analog_system = -1;
+
     gs::Gs* gs;
     gif::Gif* gif;
 };

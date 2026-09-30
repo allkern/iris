@@ -368,6 +368,7 @@ struct Instance {
     int window_mode = 0;
     bool skip_fmv = false;
     int system = ps2::AUTO;
+    int video_mode = gs::VIDEO_MODE_AUTO;
     bool enable_shaders = false;
     bool autostart = true;
     bool cache_arcade_files = false;

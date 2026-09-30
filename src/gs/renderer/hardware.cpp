@@ -20,6 +20,26 @@ void* create() {
     return new state();
 }
 
+static int get_analog_system(state* ctx) {
+    if (ctx->config.analog_system == gs::VIDEO_MODE_AUTO) {
+        return gs::get_video_mode(ctx->gs);
+    }
+
+    return ctx->config.analog_system;
+}
+
+static void init_analog_video(state* ctx) {
+    AnalogVideoFilter::Options analog_video_filter_opts;
+
+    ctx->analog_system = get_analog_system(ctx);
+
+    analog_video_filter_opts.cable = static_cast<ParallelGS::AnalogVideoFilter::Cable>(ctx->config.analog_cable);
+    analog_video_filter_opts.system = static_cast<ParallelGS::AnalogVideoFilter::System>(ctx->analog_system);
+
+    ctx->analog_video_filter.init(ctx->granite_device, analog_video_filter_opts);
+    ctx->crt_filter.init(ctx->granite_device);
+}
+
 bool init(void* udata, const CreateInfo& info) {
     state* ctx = static_cast<state*>(udata);
 
@@ -94,13 +114,7 @@ bool init(void* udata, const CreateInfo& info) {
     }
 
     if (ctx->config.enable_analog_video) {
-        AnalogVideoFilter::Options analog_video_filter_opts;
-
-        analog_video_filter_opts.cable = static_cast<ParallelGS::AnalogVideoFilter::Cable>(ctx->config.analog_cable);
-        analog_video_filter_opts.system = static_cast<ParallelGS::AnalogVideoFilter::System>(ctx->config.analog_system);
-
-        ctx->analog_video_filter.init(ctx->granite_device, analog_video_filter_opts);
-        ctx->crt_filter.init(ctx->granite_device);
+        init_analog_video(ctx);
     }
 
     return true;
@@ -216,6 +230,10 @@ Image get_frame(void* udata) {
     image.view = granite_image->get_view().get_view().view;
 
     if (ctx->config.enable_analog_video) {
+        if (ctx->analog_system != get_analog_system(ctx)) {
+            init_analog_video(ctx);
+        }
+
         auto cmd = ctx->granite_device.request_command_buffer();
 
         AnalogVideoFilter::FilterOptions filter_options = {};
@@ -297,13 +315,7 @@ void set_config(void* udata, void* config) {
     }
 
     if (ctx->config.enable_analog_video) {
-        AnalogVideoFilter::Options analog_video_filter_opts;
-
-        analog_video_filter_opts.cable = static_cast<ParallelGS::AnalogVideoFilter::Cable>(ctx->config.analog_cable);
-        analog_video_filter_opts.system = static_cast<ParallelGS::AnalogVideoFilter::System>(ctx->config.analog_system);
-
-        ctx->analog_video_filter.init(ctx->granite_device, analog_video_filter_opts);
-        ctx->crt_filter.init(ctx->granite_device);
+        init_analog_video(ctx);
     }
 }
 

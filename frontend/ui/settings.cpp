@@ -435,6 +435,45 @@ void show_system_settings(Instance* iris) {
         EndTable();
     }
 
+    Text("\nVideo mode");
+
+    static const char* video_mode_names[] = {
+        "NTSC",
+        "PAL",
+        "Auto"
+    };
+
+    static const int video_mode_order[] = {
+        gs::VIDEO_MODE_AUTO,
+        gs::VIDEO_MODE_NTSC,
+        gs::VIDEO_MODE_PAL
+    };
+
+    if (BeginCombo("##videomode", video_mode_names[iris->video_mode])) {
+        for (int mode : video_mode_order) {
+            if (imgui::Selectable(video_mode_names[mode], iris->video_mode == mode)) {
+                iris->video_mode = mode;
+
+                gs::set_forced_video_mode(iris->ps2->gs, mode);
+            }
+        }
+
+        EndCombo();
+    }
+
+    if (iris->video_mode == gs::VIDEO_MODE_AUTO) {
+        if (BeginTable("##mode-table", 2, ImGuiTableFlags_SizingFixedSame)) {
+            TableNextRow();
+
+            TableSetColumnIndex(0);
+            TextDisabled("Detected mode");
+            TableSetColumnIndex(1);
+            Text("%s", video_mode_names[gs::get_video_mode(iris->ps2->gs)]);
+
+            EndTable();
+        }
+    }
+
     Text("\nTimescale");
 
     char buf[16];
@@ -754,11 +793,18 @@ void show_hardware_renderer_settings(Instance* iris) {
 
     static const char* video_standard_names[] = {
         "NTSC",
-        "PAL"
+        "PAL",
+        "Auto"
+    };
+
+    static const int video_standard_order[] = {
+        gs::VIDEO_MODE_AUTO,
+        gs::VIDEO_MODE_NTSC,
+        gs::VIDEO_MODE_PAL
     };
 
     if (BeginCombo("##videostandard", video_standard_names[iris->hardware_backend_config.analog_system])) {
-        for (int i = 0; i < IM_ARRAYSIZE(video_standard_names); i++) {
+        for (int i : video_standard_order) {
             if (imgui::Selectable(video_standard_names[i], iris->hardware_backend_config.analog_system == i)) {
                 iris->hardware_backend_config.analog_system = i;
                 render::refresh(iris);

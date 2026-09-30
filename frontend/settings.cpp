@@ -221,6 +221,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->system_2x6_video_sync = system["system_2x6_video_sync"].value_or(false);
     iris->enable_magicgate = system["enable_magicgate"].value_or(true);
     iris->p2io_input_type = system["p2io_input_type"].value_or(kp2::p2io::INPUT_THRILL_DRIVE);
+    iris->video_mode = system["video_mode"].value_or((int)gs::VIDEO_MODE_AUTO);
 
     toml::array* mac_array = system["mac_address"].as_array();
 
@@ -264,7 +265,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->hardware_backend_config.allow_blend_demote = hardware["allow_blend_demote"].value_or(false);
     iris->hardware_backend_config.enable_analog_video = hardware["enable_analog_video"].value_or(false);
     iris->hardware_backend_config.analog_cable = hardware["analog_cable"].value_or(0);
-    iris->hardware_backend_config.analog_system = hardware["analog_system"].value_or(0);
+    iris->hardware_backend_config.analog_system = hardware["analog_system"].value_or((int)gs::VIDEO_MODE_AUTO);
     iris->hardware_backend_config.line_comb = hardware["line_comb"].value_or(false);
     iris->hardware_backend_config.skip_notch = hardware["skip_notch"].value_or(false);
     iris->hardware_backend_config.invert_fields = hardware["invert_fields"].value_or(false);
@@ -462,6 +463,7 @@ bool init(Instance* iris) {
         save(iris);
 
     ps2::set_system(iris->ps2, iris->system);
+    gs::set_forced_video_mode(iris->ps2->gs, iris->video_mode);
 
     if (!emu::load_rom_files(iris))
         iris->applets.bios_setting.show();
@@ -550,7 +552,8 @@ void save(Instance* iris) {
             { "system_2x6_monitor_frequency", iris->system_2x6_monitor_frequency },
             { "system_2x6_video_sync", iris->system_2x6_video_sync },
             { "enable_magicgate", iris->enable_magicgate },
-            { "p2io_input_type", iris->p2io_input_type }
+            { "p2io_input_type", iris->p2io_input_type },
+            { "video_mode", iris->video_mode }
         } },
         { "network", toml::table {
             { "enabled", iris->slirp_config.enabled },

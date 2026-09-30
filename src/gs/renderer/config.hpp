@@ -17,7 +17,7 @@ struct HardwareConfig {
     // Analog video
     bool enable_analog_video = false;
     int analog_cable = 0;
-    int analog_system = 0;
+    int analog_system = 2;
     bool line_comb = false;
     bool skip_notch = false;
 };

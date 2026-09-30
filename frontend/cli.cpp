@@ -150,8 +150,16 @@ static const EnumValue cable_values[] = {
 };
 
 static const EnumValue analog_system_values[] = {
-    { "ntsc", 0 },
-    { "pal", 1 },
+    { "auto", gs::VIDEO_MODE_AUTO },
+    { "ntsc", gs::VIDEO_MODE_NTSC },
+    { "pal", gs::VIDEO_MODE_PAL },
+    { nullptr, 0 }
+};
+
+static const EnumValue video_mode_values[] = {
+    { "auto", gs::VIDEO_MODE_AUTO },
+    { "ntsc", gs::VIDEO_MODE_NTSC },
+    { "pal", gs::VIDEO_MODE_PAL },
     { nullptr, 0 }
 };
 
@@ -308,6 +316,8 @@ static const Option g_options[] = {
 
     { "system", 0, ENUM, "MODEL", "Console model to emulate",
         [](Instance* i, const Value& v) { set(i, i->system, (int)v.integer); }, system_values },
+    { "video-mode", 0, ENUM, "MODE", "Video output format/timings",
+        [](Instance* i, const Value& v) { set(i, i->video_mode, (int)v.integer); }, video_mode_values },
     { "autostart", 0, FLAG, nullptr, "Start running as soon as something is loaded",
         [](Instance* i, const Value& v) { set(i, i->autostart, v.flag); } },
     { "cache-arcade-files", 0, FLAG, nullptr, "Keep arcade files extracted from archives between runs",

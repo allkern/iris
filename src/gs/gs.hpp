@@ -130,7 +130,8 @@ inline constexpr auto FRAME_PAL = (EE_CLOCK / 50) - VBLANK_PAL;
 
 enum VideoMode : int {
     VIDEO_MODE_NTSC,
-    VIDEO_MODE_PAL
+    VIDEO_MODE_PAL,
+    VIDEO_MODE_AUTO
 };
 
 struct Gs;
@@ -388,6 +389,8 @@ struct Gs {
     int scanline_cycles = SCANLINE_NTSC;
     int ee_clock = EE_CLOCK;
     int video_mode = VIDEO_MODE_NTSC;
+    int detected_video_mode = VIDEO_MODE_NTSC;
+    int forced_video_mode = VIDEO_MODE_AUTO;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -397,7 +400,9 @@ Gs* create(logger::Logger* logger, iop::intc::Intc* iop_intc, iop::timers::Timer
 void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers);
 void reset(Gs* gs);
 void set_ee_clock(Gs* gs, int hz);
-void set_video_mode(Gs* gs, int mode);
+void set_forced_video_mode(Gs* gs, int mode);
+int get_video_mode(const Gs* gs);
+int get_detected_video_mode(const Gs* gs);
 void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd);
 double get_field_rate(const Gs* gs);
 void destroy(Gs* gs);
