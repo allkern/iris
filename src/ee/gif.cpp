@@ -226,12 +226,9 @@ Gif* create(logger::Logger* logger) {
     gif->logger = logger;
     gif->logger_id = logger::register_source(logger, "gif");
 
-    const char* mask = getenv("IRIS_PATH3_MASK");
-    const char* pace = getenv("IRIS_DMA_PACE");
-
-    gif->path3_mask_enable = (mask && mask[0] == '1') ? 1 : 0;
+    gif->path3_mask_enable = 1;
     gif->p3_stall_enable = 0;
-    gif->p3_refuse = gif->path3_mask_enable && pace && atoi(pace) > 0;
+    gif->p3_refuse = 1;
 
     // A queue for each PATH
     for (int i = 0; i < 3; i++)

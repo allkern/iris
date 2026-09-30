@@ -33,15 +33,7 @@ static inline void test_gs_irq(Gs* gs) {
 }
 
 static bool queued_signal_mode() {
-    static int mode = -1;
-
-    if (mode < 0) {
-        const char* setting = getenv("IRIS_DMA_PACE");
-
-        mode = setting && atoi(setting) > 0;
-    }
-
-    return mode != 0;
+    return true;
 }
 
 static void assert_finish(Gs* gs) {

@@ -901,22 +901,7 @@ void send_vif1_irq(void* udata, int overshoot) {
     end_transfer(dmac, VIF1);
 }
 
-static int64_t dma_pace() {
-    static int64_t pace = -1;
-
-    if (pace < 0) {
-        const char* setting = getenv("IRIS_DMA_PACE");
-
-        pace = setting ? atoll(setting) : 0;
-
-        if (pace < 0) {
-            pace = 0;
-        }
-    }
-
-    return pace;
-}
-
+constexpr int64_t DMA_CYCLES_PER_QWORD = 2;
 constexpr int64_t VIF1_PACE_CHUNK_QWORDS = 128;
 constexpr int64_t VIF1_PATH3_WAIT_CYCLES = 128;
 
@@ -954,15 +939,14 @@ static void schedule_vif1_resume(Dmac* dmac, int64_t cycles) {
 }
 
 static void credit_vif1_budget(Dmac* dmac) {
-    int64_t pace = dma_pace();
-    int64_t qwords = (dmac->hw.sched->now - dmac->vif1_credit_time) / pace;
+    int64_t qwords = (dmac->hw.sched->now - dmac->vif1_credit_time) / DMA_CYCLES_PER_QWORD;
 
     if (qwords <= 0) {
         return;
     }
 
     dmac->vif1_budget += qwords * 4;
-    dmac->vif1_credit_time += qwords * pace;
+    dmac->vif1_credit_time += qwords * DMA_CYCLES_PER_QWORD;
 }
 
 static bool vif1_word_needs_gif(uint32_t word) {
@@ -1049,10 +1033,6 @@ static bool path3_busy(Dmac* dmac) {
 }
 
 bool gif_path3_active(Dmac* dmac) {
-    if (!dma_pace()) {
-        return false;
-    }
-
     if (path3_busy(dmac)) {
         return true;
     }
@@ -1061,28 +1041,16 @@ bool gif_path3_active(Dmac* dmac) {
 }
 
 void note_path3_output(Dmac* dmac, uint32_t qwords) {
-    int64_t pace = dma_pace();
-
-    if (!pace) {
-        return;
-    }
-
     int64_t now = dmac->hw.sched->now;
 
     if (dmac->gif_busy_until < now) {
         dmac->gif_busy_until = now;
     }
 
-    dmac->gif_busy_until += (int64_t)qwords * pace;
+    dmac->gif_busy_until += (int64_t)qwords * DMA_CYCLES_PER_QWORD;
 }
 
 static bool vif1_must_wait(Dmac* dmac) {
-    int64_t pace = dma_pace();
-
-    if (!pace) {
-        return false;
-    }
-
     if (dmac->hw.bus->vif1->state != vif::VIF_IDLE) {
         return false;
     }
@@ -1126,7 +1094,7 @@ static bool vif1_must_wait(Dmac* dmac) {
         return false;
     }
 
-    schedule_vif1_resume(dmac, VIF1_PACE_CHUNK_QWORDS * pace);
+    schedule_vif1_resume(dmac, VIF1_PACE_CHUNK_QWORDS * DMA_CYCLES_PER_QWORD);
 
     return true;
 }
@@ -1382,35 +1350,23 @@ static void schedule_gif_resume(Dmac* dmac, int64_t cycles) {
 }
 
 static bool gif_yield_at_packet_end(Dmac* dmac, int64_t spent) {
-    int64_t pace = dma_pace();
-
-    if (!pace) {
-        return false;
-    }
-
-    int64_t qwords = (dmac->hw.sched->now - dmac->gif_credit_time) / pace;
+    int64_t qwords = (dmac->hw.sched->now - dmac->gif_credit_time) / DMA_CYCLES_PER_QWORD;
 
     if (qwords > 0) {
         dmac->gif_budget += qwords;
-        dmac->gif_credit_time += qwords * pace;
+        dmac->gif_credit_time += qwords * DMA_CYCLES_PER_QWORD;
     }
 
     if (dmac->gif_budget - spent > 0) {
         return false;
     }
 
-    schedule_gif_resume(dmac, VIF1_PACE_CHUNK_QWORDS * pace);
+    schedule_gif_resume(dmac, VIF1_PACE_CHUNK_QWORDS * DMA_CYCLES_PER_QWORD);
 
     return true;
 }
 
 static bool gif_must_wait(Dmac* dmac) {
-    int64_t pace = dma_pace();
-
-    if (!pace) {
-        return false;
-    }
-
     if (gs::signal_stalled(dmac->hw.bus->gs)) {
         schedule_gif_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
 
@@ -1437,18 +1393,18 @@ static bool gif_must_wait(Dmac* dmac) {
         return false;
     }
 
-    int64_t qwords = (dmac->hw.sched->now - dmac->gif_credit_time) / pace;
+    int64_t qwords = (dmac->hw.sched->now - dmac->gif_credit_time) / DMA_CYCLES_PER_QWORD;
 
     if (qwords > 0) {
         dmac->gif_budget += qwords;
-        dmac->gif_credit_time += qwords * pace;
+        dmac->gif_credit_time += qwords * DMA_CYCLES_PER_QWORD;
     }
 
     if (dmac->gif_budget > 0) {
         return false;
     }
 
-    schedule_gif_resume(dmac, VIF1_PACE_CHUNK_QWORDS * pace);
+    schedule_gif_resume(dmac, VIF1_PACE_CHUNK_QWORDS * DMA_CYCLES_PER_QWORD);
 
     return true;
 }
@@ -1487,7 +1443,7 @@ static void step_gif_transfer(Dmac* dmac) {
 
     bool path3_yields = !gif::path3_packet_open(gif) || gif::path3_image_slice(gif);
 
-    if (dma_pace() && c->qwc && path3_yields && gif::path2_packet_open(gif)) {
+    if (c->qwc && path3_yields && gif::path2_packet_open(gif)) {
         schedule_gif_resume(dmac, VIF1_PATH3_WAIT_CYCLES);
 
         return;
