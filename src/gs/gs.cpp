@@ -32,10 +32,6 @@ static inline void test_gs_irq(Gs* gs) {
     }
 }
 
-static bool queued_signal_mode() {
-    return true;
-}
-
 static void assert_finish(Gs* gs) {
     gs->finish_pending = 0;
     gs->finish_cleared = 0;
@@ -598,23 +594,14 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
             gs->csr_raised &= ~(data & 0xf);
             gs->csr_enable = data;
 
-            if ((data & 1) && queued_signal_mode()) {
-                if (gs->signal_stall) {
-                    gs->signal_stall = 0;
-
-                    gs->siglblid &= ~0xffffffffull;
-                    gs->siglblid |= gs->stall_sigid;
-                    gs->csr |= 1;
-
-                    test_gs_irq(gs);
-                }
-            } else if (data & 1) {
+            if ((data & 1) && gs->signal_stall) {
                 gs->signal_stall = 0;
 
-                if (gs->signal_pending) {
-                    gs->siglblid &= ~0xffffffffull;
-                    gs->siglblid |= gs->stall_sigid;
-                }
+                gs->siglblid &= ~0xffffffffull;
+                gs->siglblid |= gs->stall_sigid;
+                gs->csr |= 1;
+
+                test_gs_irq(gs);
             }
         } return;
         case 0x12001010: {
