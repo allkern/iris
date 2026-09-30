@@ -97,11 +97,8 @@ struct Gif {
 
     int mask_m3r;
     int mask_m3p;
-    int path3_mask_enable;
 
-    int p3_stall_enable;
     int p3_resuming;
-    int p3_refuse;
     uint8_t p3_fifo[16 * 16];
     uint32_t p3_fifo_qwords;
     int p3_draining;
@@ -111,9 +108,6 @@ struct Gif {
     uint32_t download_qwords;
     int download_notify;
 
-    uint8_t* p3_defer_buf;
-    size_t p3_defer_size;
-    size_t p3_defer_cap;
 
     // From ST(Q) to RGBA(Q)
     uint64_t q;
@@ -122,7 +116,6 @@ struct Gif {
     std::atomic <uint32_t> fifo_activity;
 
     FrontScan scan;
-    int flushing_deferred_path3;
 
     uint64_t p3_left;
     int p3_eop;
@@ -150,11 +143,8 @@ void set_dump_tap(Gif* gif, void* udata, void (*tap)(void*, int, const void*, si
 void sync_backend(Gif* gif);
 void enable_front_scan(Gif* gif);
 void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords);
-int flushing_deferred_path3(Gif* gif);
 void set_path3_mask(Gif* gif, int mask);
 int get_path3_mask(Gif* gif);
-int can_accept(Gif* gif, int path);
-int path3_stall_enabled(Gif* gif);
 bool path3_packet_open(Gif* gif);
 bool path2_packet_open(Gif* gif);
 uint64_t path3_packet_qwords(Gif* gif);

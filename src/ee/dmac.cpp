@@ -1206,96 +1206,61 @@ static inline void transfer_gif_qwords(Dmac* dmac, Channel* c) {
         return;
     }
 
-    if (gif->p3_refuse) {
-        int64_t spent = 0;
+    int64_t spent = 0;
 
-        while (c->qwc) {
-            if (gif::path3_refusal(gif) && (gif::path3_fifo_holding(gif) || !gif::path3_packet_open(gif))) {
-                uint32_t space = gif::path3_fifo_space(gif);
+    while (c->qwc) {
+        if (gif::path3_refusal(gif) && (gif::path3_fifo_holding(gif) || !gif::path3_packet_open(gif))) {
+            uint32_t space = gif::path3_fifo_space(gif);
 
-                if (space > c->qwc) {
-                    space = c->qwc;
-                }
-
-                for (uint32_t index = 0; index < space; index++) {
-                    uint128_t qword = read_qword(dmac, c->madr);
-
-                    gif::path3_fifo_push(gif, (const uint8_t*)&qword, 1);
-
-                    c->madr += 16;
-                    c->qwc--;
-                }
-
-                return;
+            if (space > c->qwc) {
+                space = c->qwc;
             }
 
-            if (!gif::path3_packet_open(gif)) {
-                dmac->gif_unmask_run = false;
+            for (uint32_t index = 0; index < space; index++) {
+                uint128_t qword = read_qword(dmac, c->madr);
+
+                gif::path3_fifo_push(gif, (const uint8_t*)&qword, 1);
+
+                c->madr += 16;
+                c->qwc--;
             }
-
-            uint64_t count = gif::path3_packet_qwords(gif);
-
-            if (!count) {
-                count = 1;
-            }
-
-            if (count > c->qwc) {
-                count = c->qwc;
-            }
-
-            const uint8_t* source = dma_source_span(dmac, c->madr, (uint32_t)count);
-
-            if (source) {
-                gif::fifo_write_qwords(gif, source, (uint32_t)count, gif::PATH3);
-            } else {
-                for (uint64_t index = 0; index < count; index++) {
-                    gif::fifo_write(gif, read_qword(dmac, c->madr + (uint32_t)index * 16), gif::PATH3);
-                }
-            }
-
-            c->madr += (uint32_t)count * 16;
-            c->qwc -= (uint32_t)count;
-
-            spent += (int64_t)count;
-
-            if (c->qwc && !gif::path3_packet_open(gif) && gif_yield_at_packet_end(dmac, spent)) {
-                return;
-            }
-        }
-
-        return;
-    }
-
-    if (!gif::path3_stall_enabled(gif)) {
-        const uint8_t* source = dma_source_span(dmac, c->madr, c->qwc);
-
-        if (source) {
-            gif::fifo_write_qwords(gif, source, c->qwc, gif::PATH3);
-
-            c->madr += c->qwc * 16;
-            c->qwc = 0;
 
             return;
         }
-    }
 
-    uint32_t sent = 0;
-
-    while (sent < c->qwc) {
-        if (!gif::can_accept(gif, gif::PATH3)) {
-            break;
+        if (!gif::path3_packet_open(gif)) {
+            dmac->gif_unmask_run = false;
         }
 
-        uint128_t q = read_qword(dmac, c->madr);
+        uint64_t count = gif::path3_packet_qwords(gif);
 
-        gif::fifo_write(gif, q, gif::PATH3);
+        if (!count) {
+            count = 1;
+        }
 
-        c->madr += 16;
+        if (count > c->qwc) {
+            count = c->qwc;
+        }
 
-        sent++;
+        const uint8_t* source = dma_source_span(dmac, c->madr, (uint32_t)count);
+
+        if (source) {
+            gif::fifo_write_qwords(gif, source, (uint32_t)count, gif::PATH3);
+        } else {
+            for (uint64_t index = 0; index < count; index++) {
+                gif::fifo_write(gif, read_qword(dmac, c->madr + (uint32_t)index * 16), gif::PATH3);
+            }
+        }
+
+        c->madr += (uint32_t)count * 16;
+        c->qwc -= (uint32_t)count;
+
+        spent += (int64_t)count;
+
+        if (c->qwc && !gif::path3_packet_open(gif) && gif_yield_at_packet_end(dmac, spent)) {
+            return;
+        }
     }
-
-    c->qwc -= sent;
 }
 
 static void run_gif_transfer(Dmac* dmac);
@@ -1305,7 +1270,7 @@ void resume_gif(Dmac* dmac) {
         return;
     }
 
-    if (dmac->hw.bus->gif->p3_refuse && ((dmac->ctrl >> 2) & 3) != 3) {
+    if (((dmac->ctrl >> 2) & 3) != 3) {
         dmac->gif_unmask_run = !gif::path3_packet_open(dmac->hw.bus->gif);
         dmac->gif_budget = 0;
         dmac->gif_credit_time = dmac->hw.sched->now;

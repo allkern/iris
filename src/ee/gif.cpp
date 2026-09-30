@@ -226,10 +226,6 @@ Gif* create(logger::Logger* logger) {
     gif->logger = logger;
     gif->logger_id = logger::register_source(logger, "gif");
 
-    gif->path3_mask_enable = 1;
-    gif->p3_stall_enable = 0;
-    gif->p3_refuse = 1;
-
     // A queue for each PATH
     for (int i = 0; i < 3; i++)
         gif->queue[i] = queue::create();
@@ -271,7 +267,6 @@ void reset(Gif* gif) {
 
     gif->mask_m3r = 0;
     gif->mask_m3p = 0;
-    gif->p3_defer_size = 0;
     gif->stat &= ~3;
 
     gif->fifo_activity.store(0);
@@ -290,64 +285,15 @@ void destroy(Gif* gif) {
     for (int i = 0; i < 3; i++)
         queue::destroy(gif->queue[i]);
 
-    if (gif->p3_defer_buf)
-        free(gif->p3_defer_buf);
-
     delete gif;
 }
 
 static inline int gif_path3_masked(Gif* gif) {
-    return gif->path3_mask_enable && (gif->mask_m3r || gif->mask_m3p);
-}
-
-static void gif_defer_path3(Gif* gif, const void* buf, size_t size) {
-    if (gif->p3_defer_size + size > gif->p3_defer_cap) {
-        size_t cap = gif->p3_defer_cap ? gif->p3_defer_cap : 0x10000;
-
-        while (gif->p3_defer_size + size > cap)
-            cap *= 2;
-
-        uint8_t* grown = (uint8_t *)realloc(gif->p3_defer_buf, cap);
-
-        if (!grown) {
-            iris_error(gif, "path3: cannot hold {} more bytes, dropping {} held", size, gif->p3_defer_size);
-
-            gif->p3_defer_size = 0;
-
-            return;
-        }
-
-        gif->p3_defer_buf = grown;
-        gif->p3_defer_cap = cap;
-    }
-
-    memcpy(gif->p3_defer_buf + gif->p3_defer_size, buf, size);
-
-    gif->p3_defer_size += size;
-}
-
-int can_accept(Gif* gif, int path) {
-    if (path != PATH3 || !gif->p3_stall_enable) {
-        return 1;
-    }
-
-    if (!gif_path3_masked(gif)) {
-        return 1;
-    }
-
-    if (gif->state != State::RECV_TAG) {
-        return 1;
-    }
-
-    return 0;
-}
-
-int path3_stall_enabled(Gif* gif) {
-    return gif->p3_stall_enable;
+    return gif->mask_m3r || gif->mask_m3p;
 }
 
 int path3_refusal(Gif* gif) {
-    return gif->p3_refuse && gif_path3_masked(gif);
+    return gif_path3_masked(gif);
 }
 
 uint32_t path3_fifo_space(Gif* gif) {
@@ -393,49 +339,14 @@ static void drain_path3_fifo(Gif* gif) {
     gif->p3_draining = 0;
 }
 
-static void gif_path3_lifted(Gif* gif);
-
-static void gif_flush_path3(Gif* gif) {
-    if (!gif->p3_defer_size)
-        return;
-
-    gif->flushing_deferred_path3 = 1;
-
-    gif_send_transfer(gif, PATH3, gif->p3_defer_buf, gif->p3_defer_size);
-
-    gif->flushing_deferred_path3 = 0;
-
-    gif->p3_defer_size = 0;
-}
-
 static void gif_path3_lifted(Gif* gif) {
-    if (gif->p3_refuse) {
-        if (gif->p3_resuming || !gif->hw.dmac) {
-            return;
-        }
-
-        gif->p3_resuming = 1;
-
-        drain_path3_fifo(gif);
-
-        ee::dmac::resume_gif(gif->hw.dmac);
-
-        gif->p3_resuming = 0;
-
-        return;
-    }
-
-    if (!gif->p3_stall_enable) {
-        gif_flush_path3(gif);
-
-        return;
-    }
-
-    if (gif->p3_resuming) {
+    if (gif->p3_resuming || !gif->hw.dmac) {
         return;
     }
 
     gif->p3_resuming = 1;
+
+    drain_path3_fifo(gif);
 
     ee::dmac::resume_gif(gif->hw.dmac);
 
@@ -502,12 +413,6 @@ void write32(Gif* gif, uint32_t addr, uint64_t data) {
 
             if (gif->hw.mtvu) {
                 mtvu::push_gif_write32(gif->hw.mtvu, addr, (uint32_t)data);
-
-                if (gif->p3_refuse && prev && !gif_path3_masked(gif)) {
-                    gif_path3_lifted(gif);
-                }
-
-                return;
             }
 
             if (prev && !gif_path3_masked(gif)) {
@@ -726,17 +631,7 @@ static inline void gif_write_qword(Gif* gif, uint128_t data, int path) {
 
             size_t bytes = queue::size(queue) * sizeof(uint32_t);
 
-            // While PATH3 is masked, hold completed PATH3 packets until the
-            // mask's falling edge so PATH1/PATH2 draws that sample the target
-            // region see the pre-upload contents (double-buffered texture
-            // streaming in OutRun2 SP, SSX On Tour, etc).
-            int deferred = path == PATH3 && gif_path3_masked(gif) && !gif->p3_stall_enable && !gif->p3_refuse;
-
-            if (deferred) {
-                gif_defer_path3(gif, queue->buf.data(), bytes);
-            } else {
-                gif_send_transfer(gif, path, queue->buf.data(), bytes);
-            }
+            gif_send_transfer(gif, path, queue->buf.data(), bytes);
 
             queue::clear(queue);
         }
@@ -826,7 +721,7 @@ uint64_t path3_packet_qwords(Gif* gif) {
 }
 
 bool path3_image_slice(Gif* gif) {
-    if (!gif->p3_refuse || (gif->mode & 4) == 0) {
+    if ((gif->mode & 4) == 0) {
         return false;
     }
 
@@ -956,10 +851,6 @@ static void scan_apply_events(Gif* gif) {
 
     gif->scan.events = 0;
 
-    if (gif->scan.path == PATH3 && gif_path3_masked(gif) && !gif->p3_refuse) {
-        return;
-    }
-
     for (int index = 0; index < events; index++) {
         const FrontScanEvent& event = gif->scan.event[index];
 
@@ -1068,10 +959,6 @@ void enable_front_scan(Gif* gif) {
     gif->scan.enabled = 1;
 }
 
-int flushing_deferred_path3(Gif* gif) {
-    return gif->flushing_deferred_path3;
-}
-
 void scan_front_qwords(Gif* gif, int path, const uint8_t* data, uint32_t qwords) {
     if (!gif->scan.enabled) {
         return;
@@ -1143,10 +1030,6 @@ void set_path3_mask(Gif* gif, int mask) {
         gif->stat |= 2;
     } else {
         gif->stat &= ~2;
-    }
-
-    if (gif->hw.mtvu && !gif->p3_refuse) {
-        return;
     }
 
     if (prev && !gif_path3_masked(gif)) {
