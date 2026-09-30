@@ -420,14 +420,14 @@ static void emit_entry(Jit* jit, Emitter& e, const BlockEntry* entry, uint32_t n
         return arg;
     };
 
+    emit_prologue(e, entry->stall);
+
     if (entry->is_mtir) {
         e.drop_flags();
         e.drop_scalars();
 
         jit_function_call(&uc, &vu::jit_entry_stall, e.state, entry_arg());
     }
-
-    emit_prologue(e);
 
     auto upper = [&](bool after_lower) {
         if (upper_key(entry->upper.opcode) == UPPER_NOP && !emit_off(EMIT_NOP)) {
@@ -500,6 +500,30 @@ static void emit_entry(Jit* jit, Emitter& e, const BlockEntry* entry, uint32_t n
             if (!entry->lower_is_nop) {
                 lower();
             }
+        } else if (entry->swap_hazard) {
+            ujit::Vec kept = uc.new_vec128();
+
+            uc.v_mov(kept, e.get(entry->lower.dst.reg));
+
+            uint8_t kept_clean = e.clean[entry->lower.dst.reg];
+
+            lower();
+
+            ujit::Vec written = uc.new_vec128();
+
+            uc.v_mov(written, e.get(entry->lower.dst.reg));
+
+            uint8_t written_clean = e.clean[entry->lower.dst.reg];
+
+            e.set(entry->lower.dst.reg, kept);
+
+            e.clean[entry->lower.dst.reg] = kept_clean;
+
+            upper(true);
+
+            e.set(entry->lower.dst.reg, written);
+
+            e.clean[entry->lower.dst.reg] = written_clean;
         } else if (entry->hazard0 || entry->hazard1 || entry->is_waitq) {
             lower();
             upper(true);
@@ -600,6 +624,20 @@ static void emit_retire(Jit* jit, Emitter& e, ujit::UniCompiler& uc, const Label
         uc.j(done, ujit::test_nz(left));
 
         store_imm32(uc, VU(jit_exit), VU_JIT_STOP);
+
+        {
+            Label no_park = uc.new_label();
+
+            ujit::Gp pending = uc.new_gp32();
+
+            uc.load_i32(pending, VU(m_bit_pending));
+            uc.j(no_park, ujit::test_z(pending));
+
+            store_imm8(uc, VU(waiting_for_interlock), 1);
+            store_imm32(uc, VU(m_bit_pending), 0);
+
+            uc.bind(no_park);
+        }
 
         if (need_branch) {
             Label keep = uc.new_label();
@@ -839,23 +877,12 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
 
         int vi_shadow = 1;
 
-        bool interlocked = false;
-
         for (size_t i = 0; i < count; i++) {
             const BlockEntry& entry = b->entries[i];
 
             if (entry.m_bit) {
-                store_imm8(uc, VU(waiting_for_interlock), 1);
-                store_imm32(uc, VU(jit_exit), VU_JIT_STOP);
-                store_imm32(uc, VU(tpc), (b->tpc + (uint32_t)i) & mask);
-
-                e.store_dirty();
-
-                uc.j(trampoline);
-
-                interlocked = true;
-
-                break;
+                store_imm32(uc, VU(e_bit), 2);
+                store_imm32(uc, VU(m_bit_pending), 1);
             }
 
             if (entry.e_bit) {
@@ -867,43 +894,39 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
             emit_entry(jit, e, &entry, next_tpc, mask, i == 0 || prev_branch, &vi_shadow);
 
             bool need_branch = i == 0 || entry.branch || prev_branch;
-            bool need_end = i == 0 || entry.e_bit || prev_end;
+            bool need_end = i == 0 || entry.e_bit || entry.m_bit || prev_end;
 
             emit_retire(jit, e, uc, trampoline, need_branch, need_end, next_tpc);
 
             prev_branch = entry.branch != 0;
-            prev_end = entry.e_bit != 0;
+            prev_end = entry.e_bit != 0 || entry.m_bit != 0;
         }
 
-        if (!interlocked) {
-            store_imm32(uc, VU(tpc), (b->tpc + (uint32_t)count) & mask);
+        store_imm32(uc, VU(tpc), (b->tpc + (uint32_t)count) & mask);
 
-            e.store_dirty();
+        e.store_dirty();
 
-            uc.j(trampoline);
-        }
+        uc.j(trampoline);
     }
 
     uc.bind(trampoline);
 
-    if (member_count > 1) {
-        ujit::Gp jexit = uc.new_gp32();
+    ujit::Gp jexit = uc.new_gp32();
 
-        uc.load_i32(jexit, VU(jit_exit));
-        uc.j(region_exit, ujit::test_nz(jexit));
+    uc.load_i32(jexit, VU(jit_exit));
+    uc.j(region_exit, ujit::test_nz(jexit));
 
-        ujit::Gp cyc = uc.new_gp64();
+    ujit::Gp cyc = uc.new_gp64();
 
-        uc.load_u64(cyc, VU(vu_cycle));
-        uc.j(region_exit, ujit::ucmp_ge(cyc, VU(run_deadline)));
+    uc.load_u64(cyc, VU(vu_cycle));
+    uc.j(region_exit, ujit::ucmp_ge(cyc, VU(run_deadline)));
 
-        ujit::Gp t = uc.new_gp32();
+    ujit::Gp t = uc.new_gp32();
 
-        uc.load_u32(t, VU(tpc));
+    uc.load_u32(t, VU(tpc));
 
-        for (int m = 0; m < member_count; m++) {
-            uc.j(labels[m], ujit::cmp_eq(t, Imm(member_tpc[m])));
-        }
+    for (int m = 0; m < member_count; m++) {
+        uc.j(labels[m], ujit::cmp_eq(t, Imm(member_tpc[m])));
     }
 
     uc.bind(region_exit);

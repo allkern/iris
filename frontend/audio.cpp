@@ -66,8 +66,10 @@ void update_adma(void* userdata, SDL_AudioStream* stream, int additional_amount,
             r += (int32_t)(a.s16[1] + (b.s16[1] - a.s16[1]) * weight);
         }
 
-        iris->audio.audio_buf[i].s16[0] = iris->audio.mute_adma ? 0 : clamp_s16(l * iris->audio.volume);
-        iris->audio.audio_buf[i].s16[1] = iris->audio.mute_adma ? 0 : clamp_s16(r * iris->audio.volume);
+        bool silent = iris->audio.mute || iris->audio.mute_adma;
+
+        iris->audio.audio_buf[i].s16[0] = silent ? 0 : clamp_s16(l * iris->audio.volume);
+        iris->audio.audio_buf[i].s16[1] = silent ? 0 : clamp_s16(r * iris->audio.volume);
 
         position += step;
     }
@@ -94,7 +96,7 @@ static spu2::Sample next_voice_sample(Instance* iris, spu2::Spu2* spu2) {
     if (!spu2::pop_sample(spu2, &s))
         s.u32 = 0;
 #else
-    s = spu2::get_sample(spu2, !iris->audio.mute_adma);
+    s = spu2::get_sample(spu2, !(iris->audio.mute || iris->audio.mute_adma));
 #endif
 
     return s;

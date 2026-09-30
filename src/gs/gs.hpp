@@ -1,7 +1,5 @@
 #pragma once
 
-
-
 #include "u128.h"
 #include "scheduler.hpp"
 #include "ee/timers.hpp"
@@ -311,6 +309,9 @@ struct Gs {
     uint64_t csr_enable;
     uint64_t csr_raised;
 
+    int finish_pending;
+    int finish_cleared;
+
     // Internal registers
     uint64_t prim;
     uint64_t rgbaq;
@@ -375,7 +376,6 @@ struct Gs {
 
     // DIMX
     int dither[4][4];
-
 
     int frame_cycles = FRAME_NTSC;
     int vblank_cycles = VBLANK_NTSC;

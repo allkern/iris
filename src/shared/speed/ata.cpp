@@ -122,7 +122,6 @@ void ata_create_identify(uint8_t* buf, uint64_t sectors) {
 	uint16_t default_cyls = (sectors > 16514064 ? 16514064 : sectors) / NUM_HEADS / SECTORS_PER_TRACK;
     uint16_t current_cyls = default_cyls;
 
-
     identify->general_configuration = 0x0040; // Non-removable
     identify->num_cylinders = default_cyls;
     identify->specific_configuration = 0xc837; // taken from a real PS2 HDD

@@ -16,7 +16,6 @@ enum Size : uint32_t {
     _64MB = 0x20000
 };
 
-
 inline constexpr uint32_t SECTOR_SIZE = 512 + 16;
 
 enum {

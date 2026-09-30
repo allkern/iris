@@ -1477,7 +1477,6 @@ static bool unpack_dongle(Instance* iris, const std::filesystem::path& path,
     return found;
 }
 
-
 static int boot_arcade_thread(Instance* iris, std::string path) {
     if (!load_arcade_files(iris, path))
         finish_load(iris, 1);

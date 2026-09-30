@@ -128,7 +128,6 @@ void show_status_bar(Instance* iris) {
             Text("%s", buf);
         }
 
-
         PopStyleColor();
         PopStyleVar();
 

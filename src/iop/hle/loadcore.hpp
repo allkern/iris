@@ -19,6 +19,4 @@ struct Module {
 int reg_lib_ent(iop::Iop* iop);
 void refresh_module_list(iop::Iop* iop);
 
-
-
 }

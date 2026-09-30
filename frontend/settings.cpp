@@ -481,7 +481,6 @@ bool init(Instance* iris) {
     iris->ps2->vu0->max_cycles = iris->vu_max_cycles;
     iris->ps2->vu1->max_cycles = iris->vu_max_cycles;
 
-
     apply_device_maps(iris);
 
     ee::set_fmv_skip(iris->ps2->ee, iris->skip_fmv);

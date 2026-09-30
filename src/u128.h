@@ -1,7 +1,6 @@
 #ifndef U128_H
 #define U128_H
 
-
 #include <stdint.h>
 #include <stddef.h>
 
@@ -24,6 +23,5 @@ typedef union {
     int16_t sl16;
     int8_t sl8;
 } uint128_t;
-
 
 #endif

@@ -94,7 +94,6 @@ struct Usb {
 
     int frame_scheduled;
 
-
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };

@@ -12,6 +12,11 @@
 #include <smmintrin.h>
 #endif
 
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
+#define _EE_HOST_MXCSR
+#include <xmmintrin.h>
+#endif
+
 #include "ee.hpp"
 #include "bus.hpp"
 #include "vu.hpp"
@@ -59,10 +64,11 @@ namespace iris::ee {
         i.vu_decoded = 1; \
     }
 
-#define VU_LOWER(ins) { VU_DECODE_LOWER() vu::i_ ## ins(ee->vu0, &i.vu_ins); }
-#define VU_UPPER(ins) { VU_DECODE_UPPER() vu::i_ ## ins(ee->vu0, &i.vu_ins); }
+#define VU_LOWER(ins) { VU_DECODE_LOWER() uint32_t status = ee->vu0->status; vu::i_ ## ins(ee->vu0, &i.vu_ins); vu::macro_step(ee->vu0, status); }
+#define VU_UPPER(ins) { VU_DECODE_UPPER() uint32_t status = ee->vu0->status; vu::i_ ## ins(ee->vu0, &i.vu_ins); vu::macro_step(ee->vu0, status); }
 #define VU_LOWER_TEMPLATE(ins) { \
     VU_DECODE_LOWER() \
+    uint32_t status = ee->vu0->status; \
     switch ((i.opcode >> 21) & 0xf) { \
         case 0: vu::i_ ## ins <0>(ee->vu0, &i.vu_ins); break; \
         case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &i.vu_ins); break; \
@@ -80,9 +86,11 @@ namespace iris::ee {
         case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
         case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
         case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
-    } }
+    } \
+    vu::macro_step(ee->vu0, status); }
 #define VU_UPPER_TEMPLATE(ins) { \
     VU_DECODE_UPPER() \
+    uint32_t status = ee->vu0->status; \
     switch ((i.opcode >> 21) & 0xf) { \
         case 0: vu::i_ ## ins <0>(ee->vu0, &i.vu_ins); break; \
         case 1: vu::i_ ## ins <vu::D_W>(ee->vu0, &i.vu_ins); break; \
@@ -100,7 +108,8 @@ namespace iris::ee {
         case 13: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_W>(ee->vu0, &i.vu_ins); break; \
         case 14: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z>(ee->vu0, &i.vu_ins); break; \
         case 15: vu::i_ ## ins <vu::D_X | vu::D_Y | vu::D_Z | vu::D_W>(ee->vu0, &i.vu_ins); break; \
-    } }
+    } \
+    vu::macro_step(ee->vu0, status); }
 
 static inline int fast_abs32(int a) {
     uint32_t m = a >> 31;
@@ -1303,6 +1312,38 @@ static inline void i_div1(Ee* ee, const Instruction& i) {
         LO1 = ((int32_t)ee->r[s].ul32 < 0) ? 1 : -1;
     }
 }
+static inline float sqrt_nearest(float value) {
+#ifdef _EE_HOST_MXCSR
+    uint32_t saved = _mm_getcsr();
+
+    _mm_setcsr(saved & ~0x6000u);
+
+    float result = sqrtf(value);
+
+    _mm_setcsr(saved);
+
+    return result;
+#else
+    return sqrtf(value);
+#endif
+}
+
+static inline float divide_nearest(float a, float b) {
+#ifdef _EE_HOST_MXCSR
+    uint32_t saved = _mm_getcsr();
+
+    _mm_setcsr(saved & ~0x6000u);
+
+    float result = a / b;
+
+    _mm_setcsr(saved);
+
+    return result;
+#else
+    return a / b;
+#endif
+}
+
 static inline void i_divs(Ee* ee, const Instruction& i) {
     int t = D_RT;
     int d = D_FD;
@@ -1324,7 +1365,7 @@ static inline void i_divs(Ee* ee, const Instruction& i) {
         return;
     }
 
-    ee->f[d].f = FS / FT;
+    ee->f[d].f = divide_nearest(FS, FT);
 
     if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
         return;
@@ -3192,9 +3233,9 @@ static inline void i_rsqrts(Ee* ee, const Instruction& i) {
     } else if (ee->f[t].u32 & 0x80000000) {
         ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
 
-        ee->f[d].f = FS / sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
+        ee->f[d].f = divide_nearest(FS, sqrt_nearest(fabsf(fpu_cvtf(ee->f[t].f))));
     } else {
-        ee->f[d].f = FS / sqrtf(fpu_cvtf(ee->f[t].f));
+        ee->f[d].f = divide_nearest(FS, sqrt_nearest(fpu_cvtf(ee->f[t].f)));
     }
 
     if (fpu_check_overflow_no_flags(ee, &ee->f[d]))
@@ -3272,9 +3313,9 @@ static inline void i_sqrts(Ee* ee, const Instruction& i) {
     } else if (ee->f[t].u32 & 0x80000000) {
         ee->fcr |= FPU_FLG_I | FPU_FLG_SI;
 
-        ee->f[d].f = sqrtf(fabsf(fpu_cvtf(ee->f[t].f)));
+        ee->f[d].f = sqrt_nearest(fabsf(fpu_cvtf(ee->f[t].f)));
     } else {
-        ee->f[d].f = sqrtf(fpu_cvtf(ee->f[t].f));
+        ee->f[d].f = sqrt_nearest(fpu_cvtf(ee->f[t].f));
     }
 }
 static inline void i_sra(Ee* ee, const Instruction& i) {
@@ -3921,6 +3962,11 @@ void reset(Ee* ee) {
     ee->rt.reset(asmjit::ResetPolicy::kHard);
 
     fesetround(FE_TOWARDZERO);
+
+#ifdef _EE_HOST_MXCSR
+    ee->mxcsr_chop = (_mm_getcsr() & ~0x6000u) | 0x6000u;
+    ee->mxcsr_nearest = _mm_getcsr() & ~0x6000u;
+#endif
 
     ram::reset(ee->spr);
 
@@ -4903,6 +4949,18 @@ static inline CachedReg& get_reg(Ee* ee, asmjit::ujit::UniCompiler* uc, int i, b
     if (!sync) ee->reg_cache[i].constant = false;
 
     return ee->reg_cache[i];
+}
+
+static inline void emit_round_nearest(asmjit::ujit::UniCompiler& uc, Ee* ee) {
+#if !defined(ASMJIT_UJIT_AARCH64)
+    uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_nearest)));
+#endif
+}
+
+static inline void emit_round_chop(asmjit::ujit::UniCompiler& uc, Ee* ee) {
+#if !defined(ASMJIT_UJIT_AARCH64)
+    uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_chop)));
+#endif
 }
 
 static inline void flush_reg_cache(Ee* ee, asmjit::ujit::UniCompiler* uc) {
@@ -6450,11 +6508,19 @@ void compile_block(Ee* ee, Block* block) {
                     uc.load_u32(ft, EE(f[i.rt.r]));
                     uc.load_u32(fcr, EE(fcr));
 
+                    if (i.id == I_DIVS) {
+                        emit_round_nearest(uc, ee);
+                    }
+
                     switch (i.id) {
                         case I_ADDS: fpu::adds(uc, out, fcr, fs, ft); break;
                         case I_SUBS: fpu::subs(uc, out, fcr, fs, ft); break;
                         case I_MULS: fpu::muls(uc, out, fcr, fs, ft); break;
                         case I_DIVS: fpu::divs(uc, out, fcr, fs, ft); break;
+                    }
+
+                    if (i.id == I_DIVS) {
+                        emit_round_chop(uc, ee);
                     }
 
                     uc.store_u32(EE(f[i.sa]), out);
@@ -6510,8 +6576,8 @@ void compile_block(Ee* ee, Block* block) {
                         case I_ADDAS: fpu::adds(uc, out, fcr, fs, ft); break;
                         case I_SUBAS: fpu::subs(uc, out, fcr, fs, ft); break;
                         case I_MULAS: fpu::muls(uc, out, fcr, fs, ft); break;
-                        case I_SQRTS: fpu::sqrts(uc, out, fcr, ft); break;
-                        case I_RSQRTS: fpu::rsqrts(uc, out, fcr, fs, ft); break;
+                        case I_SQRTS: emit_round_nearest(uc, ee); fpu::sqrts(uc, out, fcr, ft); emit_round_chop(uc, ee); break;
+                        case I_RSQRTS: emit_round_nearest(uc, ee); fpu::rsqrts(uc, out, fcr, fs, ft); emit_round_chop(uc, ee); break;
 
                         default: {
                             ujit::Gp acc = uc.new_gp32(); uc.load_u32(acc, EE(a));
@@ -8692,6 +8758,8 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
 
     ee->idle_loop.armed = false;
 
+    profile::set_active_jit(profile::JIT_EE);
+
     while (true) {
         if (ee->breakpoint_count) {
             if (ee->pc == ee->bp_skip_pc) {
@@ -8735,11 +8803,9 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
 
         profile::count(profile::EE_DISPATCHES);
 
-        profile::set_active_jit(profile::JIT_EE);
 
         block->func(ee);
 
-        profile::set_active_jit(profile::JIT_NONE);
 
         int cycles = given - ee->cycles_left;
 
@@ -8774,6 +8840,8 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
         if (is_irq_pending(ee))
             break;
     }
+
+    profile::set_active_jit(profile::JIT_NONE);
 
     return total;
 }

@@ -907,8 +907,6 @@ static inline void flush_reg_cache(Iop* iop, asmjit::ujit::UniCompiler* uc) {
     }
 }
 
-
-
 template<typename F, typename = void>
 struct function_traits;
 

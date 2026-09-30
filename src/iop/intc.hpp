@@ -76,7 +76,6 @@ struct Intc {
     uint32_t mask;
     uint32_t ctrl;
 
-
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };

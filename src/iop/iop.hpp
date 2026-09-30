@@ -35,7 +35,6 @@ inline constexpr auto COP0_PRID = 15;
   -          hi,lo    Multiply/divide results, may be changed by subroutines
 */
 
-
 struct Iop;
 
 void invalidate_cache_page(Iop* iop, uint32_t addr);

@@ -84,6 +84,7 @@ struct Instruction {
     struct {
         int reg;
         int field;
+        int mask;
     } dst, src[2];
 
     int vi_dst;
@@ -109,6 +110,7 @@ void write64(Vu* vu, uint32_t addr, uint64_t data);
 void write128(Vu* vu, uint32_t addr, uint128_t data);
 void write_vi(Vu* vu, int index, uint32_t value);
 uint32_t read_vi(Vu* vu, int index);
+void macro_step(Vu* vu, uint32_t status);
 void reset(Vu* vu);
 void reset_registers(Vu* vu);
 void decode_upper(Vu* vu, uint32_t opcode);

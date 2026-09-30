@@ -288,42 +288,98 @@ static void show_vu_disassembly_view(Instance* iris, uint64_t* mem, size_t size)
     GetStyle().FontScaleMain = font_scale;
 }
 
+static void write_disassembly_row(FILE* file, uint64_t* mem, int row) {
+    uint64_t u = mem[row] >> 32;
+    uint64_t l = mem[row] & 0xffffffff;
+
+    char upper[512], lower[512];
+
+    g_vu_dis_state.addr = row;
+
+    vu::dis::disassemble_upper(upper, u, &g_vu_dis_state);
+    vu::dis::disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
+
+    if (add_padding && !compact_view) {
+#ifdef _WIN32
+        sprintf_s(upper, "%-40s", upper);
+        sprintf_s(lower, "%-40s", lower);
+#else
+        sprintf(upper, "%-40s", upper);
+        sprintf(lower, "%-40s", lower);
+#endif
+    }
+
+    if (compact_view) {
+        fprintf(file, "%04x: %08x %s\n", (uint32_t)row, (uint32_t)u, upper);
+        fprintf(file, "      %08x %s\n", (uint32_t)l, lower);
+    } else {
+        fprintf(file, "%04x: %08x %08x %s %s\n", (uint32_t)row, (uint32_t)u, (uint32_t)l, upper, lower);
+    }
+}
+
 void save_disassembly(FILE* file, uint64_t* mem, size_t size) {
     int e_bit = 0;
 
-    for (int row = disassemble_all ? 0 : addr; row < size; row++) {
-        g_vu_dis_state.addr = row * 8;
-
-        uint64_t u = mem[row] >> 32;
-        uint64_t l = mem[row] & 0xffffffff;
-
-        char upper[512], lower[512];
-
-        g_vu_dis_state.addr = row;
-
-        vu::dis::disassemble_upper(upper, u, &g_vu_dis_state);
-        vu::dis::disassemble_lower(lower, l, &g_vu_dis_state, u & 0x80000000);
-
-        if (add_padding && !compact_view) {
-#ifdef _WIN32
-            sprintf_s(upper, "%-40s", upper);
-            sprintf_s(lower, "%-40s", lower);
-#else
-            sprintf(upper, "%-40s", upper);
-            sprintf(lower, "%-40s", lower);
-#endif
-        }
-
-        if (compact_view) {
-            fprintf(file, "%04x: %08x %s\n", (uint32_t)row, (uint32_t)u, upper);
-            fprintf(file, "      %08x %s\n", (uint32_t)l, lower);
-        } else {
-            fprintf(file, "%04x: %08x %08x %s %s\n", (uint32_t)row, (uint32_t)u, (uint32_t)l, upper, lower);
-        }
+    for (int row = disassemble_all ? 0 : addr; row < (int)size; row++) {
+        write_disassembly_row(file, mem, row);
 
         if (e_bit && stop_at_e_bit && !disassemble_all) break;
 
-        e_bit = (u & 0x40000000) ? 1 : 0;
+        e_bit = ((mem[row] >> 32) & 0x40000000) ? 1 : 0;
+    }
+}
+
+static int find_program_end(uint64_t* mem, size_t size, int start) {
+    for (int row = start; row < (int)size; row++) {
+        if (!((mem[row] >> 32) & 0x40000000)) {
+            continue;
+        }
+
+        int end = row + 2;
+
+        return end < (int)size ? end : (int)size;
+    }
+
+    return -1;
+}
+
+static bool range_has_code(uint64_t* mem, int start, int end) {
+    for (int row = start; row < end; row++) {
+        if (mem[row]) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+void save_all_programs(FILE* file, uint64_t* mem, size_t size) {
+    int start = 0;
+    int count = 0;
+
+    while (start < (int)size) {
+        int end = find_program_end(mem, size, start);
+
+        if (end < 0) {
+            break;
+        }
+
+        fprintf(file, "%s; program %d, %04x-%04x\n", count ? "\n" : "", count, start, end - 1);
+
+        for (int row = start; row < end; row++) {
+            write_disassembly_row(file, mem, row);
+        }
+
+        start = end;
+        count++;
+    }
+
+    if (start < (int)size && range_has_code(mem, start, (int)size)) {
+        fprintf(file, "%s; trailing code, %04x-%04x\n", count ? "\n" : "", start, (int)size - 1);
+
+        for (int row = start; row < (int)size; row++) {
+            write_disassembly_row(file, mem, row);
+        }
     }
 }
 
@@ -408,7 +464,30 @@ void VuDisassembler::on_render() {
                 pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
             }
         }
-    } SameLine();
+    }
+    SetItemTooltip("Save what the disassembly below is showing");
+    SameLine();
+
+    if (Button(ICON_MS_SAVE_AS)) {
+        std::string title = std::string("Save all ") + vu_names[vu_index] + " programs";
+        std::string name = vu_index ? "vu1_programs.s" : "vu0_programs.s";
+
+        pfd::save_file file(title, name, { "Text files", "*.txt" });
+
+        if (!file.result().empty()) {
+            FILE* f = fopen(file.result().c_str(), "w");
+
+            if (f) {
+                save_all_programs(f, mem, size);
+
+                fclose(f);
+            } else {
+                pfd::message("Error", "Failed to open file for writing.", pfd::choice::ok, pfd::icon::error);
+            }
+        }
+    }
+    SetItemTooltip("Save all programs in micro memory");
+    SameLine();
 
     BeginDisabled(!stop_at_e_bit);
     if (Button(ICON_MS_ARROW_RIGHT_ALT " Next program")) {

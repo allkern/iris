@@ -24,8 +24,12 @@ struct BlockEntry {
     int hazard1;
     int hazard2;
     int hazard3;
+    int swap_hazard;
     int branch;
 
+    uint8_t read_reg[4];
+    uint8_t read_mask[4];
+    uint8_t stall;
     uint8_t uw_reg, uw_mask;
     uint8_t lw_reg, lw_mask;
     uint8_t is_mtir;
@@ -93,6 +97,7 @@ struct Vu {
 
     bool waiting_for_interlock;
     int wait_vi;
+    int m_bit_pending;
 
     uint32_t upload_lo;
     uint32_t upload_hi;
@@ -118,6 +123,7 @@ struct Vu {
     uint64_t vf_ready[32][4];
 
     int q_delay;
+    int fsset_guard;
     Reg32 prev_q;
     Reg32 p;
 
@@ -141,6 +147,8 @@ struct Vu {
             uint32_t tpc;
             uint32_t cmsar0;
             uint32_t fbrst;
+
+            // To-do: Return busy when interlocked by M-bit
             uint32_t vpu_stat;
             uint32_t rsv4;
             uint32_t cmsar1;
@@ -160,8 +168,6 @@ struct Vu {
     uint32_t region_epoch;
 
     jit::Jit* jit;
-
-
     gif::Gif* gif;
     vif::Vif* vif;
     Vu* vu1;

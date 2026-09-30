@@ -227,6 +227,7 @@ struct Emitter {
     ujit::Gp cycle_reg;
 
     bool status_pending = false;
+    int fsset_guard = 0;
     ujit::Gp status_or;
     ujit::Gp status_last;
 
@@ -419,13 +420,19 @@ struct Emitter {
         clamped_valid[i] = false;
     }
 
-    void mark_status(const ujit::Gp& ring3) {
-        if (!status_pending) {
+    void mark_status(const ujit::Gp& ring3, bool sticky) {
+        if (sticky) {
+            if (!status_pending) {
+                status_or = uc->new_gp32();
+
+                uc->mov(status_or, ring3);
+            } else {
+                uc->or_(status_or, status_or, ring3);
+            }
+        } else if (!status_pending) {
             status_or = uc->new_gp32();
 
-            uc->mov(status_or, ring3);
-        } else {
-            uc->or_(status_or, status_or, ring3);
+            uc->mov(status_or, Imm(0));
         }
 
         status_last = ring3;
@@ -640,7 +647,16 @@ inline ujit::Vec emit_flags4(Emitter& e, const ujit::Vec& v, uint32_t field) {
 
 inline void emit_update_status(Emitter& e) {
     e.load_flags();
-    e.mark_status(e.mac_ring[3]);
+
+    bool sticky = true;
+
+    if (e.fsset_guard > 0) {
+        sticky = false;
+
+        e.fsset_guard--;
+    }
+
+    e.mark_status(e.mac_ring[3], sticky);
 }
 
 inline void emit_epilogue(Emitter& e, const BlockEntry* entry, bool vi_shadow_live) {
@@ -706,16 +722,28 @@ inline void emit_epilogue(Emitter& e, const BlockEntry* entry, bool vi_shadow_li
     uc.add(e.cycle_reg, e.cycle_reg, Imm(1));
 }
 
-inline void emit_prologue(Emitter& e) {
+inline void emit_prologue(Emitter& e, int stall) {
     ujit::UniCompiler& uc = *e.uc;
 
     e.load_scalars();
 
+    if (stall) {
+        uc.add(e.cycle_reg, e.cycle_reg, Imm(stall));
+
+        for (int i = 0; i < stall; i++) {
+            e.shift_flags();
+        }
+    }
+
+    ujit::Gp waiting = uc.new_gp32();
     ujit::Gp less = uc.new_gp32();
 
-    uc.mov(less, e.q_delay_reg);
-    uc.sub(less, less, Imm(1));
-    uc.cmov(e.q_delay_reg, less, ujit::test_nz(e.q_delay_reg));
+    uc.mov(waiting, e.q_delay_reg);
+    uc.mov(less, waiting);
+    uc.sub(less, less, Imm(stall + 1));
+
+    uc.mov(e.q_delay_reg, Imm(0));
+    uc.cmov(e.q_delay_reg, less, ujit::scmp_gt(waiting, Imm(stall)));
 
     emit_update_status(e);
 }
@@ -1491,6 +1519,8 @@ inline bool emit_status_op(Emitter& e, const Instruction& ins, uint32_t key) {
         uc.and_(st, st, Imm(0x3f));
         uc.or_(st, st, Imm(ins.ld_imm12 & 0xfc0));
         uc.store_u32(e.mem(offsetof(Vu, status)), st);
+
+        e.fsset_guard = 4;
 
         return true;
     }

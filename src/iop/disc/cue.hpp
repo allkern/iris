@@ -4,7 +4,6 @@
 
 #include "../disc.hpp"
 
-
 #include <vector>
 #include "logger.hpp"
 
