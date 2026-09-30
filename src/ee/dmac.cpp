@@ -1187,20 +1187,6 @@ void handle_vif1_transfer(Dmac* dmac) {
         return;
     }
 
-    // Note: MGS3 will not boot unless VIF1 DMA IRQs are delayed by a few cycles for some reason.
-    //       My guess is that the game expects some VIF command within the transfer to stall and thus
-    //       delay the transfer, but I haven't been able to confirm this.
-    //       In order to debug: Checkout commit d58ca88
-
-    // scheduler::Event event;
-
-    // event.name = "vif1_transfer_end";
-    // event.cycles = 4096;
-    // event.udata = dmac;
-    // event.callback = send_vif1_irq;
-
-    // scheduler::schedule(dmac->hw.sched, event);
-
     int tte = (dmac->channels[VIF1].chcr >> 6) & 1;
     int mode = (dmac->channels[VIF1].chcr >> 2) & 3;
 

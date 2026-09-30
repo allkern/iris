@@ -63,6 +63,20 @@ static void handle_finish(void* udata, int overshoot) {
     assert_finish(gs);
 }
 
+static void arm_finish(Gs* gs) {
+    gs->finish_pending = 1;
+    gs->finish_cleared = 0;
+
+    scheduler::Event finish_event;
+
+    finish_event.callback = handle_finish;
+    finish_event.cycles = gs->scanline_cycles;
+    finish_event.name = "GS finish event";
+    finish_event.udata = gs;
+
+    scheduler::schedule(gs->hw.sched, finish_event);
+}
+
 static inline int assert_vblank(Gs* gs) {
     if ((gs->csr & 8) == 0) {
         gs->csr |= 8;
@@ -218,6 +232,7 @@ void soft_reset(Gs* gs) {
     gs->csr_raised = 0;
     gs->finish_pending = 0;
     gs->finish_cleared = 0;
+    gs->finish_queued = 0;
 
     gs->vblank = 0;
     gs->signal_pending = 0;
@@ -493,6 +508,10 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
 
             if ((data & 2) && gs->finish_pending) {
                 gs->finish_cleared = 1;
+            } else if ((data & 2) && gs->finish_queued) {
+                gs->finish_queued--;
+
+                arm_finish(gs);
             }
 
             gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
@@ -993,19 +1012,12 @@ bool signal_stalled(Gs* gs) {
 
 int apply_finish(Gs* gs, uint64_t data) {
     if (gs->finish_pending) {
+        gs->finish_queued++;
+
         return 0;
     }
 
-    gs->finish_pending = 1;
-
-    scheduler::Event finish_event;
-
-    finish_event.callback = handle_finish;
-    finish_event.cycles = gs->scanline_cycles;
-    finish_event.name = "GS finish event";
-    finish_event.udata = gs;
-
-    scheduler::schedule(gs->hw.sched, finish_event);
+    arm_finish(gs);
 
     return 0;
 }

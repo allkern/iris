@@ -311,6 +311,7 @@ struct Gs {
 
     int finish_pending;
     int finish_cleared;
+    int finish_queued;
 
     // Internal registers
     uint64_t prim;
