@@ -9,6 +9,7 @@ static inline void reset_transfer(Sio2* sio2) {
     queue::clear(sio2->in);
 
     sio2->send3_index = 0;
+    sio2->dma_block = 0x90;
 }
 
 Sio2* create(logger::Logger* logger, iop::intc::Intc* intc, scheduler::Scheduler* sched) {
@@ -36,8 +37,12 @@ void send_irq(void* udata, int overshoot) {
     iop::intc::irq(sio2->hw.intc, iop::intc::SIO2);
 }
 
-void dma_reset(Sio2* sio2) {
+void dma_reset(Sio2* sio2, uint32_t block_bytes) {
     queue::clear(sio2->in);
+
+    if (block_bytes) {
+        sio2->dma_block = block_bytes;
+    }
 }
 
 void connect(Sio2* sio2, iop::dma::Dma* dma) {
@@ -112,14 +117,12 @@ static inline int handle_command(Sio2* sio2, int idx) {
     for (int i = 0; i < len; i++)
         queue::pop(sio2->in);
 
-    // Weird behavior, DMA MCD commands are aligned to a 36-word boundary
     if (mcd) {
-        while (queue::size(sio2->out) % 0x90)
+        while (queue::size(sio2->out) % sio2->dma_block)
             queue::push(sio2->out, 0);
 
         if (!queue::is_empty(sio2->in)) {
-            // Remove input padding
-            while (sio2->in->index % 0x90)
+            while (sio2->in->index % sio2->dma_block)
                 queue::pop(sio2->in);
         }
     }

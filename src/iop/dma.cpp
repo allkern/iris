@@ -801,7 +801,7 @@ void handle_sio2_in_transfer(Dma* dma) {
 
     // iris_debug(dma, "SIO2 in transfer size={}", size);
 
-    sio2::dma_reset(dma->hw.sio2);
+    sio2::dma_reset(dma->hw.sio2, (dma->channels[SIO2_IN].bcr & 0xffff) * 4);
 
     for (int i = 0; i < size; i++) {
         uint32_t w = bus::read32(dma->hw.bus, dma->channels[SIO2_IN].madr);

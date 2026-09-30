@@ -43,6 +43,7 @@ struct Sio2 {
     uint32_t istat;
 
     int send3_index;
+    uint32_t dma_block = 0x90;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -58,6 +59,6 @@ void write8(Sio2* sio2, uint32_t addr, uint64_t data);
 void write32(Sio2* sio2, uint32_t addr, uint64_t data);
 void attach_device(Sio2* sio2, Device dev, int port);
 void detach_device(Sio2* sio2, int port);
-void dma_reset(Sio2* sio2);
+void dma_reset(Sio2* sio2, uint32_t block_bytes);
 
 }
