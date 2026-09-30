@@ -2137,6 +2137,28 @@ void write_stat(Dmac* dmac, uint32_t data) {
     test_irq(dmac);
 }
 
+static void update_mfifo_drain(Dmac* dmac) {
+    int mfifo_drain = (dmac->ctrl >> 2) & 3;
+
+    switch (mfifo_drain) {
+        case 0: {
+            dmac->mfifo_drain = NULL;
+        } break;
+
+        case 2: {
+            dmac->mfifo_drain = &dmac->channels[VIF1];
+        } break;
+
+        case 3: {
+            dmac->mfifo_drain = &dmac->channels[GIF];
+        } break;
+
+        default: {
+            iris_fatal_error(dmac, "Invalid MFIFO drain channel {}", mfifo_drain);
+        } break;
+    }
+}
+
 void write32(Dmac* dmac, uint32_t addr, uint64_t data) {
     Channel* c = get_channel(dmac, addr);
 
@@ -2144,21 +2166,7 @@ void write32(Dmac* dmac, uint32_t addr, uint64_t data) {
         case 0x1000E000: {
             dmac->ctrl = data;
 
-            int mfifo_drain = (dmac->ctrl >> 2) & 3;
-            int stall_ctrl = (dmac->ctrl >> 4) & 3;
-            int stall_drain = (dmac->ctrl >> 6) & 3;
-
-            if (mfifo_drain || stall_ctrl || stall_drain) {
-                // iris_debug(dmac, "32-bit mfifo_drain={} stall_ctrl={} stall_drain={}", //     mfifo_drain, stall_ctrl, stall_drain
-                //);
-
-                switch (mfifo_drain) {
-                    case 0: dmac->mfifo_drain = NULL; break;
-                    case 2: dmac->mfifo_drain = &dmac->channels[VIF1]; break;
-                    case 3: dmac->mfifo_drain = &dmac->channels[GIF]; break;
-                    default: iris_fatal_error(dmac, "Invalid MFIFO drain channel {}", mfifo_drain);
-                }
-            }
+            update_mfifo_drain(dmac);
         } return;
         case 0x1000E010: write_stat(dmac, data); return;
         case 0x1000E020: dmac->pcr = data; test_cpcond0(dmac); return;
@@ -2298,21 +2306,7 @@ void write8(Dmac* dmac, uint32_t addr, uint64_t data) {
             dmac->ctrl &= 0xffffff00;
             dmac->ctrl |= data;
 
-            int mfifo_drain = (dmac->ctrl >> 2) & 3;
-            int stall_ctrl = (dmac->ctrl >> 4) & 3;
-            int stall_drain = (dmac->ctrl >> 6) & 3;
-
-            if (mfifo_drain || stall_ctrl || stall_drain) {
-                // iris_debug(dmac, "8-bit mfifo_drain={} stall_ctrl={} stall_drain={}", //     mfifo_drain, stall_ctrl, stall_drain
-                //);
-
-                switch (mfifo_drain) {
-                    case 0: dmac->mfifo_drain = NULL; break;
-                    case 2: dmac->mfifo_drain = &dmac->channels[VIF1]; break;
-                    case 3: dmac->mfifo_drain = &dmac->channels[GIF]; break;
-                    default: iris_fatal_error(dmac, "Invalid MFIFO drain channel {}", mfifo_drain);
-                }
-            }
+            update_mfifo_drain(dmac);
         } return;
 
         // ENABLEW (byte 2)
