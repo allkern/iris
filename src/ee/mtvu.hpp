@@ -12,13 +12,6 @@ namespace iris::ee::bus { struct Bus; }
 
 namespace iris::mtvu {
 
-enum Mode : int {
-    MODE_OFF = 0,
-    MODE_INLINE,
-    MODE_THREAD,
-    MODE_STRICT
-};
-
 enum SyncReason : int {
     SYNC_FRAME,
     SYNC_VU1_MEMORY,
@@ -44,7 +37,6 @@ void push_vu1_execute(Mtvu* mtvu, uint32_t addr);
 void push_vu1_reset(Mtvu* mtvu);
 
 void sync(Mtvu* mtvu, SyncReason reason);
-void log_pipeline_state(Mtvu* mtvu, const char* reason);
 void poll(Mtvu* mtvu);
 void sync_gs_registers(Mtvu* mtvu);
 

@@ -71,8 +71,6 @@ struct Mtvu {
         ee::bus::Bus* bus;
     } hw;
 
-    int mode;
-
     vif::Vif* vif;
     gif::Gif* gif;
     gs::async::Async* gs_async = nullptr;
@@ -81,7 +79,6 @@ struct Mtvu {
     void (*backend_transfer)(void*, int, const void*, size_t) = nullptr;
     void (*backend_readback)(void*, void*, size_t) = nullptr;
 
-    bool front_scan = false;
     uint64_t pushes = 0;
     uint64_t pushes_at_gs_read = 0;
     int gs_reads_without_pushes = 0;
@@ -125,36 +122,18 @@ struct Mtvu {
     size_t logger_id = 0;
 };
 
-static const char* mode_name(int mode) {
-    switch (mode) {
-        case MODE_INLINE: return "inline";
-        case MODE_THREAD: return "thread";
-        case MODE_STRICT: return "strict";
-    }
-
-    return "off";
-}
-
 Mtvu* create(logger::Logger* logger) {
     Mtvu* mtvu = new Mtvu();
 
     mtvu->logger = logger;
     mtvu->logger_id = logger::register_source(logger, "mtvu");
 
-    mtvu->mode = MODE_THREAD;
-
-    if (mtvu->mode == MODE_OFF) {
-        return mtvu;
-    }
-
     mtvu->vif = vif::create(logger, 1, nullptr, nullptr);
     mtvu->gif = gif::create(logger);
 
     mtvu->ring.resize(RING_WORDS);
 
-    if (mtvu->mode == MODE_THREAD || mtvu->mode == MODE_STRICT) {
-        mtvu->gs_async = gs::async::create();
-    }
+    mtvu->gs_async = gs::async::create();
 
     return mtvu;
 }
@@ -429,16 +408,6 @@ static void wait_for_worker(Mtvu* mtvu) {
     mtvu->waiting_for_worker.store(false);
 }
 
-static void catch_up_published(Mtvu* mtvu) {
-    if (mtvu->mode == MODE_INLINE) {
-        process(mtvu);
-
-        return;
-    }
-
-    wait_for_worker(mtvu);
-}
-
 static uint32_t reserve_words(Mtvu* mtvu, uint32_t words) {
     while (true) {
         uint32_t write = mtvu->write_pos.load(std::memory_order_relaxed);
@@ -463,7 +432,7 @@ static uint32_t reserve_words(Mtvu* mtvu, uint32_t words) {
 
         profile::count(profile::MTVU_RING_FULL_WAITS);
 
-        catch_up_published(mtvu);
+        wait_for_worker(mtvu);
     }
 }
 
@@ -558,30 +527,12 @@ static void stage_words(Mtvu* mtvu, int kind, int path, const uint8_t* data, uin
 static void drain(Mtvu* mtvu) {
     flush_staged(mtvu);
 
-    catch_up_published(mtvu);
+    wait_for_worker(mtvu);
 
-    if (mtvu->gs_async) {
-        gs::async::sync(mtvu->gs_async);
-    }
+    gs::async::sync(mtvu->gs_async);
 
     apply_gs_events(mtvu);
     flush_worker_logs(mtvu);
-}
-
-static void finish_push(Mtvu* mtvu) {
-    switch (mtvu->mode) {
-        case MODE_INLINE: {
-            drain(mtvu);
-        } break;
-
-        case MODE_THREAD: {
-            wake_if_published(mtvu);
-        } break;
-
-        case MODE_STRICT: {
-            drain(mtvu);
-        } break;
-    }
 }
 
 void push_vif_words(Mtvu* mtvu, const uint8_t* data, uint32_t words) {
@@ -593,7 +544,7 @@ void push_vif_words(Mtvu* mtvu, const uint8_t* data, uint32_t words) {
         write_vif_op(mtvu, data, words);
     }
 
-    finish_push(mtvu);
+    wake_if_published(mtvu);
 }
 
 void push_vif_fbrst(Mtvu* mtvu, uint32_t data) {
@@ -607,7 +558,7 @@ void push_vif_fbrst(Mtvu* mtvu, uint32_t data) {
 
     publish(mtvu, start, 2);
 
-    finish_push(mtvu);
+    wake_if_published(mtvu);
 }
 
 void push_gif_qwords(Mtvu* mtvu, int path, const uint8_t* data, uint32_t qwords) {
@@ -619,7 +570,7 @@ void push_gif_qwords(Mtvu* mtvu, int path, const uint8_t* data, uint32_t qwords)
         write_gif_op(mtvu, path, data, qwords);
     }
 
-    finish_push(mtvu);
+    wake_if_published(mtvu);
 }
 
 void push_gif_write32(Mtvu* mtvu, uint32_t addr, uint32_t data) {
@@ -634,7 +585,7 @@ void push_gif_write32(Mtvu* mtvu, uint32_t addr, uint32_t data) {
 
     publish(mtvu, start, 3);
 
-    finish_push(mtvu);
+    wake_if_published(mtvu);
 }
 
 void push_vu1_execute(Mtvu* mtvu, uint32_t addr) {
@@ -648,7 +599,7 @@ void push_vu1_execute(Mtvu* mtvu, uint32_t addr) {
 
     publish(mtvu, start, 2);
 
-    finish_push(mtvu);
+    wake_if_published(mtvu);
 }
 
 void push_vu1_reset(Mtvu* mtvu) {
@@ -661,7 +612,7 @@ void push_vu1_reset(Mtvu* mtvu) {
 
     publish(mtvu, start, 1);
 
-    finish_push(mtvu);
+    wake_if_published(mtvu);
 }
 
 static profile::Counter sync_wait_counter(SyncReason reason) {
@@ -683,7 +634,7 @@ static bool pipeline_is_idle(Mtvu* mtvu) {
         return false;
     }
 
-    if (mtvu->gs_async && !gs::async::is_idle(mtvu->gs_async)) {
+    if (!gs::async::is_idle(mtvu->gs_async)) {
         return false;
     }
 
@@ -691,65 +642,16 @@ static bool pipeline_is_idle(Mtvu* mtvu) {
 }
 
 void sync(Mtvu* mtvu, SyncReason reason) {
-    if (mtvu->mode == MODE_OFF) {
-        return;
-    }
-
-
     flush_staged(mtvu);
 
-    if (mtvu->mode != MODE_INLINE && !pipeline_is_idle(mtvu)) {
+    if (!pipeline_is_idle(mtvu)) {
         profile::count(sync_wait_counter(reason));
     }
 
     drain(mtvu);
-
-}
-
-void log_pipeline_state(Mtvu* mtvu, const char* reason) {
-    if (mtvu->mode == MODE_OFF) {
-        return;
-    }
-
-    gs::Gs* gs = mtvu->hw.gs;
-    vif::Vif* front_vif = mtvu->hw.vif1;
-    gif::Gif* front_gif = mtvu->hw.gif;
-
-    iris_warning(mtvu, "{}: csr={:08x} imr={:08x} events={} worker_idle={} gs_idle={}",
-        reason,
-        (uint32_t)gs->csr,
-        (uint32_t)gs->imr,
-        mtvu->events_queued.load(),
-        worker_is_idle(mtvu),
-        !mtvu->gs_async || gs::async::is_idle(mtvu->gs_async)
-    );
-
-    iris_warning(mtvu, "{}: front vif state={} cmd={:02x} pending={} dreq={} stat={:08x}",
-        reason,
-        front_vif->state,
-        front_vif->cmd,
-        front_vif->pending_words,
-        front_vif->dreq,
-        front_vif->stat
-    );
-
-    iris_warning(mtvu, "{}: worker vif state={} cmd={:02x} pending={} front gif state={} qwc={} worker gif state={} qwc={}",
-        reason,
-        mtvu->vif->state,
-        mtvu->vif->cmd,
-        mtvu->vif->pending_words,
-        front_gif->state,
-        front_gif->tag.qwc,
-        mtvu->gif->state,
-        mtvu->gif->tag.qwc
-    );
 }
 
 void sync_gs_registers(Mtvu* mtvu) {
-    if (mtvu->mode == MODE_OFF) {
-        return;
-    }
-
     if (mtvu->pushes != mtvu->pushes_at_gs_read) {
         mtvu->pushes_at_gs_read = mtvu->pushes;
         mtvu->gs_reads_without_pushes = 0;
@@ -757,7 +659,7 @@ void sync_gs_registers(Mtvu* mtvu) {
         mtvu->gs_reads_without_pushes++;
     }
 
-    if (mtvu->front_scan && mtvu->gs_reads_without_pushes < GS_READ_SPIN_LIMIT) {
+    if (mtvu->gs_reads_without_pushes < GS_READ_SPIN_LIMIT) {
         poll(mtvu);
 
         return;
@@ -769,15 +671,9 @@ void sync_gs_registers(Mtvu* mtvu) {
 }
 
 void poll(Mtvu* mtvu) {
-    if (mtvu->mode == MODE_OFF) {
-        return;
-    }
+    flush_staged(mtvu);
 
-    if (mtvu->mode == MODE_THREAD) {
-        flush_staged(mtvu);
-
-        wake_if_published(mtvu);
-    }
+    wake_if_published(mtvu);
 
     apply_gs_events(mtvu);
     flush_worker_logs(mtvu);
@@ -794,14 +690,6 @@ uint32_t take_gif_fifo_activity(Mtvu* mtvu) {
 }
 
 static bool transfer_keeps_events(Mtvu* mtvu, int path) {
-    if (!mtvu->front_scan) {
-        return true;
-    }
-
-    if (gif::flushing_deferred_path3(mtvu->gif)) {
-        return true;
-    }
-
     return path == gif::PATH1 && !mtvu->processing_front_gif;
 }
 
@@ -824,13 +712,7 @@ static void worker_gif_transfer(void* udata, int path, const void* data, size_t 
 
     uint32_t flags = transfer_keeps_events(mtvu, path) ? 1 : 0;
 
-    if (mtvu->gs_async) {
-        gs::async::transfer(mtvu->gs_async, path, data, size, flags);
-
-        return;
-    }
-
-    run_backend_transfer(mtvu, path, data, size, flags);
+    gs::async::transfer(mtvu->gs_async, path, data, size, flags);
 }
 
 static void worker_gif_readback(void* udata, void* data, size_t size) {
@@ -852,9 +734,7 @@ void update_gif_backend(Mtvu* mtvu) {
     mtvu->backend_transfer = front->transfer;
     mtvu->backend_readback = front->readback;
 
-    if (mtvu->gs_async) {
-        gs::async::set_backend(mtvu->gs_async, mtvu, gs_thread_transfer);
-    }
+    gs::async::set_backend(mtvu->gs_async, mtvu, gs_thread_transfer);
 
     gif::set_backend(mtvu->gif, mtvu, worker_gif_transfer, worker_gif_readback);
     gif::set_dump_tap(mtvu->gif, front->dump_udata, front->dump_transfer);
@@ -875,9 +755,7 @@ static void start_worker(Mtvu* mtvu) {
 
     fegetenv(&mtvu->fp_env);
 
-    if (mtvu->gs_async) {
-        gs::async::start(mtvu->gs_async, mtvu->fp_env, FE_TOWARDZERO);
-    }
+    gs::async::start(mtvu->gs_async, mtvu->fp_env, FE_TOWARDZERO);
 
     mtvu->worker = std::thread(worker_main, mtvu);
 }
@@ -906,23 +784,12 @@ void connect(Mtvu* mtvu, vu::Vu* vu0, vu::Vu* vu1, vif::Vif* vif1, gif::Gif* gif
     mtvu->hw.gs = gs;
     mtvu->hw.bus = bus;
 
-    if (mtvu->mode == MODE_OFF) {
-        return;
-    }
-
-    if (gif->p3_stall_enable) {
-        iris_warning(mtvu, "IRIS_PATH3_STALL does not work with MTVU, turning it off");
-
-        gif->p3_stall_enable = 0;
-    }
-
     mtvu->vif->hw.vu = vu1;
     mtvu->vif->hw.gif = mtvu->gif;
     mtvu->vif->role = vif::VIF_ROLE_WORKER;
 
     mtvu->gif->hw.gs = gs;
     mtvu->gif->hw.vu1 = vu1;
-    mtvu->gif->p3_stall_enable = 0;
     mtvu->gif->report_fifo_activity = true;
 
     vif1->hw.mtvu = mtvu;
@@ -938,30 +805,14 @@ void connect(Mtvu* mtvu, vu::Vu* vu0, vu::Vu* vu1, vif::Vif* vif1, gif::Gif* gif
 
     gs::set_event_sink(gs, queue_gs_event, mtvu);
 
-    if (mtvu->mode == MODE_THREAD) {
-        mtvu->front_scan = true;
-
-        gif::enable_front_scan(gif);
-    }
+    gif::enable_front_scan(gif);
 
     update_gif_backend(mtvu);
 
-    if (mtvu->mode == MODE_THREAD || mtvu->mode == MODE_STRICT) {
-        start_worker(mtvu);
-    }
-
-    iris_info(mtvu, "MTVU enabled in {} mode", mode_name(mtvu->mode));
-
-    if (mtvu->gs_async) {
-        iris_info(mtvu, "GS thread enabled");
-    }
+    start_worker(mtvu);
 }
 
 void reset(Mtvu* mtvu) {
-    if (mtvu->mode == MODE_OFF) {
-        return;
-    }
-
     sync(mtvu, SYNC_OTHER);
 
     vif::reset(mtvu->vif);
@@ -976,17 +827,10 @@ void reset(Mtvu* mtvu) {
 void destroy(Mtvu* mtvu) {
     stop_worker(mtvu);
 
-    if (mtvu->gs_async) {
-        gs::async::destroy(mtvu->gs_async);
-    }
+    gs::async::destroy(mtvu->gs_async);
 
-    if (mtvu->vif) {
-        vif::destroy(mtvu->vif);
-    }
-
-    if (mtvu->gif) {
-        gif::destroy(mtvu->gif);
-    }
+    vif::destroy(mtvu->vif);
+    gif::destroy(mtvu->gif);
 
     if (mtvu->worker_logger) {
         logger::destroy(mtvu->worker_logger);
