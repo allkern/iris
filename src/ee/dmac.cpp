@@ -1048,6 +1048,34 @@ static bool path3_busy(Dmac* dmac) {
     return !gif::path3_refusal(gif);
 }
 
+bool gif_path3_active(Dmac* dmac) {
+    if (!dma_pace()) {
+        return false;
+    }
+
+    if (path3_busy(dmac)) {
+        return true;
+    }
+
+    return dmac->hw.sched->now < dmac->gif_busy_until;
+}
+
+void note_path3_output(Dmac* dmac, uint32_t qwords) {
+    int64_t pace = dma_pace();
+
+    if (!pace) {
+        return;
+    }
+
+    int64_t now = dmac->hw.sched->now;
+
+    if (dmac->gif_busy_until < now) {
+        dmac->gif_busy_until = now;
+    }
+
+    dmac->gif_busy_until += (int64_t)qwords * pace;
+}
+
 static bool vif1_must_wait(Dmac* dmac) {
     int64_t pace = dma_pace();
 

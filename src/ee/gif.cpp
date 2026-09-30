@@ -461,6 +461,10 @@ uint64_t read32(Gif* gif, uint32_t addr) {
                 v = (v & ~0x1f000000) | (gif->p3_fifo_qwords << 24) | 0x40;
             }
 
+            if (gif->hw.dmac && ee::dmac::gif_path3_active(gif->hw.dmac)) {
+                v |= 0xe00;
+            }
+
             return v;
         } break;
         case 0x10003040: return gif->tag0;
@@ -839,6 +843,10 @@ bool path3_image_slice(Gif* gif) {
 void fifo_write(Gif* gif, uint128_t data, int path) {
     if (path == PATH3) {
         track_path3(gif, (const uint8_t*)&data, 1);
+
+        if (gif->hw.dmac) {
+            ee::dmac::note_path3_output(gif->hw.dmac, 1);
+        }
     }
 
     if (path == PATH2) {
@@ -869,6 +877,10 @@ void fifo_write(Gif* gif, uint128_t data, int path) {
 void fifo_write_qwords(Gif* gif, const uint8_t* data, uint32_t count, int path) {
     if (path == PATH3 && !gif->p3_draining) {
         track_path3(gif, data, count);
+    }
+
+    if (path == PATH3 && gif->hw.dmac) {
+        ee::dmac::note_path3_output(gif->hw.dmac, count);
     }
 
     if (path == PATH2) {

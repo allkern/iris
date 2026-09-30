@@ -98,6 +98,7 @@ struct Dmac {
     bool gif_unmask_run = false;
     int64_t gif_budget = 0;
     int64_t gif_credit_time = 0;
+    int64_t gif_busy_until = 0;
 
     Channel* mfifo_drain;
 
@@ -128,6 +129,8 @@ void handle_vif0_transfer(Dmac* dmac);
 void handle_vif1_transfer(Dmac* dmac);
 void handle_gif_transfer(Dmac* dmac);
 void resume_gif(Dmac* dmac);
+bool gif_path3_active(Dmac* dmac);
+void note_path3_output(Dmac* dmac, uint32_t qwords);
 void handle_ipu_from_transfer(Dmac* dmac);
 void handle_ipu_to_transfer(Dmac* dmac);
 void handle_sif0_transfer(Dmac* dmac);
