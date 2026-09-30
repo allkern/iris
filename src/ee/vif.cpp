@@ -1190,7 +1190,7 @@ uint64_t read32(Vif* vif, uint32_t addr) {
 
         // VIF1 registers
         case 0x10003c00: {
-            uint32_t stat = vif->stat; vif->stat = 0;
+            uint32_t stat = vif->stat;
 
             if (vif->fdr) {
                 uint32_t fqc = gif::download_remaining(vif->hw.gif);
