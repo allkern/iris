@@ -174,6 +174,7 @@ bool breakpoint_hit(Ee* ee);
 void set_ram_size(Ee* ee, int ram_size);
 void set_osd_config(Ee* ee, OsdConfig config);
 OsdConfig get_osd_config(Ee* ee);
+void set_gs_crt_callback(Ee* ee, void (*func)(void* udata, int interlaced, int mode, int ffmd), void* udata);
 
 #undef EE_ALIGNED16
 

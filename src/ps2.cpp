@@ -99,6 +99,7 @@ void init(Ps2* ps2) {
     vu::connect(ps2->vu0, ps2->gif, ps2->vif0, ps2->vu1);
     vu::connect(ps2->vu1, ps2->gif, ps2->vif1, ps2->vu1);
     gs::connect(ps2->gs, ps2->ee_intc, ps2->ee_timers);
+    ee::set_gs_crt_callback(ps2->ee, gs::handle_set_gs_crt, ps2->gs);
     ee::intc::connect(ps2->ee_intc, ps2->ee);
     ee::timers::connect(ps2->ee_timers, ps2->ee_intc);
     cdvd::connect(ps2->cdvd, ps2->iop_dma);

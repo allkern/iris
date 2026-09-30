@@ -3506,6 +3506,21 @@ static inline void i_syscall(Ee* ee, const Instruction& i) {
     }
 
     switch (id) {
+        // SetGsCrt
+        case 0x02: {
+            int mode = ee->r[5].u32[0] & 0xff;
+
+            // Modes 0/1 use the BIOS mode, check ROMVER to determine
+            // which one it is
+            if (mode < 2) {
+                mode = (bus_read8(ee, 0xbfc7ff52) == 'E') ? 3 : 2;
+            }
+
+            if (ee->gs_crt_func) {
+                ee->gs_crt_func(ee->gs_crt_udata, ee->r[4].u32[0] & 1, mode, ee->r[6].u32[0] & 1);
+            }
+        } break;
+
         // ChangeThreadPriority
         case 0x29: {
             get_thread_list(ee);
@@ -8990,6 +9005,11 @@ void set_osd_config(Ee* ee, OsdConfig config) {
 
 OsdConfig get_osd_config(Ee* ee) {
     return ee->osd_config;
+}
+
+void set_gs_crt_callback(Ee* ee, void (*func)(void* udata, int interlaced, int mode, int ffmd), void* udata) {
+    ee->gs_crt_func = func;
+    ee->gs_crt_udata = udata;
 }
 
 void invalidate_block(Ee* ee, uint32_t addr) {

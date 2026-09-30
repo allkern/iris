@@ -695,7 +695,11 @@ SDL_AppResult update(Instance* iris) {
         case render::FPS_60: {
             using namespace std::chrono;
 
-            float framerate = iris->present_mode == render::FPS_30 ? 30.0f : 60.0f;
+            double framerate = gs::get_field_rate(iris->ps2->gs);
+
+            if (iris->present_mode == render::FPS_30) {
+                framerate /= 2.0;
+            }
 
             auto target = nanoseconds((int64_t)(1000000000.0 / framerate));
             auto now = high_resolution_clock::now();

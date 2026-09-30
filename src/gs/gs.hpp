@@ -109,7 +109,7 @@ inline constexpr auto VBLANK_SCANS_NTSC = 22;
 inline constexpr auto SCANLINE_NTSC = 9370;
 inline constexpr auto FRAME_SCANS_PAL = 286;
 inline constexpr auto VBLANK_SCANS_PAL = 26;
-inline constexpr auto SCANLINE_PAL = 9476;
+inline constexpr auto SCANLINE_PAL = 9437;
 
 // EE clock: 294.912 MHz, 294912000 clocks/s
 // 294912000/60=4915200 clocks/frame
@@ -125,8 +125,13 @@ inline constexpr auto FRAME_NTSC = 4502400;// (240 * 9370)
 inline constexpr auto VBLANK_NTSC = 412720;// (22 * 9370)
 inline constexpr auto PMODE_EN1 = 1;
 inline constexpr auto PMODE_EN2 = 2;
-inline constexpr auto FRAME_PAL = (286 * 9476);
-inline constexpr auto VBLANK_PAL = (26 * 9476);
+inline constexpr auto VBLANK_PAL = 462413;
+inline constexpr auto FRAME_PAL = (EE_CLOCK / 50) - VBLANK_PAL;
+
+enum VideoMode : int {
+    VIDEO_MODE_NTSC,
+    VIDEO_MODE_PAL
+};
 
 struct Gs;
 
@@ -381,6 +386,8 @@ struct Gs {
     int frame_cycles = FRAME_NTSC;
     int vblank_cycles = VBLANK_NTSC;
     int scanline_cycles = SCANLINE_NTSC;
+    int ee_clock = EE_CLOCK;
+    int video_mode = VIDEO_MODE_NTSC;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -390,6 +397,9 @@ Gs* create(logger::Logger* logger, iop::intc::Intc* iop_intc, iop::timers::Timer
 void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers);
 void reset(Gs* gs);
 void set_ee_clock(Gs* gs, int hz);
+void set_video_mode(Gs* gs, int mode);
+void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd);
+double get_field_rate(const Gs* gs);
 void destroy(Gs* gs);
 uint64_t read64(Gs* gs, uint32_t addr);
 void write64(Gs* gs, uint32_t addr, uint64_t data);

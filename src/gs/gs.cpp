@@ -195,10 +195,68 @@ void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers) {
 
 // Note: System 256/Super 256 games detect the jumper setting/system
 //       by detecting EE frequency. These systems have higher clocks.
+static void update_timings(Gs* gs) {
+    int64_t frame = FRAME_NTSC;
+    int64_t vblank = VBLANK_NTSC;
+    int64_t scanline = SCANLINE_NTSC;
+
+    if (gs->video_mode == VIDEO_MODE_PAL) {
+        frame = FRAME_PAL;
+        vblank = VBLANK_PAL;
+        scanline = SCANLINE_PAL;
+    }
+
+    gs->frame_cycles = (int)((frame * gs->ee_clock) / EE_CLOCK);
+    gs->vblank_cycles = (int)((vblank * gs->ee_clock) / EE_CLOCK);
+    gs->scanline_cycles = (int)((scanline * gs->ee_clock) / EE_CLOCK);
+}
+
 void set_ee_clock(Gs* gs, int hz) {
-    gs->frame_cycles = (int)(((int64_t)FRAME_NTSC * hz) / EE_CLOCK);
-    gs->vblank_cycles = (int)(((int64_t)VBLANK_NTSC * hz) / EE_CLOCK);
-    gs->scanline_cycles = (int)(((int64_t)SCANLINE_NTSC * hz) / EE_CLOCK);
+    gs->ee_clock = hz;
+
+    update_timings(gs);
+}
+
+void set_video_mode(Gs* gs, int mode) {
+    if (gs->video_mode == mode)
+        return;
+
+    gs->video_mode = mode;
+
+    update_timings(gs);
+}
+
+void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd) {
+    Gs* gs = (Gs*)udata;
+
+    switch (mode) {
+        // NTSC, DVD NTSC
+        case 0x02:
+        case 0x72: {
+            iris_info(gs, "SetGsCrt NTSC {} {}", interlaced ? "interlaced" : "progressive", ffmd ? "frame" : "field");
+
+            set_video_mode(gs, VIDEO_MODE_NTSC);
+        } break;
+
+        // PAL, DVD PAL
+        case 0x03:
+        case 0x82: {
+            iris_info(gs, "SetGsCrt PAL {} {}", interlaced ? "interlaced" : "progressive", ffmd ? "frame" : "field");
+
+            set_video_mode(gs, VIDEO_MODE_PAL);
+        } break;
+
+        // To-do: VESA/SDTV/HDTV timings, using NTSC for now
+        default: {
+            iris_info(gs, "SetGsCrt Unhandled mode {:02x}, using NTSC timings", mode);
+
+            set_video_mode(gs, VIDEO_MODE_NTSC);
+        } break;
+    }
+}
+
+double get_field_rate(const Gs* gs) {
+    return gs->video_mode == VIDEO_MODE_PAL ? 50.0 : 60.0;
 }
 
 void soft_reset(Gs* gs) {
@@ -240,6 +298,10 @@ void soft_reset(Gs* gs) {
 
 void reset(Gs* gs) {
     soft_reset(gs);
+
+    gs->video_mode = VIDEO_MODE_NTSC;
+
+    update_timings(gs);
 
     // Schedule Vblank event
     scheduler::Event vblank_event;

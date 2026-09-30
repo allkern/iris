@@ -729,6 +729,10 @@ struct Ee {
     uint32_t thread_list_base;
     uint32_t last_delay_slot_branch;
 
+    // SetGsCrt callback
+    void (*gs_crt_func)(void* udata, int interlaced, int mode, int ffmd) = nullptr;
+    void* gs_crt_udata = nullptr;
+
     // Stats
     uint64_t cache_misses;
     uint64_t cache_hits;
