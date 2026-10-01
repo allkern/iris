@@ -198,7 +198,7 @@ void set_axis(P2io* p2io, int axis, float value) {
 
     p2io->axis[axis] = clamp_axis(value);
 
-    float steer = p2io->axis[AXIS_STEER_RIGHT] - p2io->axis[AXIS_STEER_LEFT];
+    float steer = p2io->axis[AXIS_STEER_LEFT] - p2io->axis[AXIS_STEER_RIGHT];
 
     p2io->analog[ANALOG_STEER] = (uint16_t)(ANALOG_CENTER + (steer * (ANALOG_CENTER - 1)));
     p2io->thrilldrive_handle.steer = p2io->analog[ANALOG_STEER];

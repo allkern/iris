@@ -51,7 +51,7 @@ uint16_t handle_position(const Handle* handle) {
         return handle->steer;
     }
 
-    int position = HANDLE_CENTER + (handle->force_feedback * 0x100);
+    int position = HANDLE_CENTER - (handle->force_feedback * 0x100);
 
     if (position < 0) {
         position = 0;
