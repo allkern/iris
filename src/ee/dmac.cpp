@@ -1756,9 +1756,28 @@ void handle_sif0_transfer(Dmac* dmac) {
     // We shouldn't send an interrupt if tag end or irq/tie weren't
     // set
 }
+static void finish_sif1_transfer(void* udata, int overshoot) {
+    Dmac* dmac = (Dmac*)udata;
+
+    if ((dmac->channels[SIF1].chcr & 0x100) == 0) {
+        return;
+    }
+
+    if (dmac->hw.sched->now < dmac->sif1_done_at) {
+        return;
+    }
+
+    set_irq(dmac, SIF1);
+
+    dmac->channels[SIF1].chcr &= ~0x100;
+    dmac->channels[SIF1].qwc = 0;
+}
+
 void handle_sif1_transfer(Dmac* dmac) {
     assert(!dmac->channels[SIF1].qwc);
     assert(((dmac->channels[SIF1].chcr >> 2) & 3) == 1);
+
+    int64_t qwords = 0;
 
     // This should be ok?
     // if (!sif::fifo_is_empty(dmac->hw.sif)) {
@@ -1769,6 +1788,8 @@ void handle_sif1_transfer(Dmac* dmac) {
         uint128_t tag = read_qword(dmac, dmac->channels[SIF1].tadr);
 
         process_source_tag(dmac, &dmac->channels[SIF1], tag);
+
+        qwords += 1 + dmac->channels[SIF1].qwc;
 
         // iris_debug(dmac, "ee: sif1 tag qwc={:08x} id={} irq={} addr={:08x} mem={} data={:016x} end={} tte={}", //     dmac->channels[SIF1].tag.qwc,
         //     dmac->channels[SIF1].tag.id,
@@ -1812,10 +1833,20 @@ void handle_sif1_transfer(Dmac* dmac) {
 
     iop::dma::handle_sif1_transfer(dmac->hw.iop_dma);
 
-    set_irq(dmac, SIF1);
-
-    dmac->channels[SIF1].chcr &= ~0x100;
     dmac->channels[SIF1].qwc = 0;
+
+    int64_t cycles = qwords * DMA_CYCLES_PER_QWORD;
+
+    dmac->sif1_done_at = dmac->hw.sched->now + cycles;
+
+    scheduler::Event event;
+
+    event.name = "sif1_done";
+    event.callback = finish_sif1_transfer;
+    event.cycles = cycles;
+    event.udata = dmac;
+
+    scheduler::schedule(dmac->hw.sched, event);
 }
 void handle_sif2_transfer(Dmac* dmac) {
     iris_fatal_error(dmac, "ee: SIF2 channel unimplemented");

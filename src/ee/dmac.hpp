@@ -100,6 +100,8 @@ struct Dmac {
     int64_t gif_credit_time = 0;
     int64_t gif_busy_until = 0;
 
+    int64_t sif1_done_at = 0;
+
     Channel* mfifo_drain;
 
     uint32_t ctrl;
