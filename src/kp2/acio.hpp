@@ -50,6 +50,8 @@ struct Port {
     int tx_size;
     int tx_read;
 
+    int sync_run;
+
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
 };

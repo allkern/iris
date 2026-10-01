@@ -135,6 +135,19 @@ void reset(Port* port) {
     port->rx_size = 0;
     port->tx_size = 0;
     port->tx_read = 0;
+    port->sync_run = 0;
+}
+
+static void echo_sync(Port* port) {
+    port->sync_run++;
+
+    if (port->sync_run == 2) {
+        push(port, SYNC);
+    }
+
+    if (port->sync_run >= 2) {
+        push(port, SYNC);
+    }
 }
 
 void register_node(Port* port, node_handler handler, void* udata, const char* name) {
@@ -149,6 +162,8 @@ void register_node(Port* port, node_handler handler, void* udata, const char* na
 }
 
 void write(Port* port, const uint8_t* data, int size) {
+    port->sync_run = 0;
+
     for (int i = 0; i < size; i++) {
         uint8_t value = data[i];
 
@@ -158,6 +173,10 @@ void write(Port* port, const uint8_t* data, int size) {
             }
 
             port->rx_size = 0;
+
+            echo_sync(port);
+        } else {
+            port->sync_run = 0;
         }
 
         if (port->rx_size >= FRAME_MAX) {

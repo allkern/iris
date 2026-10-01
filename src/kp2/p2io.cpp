@@ -201,6 +201,7 @@ void set_axis(P2io* p2io, int axis, float value) {
     float steer = p2io->axis[AXIS_STEER_RIGHT] - p2io->axis[AXIS_STEER_LEFT];
 
     p2io->analog[ANALOG_STEER] = (uint16_t)(ANALOG_CENTER + (steer * (ANALOG_CENTER - 1)));
+    p2io->thrilldrive_handle.steer = p2io->analog[ANALOG_STEER];
     p2io->analog[ANALOG_GAS] = (uint16_t)(p2io->axis[AXIS_GAS] * ANALOG_MAX);
     p2io->analog[ANALOG_BRAKE] = (uint16_t)(p2io->axis[AXIS_BRAKE] * ANALOG_MAX);
 }
@@ -497,14 +498,22 @@ static int interrupt_in(P2io* p2io, uint8_t* buf, int len) {
 
     uint8_t report[INTERRUPT_PAYLOAD_SIZE];
 
-    report[0] = (uint8_t)(state >> 24);
-    report[1] = (uint8_t)(state >> 16);
-    report[2] = (uint8_t)(state >> 8);
-    report[3] = (uint8_t)state;
+    report[0] = (uint8_t)state;
+    report[1] = (uint8_t)(state >> 8);
+    report[2] = (uint8_t)(state >> 16);
+    report[3] = (uint8_t)(state >> 24);
+
+    uint16_t analog[ANALOG_COUNT];
+
+    memcpy(analog, p2io->analog, sizeof(analog));
+
+    if (p2io->input_type == INPUT_THRILL_DRIVE) {
+        analog[ANALOG_STEER] = thrilldrive::handle_position(&p2io->thrilldrive_handle);
+    }
 
     for (int i = 0; i < ANALOG_COUNT; i++) {
-        report[4 + (i * 2)] = (uint8_t)(p2io->analog[i] >> 8);
-        report[5 + (i * 2)] = (uint8_t)(p2io->analog[i] & 0xff);
+        report[4 + (i * 2)] = (uint8_t)(analog[i] >> 8);
+        report[5 + (i * 2)] = (uint8_t)(analog[i] & 0xff);
     }
 
     int size = len < INTERRUPT_PAYLOAD_SIZE ? len : INTERRUPT_PAYLOAD_SIZE;
