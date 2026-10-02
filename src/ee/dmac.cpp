@@ -512,6 +512,10 @@ static void mfifo_drain_vif1(Dmac* dmac) {
 
                 if (ring) {
                     c->madr = mfifo_wrap(dmac, c->madr);
+
+                    if (c->tag.id == 1) {
+                        c->tadr = c->madr;
+                    }
                 }
             }
 
@@ -546,6 +550,10 @@ static void mfifo_drain_vif1(Dmac* dmac) {
         uint128_t tag = read_qword(dmac, c->tadr);
 
         process_source_tag(dmac, c, tag);
+
+        if (c->tag.id == 1) {
+            c->tadr = c->madr;
+        }
 
         if (c->tag.id == 7) {
             c->tadr = c->madr + c->qwc * 16;
