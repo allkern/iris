@@ -64,5 +64,6 @@ void register_node(Port* port, node_handler handler, void* udata, const char* na
 void write(Port* port, const uint8_t* data, int size);
 int read(Port* port, uint8_t* data, int size);
 int pending(Port* port);
+void queue(Port* port, const uint8_t* data, int size);
 
 }

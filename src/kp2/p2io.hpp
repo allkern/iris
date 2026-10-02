@@ -27,6 +27,8 @@ inline constexpr auto PORT_COUNT = 2;
 
 inline constexpr auto ANALOG_COUNT = 3;
 
+inline constexpr auto EXTIO_PACKET_SIZE = 4;
+
 inline constexpr auto ANALOG_STEER = 0;
 inline constexpr auto ANALOG_GAS = 1;
 inline constexpr auto ANALOG_BRAKE = 2;
@@ -125,6 +127,9 @@ struct P2io {
 
     uint8_t dip_switches;
     int force_31khz;
+
+    uint8_t extio[EXTIO_PACKET_SIZE];
+    int extio_size;
 
     uint8_t watchdog;
     uint32_t watchdog_state;

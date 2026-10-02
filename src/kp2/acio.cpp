@@ -224,4 +224,10 @@ int pending(Port* port) {
     return port->tx_size - port->tx_read;
 }
 
+void queue(Port* port, const uint8_t* data, int size) {
+    for (int i = 0; i < size; i++) {
+        push(port, data[i]);
+    }
+}
+
 }

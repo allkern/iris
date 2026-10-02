@@ -25,6 +25,8 @@ inline constexpr auto DALLAS_READ_WHITE = 0x01;
 inline constexpr auto INTERRUPT_PAYLOAD_SIZE = 12;
 inline constexpr auto SCI_READ_MAX = 200;
 inline constexpr auto WATCHDOG_BIT = 0x00000002;
+inline constexpr auto EXTIO_FRAME_START = 0x80;
+inline constexpr auto EXTIO_ACK = 0x11;
 
 static const uint8_t firmware_version[7] = { 'D', '4', '4', 0x00, 0x01, 0x06, 0x04 };
 
@@ -325,6 +327,34 @@ static void handle_sci_read(P2io* p2io, const uint8_t* payload, int length) {
     push_response_buffer(p2io, buf, read);
 }
 
+static void extio_write(P2io* p2io, const uint8_t* data, int size) {
+    for (int i = 0; i < size; i++) {
+        if (data[i] & EXTIO_FRAME_START) {
+            p2io->extio_size = 0;
+        }
+
+        if (p2io->extio_size >= EXTIO_PACKET_SIZE) {
+            continue;
+        }
+
+        p2io->extio[p2io->extio_size++] = data[i];
+
+        if (p2io->extio_size < EXTIO_PACKET_SIZE) {
+            continue;
+        }
+
+        uint8_t sum = (p2io->extio[0] + p2io->extio[1] + p2io->extio[2]) & 0x7f;
+
+        if (sum != p2io->extio[3]) {
+            continue;
+        }
+
+        uint8_t ack = EXTIO_ACK;
+
+        acio::queue(&p2io->port[PORT_COM1], &ack, 1);
+    }
+}
+
 static void handle_sci_write(P2io* p2io, const uint8_t* payload, int length) {
     int index = length > 0 ? payload[0] : 0;
 
@@ -334,7 +364,11 @@ static void handle_sci_write(P2io* p2io, const uint8_t* payload, int length) {
         return;
     }
 
-    acio::write(&p2io->port[index], payload + 2, length - 2);
+    if (index == PORT_COM1 && p2io->input_type == INPUT_DDR) {
+        extio_write(p2io, payload + 2, length - 2);
+    } else {
+        acio::write(&p2io->port[index], payload + 2, length - 2);
+    }
 
     push_response(p2io, (uint8_t)(length - 2));
 }
@@ -703,6 +737,7 @@ static void reset_device(Device* dev) {
     P2io* p2io = from_device(dev);
 
     p2io->jamma = 0;
+    p2io->extio_size = 0;
 
     memset(p2io->analog, 0, sizeof(p2io->analog));
     memset(p2io->axis, 0, sizeof(p2io->axis));
