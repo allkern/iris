@@ -306,7 +306,6 @@ void soft_reset(Gs* gs) {
     gs->finish_queued = 0;
 
     gs->vblank = 0;
-    gs->signal_pending = 0;
     gs->signal_stall = 0;
 
     gs->ctx = &gs->context[0];
@@ -612,9 +611,7 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
 
             gs->imr = data;
 
-            if (gs->signal_pending && (prev_signal && !new_signal)) {
-                gs->signal_pending--;
-
+            if ((gs->csr & 1) && prev_signal && !new_signal) {
                 ee::intc::irq(gs->hw.ee_intc, ee::intc::GS);
             }
 
@@ -1051,7 +1048,6 @@ int apply_signal(Gs* gs, uint64_t data) {
     uint64_t value = data & mask;
 
     if (gs->csr & 1) {
-        gs->signal_pending++;
         gs->signal_stall = 1;
 
         gs->stall_sigid = gs->siglblid & 0xffffffff;
@@ -1061,7 +1057,6 @@ int apply_signal(Gs* gs, uint64_t data) {
         return 1;
     }
 
-    gs->signal_pending++;
     gs->signal = data;
 
     gs->csr |= 1;

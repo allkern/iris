@@ -276,7 +276,6 @@ struct Gs {
     int vblank;
 
     // SIGNAL stuff
-    int signal_pending;
     int signal_stall;
     uint32_t stall_sigid;
 
