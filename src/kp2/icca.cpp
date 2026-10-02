@@ -5,7 +5,7 @@
 namespace iris::kp2::icca {
 
 inline constexpr auto CODE_GET_INFO = 0x0002;
-inline constexpr auto CODE_CLEAR = 0x0000;
+inline constexpr auto CODE_CLEAR = 0x0100;
 inline constexpr auto CODE_RESET = 0x0003;
 inline constexpr auto CODE_UNKNOWN_0116 = 0x0116;
 inline constexpr auto CODE_UNKNOWN_0120 = 0x0120;

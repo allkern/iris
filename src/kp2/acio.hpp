@@ -10,6 +10,7 @@ inline constexpr auto SYNC = 0xaa;
 inline constexpr auto ESCAPE = 0xff;
 
 inline constexpr auto BROADCAST_ADDRESS = 0x00;
+inline constexpr auto RESPONSE_FLAG = 0x80;
 inline constexpr auto CODE_ASSIGN_ADDRESS = 0x0001;
 
 inline constexpr auto PAYLOAD_MAX = 256;

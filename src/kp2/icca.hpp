@@ -4,8 +4,8 @@
     --------
     Code     Description
     0002h    get node info
-    0000h    clear
     0003h    reset
+    0100h    clear
     0116h    unknown
     0120h    unknown
     0130h    start the queue loop

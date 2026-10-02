@@ -34,7 +34,7 @@ static void push_escaped(Port* port, uint8_t value) {
 
 static void send(Port* port, const Request* request, const Response* response) {
     uint8_t header[5] = {
-        request->address,
+        (uint8_t)(request->address | RESPONSE_FLAG),
         (uint8_t)(request->code >> 8),
         (uint8_t)(request->code & 0xff),
         request->sequence,
