@@ -415,6 +415,7 @@ static inline uint32_t mfifo_wrap(Dmac* dmac, uint32_t addr) {
 }
 
 static inline uint32_t transfer_vif1_qwords(Dmac* dmac);
+static bool vif1_must_wait(Dmac* dmac);
 
 void mfifo_handle_ref_tag(Dmac* dmac) {
     Channel* c = dmac->mfifo_drain;
@@ -464,6 +465,10 @@ static void mfifo_drain_vif1(Dmac* dmac) {
 
     bool progress = false;
 
+    if (dmac->vif1_pace_pending) {
+        return;
+    }
+
     while (c->chcr & 0x100) {
         if (!vif::get_dreq(vif)) {
             return;
@@ -476,10 +481,20 @@ static void mfifo_drain_vif1(Dmac* dmac) {
                 return;
             }
 
-            if (!ring && transfer_vif1_qwords(dmac)) {
-                progress = true;
+            if (vif1_must_wait(dmac)) {
+                return;
+            }
 
-                continue;
+            if (!ring) {
+                uint32_t qwords = transfer_vif1_qwords(dmac);
+
+                if (qwords) {
+                    dmac->vif1_budget -= (int64_t)qwords * 4;
+
+                    progress = true;
+
+                    continue;
+                }
             }
 
             uint128_t q = read_qword(dmac, c->madr & ~0xfu);
@@ -488,6 +503,8 @@ static void mfifo_drain_vif1(Dmac* dmac) {
 
             c->madr += 4;
             c->index++;
+
+            dmac->vif1_budget--;
 
             if (c->index == 4) {
                 c->index = 0;
@@ -519,6 +536,10 @@ static void mfifo_drain_vif1(Dmac* dmac) {
                 set_irq(dmac, MEIS);
             }
 
+            return;
+        }
+
+        if (vif1_must_wait(dmac)) {
             return;
         }
 
@@ -1003,6 +1024,12 @@ static void resume_vif1_transfer(void* udata, int overshoot) {
         return;
     }
 
+    if (((dmac->ctrl >> 2) & 3) == 2) {
+        mfifo_drain_vif1(dmac);
+
+        return;
+    }
+
     run_vif1_transfer(dmac);
 }
 
@@ -1233,6 +1260,9 @@ void handle_vif1_transfer(Dmac* dmac) {
     // );
 
     if (mfifo_drain == 2) {
+        dmac->vif1_budget = VIF1_PACE_CHUNK_QWORDS * 4;
+        dmac->vif1_credit_time = dmac->hw.sched->now;
+
         mfifo_drain_vif1(dmac);
 
         return;
