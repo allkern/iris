@@ -8887,7 +8887,9 @@ int run_block(Ee* ee, int max_cycles) {
     if (is_irq_pending(ee)) {
         int cycles = _ee_run_block(ee, 1, 4);
 
-        exception_level1(ee, CAUSE_EXC1_INT);
+        if (is_irq_pending(ee)) {
+            exception_level1(ee, CAUSE_EXC1_INT);
+        }
 
         return cycles;
     }
