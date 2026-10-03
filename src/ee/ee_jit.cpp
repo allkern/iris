@@ -5006,7 +5006,7 @@ static inline void emit_round_nearest(asmjit::ujit::UniCompiler& uc, Ee* ee) {
     asmjit::ujit::Gp fpcr = uc.new_gp64();
 
     uc.load_u64(fpcr, asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, fpcr_nearest)));
-    uc.cc->msr(asmjit::Imm(asmjit::a64::SysReg::kFPCR), fpcr);
+    uc.cc->msr(asmjit::Imm(asmjit::a64::Predicate::SysReg::kFPCR), fpcr);
 #else
     uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_nearest)));
 #endif
@@ -5017,7 +5017,7 @@ static inline void emit_round_chop(asmjit::ujit::UniCompiler& uc, Ee* ee) {
     asmjit::ujit::Gp fpcr = uc.new_gp64();
 
     uc.load_u64(fpcr, asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, fpcr_chop)));
-    uc.cc->msr(asmjit::Imm(asmjit::a64::SysReg::kFPCR), fpcr);
+    uc.cc->msr(asmjit::Imm(asmjit::a64::Predicate::SysReg::kFPCR), fpcr);
 #else
     uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_chop)));
 #endif
