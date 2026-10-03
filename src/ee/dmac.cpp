@@ -2277,7 +2277,7 @@ void write32(Dmac* dmac, uint32_t addr, uint64_t data) {
         //       BUT, Atelier Iris requires QWC to NOT be writable during IPU transfers,
         //       otherwise it will increase QWC mid-transfer, which causes the IPU to
         //       starve of data, ultimately causing the transfer to never end.
-        case 0x20: if ((c->chcr & 0x100) == 0) c->qwc = data & 0xffff; return;
+        case 0x20: if ((c->chcr & 0x100) == 0 || c == &dmac->channels[IPU_FROM]) c->qwc = data & 0xffff; return;
         case 0x30: c->tadr = data; return;
         case 0x40: c->asr0 = data; return;
         case 0x50: c->asr1 = data; return;

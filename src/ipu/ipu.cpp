@@ -129,6 +129,7 @@ Ipu::Ipu(ee::intc::Intc* intc, ee::dmac::Dmac* dmac) : intc(intc), dmac(dmac)
 
 void Ipu::reset()
 {
+    idec_ready_at = 0;
     dct_coeff = nullptr;
     VDEC_table = nullptr;
     in_FIFO.reset();
@@ -257,9 +258,13 @@ void Ipu::run()
 }
 
 #define IPU_BATCH_STEPS 64
+#define IDEC_START_DELAY 2048
 
 void Ipu::run_until_stalled()
 {
+    if (ctrl.busy && command == 0x01 && dmac->hw.sched->now < idec_ready_at)
+        return;
+
     for (int i = 0; i < IPU_BATCH_STEPS; i++)
     {
         if (!ctrl.busy)
@@ -1344,6 +1349,7 @@ void Ipu::write_command(uint32_t value)
             case 0x01:
                 iris_debug(this, "IDEC");
                 idec.state = IDEC_STATE::DELAY;
+                idec_ready_at = dmac->hw.sched->now + IDEC_START_DELAY;
                 idec.macro_type = 0;
                 idec.qsc = (command_option >> 16) & 0x1F;
                 idec.decodes_dct = command_option & (1 << 24);

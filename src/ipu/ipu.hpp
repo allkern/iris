@@ -210,6 +210,7 @@ struct Ipu
         static uint32_t quantizer_nonlinear[0x20];
 
         bool command_decoding;
+        int64_t idec_ready_at;
         uint8_t command;
         uint32_t command_option;
         uint32_t command_output;
