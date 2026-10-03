@@ -1089,7 +1089,7 @@ int apply_label(Gs* gs, uint64_t data) {
 
     uint64_t mask = data >> 32;
 
-    gs->siglblid &= (~mask) << 32;
+    gs->siglblid &= ~(mask << 32);
     gs->siglblid |= (data & mask) << 32;
 
     return 0;

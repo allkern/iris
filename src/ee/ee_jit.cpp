@@ -1,3 +1,5 @@
+#pragma clang fp contract(off)
+
 #include <signal.h>
 #include <assert.h>
 #include <math.h>
@@ -15,6 +17,10 @@
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__) || defined(_M_IX86)
 #define _EE_HOST_MXCSR
 #include <xmmintrin.h>
+#endif
+
+#if defined(__aarch64__) || defined(_M_ARM64)
+#define _EE_HOST_FPCR
 #endif
 
 #include "ee.hpp"
@@ -1323,6 +1329,17 @@ static inline float sqrt_nearest(float value) {
     _mm_setcsr(saved);
 
     return result;
+#elif defined(_EE_HOST_FPCR)
+#pragma STDC FENV_ACCESS ON
+    int saved = fegetround();
+
+    fesetround(FE_TONEAREST);
+
+    float result = sqrtf(value);
+
+    fesetround(saved);
+
+    return result;
 #else
     return sqrtf(value);
 #endif
@@ -1337,6 +1354,17 @@ static inline float divide_nearest(float a, float b) {
     float result = a / b;
 
     _mm_setcsr(saved);
+
+    return result;
+#elif defined(_EE_HOST_FPCR)
+#pragma STDC FENV_ACCESS ON
+    int saved = fegetround();
+
+    fesetround(FE_TONEAREST);
+
+    float result = a / b;
+
+    fesetround(saved);
 
     return result;
 #else
@@ -3983,6 +4011,13 @@ void reset(Ee* ee) {
     ee->mxcsr_nearest = _mm_getcsr() & ~0x6000u;
 #endif
 
+#ifdef _EE_HOST_FPCR
+    uint64_t fpcr = __builtin_arm_rsr64("fpcr");
+
+    ee->fpcr_chop = (fpcr & ~(3ull << 22)) | (3ull << 22);
+    ee->fpcr_nearest = fpcr & ~(3ull << 22);
+#endif
+
     ram::reset(ee->spr);
 
     ee->fcr = 0x01000001;
@@ -4967,13 +5002,23 @@ static inline CachedReg& get_reg(Ee* ee, asmjit::ujit::UniCompiler* uc, int i, b
 }
 
 static inline void emit_round_nearest(asmjit::ujit::UniCompiler& uc, Ee* ee) {
-#if !defined(ASMJIT_UJIT_AARCH64)
+#if defined(ASMJIT_UJIT_AARCH64)
+    asmjit::ujit::Gp fpcr = uc.new_gp64();
+
+    uc.load_u64(fpcr, asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, fpcr_nearest)));
+    uc.cc->msr(asmjit::Imm(asmjit::a64::SysReg::kFPCR), fpcr);
+#else
     uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_nearest)));
 #endif
 }
 
 static inline void emit_round_chop(asmjit::ujit::UniCompiler& uc, Ee* ee) {
-#if !defined(ASMJIT_UJIT_AARCH64)
+#if defined(ASMJIT_UJIT_AARCH64)
+    asmjit::ujit::Gp fpcr = uc.new_gp64();
+
+    uc.load_u64(fpcr, asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, fpcr_chop)));
+    uc.cc->msr(asmjit::Imm(asmjit::a64::SysReg::kFPCR), fpcr);
+#else
     uc.cc->ldmxcsr(asmjit::ujit::mem_ptr(ee->state_ptr, offsetof(Ee, mxcsr_chop)));
 #endif
 }

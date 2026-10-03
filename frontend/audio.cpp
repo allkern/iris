@@ -1,3 +1,5 @@
+#pragma clang fp contract(off)
+
 #include <chrono>
 #include <thread>
 #include <cmath>

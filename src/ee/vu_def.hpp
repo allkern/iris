@@ -102,9 +102,6 @@ struct Vu {
     uint32_t upload_lo;
     uint32_t upload_hi;
 
-    uint64_t micro_mem[0x800];
-    uint128_t vu_mem[0x400];
-
     int micro_mem_size;
     int vu_mem_size;
     int id;
@@ -177,6 +174,9 @@ struct Vu {
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
+
+    uint64_t micro_mem[0x800];
+    uint128_t vu_mem[0x400];
 };
 
 Block* find_block(Vu* vu, uint32_t tpc);

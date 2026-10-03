@@ -1,3 +1,5 @@
+#pragma clang fp contract(off)
+
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>

@@ -2,6 +2,7 @@
 #include <cstdlib>
 #include <cstddef>
 #include <cstring>
+#include <cfenv>
 
 #include "ps2.hpp"
 #include "rom.hpp"
@@ -9,6 +10,20 @@
 #include "profile_counters.hpp"
 
 namespace iris::ps2 {
+
+// Makes sure the rounding mode is correct on the
+// emulation thread 
+static inline void enter_emulation_thread() {
+    static thread_local bool rounding_set = false;
+
+    if (rounding_set) {
+        return;
+    }
+
+    fesetround(FE_TOWARDZERO);
+
+    rounding_set = true;
+}
 
 Ps2* create(logger::Logger* logger) {
     Ps2* ps2 = new Ps2();
@@ -338,6 +353,8 @@ void reset(Ps2* ps2) {
 }
 
 void cycle(Ps2* ps2) {
+    enter_emulation_thread();
+
     profile::count(profile::PS2_CYCLES);
 
     mtvu::poll(ps2->mtvu);
@@ -388,6 +405,8 @@ void cycle(Ps2* ps2) {
 }
 
 void step_ee(Ps2* ps2) {
+    enter_emulation_thread();
+
     ee::step(ps2->ee);
     scheduler::tick(ps2->sched, 1);
     ee::timers::tick(ps2->ee_timers);
@@ -405,6 +424,8 @@ void step_ee(Ps2* ps2) {
 }
 
 void step_iop(Ps2* ps2) {
+    enter_emulation_thread();
+
     for (int i = 0; i < 8; i++) {
         ee::timers::tick(ps2->ee_timers);
         ee::step(ps2->ee);

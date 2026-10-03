@@ -1,3 +1,5 @@
+#pragma clang fp contract(off)
+
 #include <cmath>
 #include <math.h>
 #include <fenv.h>

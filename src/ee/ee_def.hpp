@@ -649,6 +649,8 @@ struct Ee {
     uint32_t fcr;
     uint32_t mxcsr_chop;
     uint32_t mxcsr_nearest;
+    uint64_t fpcr_chop;
+    uint64_t fpcr_nearest;
 
     int32_t cycles_left;
     int32_t exit_req;

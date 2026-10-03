@@ -193,7 +193,7 @@ void update_window(Instance* iris) {
     // Resize swapchain?
     int width, height;
 
-    SDL_GetWindowSize(iris->window, &width, &height);
+    SDL_GetWindowSizeInPixels(iris->window, &width, &height);
 
     // Rebuilding starts with vkDeviceWaitIdle, which cannot succeed on a lost device
     if (!iris->vk.device_lost && width > 0 && height > 0 && (iris->vk.swapchain_rebuild || iris->vk.main_window_data.Width != width || iris->vk.main_window_data.Height != height)) {
