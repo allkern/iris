@@ -942,13 +942,13 @@ static inline uint8_t read_s_response(Cdvd* cdvd) {
     return data;
 }
 
-static inline long get_read_timing(Cdvd* cdvd, int dvd, int from) {
-    long read_speed = dvd ? 4 * 1382400 : 24 * 153600;
-    long block_timing = (36864000L * cdvd->read_size) / read_speed;
-    long delta = cdvd->read_lba - from;
-    long contiguous_cycles = block_timing * cdvd->read_count;
+static inline int64_t get_read_timing(Cdvd* cdvd, int dvd, int from) {
+    int64_t read_speed = dvd ? 4 * 1382400 : 24 * 153600;
+    int64_t block_timing = (36864000LL * cdvd->read_size) / read_speed;
+    int64_t delta = (int64_t)cdvd->read_lba - from;
+    int64_t contiguous_cycles = block_timing * cdvd->read_count;
 
-    long cycles = 0;
+    int64_t cycles = 0;
 
     if (!delta) {
         delta = 1;
