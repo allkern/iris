@@ -517,6 +517,8 @@ bool init(Instance* iris) {
 
     log_apply_settings(iris);
 
+    vulkan::use_bundled_drivers(iris);
+
     iris->window = SDL_CreateWindow(
         IRIS_TITLE,
         iris->window_width, iris->window_height,

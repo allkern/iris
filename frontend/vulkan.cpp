@@ -1,4 +1,6 @@
 #include <algorithm>
+#include <cstdlib>
+#include <filesystem>
 
 #include "config.hpp"
 #include "iris.hpp"
@@ -784,6 +786,27 @@ void free_texture(Instance* iris, Texture& tex) {
     if (tex.image_memory) vkFreeMemory(iris->vk.device, tex.image_memory, nullptr);
 
     tex = Texture();
+}
+
+void use_bundled_drivers(Instance* iris) {
+#ifdef __APPLE__
+    if (std::getenv("VK_DRIVER_FILES") || std::getenv("VK_ICD_FILENAMES"))
+        return;
+
+    const char* base = SDL_GetBasePath();
+
+    if (!base)
+        return;
+
+    std::filesystem::path icd = std::filesystem::path(base) / "vulkan" / "icd.d" / "MoltenVK_icd.json";
+
+    if (!std::filesystem::exists(icd))
+        return;
+
+    setenv("VK_DRIVER_FILES", icd.c_str(), 1);
+
+    iris_info(&iris->log.vulkan, "Using bundled Vulkan driver \"{}\"", icd.string());
+#endif
 }
 
 bool init(Instance* iris, bool enable_validation) {

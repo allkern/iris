@@ -73,6 +73,7 @@ struct PushConstants {
 
 namespace vulkan {
 
+void use_bundled_drivers(Instance* iris);
 bool init(Instance* iris, bool enable_validation = false);
 void cleanup(Instance* iris);
 Texture upload_texture(Instance* iris, void* pixels, int width, int height, int stride);
