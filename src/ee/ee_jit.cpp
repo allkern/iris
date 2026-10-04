@@ -5247,7 +5247,13 @@ static asmjit::CodeHolder& prepare_code_holder(Ee* ee) {
         return ee->code;
     }
 
+#ifdef __APPLE__
+    ee->code.reset();
+    ee->code.init(ee->rt.environment(), ee->rt.cpu_features());
+    ee->code.attach(ee->bc);
+#else
     ee->code.reinit();
+#endif
 
     return ee->code;
 }
