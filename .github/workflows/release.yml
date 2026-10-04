@@ -150,6 +150,9 @@ jobs:
     - name: Install Vulkan SDK
       uses: jakoch/install-vulkan-sdk-action@v1
       with:
+        # MoltenVK 1.4.2 (SDK 1.4.357.1+) drops subgroup arithmetic on Intel
+        # GPUs, which parallel-gs requires. 1.4.357.0 ships MoltenVK 1.4.1
+        vulkan_version: 1.4.357.0
         optional_components: com.lunarg.vulkan.volk
         install_runtime: true
         cache: true
@@ -168,6 +171,23 @@ jobs:
         cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
         cmake --build build
         sudo cmake --install build
+
+    - name: Replace bundled symlinks and re-sign
+      run: |
+        # Artifact zips flatten symlinks into copies, which breaks the
+        # bundle's code signature, so bundle real files and sign those
+        (
+          cd ./build/iris.app/Contents/Frameworks
+          for f in *; do
+            if [ -L "$f" ]; then
+              target=$(readlink "$f")
+              sudo rm "$f"
+              sudo cp "$target" "$f"
+            fi
+          done
+        )
+        sudo codesign --force --deep --sign - ./build/iris.app
+        codesign --verify --deep --strict ./build/iris.app
 
     - name: Generate artifact name
       id: generate-name
