@@ -2,11 +2,15 @@ cmake_minimum_required(VERSION 3.25)
 project(iris LANGUAGES C CXX)
 
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
-set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12")
 set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
+# Normalizing destinations good
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW) 
+endif()
 
 # Statically link SDL3 for Linux targets
 set(SDL_STATIC ON)
@@ -469,7 +473,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 
     find_library(MOLTENVK_LIBRARY
         NAMES libMoltenVK.dylib
-        PATHS ENV VULKAN_SDK
+        PATHS /usr/local/lib ENV VULKAN_SDK
         PATH_SUFFIXES /lib
     )
 

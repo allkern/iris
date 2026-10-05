@@ -138,6 +138,7 @@ jobs:
     - uses: actions/setup-python@v7
       with:
         python-version: '3.12'
+        cache: 'pip'
 
     - name: Install mbedTLS codegen deps
       run: pip install -r deps/mbedtls/scripts/basic.requirements.txt
@@ -145,7 +146,7 @@ jobs:
     - name: Build and pack Iris
       run: |
         git fetch --all --tags
-        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64"
         cmake --build build
         sudo cmake --install build
 
