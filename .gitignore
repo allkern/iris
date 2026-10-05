@@ -5,10 +5,12 @@ tools/
 elf/
 roms/
 .vs/
+.venv/
 ac/
 screens/
 imgui.ini
 iris.res
+*.app
 *.AppImage
 *.expected
 *.dump

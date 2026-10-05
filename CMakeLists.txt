@@ -524,48 +524,31 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "
 message(STATUS "CMake System Name: ${CMAKE_SYSTEM_NAME}")
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    # tell Install about the target, otherwise fixup won't know about the transitive dependencies
-    install(TARGETS iris
-        BUNDLE DESTINATION ./install COMPONENT Runtime
-           RUNTIME DESTINATION ./install/bin COMPONENT Runtime
-    )
-    
-    set(BUNDLE_PATH "${CMAKE_BINARY_DIR}/iris.app") # where to look for dependencies when fixing up
-    file(GLOB VULKAN_DYLIBS $ENV{VULKAN_SDK}/lib/libvulkan.*.dylib)
-    set(VULKAN_DYLIBS ${VULKAN_DYLIBS} $ENV{VULKAN_SDK}/lib/libMoltenVK.dylib)
+    install(TARGETS iris BUNDLE DESTINATION .)
+
+    set(DIRS "/usr/local/lib")
+    if(DEFINED ENV{VULKAN_SDK})
+        list(APPEND DIRS $ENV{VULKAN_SDK}/lib)
+    endif()
+
     install(CODE "
-        execute_process(COMMAND echo \"Preparing to bundle iris...\")
-        execute_process(COMMAND echo \"Bundle path: ${BUNDLE_PATH}\")
-        execute_process(COMMAND echo \"Vulkan dylibs: ${VULKAN_DYLIBS}\")
-        execute_process(COMMAND echo \"Adding local RPATH...\")
-        execute_process(
-            COMMAND install_name_tool -add_rpath
-            \"@executable_path/../Frameworks\"
-            \"${BUNDLE_PATH}/Contents/MacOS/iris\"
-        )
-        execute_process(COMMAND echo \"Creating ICD JSON directory...\")
-        make_directory(${BUNDLE_PATH}/Contents/Resources/vulkan/icd.d)
-        execute_process(COMMAND echo \"Creating Frameworks directory...\")
-        make_directory(${BUNDLE_PATH}/Contents/Frameworks)
-        execute_process(COMMAND echo \"Copying files...\")
-        file(COPY
-            ${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK_icd.json
-            DESTINATION ${BUNDLE_PATH}/Contents/Resources/vulkan/icd.d/
-        )
-        file(COPY
-            ${VULKAN_DYLIBS}
-            DESTINATION ${BUNDLE_PATH}/Contents/Frameworks/
-        )
-        execute_process(COMMAND echo \"Signing app bundle...\")
-        execute_process(COMMAND
-            codesign --force --deep --sign - ${BUNDLE_PATH}
-            RESULT_VARIABLE codesign_result
-            OUTPUT_VARIABLE codesign_output
-        )
+        include(BundleUtilities)
+
+        make_directory($<TARGET_BUNDLE_DIR:iris>/Contents/Resources/vulkan/icd.d)
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK_icd.json DESTINATION $<TARGET_BUNDLE_DIR:iris>/Contents/Resources/vulkan/icd.d/)
+
+        fixup_bundle($<TARGET_BUNDLE_DIR:iris> \"\" \"${DIRS}\")
+        verify_app($<TARGET_BUNDLE_DIR:iris>)
+
+        execute_process(COMMAND codesign --force --deep --sign - ${BUNDLE_PATH} RESULT_VARIABLE codesign_result OUTPUT_VARIABLE codesign_output)
         if (codesign_result)
             execute_process(COMMAND echo \"${codesign_output}\")
         endif()
     ")
+
+    # CMake forgets to copy the signature. I have no idea why
+    install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/iris.app/Contents/_CodeSignature" DESTINATION "iris.app/Contents")
+
     set(CPACK_GENERATOR "DragNDrop")
     include(CPack)
 endif()

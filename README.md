@@ -91,14 +91,30 @@ cmake --build build
 ```
 
 ### macOS
-
+Install the dependencies, for example with Homebrew:
+```sh
+brew install cmake ninja python
 ```
+Then clone:
+```sh
 git clone https://github.com/allkern/iris --recursive
 cd iris
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+```
+mbedTLS uses a Python source generator, which requires some dependencies. You can use a virtual environment to install these locally:
+```sh
+python3 -m venv .venv
+./.venv/bin/pip install -r deps/mbedtls/scripts/basic.requirements.txt 
+```
+Finally, configure and build:
+```sh
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPython3_EXECUTABLE=$PWD/.venv/bin/python
 cmake --build build
 ```
-Optionally run `sudo cmake --install build` to generate a macOS App Bundle
+You can also generate a proper Bundle if you'd like:
+```sh
+cmake --install build --prefix .
+```
+You'll then find a full `iris.app` in the project directory.
 
 ## Progress/Insights
 Iris can boot/run a fairly large number of commercial games, playability may be all over the place though, some games run fairly smoothly, while others can't break the 1 digit FPS mark, this is due to the lack of EE/VU JITs which will be addressed soon.
