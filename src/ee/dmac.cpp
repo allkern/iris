@@ -971,6 +971,7 @@ void send_vif1_irq(void* udata, int overshoot) {
 constexpr int64_t DMA_CYCLES_PER_QWORD = 2;
 constexpr int64_t VIF1_PACE_CHUNK_QWORDS = 128;
 constexpr int64_t VIF1_PATH3_WAIT_CYCLES = 128;
+constexpr int64_t SIF1_MIN_DELAY_CYCLES = 16*16;
 
 static void run_vif1_transfer(Dmac* dmac);
 
@@ -1834,6 +1835,16 @@ void handle_sif1_transfer(Dmac* dmac) {
 
     int64_t cycles = qwords * DMA_CYCLES_PER_QWORD;
 
+    // Crazy Taxi hangs on boot if we don't remove delays for
+    // very small transfers (i.e. less than 64 qwords/256 EE cycles)
+    if (cycles < SIF1_MIN_DELAY_CYCLES) {
+        set_irq(dmac, SIF1);
+
+        dmac->channels[SIF1].chcr &= ~0x100;
+
+        return;
+    }
+
     dmac->sif1_done_at = dmac->hw.sched->now + cycles;
 
     scheduler::Event event;
@@ -2346,7 +2357,8 @@ void write8(Dmac* dmac, uint32_t addr, uint64_t data) {
 }
 
 uint64_t read16(Dmac* dmac, uint32_t addr) {
-    int shift = (addr & 2) * 16;
+    int shift = (addr & 2) * 8;
+
     addr = addr & ~3;
 
     return (read32(dmac, addr) >> shift) & 0xffff;

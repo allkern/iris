@@ -210,11 +210,29 @@ void reset(Spu2* spu2) {
     // scheduler::schedule(spu2->hw.sched, event);
 }
 
+static thread_local bool on_audio_thread = false;
+
 void irq(Spu2* spu2, int c) {
     if (spu2->spdif_irq & (4 << c))
         return;
 
     spu2->spdif_irq |= 4 << c;
+
+    if (on_audio_thread) {
+        spu2->deferred_irq.store(1, std::memory_order_release);
+
+        return;
+    }
+
+    iop::intc::irq(spu2->hw.intc, iop::intc::SPU2);
+}
+
+void service(Spu2* spu2) {
+    if (!spu2->deferred_irq.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    spu2->deferred_irq.store(0, std::memory_order_relaxed);
 
     iop::intc::irq(spu2->hw.intc, iop::intc::SPU2);
 }
@@ -1395,7 +1413,15 @@ static int16_t reverb_channel(Spu2* spu2, int core, int R, int32_t in_sample) {
 #define MMIX_SINEL (1 << 1)
 #define MMIX_SINER (1 << 0)
 
+static Sample render_sample(Spu2* spu2, int adma_enable);
+
 Sample get_sample(Spu2* spu2, int adma_enable) {
+    on_audio_thread = true;
+
+    return render_sample(spu2, adma_enable);
+}
+
+static Sample render_sample(Spu2* spu2, int adma_enable) {
     Sample s = silence;
 
     int R = spu2->reverb_cycles & 1;
@@ -1496,7 +1522,7 @@ void tick(Spu2* spu2, int cycles) {
     while (spu2->sample_cycles >= 768) {
         spu2->sample_cycles -= 768;
 
-        Sample s = get_sample(spu2, 0);
+        Sample s = render_sample(spu2, 0);
 
         uint32_t w = spu2->out_write;
 

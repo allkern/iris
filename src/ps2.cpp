@@ -394,6 +394,8 @@ void cycle(Ps2* ps2) {
         spu2_tick(ps2->spu2, ps2->timescale * cycles);
 #else
         ps2->spu2->emu_cycle += (uint64_t)ps2->timescale * cycles;
+
+        spu2::service(ps2->spu2);
 #endif
 
         ps2->iop_cycles -= cycles;

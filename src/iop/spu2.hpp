@@ -1,5 +1,7 @@
 #pragma once
 
+#include <atomic>
+
 #include "spu2_decl.hpp"
 #include "scheduler.hpp"
 #include "intc.hpp"
@@ -11,11 +13,11 @@ namespace iris::spu2 {
 inline constexpr auto RAM_SIZE = 0x100000;// 2 MB
 
 // SPU2 generation mode:
-//   1 = synchronous - the voice mix is produced on the emulation thread, one
+//   1 = synchronous: the voice mix is produced on the emulation thread, one
 //       sample per 768 IOP cycles, into the ring buffer below which the audio
 //       thread drains. Accurate envelope/IRQ timing, but underruns (crackles)
 //       whenever the emulator can't sustain full speed.
-//   0 = asynchronous - the audio thread generates the mix on demand. Cheaper
+//   0 = asynchronous: the audio thread generates the mix on demand. Cheaper
 //       and gap-free under load, at the cost of envelope-timing accuracy.
 #define SPU2_SYNC 0
 
@@ -252,6 +254,8 @@ struct Spu2 {
     uint64_t emu_cycle;
     uint32_t reverb_cycles;
 
+    std::atomic <uint32_t> deferred_irq = 0;
+
     Sample out_buffer[OUT_BUFFER_SIZE];
     volatile uint32_t out_write;
     volatile uint32_t out_read;
@@ -270,6 +274,7 @@ void destroy(Spu2* spu2);
 Sample get_sample(Spu2* spu, int adma_enable);
 void tick(Spu2* spu2, int cycles);
 int pop_sample(Spu2* spu2, Sample* out);
+void service(Spu2* spu2);
 Sample get_voice_sample(Spu2* spu2, int c, int v);
 Sample get_adma_sample(Spu2* spu2, int c);
 void start_adma(Spu2* spu2, int c);
