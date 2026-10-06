@@ -148,31 +148,25 @@ jobs:
         git fetch --all --tags
         cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release "-DCMAKE_OSX_ARCHITECTURES=x86_64;arm64"
         cmake --build build
-        sudo cmake --install build
+        cmake --install build --prefix dist
 
     - name: Replace bundled symlinks and re-sign
       run: |
         # Artifact zips flatten symlinks into copies, which breaks the
         # bundle's code signature, so bundle real files and sign those
         (
-          cd ./build/iris.app/Contents/Frameworks
+          cd dist/iris.app/Contents/Frameworks
           for f in *; do
             if [ -L "$f" ]; then
               target=$(readlink "$f")
-              sudo rm "$f"
-              sudo cp "$target" "$f"
+              rm "$f"
+              cp "$target" "$f"
             fi
           done
         )
-        sudo codesign --force --deep --sign - ./build/iris.app
-        codesign --verify --deep --strict ./build/iris.app
-
-    - name: Stage artifact
-      run: |
-        mkdir -p ./build/dist
-        cp -R ./build/iris.app ./build/dist
+        codesign --force --deep --sign - dist/iris.app
 
     - uses: actions/upload-artifact@v7
       with:
         name: iris-latest-macos-universal
-        path: ./build/dist
+        path: ./dist

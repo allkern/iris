@@ -524,13 +524,13 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "
 message(STATUS "CMake System Name: ${CMAKE_SYSTEM_NAME}")
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    install(TARGETS iris BUNDLE DESTINATION .)
-
     set(DIRS "/usr/local/lib")
     if(DEFINED ENV{VULKAN_SDK})
         list(APPEND DIRS $ENV{VULKAN_SDK}/lib)
     endif()
 
+    # Install prefixes are passed through unnormalized, and fixup_bundle requires a complete path, therefore we need to clobber the bundle in the build folder.
+    # There's also no way to normalize a path given as a generator expression, like INSTALL_PREFIX.
     install(CODE "
         include(BundleUtilities)
 
@@ -538,19 +538,21 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
         file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK_icd.json DESTINATION $<TARGET_BUNDLE_DIR:iris>/Contents/Resources/vulkan/icd.d/)
 
         fixup_bundle($<TARGET_BUNDLE_DIR:iris> \"\" \"${DIRS}\")
-        verify_app($<TARGET_BUNDLE_DIR:iris>)
 
-        execute_process(COMMAND codesign --force --deep --sign - ${BUNDLE_PATH} RESULT_VARIABLE codesign_result OUTPUT_VARIABLE codesign_output)
+        execute_process(COMMAND codesign --force --deep --sign - $<TARGET_BUNDLE_DIR:iris> RESULT_VARIABLE codesign_result OUTPUT_VARIABLE codesign_output)
         if (codesign_result)
             execute_process(COMMAND echo \"${codesign_output}\")
         endif()
     ")
 
-    # CMake forgets to copy the signature. I have no idea why
-    install(DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/iris.app/Contents/_CodeSignature" DESTINATION "iris.app/Contents")
+    # BUNDLE installs will try modify the rpath of the bundle, which won't work as fixup_bundle already does so.
+    install(FILES $<TARGET_BUNDLE_DIR:iris> DESTINATION .)
+
+    # FILES installs do not retain the executable flag on binaries.
+    install(CODE "execute_process(COMMAND /bin/sh -c \"chmod +x $<INSTALL_PREFIX>/iris.app/Contents/Frameworks/* $<INSTALL_PREFIX>/iris.app/Contents/MacOS/*\")")
 
     set(CPACK_GENERATOR "DragNDrop")
-    include(CPack)
+    include(CPack)  
 endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
