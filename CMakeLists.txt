@@ -2,11 +2,15 @@ cmake_minimum_required(VERSION 3.25)
 project(iris LANGUAGES C CXX)
 
 set(WIN_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.rc)
-set(CMAKE_OSX_ARCHITECTURES "x86_64;arm64")
-set(CMAKE_OSX_DEPLOYMENT_TARGET "10.15")
+set(CMAKE_OSX_DEPLOYMENT_TARGET "12")
 set(OSX_ICON ${CMAKE_CURRENT_SOURCE_DIR}/res/iris.icns)
 
 set_source_files_properties(${OSX_ICON} PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+
+# Normalizing destinations good
+if(POLICY CMP0177)
+    cmake_policy(SET CMP0177 NEW) 
+endif()
 
 # Statically link SDL3 for Linux targets
 set(SDL_STATIC ON)
@@ -469,7 +473,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
 
     find_library(MOLTENVK_LIBRARY
         NAMES libMoltenVK.dylib
-        PATHS ENV VULKAN_SDK
+        PATHS /usr/local/lib ENV VULKAN_SDK
         PATH_SUFFIXES /lib
     )
 
@@ -520,50 +524,35 @@ set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT "
 message(STATUS "CMake System Name: ${CMAKE_SYSTEM_NAME}")
 
 if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
-    # tell Install about the target, otherwise fixup won't know about the transitive dependencies
-    install(TARGETS iris
-        BUNDLE DESTINATION ./install COMPONENT Runtime
-           RUNTIME DESTINATION ./install/bin COMPONENT Runtime
-    )
-    
-    set(BUNDLE_PATH "${CMAKE_BINARY_DIR}/iris.app") # where to look for dependencies when fixing up
-    file(GLOB VULKAN_DYLIBS $ENV{VULKAN_SDK}/lib/libvulkan.*.dylib)
-    set(VULKAN_DYLIBS ${VULKAN_DYLIBS} $ENV{VULKAN_SDK}/lib/libMoltenVK.dylib)
+    set(DIRS "/usr/local/lib")
+    if(DEFINED ENV{VULKAN_SDK})
+        list(APPEND DIRS $ENV{VULKAN_SDK}/lib)
+    endif()
+
+    # Install prefixes are passed through unnormalized, and fixup_bundle requires a complete path, therefore we need to clobber the bundle in the build folder.
+    # There's also no way to normalize a path given as a generator expression, like INSTALL_PREFIX.
     install(CODE "
-        execute_process(COMMAND echo \"Preparing to bundle iris...\")
-        execute_process(COMMAND echo \"Bundle path: ${BUNDLE_PATH}\")
-        execute_process(COMMAND echo \"Vulkan dylibs: ${VULKAN_DYLIBS}\")
-        execute_process(COMMAND echo \"Adding local RPATH...\")
-        execute_process(
-            COMMAND install_name_tool -add_rpath
-            \"@executable_path/../Frameworks\"
-            \"${BUNDLE_PATH}/Contents/MacOS/iris\"
-        )
-        execute_process(COMMAND echo \"Creating ICD JSON directory...\")
-        make_directory(${BUNDLE_PATH}/Contents/Resources/vulkan/icd.d)
-        execute_process(COMMAND echo \"Creating Frameworks directory...\")
-        make_directory(${BUNDLE_PATH}/Contents/Frameworks)
-        execute_process(COMMAND echo \"Copying files...\")
-        file(COPY
-            ${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK_icd.json
-            DESTINATION ${BUNDLE_PATH}/Contents/Resources/vulkan/icd.d/
-        )
-        file(COPY
-            ${VULKAN_DYLIBS}
-            DESTINATION ${BUNDLE_PATH}/Contents/Frameworks/
-        )
-        execute_process(COMMAND echo \"Signing app bundle...\")
-        execute_process(COMMAND
-            codesign --force --deep --sign - ${BUNDLE_PATH}
-            RESULT_VARIABLE codesign_result
-            OUTPUT_VARIABLE codesign_output
-        )
+        include(BundleUtilities)
+
+        make_directory($<TARGET_BUNDLE_DIR:iris>/Contents/Resources/vulkan/icd.d)
+        file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/MoltenVK_icd.json DESTINATION $<TARGET_BUNDLE_DIR:iris>/Contents/Resources/vulkan/icd.d/)
+
+        fixup_bundle($<TARGET_BUNDLE_DIR:iris> \"\" \"${DIRS}\")
+
+        execute_process(COMMAND codesign --force --deep --sign - $<TARGET_BUNDLE_DIR:iris> RESULT_VARIABLE codesign_result OUTPUT_VARIABLE codesign_output)
         if (codesign_result)
             execute_process(COMMAND echo \"${codesign_output}\")
         endif()
     ")
+
+    # BUNDLE installs will try modify the rpath of the bundle, which won't work as fixup_bundle already does so.
+    install(FILES $<TARGET_BUNDLE_DIR:iris> DESTINATION .)
+
+    # FILES installs do not retain the executable flag on binaries.
+    install(CODE "execute_process(COMMAND /bin/sh -c \"chmod +x $<INSTALL_PREFIX>/iris.app/Contents/Frameworks/* $<INSTALL_PREFIX>/iris.app/Contents/MacOS/*\")")
+
     set(CPACK_GENERATOR "DragNDrop")
-    include(CPack)
+    include(CPack)  
 endif()
 
 if (CMAKE_SYSTEM_NAME MATCHES "Linux")
