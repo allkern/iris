@@ -1233,7 +1233,7 @@ static void draw_header(Instance* iris) {
     std::string status = status_text(iris);
 
     if (status.size()) {
-        count += " â¢ " + status;
+        count += " · " + status;
     }
 
     SetCursorPosY(start_y + (title_height - GetFontSize()) * 0.5f + 2.0f * scale);

@@ -29,9 +29,9 @@ bool About::begin() {
 void About::on_render() {
     using namespace ImGui;
 
-    if (BeginChild("##iconchild", ImVec2(100.0, 250.0), ImGuiChildFlags_AutoResizeY)) {
+    if (BeginChild("##iconchild", ImVec2(100.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
         Image((ImTextureID)(intptr_t)iris->ui.iris_icon.descriptor_set, ImVec2(100.0, 100.0));
-    } EndChild(); SameLine(0.0, 10.0);
+    } EndChild(); SameLine(0.0, 8.0);
 
     if (BeginChild("##textchild", ImVec2(420.0, 0.0), ImGuiChildFlags_AutoResizeY)) {
         PushFont(iris->ui.font_heading);
@@ -40,18 +40,18 @@ void About::on_render() {
 
         Separator();
 
-        Text("Experimental PlayStation 2 emulator");
-        Text("");
+        Text("Sony PlayStation 2 emulator for Windows, Linux and macOS.");
+        Spacing();
         Text("Available at "); SameLine(0.0, 0.0);
         TextLinkOpenURL("https://github.com/allkern/iris", "https://github.com/allkern/iris");
-        Text("");
+        Spacing();
         TextWrapped(
             "Special thanks to: The emudev Discord server, Ziemas, "
             "refraction, ncarrillo, cakehonolulu, Layle, el_isra, "
-            "uyjulian, slimpuggamer, DiscoStarSlayer, PSI, and "
-            "the PCSX2 team for their kind support."
+            "uyjulian, slimpuggamer, DiscoStarSlayer, PSI, the PCSX2 "
+            "and ARMSX2 teams for their kind support."
         );
-        Text("");
+        Spacing();
         Text("Please file any issues to "); SameLine(0.0, 0.0);
         TextLinkOpenURL("our GitHub issues page", "https://github.com/allkern/iris/issues"); SameLine(0.0, 0.0);
         Text(".");
