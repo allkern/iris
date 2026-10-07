@@ -188,6 +188,16 @@ static void show_iris_menu(Instance* iris) {
         }
 
         menu::separator();
+    
+        bool library_available = iris->loaded.empty() && iris->arcade_id.empty() && !iris->ui.loading_file_active;
+
+        if (menu::item(ICON_MS_LIBRARY_BOOKS " Game library", nullptr, iris->ui.show_library, library_available)) {
+            iris->debug.pause = true;
+            iris->ui.show_library = !iris->ui.show_library;
+            iris->ui.show_library_saved = iris->ui.show_library;
+        }
+
+        menu::separator();
 
         if (menu::item(iris->debug.pause ? ICON_MS_PLAY_ARROW " Run" : ICON_MS_PAUSE " Pause", "Space", false, !iris->ui.loading_file_active)) {
             iris->debug.pause = !iris->debug.pause;
@@ -237,9 +247,8 @@ static void show_iris_menu(Instance* iris) {
             patches::clear(iris);
         }
 
-        if (menu::item(ICON_MS_CLOSE " Close")) {
-            iris->debug.pause = true;
-            iris->ui.show_gamelist = true;
+        if (menu::item(ICON_MS_CLOSE " Close", nullptr, false, !iris->ui.loading_file_active)) {
+            emu::close_game(iris);
         }
 
         menu::end();
@@ -590,10 +599,6 @@ static void show_debug_menu(Instance* iris) {
             iris->applets.logs.open = false;
             iris->ui.show_imgui_demo = false;
             iris->ui.show_overlay = false;
-        }
-
-        if (menu::item("Gamelist")) {
-            iris->ui.show_gamelist = true;
         }
 
         menu::end();

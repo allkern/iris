@@ -135,7 +135,8 @@ void finalize_load(Instance* iris) {
 
     iris->ui.loading_file_active = false;
     iris->ui.loading_target = "";
-    iris->ui.show_gamelist = false;
+    iris->ui.show_library_saved = iris->ui.show_library;
+    iris->ui.show_library = false;
 
     imgui::end_dim(iris);
 
@@ -145,6 +146,8 @@ void finalize_load(Instance* iris) {
         iris->vk.image = {};
 
         iris->loaded = iris->load_pending_name;
+
+        library::mark_played(iris, iris->load_pending_file);
 
         if (iris->arcade_id.empty()) {
             clean_arcade_files(iris);
@@ -1132,6 +1135,22 @@ static int manifest_media_type(const std::string& media) {
     return -1;
 }
 
+static void apply_manifest_identity(const ini::File& acgame, const std::string& gameid, ArcadeSource* source) {
+    std::string set = find_set_by_game_id(gameid);
+
+    source->id = set.size() ? set : lowercase(gameid);
+
+    load_arcade_definition(source);
+
+    source->name = ini::value(acgame, "game", "name", source->name.size() ? source->name : gameid);
+
+    int system = manifest_system(ini::value(acgame, "game", "platform"));
+
+    if (system != ps2::AUTO) {
+        source->system = system;
+    }
+}
+
 static std::optional<ArcadeSource> open_arcade_manifest(Instance* iris, const std::filesystem::path& path) {
     ini::File acgame;
 
@@ -1151,18 +1170,7 @@ static std::optional<ArcadeSource> open_arcade_manifest(Instance* iris, const st
 
     ArcadeSource source;
 
-    std::string set = find_set_by_game_id(gameid);
-
-    source.id = set.size() ? set : lowercase(gameid);
-
-    load_arcade_definition(&source);
-
-    source.name = ini::value(acgame, "game", "name", source.name.size() ? source.name : gameid);
-
-    int system = manifest_system(ini::value(acgame, "game", "platform"));
-
-    if (system != ps2::AUTO)
-        source.system = system;
+    apply_manifest_identity(acgame, gameid, &source);
 
     int media_type = manifest_media_type(ini::value(acgame, "data", "media"));
 
@@ -1882,6 +1890,92 @@ bool is_arcade_file(Instance* iris, std::string path) {
         return false;
 
     return identify_arcade_archive(index).size() != 0;
+}
+
+std::optional <ArcadeInfo> describe_arcade(const std::string& file) {
+    std::filesystem::path path(file);
+
+    std::error_code ec;
+
+    ArcadeSource source;
+    ArcadeInfo info;
+
+    if (is_arcade_manifest(path)) {
+        ini::File acgame;
+
+        if (!ini::load(path, &acgame)) {
+            return {};
+        }
+
+        std::string gameid = ini::value(acgame, "game", "gameid");
+
+        if (!is_namco_game_id(gameid)) {
+            return {};
+        }
+
+        apply_manifest_identity(acgame, gameid, &source);
+
+        info.subdir = (path.parent_path() / ini::value(acgame, "data", "subdir", gameid)).string();
+    } else if (std::filesystem::is_directory(path, ec)) {
+        source.id = identify_arcade_directory(path);
+
+        if (source.id.empty()) {
+            return {};
+        }
+
+        load_arcade_definition(&source);
+    } else if (archive::is_archive(path)) {
+        ArchiveIndex index;
+
+        index.path = path;
+
+        if (!archive::list(index.path, &index.entries)) {
+            return {};
+        }
+
+        source.id = identify_arcade_archive(index);
+
+        if (source.id.empty()) {
+            return {};
+        }
+
+        load_arcade_definition(&source);
+    } else {
+        return {};
+    }
+
+    info.id = source.id;
+    info.name = source.name.size() ? source.name : source.id;
+    info.system = source.system;
+
+    return info;
+}
+
+void close_game(Instance* iris) {
+    iris->debug.pause = true;
+
+    mtvu::sync(iris->ps2->mtvu, mtvu::SYNC_OTHER);
+
+    cdvd::close(iris->ps2->cdvd);
+
+    patches::clear(iris);
+
+    iris->loaded = "";
+    iris->arcade_id = "";
+
+    ps2::set_system(iris->ps2, iris->system);
+    load_rom_files(iris);
+    ps2::reset(iris->ps2);
+
+    vulkan::wait_idle(iris);
+
+    gs::renderer::reset(iris->renderer);
+
+    iris->vk.image = {};
+
+    clean_arcade_files(iris);
+
+    iris->ui.show_library = iris->ui.show_library_saved;
 }
 
 static bool arcade_system_supported(int system) {

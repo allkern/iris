@@ -10,6 +10,25 @@ struct Instance;
 
 namespace imgui {
 
+constexpr ImVec4 hex_color(int hex, float alpha = 1.0f) {
+    return ImVec4(
+        ((hex >> 16) & 0xff) / 255.0f,
+        ((hex >> 8) & 0xff) / 255.0f,
+        (hex & 0xff) / 255.0f,
+        alpha
+    );
+}
+
+inline constexpr ImVec4 BADGE_GREEN = hex_color(0x22c55e);
+inline constexpr ImVec4 BADGE_EMERALD = hex_color(0x34d399);
+inline constexpr ImVec4 BADGE_BLUE = hex_color(0x60a5fa);
+inline constexpr ImVec4 BADGE_SKY = hex_color(0x38bdf8);
+inline constexpr ImVec4 BADGE_VIOLET = hex_color(0xa78bfa);
+inline constexpr ImVec4 BADGE_PINK = hex_color(0xf472b6);
+inline constexpr ImVec4 BADGE_RED = hex_color(0xf87171);
+inline constexpr ImVec4 BADGE_AMBER = hex_color(0xfbbf24);
+inline constexpr ImVec4 BADGE_ORANGE = hex_color(0xf59e0b);
+
 enum Theme {
     GRANITE_NEO,
     IMGUI_DARK,
@@ -72,6 +91,8 @@ float splitter_at_cursor(bool vertical);
 
 bool segmented(const char* id, int* value, const char* const* labels, int count, float width = 0.0f);
 bool text_input(const char* id, std::string* value, const char* placeholder = "", float width = 0.0f);
+ImVec2 badge_size(const char* text);
+void badge(ImDrawList* draw_list, ImVec2 pos, const char* text, const ImVec4& color, float bg_alpha = 0.16f);
 void badge(const char* text, const ImVec4& color, float bg_alpha = 0.16f);
 
 }

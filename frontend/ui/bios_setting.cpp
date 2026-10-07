@@ -119,22 +119,22 @@ void BiosSetting::show_bios_stage() {
     }
 
     if (bios_checked) {
-        ImVec4 col = bios_valid ? ImVec4(0.0f, 1.0f, 0.0f, 1.0f) : ImVec4(1.0f, 1.0f, 0.0f, 1.0f);
+        ImVec4 col = bios_valid ? imgui::BADGE_GREEN : imgui::BADGE_AMBER;
         const char* text = nullptr;
 
         switch (bios_valid) {
             case 0: {
-                col = ImVec4(0.86f, 0.19f, 0.18f, 1.0f);
+                col = imgui::BADGE_RED;
                 text = ICON_MS_CLOSE " Couldn't open the specified file.";
             } break;
 
             case 1: {
-                col = ImVec4(0.90f, 0.73f, 0.2f, 1.0f);
+                col = imgui::BADGE_AMBER;
                 text = ICON_MS_WARNING " BIOS is unknown, it might not work as expected.";
             } break;
 
             case 2: {
-                col = ImVec4(0.42f, 0.85f, 0.1f, 1.0f);
+                col = imgui::BADGE_GREEN;
                 text = ICON_MS_CHECK " BIOS is known!";
             } break;
         }

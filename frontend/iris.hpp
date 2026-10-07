@@ -43,7 +43,7 @@
 #include "platform.hpp"
 #include "audio.hpp"
 #include "settings.hpp"
-#include "gamelist.hpp"
+#include "library.hpp"
 #include "applets.hpp"
 #include "cli.hpp"
 
@@ -160,7 +160,8 @@ struct Instance {
         bool show_status_bar = true;
         bool show_imgui_demo = false;
         bool show_overlay = false;
-        bool show_gamelist = false;
+        bool show_library = false;
+        bool show_library_saved = false;
         int theme = imgui::GRANITE_NEO;
         bool imgui_enable_viewports = true;
         int codeview_color_scheme = 0;
@@ -174,7 +175,6 @@ struct Instance {
         ImColor codeview_color_highlight = IM_COL32(75, 75, 75, 255);
         float codeview_font_scale = 1.0f;
         bool codeview_use_theme_background = true;
-        std::unordered_map <std::string, Texture> covers = {};
         int menubar_height = 0;
         float ui_scale = 1.0f;
         int docking_mode = 0;
@@ -303,6 +303,18 @@ struct Instance {
         std::string log_path = "";
     } paths;
 
+    struct {
+        std::vector <std::string> dirs = {};
+        bool recursive = true;
+        bool show_on_startup = true;
+        bool download_covers = true;
+        int view = library::VIEW_LIST;
+        float grid_size = 180.0f;
+        int sort = library::SORT_TITLE;
+        int filter = library::FILTER_ALL;
+        library::State* state = nullptr;
+    } library;
+
     Applets applets;
 
     cli::State cli;
@@ -329,7 +341,7 @@ struct Instance {
         LogSource audio;
         LogSource slirp;
         LogSource net;
-        LogSource gamelist;
+        LogSource library;
         LogSource platform;
         LogSource ui;
     } log;
@@ -372,7 +384,7 @@ struct Instance {
     bool enable_shaders = false;
     bool autostart = true;
     bool cache_arcade_files = false;
-    bool arcade_dongle_boot = false;
+    bool arcade_dongle_boot = true;
     bool enable_patches = true;
     bool apply_patches_on_insert = true;
 
@@ -455,7 +467,7 @@ void show_main_menubar(Instance* iris);
 void show_status_bar(Instance* iris);
 void show_fatal_error(Instance* iris);
 void show_overlay(Instance* iris);
-void show_gamelist(Instance* iris);
+void show_library(Instance* iris);
 
 void handle_keydown_event(Instance* iris, SDL_Event* event);
 void handle_keyup_event(Instance* iris, SDL_Event* event);

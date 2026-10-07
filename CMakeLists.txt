@@ -250,7 +250,7 @@ target_sources(iris PRIVATE
     frontend/audio.cpp
     frontend/cli.cpp
     frontend/log.cpp
-    frontend/gamelist.cpp
+    frontend/library.cpp
     frontend/handlers.cpp
     frontend/vulkan.cpp
     frontend/imgui.cpp
@@ -278,7 +278,7 @@ target_sources(iris PRIVATE
     frontend/ui/dma.cpp
     frontend/ui/fatal_error.cpp
     frontend/ui/file_explorer.cpp
-    frontend/ui/gamelist.cpp
+    frontend/ui/library.cpp
     frontend/ui/gs.cpp
     frontend/ui/gs_dump.cpp
     frontend/ui/intc.cpp

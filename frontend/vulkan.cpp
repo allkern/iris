@@ -771,6 +771,16 @@ Texture upload_texture(Instance* iris, void* pixels, int width, int height, int 
     return tex;
 }
 
+static void destroy_texture(Instance* iris, Texture& tex) {
+    if (tex.descriptor_set) vkFreeDescriptorSets(iris->vk.device, iris->vk.descriptor_pool, 1, &tex.descriptor_set);
+    if (tex.sampler) vkDestroySampler(iris->vk.device, tex.sampler, nullptr);
+    if (tex.image_view) vkDestroyImageView(iris->vk.device, tex.image_view, nullptr);
+    if (tex.image) vkDestroyImage(iris->vk.device, tex.image, nullptr);
+    if (tex.image_memory) vkFreeMemory(iris->vk.device, tex.image_memory, nullptr);
+
+    tex = Texture();
+}
+
 void free_texture(Instance* iris, Texture& tex) {
     if (!iris->vk.device)
         return;
@@ -779,13 +789,21 @@ void free_texture(Instance* iris, Texture& tex) {
     // so any frame still referencing this descriptor set has to retire first
     vkDeviceWaitIdle(iris->vk.device);
 
-    if (tex.descriptor_set) vkFreeDescriptorSets(iris->vk.device, iris->vk.descriptor_pool, 1, &tex.descriptor_set);
-    if (tex.sampler) vkDestroySampler(iris->vk.device, tex.sampler, nullptr);
-    if (tex.image_view) vkDestroyImageView(iris->vk.device, tex.image_view, nullptr);
-    if (tex.image) vkDestroyImage(iris->vk.device, tex.image, nullptr);
-    if (tex.image_memory) vkFreeMemory(iris->vk.device, tex.image_memory, nullptr);
+    destroy_texture(iris, tex);
+}
 
-    tex = Texture();
+void free_textures(Instance* iris, std::vector <Texture>& textures) {
+    if (!iris->vk.device || textures.empty()) {
+        return;
+    }
+
+    vkDeviceWaitIdle(iris->vk.device);
+
+    for (Texture& tex : textures) {
+        destroy_texture(iris, tex);
+    }
+
+    textures.clear();
 }
 
 void use_bundled_drivers(Instance* iris) {
@@ -1476,6 +1494,10 @@ Texture load_texture_from_memory(Instance* iris, const void* data, size_t size) 
 
     stbi_uc* buf = stbi_load_from_memory((const stbi_uc*)data, size, &x, &y, &c, 4);
 
+    if (!buf) {
+        return {};
+    }
+
     auto tex = vulkan::upload_texture(iris, buf, x, y, c);
 
     stbi_image_free(buf);
@@ -1487,6 +1509,10 @@ Texture load_texture_from_file(Instance* iris, std::string path) {
     int x, y, c;
 
     stbi_uc* buf = stbi_load(path.c_str(), &x, &y, &c, 4);
+
+    if (!buf) {
+        return {};
+    }
 
     auto tex = vulkan::upload_texture(iris, buf, x, y, c);
 

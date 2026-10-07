@@ -105,6 +105,24 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     if (iris->paths.log_path.empty())
         iris->paths.log_path = iris->paths.pref_path + "iris.log";
 
+    auto library = tbl["library"];
+    iris->library.recursive = library["recursive"].value_or(true);
+    iris->library.show_on_startup = library["show_on_startup"].value_or(true);
+    iris->library.download_covers = library["download_covers"].value_or(true);
+    iris->library.view = library["view"].value_or((int)library::VIEW_LIST);
+    iris->library.grid_size = library["grid_size"].value_or(180.0f);
+    iris->library.sort = library["sort"].value_or((int)library::SORT_TITLE);
+    iris->library.filter = library["filter"].value_or((int)library::FILTER_ALL);
+    iris->library.dirs.clear();
+
+    if (toml::array* dirs = library["dirs"].as_array()) {
+        for (const toml::node& node : *dirs) {
+            if (auto dir = node.value <std::string> ()) {
+                iris->library.dirs.push_back(*dir);
+            }
+        }
+    }
+
     auto host = tbl["host"];
     iris->paths.host_path = host["path"].value_or("");
     iris->paths.host_from_elf = host["from_elf"].value_or(false);
@@ -213,7 +231,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->vu_engine[1] = system["vu1_engine"].value_or((int)vu::VU_ENGINE_JIT);
     iris->vu_jit_threshold = system["vu_jit_threshold"].value_or(200);
     iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
-    iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(false);
+    iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(true);
     iris->enable_patches = system["enable_patches"].value_or(true);
     iris->apply_patches_on_insert = system["apply_patches_on_insert"].value_or(true);
     iris->system_2x6_rgb_level = system["system_2x6_rgb_level"].value_or(false);
@@ -691,6 +709,16 @@ void save(Instance* iris) {
             { "mecha_kelf_kc_path", iris->paths.mecha_kelf_kc_path },
             { "auto", iris->paths.auto_paths }
         } },
+        { "library", toml::table {
+            { "dirs", toml::array() },
+            { "recursive", iris->library.recursive },
+            { "show_on_startup", iris->library.show_on_startup },
+            { "download_covers", iris->library.download_covers },
+            { "view", iris->library.view },
+            { "grid_size", iris->library.grid_size },
+            { "sort", iris->library.sort },
+            { "filter", iris->library.filter }
+        } },
         { "host", toml::table {
             { "path", iris->paths.host_path },
             { "from_elf", iris->paths.host_from_elf }
@@ -714,6 +742,12 @@ void save(Instance* iris) {
         if (dev.size()) {
             devices->insert_or_assign(dev, host);
         }
+    }
+
+    toml::array* library_dirs = tbl["library"]["dirs"].as_array();
+
+    for (const std::string& dir : iris->library.dirs) {
+        library_dirs->push_back(dir);
     }
 
     toml::array* recents = tbl["recents"]["array"].as_array();

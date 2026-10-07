@@ -702,25 +702,38 @@ bool BeginMenu(const char* label, bool enabled) {
     return open;
 }
 
+static ImVec2 badge_padding() {
+    ImGuiStyle& style = ImGui::GetStyle();
+
+    return ImVec2(style.FramePadding.x * 0.85f, style.FramePadding.y * 0.75f);
+}
+
+ImVec2 badge_size(const char* text) {
+    ImVec2 padding = badge_padding();
+    ImVec2 size = ImGui::CalcTextSize(text);
+
+    return ImVec2(size.x + padding.x * 2.0f, size.y + padding.y * 2.0f);
+}
+
+void badge(ImDrawList* draw_list, ImVec2 pos, const char* text, const ImVec4& color, float bg_alpha) {
+    using namespace ImGui;
+
+    ImVec2 padding = badge_padding();
+    ImVec2 size = badge_size(text);
+    ImVec2 end = ImVec2(pos.x + size.x, pos.y + size.y);
+
+    draw_list->AddRectFilled(pos, end, GetColorU32(ImVec4(color.x, color.y, color.z, color.w * bg_alpha)), size.y * 0.5f);
+    draw_list->AddText(ImVec2(pos.x + padding.x, pos.y + padding.y), GetColorU32(color), text);
+}
+
 void badge(const char* text, const ImVec4& color, float bg_alpha) {
     using namespace ImGui;
 
-    ImGuiStyle& style = GetStyle();
-    ImDrawList* draw_list = GetWindowDrawList();
-
-    ImVec2 padding = ImVec2(style.FramePadding.x * 0.75f, style.FramePadding.y * 0.5f);
-    ImVec2 size = CalcTextSize(text);
-    ImVec2 total = ImVec2(size.x + padding.x * 2.0f, size.y + padding.y * 2.0f);
     ImVec2 origin = GetCursorScreenPos();
 
-    Dummy(total);
+    Dummy(badge_size(text));
 
-    ImVec2 end = ImVec2(origin.x + total.x, origin.y + total.y);
-    float rounding = total.y * 0.5f;
-
-    draw_list->AddRectFilled(origin, end, GetColorU32(ImVec4(color.x, color.y, color.z, bg_alpha)), rounding);
-    draw_list->AddRect(origin, end, GetColorU32(ImVec4(color.x, color.y, color.z, bg_alpha * 2.5f)), rounding);
-    draw_list->AddText(ImVec2(origin.x + padding.x, origin.y + padding.y), GetColorU32(color), text);
+    badge(GetWindowDrawList(), origin, text, color, bg_alpha);
 }
 
 namespace palette {
@@ -1928,7 +1941,7 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
     if ((err = vkBeginCommandBuffer(fd->CommandBuffer, &begin_info)) != VK_SUCCESS)
         return abort_frame(iris, "Failed to begin command buffer", err);
 
-    if (iris->vk.instance && (iris->headless || !iris->ui.show_gamelist)) {
+    if (iris->vk.instance && (iris->headless || !iris->ui.show_library)) {
         render::render_frame(iris, fd->CommandBuffer, fd->Framebuffer);
     }
 

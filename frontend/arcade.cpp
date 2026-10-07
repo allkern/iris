@@ -162,11 +162,8 @@ struct Dump {
 
 }
 
-static const std::vector <Dump>& dumps() {
-    static std::vector <Dump> cached;
-
-    if (cached.size())
-        return cached;
+static std::vector <Dump> build_dumps() {
+    std::vector <Dump> cached;
 
     for (auto&& [key, value] : g_arcade_definitions) {
         const toml::table* table = value.as_table();
@@ -207,6 +204,12 @@ static const std::vector <Dump>& dumps() {
             cached.push_back(dump);
         }
     }
+
+    return cached;
+}
+
+static const std::vector <Dump>& dumps() {
+    static const std::vector <Dump> cached = build_dumps();
 
     return cached;
 }

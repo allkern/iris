@@ -386,32 +386,18 @@ void update_window(Instance* iris) {
     if (iris->ui.show_overlay) show_overlay(iris);
     if (iris->fatal_error) show_fatal_error(iris);
 
-    iris->ui.show_gamelist = false;
+    if (!iris->debug.pause) {
+        iris->ui.show_library = false;
+    }
 
-    // if (iris->ui.show_gamelist && !iris->headless) {
-    //     ImVec2 pos = GetMainViewport()->Pos;
-    //     ImVec2 size = GetMainViewport()->Size;
+    library::update(iris);
 
-    //     pos.y += iris->ui.menubar_height;
-
-    //     SetNextWindowPos(pos, ImGuiCond_Always);
-    //     SetNextWindowSize(ImVec2((float)width, (float)height - iris->ui.menubar_height), ImGuiCond_Always);
-    //     SetNextWindowViewport(GetMainViewport()->ID);
-
-    //     ImGuiWindowFlags flags =
-    //         ImGuiWindowFlags_NoDecoration |
-    //         ImGuiWindowFlags_NoMove |
-    //         ImGuiWindowFlags_NoResize |
-    //         ImGuiWindowFlags_NoSavedSettings |
-    //         ImGuiWindowFlags_NoDocking;
-
-    //     if (Begin("##GameLibrary", nullptr, flags)) {
-    //         show_gamelist(iris);
-    //     } End();
-    // }
+    if (iris->ui.show_library && !iris->headless) {
+        show_library(iris);
+    }
 
     // Display little pause icon in the top right corner
-    if (iris->debug.pause) {
+    if (iris->debug.pause && !iris->ui.show_library) {
         ImVec2 ts = CalcTextSize(ICON_MS_PAUSE);
         ImVec2 offset = ImVec2(10.0f, 10.0f);
         // ImVec2 padding = ImVec2(0.0f, 0.0f);
@@ -568,11 +554,14 @@ bool init(Instance* iris) {
         return false;
     }
 
-    if (!gamelist::init(iris)) {
-        iris_error(&iris->log.iris, "Failed to initialize gamelist");
+    if (!library::init(iris)) {
+        iris_error(&iris->log.iris, "Failed to initialize library");
 
         return false;
     }
+
+    iris->ui.show_library = iris->library.show_on_startup && iris->loaded.empty() && iris->arcade_id.empty();
+    iris->ui.show_library_saved = iris->ui.show_library;
 
     for (const std::string& s : iris->vk.shader_passes_pending)
         shaders::push(iris, s);
@@ -1262,6 +1251,7 @@ void destroy(Instance* iris) {
 
     if (iris->window) SDL_HideWindow(iris->window);
 
+    library::destroy(iris);
     imgui::cleanup(iris);
     audio::close(iris);
     settings::close(iris);
@@ -1274,7 +1264,6 @@ void destroy(Instance* iris) {
     vulkan::cleanup(iris);
     platform::destroy(iris);
     emu::destroy(iris);
-    gamelist::destroy(iris);
     net::cleanup();
 
     if (iris->window) SDL_DestroyWindow(iris->window);

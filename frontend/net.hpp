@@ -1,12 +1,6 @@
 #pragma once
 
-#include <unordered_map>
-#include <cstdint>
 #include <string>
-#include <vector>
-#include <chrono>
-#include <array>
-#include <deque>
 
 #include <curl/curl.h>
 
@@ -19,8 +13,15 @@ struct DownloadResult {
     std::string body;
 };
 
+struct Session;
+
 bool init(LogSource* log);
 void cleanup();
-DownloadResult download(std::string url);
+
+Session* open_session();
+void close_session(Session* session);
+
+DownloadResult download(Session* session, const std::string& url);
+DownloadResult download(const std::string& url);
 
 }

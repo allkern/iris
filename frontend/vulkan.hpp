@@ -78,6 +78,7 @@ bool init(Instance* iris, bool enable_validation = false);
 void cleanup(Instance* iris);
 Texture upload_texture(Instance* iris, void* pixels, int width, int height, int stride);
 void free_texture(Instance* iris, Texture& tex);
+void free_textures(Instance* iris, std::vector <Texture>& textures);
 void* read_image(Instance* iris, VkImage image, VkFormat format, int width, int height);
 void wait_idle(Instance* iris);
 void dump_device_fault(Instance* iris);

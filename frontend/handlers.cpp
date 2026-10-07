@@ -122,7 +122,7 @@ void init_logger(Instance* iris) {
     reg(iris->log.audio, "audio");
     reg(iris->log.slirp, "slirp");
     reg(iris->log.net, "net");
-    reg(iris->log.gamelist, "gamelist");
+    reg(iris->log.library, "library");
     reg(iris->log.platform, "platform");
     reg(iris->log.ui, "ui");
 }

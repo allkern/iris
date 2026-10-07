@@ -3,6 +3,7 @@
 #include <string>
 #include <cctype>
 #include <cstring>
+#include <filesystem>
 #include <functional>
 #include <random>
 
@@ -14,6 +15,7 @@
 #include "ps2.hpp"
 #include "settings.hpp"
 #include "imgui.hpp"
+#include "imgui_internal.h"
 #include "iop/mg.hpp"
 
 namespace iris {
@@ -273,6 +275,7 @@ static int settings_fullscreen_flags[] = {
 static const char* settings_buttons[] = {
     " " ICON_MS_DEPLOYED_CODE "  System",
     " " ICON_MS_FOLDER "  Paths",
+    " " ICON_MS_LIBRARY_BOOKS "  Library",
     " " ICON_MS_MONITOR "  Graphics",
     " " ICON_MS_BRUSH "  Shaders",
     " " ICON_MS_STADIA_CONTROLLER "  Input",
@@ -2241,6 +2244,125 @@ static const char* titlebar_style_names[] = {
 };
 #endif
 
+void show_library_settings(Instance* iris) {
+    using namespace ImGui;
+
+    imgui::section(iris, "Game folders");
+
+    int remove_index = -1;
+
+    ImGuiTableFlags table_flags =
+        ImGuiTableFlags_RowBg |
+        ImGuiTableFlags_BordersOuter |
+        ImGuiTableFlags_SizingFixedFit |
+        ImGuiTableFlags_PadOuterX;
+
+    if (BeginTable("##library-dirs", 2, table_flags)) {
+        TableSetupColumn("Folder", ImGuiTableColumnFlags_WidthStretch);
+        TableSetupColumn("##actions", ImGuiTableColumnFlags_WidthFixed);
+        TableHeadersRow();
+
+        if (iris->library.dirs.empty()) {
+            TableNextRow();
+            TableSetColumnIndex(0);
+            AlignTextToFramePadding();
+            TextDisabled("No folders added yet");
+        }
+
+        for (int i = 0; i < (int)iris->library.dirs.size(); i++) {
+            PushID(i);
+
+            TableNextRow();
+            TableSetColumnIndex(0);
+            AlignTextToFramePadding();
+            Text(ICON_MS_FOLDER " %s", iris->library.dirs[i].c_str());
+
+            if (IsItemHovered()) {
+                SetTooltip("%s", iris->library.dirs[i].c_str());
+            }
+
+            TableSetColumnIndex(1);
+
+            if (Button(ICON_MS_FOLDER_OPEN "##open")) {
+                SDL_OpenURL(iris->library.dirs[i].c_str());
+            }
+
+            SameLine();
+
+            if (Button(ICON_MS_DELETE "##remove")) {
+                remove_index = i;
+            }
+
+            PopID();
+        }
+
+        EndTable();
+    }
+
+    if (remove_index >= 0) {
+        iris->library.dirs.erase(iris->library.dirs.begin() + remove_index);
+    }
+
+    Spacing();
+
+    if (Button(ICON_MS_CREATE_NEW_FOLDER " Add folder...")) {
+        audio::mute(iris);
+
+        auto f = pfd::select_folder("Select a folder with games", "", pfd::opt::none);
+
+        while (!f.ready());
+
+        audio::unmute(iris);
+
+        std::string result = f.result();
+
+        if (result.size() && std::find(iris->library.dirs.begin(), iris->library.dirs.end(), result) == iris->library.dirs.end()) {
+            iris->library.dirs.push_back(result);
+        }
+    }
+
+    SameLine();
+
+    if (Button(ICON_MS_REFRESH " Rescan")) {
+        library::rescan(iris);
+    }
+
+    Spacing();
+
+    imgui::section(iris, "Options");
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox("Scan subfolders", &iris->library.recursive);
+    Checkbox("Show library on startup", &iris->library.show_on_startup);
+    Checkbox("Download covers and game titles", &iris->library.download_covers);
+    PopStyleVar();
+
+    Spacing();
+
+    imgui::section(iris, "Covers");
+
+    if (Button(ICON_MS_REFRESH " Retry missing covers")) {
+        library::refresh_covers(iris);
+    }
+
+    SameLine();
+
+    if (Button(ICON_MS_DELETE " Clear cover cache")) {
+        library::clear_cover_cache(iris);
+    }
+
+    SameLine();
+
+    if (Button(ICON_MS_FOLDER_OPEN " Open covers folder")) {
+        std::string path = (std::filesystem::path(iris->paths.pref_path) / "library" / "covers").string();
+
+        SDL_OpenURL(path.c_str());
+    }
+
+    TextDisabled("Put <serial>.png or <serial>.jpg in the covers folder to use your own cover art.");
+    TextDisabled("Add custom arcade covers in covers/arcade/<set>.png");
+}
+
 void show_misc_settings(Instance* iris) {
     using namespace ImGui;
 
@@ -2458,6 +2580,18 @@ void show_misc_settings(Instance* iris) {
 
     if (Checkbox(" Enable MagicGate", &iris->enable_magicgate)) {
         settings::apply_magicgate(iris);
+    } SameLine();
+
+    SeparatorEx(ImGuiSeparatorFlags_Vertical);
+
+    SameLine();
+
+    AlignTextToFramePadding();
+
+    if (iris->enable_magicgate && cdvd::mg_ready(iris->ps2->cdvd)) {
+        imgui::badge(ICON_MS_CHECK "  Key store ready", imgui::BADGE_GREEN);
+    } else {
+        imgui::badge(ICON_MS_INFO "  Using HLE authentication", imgui::BADGE_AMBER);
     }
 
     PopStyleVar();
@@ -2480,16 +2614,6 @@ void show_misc_settings(Instance* iris) {
     }
 
     EndDisabled();
-
-    SameLine();
-
-    AlignTextToFramePadding();
-
-    if (iris->enable_magicgate && cdvd::mg_ready(iris->ps2->cdvd)) {
-        imgui::badge(ICON_MS_CHECK "  Key store ready", ImVec4(0.42f, 0.85f, 0.1f, 1.0f));
-    } else {
-        imgui::badge(ICON_MS_INFO "  Using HLE authentication", ImVec4(0.90f, 0.73f, 0.2f, 1.0f));
-    }
 }
 
 static const char* builtin_shader_names[] = {
@@ -2784,13 +2908,14 @@ void SettingsWindow::on_render() {
         switch (selected) {
             case 0: show_system_settings(iris); break;
             case 1: show_paths_settings(iris); break;
-            case 2: show_graphics_settings(iris); break;
-            case 3: show_shader_settings(iris); break;
-            case 4: show_input_settings(iris); break;
-            case 5: show_memory_card_settings(iris); break;
-            case 6: show_usb_settings(iris); break;
-            case 7: show_device_settings(iris); break;
-            case 8: show_misc_settings(iris); break;
+            case 2: show_library_settings(iris); break;
+            case 3: show_graphics_settings(iris); break;
+            case 4: show_shader_settings(iris); break;
+            case 5: show_input_settings(iris); break;
+            case 6: show_memory_card_settings(iris); break;
+            case 7: show_usb_settings(iris); break;
+            case 8: show_device_settings(iris); break;
+            case 9: show_misc_settings(iris); break;
         }
     } EndChild();
 

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <optional>
 #include <string>
 
 namespace iris {
@@ -14,6 +15,13 @@ enum class RecentType : int {
 struct Recent {
     std::string path;
     RecentType type;
+};
+
+struct ArcadeInfo {
+    std::string id;
+    std::string name;
+    std::string subdir;
+    int system = 0;
 };
 
 namespace emu {
@@ -48,6 +56,8 @@ void clean_tmp_files(Instance* iris);
 bool is_arcade_file(Instance* iris, std::string path);
 bool load_arcade(Instance* iris, std::string path);
 bool load_arcade_files(Instance* iris, std::string path);
+std::optional <ArcadeInfo> describe_arcade(const std::string& path);
+void close_game(Instance* iris);
 int attach_memory_card(Instance* iris, int slot, const char* path);
 void detach_memory_card(Instance* iris, int slot);
 int format_memory_card(Instance* iris, int slot);
