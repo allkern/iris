@@ -45,6 +45,7 @@ void create(Instance* iris) {
         &applets.compat_report,
         &applets.settings,
         &applets.pad_debugger,
+        &applets.dvd_remote,
         &applets.symbols,
         &applets.ee_threads,
         &applets.iop_threads,

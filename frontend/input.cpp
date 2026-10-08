@@ -111,6 +111,22 @@ static void build_default_mapping(Mapping& map, int id) {
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_2     , SDL_KMOD_NONE), IRIS_S2X6_SW_TEST);
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_P     , SDL_KMOD_NONE), IRIS_P2IO_SW_CARD1);
         map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_O     , SDL_KMOD_NONE), IRIS_P2IO_SW_CARD2);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_1       , SDL_KMOD_NONE), IRIS_RM_DIGIT_1);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_2       , SDL_KMOD_NONE), IRIS_RM_DIGIT_2);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_3       , SDL_KMOD_NONE), IRIS_RM_DIGIT_3);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_4       , SDL_KMOD_NONE), IRIS_RM_DIGIT_4);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_5       , SDL_KMOD_NONE), IRIS_RM_DIGIT_5);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_6       , SDL_KMOD_NONE), IRIS_RM_DIGIT_6);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_7       , SDL_KMOD_NONE), IRIS_RM_DIGIT_7);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_8       , SDL_KMOD_NONE), IRIS_RM_DIGIT_8);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_9       , SDL_KMOD_NONE), IRIS_RM_DIGIT_9);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_0       , SDL_KMOD_NONE), IRIS_RM_DIGIT_0);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_ENTER   , SDL_KMOD_NONE), IRIS_RM_ENTER);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_PLUS    , SDL_KMOD_NONE), IRIS_RM_PLAY);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_MINUS   , SDL_KMOD_NONE), IRIS_RM_STOP);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_MULTIPLY, SDL_KMOD_NONE), IRIS_RM_PAUSE);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_DIVIDE  , SDL_KMOD_NONE), IRIS_RM_DISPLAY);
+        map.map.insert(IEVENT(EventType::KEYBOARD, SDLK_KP_PERIOD  , SDL_KMOD_NONE), IRIS_RM_RETURN);
     } else {
         map.name = "Gamepad (default)";
 
@@ -483,7 +499,168 @@ static bool handle_s2x6_action(Instance* iris, InputAction action, int slot, flo
     return true;
 }
 
+static dev::rm::Key remote_key(uint32_t action, bool desr) {
+    if (desr) {
+        switch (action) {
+            case IRIS_RM_DIGIT_1: return { dev::rm::DESR_ONE };
+            case IRIS_RM_DIGIT_2: return { dev::rm::DESR_TWO };
+            case IRIS_RM_DIGIT_3: return { dev::rm::DESR_THREE };
+            case IRIS_RM_DIGIT_4: return { dev::rm::DESR_FOUR };
+            case IRIS_RM_DIGIT_5: return { dev::rm::DESR_FIVE };
+            case IRIS_RM_DIGIT_6: return { dev::rm::DESR_SIX };
+            case IRIS_RM_DIGIT_7: return { dev::rm::DESR_SEVEN };
+            case IRIS_RM_DIGIT_8: return { dev::rm::DESR_EIGHT };
+            case IRIS_RM_DIGIT_9: return { dev::rm::DESR_NINE };
+            case IRIS_RM_DIGIT_0: return { dev::rm::DESR_TEN };
+            case IRIS_RM_ENTER: return { dev::rm::DESR_ENTER };
+            case IRIS_RM_CLEAR: return { dev::rm::DESR_CLEAR };
+            case IRIS_RM_RETURN: return { dev::rm::DESR_RETURN };
+            case IRIS_RM_TITLE: return { dev::rm::DESR_TOP_MENU };
+            case IRIS_RM_MENU: return { dev::rm::DESR_MENU };
+            case IRIS_RM_PROGRAM: return { dev::rm::DESR_PROGRAM };
+            case IRIS_RM_DISPLAY: return { dev::rm::DESR_DISPLAY };
+            case IRIS_RM_PREV: return { dev::rm::DESR_L1_PREV };
+            case IRIS_RM_NEXT: return { dev::rm::DESR_R1_NEXT };
+            case IRIS_RM_SCAN_BACK: return { dev::rm::DESR_L2_SCAN_BACK };
+            case IRIS_RM_SCAN_FORW: return { dev::rm::DESR_R2_SCAN_FORW };
+            case IRIS_RM_PLAY: return { dev::rm::DESR_PLAY };
+            case IRIS_RM_STOP: return { dev::rm::DESR_STOP };
+            case IRIS_RM_PAUSE: return { dev::rm::DESR_PAUSE };
+            case IRIS_RM_UP: return { dev::rm::DESR_UP };
+            case IRIS_RM_DOWN: return { dev::rm::DESR_DOWN };
+            case IRIS_RM_LEFT: return { dev::rm::DESR_LEFT };
+            case IRIS_RM_RIGHT: return { dev::rm::DESR_RIGHT };
+            case IRIS_RM_SELECT: return { dev::rm::DESR_SELECT };
+            case IRIS_RM_START: return { dev::rm::DESR_START };
+            case IRIS_RM_L1: return { dev::rm::DESR_L1_PREV };
+            case IRIS_RM_R1: return { dev::rm::DESR_R1_NEXT };
+            case IRIS_RM_L2: return { dev::rm::DESR_L2_SCAN_BACK };
+            case IRIS_RM_R2: return { dev::rm::DESR_R2_SCAN_FORW };
+            case IRIS_RM_L3: return { dev::rm::DESR_L3 };
+            case IRIS_RM_R3: return { dev::rm::DESR_R3 };
+            case IRIS_RM_TRIANGLE: return { dev::rm::DESR_TRIANGLE };
+            case IRIS_RM_CIRCLE: return { dev::rm::DESR_CIRCLE };
+            case IRIS_RM_CROSS: return { dev::rm::DESR_CROSS };
+            case IRIS_RM_SQUARE: return { dev::rm::DESR_SQUARE };
+            case IRIS_RM_EJECT: return { dev::rm::DESR_EJECT };
+            case IRIS_RM_POWER: return { dev::rm::DESR_POWER };
+            default: break;
+        }
+    }
+
+    switch (action) {
+        case IRIS_RM_DIGIT_1: return { dev::rm::DVD_ONE };
+        case IRIS_RM_DIGIT_2: return { dev::rm::DVD_TWO };
+        case IRIS_RM_DIGIT_3: return { dev::rm::DVD_THREE };
+        case IRIS_RM_DIGIT_4: return { dev::rm::DVD_FOUR };
+        case IRIS_RM_DIGIT_5: return { dev::rm::DVD_FIVE };
+        case IRIS_RM_DIGIT_6: return { dev::rm::DVD_SIX };
+        case IRIS_RM_DIGIT_7: return { dev::rm::DVD_SEVEN };
+        case IRIS_RM_DIGIT_8: return { dev::rm::DVD_EIGHT };
+        case IRIS_RM_DIGIT_9: return { dev::rm::DVD_NINE };
+        case IRIS_RM_DIGIT_0: return { dev::rm::DVD_ZERO };
+        case IRIS_RM_ENTER: return { dev::rm::DVD_ENTER };
+        case IRIS_RM_CLEAR: return { dev::rm::DVD_CLEAR };
+        case IRIS_RM_RETURN: return { dev::rm::DVD_RETURN };
+        case IRIS_RM_TITLE: return { dev::rm::DVD_TITLE };
+        case IRIS_RM_MENU: return { dev::rm::DVD_MENU };
+        case IRIS_RM_TIME: return { dev::rm::DVD_TIME };
+        case IRIS_RM_ATOB: return { dev::rm::DVD_ATOB };
+        case IRIS_RM_REPEAT: return { dev::rm::DVD_REPEAT };
+        case IRIS_RM_SHUFFLE: return { dev::rm::DVD_SHUFFLE };
+        case IRIS_RM_PROGRAM: return { dev::rm::DVD_PROGRAM };
+        case IRIS_RM_PREV: return { dev::rm::DVD_PREV };
+        case IRIS_RM_NEXT: return { dev::rm::DVD_NEXT };
+        case IRIS_RM_PLAY: return { dev::rm::DVD_PLAY };
+        case IRIS_RM_SCAN_BACK: return { dev::rm::DVD_SCAN_BACK };
+        case IRIS_RM_SCAN_FORW: return { dev::rm::DVD_SCAN_FORW };
+        case IRIS_RM_STOP: return { dev::rm::DVD_STOP };
+        case IRIS_RM_PAUSE: return { dev::rm::DVD_PAUSE };
+        case IRIS_RM_DISPLAY: return { dev::rm::DVD_DISPLAY };
+        case IRIS_RM_SLOW_BACK: return { dev::rm::DVD_SLOW_BACK };
+        case IRIS_RM_SLOW_FORW: return { dev::rm::DVD_SLOW_FORW };
+        case IRIS_RM_SUBTITLE: return { dev::rm::DVD_SUBTITLE };
+        case IRIS_RM_AUDIO: return { dev::rm::DVD_AUDIO };
+        case IRIS_RM_ANGLE: return { dev::rm::DVD_ANGLE };
+        case IRIS_RM_UP: return { dev::rm::DVD_UP, dev::rm::PS2_UP };
+        case IRIS_RM_DOWN: return { dev::rm::DVD_DOWN, dev::rm::PS2_DOWN };
+        case IRIS_RM_LEFT: return { dev::rm::DVD_LEFT, dev::rm::PS2_LEFT };
+        case IRIS_RM_RIGHT: return { dev::rm::DVD_RIGHT, dev::rm::PS2_RIGHT };
+        case IRIS_RM_SELECT: return { dev::rm::PS2_SELECT };
+        case IRIS_RM_START: return { dev::rm::PS2_START };
+        case IRIS_RM_L1: return { dev::rm::PS2_L1 };
+        case IRIS_RM_R1: return { dev::rm::PS2_R1 };
+        case IRIS_RM_L2: return { dev::rm::PS2_L2 };
+        case IRIS_RM_R2: return { dev::rm::PS2_R2 };
+        case IRIS_RM_L3: return { dev::rm::PS2_L3 };
+        case IRIS_RM_R3: return { dev::rm::PS2_R3 };
+        case IRIS_RM_TRIANGLE: return { dev::rm::PS2_TRIANGLE };
+        case IRIS_RM_CIRCLE: return { dev::rm::PS2_CIRCLE };
+        case IRIS_RM_CROSS: return { dev::rm::PS2_CROSS };
+        case IRIS_RM_SQUARE: return { dev::rm::PS2_SQUARE };
+        case IRIS_RM_EJECT: return { dev::rm::PS2_EJECT };
+        case IRIS_RM_RESET: return { dev::rm::PS2_RESET };
+        case IRIS_RM_POWER: return { dev::rm::PS2_POWER };
+        case IRIS_RM_HOME: return { dev::rm::DESR_HOME };
+        case IRIS_RM_G_GUIDE: return { dev::rm::DESR_G_GUIDE };
+        case IRIS_RM_QUIT_GAME: return { dev::rm::DESR_QUIT_GAME };
+        case IRIS_RM_REC_MODE: return { dev::rm::DESR_REC_MODE };
+        case IRIS_RM_REC_START: return { dev::rm::DESR_REC_START };
+        case IRIS_RM_REC_PAUSE: return { dev::rm::DESR_REC_PAUSE };
+        case IRIS_RM_REC_STOP: return { dev::rm::DESR_REC_STOP };
+        case IRIS_RM_DELETE: return { dev::rm::DESR_DELETE };
+        default: return {};
+    }
+}
+
+static bool is_desr(Instance* iris) {
+    return iris->ps2->detected_system == ps2::PSX_DESR;
+}
+
+void sync_remote(Instance* iris) {
+    dev::rm::Key key = remote_key(iris->input.remote_action, is_desr(iris));
+
+    if (key.code[0]) {
+        cdvd::set_remote_key(iris->ps2->cdvd, key);
+        speed::dvrp::set_remote_key(iris->ps2->speed->dvrp, key);
+    } else {
+        cdvd::release_remote_key(iris->ps2->cdvd);
+        speed::dvrp::release_remote_key(iris->ps2->speed->dvrp);
+    }
+
+    for (int i = 0; i < 2; i++) {
+        if (!iris->input.rm[i])
+            continue;
+
+        if (key.code[0]) {
+            dev::rm::set_key(iris->input.rm[i], key);
+        } else {
+            dev::rm::release(iris->input.rm[i]);
+        }
+    }
+}
+
+static bool handle_remote_action(Instance* iris, InputAction action, float value) {
+    if (!remote_key(action, false).code[0])
+        return false;
+
+    if (value > 0.5f) {
+        iris->input.remote_action = action;
+    } else if (iris->input.remote_action == action) {
+        iris->input.remote_action = 0xffffffff;
+    } else {
+        return true;
+    }
+
+    sync_remote(iris);
+
+    return true;
+}
+
 void execute_action(Instance* iris, InputAction action, int slot, float value) {
+    if (handle_remote_action(iris, action, value))
+        return;
+
     if (handle_p2io_action(iris, action, slot, value))
         return;
 
@@ -550,7 +727,7 @@ void execute_action(Instance* iris, InputAction action, int slot, float value) {
         case IRIS_S2X6_SW_TEST:
         case IRIS_P2IO_SW_CARD1:
         case IRIS_P2IO_SW_CARD2:
-        case IRIS_INPUT_ACTION_MAX: break;
+        default: break;
     }
 }
 

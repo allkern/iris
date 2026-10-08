@@ -220,6 +220,7 @@ Guncon* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
     dev.reset = reset;
     dev.handle_command = handle_command;
     dev.udata = guncon;
+    dev.id = sio2::DEV_PAD;
 
     guncon->port = port;
     guncon->config_mode = 0;

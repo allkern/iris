@@ -1,4 +1,5 @@
 #include <new>
+#include <cstring>
 
 #include "../speed.hpp"
 #include "dvrp.hpp"
@@ -58,11 +59,30 @@ void dvrp_send_intr_cmd_comp(void* udata, int overshoot) {
     dvrp_send_irq(dvrp, INTR_CMD_COMP);
 }
 
+static void dvrp_get_sircs(Dvrp* dvrp) {
+    uint32_t code = dev::rm::next_code(dvrp->remote_key.load(), dvrp->remote_phase);
+
+    dvrp->remote_reads++;
+
+    dvrp->reply[1] = code ? 0x14 : 0x00;
+    dvrp->reply[2] = code & 0xff;
+    dvrp->reply[3] = (code >> 8) & 0xff;
+    dvrp->reply[4] = (code >> 16) & 0xff;
+}
+
 void dvrp_handle_command(Dvrp* dvrp, uint16_t cmd) {
     // iris_debug(dvrp, "Handle command {:04x} params={}", cmd, dvrp->param_index);
 
     dvrp->cmd = cmd;
     dvrp->param_index = 0;
+
+    memset(dvrp->reply, 0, sizeof(dvrp->reply));
+
+    dvrp->reply_index = 0;
+
+    if (cmd == 0x5107) {
+        dvrp_get_sircs(dvrp);
+    }
 
     scheduler::Event event;
 
@@ -87,6 +107,7 @@ uint64_t read(Dvrp* dvrp, uint32_t addr) {
         case 0x4214: return dvrp->params[dvrp->param_index];
         case 0x4218: return dvrp->status2;
         case 0x4220: return dvrp->intr_cause;
+        case 0x4224: return dvrp->reply_index < 64 ? dvrp->reply[dvrp->reply_index++] : 0;
         case 0x4228: return 1; // ?
         case 0x4230: return dvrp->status;
 
@@ -103,6 +124,14 @@ void dvrp_clear_speed_dvr_intr(Dvrp* dvrp) {
     if ((dvrp->intr_stat & dvrp->intr_mask) == 0) {
         dvrp->speed->intr_stat &= ~INTR_DVR;
     }
+}
+
+void set_remote_key(Dvrp* dvrp, dev::rm::Key key) {
+    dvrp->remote_key.store(key);
+}
+
+void release_remote_key(Dvrp* dvrp) {
+    dvrp->remote_key.store(dev::rm::Key {});
 }
 
 void write(Dvrp* dvrp, uint32_t addr, uint64_t data) {

@@ -50,6 +50,7 @@
 namespace iris::gs::dump { struct Dump; }
 namespace iris::dev::ds { struct Ds; }
 namespace iris::dev::mcd { struct Mcd; }
+namespace iris::dev::rm { struct Rm; }
 
 namespace iris {
 
@@ -208,6 +209,8 @@ struct Instance {
         bool last_input_event_read = true;
         float last_input_event_value = 0.0f;
         dev::ds::Ds* ds[2] = { nullptr };
+        dev::rm::Rm* rm[2] = { nullptr };
+        uint32_t remote_action = 0xffffffff;
         dev::mcd::Mcd* mcd[2] = { nullptr };
         int mcd_slot_type[2] = { 0 };
     } input;

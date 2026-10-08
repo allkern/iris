@@ -20,6 +20,7 @@ struct Device {
     void (*detach)(void*) = nullptr;
     void (*reset)(void*) = nullptr;
     void* udata = nullptr;
+    int id = 0;
 };
 
 struct Sio2 {

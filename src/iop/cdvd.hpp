@@ -5,6 +5,7 @@
 #include "disc.hpp"
 #include "mg.hpp"
 #include "logger.hpp"
+#include "dev/rm.hpp"
 
 namespace iris::cdvd {
 
@@ -158,6 +159,12 @@ struct Cdvd {
 
     int mg_enabled = 1;
 
+    std::atomic <dev::rm::Key> remote_key = dev::rm::Key {};
+    std::atomic <uint32_t> remote_reads = 0;
+    int remote_phase = 0;
+    uint16_t remote_mask = 0;
+    uint8_t rc_bypass = 0;
+
 #ifdef IRIS_ENABLE_MAGICGATE
     mg::Keys mecha_keys;
     mg::State* mecha_state;
@@ -177,6 +184,8 @@ void destroy(Cdvd* cdvd);
 int open(Cdvd* cdvd, const char* path, int delay);
 void close(Cdvd* cdvd);
 void power_off(Cdvd* cdvd);
+void set_remote_key(Cdvd* cdvd, dev::rm::Key key);
+void release_remote_key(Cdvd* cdvd);
 int load_nvram(Cdvd* cdvd, const char* path);
 void set_mechacon_model(Cdvd* cdvd, int model);
 int load_mg_key(Cdvd* cdvd, int which, const char* path);

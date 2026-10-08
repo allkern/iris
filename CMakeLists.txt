@@ -294,6 +294,7 @@ target_sources(iris PRIVATE
     frontend/ui/modules.cpp
     frontend/ui/overlay.cpp
     frontend/ui/pad.cpp
+    frontend/ui/remote.cpp
     frontend/ui/settings.cpp
     frontend/ui/spu2.cpp
     frontend/ui/state.cpp
@@ -315,6 +316,7 @@ target_sources(iris PRIVATE
     src/dev/mcd.cpp
     src/dev/mtap.cpp
     src/dev/ps1_mcd.cpp
+    src/dev/rm.cpp
     src/ee/ee_jit.cpp
     src/ee/bus.cpp
     src/ee/dmac.cpp

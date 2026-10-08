@@ -614,6 +614,7 @@ Mcd* attach(logger::Logger* logger, sio2::Sio2* sio2, int port, const char* path
     dev.reset = reset;
     dev.handle_command = handle_command;
     dev.udata = mcd;
+    dev.id = sio2::DEV_MCD;
 
     sio2::attach_device(sio2, dev, port);
 

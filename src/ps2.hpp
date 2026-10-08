@@ -54,6 +54,7 @@
 #include "dev/mcd.hpp"
 #include "dev/ps1_mcd.hpp"
 #include "dev/mtap.hpp"
+#include "dev/rm.hpp"
 
 #include "scheduler.hpp"
 #include "logger.hpp"

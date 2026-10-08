@@ -286,6 +286,7 @@ Ds* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
     dev.reset = reset;
     dev.handle_command = handle_command;
     dev.udata = ds;
+    dev.id = sio2::DEV_PAD;
 
     ds->port = port;
     ds->ax_right_y = 0x7f;

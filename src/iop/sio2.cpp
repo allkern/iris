@@ -93,18 +93,12 @@ static inline int handle_command(Sio2* sio2, int idx) {
     //     idx, p, devid, queue::size(sio2->in), queue::size(sio2->in) + 2, len
     //);
 
-    // If we're sending a pad command, make sure it's only for ports
-    // 0-1, and if it's a memory card command, make sure it's only
-    // for ports 2-3
-    int pad = devid == DEV_PAD;
     int mcd = devid == DEV_MCD;
-    int mtap = devid == DEV_MTAP;
 
-    if (!(pad || mcd))
+    if (!sio2->port[p].handle_command)
         return 0;
 
-    // Check if the port is actually connected
-    if (!sio2->port[p].handle_command)
+    if (devid != sio2->port[p].id)
         return 0;
 
     // iris_debug(sio2, "Sending command {:02x} to port {} with devid {:02x} (in: {} ({}), len: {})", //     cmd, p, devid, queue::size(sio2->in), queue::size(sio2->in) + 2, len
@@ -313,6 +307,7 @@ void detach_device(Sio2* sio2, int port) {
     dev->detach = 0;
     dev->reset = 0;
     dev->udata = NULL;
+    dev->id = 0;
 }
 
 }

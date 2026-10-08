@@ -35,6 +35,7 @@ Mtap* attach(logger::Logger* logger, sio2::Sio2* sio2, int port) {
     dev.detach = detach;
     dev.handle_command = handle_command;
     dev.udata = mtap;
+    dev.id = sio2::DEV_MTAP;
 
     sio2::attach_device(sio2, dev, port);
 

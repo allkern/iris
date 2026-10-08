@@ -381,6 +381,8 @@ static inline void s_read_wakeup_time(Cdvd* cdvd) {
         cdvd->s_fifo[i] = 0;
 }
 static inline void s_rc_bypass_ctrl(Cdvd* cdvd) {
+    cdvd->rc_bypass = cdvd->s_params[0];
+
     init_s_fifo(cdvd, 1);
 
     cdvd->s_fifo[0] = 0;
@@ -771,13 +773,31 @@ static inline void s_get_region_params(Cdvd* cdvd) {
     // cdvd->s_fifo[4] = 0x1;
 }
 static inline void s_remote2_read(Cdvd* cdvd) {
+    uint32_t code = dev::rm::next_code(cdvd->remote_key.load(), cdvd->remote_phase);
+
+    cdvd->remote_reads++;
+
     init_s_fifo(cdvd, 5);
 
     cdvd->s_fifo[0] = 0x00;
-    cdvd->s_fifo[1] = 0x14;
-    cdvd->s_fifo[2] = 0x00;
-    cdvd->s_fifo[3] = 0x00;
-    cdvd->s_fifo[4] = 0x00;
+    cdvd->s_fifo[1] = code ? 0x14 : 0x00;
+    cdvd->s_fifo[2] = code & 0xff;
+    cdvd->s_fifo[3] = (code >> 8) & 0xff;
+    cdvd->s_fifo[4] = (code >> 16) & 0xff;
+}
+static inline void s_remote2_7(Cdvd* cdvd) {
+    cdvd->remote_mask = cdvd->s_params[0] | (cdvd->s_params[1] << 8);
+
+    init_s_fifo(cdvd, 1);
+
+    cdvd->s_fifo[0] = 0;
+}
+static inline void s_remote2_7_get(Cdvd* cdvd) {
+    init_s_fifo(cdvd, 3);
+
+    cdvd->s_fifo[0] = 0;
+    cdvd->s_fifo[1] = cdvd->remote_mask & 0xff;
+    cdvd->s_fifo[2] = cdvd->remote_mask >> 8;
 }
 static inline void s_remote2_6(Cdvd* cdvd) {
     init_s_fifo(cdvd, 3);
@@ -867,11 +887,13 @@ void handle_s_command(Cdvd* cdvd, uint8_t cmd) {
         // Used by Namco System 246 at boot
         case 0x1c: iris_debug(cdvd, "blue_led_ctl"); s_blue_led_ctl(cdvd); break;
         case 0x1e: iris_debug(cdvd, "remote2_read"); s_remote2_read(cdvd); break;
+        case 0x1f: iris_debug(cdvd, "remote2_7({:02x}{:02x})", cdvd->s_params[1], cdvd->s_params[0]); s_remote2_7(cdvd); break;
 
         // Used by the PS2 DVD player
         case 0x20: iris_debug(cdvd, "remote2_6"); s_remote2_6(cdvd); break;
         case 0x22: iris_debug(cdvd, "read_wakeup_time"); s_read_wakeup_time(cdvd); break;
-        case 0x24: iris_debug(cdvd, "rc_bypass_ctrl"); s_rc_bypass_ctrl(cdvd); break;
+        case 0x24: iris_debug(cdvd, "rc_bypass_ctrl({:02x})", cdvd->s_params[0]); s_rc_bypass_ctrl(cdvd); break;
+        case 0x26: iris_debug(cdvd, "remote2_7_get"); s_remote2_7_get(cdvd); break;
         case 0x29: iris_debug(cdvd, "notice_game_start"); s_notice_game_start(cdvd); break;
 
         // No idea what this is, used by PSX DESR
@@ -1594,6 +1616,14 @@ void power_off(Cdvd* cdvd) {
     iop::intc::irq(cdvd->hw.intc, iop::intc::CDVD);
 }
 
+void set_remote_key(Cdvd* cdvd, dev::rm::Key key) {
+    cdvd->remote_key.store(key);
+}
+
+void release_remote_key(Cdvd* cdvd) {
+    cdvd->remote_key.store(dev::rm::Key {});
+}
+
 uint8_t read_speed(Cdvd* cdvd) {
     uint8_t speed = cdvd->read_speed & 0x3F;
 
@@ -1694,6 +1724,10 @@ void reset(Cdvd* cdvd) {
     cdvd->config_block_index = 0;
     cdvd->s_cmd = 0;
     cdvd->buf_size = 0;
+
+    cdvd->remote_phase = 0;
+    cdvd->remote_mask = 0;
+    cdvd->rc_bypass = 0;
 }
 
 #ifdef IRIS_ENABLE_MAGICGATE

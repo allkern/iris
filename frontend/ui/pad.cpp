@@ -14,7 +14,7 @@ void PadDebugger::on_render() {
 
     if (BeginTabBar("##padtabbar")) {
         if (imgui::BeginTabItem("Slot 1")) {
-            dev::ds::Ds* ds = (dev::ds::Ds*)iris->ps2->sio2->port[0].udata;
+            dev::ds::Ds* ds = iris->input.ds[0];
 
             if (!ds) {
                 Text("No controller connected");
@@ -39,7 +39,7 @@ void PadDebugger::on_render() {
         }
 
         if (imgui::BeginTabItem("Slot 2")) {
-            dev::ds::Ds* ds = (dev::ds::Ds*)iris->ps2->sio2->port[1].udata;
+            dev::ds::Ds* ds = iris->input.ds[1];
 
             if (!ds) {
                 Text("No controller connected");

@@ -22,6 +22,7 @@
 #include "ui/memory_search.hpp"
 #include "ui/modules.hpp"
 #include "ui/pad.hpp"
+#include "ui/remote.hpp"
 #include "ui/settings.hpp"
 #include "ui/spu2.hpp"
 #include "ui/state.hpp"
@@ -56,6 +57,7 @@ struct Applets {
     Symbols symbols;
     Timers timers;
     PadDebugger pad_debugger;
+    DvdRemote dvd_remote;
     MediaTool media_tool;
     FileExplorer file_explorer;
     GsDumpTool gs_dump_tool;

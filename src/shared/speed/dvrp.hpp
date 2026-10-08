@@ -1,6 +1,9 @@
 #pragma once
 
+#include <atomic>
+
 #include "logger.hpp"
+#include "dev/rm.hpp"
 
 namespace iris::speed { struct Speed; }
 
@@ -46,6 +49,13 @@ struct Dvrp {
     uint16_t intr_mask; // 4208h
     uint16_t intr_cause; // 4220h Command that caused the interrupt?
 
+    uint16_t reply[64];
+    int reply_index;
+
+    std::atomic <dev::rm::Key> remote_key = dev::rm::Key {};
+    std::atomic <uint32_t> remote_reads = 0;
+    int remote_phase;
+
     Speed* speed;
 
     logger::Logger* logger = nullptr;
@@ -57,5 +67,7 @@ void init(Dvrp* dvrp, Speed* speed);
 void destroy(Dvrp* dvrp);
 uint64_t read(Dvrp* dvrp, uint32_t addr);
 void write(Dvrp* dvrp, uint32_t addr, uint64_t data);
+void set_remote_key(Dvrp* dvrp, dev::rm::Key key);
+void release_remote_key(Dvrp* dvrp);
 
 }

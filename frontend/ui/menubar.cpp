@@ -517,6 +517,10 @@ static void show_tools_menu(Instance* iris) {
             iris->applets.file_explorer.show();
         }
 
+        if (menu::item(ICON_MS_SETTINGS_REMOTE " DVD Remote")) {
+            iris->applets.dvd_remote.show();
+        }
+
         menu::end();
     }
 }

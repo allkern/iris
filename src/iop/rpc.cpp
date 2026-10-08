@@ -24,6 +24,9 @@ const char* get_server(uint32_t id) {
         case 0x80000903: return "MTAP Get Connection (MTAPMAN)";
         case 0x80000904: return "MTAP Unknown (MTAPMAN)";
         case 0x80000905: return "MTAP Unknown (MTAPMAN)";
+        case 0x80000C00: return "RMMAN";
+        case 0x80000C01: return "RMMAN2";
+        case 0x80000C02: return "RMMANX";
         case 0x80001400: return "EYETOY";
     }
 

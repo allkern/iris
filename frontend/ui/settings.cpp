@@ -177,6 +177,67 @@ const char* get_input_name(InputAction action) {
         case IRIS_P2IO_SW_CARD1: return "Python 2 Insert Card 1";
         case IRIS_P2IO_SW_CARD2: return "Python 2 Insert Card 2";
         case IRIS_S2X6_SW_TEST: return "System 246/256 Test";
+
+        case IRIS_RM_DIGIT_1: return "DVD Remote 1";
+        case IRIS_RM_DIGIT_2: return "DVD Remote 2";
+        case IRIS_RM_DIGIT_3: return "DVD Remote 3";
+        case IRIS_RM_DIGIT_4: return "DVD Remote 4";
+        case IRIS_RM_DIGIT_5: return "DVD Remote 5";
+        case IRIS_RM_DIGIT_6: return "DVD Remote 6";
+        case IRIS_RM_DIGIT_7: return "DVD Remote 7";
+        case IRIS_RM_DIGIT_8: return "DVD Remote 8";
+        case IRIS_RM_DIGIT_9: return "DVD Remote 9";
+        case IRIS_RM_DIGIT_0: return "DVD Remote 0";
+        case IRIS_RM_ENTER: return "DVD Remote Enter";
+        case IRIS_RM_CLEAR: return "DVD Remote Clear";
+        case IRIS_RM_RETURN: return "DVD Remote Return";
+        case IRIS_RM_TITLE: return "DVD Remote Title";
+        case IRIS_RM_MENU: return "DVD Remote Menu";
+        case IRIS_RM_TIME: return "DVD Remote Time";
+        case IRIS_RM_ATOB: return "DVD Remote A-B";
+        case IRIS_RM_REPEAT: return "DVD Remote Repeat";
+        case IRIS_RM_SHUFFLE: return "DVD Remote Shuffle";
+        case IRIS_RM_PROGRAM: return "DVD Remote Program";
+        case IRIS_RM_PREV: return "DVD Remote Previous";
+        case IRIS_RM_NEXT: return "DVD Remote Next";
+        case IRIS_RM_PLAY: return "DVD Remote Play";
+        case IRIS_RM_SCAN_BACK: return "DVD Remote Scan Back";
+        case IRIS_RM_SCAN_FORW: return "DVD Remote Scan Forward";
+        case IRIS_RM_STOP: return "DVD Remote Stop";
+        case IRIS_RM_PAUSE: return "DVD Remote Pause";
+        case IRIS_RM_DISPLAY: return "DVD Remote Display";
+        case IRIS_RM_SLOW_BACK: return "DVD Remote Slow Back";
+        case IRIS_RM_SLOW_FORW: return "DVD Remote Slow Forward";
+        case IRIS_RM_SUBTITLE: return "DVD Remote Subtitle";
+        case IRIS_RM_AUDIO: return "DVD Remote Audio";
+        case IRIS_RM_ANGLE: return "DVD Remote Angle";
+        case IRIS_RM_UP: return "DVD Remote Up";
+        case IRIS_RM_DOWN: return "DVD Remote Down";
+        case IRIS_RM_LEFT: return "DVD Remote Left";
+        case IRIS_RM_RIGHT: return "DVD Remote Right";
+        case IRIS_RM_SELECT: return "DVD Remote Select";
+        case IRIS_RM_START: return "DVD Remote Start";
+        case IRIS_RM_L1: return "DVD Remote L1";
+        case IRIS_RM_R1: return "DVD Remote R1";
+        case IRIS_RM_L2: return "DVD Remote L2";
+        case IRIS_RM_R2: return "DVD Remote R2";
+        case IRIS_RM_L3: return "DVD Remote L3";
+        case IRIS_RM_R3: return "DVD Remote R3";
+        case IRIS_RM_TRIANGLE: return "DVD Remote Triangle";
+        case IRIS_RM_CIRCLE: return "DVD Remote Circle";
+        case IRIS_RM_CROSS: return "DVD Remote Cross";
+        case IRIS_RM_SQUARE: return "DVD Remote Square";
+        case IRIS_RM_EJECT: return "DVD Remote Eject";
+        case IRIS_RM_RESET: return "DVD Remote Reset";
+        case IRIS_RM_POWER: return "DVD Remote Power";
+        case IRIS_RM_HOME: return "DVD Remote Home (PSX)";
+        case IRIS_RM_G_GUIDE: return "DVD Remote G-Guide (PSX)";
+        case IRIS_RM_QUIT_GAME: return "DVD Remote Quit Game (PSX)";
+        case IRIS_RM_REC_MODE: return "DVD Remote Recording Mode (PSX)";
+        case IRIS_RM_REC_START: return "DVD Remote Record (PSX)";
+        case IRIS_RM_REC_PAUSE: return "DVD Remote Record Pause (PSX)";
+        case IRIS_RM_REC_STOP: return "DVD Remote Record Stop (PSX)";
+        case IRIS_RM_DELETE: return "DVD Remote Delete (PSX)";
         case IRIS_INPUT_ACTION_MAX: break;
     }
 
@@ -1107,6 +1168,16 @@ void show_graphics_settings(Instance* iris) {
     PopStyleVar(2);
 }
 
+static void detach_controller(Instance* iris, int slot) {
+    if (!iris->input.ds[slot] && !iris->input.rm[slot])
+        return;
+
+    sio2::detach_device(iris->ps2->sio2, slot);
+
+    iris->input.ds[slot] = nullptr;
+    iris->input.rm[slot] = nullptr;
+}
+
 void show_controller_slot(Instance* iris, int slot) {
     using namespace ImGui;
 
@@ -1125,6 +1196,8 @@ void show_controller_slot(Instance* iris, int slot) {
 
         if (iris->input.ds[slot]) {
             controller_name = "DualShock 2";
+        } else if (iris->input.rm[slot]) {
+            controller_name = "DVD Remote receiver";
         }
 
         float avail_width = GetContentRegionAvail().x;
@@ -1133,16 +1206,24 @@ void show_controller_slot(Instance* iris, int slot) {
 
         if (BeginCombo("##controller", controller_name.c_str())) {
             if (imgui::Selectable("None")) {
-                if (iris->input.ds[slot]) {
-                    sio2::detach_device(iris->ps2->sio2, slot);
-
-                    iris->input.ds[slot] = nullptr;
-                }
+                detach_controller(iris, slot);
             }
 
             if (imgui::Selectable("DualShock 2")) {
                 if (!iris->input.ds[slot]) {
+                    detach_controller(iris, slot);
+
                     iris->input.ds[slot] = dev::ds::attach(iris->logger, iris->ps2->sio2, slot);
+                }
+            }
+
+            if (imgui::Selectable("DVD Remote receiver")) {
+                if (!iris->input.rm[slot]) {
+                    detach_controller(iris, slot);
+
+                    iris->input.rm[slot] = dev::rm::attach(iris->logger, iris->ps2->sio2, slot);
+
+                    input::sync_remote(iris);
                 }
             }
 
@@ -1151,7 +1232,7 @@ void show_controller_slot(Instance* iris, int slot) {
     } EndChild(); SameLine(0.0, 10.0);
 
     if (BeginChild((std::string(label) + "##icon").c_str(), ImVec2(0, 0), ImGuiChildFlags_AutoResizeY)) {
-        BeginDisabled(!iris->input.ds[slot]);
+        BeginDisabled(!iris->input.ds[slot] && !iris->input.rm[slot]);
 
         float avail_width = GetContentRegionAvail().x;
 
