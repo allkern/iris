@@ -65,6 +65,7 @@ void init(Ps2* ps2) {
     ps2->usb = usb::create(ps2->logger, ps2->iop_intc, ps2->iop_bus, ps2->sched);
     ps2->gs = gs::create(ps2->logger, ps2->iop_intc, ps2->iop_timers, ps2->sched);
     ps2->cdvd = cdvd::create(ps2->logger, ps2->iop_intc, ps2->sched);
+    ps2->rainbow = rainbow::create(ps2->logger, ps2->iop_intc, ps2->sched, ps2->cdvd);
     ps2->sio2 = sio2::create(ps2->logger, ps2->iop_intc, ps2->sched);
     ps2->spu2 = spu2::create(ps2->logger, ps2->iop_intc, ps2->sched);
 
@@ -135,6 +136,7 @@ void init(Ps2* ps2) {
     ps2->iop_bus->intc = ps2->iop_intc;
     ps2->iop_bus->timers = ps2->iop_timers;
     ps2->iop_bus->cdvd = ps2->cdvd;
+    ps2->iop_bus->rainbow = ps2->rainbow;
     ps2->iop_bus->sio2 = ps2->sio2;
     ps2->iop_bus->spu2 = ps2->spu2;
     ps2->iop_bus->usb = ps2->usb;
@@ -333,6 +335,7 @@ void reset(Ps2* ps2) {
     sbus::reset(ps2->sbus);
     sif::reset(ps2->sif);
     cdvd::reset(ps2->cdvd);
+    rainbow::reset(ps2->rainbow);
     sio2::reset(ps2->sio2);
 
     gif::reset(ps2->gif);
@@ -391,7 +394,7 @@ void cycle(Ps2* ps2) {
         iop::timers::tick_cycles(ps2->iop_timers, cycles / 2);
 
 #if SPU2_SYNC
-        spu2_tick(ps2->spu2, ps2->timescale * cycles);
+        spu2::tick(ps2->spu2, ps2->timescale * cycles);
 #else
         ps2->spu2->emu_cycle += (uint64_t)ps2->timescale * cycles;
 
@@ -446,6 +449,7 @@ void set_timescale(Ps2* ps2, int timescale) {
 
 void destroy(Ps2* ps2) {
     cdvd::destroy(ps2->cdvd);
+    rainbow::destroy(ps2->rainbow);
     scheduler::destroy(ps2->sched);
     ee::destroy(ps2->ee);
     vu::destroy(ps2->vu0);
@@ -714,6 +718,8 @@ void set_system(Ps2* ps2, int system) {
         system, ps2->ee_ram->size / 0x100000, ps2->iop_ram->size / 0x100000);
 
     cdvd::set_mechacon_model(ps2->cdvd, mechacon_model);
+    cdvd::set_psx(ps2->cdvd, system == PSX_DESR);
+    rainbow::set_enabled(ps2->rainbow, system == PSX_DESR);
 
     ee::BusInterface bus_data;
     bus_data.read8 = ee::bus::read8;

@@ -15,6 +15,7 @@
 #include "intc.hpp"
 #include "timers.hpp"
 #include "cdvd.hpp"
+#include "rainbow.hpp"
 #include "sio2.hpp"
 #include "spu2.hpp"
 #include "usb.hpp"
@@ -49,6 +50,7 @@ struct Bus {
     iop::intc::Intc* intc;
     iop::timers::Timers* timers;
     cdvd::Cdvd* cdvd;
+    rainbow::Rainbow* rainbow;
     sio2::Sio2* sio2;
     spu2::Spu2* spu2;
     usb::Usb* usb;

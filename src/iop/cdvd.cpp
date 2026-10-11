@@ -1001,7 +1001,7 @@ static inline void set_status(Cdvd* cdvd, uint8_t data) {
 static inline void send_irq(Cdvd* cdvd) {
     iop::intc::irq(cdvd->hw.intc, iop::intc::CDVD);
 
-    cdvd->i_stat |= 2;
+    cdvd->i_stat |= IRQ_CMD_COMPLETE;
 }
 
 void fetch_sector(Cdvd* cdvd) {
@@ -1140,9 +1140,6 @@ void do_read(void* udata, int overshoot) {
     set_status(cdvd, STATUS_PAUSED);
 
     send_irq(cdvd);
-
-    // I_STAT needs to be set to 3?
-    cdvd->i_stat |= 2;
 }
 
 static inline void n_nop(Cdvd* cdvd) {
@@ -1535,6 +1532,12 @@ void set_detected_type(void* udata, int overshoot) {
     set_status(cdvd, STATUS_PAUSED);
 
     cdvd->disc_type = cdvd->detected_disc_type;
+
+    if (cdvd->psx) {
+        cdvd->i_stat |= IRQ_DISC_EJECTED;
+
+        iop::intc::irq(cdvd->hw.intc, iop::intc::CDVD);
+    }
 }
 
 int open(Cdvd* cdvd, const char* path, int delay) {
@@ -1652,7 +1655,7 @@ uint64_t read8(Cdvd* cdvd, uint32_t addr) {
         case 0x1F40200B: iris_debug(cdvd, "read sticky_status {:x}", cdvd->sticky_status); return cdvd->sticky_status;
         case 0x1F40200F: iris_debug(cdvd, "read disc_type {:x}", cdvd->disc_type); return cdvd->disc_type;
         case 0x1F402013: iris_debug(cdvd, "read speed {:x}", read_speed(cdvd)); return read_speed(cdvd);
-        case 0x1F402015: return 0xff;
+        case 0x1F402015: return cdvd->psx ? 0x01 : 0x00;
         case 0x1F402016: iris_debug(cdvd, "read s_cmd {:x}", cdvd->s_cmd); return cdvd->s_cmd;
         case 0x1F402017: iris_debug(cdvd, "read s_stat {:x}", cdvd->s_stat); return cdvd->s_stat;
         // case 0x1F402017: (W);
@@ -1817,6 +1820,10 @@ void set_mechacon_model(Cdvd* cdvd, int model) {
             cdvd->layout = g_dragon_layout;
         } break;
     }
+}
+
+void set_psx(Cdvd* cdvd, int psx) {
+    cdvd->psx = psx;
 }
 
 int load_nvram(Cdvd* cdvd, const char* path) {

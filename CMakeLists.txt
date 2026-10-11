@@ -348,6 +348,7 @@ target_sources(iris PRIVATE
     src/gs/renderer/hardware.cpp
     src/iop/bus.cpp
     src/iop/cdvd.cpp
+    src/iop/rainbow.cpp
     src/iop/disc.cpp
     src/iop/dma.cpp
     src/iop/fw.cpp

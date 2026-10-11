@@ -113,6 +113,7 @@ uint32_t read8(void* udata, uint32_t addr) {
     MAP_MEM_READ_NS(8, 0x1F800000, 0x1F8003FF, ram, iop_spr);
     MAP_REG_READ_NS(8, 0x1F801070, 0x1F80107B, iop::intc, intc);
     MAP_REG_READ_NS(8, 0x1F402004, 0x1F4020FF, cdvd, cdvd);
+    MAP_REG_READ_NS(8, 0x1F410000, 0x1F41FFFF, rainbow, rainbow);
     MAP_REG_READ_NS(8, 0x1F808200, 0x1F808280, sio2, sio2);
     MAP_MEM_READ_NS(8, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(8, 0x1E400000, 0x1E7FFFFF, bios, rom2);
@@ -170,6 +171,7 @@ uint32_t read16(void* udata, uint32_t addr) {
     MAP_MEM_READ_NS(16, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(16, 0x1E400000, 0x1E7FFFFF, bios, rom2);
     MAP_REG_READ_NS(16, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ_NS(16, 0x1F410000, 0x1F41FFFF, rainbow, rainbow);
     MAP_REG_READ_NS(16, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
@@ -239,6 +241,7 @@ uint32_t read32(void* udata, uint32_t addr) {
     MAP_MEM_READ_NS(32, 0x1E000000, 0x1E3FFFFF, bios, rom1);
     MAP_MEM_READ_NS(32, 0x1E400000, 0x1E7FFFFF, bios, rom2);
     MAP_REG_READ_NS(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_READ_NS(32, 0x1F410000, 0x1F41FFFF, rainbow, rainbow);
     MAP_REG_READ_NS(32, 0x1F801410, 0x1F801413, dma, dma);
     MAP_REG_READ_NS(32, 0x10000000, 0x1000FFFF, speed, speed);
 
@@ -276,6 +279,7 @@ void write8(void* udata, uint32_t addr, uint32_t data) {
     // MAP_MEM_WRITE_NS(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
     MAP_MEM_WRITE_NS(8, 0x1F800000, 0x1F8003FF, ram, iop_spr);
     MAP_REG_WRITE_NS(8, 0x1F402004, 0x1F4020FF, cdvd, cdvd);
+    MAP_REG_WRITE_NS(8, 0x1F410000, 0x1F41FFFF, rainbow, rainbow);
     MAP_REG_WRITE_NS(8, 0x1F801070, 0x1F80107B, iop::intc, intc);
     MAP_REG_WRITE_NS(32, 0x1F801080, 0x1F8010EF, dma, dma);
     MAP_REG_WRITE_NS(32, 0x1F801500, 0x1F80155F, dma, dma);
@@ -328,6 +332,7 @@ void write16(void* udata, uint32_t addr, uint32_t data) {
     MAP_REG_WRITE_NS(16, 0x1F8010F0, 0x1F8010F8, dma, dma);
     MAP_REG_WRITE_NS(16, 0x1F900000, 0x1F9007FF, spu2, spu2);
     MAP_REG_WRITE_NS(16, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE_NS(16, 0x1F410000, 0x1F41FFFF, rainbow, rainbow);
     MAP_REG_WRITE_NS(16, 0x10000000, 0x1000FFFF, speed, speed);
 
     // System 147/148 mappings
@@ -380,6 +385,7 @@ void write32(void* udata, uint32_t addr, uint32_t data) {
 
     MAP_REG_WRITE_NS(32, 0x1F808400, 0x1F80854F, fw, fw);
     MAP_REG_WRITE_NS(32, 0x1F801460, 0x1F80147F, dev9, dev9);
+    MAP_REG_WRITE_NS(32, 0x1F410000, 0x1F41FFFF, rainbow, rainbow);
     MAP_REG_WRITE_NS(32, 0x1F801410, 0x1F801413, dma, dma);
     MAP_REG_WRITE_NS(32, 0x10000000, 0x1000FFFF, speed, speed);
 

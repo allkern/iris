@@ -18,6 +18,7 @@
 #include "iop/intc.hpp"
 #include "iop/timers.hpp"
 #include "iop/cdvd.hpp"
+#include "iop/rainbow.hpp"
 #include "iop/sio2.hpp"
 #include "iop/spu2.hpp"
 #include "iop/usb.hpp"
@@ -107,6 +108,7 @@ struct Ps2 {
     bios::Bios* rom1; // Mapped to 1E000000-1E3FFFFF (DVD firmware)
     bios::Bios* rom2; // Mapped to 1E400000-1E7FFFFF (Chinese exts)
     cdvd::Cdvd* cdvd;
+    rainbow::Rainbow* rainbow;
     sif::Sif* sif;
     usb::Usb* usb;
     sbus::Sbus* sbus;

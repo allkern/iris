@@ -55,8 +55,7 @@ inline constexpr auto N_STATUS_BUSY = 128;
     4     BS_Power DET?
     5-7   Unused
 */
-inline constexpr auto IRQ_DATA_READY = 1;
-inline constexpr auto IRQ_NCMD_DONE = 2;
+inline constexpr auto IRQ_CMD_COMPLETE = 1;
 inline constexpr auto IRQ_POWER_OFF = 4;
 inline constexpr auto IRQ_DISC_EJECTED = 8;
 inline constexpr auto IRQ_BS_POWER = 16;
@@ -158,6 +157,7 @@ struct Cdvd {
     NvramLayout layout;
 
     int mg_enabled = 1;
+    int psx = 0;
 
     std::atomic <dev::rm::Key> remote_key = dev::rm::Key {};
     std::atomic <uint32_t> remote_reads = 0;
@@ -188,6 +188,7 @@ void set_remote_key(Cdvd* cdvd, dev::rm::Key key);
 void release_remote_key(Cdvd* cdvd);
 int load_nvram(Cdvd* cdvd, const char* path);
 void set_mechacon_model(Cdvd* cdvd, int model);
+void set_psx(Cdvd* cdvd, int psx);
 int load_mg_key(Cdvd* cdvd, int which, const char* path);
 int derive_mg_keys(Cdvd* cdvd, int mode);
 int mg_ready(Cdvd* cdvd);
