@@ -15,6 +15,7 @@
 #include "logger.hpp"
 
 namespace iris::cdvd { struct Cdvd; }
+namespace iris::rainbow { struct Rainbow; }
 namespace iris::sio2 { struct Sio2; }
 namespace iris::spu2 { struct Spu2; }
 
@@ -81,6 +82,7 @@ struct Dma {
         speed::Speed* speed;
         s2x6::acata::Acata* s2x6_acata;
         s2x6::acram::Acram* s2x6_acram;
+        rainbow::Rainbow* rainbow;
         scheduler::Scheduler* sched;
         iop::Iop* iop;
     } hw;

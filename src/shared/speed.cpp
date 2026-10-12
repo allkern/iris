@@ -50,6 +50,10 @@ uint64_t read8(Speed* speed, uint32_t addr) {
         return smap::read8(speed->smap, addr);
     }
 
+    if (addr >= 0x4000 && addr < 0x4800) {
+        return dvrp::read(speed->dvrp, addr);
+    }
+
     // iris_debug(speed, "read8 {:08x} {:08x}", addr);
 
     switch (addr) {
@@ -71,7 +75,7 @@ uint64_t read16(Speed* speed, uint32_t addr) {
         return ata::read16(speed->ata, addr);
     }
 
-    if (addr >= 0x4200 && addr < 0x4240) {
+    if (addr >= 0x4000 && addr < 0x4800) {
         return dvrp::read(speed->dvrp, addr);
     }
 
@@ -107,7 +111,7 @@ uint64_t read32(Speed* speed, uint32_t addr) {
         return flash::read32(speed->flash, addr);
     }
 
-    if (addr >= 0x4200 && addr < 0x4240) {
+    if (addr >= 0x4000 && addr < 0x4800) {
         return dvrp::read(speed->dvrp, addr);
     }
 
@@ -120,6 +124,12 @@ void write8(Speed* speed, uint32_t addr, uint64_t data) {
 
     if (addr >= 0x0100 && addr < 0x4000) {
         smap::write8(speed->smap, addr, data);
+
+        return;
+    }
+
+    if (addr >= 0x4000 && addr < 0x4800) {
+        dvrp::write(speed->dvrp, addr, data);
 
         return;
     }
@@ -154,7 +164,7 @@ void write16(Speed* speed, uint32_t addr, uint64_t data) {
         return;
     }
 
-    if (addr >= 0x4200 && addr < 0x4240) {
+    if (addr >= 0x4000 && addr < 0x4800) {
         dvrp::write(speed->dvrp, addr, data);
 
         return;
@@ -190,7 +200,7 @@ void write32(Speed* speed, uint32_t addr, uint64_t data) {
         return;
     }
 
-    if (addr >= 0x4200 && addr < 0x4240) {
+    if (addr >= 0x4000 && addr < 0x4800) {
         dvrp::write(speed->dvrp, addr, data);
 
         return;

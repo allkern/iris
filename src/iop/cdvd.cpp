@@ -1655,7 +1655,7 @@ uint64_t read8(Cdvd* cdvd, uint32_t addr) {
         case 0x1F40200B: iris_debug(cdvd, "read sticky_status {:x}", cdvd->sticky_status); return cdvd->sticky_status;
         case 0x1F40200F: iris_debug(cdvd, "read disc_type {:x}", cdvd->disc_type); return cdvd->disc_type;
         case 0x1F402013: iris_debug(cdvd, "read speed {:x}", read_speed(cdvd)); return read_speed(cdvd);
-        case 0x1F402015: return cdvd->psx ? 0x01 : 0x00;
+        case 0x1F402015: return cdvd->psx ? (0x01 | (cdvd->atapi_owner ? 0x80 : 0x00)) : 0x00;
         case 0x1F402016: iris_debug(cdvd, "read s_cmd {:x}", cdvd->s_cmd); return cdvd->s_cmd;
         case 0x1F402017: iris_debug(cdvd, "read s_stat {:x}", cdvd->s_stat); return cdvd->s_stat;
         // case 0x1F402017: (W);

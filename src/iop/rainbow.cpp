@@ -70,6 +70,7 @@ static void check_media_change(Rainbow* rainbow) {
     if (disc != rainbow->last_disc) {
         rainbow->last_disc = disc;
         rainbow->unit_attention = 1;
+        rainbow->media_event = disc ? 2 : 3;
     }
 }
 
@@ -262,14 +263,6 @@ static void cmd_read10(Rainbow* rainbow) {
     uint32_t lba = (pkt[2] << 24) | (pkt[3] << 16) | (pkt[4] << 8) | pkt[5];
     uint32_t count = (pkt[7] << 8) | pkt[8];
 
-    if (rainbow->feature & 1) {
-        iris_warning(rainbow, "READ(10) over DMA isn't supported yet (lba {:x} count {})", lba, count);
-
-        fail(rainbow, SENSE_ILLEGAL_REQUEST, 0x20, 0x00);
-
-        return;
-    }
-
     if (count * 2048 > sizeof(rainbow->buf)) {
         iris_warning(rainbow, "READ(10) of {} sectors is too large", count);
 
@@ -282,7 +275,113 @@ static void cmd_read10(Rainbow* rainbow) {
         iop::disc::read_sector(rainbow->hw.cdvd->disc, &rainbow->buf[i * 2048], lba + i, 2048);
     }
 
+    iris_debug(rainbow, "READ(10) lba {:x} count {} dma {}", lba, count, rainbow->feature & 1);
+
+    if (rainbow->feature & 1) {
+        rainbow->buf_size = count * 2048;
+        rainbow->buf_index = 0;
+        rainbow->dma_active = count != 0;
+        rainbow->status = STATUS_DRDY | STATUS_DSC | STATUS_DRQ;
+
+        if (!count) {
+            schedule_complete(rainbow);
+        }
+
+        return;
+    }
+
     schedule_data_in(rainbow, count * 2048);
+}
+
+static void cmd_read_disc_info(Rainbow* rainbow) {
+    if (!check_ready(rainbow))
+        return;
+
+    uint32_t size = alloc_length_16(rainbow->packet);
+    uint8_t data[34] = {};
+
+    data[1] = 32;
+    data[2] = 0x0e;
+    data[3] = 1;
+    data[4] = 1;
+    data[5] = 1;
+    data[6] = 1;
+    data[7] = 0x20;
+    data[20] = 0xff;
+    data[21] = 0xff;
+    data[22] = 0xff;
+    data[23] = 0xff;
+
+    memset(rainbow->buf, 0, std::max<uint32_t>(size, sizeof(data)));
+    memcpy(rainbow->buf, data, std::min<uint32_t>(size, sizeof(data)));
+
+    schedule_data_in(rainbow, size);
+}
+
+static void cmd_get_event_status(Rainbow* rainbow) {
+    const uint8_t* pkt = rainbow->packet;
+    uint32_t size = alloc_length_16(pkt);
+
+    check_media_change(rainbow);
+
+    memset(rainbow->buf, 0, std::max<uint32_t>(size, 8));
+
+    if (!(pkt[1] & 1) || !(pkt[4] & 0x10)) {
+        rainbow->buf[1] = 2;
+        rainbow->buf[2] = 0x80;
+        rainbow->buf[3] = 0x10;
+
+        set_sense(rainbow, SENSE_NONE, 0, 0);
+        schedule_data_in(rainbow, std::min<uint32_t>(size, 4));
+
+        return;
+    }
+
+    bool tray_open = rainbow->hw.cdvd->status & cdvd::STATUS_TRAY_OPEN_BIT;
+
+    rainbow->buf[1] = 6;
+    rainbow->buf[2] = 0x04;
+    rainbow->buf[3] = 0x10;
+    rainbow->buf[4] = rainbow->media_event;
+    rainbow->buf[5] = (media_present(rainbow) ? 0x02 : 0x00) | (tray_open ? 0x01 : 0x00);
+
+    iris_debug(rainbow, "GET EVENT STATUS -> event {} status {:02x}", rainbow->media_event, rainbow->buf[5]);
+
+    rainbow->media_event = 0;
+
+    set_sense(rainbow, SENSE_NONE, 0, 0);
+    schedule_data_in(rainbow, std::min<uint32_t>(size, 8));
+}
+
+static void cmd_get_configuration(Rainbow* rainbow) {
+    uint32_t size = alloc_length_16(rainbow->packet);
+    uint16_t profile = 0;
+
+    check_media_change(rainbow);
+
+    if (media_present(rainbow)) {
+        profile = media_is_dvd(rainbow) ? 0x0010 : 0x0008;
+    }
+
+    uint8_t data[20] = {};
+
+    data[3] = 16;
+    data[6] = profile >> 8;
+    data[7] = profile & 0xff;
+    data[10] = 0x03;
+    data[11] = 8;
+    data[13] = 0x10;
+    data[14] = profile == 0x0010 ? 0x01 : 0x00;
+    data[17] = 0x08;
+    data[18] = profile == 0x0008 ? 0x01 : 0x00;
+
+    memset(rainbow->buf, 0, std::max<uint32_t>(size, sizeof(data)));
+    memcpy(rainbow->buf, data, std::min<uint32_t>(size, sizeof(data)));
+
+    iris_debug(rainbow, "GET CONFIGURATION -> profile {:04x}", profile);
+
+    set_sense(rainbow, SENSE_NONE, 0, 0);
+    schedule_data_in(rainbow, size);
 }
 
 static void cmd_start_stop_unit(Rainbow* rainbow) {
@@ -336,8 +435,19 @@ static void cmd_vendor_f6(Rainbow* rainbow) {
 
 static void cmd_vendor_f9(Rainbow* rainbow) {
     switch (rainbow->packet[2]) {
-        case 0xb1:
+        case 0xb1: {
+            iris_debug(rainbow, "Spindle released to the mechacon");
+
+            rainbow->hw.cdvd->atapi_owner = 0;
+
+            schedule_complete(rainbow);
+        } return;
+
         case 0xb2: {
+            iris_debug(rainbow, "Spindle taken by the ATAPI drive");
+
+            rainbow->hw.cdvd->atapi_owner = 1;
+
             schedule_complete(rainbow);
         } return;
     }
@@ -374,6 +484,9 @@ static void execute_packet(Rainbow* rainbow) {
         case 0x1e: schedule_complete(rainbow); return;
         case 0x25: cmd_read_capacity(rainbow); return;
         case 0x28: cmd_read10(rainbow); return;
+        case 0x46: cmd_get_configuration(rainbow); return;
+        case 0x51: cmd_read_disc_info(rainbow); return;
+        case 0x4a: cmd_get_event_status(rainbow); return;
         case 0xf6: cmd_vendor_f6(rainbow); return;
         case 0xf9: cmd_vendor_f9(rainbow); return;
     }
@@ -599,7 +712,12 @@ static uint16_t read_reg(Rainbow* rainbow, uint32_t offset) {
         case 0x28: return rainbow->intr_stat;
         case 0x2a: return rainbow->intr_mask;
         case 0x32: return rainbow->xfr_ctrl;
-        case 0x38: return 0;
+        case 0x38: {
+            if (!rainbow->dma_active)
+                return 0;
+
+            return std::min<uint32_t>((rainbow->buf_size - rainbow->buf_index) / 512, 31);
+        }
         case 0x40: return read_data(rainbow);
         case 0x42: return rainbow->error;
         case 0x44: return rainbow->nsector;
@@ -694,6 +812,8 @@ void reset(Rainbow* rainbow) {
     rainbow->enabled = enabled;
 
     set_signature(rainbow);
+
+    rainbow->hw.cdvd->atapi_owner = 0;
 }
 
 void destroy(Rainbow* rainbow) {
@@ -702,6 +822,26 @@ void destroy(Rainbow* rainbow) {
 
 void set_enabled(Rainbow* rainbow, int enabled) {
     rainbow->enabled = enabled;
+}
+
+int dma_active(Rainbow* rainbow) {
+    return rainbow->enabled && rainbow->dma_active;
+}
+
+void dma_read(Rainbow* rainbow, uint8_t* buf, uint32_t size) {
+    uint32_t available = rainbow->buf_size - rainbow->buf_index;
+    uint32_t n = std::min(size, available);
+
+    memcpy(buf, &rainbow->buf[rainbow->buf_index], n);
+    memset(buf + n, 0, size - n);
+
+    rainbow->buf_index += n;
+
+    if (rainbow->buf_index >= rainbow->buf_size) {
+        rainbow->dma_active = 0;
+
+        schedule_complete(rainbow);
+    }
 }
 
 uint64_t read8(Rainbow* rainbow, uint32_t addr) {

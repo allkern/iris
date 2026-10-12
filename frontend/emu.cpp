@@ -84,6 +84,8 @@ bool init(Instance* iris) {
 
     iris->input.ds[0] = dev::ds::attach(iris->logger, iris->ps2->sio2, 0);
 
+    speed::dvrp::set_root(iris->ps2->speed->dvrp, (iris->paths.pref_path + "dvr").c_str());
+
     return true;
 }
 

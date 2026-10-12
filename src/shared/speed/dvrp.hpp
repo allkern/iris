@@ -1,6 +1,12 @@
 #pragma once
 
 #include <atomic>
+#include <cstdio>
+#include <ctime>
+#include <deque>
+#include <map>
+#include <string>
+#include <vector>
 
 #include "logger.hpp"
 #include "dev/rm.hpp"
@@ -15,48 +21,63 @@ inline constexpr auto INTR_CMD_COMP = 0x04;
 inline constexpr auto INTR_DMA_ACK = 0x08;
 inline constexpr auto INTR_DMA_END = 0x10;
 
+struct Response {
+    uint16_t cause = 0;
+    uint16_t stat = 0;
+    uint16_t words[8] = {};
+    int count = 0;
+};
+
+struct DvrFile {
+    FILE* file = nullptr;
+    bool is_dir = false;
+    bool root = false;
+    std::vector<std::string> entries;
+    size_t index = 0;
+    std::string path;
+};
+
 struct Dvrp {
-    // 0x3109 - avioctl2_set_d_audio_sel
-    uint16_t cmd;
+    uint16_t cmd = 0;
+    uint16_t params[0x10] = {};
+    uint8_t param_index = 0;
 
-    // Unknown what these parameters mean
-    uint16_t params[0x10];
-    uint8_t param_index;
+    uint8_t dma_dir = 0;
+    uint8_t reset_reg = 0;
 
-    // bit 1 - Busy
-    // bit 2 - DVR/MISC task
-    // bit 3 - AV task
-    // bit 4 - DVR task
-    // bit 5 - IOMAN task
-    uint8_t status;
+    uint16_t intr_stat = 0;
+    uint16_t intr_mask = 0;
+    uint16_t intr_cause = 0;
 
-    // bit 7 - busy? (expected to be 0)
-    uint8_t status2;
+    uint16_t reply[64] = {};
+    int reply_count = 0;
+    int reply_index = 0;
 
-    // DVR INTR regs:
-    // 4200 - intr stat (R?)
-    // 4204 - intr ack (W?)
-    // 4208 - intr mask (RW)
-    // 4220 - intr cause/command? (R?)
+    std::deque<Response> responses;
+    bool delivery_pending = false;
 
-    // DVR INTRs:
-    // bit 0 - DVRRDY (DVR ready)
-    // bit 1 - CMD_ACK (Command acknowledged)
-    // bit 2 - CMD_COMP (Command completed)
-    // bit 3 - DMAACK (DMA transfer acknowledged)
-    // bit 4 - DMAEND (DMA transfer ended)
-    uint16_t intr_stat; // 4200h
-    uint16_t intr_mask; // 4208h
-    uint16_t intr_cause; // 4220h Command that caused the interrupt?
+    uint16_t dma_cmd = 0;
+    std::vector<uint8_t> dma_in;
+    std::vector<uint8_t> dma_out;
+    int32_t ret = 0;
 
-    uint16_t reply[64];
-    int reply_index;
+    int file_fd = 0;
+    uint32_t io_size = 0;
+    std::map<int, DvrFile> files;
+    int next_fd = 1;
+    std::string root;
+
+    std::map<uint16_t, uint16_t> presets;
+    uint8_t tv_channel = 0;
+    bool rec_active = false;
+    bool rec_paused = false;
+    std::time_t rec_start = 0;
 
     std::atomic <dev::rm::Key> remote_key = dev::rm::Key {};
     std::atomic <uint32_t> remote_reads = 0;
-    int remote_phase;
+    int remote_phase = 0;
 
-    Speed* speed;
+    Speed* speed = nullptr;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;
@@ -67,6 +88,9 @@ void init(Dvrp* dvrp, Speed* speed);
 void destroy(Dvrp* dvrp);
 uint64_t read(Dvrp* dvrp, uint32_t addr);
 void write(Dvrp* dvrp, uint32_t addr, uint64_t data);
+void read_dma(Dvrp* dvrp, uint8_t* buf, uint32_t size);
+void write_dma(Dvrp* dvrp, const uint8_t* buf, uint32_t size);
+void set_root(Dvrp* dvrp, const char* path);
 void set_remote_key(Dvrp* dvrp, dev::rm::Key key);
 void release_remote_key(Dvrp* dvrp);
 

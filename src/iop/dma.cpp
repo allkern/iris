@@ -1,6 +1,9 @@
 #include <new>
 #include <cctype>
 #include <signal.h>
+#include <vector>
+#include <cstring>
+#include <algorithm>
 
 #include "cdvd.hpp"
 #include "sio2.hpp"
@@ -9,6 +12,7 @@
 #include "iop_def.hpp"
 #include "dma.hpp"
 #include "rpc.hpp"
+#include "rainbow.hpp"
 
 namespace iris::iop::dma {
 
@@ -172,7 +176,33 @@ void handle_mdec_out_transfer(Dma* dma) {
 void handle_sif2_transfer(Dma* dma) {
     iris_fatal_error(dma, "iop: SIF2 channel unimplemented");
 }
+static void handle_rainbow_transfer(Dma* dma) {
+    uint32_t size = dma->channels[CDVD].transfer_size;
+    std::vector<uint8_t> buf(size);
+
+    rainbow::dma_read(dma->hw.rainbow, buf.data(), size);
+
+    for (uint32_t i = 0; i < size; i++) {
+        iop::invalidate_cache_page(dma->hw.iop, dma->channels[CDVD].madr);
+        bus::write8(dma->hw.bus, dma->channels[CDVD].madr++, buf[i]);
+    }
+
+    dma->channels[CDVD].transfer_size = 0;
+
+    set_dicr_flag(dma, CDVD);
+    check_irq(dma);
+
+    dma->channels[CDVD].chcr &= ~0x1000000;
+    dma->channels[CDVD].bcr = 0;
+}
+
 void handle_cdvd_transfer(Dma* dma) {
+    if (dma->hw.rainbow && rainbow::dma_active(dma->hw.rainbow) && (dma->channels[CDVD].chcr & 0x1000000)) {
+        handle_rainbow_transfer(dma);
+
+        return;
+    }
+
     // No data in CDVD buffer yet
     if (!dma->hw.cdvd->buf_size)
         return;
@@ -490,6 +520,40 @@ void handle_spu2_transfer(Dma* dma) {
     spu_adma_start_tracking(dma, SPU2, madr_start, size, 192 * 8, spu2_adma_advance_handler);
 }
 
+static void handle_dev9_dvrp_transfer(Dma* dma) {
+    uint32_t size = dma->channels[DEV9].transfer_size;
+    std::vector<uint8_t> buf(size);
+
+    if (dma->channels[DEV9].chcr & 1) {
+        for (uint32_t i = 0; i < size; i += 4) {
+            uint32_t d = bus::read32(dma->hw.bus, dma->channels[DEV9].madr + i);
+
+            memcpy(&buf[i], &d, std::min<uint32_t>(4, size - i));
+        }
+
+        speed::dvrp::write_dma(dma->hw.speed->dvrp, buf.data(), size);
+    } else {
+        speed::dvrp::read_dma(dma->hw.speed->dvrp, buf.data(), size);
+
+        for (uint32_t i = 0; i < size; i += 4) {
+            uint32_t d = 0;
+
+            memcpy(&d, &buf[i], std::min<uint32_t>(4, size - i));
+
+            iop::invalidate_cache_page(dma->hw.iop, dma->channels[DEV9].madr + i);
+            bus::write32(dma->hw.bus, dma->channels[DEV9].madr + i, d);
+        }
+    }
+
+    dma->channels[DEV9].madr += size;
+    dma->channels[DEV9].transfer_size = 0;
+
+    set_dicr_flag(dma, DEV9);
+    check_irq(dma);
+
+    dma->channels[DEV9].chcr &= ~0x1000000;
+}
+
 void handle_dev9_ata_transfer(Dma* dma) {
     // iris_debug(dma, "iop: dev9 ata madr={:08x} bcr={:08x} chcr={:08x} tadr={:08x} size={} ({:08x})", //     dma->channels[DEV9].madr,
     //     dma->channels[DEV9].bcr,
@@ -669,7 +733,9 @@ void handle_dev9_transfer(Dma* dma) {
         return;
     }
 
-    if (dma->dev9_mode == DEV9_MODE_RETAIL) {
+    if (dma->dev9_mode == DEV9_MODE_RETAIL && (dma->hw.speed->dma_ctrl & 0x10) && (dma->hw.speed->rev3 & speed::CAPS_DVR)) {
+        handle_dev9_dvrp_transfer(dma);
+    } else if (dma->dev9_mode == DEV9_MODE_RETAIL) {
         handle_dev9_ata_transfer(dma);
     } else if (dma->dev9_mode == DEV9_MODE_ACATA) {
         if (!s2x6::acata::dma_pending(dma->hw.s2x6_acata) && s2x6::acram::is_dma_target(dma->dev9_dma_target)) {

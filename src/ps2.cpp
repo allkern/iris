@@ -137,6 +137,7 @@ void init(Ps2* ps2) {
     ps2->iop_bus->timers = ps2->iop_timers;
     ps2->iop_bus->cdvd = ps2->cdvd;
     ps2->iop_bus->rainbow = ps2->rainbow;
+    ps2->iop_dma->hw.rainbow = ps2->rainbow;
     ps2->iop_bus->sio2 = ps2->sio2;
     ps2->iop_bus->spu2 = ps2->spu2;
     ps2->iop_bus->usb = ps2->usb;

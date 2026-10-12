@@ -68,16 +68,18 @@ struct Rainbow {
     uint8_t packet[12] = {};
     int packet_index = 0;
 
-    uint8_t buf[0x10000] = {};
+    uint8_t buf[0x80000] = {};
     uint32_t buf_size = 0;
     uint32_t buf_index = 0;
     uint32_t chunk_end = 0;
     uint32_t byte_limit = 0;
+    int dma_active = 0;
 
     uint8_t sense_key = 0;
     uint8_t asc = 0;
     uint8_t ascq = 0;
     int unit_attention = 0;
+    int media_event = 0;
     void* last_disc = nullptr;
 
     logger::Logger* logger = nullptr;
@@ -88,6 +90,8 @@ Rainbow* create(logger::Logger* logger, iop::intc::Intc* intc, scheduler::Schedu
 void reset(Rainbow* rainbow);
 void destroy(Rainbow* rainbow);
 void set_enabled(Rainbow* rainbow, int enabled);
+int dma_active(Rainbow* rainbow);
+void dma_read(Rainbow* rainbow, uint8_t* buf, uint32_t size);
 uint64_t read8(Rainbow* rainbow, uint32_t addr);
 uint64_t read16(Rainbow* rainbow, uint32_t addr);
 uint64_t read32(Rainbow* rainbow, uint32_t addr);

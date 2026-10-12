@@ -158,6 +158,7 @@ struct Cdvd {
 
     int mg_enabled = 1;
     int psx = 0;
+    int atapi_owner = 0;
 
     std::atomic <dev::rm::Key> remote_key = dev::rm::Key {};
     std::atomic <uint32_t> remote_reads = 0;
