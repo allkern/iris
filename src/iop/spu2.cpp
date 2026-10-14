@@ -1,10 +1,37 @@
+/*
+    This file is part of the Iris PlayStation 2 emulator project.
+    Hosted at https://github.com/allkern/iris
+
+    MIT License
+
+    Copyright (c) 2026 Allkern/Lycoder (Lisandro Alarcón)
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+*/
+
 #include <new>
 
 #include "spu2.hpp"
 
 namespace iris::spu2 {
 
-#if !SYNC
+#if !SPU2_SYNC
 static void env_catchup(Spu2* spu2, int c, int vi);
 #endif
 
@@ -348,7 +375,7 @@ void write_koff(Spu2* spu2, int c, int h, uint64_t data) {
 
         // spu2->c[c].v[i+h*16].playing = 0;
 
-#if !SYNC
+#if !SPU2_SYNC
         env_catchup(spu2, c, v);
 #endif
 
@@ -443,7 +470,7 @@ void write_attr(Spu2* spu2, int c, uint64_t data) {
 }
 
 uint16_t get_voice_envx(Spu2* spu2, int c, int v) {
-#if !SYNC
+#if !SPU2_SYNC
     env_catchup(spu2, c, v);
 #endif
 
@@ -1157,7 +1184,7 @@ int16_t volume_step(Volume* vol) {
     return vol->current;
 }
 
-#if !SYNC
+#if !SPU2_SYNC
 static void env_catchup(Spu2* spu2, int c, int vi) {
     Core* cr = &spu2->c[c];
     Voice* v = &cr->v[vi];
@@ -1189,7 +1216,7 @@ Sample get_voice_sample(Spu2* spu2, int cr, int vc) {
 
     handle_adsr(spu2, c, v);
 
-#if !SYNC
+#if !SPU2_SYNC
     v->env_cycle += 768;
 #endif
 
