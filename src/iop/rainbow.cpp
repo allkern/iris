@@ -30,6 +30,7 @@
 #include <algorithm>
 
 #include "rainbow.hpp"
+#include "disc/cue.hpp"
 
 namespace iris::rainbow {
 
@@ -262,11 +263,80 @@ static void cmd_inquiry(Rainbow* rainbow) {
     schedule_data_in(rainbow, size);
 }
 
+struct Track {
+    int number;
+    bool audio;
+    uint32_t lba;
+};
+
+static uint32_t media_sectors(Rainbow* rainbow) {
+    iop::disc::Disc* disc = rainbow->hw.cdvd->disc;
+    int sector_size = iop::disc::get_sector_size(disc);
+
+    if (sector_size <= 0) {
+        sector_size = 2048;
+    }
+
+    return (uint32_t)(iop::disc::get_size(disc) / sector_size);
+}
+
+static int read_tracks(Rainbow* rainbow, Track* out, int max) {
+    iop::disc::Disc* disc = rainbow->hw.cdvd->disc;
+    int count = std::clamp(iop::disc::get_track_count(disc), 1, max);
+
+    for (int i = 0; i < count; i++) {
+        iop::disc::TrackInfo info = {};
+
+        out[i].number = i + 1;
+        out[i].audio = false;
+        out[i].lba = 0;
+
+        if (iop::disc::get_track_info(disc, i + 1, &info)) {
+            out[i].audio = info.type == iop::disc::cue::TS_AUDIO;
+            out[i].lba = info.lba >= 150 ? info.lba - 150 : 0;
+        }
+    }
+
+    return count;
+}
+
+static bool lba_is_audio(Rainbow* rainbow, uint32_t lba) {
+    Track tracks[99];
+    int count = read_tracks(rainbow, tracks, 99);
+    bool audio = false;
+
+    for (int i = 0; i < count; i++) {
+        if (lba >= tracks[i].lba) {
+            audio = tracks[i].audio;
+        }
+    }
+
+    return audio;
+}
+
+static void put_address(uint8_t* p, uint32_t lba, bool msf) {
+    if (msf) {
+        uint32_t abs = lba + 150;
+
+        p[0] = 0;
+        p[1] = abs / (60 * 75);
+        p[2] = (abs / 75) % 60;
+        p[3] = abs % 75;
+
+        return;
+    }
+
+    p[0] = (lba >> 24) & 0xff;
+    p[1] = (lba >> 16) & 0xff;
+    p[2] = (lba >> 8) & 0xff;
+    p[3] = lba & 0xff;
+}
+
 static void cmd_read_capacity(Rainbow* rainbow) {
     if (!check_ready(rainbow))
         return;
 
-    uint64_t sectors = iop::disc::get_size(rainbow->hw.cdvd->disc) / 2048;
+    uint64_t sectors = media_sectors(rainbow);
     uint32_t last = sectors ? (uint32_t)(sectors - 1) : 0;
 
     rainbow->buf[0] = (last >> 24) & 0xff;
@@ -281,6 +351,43 @@ static void cmd_read_capacity(Rainbow* rainbow) {
     schedule_data_in(rainbow, 8);
 }
 
+static void read_sectors(Rainbow* rainbow, uint32_t lba, uint32_t count, int mode, uint32_t sector_bytes) {
+    if ((uint64_t)count * sector_bytes > sizeof(rainbow->buf)) {
+        iris_warning(rainbow, "Read of {} sectors is too large", count);
+
+        fail(rainbow, SENSE_ILLEGAL_REQUEST, 0x24, 0x00);
+
+        return;
+    }
+
+    uint8_t sector[2352];
+
+    for (uint32_t i = 0; i < count; i++) {
+        memset(sector, 0, sizeof(sector));
+
+        iop::disc::read_sector(rainbow->hw.cdvd->disc, sector, lba + i, mode);
+
+        memcpy(&rainbow->buf[i * sector_bytes], sector, sector_bytes);
+    }
+
+    uint32_t size = count * sector_bytes;
+
+    if (rainbow->feature & 1) {
+        rainbow->buf_size = size;
+        rainbow->buf_index = 0;
+        rainbow->dma_active = size != 0;
+        rainbow->status = STATUS_DRDY | STATUS_DSC | STATUS_DRQ;
+
+        if (!size) {
+            schedule_complete(rainbow);
+        }
+
+        return;
+    }
+
+    schedule_data_in(rainbow, size);
+}
+
 static void cmd_read10(Rainbow* rainbow) {
     if (!check_ready(rainbow))
         return;
@@ -290,34 +397,124 @@ static void cmd_read10(Rainbow* rainbow) {
     uint32_t lba = (pkt[2] << 24) | (pkt[3] << 16) | (pkt[4] << 8) | pkt[5];
     uint32_t count = (pkt[7] << 8) | pkt[8];
 
-    if (count * 2048 > sizeof(rainbow->buf)) {
-        iris_warning(rainbow, "READ(10) of {} sectors is too large", count);
-
-        fail(rainbow, SENSE_ILLEGAL_REQUEST, 0x24, 0x00);
-
-        return;
-    }
-
-    for (uint32_t i = 0; i < count; i++) {
-        iop::disc::read_sector(rainbow->hw.cdvd->disc, &rainbow->buf[i * 2048], lba + i, 2048);
-    }
-
     iris_debug(rainbow, "READ(10) lba {:x} count {} dma {}", lba, count, rainbow->feature & 1);
 
-    if (rainbow->feature & 1) {
-        rainbow->buf_size = count * 2048;
-        rainbow->buf_index = 0;
-        rainbow->dma_active = count != 0;
-        rainbow->status = STATUS_DRDY | STATUS_DSC | STATUS_DRQ;
+    read_sectors(rainbow, lba, count, iop::disc::DISC_SS_DATA, 2048);
+}
 
-        if (!count) {
-            schedule_complete(rainbow);
-        }
+static void cmd_read_cd(Rainbow* rainbow) {
+    if (!check_ready(rainbow))
+        return;
+
+    const uint8_t* pkt = rainbow->packet;
+
+    uint32_t lba = (pkt[2] << 24) | (pkt[3] << 16) | (pkt[4] << 8) | pkt[5];
+    uint32_t count = (pkt[6] << 16) | (pkt[7] << 8) | pkt[8];
+    uint8_t fields = pkt[9];
+
+    iris_debug(rainbow, "READ CD lba {:x} count {} fields {:02x} sub {:02x} dma {}", lba, count, fields, pkt[10], rainbow->feature & 1);
+
+    if (!(fields & 0x90)) {
+        read_sectors(rainbow, lba, 0, iop::disc::DISC_SS_DATA, 2048);
 
         return;
     }
 
-    schedule_data_in(rainbow, count * 2048);
+    bool raw = (fields & 0xf8) == 0xf8;
+
+    if ((!raw && fields != 0x10) || pkt[10]) {
+        iris_warning(rainbow, "READ CD fields {:02x} sub-channel {:02x} not supported, returning user data", fields, pkt[10]);
+    }
+
+    if (raw || lba_is_audio(rainbow, lba)) {
+        read_sectors(rainbow, lba, count, iop::disc::DISC_SS_RAW, 2352);
+
+        return;
+    }
+
+    read_sectors(rainbow, lba, count, iop::disc::DISC_SS_DATA, 2048);
+}
+
+static void cmd_read_toc(Rainbow* rainbow) {
+    if (!check_ready(rainbow))
+        return;
+
+    const uint8_t* pkt = rainbow->packet;
+
+    bool msf = pkt[1] & 0x02;
+    int format = pkt[2] & 0x0f;
+    uint32_t size = alloc_length_16(pkt);
+
+    if (!format) {
+        format = pkt[9] >> 6;
+    }
+
+    Track tracks[99];
+    int count = read_tracks(rainbow, tracks, 99);
+    uint8_t data[4 + 8 * 100] = {};
+    uint32_t len = 4;
+
+    switch (format) {
+        case 0: {
+            int start = pkt[6];
+
+            if (start > tracks[count - 1].number && start != 0xaa) {
+                fail(rainbow, SENSE_ILLEGAL_REQUEST, 0x24, 0x00);
+
+                return;
+            }
+
+            data[2] = tracks[0].number;
+            data[3] = tracks[count - 1].number;
+
+            for (int i = 0; i < count; i++) {
+                if (start == 0xaa || tracks[i].number < start)
+                    continue;
+
+                data[len + 1] = tracks[i].audio ? 0x10 : 0x14;
+                data[len + 2] = tracks[i].number;
+
+                put_address(&data[len + 4], tracks[i].lba, msf);
+
+                len += 8;
+            }
+
+            data[len + 1] = tracks[count - 1].audio ? 0x10 : 0x14;
+            data[len + 2] = 0xaa;
+
+            put_address(&data[len + 4], media_sectors(rainbow), msf);
+
+            len += 8;
+        } break;
+
+        case 1: {
+            data[2] = 1;
+            data[3] = 1;
+            data[5] = tracks[0].audio ? 0x10 : 0x14;
+            data[6] = tracks[0].number;
+
+            put_address(&data[8], tracks[0].lba, msf);
+
+            len += 8;
+        } break;
+
+        default: {
+            iris_warning(rainbow, "READ TOC format {} not supported", format);
+
+            fail(rainbow, SENSE_ILLEGAL_REQUEST, 0x24, 0x00);
+        } return;
+    }
+
+    data[0] = ((len - 2) >> 8) & 0xff;
+    data[1] = (len - 2) & 0xff;
+
+    iris_debug(rainbow, "READ TOC format {} msf {} -> {} track(s)", format, msf, count);
+
+    uint32_t out = std::min(size, len);
+
+    memcpy(rainbow->buf, data, out);
+
+    schedule_data_in(rainbow, out);
 }
 
 static void cmd_read_disc_info(Rainbow* rainbow) {
@@ -511,6 +708,8 @@ static void execute_packet(Rainbow* rainbow) {
         case 0x1e: schedule_complete(rainbow); return;
         case 0x25: cmd_read_capacity(rainbow); return;
         case 0x28: cmd_read10(rainbow); return;
+        case 0x43: cmd_read_toc(rainbow); return;
+        case 0xbe: cmd_read_cd(rainbow); return;
         case 0x46: cmd_get_configuration(rainbow); return;
         case 0x51: cmd_read_disc_info(rainbow); return;
         case 0x4a: cmd_get_event_status(rainbow); return;
