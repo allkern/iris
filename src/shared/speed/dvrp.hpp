@@ -38,6 +38,7 @@
 
 #include "logger.hpp"
 #include "dev/rm.hpp"
+#include "dvrfs.hpp"
 
 namespace iris::speed { struct Speed; }
 
@@ -58,6 +59,8 @@ struct Response {
 
 struct DvrFile {
     FILE* file = nullptr;
+    dvrfs::Volume* volume = nullptr;
+    dvrfs::Handle handle;
     bool is_dir = false;
     bool root = false;
     std::vector<std::string> entries;
@@ -92,6 +95,7 @@ struct Dvrp {
     int file_fd = 0;
     uint32_t io_size = 0;
     std::map<int, DvrFile> files;
+    std::map<std::string, dvrfs::Volume*> volumes;
     int next_fd = 1;
     std::string root;
 

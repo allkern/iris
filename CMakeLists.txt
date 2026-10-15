@@ -398,6 +398,7 @@ target_sources(iris PRIVATE
     src/shared/sif.cpp
     src/shared/speed.cpp
     src/shared/speed/ata.cpp
+    src/shared/speed/dvrfs.cpp
     src/shared/speed/dvrp.cpp
     src/shared/speed/eeprom.cpp
     src/shared/speed/flash.cpp

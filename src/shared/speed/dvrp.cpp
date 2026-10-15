@@ -32,6 +32,7 @@
 
 #include "../speed.hpp"
 #include "dvrp.hpp"
+#include "dvrfs.hpp"
 
 namespace iris::speed::dvrp {
 
@@ -76,6 +77,12 @@ enum : uint16_t {
     DVR_GET_DVCAM_NAME = 0x4108,
     DVR_GET_SIRCS = 0x5107,
     DVR_SAVE_PRESET_INFO = 0x510a
+};
+
+enum : uint32_t {
+    HDIOC_SETMAXLBA28 = 0x683a,
+    HDIOC_PRESETMAXLBA28 = 0x683d,
+    HDIOC_POSTSETMAXLBA28 = 0x683e
 };
 
 enum : int32_t {
@@ -287,9 +294,142 @@ static DvrFile* get_file(Dvrp* dvrp, int fd) {
     return it == dvrp->files.end() ? nullptr : &it->second;
 }
 
+static void mount_defaults(Dvrp* dvrp) {
+    static const char* const defaults[][2] = {
+        { "dvr_pfs0:", "__xcontents" },
+        { "dvr_pfs1:", "__xdata" }
+    };
+
+    for (const auto& entry : defaults) {
+        if (dvrp->volumes.count(entry[0]))
+            continue;
+
+        dvrfs::Volume* volume = dvrfs::mount(dvrp->speed->ata, entry[1]);
+
+        if (volume) {
+            dvrp->volumes[entry[0]] = volume;
+
+            iris_info(dvrp, "{} mounted on {} in the HDD image", entry[0], entry[1]);
+        }
+    }
+}
+
+static dvrfs::Volume* volume_for(Dvrp* dvrp, const std::string& guest, std::string* path) {
+    size_t colon = guest.find(':');
+
+    if (colon == std::string::npos)
+        return nullptr;
+
+    auto it = dvrp->volumes.find(guest.substr(0, colon + 1));
+
+    if (it == dvrp->volumes.end()) {
+        mount_defaults(dvrp);
+
+        it = dvrp->volumes.find(guest.substr(0, colon + 1));
+    }
+
+    if (it == dvrp->volumes.end())
+        return nullptr;
+
+    *path = guest.substr(colon + 1);
+
+    return it->second;
+}
+
+static void drop_volume(Dvrp* dvrp, dvrfs::Volume* volume) {
+    for (auto it = dvrp->files.begin(); it != dvrp->files.end();) {
+        if (it->second.volume == volume) {
+            it = dvrp->files.erase(it);
+        } else {
+            ++it;
+        }
+    }
+
+    dvrfs::unmount(volume);
+}
+
+static void drop_partition(Dvrp* dvrp, const std::string& partition) {
+    for (auto it = dvrp->volumes.begin(); it != dvrp->volumes.end();) {
+        if (partition.empty() || dvrfs::partition_of(it->second) == partition) {
+            drop_volume(dvrp, it->second);
+
+            it = dvrp->volumes.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+static void release_all(Dvrp* dvrp) {
+    for (auto& [fd, f] : dvrp->files) {
+        if (f.file) {
+            fclose(f.file);
+        }
+    }
+
+    dvrp->files.clear();
+
+    drop_partition(dvrp, "");
+}
+
+static void put_pfs_time(uint8_t* p, const uint8_t* t) {
+    memcpy(p, t, 6);
+
+    p[6] = t[7];
+    p[7] = t[6];
+}
+
+static void put_pfs_stat(uint8_t* out, const dvrfs::Stat& stat) {
+    memset(out, 0, 64);
+
+    put_be32(&out[0], stat.mode);
+    put_be32(&out[4], stat.attr);
+    put_be32(&out[8], (uint32_t)stat.size);
+    put_pfs_time(&out[12], stat.ctime);
+    put_pfs_time(&out[20], stat.atime);
+    put_pfs_time(&out[28], stat.mtime);
+    put_be32(&out[36], (uint32_t)(stat.size >> 32));
+    put_be32(&out[40], stat.uid);
+    put_be32(&out[44], stat.gid);
+    put_be32(&out[48], stat.blocks);
+    put_be32(&out[52], stat.data);
+}
+
+static int32_t add_file(Dvrp* dvrp, dvrfs::Volume* volume, const dvrfs::Handle& handle, const std::string& guest) {
+    int fd = dvrp->next_fd++;
+
+    DvrFile& f = dvrp->files[fd];
+
+    f.volume = volume;
+    f.handle = handle;
+    f.is_dir = handle.directory;
+    f.path = guest;
+
+    return fd;
+}
+
 static int32_t do_open(Dvrp* dvrp) {
+    if (dvrp->dma_in.size() < 6)
+        return ERR_IO;
+
     uint32_t flags = be32(dvrp->dma_in.data());
     std::string guest = guest_string(dvrp->dma_in, 6);
+    std::string relative;
+
+    if (dvrfs::Volume* volume = volume_for(dvrp, guest, &relative)) {
+        uint16_t mode = (uint16_t)((dvrp->dma_in[4] << 8) | dvrp->dma_in[5]);
+        dvrfs::Handle handle;
+
+        int r = dvrfs::open(volume, relative, flags, mode, &handle);
+
+        iris_debug(dvrp, "open {} ({:x}) -> {}", guest, flags, r);
+
+        if (r < 0)
+            return r;
+
+        return add_file(dvrp, volume, handle, guest);
+    }
+
     std::string path = host_path(dvrp, guest.c_str());
 
     std::error_code ec;
@@ -337,6 +477,21 @@ static int32_t do_open(Dvrp* dvrp) {
 
 static int32_t do_dopen(Dvrp* dvrp) {
     std::string guest = guest_string(dvrp->dma_in, 0);
+    std::string relative;
+
+    if (dvrfs::Volume* volume = volume_for(dvrp, guest, &relative)) {
+        dvrfs::Handle handle;
+
+        int r = dvrfs::dopen(volume, relative, &handle);
+
+        iris_debug(dvrp, "dopen {} -> {}", guest, r);
+
+        if (r < 0)
+            return r;
+
+        return add_file(dvrp, volume, handle, guest);
+    }
+
     std::string path = host_path(dvrp, guest.c_str());
 
     std::error_code ec;
@@ -372,17 +527,26 @@ static int32_t do_close(Dvrp* dvrp, int fd) {
     if (!f)
         return ERR_BADF;
 
+    int32_t r = 0;
+
+    if (f->volume) {
+        r = dvrfs::close(f->volume, &f->handle);
+    }
+
     if (f->file) {
         fclose(f->file);
     }
 
     dvrp->files.erase(fd);
 
-    return 0;
+    return r;
 }
 
-static int32_t do_lseek(Dvrp* dvrp, int fd, int64_t offset, int whence) {
+static int64_t do_lseek(Dvrp* dvrp, int fd, int64_t offset, int whence) {
     DvrFile* f = get_file(dvrp, fd);
+
+    if (f && f->volume)
+        return dvrfs::seek(f->volume, &f->handle, offset, whence);
 
     if (!f || !f->file)
         return ERR_BADF;
@@ -400,6 +564,9 @@ static int32_t do_read(Dvrp* dvrp) {
 
     dvrp->dma_out.assign(dvrp->io_size, 0);
 
+    if (f && f->volume)
+        return (int32_t)dvrfs::read(f->volume, &f->handle, dvrp->dma_out.data(), dvrp->io_size);
+
     if (!f || !f->file)
         return ERR_BADF;
 
@@ -410,11 +577,13 @@ static int32_t do_read(Dvrp* dvrp) {
 
 static int32_t do_write(Dvrp* dvrp) {
     DvrFile* f = get_file(dvrp, dvrp->file_fd);
+    size_t size = std::min<size_t>(dvrp->io_size, dvrp->dma_in.size());
+
+    if (f && f->volume)
+        return (int32_t)dvrfs::write(f->volume, &f->handle, dvrp->dma_in.data(), (uint32_t)size);
 
     if (!f || !f->file)
         return ERR_BADF;
-
-    size_t size = std::min<size_t>(dvrp->io_size, dvrp->dma_in.size());
 
     return (int32_t)fwrite(dvrp->dma_in.data(), 1, size, f->file);
 }
@@ -423,6 +592,24 @@ static int32_t do_dread(Dvrp* dvrp) {
     DvrFile* f = get_file(dvrp, dvrp->file_fd);
 
     dvrp->dma_out.assign(0x100, 0);
+
+    if (f && f->volume) {
+        std::string name;
+        dvrfs::Stat stat;
+
+        int r = dvrfs::dread(f->volume, &f->handle, &name, &stat);
+
+        if (r <= 0)
+            return r;
+
+        put_pfs_stat(dvrp->dma_out.data(), stat);
+
+        size_t len = std::min<size_t>(name.size(), 0x100 - 64 - 1);
+
+        memcpy(&dvrp->dma_out[64], name.data(), len);
+
+        return r;
+    }
 
     if (!f || !f->is_dir)
         return ERR_BADF;
@@ -433,7 +620,7 @@ static int32_t do_dread(Dvrp* dvrp) {
     const std::string& name = f->entries[f->index++];
     std::string path = (fs::path(f->path) / name).string();
 
-    fill_stat(path, dvrp->dma_out.data(), false, f->root && name != "." && name != "..");
+    fill_stat(path, dvrp->dma_out.data(), true, f->root && name != "." && name != "..");
 
     size_t len = std::min<size_t>(name.size(), 0x100 - 64 - 1);
 
@@ -444,9 +631,25 @@ static int32_t do_dread(Dvrp* dvrp) {
 
 static int32_t do_getstat(Dvrp* dvrp) {
     std::string guest = guest_string(dvrp->dma_in, 0);
-    std::string path = host_path(dvrp, guest.c_str());
+    std::string relative;
 
     dvrp->dma_out.assign(0x100, 0);
+
+    if (dvrfs::Volume* volume = volume_for(dvrp, guest, &relative)) {
+        dvrfs::Stat stat;
+
+        int r = dvrfs::getstat(volume, relative, &stat);
+
+        if (r == 0) {
+            put_pfs_stat(dvrp->dma_out.data(), stat);
+        }
+
+        iris_debug(dvrp, "getstat {} -> {}", guest, r);
+
+        return r;
+    }
+
+    std::string path = host_path(dvrp, guest.c_str());
 
     int32_t r = fill_stat(path, dvrp->dma_out.data(), true, false);
 
@@ -457,7 +660,18 @@ static int32_t do_getstat(Dvrp* dvrp) {
 
 static int32_t do_mkdir(Dvrp* dvrp) {
     std::string guest = guest_string(dvrp->dma_in, 4);
+    std::string relative;
     std::error_code ec;
+
+    if (dvrfs::Volume* volume = volume_for(dvrp, guest, &relative)) {
+        uint32_t mode = dvrp->dma_in.size() >= 4 ? be32(dvrp->dma_in.data()) : 0x1ff;
+
+        int r = dvrfs::mkdir(volume, relative, (uint16_t)mode);
+
+        iris_debug(dvrp, "mkdir {} -> {}", guest, r);
+
+        return r;
+    }
 
     fs::create_directories(host_path(dvrp, guest.c_str()), ec);
 
@@ -468,6 +682,16 @@ static int32_t do_mkdir(Dvrp* dvrp) {
 
 static int32_t do_remove(Dvrp* dvrp, bool dir) {
     std::string guest = guest_string(dvrp->dma_in, 0);
+    std::string relative;
+
+    if (dvrfs::Volume* volume = volume_for(dvrp, guest, &relative)) {
+        int r = dir ? dvrfs::rmdir(volume, relative) : dvrfs::remove(volume, relative);
+
+        iris_debug(dvrp, "{} {} -> {}", dir ? "rmdir" : "remove", guest, r);
+
+        return r;
+    }
+
     std::string path = host_path(dvrp, guest.c_str());
     std::error_code ec;
 
@@ -480,10 +704,127 @@ static int32_t do_remove(Dvrp* dvrp, bool dir) {
     return fs::remove(path, ec) ? 0 : ERR_IO;
 }
 
+static int32_t do_rename(Dvrp* dvrp) {
+    if (dvrp->dma_in.size() < 4)
+        return ERR_IO;
+
+    uint32_t new_offset = be32(dvrp->dma_in.data());
+    std::string from = guest_string(dvrp->dma_in, 4);
+    std::string to = guest_string(dvrp->dma_in, new_offset);
+    std::string from_relative;
+    std::string to_relative;
+
+    dvrfs::Volume* volume = volume_for(dvrp, from, &from_relative);
+
+    if (volume) {
+        if (volume_for(dvrp, to, &to_relative) != volume)
+            return ERR_IO;
+
+        int r = dvrfs::rename(volume, from_relative, to_relative);
+
+        iris_debug(dvrp, "rename {} -> {} = {}", from, to, r);
+
+        return r;
+    }
+
+    std::error_code ec;
+
+    fs::rename(host_path(dvrp, from.c_str()), host_path(dvrp, to.c_str()), ec);
+
+    return ec ? ERR_IO : 0;
+}
+
+static int32_t do_mount(Dvrp* dvrp) {
+    if (dvrp->dma_in.size() < 16)
+        return ERR_IO;
+
+    uint32_t fs_len = be32(&dvrp->dma_in[4]);
+    std::string fsname = guest_string(dvrp->dma_in, 16);
+    std::string devname = guest_string(dvrp->dma_in, fs_len);
+    size_t colon = devname.find(':');
+
+    auto it = dvrp->volumes.find(fsname);
+
+    if (it != dvrp->volumes.end()) {
+        drop_volume(dvrp, it->second);
+
+        dvrp->volumes.erase(it);
+    }
+
+    dvrfs::Volume* volume = nullptr;
+
+    if (colon != std::string::npos) {
+        volume = dvrfs::mount(dvrp->speed->ata, devname.substr(colon + 1));
+    }
+
+    if (volume) {
+        dvrp->volumes[fsname] = volume;
+    } else {
+        std::error_code ec;
+
+        fs::create_directories(host_path(dvrp, fsname.c_str()), ec);
+    }
+
+    iris_debug(dvrp, "mount {} on {} ({})", fsname, devname, volume ? "image" : "host");
+
+    return 0;
+}
+
+static int32_t do_umount(Dvrp* dvrp) {
+    std::string fsname = guest_string(dvrp->dma_in, 0);
+
+    auto it = dvrp->volumes.find(fsname);
+
+    if (it != dvrp->volumes.end()) {
+        drop_volume(dvrp, it->second);
+
+        dvrp->volumes.erase(it);
+    }
+
+    return 0;
+}
+
 static int32_t do_devctl(Dvrp* dvrp) {
     uint32_t ctlcmd = dvrp->dma_in.size() >= 8 ? be32(&dvrp->dma_in[4]) : 0;
+    uint32_t argoffset = dvrp->dma_in.size() >= 4 ? be32(&dvrp->dma_in[0]) : 0;
+    uint32_t buflen = dvrp->dma_in.size() >= 12 ? be32(&dvrp->dma_in[8]) : 0;
+    uint32_t arglen = dvrp->dma_in.size() >= 16 ? be32(&dvrp->dma_in[12]) : 0;
+    uint32_t arg0 = 0;
+
+    if (arglen >= 4 && dvrp->dma_in.size() >= 20) {
+        memcpy(&arg0, &dvrp->dma_in[16], sizeof(arg0));
+    }
+
+    std::string name = guest_string(dvrp->dma_in, argoffset);
+
+    iris_debug(dvrp, "devctl {} {:04x} (arglen {} arg0 {:08x} buflen {})", name, ctlcmd, arglen, arg0, buflen);
 
     dvrp->dma_out.assign(0x100, 0);
+
+    if (name.rfind("dvr_hdd", 0) == 0) {
+        switch (ctlcmd) {
+            case HDIOC_SETMAXLBA28: {
+                if (arglen < 4 || !arg0)
+                    return ERR_IO;
+
+                ata::set_maxlba28(dvrp->speed->ata, arg0);
+            } return 0;
+
+            case HDIOC_PRESETMAXLBA28:
+            case HDIOC_POSTSETMAXLBA28: {
+            } return 0;
+        }
+    }
+
+    std::string relative;
+
+    if (dvrfs::Volume* volume = volume_for(dvrp, name, &relative)) {
+        if (ctlcmd == 0x5001)
+            return (int32_t)dvrfs::zone_size(volume);
+
+        if (ctlcmd == 0x5002)
+            return (int32_t)dvrfs::free_zones(volume);
+    }
 
     if (ctlcmd == 0x5001)
         return 0x80000;
@@ -492,6 +833,49 @@ static int32_t do_devctl(Dvrp* dvrp) {
         return 0x7d00;
 
     return 0;
+}
+
+static int32_t do_format(Dvrp* dvrp) {
+    if (dvrp->dma_in.size() < 12)
+        return ERR_IO;
+
+    uint32_t dev_len = be32(&dvrp->dma_in[0]);
+    uint32_t arg_offset = be32(&dvrp->dma_in[4]);
+    uint32_t arglen = be32(&dvrp->dma_in[8]);
+
+    std::string dev = guest_string(dvrp->dma_in, 12);
+    std::string blockdev = guest_string(dvrp->dma_in, dev_len);
+
+    uint32_t arg[3] = {};
+
+    for (uint32_t i = 0; i < 3 && (i + 1) * 4 <= arglen && (size_t)arg_offset + (i + 1) * 4 <= dvrp->dma_in.size(); i++) {
+        arg[i] = be32(&dvrp->dma_in[arg_offset + i * 4]);
+    }
+
+    int32_t r = ERR_IO;
+
+    if (dev.rfind("dvr_hdd", 0) == 0) {
+        drop_partition(dvrp, "");
+
+        r = dvrfs::format_area(dvrp->speed->ata);
+    } else if (dev.rfind("dvr_pfs", 0) == 0) {
+        size_t colon = blockdev.find(':');
+        uint32_t fragment = arglen == 12 && arg[1] == 0x2d66 ? arg[2] : 0;
+
+        if (colon != std::string::npos && arglen >= 4) {
+            drop_partition(dvrp, blockdev.substr(colon + 1));
+
+            r = dvrfs::format_pfs(dvrp->speed->ata, blockdev.substr(colon + 1), arg[0], fragment);
+
+            if (r == 0) {
+                mount_defaults(dvrp);
+            }
+        }
+    }
+
+    iris_debug(dvrp, "format {} on {} -> {}", dev, blockdev, r);
+
+    return r;
 }
 
 static int32_t do_dvcam_name(Dvrp* dvrp) {
@@ -539,7 +923,7 @@ static void handle_phase1(Dvrp* dvrp, uint16_t cmd) {
         } return;
 
         case DVRF_LSEEK: {
-            int32_t r = do_lseek(dvrp, param32(dvrp, 0), (int32_t)param32(dvrp, 2), param32(dvrp, 4));
+            int32_t r = (int32_t)do_lseek(dvrp, param32(dvrp, 0), (int32_t)param32(dvrp, 2), param32(dvrp, 4));
 
             ack(dvrp, cmd);
             complete(dvrp, cmd, r);
@@ -714,10 +1098,15 @@ static void finish_send(Dvrp* dvrp) {
         case DVRF_REMOVE: r = do_remove(dvrp, false); break;
         case DVRF_RMDIR: r = do_remove(dvrp, true); break;
         case DVRF_WRITE: r = do_write(dvrp); break;
+        case DVRF_FORMAT: {
+            r = do_format(dvrp);
+        } break;
+
+        case DVRF_MOUNT: r = do_mount(dvrp); break;
+        case DVRF_UMOUNT: r = do_umount(dvrp); break;
+        case DVRF_RENAME: r = do_rename(dvrp); break;
+
         case DVRF_SYNC:
-        case DVRF_UMOUNT:
-        case DVRF_MOUNT:
-        case DVRF_FORMAT:
         case DVR_SEND_TIMER_EVENT: r = 0; break;
 
         default: {
@@ -766,6 +1155,8 @@ static void handle_command(Dvrp* dvrp, uint16_t cmd) {
 static void ready_event(void* udata, int overshoot) {
     Dvrp* dvrp = (Dvrp*)udata;
 
+    mount_defaults(dvrp);
+
     respond(dvrp, 0, INTR_READY, 1);
 }
 
@@ -776,6 +1167,8 @@ static void write_reset(Dvrp* dvrp, uint8_t data) {
 
     if (!rising)
         return;
+
+    release_all(dvrp);
 
     scheduler::Event event;
 
@@ -801,11 +1194,7 @@ void init(Dvrp* dvrp, Speed* speed) {
 }
 
 void destroy(Dvrp* dvrp) {
-    for (auto& [fd, f] : dvrp->files) {
-        if (f.file) {
-            fclose(f.file);
-        }
-    }
+    release_all(dvrp);
 
     delete dvrp;
 }
