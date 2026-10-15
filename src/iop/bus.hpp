@@ -100,6 +100,8 @@ struct Bus {
 
     int disable_usb;
 
+    uint32_t ssbus[18];
+
     void* fastmem_r_table[0x10000];
     void* fastmem_w_table[0x10000];
 

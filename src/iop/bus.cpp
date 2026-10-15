@@ -75,6 +75,15 @@ void destroy(Bus* bus) {
     delete bus;
 }
 
+static inline bool is_ssbus_reg(uint32_t addr) {
+    return ((addr >= 0x1f801000) && (addr <= 0x1f801023)) ||
+           ((addr >= 0x1f801400) && (addr <= 0x1f801423));
+}
+
+static inline int ssbus_index(uint32_t addr) {
+    return ((addr & 0x400) ? 9 : 0) + ((addr & 0x3f) >> 2);
+}
+
 #define MAP_MEM_READ_NS(b, l, u, d, n)     if ((addr >= l) && (addr <= u)) return d::read ## b (bus->n, addr - l);
 
 #define MAP_REG_READ_NS(b, l, u, d, n)     if ((addr >= l) && (addr <= u)) return d::read ## b (bus->n, addr);
@@ -280,6 +289,10 @@ uint32_t read32(void* udata, uint32_t addr) {
     if (addr == 0x1f801560) return 0;
     if (addr == 0x1f801014) return 0;
 
+    if (is_ssbus_reg(addr)) {
+        return bus->ssbus[ssbus_index(addr)];
+    }
+
     if ((addr & 0xff000000) == 0x1e000000) return 0;
     if (addr == 0xfffe0130) return 0xffffffff;
 
@@ -418,6 +431,12 @@ void write32(void* udata, uint32_t addr, uint32_t data) {
 
     // System 147/148 mappings
     MAP_MEM_WRITE_CHK_NS(32, 0x10C00000, 0x10C07FFF, s14x::sram, s14x_sram);
+
+    if (is_ssbus_reg(addr)) {
+        bus->ssbus[ssbus_index(addr)] = data;
+
+        return;
+    }
 
     // iris_debug(bus, "Bus: Unhandled 32-bit write to physical address 0x{:08x} (0x{:08x})", addr, data);
 }
