@@ -260,6 +260,8 @@ int load_hdd(Speed* speed, const char* path) {
 
     if (ret) {
         speed->rev3 |= CAPS_ATA;
+
+        ata::set_dvr_mode(speed->ata, speed->rev3 & CAPS_DVR);
     }
 
     return ret;
@@ -295,6 +297,8 @@ void set_dvrp_enabled(Speed* speed, int enabled) {
     } else {
         speed->rev3 &= ~CAPS_DVR;
     }
+
+    ata::set_dvr_mode(speed->ata, enabled);
 }
 
 void set_flash_enabled(Speed* speed, int enabled) {

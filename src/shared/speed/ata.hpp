@@ -62,6 +62,8 @@ inline constexpr auto NUM_HEADS = 16;
 inline constexpr auto SECTORS_PER_TRACK = 63;
 
 inline constexpr auto LBA28_MAX_SECTORS = 0x0fffffffull;
+inline constexpr auto DVR_MAXLBA28_2GB = 0x400000ull;
+inline constexpr auto DVR_MAXLBA28_40GB = 0x4a817c8ull;
 inline constexpr auto LBA48_MAX_NSECTORS = 0x10000ull;
 
 inline constexpr auto ATAPI_DVD_SECTOR_SIZE = 2048;
@@ -391,6 +393,9 @@ struct Ata {
     int last_unhandled_command;
     uint8_t sce_security_data[512];
 
+    bool dvr_mode = false;
+    uint64_t maxlba28 = 0;
+
     Speed* speed;
     scheduler::Scheduler* sched;
 
@@ -403,6 +408,10 @@ void init(Ata* ata, Speed* speed, scheduler::Scheduler* sched);
 int load(Ata* ata, const char* path);
 int load_security_data(Ata* ata, const char* path);
 void destroy(Ata* ata);
+void set_dvr_mode(Ata* ata, bool enabled);
+void set_maxlba28(Ata* ata, uint64_t maxlba28);
+bool has_extend_at(Ata* ata, uint64_t lba);
+uint64_t get_sector_count(Ata* ata);
 uint64_t read16(Ata* ata, uint32_t addr);
 uint64_t read32(Ata* ata, uint32_t addr);
 void write16(Ata* ata, uint32_t addr, uint64_t data);

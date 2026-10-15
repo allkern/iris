@@ -26,6 +26,8 @@
 */
 
 #include <new>
+#include <cstring>
+#include <algorithm>
 
 #include "../speed.hpp"
 #include "ata.hpp"
@@ -300,6 +302,81 @@ void destroy(Ata* ata) {
     delete ata;
 }
 
+static void set_identify_lba28(Ata* ata, uint32_t sectors) {
+    memcpy(&ata->identify[120], &sectors, sizeof(sectors));
+
+    if (ata->identify[510] != 0xa5)
+        return;
+
+    uint8_t sum = 0;
+
+    for (int i = 0; i < 511; i++) {
+        sum += ata->identify[i];
+    }
+
+    ata->identify[511] = -sum;
+}
+
+uint64_t get_sector_count(Ata* ata) {
+    if (!ata->hdd.get_sector_count)
+        return 0;
+
+    return ata->hdd.get_sector_count(ata->hdd.udata);
+}
+
+bool has_extend_at(Ata* ata, uint64_t lba) {
+    if (!ata->hdd.read_sector || lba >= get_sector_count(ata))
+        return false;
+
+    uint8_t buf[SECTOR_SIZE] = {};
+
+    ata->hdd.read_sector(ata->hdd.udata, lba, buf);
+
+    return !memcmp(&buf[4], "APA", 4) && !strncmp((const char*)&buf[16], "__extend", 32);
+}
+
+static uint64_t detect_maxlba28(Ata* ata, uint64_t sectors) {
+    if (has_extend_at(ata, DVR_MAXLBA28_2GB))
+        return DVR_MAXLBA28_2GB;
+
+    if (has_extend_at(ata, DVR_MAXLBA28_40GB))
+        return DVR_MAXLBA28_40GB;
+
+    if (sectors > DVR_MAXLBA28_40GB)
+        return DVR_MAXLBA28_40GB;
+
+    return 0;
+}
+
+void set_dvr_mode(Ata* ata, bool enabled) {
+    ata->dvr_mode = enabled;
+
+    if (!ata->hdd.read_sector || !ata->hdd.get_sector_count)
+        return;
+
+    uint64_t sectors = ata->hdd.get_sector_count(ata->hdd.udata);
+    uint64_t maxlba28 = enabled ? detect_maxlba28(ata, sectors) : 0;
+
+    if (maxlba28 == ata->maxlba28)
+        return;
+
+    set_maxlba28(ata, maxlba28);
+}
+
+void set_maxlba28(Ata* ata, uint64_t maxlba28) {
+    uint64_t sectors = get_sector_count(ata);
+
+    ata->maxlba28 = maxlba28;
+
+    if (maxlba28) {
+        iris_info(ata, "DVR area starts at sector {:x}", maxlba28);
+
+        set_identify_lba28(ata, (uint32_t)maxlba28);
+    } else {
+        set_identify_lba28(ata, (uint32_t)std::min<uint64_t>(sectors, LBA28_MAX_SECTORS));
+    }
+}
+
 int ata_get_drive(Ata* ata) {
     return (ata->select >> 4) & 1;
 }
@@ -482,7 +559,7 @@ void ata_handle_command(Ata* ata, uint16_t cmd) {
 
         case C_READ_NATIVE_MAX_ADDRESS: {
             uint64_t sectors = ata->hdd.get_sector_count(ata->hdd.udata);
-            uint64_t max = sectors > LBA28_MAX_SECTORS ? LBA28_MAX_SECTORS : sectors;
+            uint64_t max = ata->maxlba28 ? ata->maxlba28 : (sectors > LBA28_MAX_SECTORS ? LBA28_MAX_SECTORS : sectors);
 
             iris_debug(ata, "READ NATIVE MAX ADDRESS ({})", max);
 
