@@ -361,6 +361,12 @@ void flash_write_cmd(Flash* flash, uint16_t value) {
 }
 
 void flash_write_addr(Flash* flash, uint16_t value) {
+    bool read = (flash->cmd == SM_CMD_READ1) || (flash->cmd == SM_CMD_READ2) || (flash->cmd == SM_CMD_READ3);
+
+    if (read && flash->addrbyte == 0) {
+        flash->address = flash->cmd == SM_CMD_READ2 ? PAGE_SIZE / 2 : 0;
+    }
+
     flash->address |= (value & 0xff) << (flash->addrbyte == 0 ? 0 : (1 + 8 * flash->addrbyte));
     flash->addrbyte++;
 
