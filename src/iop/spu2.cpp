@@ -1588,6 +1588,10 @@ int adma_is_bitstream(Spu2* spu2) {
     return ((spu2->spdif_out & 0x100) != 0) && ((spu2->spdif_mode & 2) != 0);
 }
 
+int adma_is_hifi(Spu2* spu2) {
+    return (spu2->spdif_out & 0x4) != 0;
+}
+
 void start_adma(Spu2* spu2, int c) {
     spu2->c[c].adma_playing = 0;
     spu2->c[c].memin_read_addr = 0;
@@ -1611,17 +1615,24 @@ int adma_write(Spu2* spu2, int core, uint16_t* buf, uint32_t size) {
 
             if ((cap - (write - read)) < 256)
                 break;
+
+            c->adma_hifi = adma_is_hifi(spu2);
         }
 
         int ch = c->adma_fill >> 8;
+        uint32_t index = c->adma_fill & 0xff;
 
-        uint32_t frame = (write + (c->adma_fill & 0xff)) & mask;
-
-        c->adma_buffer[frame].s16[ch] = buf[i];
+        if (c->adma_hifi) {
+            if (index & 1) {
+                c->adma_buffer[(write + (index >> 1)) & mask].s16[ch] = buf[i];
+            }
+        } else {
+            c->adma_buffer[(write + index) & mask].s16[ch] = buf[i];
+        }
 
         if (++c->adma_fill == 512) {
             c->adma_fill = 0;
-            write += 256;
+            write += c->adma_hifi ? 128 : 256;
 
             __atomic_store_n(&c->adma_write, write, __ATOMIC_RELEASE);
         }

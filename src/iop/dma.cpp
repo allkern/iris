@@ -450,7 +450,8 @@ void handle_spu1_transfer(Dma* dma) {
 
     free(buf);
 
-    int cpb = spu2::adma_is_bitstream(dma->hw.spu2) ? (96 * 8) : (192 * 8);
+    int double_rate = spu2::adma_is_bitstream(dma->hw.spu2) || spu2::adma_is_hifi(dma->hw.spu2);
+    int cpb = double_rate ? (96 * 8) : (192 * 8);
 
     spu_adma_start_tracking(dma, SPU1, madr_start, size, cpb, spu1_adma_advance_handler);
 }
@@ -542,9 +543,9 @@ void handle_spu2_transfer(Dma* dma) {
 
     free(buf);
 
-    // Core 1 has no bitstream-bypass double-rate mode. Track MADR at the normal
-    // 48 kHz rate
-    spu_adma_start_tracking(dma, SPU2, madr_start, size, 192 * 8, spu2_adma_advance_handler);
+    int cpb = spu2::adma_is_hifi(dma->hw.spu2) ? (96 * 8) : (192 * 8);
+
+    spu_adma_start_tracking(dma, SPU2, madr_start, size, cpb, spu2_adma_advance_handler);
 }
 
 static void handle_dev9_dvrp_transfer(Dma* dma) {

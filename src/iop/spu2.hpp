@@ -254,6 +254,7 @@ struct Core {
     uint32_t adma_write;
     uint32_t adma_read;
     uint32_t adma_fill;
+    int adma_hifi;
 };
 
 struct Spu2 {
@@ -308,6 +309,7 @@ void start_adma(Spu2* spu2, int c);
 int adma_write(Spu2* spu2, int c, uint16_t* buf, uint32_t size);
 int is_adma_active(Spu2* spu2, int c);
 int adma_is_bitstream(Spu2* spu2);
+int adma_is_hifi(Spu2* spu2);
 uint16_t read_data(Spu2* spu2, int c);
 
 }
