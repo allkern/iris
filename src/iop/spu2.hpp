@@ -37,7 +37,7 @@
 
 namespace iris::spu2 {
 
-inline constexpr auto RAM_SIZE = 0x100000;// 2 MB
+inline constexpr auto RAM_SIZE = 0x100000; // 2 MB
 
 // SPU2 generation mode:
 //   1 = synchronous: the voice mix is produced on the emulation thread, one
@@ -46,7 +46,7 @@ inline constexpr auto RAM_SIZE = 0x100000;// 2 MB
 //       whenever the emulator can't sustain full speed.
 //   0 = asynchronous: the audio thread generates the mix on demand. Cheaper
 //       and gap-free under load, at the cost of envelope-timing accuracy.
-#define SPU2_SYNC 1
+#define SPU2_SYNC 0
 
 inline constexpr auto IOP_CLOCK_DIVIDER = 8;
 inline constexpr auto CYCLES_PER_SAMPLE = 768;
