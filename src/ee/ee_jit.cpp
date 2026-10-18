@@ -389,6 +389,36 @@ static inline int fpu_min(int32_t a, int32_t b) {
 
 void exception_level1(Ee* ee, uint32_t cause);
 
+static constexpr int CSR_SPIN_THRESHOLD = 10000;
+static constexpr uint32_t CSR_SPIN_IGNORED_BITS = 0x4000u;
+
+#define CSR_SPIN_READ_FUNC(b)                                                   \
+    static inline uint64_t csr_spin_read ## b(Ee* ee, uint32_t phys) {         \
+        uint64_t value = ee->bus.read ## b(ee->bus.udata, phys);               \
+        if (++ee->csr_reads == CSR_SPIN_THRESHOLD)                             \
+            ee->csr_spin_value = (uint32_t)value & ~CSR_SPIN_IGNORED_BITS;     \
+        return value;                                                          \
+    }
+
+CSR_SPIN_READ_FUNC(8)
+CSR_SPIN_READ_FUNC(16)
+CSR_SPIN_READ_FUNC(32)
+CSR_SPIN_READ_FUNC(64)
+
+#undef CSR_SPIN_READ_FUNC
+
+static inline bool csr_spin_released(Ee* ee) {
+    uint32_t value = (uint32_t)ee->bus.read32(ee->bus.udata, 0x12001000) & ~CSR_SPIN_IGNORED_BITS;
+
+    if (value == ee->csr_spin_value) {
+        return false;
+    }
+
+    ee->csr_reads = 0;
+
+    return true;
+}
+
 #ifdef _EE_USE_MMU
 static inline VtlbEntry* search_vtlb(Ee* ee, uint32_t virt) {
     for (int i = 0; i < 48; i++) {
@@ -485,7 +515,7 @@ static inline int translate_virt(Ee* ee, uint32_t virt, uint32_t* phys, int load
         if (translate_virt(ee, addr, &phys, 1) == 1)                         \
             return ram::read ## b(ee->spr, phys);                            \
         if (phys == 0x1000f000) ee->intc_reads++;                               \
-        if (phys == 0x12001000) ee->csr_reads++;                                \
+        if (phys == 0x12001000) return csr_spin_read ## b(ee, phys);            \
         return ee->bus.read ## b(ee->bus.udata, phys);                          \
     }
 
@@ -626,7 +656,7 @@ static inline void invalidate_page(Ee* ee, uint32_t addr) {
         uint32_t phys;                                                         \
         translate_virt(ee, addr, &phys);                                    \
         if (phys == 0x1000f000) ee->intc_reads++;                              \
-        if (phys == 0x12001000) ee->csr_reads++;                               \
+        if (phys == 0x12001000) return csr_spin_read ## b(ee, phys);           \
         return ee->bus.read ## b(ee->bus.udata, phys);                         \
     }
 
@@ -8972,7 +9002,10 @@ int run_block(Ee* ee, int max_cycles) {
         return cycles;
     }
 
-    if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000) {
+    bool idle = ee->pc == 0x81fc0 || ee->intc_reads >= 10000;
+    bool spinning = !idle && ee->csr_reads >= CSR_SPIN_THRESHOLD && !csr_spin_released(ee);
+
+    if (idle || spinning) {
         catch_up_vu1_worker(ee);
 
         if (is_irq_pending(ee)) {

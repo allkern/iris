@@ -752,6 +752,7 @@ struct Ee {
 
     int eenull_counter;
     int csr_reads;
+    uint32_t csr_spin_value;
     int intc_reads;
     int ram_size;
 
