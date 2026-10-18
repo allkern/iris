@@ -1591,13 +1591,110 @@ static uint32_t vif_unpack_general(Vif* vif, const uint8_t* data, uint32_t words
     return vertices * per_vertex;
 }
 
+static inline uint32_t vif_unpack_subword_vertices(uint32_t fmt) {
+    switch (fmt) {
+        case UNPACK_S_16: return 2;
+        case UNPACK_S_8: return 4;
+        case UNPACK_V2_8: return 2;
+        case UNPACK_V4_5: return 2;
+    }
+
+    return 0;
+}
+
+static inline uint128_t vif_decode_subword(uint32_t fmt, uint32_t word, uint32_t index, bool sign_extend) {
+    uint128_t q = { 0 };
+
+    switch (fmt) {
+        case UNPACK_S_16: {
+            uint32_t value = vif_extend16((word >> (index * 16)) & 0xffff, sign_extend);
+
+            q.u32[0] = value;
+            q.u32[1] = value;
+            q.u32[2] = value;
+            q.u32[3] = value;
+        } break;
+
+        case UNPACK_S_8: {
+            uint32_t value = vif_extend8((word >> (index * 8)) & 0xff, sign_extend);
+
+            q.u32[0] = value;
+            q.u32[1] = value;
+            q.u32[2] = value;
+            q.u32[3] = value;
+        } break;
+
+        case UNPACK_V2_8: {
+            uint32_t pair = (word >> (index * 16)) & 0xffff;
+
+            q.u32[0] = vif_extend8(pair & 0xff, sign_extend);
+            q.u32[1] = vif_extend8(pair >> 8, sign_extend);
+        } break;
+
+        case UNPACK_V4_5: {
+            uint32_t color = (word >> (index * 16)) & 0xffff;
+
+            q.u32[0] = ((color >> 0) & 0x1f) << 3;
+            q.u32[1] = ((color >> 5) & 0x1f) << 3;
+            q.u32[2] = ((color >> 10) & 0x1f) << 3;
+            q.u32[3] = ((color >> 15) & 1) << 7;
+        } break;
+    }
+
+    return q;
+}
+
+static uint32_t vif_unpack_subword(Vif* vif, const uint8_t* data, uint32_t words) {
+    uint32_t fmt = vif->unpack_fmt;
+    uint32_t per_word = vif_unpack_subword_vertices(fmt);
+    bool sign_extend = !vif->unpack_usn;
+
+    VifVertexWriter writer = vif_begin_vertices(vif);
+
+    for (uint32_t index = 0; index < words; index++) {
+        uint32_t word;
+
+        memcpy(&word, data + (size_t)index * 4, sizeof(word));
+
+        for (uint32_t i = 0; i < per_word; i++) {
+            vif_write_data_vertex(vif, writer, vif_decode_subword(fmt, word, i, sign_extend));
+
+            if (!(--vif->unpack_num)) {
+                break;
+            }
+        }
+    }
+
+    vif->pending_words -= (int)words;
+
+    if (!vif->pending_words) {
+        vif->state = VIF_IDLE;
+    }
+
+    return words;
+}
+
 static void vif_unpack_span(Vif* vif, const uint8_t* data, uint32_t count) {
     bool bulk = vif_unpack_vertex_words(vif->unpack_fmt) != 0;
     bool simple = vif_unpack_is_simple(vif);
+    bool subword = vif_unpack_subword_vertices(vif->unpack_fmt) != 0;
 
     uint32_t index = 0;
 
     while (index < count) {
+        if (subword && !vif->shift && vif->pending_words > 0) {
+            uint32_t remaining = count - index;
+            uint32_t words = remaining < (uint32_t)vif->pending_words ? remaining : (uint32_t)vif->pending_words;
+
+            vif_unpack_subword(vif, data + (size_t)index * 4, words);
+
+            profile::count(profile::VIF1_UNPACK_WORDS, words);
+
+            index += words;
+
+            continue;
+        }
+
         if (bulk && !vif->shift) {
             const uint8_t* source = data + (size_t)index * 4;
 
