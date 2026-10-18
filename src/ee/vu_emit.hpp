@@ -211,10 +211,11 @@ enum {
     K_CLIPGT = K_WRITE + 16,
     K_CLIPLT,
     K_MACU,     // underflow, bit 8
-    K_MACO      // overflow, bit 12
+    K_MACO,     // overflow, bit 12
+    K_MACREV
 };
 
-constexpr int K_COUNT = K_MACO + 1;
+constexpr int K_COUNT = K_MACREV + 1;
 
 extern const uint32_t g_vu_const[K_COUNT][4];
 
@@ -270,6 +271,7 @@ struct Emitter {
 
     bool flags_loaded = false;
     ujit::Gp mac_reg;
+    ujit::Gp mac_hi;
     ujit::Gp mac_ring[4];
 
     int clip_shifts = 0;
@@ -358,6 +360,11 @@ struct Emitter {
 
         uc->load_u32(mac_reg, mem(offsetof(Vu, mac)));
         uc->mov(status_or, Imm(0));
+
+        mac_hi = uc->new_gp32();
+
+        uc->mov(mac_hi, mac_reg);
+        uc->and_(mac_hi, mac_hi, Imm(0xffff0000u));
 
         for (int i = 0; i < 4; i++) {
             mac_ring[i] = uc->new_gp32();
@@ -713,8 +720,7 @@ inline ujit::Vec emit_flags4(Emitter& e, const ujit::Vec& v, uint32_t field) {
 
     uc.v_and_i32(a, v, e.k(K_MANT));
     uc.v_cmp_eq_i32(d, a, e.k(K_ZERO));
-    uc.v_xor_i32(d, d, e.k(K_ONES));
-    uc.v_and_i32(d, b, d);
+    uc.v_andn_i32(d, d, b);
 
     uc.v_and_i32(a, v, e.k(K_SIGN));
 
@@ -723,6 +729,10 @@ inline ujit::Vec emit_flags4(Emitter& e, const ujit::Vec& v, uint32_t field) {
     uc.v_or_i32(a, a, e.k(K_MAXN));
     uc.v_blendv_u8(out, out, a, c);
 
+    ujit::Gp newmac = uc.new_gp32();
+    ujit::Gp mac = uc.new_gp32();
+
+#if defined(ASMJIT_UJIT_AARCH64)
     uc.v_srli_u32(a, b, 31);
     uc.v_srli_u32(b, v, 31);
     uc.v_slli_i32(b, b, 4);
@@ -740,10 +750,23 @@ inline ujit::Vec emit_flags4(Emitter& e, const ujit::Vec& v, uint32_t field) {
     uc.v_swizzle_u32x4(b, a, ujit::swizzle(1, 0, 3, 2));
     uc.v_or_i32(a, a, b);
 
-    ujit::Gp newmac = uc.new_gp32();
-    ujit::Gp mac = uc.new_gp32();
-
     uc.s_extract_u32(newmac, a, 0);
+#else
+    ujit::Vec zs = uc.new_vec128();
+    ujit::Vec uo = uc.new_vec128();
+    ujit::Vec bytes = uc.new_vec128();
+
+    uc.v_packs_i32_i16(zs, b, v);
+    uc.v_packs_i32_i16(uo, d, c);
+    uc.v_packs_i16_i8(bytes, zs, uo);
+    uc.v_swizzlev_u8(bytes, bytes, e.k(K_MACREV));
+
+    if (uc.has_avx()) {
+        uc.cc->vpmovmskb(newmac, bytes);
+    } else {
+        uc.cc->pmovmskb(newmac, bytes);
+    }
+#endif
 
     if (nibble_mask(field) != 0xffffu) {
         uc.and_(newmac, newmac, Imm(nibble_mask(field)));
@@ -751,9 +774,7 @@ inline ujit::Vec emit_flags4(Emitter& e, const ujit::Vec& v, uint32_t field) {
 
     e.load_flags();
 
-    uc.mov(mac, e.mac_reg);
-    uc.and_(mac, mac, Imm(0xffff0000u));
-    uc.or_(mac, mac, newmac);
+    uc.or_(mac, e.mac_hi, newmac);
 
     e.mac_reg = mac;
 
