@@ -360,6 +360,7 @@ bool Ipu::process_IDEC()
                 break;
             case IDEC_STATE::DCT_TYPE:
                 iris_debug(this, "Decode DCT");
+                idec.dct_field = false;
                 if (idec.decodes_dct)
                 {
                     uint32_t value;
@@ -367,9 +368,7 @@ bool Ipu::process_IDEC()
                         return false;
                     in_FIFO.advance_stream(1);
 
-                    //Play expects this to be zero for IDEC intra path.
-                    // if (value != 0)
-                    //     throw VLC_Error("IDEC unsupported DCT type");
+                    idec.dct_field = value != 0;
                 }
                 idec.state = IDEC_STATE::QSC;
                 break;
@@ -394,6 +393,7 @@ bool Ipu::process_IDEC()
                 bdec.block_index = 0;
                 bdec.cur_channel = 0;
                 bdec.reset_dc = idec.blocks_decoded == 0;
+                bdec.dct_field = idec.dct_field;
                 bdec.check_start_code = false;
                 idec.state = IDEC_STATE::READ_BLOCK;
                 break;
@@ -609,19 +609,14 @@ bool Ipu::process_BDEC()
             {
                 iris_debug(this, "BDEC done!");
                 uint128_t quad;
-                for (int i = 0; i < 8; i++)
+                for (int row = 0; row < 16; row++)
                 {
-                    memcpy(quad.u8, bdec.blocks[0] + (i * 8), sizeof(int16_t) * 8);
-                    bdec.out_fifo->f.push_back(quad);
-                    memcpy(quad.u8, bdec.blocks[1] + (i * 8), sizeof(int16_t) * 8);
-                    bdec.out_fifo->f.push_back(quad);
-                }
+                    int top = bdec.dct_field ? (row & 1) * 2 : (row >> 3) * 2;
+                    int line = bdec.dct_field ? (row >> 1) : (row & 7);
 
-                for (int i = 0; i < 8; i++)
-                {
-                    memcpy(quad.u8, bdec.blocks[2] + (i * 8), sizeof(int16_t) * 8);
+                    memcpy(quad.u8, bdec.blocks[top] + (line * 8), sizeof(int16_t) * 8);
                     bdec.out_fifo->f.push_back(quad);
-                    memcpy(quad.u8, bdec.blocks[3] + (i * 8), sizeof(int16_t) * 8);
+                    memcpy(quad.u8, bdec.blocks[top + 1] + (line * 8), sizeof(int16_t) * 8);
                     bdec.out_fifo->f.push_back(quad);
                 }
 
@@ -1389,6 +1384,7 @@ void Ipu::write_command(uint32_t value)
                 idec.macro_type = 0;
                 idec.qsc = (command_option >> 16) & 0x1F;
                 idec.decodes_dct = command_option & (1 << 24);
+                idec.dct_field = false;
                 idec.blocks_decoded = 0;
                 csc.use_RGB16 = command_option & (1 << 27);
                 break;
@@ -1401,6 +1397,7 @@ void Ipu::write_command(uint32_t value)
                 bdec.cur_channel = 0;
                 bdec.quantizer_step = (command_option >> 16) & 0x1F;
                 bdec.reset_dc = command_option & (1 << 26);
+                bdec.dct_field = command_option & (1 << 25);
                 bdec.intra = command_option & (1 << 27);
                 bdec.check_start_code = true;
                 break;

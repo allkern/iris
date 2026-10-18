@@ -113,6 +113,7 @@ struct IDEC_Command
     uint32_t macro_type;
 
     bool decodes_dct;
+    bool dct_field;
     uint32_t qsc;
 
     IPU_FIFO temp_fifo;
@@ -126,6 +127,7 @@ struct BDEC_Command
     IPU_FIFO* out_fifo;
     bool intra;
     bool reset_dc;
+    bool dct_field;
     bool check_start_code;
     int quantizer_step;
 
