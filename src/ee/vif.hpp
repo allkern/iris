@@ -54,11 +54,18 @@ enum {
 };
 
 inline constexpr auto ERR_MII = 0x1;
+inline constexpr auto STAT_VSS = 1 << 8;
+inline constexpr auto STAT_VFS = 1 << 9;
 inline constexpr auto STAT_VIS = 1 << 10;
 inline constexpr auto STAT_FDR = 1 << 23;
 inline constexpr auto VIF0_FIFO_BASE = 0x10004000;
 inline constexpr auto VIF1_FIFO_BASE = 0x10005000;
 inline constexpr auto STAT_INT = 1 << 11;
+inline constexpr auto STAT_STALLS = 0x3f00;
+inline constexpr auto FBRST_RST = 1 << 0;
+inline constexpr auto FBRST_FBK = 1 << 1;
+inline constexpr auto FBRST_STP = 1 << 2;
+inline constexpr auto FBRST_STC = 1 << 3;
 
 inline constexpr auto CMD_NOP = 0x00;
 inline constexpr auto CMD_STCYCL = 0x01;
@@ -109,7 +116,6 @@ struct Vif {
 
     uint32_t stat;
     int fdr = 0;
-    uint32_t fbrst;
     uint32_t err;
     uint32_t mark;
     uint32_t cycle;
@@ -168,7 +174,7 @@ void fifo_write(Vif* vif, uint32_t data);
 int get_dreq(Vif* vif);
 void write_direct_qwords(Vif* vif, const uint8_t* data, uint32_t qwords);
 void write_words(Vif* vif, const uint8_t* data, uint32_t count);
-void reset_command_state(Vif* vif, uint32_t data);
+void write_fbrst(Vif* vif, uint32_t data);
 
 inline uint32_t direct_qwords_pending(const Vif* vif) {
     if (vif->state != VIF_RECV_DATA || vif->shift || !vif->dreq) {

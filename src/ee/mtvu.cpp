@@ -267,7 +267,7 @@ static inline uint32_t process_op(Mtvu* mtvu, uint32_t read) {
         }
 
         case OP_VIF_FBRST: {
-            vif::reset_command_state(mtvu->vif, op[1]);
+            vif::write_fbrst(mtvu->vif, op[1]);
 
             return read + 2;
         }

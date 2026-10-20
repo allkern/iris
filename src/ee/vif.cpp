@@ -1179,16 +1179,27 @@ static inline uint32_t vif_read_row(Vif* vif, int index) {
     return vif->r[index];
 }
 
-void reset_command_state(Vif* vif, uint32_t data) {
-    vif->fbrst = data;
-    vif->state = VIF_IDLE;
-    vif->pending_words = 0;
-    vif->unpack_shift = 0;
-    vif->shift = 0;
-    vif->dreq = 1;
+void write_fbrst(Vif* vif, uint32_t data) {
+    if (data & FBRST_RST) {
+        vif->state = VIF_IDLE;
+        vif->pending_words = 0;
+        vif->unpack_shift = 0;
+        vif->shift = 0;
+        vif->dreq = 1;
+        vif->stat &= ~STAT_STALLS;
+    }
 
-    if (data & 8) {
-        vif->stat &= ~0x3f00;
+    if (data & FBRST_FBK) {
+        vif->stat |= STAT_VFS;
+    }
+
+    if (data & FBRST_STP) {
+        vif->stat |= STAT_VSS;
+    }
+
+    if (data & FBRST_STC) {
+        vif->stat &= ~STAT_STALLS;
+        vif->dreq = 1;
     }
 }
 
@@ -1196,7 +1207,7 @@ uint64_t read32(Vif* vif, uint32_t addr) {
     switch (addr) {
         // VIF0 registers
         case 0x10003800: return vif->stat;
-        // case 0x10003810: return vif->fbrst;
+        case 0x10003810: return 0;
         case 0x10003820: return vif->err;
         case 0x10003830: return vif->mark;
         case 0x10003840: return vif->cycle;
@@ -1231,7 +1242,7 @@ uint64_t read32(Vif* vif, uint32_t addr) {
             
             return stat; 
         } break;
-        case 0x10003c10: return vif->fbrst;
+        case 0x10003c10: return 0;
         case 0x10003c20: return vif->err;
         case 0x10003c30: return vif->mark;
         case 0x10003c40: return vif->cycle;
@@ -1269,7 +1280,7 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
     switch (addr) {
         // VIF0 registers
         case 0x10003810: {
-            reset_command_state(vif, data);
+            write_fbrst(vif, data);
 
             ee::dmac::handle_vif0_transfer(vif->hw.dmac);
         } break;
@@ -1291,7 +1302,7 @@ void write32(Vif* vif, uint32_t addr, uint64_t data) {
             vif->fdr = fdr;
         } break;
         case 0x10003c10: {
-            reset_command_state(vif, data);
+            write_fbrst(vif, data);
 
             if (data & 1) {
                 gif::set_path3_mask(vif->hw.gif, 0);
@@ -1360,6 +1371,14 @@ void fifo_write(Vif* vif, uint32_t data) {
 }
 
 int get_dreq(Vif* vif) {
+    if (vif->stat & STAT_VFS) {
+        return 0;
+    }
+
+    if ((vif->stat & STAT_VSS) && vif->state == VIF_IDLE) {
+        return 0;
+    }
+
     return vif->dreq;
 }
 
