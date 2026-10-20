@@ -34,7 +34,30 @@ namespace iris::ipu {
 VLC_Table::VLC_Table(VLC_Entry* table, int table_size, int max_bits, unsigned int* index_table) :
     table(table), table_size(table_size), max_bits(max_bits), index_table(index_table)
 {
+    lut_bits = max_bits < LUT_BITS ? max_bits : LUT_BITS;
 
+    for (uint32_t prefix = 0; prefix < (1u << lut_bits); prefix++)
+        lut[prefix] = (int16_t)search(prefix, lut_bits, 0, lut_bits);
+}
+
+int VLC_Table::search(uint32_t window, int window_bits, int first, int last) const
+{
+    for (int i = first; i < last; i++)
+    {
+        const int bits = i + 1;
+        const uint32_t key = window >> (window_bits - bits);
+
+        for (int j = index_table[i]; j < table_size; j++)
+        {
+            if (bits != table[j].bits)
+                break;
+
+            if (key == table[j].key)
+                return j;
+        }
+    }
+
+    return -1;
 }
 
 bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry, bool* invalid)
@@ -46,22 +69,15 @@ bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry, bool* invalid)
 
     if (FIFO.get_bits(window, max_bits))
     {
-        for (int i = 0; i < max_bits; i++)
+        int j = lut[window >> (max_bits - lut_bits)];
+
+        if (j < 0)
+            j = search(window, max_bits, lut_bits, max_bits);
+
+        if (j >= 0)
         {
-            const int bits = i + 1;
-            const uint32_t key = window >> (max_bits - bits);
-
-            for (int j = index_table[i]; j < table_size; j++)
-            {
-                if (bits != table[j].bits)
-                    break;
-
-                if (key == table[j].key)
-                {
-                    entry = table[j];
-                    return true;
-                }
-            }
+            entry = table[j];
+            return true;
         }
 
         if (invalid)

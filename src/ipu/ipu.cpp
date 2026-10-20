@@ -299,7 +299,7 @@ void Ipu::run_until_stalled()
         if (!ctrl.busy)
             break;
 
-        bool bitstream_only = (command == 0x03) || (command == 0x04);
+        bool bitstream_only = (command == 0x02) || (command == 0x03) || (command == 0x04);
         size_t in_size = in_FIFO.f.size();
         int bit_pointer = in_FIFO.bit_pointer;
 

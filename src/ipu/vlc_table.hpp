@@ -42,9 +42,15 @@ struct VLC_Entry
 class VLC_Table
 {
     private:
+        static constexpr int LUT_BITS = 10;
+
         VLC_Entry* table;
         int table_size, max_bits;
         unsigned int* index_table;
+        int lut_bits;
+        int16_t lut[1 << LUT_BITS];
+
+        int search(uint32_t window, int window_bits, int first, int last) const;
     protected:
         VLC_Table(VLC_Entry* table, int table_size, int max_bits, unsigned int* index_table);
     public:
