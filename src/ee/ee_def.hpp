@@ -465,6 +465,7 @@ enum : int {
     I_NOP,
     I_LWFIX,
     I_SWFIX,
+    I_LINK,
     I_MAX
 };
 
@@ -570,6 +571,19 @@ struct CachePage {
     uint32_t max_code_addr;
     bool valid;
     bool dirty;
+    uint32_t epoch;
+};
+
+inline constexpr auto INLINE_MAX_CALLEE_WORDS = 8;
+
+struct InlineRange {
+    uint32_t start;
+    uint32_t end;
+};
+
+struct InlineDep {
+    uint32_t page;
+    uint32_t epoch;
 };
 
 inline constexpr auto BLOCK_LUT_SIZE = 65536;
@@ -609,6 +623,101 @@ struct IdleLoop {
     uint32_t verified_mask;
 
     uint64_t snapshot[32];
+};
+
+inline constexpr int WAIT_LOOP_STREAK = 2;
+inline constexpr int WAIT_LOOP_VERIFY_STREAK = 8;
+inline constexpr int WAIT_LOOP_MAX_STEPS = 2048;
+inline constexpr int WAIT_LOOP_RECHECK_SLICES = 64;
+inline constexpr uint32_t WAIT_LOOP_MIN_BACKOFF = 16;
+inline constexpr uint32_t WAIT_LOOP_MAX_BACKOFF = 4096;
+inline constexpr uint32_t WAIT_LOOP_SPR_TAG = 0x80000000u;
+inline constexpr int WAIT_LOOP_COUNTED_REPEATS = 2;
+inline constexpr int WAIT_LOOP_COUNTED_FAIL_SLOTS = 32;
+inline constexpr uint64_t WAIT_LOOP_COUNTED_GLOBAL_COOLDOWN = 65536;
+inline constexpr uint64_t WAIT_LOOP_CATCH_UP_CYCLES = 262144;
+inline constexpr uint64_t WAIT_LOOP_COUNTED_MIN_BACKOFF = 16384;
+inline constexpr uint64_t WAIT_LOOP_COUNTED_MAX_BACKOFF = 16777216;
+inline constexpr int WAIT_LOOP_COUNTED_MAX_STEPS = 128;
+
+struct WaitLoopState {
+    uint128_t r[32];
+    uint128_t hi;
+    uint128_t lo;
+    uint64_t sa;
+    uint32_t cop0_r[32];
+    uint32_t debug[8];
+    uint32_t f[32];
+    uint32_t a;
+    uint32_t fcr;
+    uint32_t pc;
+    int cpcond0;
+};
+
+inline constexpr size_t WAIT_LOOP_CACHE_SIZE = 4;
+
+struct WaitLoopMmio {
+    uint32_t phys;
+    uint32_t bytes;
+    uint64_t value;
+};
+
+struct WaitLoopCountedFailure {
+    uint32_t pc;
+    uint64_t until;
+    uint64_t backoff;
+};
+
+struct WaitLoopEntry {
+    WaitLoopState start;
+
+    uint64_t period;
+    uint64_t stamp;
+    bool spr_touched;
+    bool confirmed;
+
+    std::vector <uint32_t> addrs;
+    std::vector <uint32_t> values;
+    std::vector <uint32_t> page_list;
+    std::vector <WaitLoopMmio> mmio;
+};
+
+struct WaitLoop {
+    bool attempt;
+    bool active;
+    bool tracing;
+    bool trace_failed;
+    bool replaying;
+    bool confirming;
+    bool dirty;
+
+    uint32_t streak;
+    uint32_t cooldown;
+    uint32_t backoff;
+    uint32_t slices_since_check;
+
+    uint64_t credit;
+    uint64_t stamp;
+
+    WaitLoopState start;
+
+    std::unordered_map <uint32_t, uint32_t> trace;
+    std::vector <WaitLoopMmio> mmio_trace;
+    std::vector <WaitLoopEntry> entries;
+    std::vector <uint8_t> pages;
+    WaitLoopEntry* entry = nullptr;
+
+    WaitLoopEntry counted;
+    bool counting;
+    uint64_t remaining;
+    int64_t delta[32];
+
+    uint32_t last_slice_pc;
+    uint32_t slice_repeats;
+    uint32_t counted_fail_next;
+    uint64_t counted_next_attempt;
+    uint64_t last_catch_up;
+    WaitLoopCountedFailure counted_fails[WAIT_LOOP_COUNTED_FAIL_SLOTS];
 };
 
 struct Ee {
@@ -720,6 +829,9 @@ struct Ee {
 
     std::vector <SubBlock> sub_blocks;
     std::vector <uint32_t> region_pending;
+    std::vector <InlineRange> inline_ranges;
+    std::vector <InlineDep> inline_deps;
+    bool inline_calls = true;
 
     // JIT stuff
     uint32_t last_block_lookup_pc;
@@ -770,6 +882,7 @@ struct Ee {
     uint64_t uncached_reads;
 
     IdleLoop idle_loop;
+    WaitLoop wait_loop;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;

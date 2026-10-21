@@ -272,6 +272,14 @@ void Ipu::run()
         //     ctrl.error_code = true;
         //     finish_command();
         // }
+
+        if (ctrl.busy && in_FIFO.vlc_error)
+        {
+            in_FIFO.vlc_error = false;
+            ctrl.error_code = true;
+
+            finish_command();
+        }
     }
     if (can_write_FIFO()) {
         dmac->channels[ee::dmac::IPU_TO].dreq = 1;
@@ -348,11 +356,8 @@ bool Ipu::process_IDEC()
                     if (!invalid)
                         return false;
 
-                    iris_warning(this, "IDEC: no macroblock type matches the stream, aborting the command");
-
-                    ctrl.error_code = true;
-
-                    return true;
+                    in_FIFO.vlc_error = false;
+                    idec.macro_type = 0;
                 }
 
                 idec.state = IDEC_STATE::DCT_TYPE;
@@ -476,7 +481,8 @@ bool Ipu::process_IDEC()
                 }
                 else
                 {
-                    // throw VLC_Error("IDEC start code invalid");
+                    ctrl.error_code = true;
+                    idec.state = IDEC_STATE::DONE;
                 }
             }
                 break;
@@ -485,7 +491,15 @@ bool Ipu::process_IDEC()
                 iris_debug(this, "Macroblock increment");
                 uint32_t inc;
                 if (!macroblock_increment.get_symbol(in_FIFO, inc))
-                    return false;
+                {
+                    if (!in_FIFO.vlc_error)
+                        return false;
+
+                    in_FIFO.vlc_error = false;
+                    idec.state = IDEC_STATE::DONE;
+
+                    break;
+                }
 
                 // if ((inc & 0xFFFF) != 1)
                 //     throw VLC_Error("IDEC invalid macroblock increment");
@@ -874,15 +888,18 @@ bool Ipu::BDEC_read_coeffs()
                 iris_debug(this, "READ_COEFF Read coeffs!");
             {
                 RunLevelPair pair;
-                if (!bdec.subblock_index)
+                bool decoded = bdec.subblock_index
+                    ? dct_coeff->get_runlevel_pair(in_FIFO, pair, ctrl.MPEG1)
+                    : dct_coeff->get_runlevel_pair_dc(in_FIFO, pair, ctrl.MPEG1);
+
+                if (!decoded)
                 {
-                    if (!dct_coeff->get_runlevel_pair_dc(in_FIFO, pair, ctrl.MPEG1))
+                    if (!in_FIFO.vlc_error)
                         return false;
-                }
-                else
-                {
-                    if (!dct_coeff->get_runlevel_pair(in_FIFO, pair, ctrl.MPEG1))
-                        return false;
+
+                    in_FIFO.vlc_error = false;
+
+                    return true;
                 }
                 iris_debug(this, "Run: {} Level: {}", pair.run, pair.level);
                 bdec.subblock_index += pair.run;
@@ -1369,6 +1386,7 @@ void Ipu::write_command(uint32_t value)
         command_option = value & ~0xF0000000;
         ctrl.error_code = false;
         ctrl.start_code = false;
+        in_FIFO.vlc_error = false;
         switch (command)
         {
             case 0x00:

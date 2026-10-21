@@ -80,6 +80,8 @@ bool VLC_Table::peek_symbol(IPU_FIFO &FIFO, VLC_Entry &entry, bool* invalid)
             return true;
         }
 
+        FIFO.vlc_error = true;
+
         if (invalid)
             *invalid = true;
 

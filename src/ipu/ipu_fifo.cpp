@@ -38,6 +38,7 @@ void IPU_FIFO::reset()
     bit_pointer = 0;
     cached_bits = 0;
     bit_cache_dirty = true;
+    vlc_error = false;
 }
 
 void IPU_FIFO::byte_align()

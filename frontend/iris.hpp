@@ -464,6 +464,8 @@ struct Instance {
     struct {
         std::chrono::steady_clock::time_point start;
         uint64_t frames = 0;
+        uint64_t last_vif1_kicks = 0;
+        uint64_t vif1_kick_frames[4] = {};
         std::string name = "";
     } profiling;
 

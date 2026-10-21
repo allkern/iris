@@ -41,6 +41,7 @@ struct IPU_FIFO
     int bit_pointer;
     uint64_t cached_bits;
     bool bit_cache_dirty;
+    bool vlc_error = false;
     uint32_t fifo_word(int byte_offset) const;
     bool get_bits(uint32_t& data, int bits);
     bool advance_stream(uint8_t amount);

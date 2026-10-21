@@ -46,6 +46,8 @@ enum Counter : int {
     EE_COMPILES_AT_REGION_INTERIOR,
     EE_COMPILES_FOR_IRQ_ENTRY,
     EE_COMPILED_INSTRUCTIONS,
+    EE_INLINED_CALLS,
+    EE_INLINE_GUARD_FAILS,
     EE_IDLE_LOOP_ITERATIONS_VERIFIED,
     EE_IDLE_LOOP_SKIPS,
     EE_IDLE_LOOP_SKIPPED_CYCLES,
@@ -100,6 +102,8 @@ enum Counter : int {
     MTVU_OTHER_SYNC_WAITS,
     GS_ASYNC_TRANSFERS,
     GS_ASYNC_RING_FULL_WAITS,
+    GS_DISPLAY_REGISTER_CHANGES,
+    GS_FINISH_WRITES,
     COUNTER_COUNT
 };
 
@@ -135,6 +139,8 @@ inline const char* counter_name(int counter) {
         case EE_COMPILES_AT_REGION_INTERIOR: return "ee compiles at a sub-block inside a region";
         case EE_COMPILES_FOR_IRQ_ENTRY: return "ee compiles with the short irq entry hint";
         case EE_COMPILED_INSTRUCTIONS: return "ee instructions compiled";
+        case EE_INLINED_CALLS: return "ee leaf calls inlined";
+        case EE_INLINE_GUARD_FAILS: return "ee blocks dropped by a stale inlined callee";
         case EE_IDLE_LOOP_ITERATIONS_VERIFIED: return "ee idle loop iterations verified";
         case EE_IDLE_LOOP_SKIPS: return "ee idle loop skips";
         case EE_IDLE_LOOP_SKIPPED_CYCLES: return "ee idle loop cycles skipped";
@@ -189,6 +195,8 @@ inline const char* counter_name(int counter) {
         case MTVU_OTHER_SYNC_WAITS: return "mtvu other syncs that waited for the worker";
         case GS_ASYNC_TRANSFERS: return "gs thread transfers queued";
         case GS_ASYNC_RING_FULL_WAITS: return "gs thread waits for ring space";
+        case GS_DISPLAY_REGISTER_CHANGES: return "gs display register changes (PMODE, DISPFB, DISPLAY)";
+        case GS_FINISH_WRITES: return "gs FINISH writes";
     }
 
     return "unknown";

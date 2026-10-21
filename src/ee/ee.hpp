@@ -195,6 +195,7 @@ void reset_intc_reads(Ee* ee);
 void reset_csr_reads(Ee* ee);
 void invalidate_block(Ee* ee, uint32_t addr);
 void invalidate_range(Ee* ee, uint32_t addr, uint32_t size);
+void invalidate_spr(Ee* ee);
 void flush_cache(Ee* ee);
 void set_breakpoints(Ee* ee, const uint32_t* addrs, int count);
 bool breakpoint_hit(Ee* ee);

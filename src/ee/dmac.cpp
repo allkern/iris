@@ -69,6 +69,8 @@ static inline void write_qword(Dmac* dmac, uint32_t addr, int mem, uint128_t val
         return;
     }
 
+    ee::invalidate_spr(dmac->hw.ee);
+
     ram::write128(dmac->hw.spr, addr & 0x3ff0, value);
 }
 
@@ -2030,6 +2032,8 @@ void spr_to_interleave(Dmac* dmac) {
         for (int i = 0; i < tqwc && dmac->channels[SPR_TO].qwc; i++) {
             uint128_t q = read_qword(dmac, dmac->channels[SPR_TO].madr);
 
+            ee::invalidate_spr(dmac->hw.ee);
+
             ram::write128(dmac->hw.spr, dmac->channels[SPR_TO].sadr, q);
 
             dmac->channels[SPR_TO].madr += 0x10;
@@ -2067,6 +2071,8 @@ void handle_spr_to_transfer(Dmac* dmac) {
     for (int i = 0; i < dmac->channels[SPR_TO].qwc; i++) {
         uint128_t q = read_qword(dmac, dmac->channels[SPR_TO].madr);
 
+        ee::invalidate_spr(dmac->hw.ee);
+
         ram::write128(dmac->hw.spr, dmac->channels[SPR_TO].sadr, q);
 
         dmac->channels[SPR_TO].madr += 0x10;
@@ -2085,6 +2091,8 @@ void handle_spr_to_transfer(Dmac* dmac) {
         uint128_t tag = read_qword(dmac, dmac->channels[SPR_TO].tadr);
 
         if ((dmac->channels[SPR_TO].chcr >> 6) & 1) {
+            ee::invalidate_spr(dmac->hw.ee);
+
             ram::write128(dmac->hw.spr, dmac->channels[SPR_TO].sadr, tag);
 
             dmac->channels[SPR_TO].sadr += 0x10;
@@ -2104,6 +2112,8 @@ void handle_spr_to_transfer(Dmac* dmac) {
 
         for (int i = 0; i < dmac->channels[SPR_TO].qwc; i++) {
             uint128_t q = read_qword(dmac, dmac->channels[SPR_TO].madr);
+
+            ee::invalidate_spr(dmac->hw.ee);
 
             ram::write128(dmac->hw.spr, dmac->channels[SPR_TO].sadr, q);
 

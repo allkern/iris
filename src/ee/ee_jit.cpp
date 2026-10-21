@@ -594,6 +594,7 @@ void purge_cache(Ee* ee) {
     for (int i = 0; i < CACHE_PAGECOUNT; i++) {
         ee->block_cache[i].dirty = true;
         ee->block_cache[i].valid = false;
+        ee->block_cache[i].epoch++;
 
         if (ee->block_cache[i].blocks) {
             delete[] ee->block_cache[i].blocks;
@@ -649,12 +650,75 @@ static inline void invalidate_page(Ee* ee, uint32_t addr) {
 //     } \
 // }
 
+static inline bool idle_stable_mmio(uint32_t phys) {
+    return phys >= 0x10002000 && phys < 0x10002040;
+}
+
+static uint64_t idle_mmio_value(Ee* ee, uint32_t phys, uint32_t bytes) {
+    switch (bytes) {
+        case 1: return ee->bus.read8(ee->bus.udata, phys);
+        case 2: return ee->bus.read16(ee->bus.udata, phys);
+        case 4: return ee->bus.read32(ee->bus.udata, phys);
+    }
+
+    return ee->bus.read64(ee->bus.udata, phys);
+}
+
+static void idle_trace_word(WaitLoop& ep, uint32_t key, uint32_t value) {
+    ep.trace.try_emplace(key, value);
+}
+
+static void idle_trace_access(Ee* ee, uint32_t addr, uint32_t phys, uint32_t bytes, bool write) {
+    WaitLoop& ep = ee->wait_loop;
+
+    if ((addr & 0xf0000000) == 0x70000000) {
+        uint32_t offset = addr & 0x3fff;
+
+        for (uint32_t word = offset & ~3u; word < offset + bytes; word += 4)
+            idle_trace_word(ep, WAIT_LOOP_SPR_TAG | word, ram::read32(ee->spr, word));
+
+        return;
+    }
+
+    if (phys + bytes - 1 <= (uint32_t)ee->ram_size) {
+        for (uint32_t word = phys & ~3u; word < phys + bytes; word += 4)
+            idle_trace_word(ep, word, (uint32_t)ee->bus.read32(ee->bus.udata, word));
+
+        return;
+    }
+
+    if (!write && phys >= 0x1fc00000 && phys < 0x20000000)
+        return;
+
+    if (!write && bytes <= 8 && idle_stable_mmio(phys)) {
+        uint64_t value = idle_mmio_value(ee, phys, bytes);
+
+        for (const WaitLoopMmio& m : ep.mmio_trace) {
+            if (m.phys == phys && m.bytes == bytes) {
+                if (m.value != value)
+                    ep.trace_failed = true;
+
+                return;
+            }
+        }
+
+        ep.mmio_trace.push_back({ phys, bytes, value });
+
+        return;
+    }
+
+    ep.trace_failed = true;
+}
+
 #define BUS_READ_FUNC(b)                                                       \
     static inline uint64_t bus_read ## b(Ee* ee, uint32_t addr) { \
-        if ((addr & 0xf0000000) == 0x70000000)                                 \
+        if ((addr & 0xf0000000) == 0x70000000) {                               \
+            if (ee->wait_loop.tracing) idle_trace_access(ee, addr, 0, b / 8, false); \
             return ram::read ## b(ee->spr, addr & 0x3fff);                  \
+        }                                                                      \
         uint32_t phys;                                                         \
         translate_virt(ee, addr, &phys);                                    \
+        if (ee->wait_loop.tracing) idle_trace_access(ee, addr, phys, b / 8, false); \
         if (phys == 0x1000f000) ee->intc_reads++;                              \
         if (phys == 0x12001000) return csr_spin_read ## b(ee, phys);           \
         return ee->bus.read ## b(ee->bus.udata, phys);                         \
@@ -662,10 +726,13 @@ static inline void invalidate_page(Ee* ee, uint32_t addr) {
 
 #define BUS_WRITE_FUNC(b)                                                                  \
     static inline void bus_write ## b(Ee* ee, uint32_t addr, uint64_t data) { \
-        if ((addr & 0xf0000000) == 0x70000000)                                             \
-        { ram::write ## b(ee->spr, addr & 0x3fff, data); return; }                      \
+        if ((addr & 0xf0000000) == 0x70000000) {                                           \
+            if (ee->wait_loop.tracing) idle_trace_access(ee, addr, 0, b / 8, true);          \
+            ram::write ## b(ee->spr, addr & 0x3fff, data); return;                         \
+        }                                                                                  \
         uint32_t phys;                                                                     \
         translate_virt(ee, addr, &phys);                                                \
+        if (ee->wait_loop.tracing) idle_trace_access(ee, addr, phys, b / 8, true);           \
         invalidate_page(ee, phys);                                                      \
         ee->bus.write ## b(ee->bus.udata, phys, data);                                     \
     }
@@ -676,12 +743,17 @@ BUS_READ_FUNC(32)
 BUS_READ_FUNC(64)
 
 static inline uint128_t bus_read128(Ee* ee, uint32_t addr) {
-    if ((addr & 0xf0000000) == 0x70000000)
+    if ((addr & 0xf0000000) == 0x70000000) {
+        if (ee->wait_loop.tracing) idle_trace_access(ee, addr & ~0xfu, 0, 16, false);
+
         return ram::read128(ee->spr, addr & 0x3ff0);
+    }
 
     uint32_t phys;
 
     translate_virt(ee, addr, &phys);
+
+    if (ee->wait_loop.tracing) idle_trace_access(ee, addr, phys & ~0xfu, 16, false);
 
     return ee->bus.read128(ee->bus.udata, phys);
 }
@@ -699,6 +771,8 @@ BUS_WRITE_FUNC(64)
 
 void bus_write128(Ee* ee, uint32_t addr, uint128_t data) {
     if ((addr & 0xf0000000) == 0x70000000) {
+        if (ee->wait_loop.tracing) idle_trace_access(ee, addr & ~0xfu, 0, 16, true);
+
         ram::write128(ee->spr, addr & 0x3ff0, data);
 
         return;
@@ -707,6 +781,9 @@ void bus_write128(Ee* ee, uint32_t addr, uint128_t data) {
     uint32_t phys;
 
     translate_virt(ee, addr, &phys);
+
+    if (ee->wait_loop.tracing) idle_trace_access(ee, addr, phys & ~0xfu, 16, true);
+
     invalidate_page(ee, phys);
 
     ee->bus.write128(ee->bus.udata, phys, data);
@@ -974,10 +1051,35 @@ static inline void set_pc(Ee* ee, uint32_t addr) {
     ee->next_pc = addr;
 }
 
+static inline void note_wait_loop_exception(Ee* ee, uint32_t cause) {
+    WaitLoop& ep = ee->wait_loop;
+
+    if (ep.tracing || ep.replaying)
+        return;
+
+    if (cause != CAUSE_EXC1_SYS || ee->r[3].u32[0] != 0x2b) {
+        ep.streak = 0;
+        ep.attempt = false;
+
+        return;
+    }
+
+    if (ep.cooldown) {
+        ep.cooldown--;
+
+        return;
+    }
+
+    if (++ep.streak >= WAIT_LOOP_STREAK && !ep.active)
+        ep.attempt = true;
+}
+
 void exception_level1(Ee* ee, uint32_t cause) {
     uint32_t vec = VEC_COMMON;
 
     ee->exit_req = 1;
+
+    note_wait_loop_exception(ee, cause);
 
     switch (cause) {
         case CAUSE_EXC1_TLBL:
@@ -1553,6 +1655,9 @@ static inline void i_jal(Ee* ee, const Instruction& i) {
     ee->r[31].ul64 = ee->next_pc;
 
     set_pc(ee, (ee->next_pc & 0xf0000000) | (D_I26 << 2));
+}
+static inline void i_link(Ee* ee, const Instruction& i) {
+    ee->r[31].ul64 = i.rd.value;
 }
 static inline void i_jalr(Ee* ee, const Instruction& i) {
     uint32_t next_pc = ee->next_pc;
@@ -4057,6 +4162,33 @@ void reset(Ee* ee) {
     ee->deci2addr = 0;
     ee->deci2handler = 0;
 
+    ee->wait_loop.attempt = false;
+    ee->wait_loop.active = false;
+    ee->wait_loop.tracing = false;
+    ee->wait_loop.replaying = false;
+    ee->wait_loop.streak = 0;
+    ee->wait_loop.cooldown = 0;
+    ee->wait_loop.backoff = WAIT_LOOP_MIN_BACKOFF;
+    ee->wait_loop.credit = 0;
+    ee->wait_loop.trace.clear();
+    ee->wait_loop.entries.clear();
+    ee->wait_loop.pages.clear();
+    ee->wait_loop.entry = nullptr;
+    ee->wait_loop.counting = false;
+    ee->wait_loop.confirming = false;
+    ee->wait_loop.last_slice_pc = 0;
+    ee->wait_loop.slice_repeats = 0;
+    ee->wait_loop.counted_fail_next = 0;
+    ee->wait_loop.counted_next_attempt = 0;
+    ee->wait_loop.last_catch_up = 0;
+
+    for (WaitLoopCountedFailure& f : ee->wait_loop.counted_fails)
+        f = {};
+
+    const char* inline_env = getenv("IRIS_EE_INLINE");
+
+    ee->inline_calls = !inline_env || strcmp(inline_env, "0") != 0;
+
     purge_cache(ee);
 
     ee->rt.reset(asmjit::ResetPolicy::kHard);
@@ -4613,6 +4745,125 @@ static inline bool has_breakpoint(Ee* ee, uint32_t addr) {
     return false;
 }
 
+static inline bool inline_instruction_allowed(uint32_t opcode, const Instruction& i) {
+    if (!opcode)
+        return true;
+
+    if (i.branch || i.id == I_INVALID)
+        return false;
+
+    switch (opcode >> 26) {
+        case 0x10: case 0x12: case 0x2f: case 0x36: case 0x3e:
+            return false;
+    }
+
+    return i.rt.r != 31 && i.rd.r != 31;
+}
+
+static inline int leaf_callee_words(Ee* ee, uint32_t target, uint32_t* phys) {
+    if (target & 3)
+        return 0;
+
+    if (translate_virt(ee, target, phys) || *phys >= 0x02000000)
+        return 0;
+
+    const CachePage& cp = ee->block_cache[*phys / MIN_PAGESIZE];
+
+    if (cp.valid && cp.dirty)
+        return 0;
+
+    for (int k = 0; k < INLINE_MAX_CALLEE_WORDS; k++) {
+        uint32_t addr = target + k * 4;
+
+        if (((addr + 4) & ~(uint32_t)(MIN_PAGESIZE - 1)) != (target & ~(uint32_t)(MIN_PAGESIZE - 1)))
+            return 0;
+
+        if (ee->breakpoint_count && has_breakpoint(ee, addr))
+            return 0;
+
+        uint32_t opcode = bus_read32(ee, addr);
+
+        if (opcode == 0x03e00008) {
+            uint32_t slot = bus_read32(ee, addr + 4);
+
+            if (!inline_instruction_allowed(slot, decode(slot)))
+                return 0;
+
+            return k + 2;
+        }
+
+        if (!inline_instruction_allowed(opcode, decode(opcode)))
+            return 0;
+    }
+
+    return 0;
+}
+
+static inline bool try_inline_call(Ee* ee, SubBlock& sb, int* max_cycles, std::vector<Instruction>& out) {
+    if (!ee->inline_calls || ee->fmv_skip || ee->breakpoint_count)
+        return false;
+
+    const Instruction& jal = out.back();
+
+    uint32_t ret = sb.end_pc + 8;
+    uint32_t target = (ret & 0xf0000000) | (jal.i26 << 2);
+
+    uint32_t slot = bus_read32(ee, sb.end_pc + 4);
+
+    Instruction slot_i = decode(slot);
+
+    if (slot && (slot_i.branch || slot_i.id == I_INVALID || slot_i.rt.r == 31 || slot_i.rd.r == 31))
+        return false;
+
+    uint32_t phys;
+
+    int words = leaf_callee_words(ee, target, &phys);
+
+    if (!words || *max_cycles < 3 + words)
+        return false;
+
+    Instruction link = jal;
+
+    link.id = I_LINK;
+    link.func = i_link;
+    link.branch = 0;
+    link.rd.r = 31;
+    link.rd.value = ret;
+
+    out.back() = link;
+
+    if (slot) {
+        out.push_back(slot_i);
+
+        sb.count++;
+    }
+
+    for (int k = 0; k < words; k++) {
+        if (k == words - 2)
+            continue;
+
+        uint32_t opcode = bus_read32(ee, target + k * 4);
+
+        if (!opcode)
+            continue;
+
+        out.push_back(decode(opcode));
+
+        sb.count++;
+    }
+
+    sb.cycles += 2 + words;
+    sb.end_pc = ret;
+
+    *max_cycles -= 2 + words;
+
+    ee->inline_ranges.push_back({ phys, phys + (uint32_t)words * 4 });
+
+    profile::count(profile::EE_INLINED_CALLS);
+
+    return true;
+}
+
 static inline SubBlock decode_sub_block(Ee* ee, uint32_t pc, int max_cycles, std::vector<Instruction>& out) {
     SubBlock sb;
 
@@ -4659,6 +4910,9 @@ static inline SubBlock decode_sub_block(Ee* ee, uint32_t pc, int max_cycles, std
 
             break;
         }
+
+        if (i.id == I_JAL && !delay_slot && ee->opcode && try_inline_call(ee, sb, &max_cycles, out))
+            continue;
 
         sb.cycles++; // += i.cycles;
 
@@ -4766,7 +5020,8 @@ static inline bool classify_idle_instruction(const Instruction& i, uint32_t* wri
             return i.rt.r != 0;
         }
 
-        case I_JAL: case I_BLTZAL: case I_BGEZAL: case I_BLTZALL: case I_BGEZALL: {
+        case I_JAL: case I_BLTZAL: case I_BGEZAL: case I_BLTZALL: case I_BGEZALL:
+        case I_LINK: {
             *written |= 1u << 31;
 
             return true;
@@ -4833,6 +5088,8 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
     block.instructions.reserve(max_cycles);
 
     ee->sub_blocks.clear();
+    ee->inline_ranges.clear();
+    ee->inline_deps.clear();
 
     bool grow = max_cycles >= BLOCK_MAX_INSTRS;
 
@@ -4931,6 +5188,44 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
         }
     }
 
+    for (const InlineRange& r : ee->inline_ranges) {
+        uint32_t callee_page = r.start / MIN_PAGESIZE;
+
+        CachePage& cp = ee->block_cache[callee_page];
+
+        if (!cp.valid) {
+            cp.blocks = new Block[MIN_PAGESIZE >> 2];
+            cp.dirty = false;
+            cp.valid = true;
+            cp.min_code_addr = r.start;
+            cp.max_code_addr = r.end;
+        }
+
+        if (cp.min_code_addr > r.start) {
+            cp.min_code_addr = r.start;
+        }
+
+        if (cp.max_code_addr < r.end) {
+            cp.max_code_addr = r.end;
+        }
+
+        if (callee_page == page)
+            continue;
+
+        bool known = false;
+
+        for (const InlineDep& d : ee->inline_deps) {
+            if (d.page == callee_page) {
+                known = true;
+                break;
+            }
+        }
+
+        if (!known) {
+            ee->inline_deps.push_back({ callee_page, cp.epoch });
+        }
+    }
+
     for (size_t k = 1; k < ee->sub_blocks.size(); k++) {
         uint32_t interior_offset = (ee->sub_blocks[k].start_pc & (MIN_PAGESIZE - 1)) >> 2;
 
@@ -4945,6 +5240,13 @@ static inline Block* cache_block(Ee* ee, int max_cycles) {
 }
 
 void compile_block(Ee* ee, Block* block);
+
+static void drop_stale_inline_page(Ee* ee, uint32_t page) {
+    profile::count(profile::EE_INLINE_GUARD_FAILS);
+
+    ee->block_cache[page].dirty = true;
+    ee->block_lut_gen++;
+}
 
 static inline Block* find_block(Ee* ee, uint32_t pc) {
 #ifdef _EE_DISABLE_CACHE
@@ -4980,6 +5282,7 @@ static inline Block* find_block(Ee* ee, uint32_t pc) {
         ee->block_cache[page].valid = false;
         ee->block_cache[page].min_code_addr = 0;
         ee->block_cache[page].max_code_addr = 0;
+        ee->block_cache[page].epoch++;
 
         ee->block_lut_gen++;
 
@@ -5513,6 +5816,51 @@ void compile_block(Ee* ee, Block* block) {
             emit_branch(eq ? ujit::cmp_ne(rs.reg, rt.reg) : ujit::cmp_eq(rs.reg, rt.reg), D_SI16);
         }
     };
+
+    if (!ee->inline_deps.empty()) {
+        Label fresh = uc.new_label();
+        Label stale = uc.new_label();
+
+        for (size_t d = 0; d < ee->inline_deps.size(); d++) {
+            const InlineDep& dep = ee->inline_deps[d];
+
+            ujit::Gp cp = uc.new_gp_ptr();
+            ujit::Gp epoch = uc.new_gp32();
+            ujit::Gp dirty = uc.new_gp32();
+
+            uc.mov(cp, Imm((uintptr_t)&ee->block_cache[dep.page]));
+            uc.load_u32(epoch, ujit::mem_ptr(cp, offsetof(CachePage, epoch)));
+            uc.j(stale, ujit::cmp_ne(epoch, Imm(dep.epoch)));
+            uc.load_u8(dirty, ujit::mem_ptr(cp, offsetof(CachePage, dirty)));
+
+            if (d + 1 < ee->inline_deps.size()) {
+                uc.j(stale, ujit::test_nz(dirty));
+            } else {
+                uc.j(fresh, ujit::test_z(dirty));
+            }
+        }
+
+        uc.bind(stale);
+
+        ujit::Gp page = uc.new_gp32();
+
+        uc.mov(page, Imm(region_phys / MIN_PAGESIZE));
+
+        InvokeNode* invoke_node = jit_invoke(
+            uc,
+            (uintptr_t)drop_stale_inline_page,
+            FuncSignature::build<void, Ee*, uint32_t>()
+        );
+
+        invoke_node->set_arg(0, ee->state_ptr);
+        invoke_node->set_arg(1, page);
+
+        store_imm32(uc, EE(next_pc), block->start_pc);
+
+        uc.ret();
+
+        uc.bind(fresh);
+    }
 
     for (size_t sb_i = 0; sb_i < ee->sub_blocks.size(); sb_i++) {
         const SubBlock& sb = ee->sub_blocks[sb_i];
@@ -6126,6 +6474,10 @@ void compile_block(Ee* ee, Block* block) {
                     CachedReg& rs = get_reg(ee, &uc, i.rs.r);
 
                     uc.store_u32(EE(next_pc), rs.reg);
+                } break;
+
+                case I_LINK: {
+                    set_const(ee, &uc, 31, i.rd.value);
                 } break;
 
                 case I_JAL: {
@@ -8876,6 +9228,10 @@ static inline int observe_idle_loop(Ee* ee, const Block* block, int remaining) {
     return skipped;
 }
 
+static inline uint32_t wait_loop_vector(const Ee* ee) {
+    return ((ee->status & SR_BEV) ? 0xbfc00200 : 0x80000000) + VEC_COMMON;
+}
+
 static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
     int total = 0;
 
@@ -8960,13 +9316,1098 @@ static inline int _ee_run_block(Ee* ee, int budget, int compile_hint) {
         if (ee->pc == 0x81fc0 || ee->intc_reads >= 10000 || ee->csr_reads >= 10000)
             break;
 
-        if (is_irq_pending(ee))
+        if (!ee->wait_loop.replaying && is_irq_pending(ee))
+            break;
+
+        if (ee->wait_loop.attempt && !ee->wait_loop.replaying && ee->pc == wait_loop_vector(ee))
+            break;
+
+        if (ee->wait_loop.confirming && ee->pc == ee->wait_loop.start.pc)
             break;
     }
 
     profile::set_active_jit(profile::JIT_NONE);
 
     return total;
+}
+
+static void capture_idle_state(const Ee* ee, WaitLoopState* s) {
+    memcpy(s->r, ee->r, sizeof(s->r));
+
+    s->hi = ee->hi;
+    s->lo = ee->lo;
+    s->sa = ee->sa;
+
+    memcpy(s->cop0_r, ee->cop0_r, sizeof(s->cop0_r));
+
+    s->debug[0] = ee->dab;
+    s->debug[1] = ee->dabm;
+    s->debug[2] = ee->dvb;
+    s->debug[3] = ee->dvbm;
+    s->debug[4] = ee->iab;
+    s->debug[5] = ee->iabm;
+    s->debug[6] = ee->pcr0;
+    s->debug[7] = ee->pcr1;
+
+    for (int i = 0; i < 32; i++)
+        s->f[i] = ee->f[i].u32;
+
+    s->a = ee->a.u32;
+    s->fcr = ee->fcr;
+    s->pc = ee->pc;
+    s->cpcond0 = ee->cpcond0;
+}
+
+static bool idle_state_equal(const WaitLoopState* now, const WaitLoopState* start) {
+    for (int k = 0; k < 32; k++) {
+        if (k != 9 && now->cop0_r[k] != start->cop0_r[k])
+            return false;
+    }
+
+    return memcmp(now->r, start->r, sizeof(now->r)) == 0
+        && memcmp(&now->hi, &start->hi, sizeof(now->hi)) == 0
+        && memcmp(&now->lo, &start->lo, sizeof(now->lo)) == 0
+        && now->sa == start->sa
+        && memcmp(now->debug, start->debug, sizeof(now->debug)) == 0
+        && memcmp(now->f, start->f, sizeof(now->f)) == 0
+        && now->a == start->a
+        && now->fcr == start->fcr
+        && now->pc == start->pc
+        && now->cpcond0 == start->cpcond0;
+}
+
+static bool idle_state_matches(const Ee* ee, const WaitLoopState* start) {
+    WaitLoopState now;
+
+    capture_idle_state(ee, &now);
+
+    return idle_state_equal(&now, start);
+}
+
+static inline bool idle_irq_raised(const Ee* ee) {
+    return (ee->cause & (CAUSE_IP2 | CAUSE_IP3)) != 0;
+}
+
+static bool idle_instruction_allowed(const Ee* ee, uint32_t opcode, bool delay_slot) {
+    uint32_t op = opcode >> 26;
+    uint32_t funct = opcode & 0x3f;
+
+    switch (op) {
+        case 0x00:
+            if (funct == 0x0c)
+                return !delay_slot && ee->r[3].u32[0] == 0x2b;
+
+            return funct != 0x0d && !(funct >= 0x30 && funct <= 0x36);
+
+        case 0x01: {
+            uint32_t rt = (opcode >> 16) & 0x1f;
+
+            return !(rt >= 0x08 && rt <= 0x0e);
+        }
+
+        case 0x10: {
+            uint32_t rs = (opcode >> 21) & 0x1f;
+            uint32_t rd = (opcode >> 11) & 0x1f;
+
+            if (rs == 0x10)
+                return funct == 0x18 || funct == 0x38 || funct == 0x39;
+
+            if (rs == 0x00)
+                return rd != 1 && rd != 9 && rd != 25;
+
+            return true;
+        }
+
+        case 0x12:
+        case 0x2f:
+        case 0x36:
+        case 0x3e:
+            return false;
+    }
+
+    return true;
+}
+
+enum IdleTag : uint8_t {
+    IDLE_TAG_INVARIANT,
+    IDLE_TAG_AFFINE,
+    IDLE_TAG_PREDICATE
+};
+
+struct IdleTags {
+    uint8_t kind[32];
+    int64_t delta[32];
+    uint64_t limit;
+    bool failed;
+};
+
+static inline void idle_limit(IdleTags* t, uint64_t n) {
+    if (n < t->limit)
+        t->limit = n;
+}
+
+static void idle_limit_less(IdleTags* t, int64_t d, int64_t dd) {
+    if (dd > 0 && d < 0) {
+        idle_limit(t, (uint64_t)(-(d + 1)) / (uint64_t)dd);
+    } else if (dd < 0 && d >= 0) {
+        idle_limit(t, (uint64_t)d / (uint64_t)(-dd));
+    }
+}
+
+static void idle_limit_equal(IdleTags* t, int64_t d, int64_t dd) {
+    if (!dd)
+        return;
+
+    if (!d) {
+        idle_limit(t, 0);
+
+        return;
+    }
+
+    if ((-d) % dd == 0 && (-d) / dd > 0)
+        idle_limit(t, (uint64_t)((-d) / dd - 1));
+}
+
+static void idle_limit_range32(IdleTags* t, int64_t v, int64_t dd) {
+    if (v < INT32_MIN || v > INT32_MAX) {
+        t->failed = true;
+
+        return;
+    }
+
+    if (dd > 0) {
+        idle_limit(t, (uint64_t)(INT32_MAX - v) / (uint64_t)dd);
+    } else if (dd < 0) {
+        idle_limit(t, (uint64_t)(v - INT32_MIN) / (uint64_t)(-dd));
+    }
+}
+
+static void idle_limit_unsigned(IdleTags* t, int64_t a, int64_t da, int64_t b, int64_t db) {
+    if (a < 0 || b < 0) {
+        t->failed = true;
+
+        return;
+    }
+
+    if (da < 0)
+        idle_limit(t, (uint64_t)a / (uint64_t)(-da));
+
+    if (db < 0)
+        idle_limit(t, (uint64_t)b / (uint64_t)(-db));
+
+    idle_limit_less(t, a - b, da - db);
+}
+
+static void idle_tag_instruction(IdleTags* t, const Ee* ee, uint32_t opcode, int* out, uint8_t* out_kind, int64_t* out_delta) {
+    uint32_t op = opcode >> 26;
+    uint32_t funct = opcode & 0x3f;
+    int rs = (opcode >> 21) & 0x1f;
+    int rt = (opcode >> 16) & 0x1f;
+    int rd = (opcode >> 11) & 0x1f;
+    int64_t imm = (int16_t)(opcode & 0xffff);
+
+    *out = -1;
+
+    auto kind = [&](int r) -> uint8_t { return r ? t->kind[r] : (uint8_t)IDLE_TAG_INVARIANT; };
+    auto delta = [&](int r) -> int64_t { return (r && t->kind[r] == IDLE_TAG_AFFINE) ? t->delta[r] : 0; };
+    auto value = [&](int r) -> int64_t { return (int64_t)ee->r[r].u64[0]; };
+    auto tagged = [&](int r) { return kind(r) != IDLE_TAG_INVARIANT; };
+    auto predicate = [&](int r) { return kind(r) == IDLE_TAG_PREDICATE; };
+
+    auto set = [&](int r, uint8_t k, int64_t d) {
+        *out = r;
+        *out_kind = (k == IDLE_TAG_AFFINE && !d) ? (uint8_t)IDLE_TAG_INVARIANT : k;
+        *out_delta = *out_kind == IDLE_TAG_AFFINE ? d : 0;
+    };
+
+    auto fail = [&]() { t->failed = true; };
+
+    switch (op) {
+        case 0x00: {
+            switch (funct) {
+                case 0x21:
+                case 0x23: {
+                    if (predicate(rs) || predicate(rt)) return fail();
+
+                    int64_t d = funct == 0x21 ? delta(rs) + delta(rt) : delta(rs) - delta(rt);
+
+                    if (tagged(rs)) idle_limit_range32(t, value(rs), delta(rs));
+                    if (tagged(rt)) idle_limit_range32(t, value(rt), delta(rt));
+
+                    if (d) {
+                        int64_t a = (int32_t)value(rs);
+                        int64_t b = (int32_t)value(rt);
+
+                        idle_limit_range32(t, funct == 0x21 ? a + b : a - b, d);
+                    }
+
+                    return set(rd, IDLE_TAG_AFFINE, d);
+                }
+
+                case 0x2d:
+                case 0x2f: {
+                    if (predicate(rs) || predicate(rt)) {
+                        if (funct == 0x2d && (rs == 0 || rt == 0))
+                            return set(rd, IDLE_TAG_PREDICATE, 0);
+
+                        return fail();
+                    }
+
+                    return set(rd, IDLE_TAG_AFFINE, funct == 0x2d ? delta(rs) + delta(rt) : delta(rs) - delta(rt));
+                }
+
+                case 0x25: {
+                    if (rs == 0 || rt == 0) {
+                        int source = rs ? rs : rt;
+
+                        return set(rd, kind(source), delta(source));
+                    }
+
+                    if (tagged(rs) || tagged(rt)) return fail();
+
+                    return set(rd, IDLE_TAG_INVARIANT, 0);
+                }
+
+                case 0x2a:
+                case 0x2b: {
+                    if (predicate(rs) || predicate(rt)) return fail();
+
+                    if (!tagged(rs) && !tagged(rt))
+                        return set(rd, IDLE_TAG_INVARIANT, 0);
+
+                    if (funct == 0x2a) {
+                        idle_limit_less(t, value(rs) - value(rt), delta(rs) - delta(rt));
+                    } else {
+                        idle_limit_unsigned(t, value(rs), delta(rs), value(rt), delta(rt));
+                    }
+
+                    return set(rd, IDLE_TAG_PREDICATE, 0);
+                }
+
+                case 0x08:
+                case 0x09: {
+                    if (tagged(rs)) return fail();
+
+                    if (funct == 0x09) set(rd, IDLE_TAG_INVARIANT, 0);
+
+                    return;
+                }
+
+                case 0x0c: {
+                    for (int r = 1; r < 32; r++) {
+                        if (t->kind[r] != IDLE_TAG_INVARIANT) return fail();
+                    }
+
+                    return;
+                }
+
+                case 0x0f:
+                    return;
+            }
+        } break;
+
+        case 0x01: {
+            if (rt <= 0x03 || (rt >= 0x10 && rt <= 0x13)) {
+                if (kind(rs) == IDLE_TAG_AFFINE) idle_limit_less(t, value(rs), delta(rs));
+
+                if (rt >= 0x10) set(31, IDLE_TAG_INVARIANT, 0);
+
+                return;
+            }
+        } break;
+
+        case 0x02:
+            return;
+
+        case 0x03:
+            return set(31, IDLE_TAG_INVARIANT, 0);
+
+        case 0x04:
+        case 0x05:
+        case 0x14:
+        case 0x15: {
+            if (predicate(rs) || predicate(rt)) {
+                if ((predicate(rs) && rt == 0) || (predicate(rt) && rs == 0)) return;
+
+                return fail();
+            }
+
+            if (tagged(rs) || tagged(rt))
+                idle_limit_equal(t, value(rs) - value(rt), delta(rs) - delta(rt));
+
+            return;
+        }
+
+        case 0x06:
+        case 0x07:
+        case 0x16:
+        case 0x17: {
+            if (kind(rs) == IDLE_TAG_AFFINE) idle_limit_less(t, value(rs) - 1, delta(rs));
+
+            return;
+        }
+
+        case 0x09: {
+            if (predicate(rs)) return fail();
+
+            if (tagged(rs)) {
+                idle_limit_range32(t, value(rs), delta(rs));
+                idle_limit_range32(t, (int64_t)(int32_t)value(rs) + imm, delta(rs));
+            }
+
+            return set(rt, kind(rs), delta(rs));
+        }
+
+        case 0x19: {
+            if (predicate(rs)) return fail();
+
+            return set(rt, kind(rs), delta(rs));
+        }
+
+        case 0x0a:
+        case 0x0b: {
+            if (predicate(rs)) return fail();
+
+            if (!tagged(rs))
+                return set(rt, IDLE_TAG_INVARIANT, 0);
+
+            if (op == 0x0a) {
+                idle_limit_less(t, value(rs) - imm, delta(rs));
+            } else {
+                idle_limit_unsigned(t, value(rs), delta(rs), imm, 0);
+            }
+
+            return set(rt, IDLE_TAG_PREDICATE, 0);
+        }
+
+        case 0x0f:
+            return set(rt, IDLE_TAG_INVARIANT, 0);
+
+        case 0x1a: case 0x1b: case 0x1e: case 0x20: case 0x21: case 0x22: case 0x23:
+        case 0x24: case 0x25: case 0x26: case 0x27: case 0x37: {
+            if (tagged(rs)) return fail();
+
+            return set(rt, IDLE_TAG_INVARIANT, 0);
+        }
+
+        case 0x31: {
+            if (tagged(rs)) return fail();
+
+            return;
+        }
+
+        case 0x1f: case 0x28: case 0x29: case 0x2a: case 0x2b: case 0x2c: case 0x2d:
+        case 0x2e: case 0x3f: {
+            if (tagged(rs) || tagged(rt)) return fail();
+
+            return;
+        }
+
+        case 0x39: {
+            if (tagged(rs)) return fail();
+
+            return;
+        }
+    }
+
+    if (tagged(rs) || tagged(rt) || tagged(rd))
+        fail();
+}
+
+static bool idle_execute(Ee* ee, bool* in_delay, IdleTags* tags) {
+    uint32_t pc = ee->pc;
+    uint32_t phys;
+
+    translate_virt(ee, pc, &phys);
+
+    uint32_t opcode = (uint32_t)ee->bus.read32(ee->bus.udata, phys);
+
+    Instruction i = decode(opcode);
+
+    bool allowed = idle_instruction_allowed(ee, opcode, *in_delay);
+    bool raises = i.id == I_SYSCALL || i.id == I_BREAK;
+
+    int out = -1;
+    uint8_t out_kind = IDLE_TAG_INVARIANT;
+    int64_t out_delta = 0;
+    uint128_t before[32];
+
+    if (tags) {
+        memcpy(before, ee->r, sizeof(before));
+
+        idle_tag_instruction(tags, ee, opcode, &out, &out_kind, &out_delta);
+    }
+
+    ee->delay_slot = *in_delay;
+    ee->branch = 0;
+    ee->prev_pc = pc;
+    ee->opcode = opcode;
+    ee->pc = ee->next_pc;
+    ee->next_pc += 4;
+    ee->exit_req = 0;
+    ee->exception = 0;
+
+    if (raises)
+        ee->pc = pc;
+
+    i.func(ee, i);
+
+    ee->total_cycles++;
+    ee->count++;
+
+    ee->r[0] = { 0 };
+
+    if (tags) {
+        for (int r = 1; r < 32; r++) {
+            if (r == out) {
+                tags->kind[r] = out_kind;
+                tags->delta[r] = out_delta;
+            } else if (memcmp(&before[r], &ee->r[r], sizeof(uint128_t))) {
+                tags->kind[r] = IDLE_TAG_INVARIANT;
+                tags->delta[r] = 0;
+            }
+        }
+    }
+
+    *in_delay = false;
+
+    if (ee->exit_req || i.id == I_ERET) {
+        ee->pc = ee->next_pc;
+        ee->next_pc = ee->pc + 4;
+    } else if (raises) {
+        ee->pc = pc + 4;
+    } else if (i.branch == 3 && ee->exception) {
+        ee->exception = 0;
+        ee->pc = ee->next_pc;
+        ee->next_pc = ee->pc + 4;
+    } else if (i.branch == 1 || i.branch == 3) {
+        *in_delay = true;
+    }
+
+    ee->exit_req = 0;
+
+    return allowed;
+}
+
+static uint32_t idle_word_value(Ee* ee, uint32_t key) {
+    if (key & WAIT_LOOP_SPR_TAG)
+        return ram::read32(ee->spr, key & 0x3fff);
+
+    return (uint32_t)ee->bus.read32(ee->bus.udata, key);
+}
+
+static bool idle_memory_intact(Ee* ee, const WaitLoopEntry& entry) {
+    for (size_t k = 0; k < entry.addrs.size(); k++) {
+        if (idle_word_value(ee, entry.addrs[k]) != entry.values[k])
+            return false;
+    }
+
+    return true;
+}
+
+static bool idle_mmio_intact(Ee* ee, const WaitLoopEntry& entry) {
+    for (const WaitLoopMmio& m : entry.mmio) {
+        if (idle_mmio_value(ee, m.phys, m.bytes) != m.value)
+            return false;
+    }
+
+    return true;
+}
+
+static void back_off_wait_loop(WaitLoop& ep) {
+    ep.streak = 0;
+    ep.cooldown = ep.backoff;
+    ep.backoff = ep.backoff * 2 > WAIT_LOOP_MAX_BACKOFF ? WAIT_LOOP_MAX_BACKOFF : ep.backoff * 2;
+}
+
+static void release_idle_pages(WaitLoop& ep) {
+    if (!ep.entry)
+        return;
+
+    for (uint32_t page : ep.entry->page_list)
+        ep.pages[page] = 0;
+
+    ep.entry = nullptr;
+}
+
+static void activate_wait_loop(Ee* ee, WaitLoopEntry* entry, bool counting) {
+    WaitLoop& ep = ee->wait_loop;
+
+    size_t page_count = ((size_t)ee->ram_size + 1) / MIN_PAGESIZE;
+
+    if (ep.pages.size() != page_count)
+        ep.pages.assign(page_count, 0);
+
+    release_idle_pages(ep);
+
+    for (uint32_t page : entry->page_list)
+        ep.pages[page] = 1;
+
+    entry->stamp = ++ep.stamp;
+
+    ep.entry = entry;
+    ep.counting = counting;
+    ep.attempt = false;
+    ep.streak = 0;
+    ep.credit = 0;
+    ep.dirty = false;
+    ep.slices_since_check = 0;
+    ep.last_catch_up = ee->total_cycles;
+    ep.active = true;
+
+    if (!counting)
+        ep.backoff = WAIT_LOOP_MIN_BACKOFF;
+}
+
+static bool fill_idle_entry(Ee* ee, WaitLoopEntry* entry) {
+    WaitLoop& ep = ee->wait_loop;
+
+    entry->addrs.clear();
+    entry->values.clear();
+    entry->page_list.clear();
+    entry->mmio = ep.mmio_trace;
+    entry->spr_touched = false;
+    entry->confirmed = false;
+    entry->stamp = 0;
+
+    for (const auto& [key, value] : ep.trace) {
+        if (idle_word_value(ee, key) != value)
+            return false;
+
+        entry->addrs.push_back(key);
+        entry->values.push_back(value);
+
+        if (key & WAIT_LOOP_SPR_TAG) {
+            entry->spr_touched = true;
+
+            continue;
+        }
+
+        uint32_t page = key / MIN_PAGESIZE;
+
+        if (std::find(entry->page_list.begin(), entry->page_list.end(), page) == entry->page_list.end())
+            entry->page_list.push_back(page);
+    }
+
+    return idle_mmio_intact(ee, *entry);
+}
+
+static int find_cached_wait_loop(Ee* ee) {
+    WaitLoop& ep = ee->wait_loop;
+
+    for (size_t k = 0; k < ep.entries.size(); k++) {
+        const WaitLoopEntry& entry = ep.entries[k];
+
+        if (entry.start.pc != ee->pc)
+            continue;
+
+        if (idle_state_matches(ee, &entry.start) && idle_memory_intact(ee, entry) && idle_mmio_intact(ee, entry))
+            return (int)k;
+    }
+
+    return -1;
+}
+
+static int store_wait_loop(Ee* ee, uint64_t period) {
+    WaitLoop& ep = ee->wait_loop;
+
+    WaitLoopEntry entry;
+
+    if (!fill_idle_entry(ee, &entry))
+        return -1;
+
+    entry.start = ep.start;
+    entry.period = period;
+
+    if (ep.entry && !ep.counting)
+        release_idle_pages(ep);
+
+    if (ep.entries.size() < WAIT_LOOP_CACHE_SIZE) {
+        ep.entries.push_back(std::move(entry));
+
+        return (int)ep.entries.size() - 1;
+    }
+
+    int oldest = 0;
+
+    for (size_t k = 1; k < ep.entries.size(); k++) {
+        if (ep.entries[k].stamp < ep.entries[oldest].stamp)
+            oldest = (int)k;
+    }
+
+    ep.entries[oldest] = std::move(entry);
+
+    return oldest;
+}
+
+static void discard_wait_loop(Ee* ee, int index) {
+    WaitLoop& ep = ee->wait_loop;
+
+    static int warnings = 0;
+
+    if (warnings < 16) {
+        warnings++;
+
+        iris_warning(ee, "ee: wait loop at {:08x} did not repeat under the JIT, discarding it", ep.entries[index].start.pc);
+    }
+
+    if (ep.entry && !ep.counting)
+        release_idle_pages(ep);
+
+    ep.entries.erase(ep.entries.begin() + index);
+
+    back_off_wait_loop(ep);
+}
+
+static int confirm_wait_loop(Ee* ee, int index) {
+    WaitLoop& ep = ee->wait_loop;
+
+    uint64_t period = ep.entries[index].period;
+    uint64_t limit = period * 2 + 64;
+    uint64_t done = 0;
+
+    ep.start.pc = ep.entries[index].start.pc;
+    ep.confirming = true;
+
+    while (done < limit && !ee->bp_hit && !idle_irq_raised(ee)) {
+        int cycles = _ee_run_block(ee, (int)(limit - done), BLOCK_MAX_INSTRS);
+
+        if (cycles <= 0)
+            break;
+
+        done += (uint64_t)cycles;
+
+        if (ee->pc == ep.start.pc && idle_state_matches(ee, &ep.entries[index].start))
+            break;
+    }
+
+    ep.confirming = false;
+
+    const WaitLoopEntry& entry = ep.entries[index];
+
+    if (ee->pc != entry.start.pc && (idle_irq_raised(ee) || ee->bp_hit))
+        return (int)done;
+
+    bool repeated = ee->pc == entry.start.pc
+        && idle_state_matches(ee, &entry.start)
+        && idle_memory_intact(ee, entry)
+        && idle_mmio_intact(ee, entry);
+
+    if (!repeated) {
+
+        discard_wait_loop(ee, index);
+
+        return (int)done;
+    }
+
+    ep.entries[index].confirmed = true;
+    ep.entries[index].period = done;
+
+    activate_wait_loop(ee, &ep.entries[index], false);
+
+    return (int)done;
+}
+
+static int verify_wait_loop(Ee* ee) {
+    WaitLoop& ep = ee->wait_loop;
+
+    ep.attempt = false;
+
+    if (ee->fmv_skip || ee->breakpoint_count || idle_irq_raised(ee)) {
+        back_off_wait_loop(ep);
+
+        return 0;
+    }
+
+    ee->next_pc = ee->pc + 4;
+
+    int cached = find_cached_wait_loop(ee);
+
+    if (cached >= 0) {
+
+        if (!ep.entries[cached].confirmed)
+            return confirm_wait_loop(ee, cached);
+
+        activate_wait_loop(ee, &ep.entries[cached], false);
+
+        return 0;
+    }
+
+    if (ep.streak < WAIT_LOOP_VERIFY_STREAK)
+        return 0;
+
+    uint64_t start_cycles = ee->total_cycles;
+
+    capture_idle_state(ee, &ep.start);
+
+    ep.trace.clear();
+    ep.mmio_trace.clear();
+    ep.trace_failed = false;
+    ep.tracing = true;
+
+    bool in_delay = false;
+    bool closed = false;
+    int steps = 0;
+
+    while (true) {
+        if (!idle_execute(ee, &in_delay, nullptr))
+            ep.trace_failed = true;
+
+        steps++;
+
+        if (in_delay)
+            continue;
+
+        if (ep.trace_failed || steps >= WAIT_LOOP_MAX_STEPS)
+            break;
+
+        if (ee->pc == ep.start.pc && idle_state_matches(ee, &ep.start)) {
+            closed = true;
+
+            break;
+        }
+    }
+
+    ep.tracing = false;
+
+    int executed = (int)(ee->total_cycles - start_cycles);
+
+    int index = -1;
+
+    if (closed && !ep.trace_failed && !idle_irq_raised(ee))
+        index = store_wait_loop(ee, (uint64_t)executed);
+
+    ep.trace.clear();
+    ep.mmio_trace.clear();
+
+    if (index < 0) {
+        back_off_wait_loop(ep);
+
+        return executed;
+    }
+
+    ep.streak = 0;
+
+    return executed;
+}
+
+static bool idle_run_iteration(Ee* ee, uint32_t head, IdleTags* tags) {
+    WaitLoop& ep = ee->wait_loop;
+
+    bool in_delay = false;
+    int steps = 0;
+
+    while (true) {
+        if (!idle_execute(ee, &in_delay, tags))
+            ep.trace_failed = true;
+
+        steps++;
+
+        if (in_delay)
+            continue;
+
+        if (ep.trace_failed || (tags && tags->failed))
+            return false;
+
+        if (ee->pc == head)
+            return true;
+
+        if (steps >= WAIT_LOOP_COUNTED_MAX_STEPS)
+            return false;
+    }
+}
+
+static bool idle_states_step(const WaitLoopState* a, const WaitLoopState* b, int64_t* delta) {
+    WaitLoopState y = *b;
+
+    for (int r = 0; r < 32; r++) {
+        if (a->r[r].u64[1] != y.r[r].u64[1])
+            return false;
+
+        delta[r] = (int64_t)(y.r[r].u64[0] - a->r[r].u64[0]);
+
+        y.r[r].u64[0] = a->r[r].u64[0];
+    }
+
+    return idle_state_equal(&y, a);
+}
+
+static WaitLoopCountedFailure* find_counted_failure(WaitLoop& ep, uint32_t pc) {
+    for (WaitLoopCountedFailure& f : ep.counted_fails) {
+        if (f.backoff && f.pc == pc)
+            return &f;
+    }
+
+    return nullptr;
+}
+
+static bool counted_wait_loop_allowed(const Ee* ee, WaitLoop& ep, uint32_t pc) {
+    if (ee->total_cycles < ep.counted_next_attempt)
+        return false;
+
+    WaitLoopCountedFailure* f = find_counted_failure(ep, pc);
+
+    return !f || ee->total_cycles >= f->until;
+}
+
+static void back_off_counted_wait_loop(Ee* ee, WaitLoop& ep, uint32_t pc) {
+    WaitLoopCountedFailure* f = find_counted_failure(ep, pc);
+
+    if (!f) {
+        f = &ep.counted_fails[ep.counted_fail_next];
+
+        ep.counted_fail_next = (ep.counted_fail_next + 1) % WAIT_LOOP_COUNTED_FAIL_SLOTS;
+
+        f->pc = pc;
+        f->backoff = WAIT_LOOP_COUNTED_MIN_BACKOFF;
+    } else {
+        f->backoff = f->backoff * 2 > WAIT_LOOP_COUNTED_MAX_BACKOFF ? WAIT_LOOP_COUNTED_MAX_BACKOFF : f->backoff * 2;
+    }
+
+    f->until = ee->total_cycles + f->backoff;
+
+    ep.counted_next_attempt = ee->total_cycles + WAIT_LOOP_COUNTED_GLOBAL_COOLDOWN;
+}
+
+static void forgive_counted_wait_loop(WaitLoop& ep, uint32_t pc) {
+    WaitLoopCountedFailure* f = find_counted_failure(ep, pc);
+
+    if (f)
+        f->backoff = 0;
+}
+
+static int verify_counted_wait_loop(Ee* ee) {
+    WaitLoop& ep = ee->wait_loop;
+
+    uint32_t head = ee->pc;
+    uint64_t start_cycles = ee->total_cycles;
+
+    ee->next_pc = ee->pc + 4;
+
+    WaitLoopState s0;
+    WaitLoopState s1;
+    WaitLoopState s2;
+
+    int64_t first[32];
+    int64_t second[32];
+
+    IdleTags tags;
+
+    capture_idle_state(ee, &s0);
+
+    ep.trace.clear();
+    ep.mmio_trace.clear();
+    ep.trace_failed = false;
+    ep.tracing = true;
+
+    bool ok = idle_run_iteration(ee, head, nullptr);
+
+    if (ok) {
+        capture_idle_state(ee, &s1);
+
+        ok = idle_states_step(&s0, &s1, first);
+    }
+
+    if (ok) {
+        for (int r = 0; r < 32; r++) {
+            tags.kind[r] = first[r] ? IDLE_TAG_AFFINE : IDLE_TAG_INVARIANT;
+            tags.delta[r] = first[r];
+        }
+
+        tags.limit = UINT64_MAX;
+        tags.failed = false;
+
+        ok = idle_run_iteration(ee, head, &tags);
+    }
+
+    if (ok) {
+        capture_idle_state(ee, &s2);
+
+        ok = idle_states_step(&s1, &s2, second);
+
+        for (int r = 0; ok && r < 32; r++) {
+            if (second[r] != first[r])
+                ok = false;
+
+            if (tags.kind[r] == IDLE_TAG_AFFINE ? tags.delta[r] != first[r] : first[r] != 0)
+                ok = false;
+        }
+    }
+
+    ep.tracing = false;
+
+    int executed = (int)(ee->total_cycles - start_cycles);
+
+    ok = ok && !idle_irq_raised(ee) && tags.limit >= 2 && fill_idle_entry(ee, &ep.counted);
+
+    ep.trace.clear();
+    ep.mmio_trace.clear();
+
+    if (!ok) {
+        back_off_counted_wait_loop(ee, ep, head);
+
+        return executed;
+    }
+
+    WaitLoopState expected = s2;
+
+    for (int r = 0; r < 32; r++)
+        expected.r[r].u64[0] += (uint64_t)first[r];
+
+    uint64_t limit = (uint64_t)executed * 2 + 64;
+    uint64_t done = 0;
+
+    while (done < limit && !ee->bp_hit && !idle_irq_raised(ee)) {
+        int cycles = _ee_run_block(ee, 1, BLOCK_MAX_INSTRS);
+
+        if (cycles <= 0)
+            break;
+
+        done += (uint64_t)cycles;
+
+        if (ee->pc == head)
+            break;
+    }
+
+    bool repeated = ee->pc == head
+        && idle_state_matches(ee, &expected)
+        && idle_memory_intact(ee, ep.counted)
+        && idle_mmio_intact(ee, ep.counted);
+
+    if (!repeated) {
+        back_off_counted_wait_loop(ee, ep, head);
+
+        return executed + (int)done;
+    }
+
+    if (ep.entry && !ep.counting)
+        release_idle_pages(ep);
+
+    ep.counted.start = expected;
+    ep.counted.period = done;
+    ep.counted.confirmed = true;
+
+    memcpy(ep.delta, first, sizeof(ep.delta));
+
+    ep.remaining = tags.limit - 1;
+
+    forgive_counted_wait_loop(ep, head);
+
+    activate_wait_loop(ee, &ep.counted, true);
+
+    return executed + (int)done;
+}
+
+static bool wait_loop_holds(Ee* ee) {
+    WaitLoop& ep = ee->wait_loop;
+
+    if (idle_irq_raised(ee) || ee->breakpoint_count)
+        return false;
+
+    if (ee->cpcond0 != ep.entry->start.cpcond0 || (ee->cause & 0xff00) != (ep.entry->start.cop0_r[13] & 0xff00))
+        return false;
+
+    if (!idle_mmio_intact(ee, *ep.entry))
+        return false;
+
+    if (ep.dirty || ++ep.slices_since_check >= WAIT_LOOP_RECHECK_SLICES) {
+        ep.dirty = false;
+        ep.slices_since_check = 0;
+
+        if (!idle_memory_intact(ee, *ep.entry))
+            return false;
+    }
+
+    if (ee->total_cycles - ep.last_catch_up >= WAIT_LOOP_CATCH_UP_CYCLES) {
+        ep.last_catch_up = ee->total_cycles;
+
+        catch_up_vu1_worker(ee);
+    }
+
+    return !idle_irq_raised(ee);
+}
+
+static int end_wait_loop(Ee* ee) {
+    WaitLoop& ep = ee->wait_loop;
+
+    ep.active = false;
+    ep.streak = 0;
+    ep.slice_repeats = 0;
+
+    uint64_t phase = ep.credit;
+
+    ep.credit = 0;
+
+    if (!phase)
+        return 0;
+
+    ee->total_cycles -= phase;
+    ee->count -= (uint32_t)phase;
+
+    ep.replaying = true;
+
+    uint64_t done = 0;
+
+    while (done < phase && !ee->bp_hit) {
+        int cycles = _ee_run_block(ee, (int)(phase - done), BLOCK_MAX_INSTRS);
+
+        if (cycles <= 0)
+            break;
+
+        done += (uint64_t)cycles;
+    }
+
+    ep.replaying = false;
+
+    return done > phase ? (int)(done - phase) : 0;
+}
+
+static int skip_wait_loop(Ee* ee, int max_cycles) {
+    WaitLoop& ep = ee->wait_loop;
+
+    if (max_cycles < 1)
+        max_cycles = 1;
+
+    uint64_t period = ep.entry->period;
+    uint64_t credit = ep.credit + (uint64_t)max_cycles;
+
+    ee->total_cycles += max_cycles;
+    ee->count += max_cycles;
+
+    profile::count(profile::EE_IDLE_LOOP_SKIPPED_CYCLES, (uint64_t)max_cycles);
+
+    if (!ep.counting) {
+        ep.credit = credit % period;
+
+        return max_cycles;
+    }
+
+    uint64_t iterations = credit / period;
+
+    if (iterations > ep.remaining)
+        iterations = ep.remaining;
+
+    for (int r = 1; r < 32; r++)
+        ee->r[r].u64[0] += (uint64_t)ep.delta[r] * iterations;
+
+    ep.remaining -= iterations;
+
+    uint64_t leftover = credit - iterations * period;
+
+    if (ep.remaining) {
+        ep.credit = leftover;
+
+        return max_cycles;
+    }
+
+    uint64_t unconsumed = leftover < (uint64_t)max_cycles ? leftover : (uint64_t)max_cycles;
+
+    ee->total_cycles -= unconsumed;
+    ee->count -= (uint32_t)unconsumed;
+
+    ep.credit = leftover - unconsumed;
+
+    return (int)((uint64_t)max_cycles - unconsumed) + end_wait_loop(ee);
 }
 
 bool breakpoint_hit(Ee* ee) {
@@ -8985,12 +10426,25 @@ void set_breakpoints(Ee* ee, const uint32_t* addrs, int count) {
     ee->bp_hit = false;
     ee->bp_skip_pc = 0xffffffff;
 
+    ee->wait_loop.active = false;
+    ee->wait_loop.credit = 0;
+
     purge_cache(ee);
 }
 
 int run_block(Ee* ee, int max_cycles) {
     if (ee->bp_hit)
         return 0;
+
+    if (ee->wait_loop.active) {
+        if (wait_loop_holds(ee))
+            return skip_wait_loop(ee, max_cycles);
+
+        int overshoot = end_wait_loop(ee);
+
+        if (overshoot)
+            return overshoot;
+    }
 
     if (is_irq_pending(ee)) {
         int cycles = _ee_run_block(ee, 1, 4);
@@ -9021,12 +10475,41 @@ int run_block(Ee* ee, int max_cycles) {
         return 16*64;
     }
 
+    if (ee->wait_loop.attempt && ee->pc == wait_loop_vector(ee)) {
+        int cycles = verify_wait_loop(ee);
+
+        if (cycles > 0 || ee->wait_loop.active)
+            return cycles;
+    }
+
+    WaitLoop& ep = ee->wait_loop;
+
+    if (ee->pc == ep.last_slice_pc) {
+        if (ep.slice_repeats < WAIT_LOOP_COUNTED_REPEATS)
+            ep.slice_repeats++;
+    } else {
+        ep.last_slice_pc = ee->pc;
+        ep.slice_repeats = 0;
+    }
+
+    if (ep.slice_repeats >= WAIT_LOOP_COUNTED_REPEATS && !ee->fmv_skip && !ee->breakpoint_count && !idle_irq_raised(ee) && counted_wait_loop_allowed(ee, ep, ee->pc)) {
+        ep.slice_repeats = 0;
+
+        int cycles = verify_counted_wait_loop(ee);
+
+        if (cycles > 0 || ep.active)
+            return cycles;
+    }
+
     // max_cycles is the remaining timeslice budget; chain blocks up to it.
     return _ee_run_block(ee, max_cycles, BLOCK_MAX_INSTRS);
 }
 
 int step(Ee* ee) {
     static Instruction i;
+
+    ee->wait_loop.active = false;
+    ee->wait_loop.credit = 0;
 
     ee->delay_slot = ee->branch;
     ee->branch = 0;
@@ -9077,6 +10560,9 @@ ram::Ram* get_spr(Ee* ee) {
 }
 
 void set_fmv_skip(Ee* ee, int v) {
+    if (ee->fmv_skip != v)
+        ee->pending_purge = true;
+
     ee->fmv_skip = v;
 }
 
@@ -9134,6 +10620,9 @@ void invalidate_block(Ee* ee, uint32_t addr) {
 
     profile::count(profile::EE_DMA_INVALIDATIONS);
 
+    if (ee->wait_loop.active && page < ee->wait_loop.pages.size() && ee->wait_loop.pages[page])
+        ee->wait_loop.dirty = true;
+
     if (!ee->block_cache[page].valid || ee->block_cache[page].dirty) {
         return;
     }
@@ -9148,6 +10637,11 @@ void invalidate_range(Ee* ee, uint32_t addr, uint32_t size) {
     for (uint32_t i = 0; i < size; i += MIN_PAGESIZE) {
         invalidate_block(ee, addr + i);
     }
+}
+
+void invalidate_spr(Ee* ee) {
+    if (ee->wait_loop.active && ee->wait_loop.entry->spr_touched)
+        ee->wait_loop.dirty = true;
 }
 
 }

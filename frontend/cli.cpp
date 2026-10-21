@@ -520,7 +520,7 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->remember_window_size, v.flag); } },
     { "overlay", 0, FLAG, nullptr, "Show the performance overlay",
         [](Instance* i, const Value& v) { set(i, i->ui.show_overlay, v.flag); } },
-    { "codeview-scheme", 0, ENUM, "NAME", "Disassembly colour scheme",
+    { "codeview-scheme", 0, ENUM, "NAME", "Disassembly color scheme",
         [](Instance* i, const Value& v) { set(i, i->ui.codeview_color_scheme, (int)v.integer); }, codeview_values },
     { "codeview-font-scale", 0, NUMBER, "F", "Disassembly font scale",
         [](Instance* i, const Value& v) { set(i, i->ui.codeview_font_scale, (float)v.number); } },

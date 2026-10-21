@@ -47,6 +47,7 @@
 #include "net.hpp"
 #include "slirp.hpp"
 #include "profiler.hpp"
+#include "profile_counters.hpp"
 
 // SDL3 includes
 #include <SDL3/SDL.h>
@@ -690,6 +691,12 @@ SDL_AppResult update(Instance* iris) {
 
     if (profiler::is_running()) {
         iris->profiling.frames++;
+
+        uint64_t kicks = profile::counters[profile::VIF1_DMA_KICKS];
+        uint64_t delta = kicks - iris->profiling.last_vif1_kicks;
+
+        iris->profiling.vif1_kick_frames[delta < 3 ? delta : 3]++;
+        iris->profiling.last_vif1_kicks = kicks;
     }
 
     // printf("ee_stats: cache: hits=%d misses=%d idle skips=%d\n", iris->ps2->ee->cache_hits, iris->ps2->ee->cache_misses, iris->ps2->ee->idle_skips);
@@ -1162,6 +1169,15 @@ static void write_profiling_header(Instance* iris, FILE* file) {
         iris->vu_region_limit
     );
 
+    const uint64_t* kicks = iris->profiling.vif1_kick_frames;
+
+    fprintf(file, "vsyncs by vif1 dma kicks: 0: %llu, 1: %llu, 2: %llu, 3+: %llu\n",
+        (unsigned long long)kicks[0],
+        (unsigned long long)kicks[1],
+        (unsigned long long)kicks[2],
+        (unsigned long long)kicks[3]
+    );
+
     fprintf(file, "\n");
 }
 
@@ -1172,6 +1188,10 @@ void start_profiling(Instance* iris) {
 
     iris->profiling.name = profiling_session_name(iris);
     iris->profiling.frames = 0;
+    iris->profiling.last_vif1_kicks = 0;
+
+    for (uint64_t& count : iris->profiling.vif1_kick_frames)
+        count = 0;
     iris->profiling.start = std::chrono::steady_clock::now();
 
     profiler::start();

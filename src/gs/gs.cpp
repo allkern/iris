@@ -30,6 +30,7 @@
 #include "gs.hpp"
 #include "ee/intc.hpp"
 #include "iop/intc.hpp"
+#include "profile_counters.hpp"
 
 namespace iris::gs {
 
@@ -581,17 +582,17 @@ static inline void unpack_dispfb2(Gs* gs) {
 
 void write64(Gs* gs, uint32_t addr, uint64_t data) {
     switch (addr) {
-        case 0x12000000: gs->pmode = data; return;
+        case 0x12000000: if (gs->pmode != data) profile::count(profile::GS_DISPLAY_REGISTER_CHANGES); gs->pmode = data; return;
         case 0x12000010: gs->smode1 = data; return;
         case 0x12000020: gs->smode2 = data; return;
         case 0x12000030: gs->srfsh = data; return;
         case 0x12000040: gs->synch1 = data; return;
         case 0x12000050: gs->synch2 = data; return;
         case 0x12000060: gs->syncv = data; return;
-        case 0x12000070: gs->dispfb1 = data; unpack_dispfb1(gs); return;
-        case 0x12000080: gs->display1 = data; return;
-        case 0x12000090: gs->dispfb2 = data; unpack_dispfb2(gs); return;
-        case 0x120000A0: gs->display2 = data; return;
+        case 0x12000070: if (gs->dispfb1 != data) profile::count(profile::GS_DISPLAY_REGISTER_CHANGES); gs->dispfb1 = data; unpack_dispfb1(gs); return;
+        case 0x12000080: if (gs->display1 != data) profile::count(profile::GS_DISPLAY_REGISTER_CHANGES); gs->display1 = data; return;
+        case 0x12000090: if (gs->dispfb2 != data) profile::count(profile::GS_DISPLAY_REGISTER_CHANGES); gs->dispfb2 = data; unpack_dispfb2(gs); return;
+        case 0x120000A0: if (gs->display2 != data) profile::count(profile::GS_DISPLAY_REGISTER_CHANGES); gs->display2 = data; return;
         case 0x120000B0: gs->extbuf = data; return;
         case 0x120000C0: gs->extdata = data; return;
         case 0x120000D0: gs->extwrite = data; return;
@@ -1100,6 +1101,8 @@ bool signal_stalled(Gs* gs) {
 }
 
 int apply_finish(Gs* gs, uint64_t data) {
+    profile::count(profile::GS_FINISH_WRITES);
+
     if (gs->finish_pending) {
         gs->finish_queued++;
 

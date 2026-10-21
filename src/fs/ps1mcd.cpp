@@ -489,14 +489,14 @@ int get_save_info(Fs* fs, const char* path, SaveInfo* out) {
 
         for (int p = 0; p < 16 * 16; p++) {
             uint8_t index = (p & 1) ? (bitmap[p / 2] >> 4) : (bitmap[p / 2] & 0x0f);
-            uint16_t colour = clut[index];
+            uint16_t color = clut[index];
 
             uint8_t* px = out->icon[f] + p * 4;
 
-            px[0] = (uint8_t)((colour & 0x1f) << 3);
-            px[1] = (uint8_t)(((colour >> 5) & 0x1f) << 3);
-            px[2] = (uint8_t)(((colour >> 10) & 0x1f) << 3);
-            px[3] = (index || (colour & 0x8000)) ? 0xff : 0x00;
+            px[0] = (uint8_t)((color & 0x1f) << 3);
+            px[1] = (uint8_t)(((color >> 5) & 0x1f) << 3);
+            px[2] = (uint8_t)(((color >> 10) & 0x1f) << 3);
+            px[3] = (index || (color & 0x8000)) ? 0xff : 0x00;
         }
     }
 
