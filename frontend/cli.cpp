@@ -160,12 +160,17 @@ static const EnumValue screenshot_mode_values[] = {
     { nullptr, 0 }
 };
 
-static const EnumValue ssaa_values[] = {
-    { "off", 0 },
+static const EnumValue internal_resolution_values[] = {
+    { "1x", 0 },
     { "2x", 1 },
     { "4x", 2 },
-    { "8x", 3 },
-    { "16x", 4 },
+    { nullptr, 0 }
+};
+
+static const EnumValue color_depth_values[] = {
+    { "accurate", 0 },
+    { "no-dither", 1 },
+    { "32bit", 2 },
     { nullptr, 0 }
 };
 
@@ -418,15 +423,20 @@ static const Option g_options[] = {
 
     { nullptr, 0, FLAG, nullptr, "Hardware renderer" },
 
-    { "super-sampling", 0, ENUM, "N", "Super sampling factor",
+    { "internal-resolution", 0, ENUM, "RES", "Internal rendering resolution",
         [](Instance* i, const Value& v) {
-            set(i, i->hardware_backend_config.super_sampling, (int)v.integer);
+            set(i, i->hardware_backend_config.internal_resolution, (int)v.integer);
 
-            if (v.integer)
+            if (v.integer) {
                 set(i, i->hardware_backend_config.force_progressive, true);
-        }, ssaa_values },
-    { "super-sampled-quads", 0, FLAG, nullptr, "Super sample UI and sprite quads too",
-        [](Instance* i, const Value& v) { set(i, i->hardware_backend_config.super_sampled_quads, v.flag); } },
+            }
+        }, internal_resolution_values },
+    { "ssaa", 0, FLAG, nullptr, "Supersample on top of the internal resolution (1x and 2x only)",
+        [](Instance* i, const Value& v) { set(i, i->hardware_backend_config.ssaa, v.flag); } },
+    { "upscale-2d", 0, FLAG, nullptr, "Upscale 2D elements",
+        [](Instance* i, const Value& v) { set(i, i->hardware_backend_config.upscale_2d, v.flag); } },
+    { "color-depth", 0, ENUM, "MODE", "16-bit framebuffer color depth",
+        [](Instance* i, const Value& v) { set(i, i->hardware_backend_config.color_depth, (int)v.integer); }, color_depth_values },
     { "force-progressive", 0, FLAG, nullptr, "Force progressive scan",
         [](Instance* i, const Value& v) { set(i, i->hardware_backend_config.force_progressive, v.flag); } },
     { "overscan", 0, FLAG, nullptr, "Show the overscan area",

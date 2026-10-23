@@ -30,8 +30,10 @@
 namespace iris::gs::renderer {
 
 struct HardwareConfig {
-    int super_sampling = 0;
-    bool super_sampled_quads = false;
+    int internal_resolution = 0;
+    bool ssaa = false;
+    bool upscale_2d = false;
+    int color_depth = 0;
     bool force_progressive = false;
     bool overscan = false;
     bool crtc_offsets = false;

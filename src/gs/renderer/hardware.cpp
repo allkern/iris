@@ -67,6 +67,32 @@ static void init_analog_video(state* ctx) {
     ctx->crt_filter.init(ctx->granite_device);
 }
 
+static SuperSampling get_super_sampling(state* ctx) {
+    if (ctx->config.enable_analog_video) {
+        return SuperSampling::X1;
+    }
+
+    switch (ctx->config.internal_resolution) {
+        case 1: return ctx->config.ssaa ? SuperSampling::X16 : SuperSampling::X4;
+        case 2: return SuperSampling::X16;
+    }
+
+    return ctx->config.ssaa ? SuperSampling::X4 : SuperSampling::X1;
+}
+
+static void apply_super_sampling(state* ctx) {
+    ctx->iface.set_super_sampling_rate(get_super_sampling(ctx), true, true, ctx->config.upscale_2d);
+}
+
+static void apply_color_depth(state* ctx) {
+    switch (ctx->config.color_depth) {
+        case 1: ctx->iface.set_color_depth(ColorDepth::NoDither); return;
+        case 2: ctx->iface.set_color_depth(ColorDepth::Force32); return;
+    }
+
+    ctx->iface.set_color_depth(ColorDepth::Accurate);
+}
+
 bool init(void* udata, const CreateInfo& info) {
     state* ctx = static_cast<state*>(udata);
 
@@ -103,10 +129,10 @@ bool init(void* udata, const CreateInfo& info) {
     ctx->granite_device.init_frame_contexts(4);
 
     GSOptions opts = {};
-    opts.super_sampling = (SuperSampling)ctx->config.super_sampling;
+    opts.super_sampling = get_super_sampling(ctx);
     opts.ordered_super_sampling = true;
     opts.super_sampled_textures = true;
-    opts.super_sampled_quads = ctx->config.super_sampled_quads;
+    opts.super_sampled_quads = ctx->config.upscale_2d;
     opts.dynamic_super_sampling = true;
 
     if (!ctx->iface.init(&ctx->granite_device, opts)) {
@@ -124,21 +150,8 @@ bool init(void* udata, const CreateInfo& info) {
 
     ctx->iface.set_hacks(hacks);
 
-    if (ctx->config.super_sampling == 0) {
-        ctx->iface.set_super_sampling_rate((SuperSampling)0, false, false);
-    } else if (!ctx->config.enable_analog_video) {
-        SuperSampling super_sampling;
-
-        switch (ctx->config.super_sampling) {
-            case 1: super_sampling = SuperSampling::X2; break;
-            case 2: super_sampling = SuperSampling::X4; break;
-            case 3: super_sampling = SuperSampling::X8; break;
-            case 4: super_sampling = SuperSampling::X16; break;
-            default: super_sampling = (SuperSampling)0; break;
-        }
-
-        ctx->iface.set_super_sampling_rate(super_sampling, true, true, ctx->config.super_sampled_quads);
-    }
+    apply_super_sampling(ctx);
+    apply_color_depth(ctx);
 
     if (ctx->config.enable_analog_video) {
         init_analog_video(ctx);
@@ -220,9 +233,10 @@ Image get_frame(void* udata) {
         info.phase ^= 1;
     }
 
-    if (ctx->config.super_sampling) {
+    if (get_super_sampling(ctx) != SuperSampling::X1) {
         info.raw_circuit_scanout = true;
-        info.high_resolution_scanout = true;
+        info.high_resolution_scanout = ctx->config.internal_resolution != 0;
+        info.quad_resolution_scanout = ctx->config.internal_resolution == 2;
         info.anti_blur = true;
     } else {
         info.raw_circuit_scanout = false;
@@ -235,10 +249,6 @@ Image get_frame(void* udata) {
     info.crtc_offsets = ctx->config.crtc_offsets;
     info.dst_access = VK_ACCESS_2_SHADER_SAMPLED_READ_BIT;
     info.dst_stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    // Granite is synchronization2-native and asserts on the legacy layouts.
-    // READ_ONLY_OPTIMAL is also the combination parallel-gs fast-paths: with
-    // FRAGMENT_SHADER/SHADER_SAMPLED_READ it can skip its exit barrier because
-    // the scanout barrier already established that dependency.
     info.dst_layout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL;
     info.adapt_to_internal_horizontal_resolution = true;
 
@@ -325,21 +335,8 @@ void set_config(void* udata, void* config) {
 
     ctx->iface.set_hacks(hacks);
 
-    if (ctx->config.super_sampling == 0) {
-        ctx->iface.set_super_sampling_rate((SuperSampling)0, false, false);
-    } else if (!ctx->config.enable_analog_video) {
-        SuperSampling super_sampling;
-
-        switch (ctx->config.super_sampling) {
-            case 1: super_sampling = SuperSampling::X2; break;
-            case 2: super_sampling = SuperSampling::X4; break;
-            case 3: super_sampling = SuperSampling::X8; break;
-            case 4: super_sampling = SuperSampling::X16; break;
-            default: super_sampling = (SuperSampling)0; break;
-        }
-
-        ctx->iface.set_super_sampling_rate(super_sampling, true, true, ctx->config.super_sampled_quads);
-    }
+    apply_super_sampling(ctx);
+    apply_color_depth(ctx);
 
     if (ctx->config.enable_analog_video) {
         init_analog_video(ctx);

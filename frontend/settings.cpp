@@ -299,8 +299,44 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->screenshot_shader_processing = screenshots["shader_processing"].value_or(false);
 
     auto hardware = tbl["hardware"];
-    iris->hardware_backend_config.super_sampling = hardware["super_sampling"].value_or(0);
-    iris->hardware_backend_config.super_sampled_quads = hardware["super_sampled_quads"].value_or(false);
+
+    if (hardware["internal_resolution"]) {
+        iris->hardware_backend_config.internal_resolution = hardware["internal_resolution"].value_or(0);
+        iris->hardware_backend_config.ssaa = hardware["ssaa"].value_or(false);
+    } else {
+        int legacy_super_sampling = hardware["super_sampling"].value_or(0);
+        bool legacy_quad_scanout = hardware["quad_resolution_scanout"].value_or(false);
+
+        switch (legacy_super_sampling) {
+            case 1: {
+                iris->hardware_backend_config.internal_resolution = 0;
+                iris->hardware_backend_config.ssaa = true;
+            } break;
+
+            case 2: {
+                iris->hardware_backend_config.internal_resolution = 1;
+                iris->hardware_backend_config.ssaa = false;
+            } break;
+
+            case 3: {
+                iris->hardware_backend_config.internal_resolution = 1;
+                iris->hardware_backend_config.ssaa = true;
+            } break;
+
+            case 4: {
+                iris->hardware_backend_config.internal_resolution = legacy_quad_scanout ? 2 : 1;
+                iris->hardware_backend_config.ssaa = !legacy_quad_scanout;
+            } break;
+
+            default: {
+                iris->hardware_backend_config.internal_resolution = 0;
+                iris->hardware_backend_config.ssaa = false;
+            } break;
+        }
+    }
+
+    iris->hardware_backend_config.upscale_2d = hardware["upscale_2d"].value_or(hardware["super_sampled_quads"].value_or(false));
+    iris->hardware_backend_config.color_depth = hardware["color_depth"].value_or(0);
     iris->hardware_backend_config.force_progressive = hardware["force_progressive"].value_or(false);
     iris->hardware_backend_config.overscan = hardware["overscan"].value_or(false);
     iris->hardware_backend_config.crtc_offsets = hardware["crtc_offsets"].value_or(false);
@@ -634,8 +670,10 @@ void save(Instance* iris) {
         // hardware.super_sampling = 2
         // etc.
         { "hardware", toml::table {
-            { "super_sampling", iris->hardware_backend_config.super_sampling },
-            { "super_sampled_quads", iris->hardware_backend_config.super_sampled_quads },
+            { "internal_resolution", iris->hardware_backend_config.internal_resolution },
+            { "ssaa", iris->hardware_backend_config.ssaa },
+            { "upscale_2d", iris->hardware_backend_config.upscale_2d },
+            { "color_depth", iris->hardware_backend_config.color_depth },
             { "force_progressive", iris->hardware_backend_config.force_progressive },
             { "overscan", iris->hardware_backend_config.overscan },
             { "crtc_offsets", iris->hardware_backend_config.crtc_offsets },

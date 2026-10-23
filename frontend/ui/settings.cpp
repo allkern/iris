@@ -818,23 +818,29 @@ void show_system_settings(Instance* iris) {
     PopStyleVar();
 }
 
-static const char* ssaa_names[] = {
-    "Disabled",
+static const char* internal_resolution_names[] = {
+    "1x (Native)",
     "2x",
-    "4x",
-    "8x",
-    "16x"
+    "4x"
+};
+
+static const char* color_depth_names[] = {
+    "Accurate",
+    "No dithering",
+    "Force 32-bit"
 };
 
 void show_hardware_renderer_settings(Instance* iris) {
     using namespace ImGui;
 
-    Text("SSAA");
+    Text("Internal resolution");
 
-    if (BeginCombo("##ssaa", ssaa_names[iris->hardware_backend_config.super_sampling])) {
-        for (int i = 0; i < IM_ARRAYSIZE(ssaa_names); i++) {
-            if (imgui::Selectable(ssaa_names[i], iris->hardware_backend_config.super_sampling == i)) {
-                iris->hardware_backend_config.super_sampling = i;
+    int internal_resolution = std::clamp(iris->hardware_backend_config.internal_resolution, 0, IM_ARRAYSIZE(internal_resolution_names) - 1);
+
+    if (BeginCombo("##internalresolution", internal_resolution_names[internal_resolution])) {
+        for (int i = 0; i < IM_ARRAYSIZE(internal_resolution_names); i++) {
+            if (imgui::Selectable(internal_resolution_names[i], internal_resolution == i)) {
+                iris->hardware_backend_config.internal_resolution = i;
 
                 if (i != 0) {
                     iris->hardware_backend_config.force_progressive = true;
@@ -848,19 +854,46 @@ void show_hardware_renderer_settings(Instance* iris) {
     }
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
-    BeginDisabled(iris->hardware_backend_config.super_sampling == 0);
 
-    if (Checkbox(" Smooth UI/sprites", &iris->hardware_backend_config.super_sampled_quads)) {
+    bool max_resolution = internal_resolution == IM_ARRAYSIZE(internal_resolution_names) - 1;
+    bool ssaa = iris->hardware_backend_config.ssaa && !max_resolution;
+
+    BeginDisabled(max_resolution);
+
+    if (Checkbox(" SSAA", &ssaa)) {
+        iris->hardware_backend_config.ssaa = ssaa;
+
         render::refresh(iris);
     }
 
-    // if (IsItemHovered()) {
-    //     SetTooltip("Super-sample textured 2D sprites instead of snapping them to the native\n"
-    //                "pixel grid, so upscaled UI is smoothed rather than point-scaled.\n"
-    //                "May cause minor texture-atlas bleeding in some games.");
-    // }
+    EndDisabled();
+
+    BeginDisabled(internal_resolution == 0 && !ssaa);
+
+    if (Checkbox(" Upscale 2D elements", &iris->hardware_backend_config.upscale_2d)) {
+        render::refresh(iris);
+    }
 
     EndDisabled();
+    PopStyleVar();
+
+    Text("Color depth");
+
+    int color_depth = std::clamp(iris->hardware_backend_config.color_depth, 0, IM_ARRAYSIZE(color_depth_names) - 1);
+
+    if (BeginCombo("##colordepth", color_depth_names[color_depth])) {
+        for (int i = 0; i < IM_ARRAYSIZE(color_depth_names); i++) {
+            if (imgui::Selectable(color_depth_names[i], color_depth == i)) {
+                iris->hardware_backend_config.color_depth = i;
+
+                render::refresh(iris);
+            }
+        }
+
+        EndCombo();
+    }
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
 
     // BeginDisabled(iris->hardware_backend_config.super_sampling != 0);
     if (Checkbox(" Force progressive scan", &iris->hardware_backend_config.force_progressive)) {
