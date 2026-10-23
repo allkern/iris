@@ -52,6 +52,8 @@ enum Counter : int {
     EE_IDLE_LOOP_SKIPS,
     EE_IDLE_LOOP_SKIPPED_CYCLES,
     EE_IDLE_LOOP_MISPREDICTIONS,
+    EE_TIMER_WAIT_LOOPS,
+    EE_TIMER_WAIT_LOOP_REBASES,
     IOP_BLOCKS_COMPILED,
     IOP_STORE_INVALIDATIONS,
     IOP_EE_WRITE_INVALIDATIONS,
@@ -145,6 +147,8 @@ inline const char* counter_name(int counter) {
         case EE_IDLE_LOOP_SKIPS: return "ee idle loop skips";
         case EE_IDLE_LOOP_SKIPPED_CYCLES: return "ee idle loop cycles skipped";
         case EE_IDLE_LOOP_MISPREDICTIONS: return "ee idle loop mispredictions";
+        case EE_TIMER_WAIT_LOOPS: return "ee timer wait loops entered";
+        case EE_TIMER_WAIT_LOOP_REBASES: return "ee timer wait loop rebases";
         case IOP_BLOCKS_COMPILED: return "iop blocks compiled";
         case IOP_STORE_INVALIDATIONS: return "iop code pages dirtied by stores";
         case IOP_EE_WRITE_INVALIDATIONS: return "iop code pages dirtied by ee writes";

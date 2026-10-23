@@ -654,6 +654,10 @@ static inline bool idle_stable_mmio(uint32_t phys) {
     return phys >= 0x10002000 && phys < 0x10002040;
 }
 
+static inline bool idle_timer_count(uint32_t phys) {
+    return phys < 0x10002000 && (phys & 0xffffe7ff) == 0x10000000;
+}
+
 static uint64_t idle_mmio_value(Ee* ee, uint32_t phys, uint32_t bytes) {
     switch (bytes) {
         case 1: return ee->bus.read8(ee->bus.udata, phys);
@@ -670,6 +674,9 @@ static void idle_trace_word(WaitLoop& ep, uint32_t key, uint32_t value) {
 
 static void idle_trace_access(Ee* ee, uint32_t addr, uint32_t phys, uint32_t bytes, bool write) {
     WaitLoop& ep = ee->wait_loop;
+
+    if (write)
+        ep.trace_stores++;
 
     if ((addr & 0xf0000000) == 0x70000000) {
         uint32_t offset = addr & 0x3fff;
@@ -690,7 +697,7 @@ static void idle_trace_access(Ee* ee, uint32_t addr, uint32_t phys, uint32_t byt
     if (!write && phys >= 0x1fc00000 && phys < 0x20000000)
         return;
 
-    if (!write && bytes <= 8 && idle_stable_mmio(phys)) {
+    if (!write && bytes <= 8 && (idle_stable_mmio(phys) || (ep.allow_timer && idle_timer_count(phys)))) {
         uint64_t value = idle_mmio_value(ee, phys, bytes);
 
         for (const WaitLoopMmio& m : ep.mmio_trace) {
@@ -10123,6 +10130,15 @@ static bool idle_run_iteration(Ee* ee, uint32_t head, IdleTags* tags) {
     }
 }
 
+static bool idle_trace_reads_timer(const WaitLoop& ep) {
+    for (const WaitLoopMmio& m : ep.mmio_trace) {
+        if (idle_timer_count(m.phys))
+            return true;
+    }
+
+    return false;
+}
+
 static bool idle_states_step(const WaitLoopState* a, const WaitLoopState* b, int64_t* delta) {
     WaitLoopState y = *b;
 
@@ -10194,8 +10210,8 @@ static int verify_counted_wait_loop(Ee* ee) {
     WaitLoopState s1;
     WaitLoopState s2;
 
-    int64_t first[32];
-    int64_t second[32];
+    int64_t first[32] = {};
+    int64_t second[32] = {};
 
     IdleTags tags;
 
@@ -10204,9 +10220,19 @@ static int verify_counted_wait_loop(Ee* ee) {
     ep.trace.clear();
     ep.mmio_trace.clear();
     ep.trace_failed = false;
+    ep.trace_stores = 0;
+    ep.allow_timer = true;
     ep.tracing = true;
 
     bool ok = idle_run_iteration(ee, head, nullptr);
+
+    bool timed = ok && idle_trace_reads_timer(ep);
+
+    if (timed) {
+        capture_idle_state(ee, &s0);
+
+        ok = idle_run_iteration(ee, head, nullptr);
+    }
 
     if (ok) {
         capture_idle_state(ee, &s1);
@@ -10241,10 +10267,20 @@ static int verify_counted_wait_loop(Ee* ee) {
     }
 
     ep.tracing = false;
+    ep.allow_timer = false;
 
     int executed = (int)(ee->total_cycles - start_cycles);
 
     ok = ok && !idle_irq_raised(ee) && tags.limit >= 2 && fill_idle_entry(ee, &ep.counted);
+
+    bool fixed_point = true;
+
+    for (int r = 0; r < 32; r++) {
+        if (first[r])
+            fixed_point = false;
+    }
+
+    ep.counted.timer_rebase = timed && fixed_point && !ep.trace_stores;
 
     ep.trace.clear();
     ep.mmio_trace.clear();
@@ -10301,7 +10337,98 @@ static int verify_counted_wait_loop(Ee* ee) {
 
     activate_wait_loop(ee, &ep.counted, true);
 
+    if (ep.counted.timer_rebase)
+        profile::count(profile::EE_TIMER_WAIT_LOOPS);
+
     return executed + (int)done;
+}
+
+static bool run_to_wait_loop_head(Ee* ee, uint32_t head, uint64_t limit, uint64_t* done) {
+    WaitLoop& ep = ee->wait_loop;
+
+    uint64_t used = 0;
+
+    ep.start.pc = head;
+    ep.confirming = true;
+
+    while (used < limit && !ee->bp_hit && !idle_irq_raised(ee)) {
+        int cycles = _ee_run_block(ee, (int)(limit - used), BLOCK_MAX_INSTRS);
+
+        if (cycles <= 0)
+            break;
+
+        used += (uint64_t)cycles;
+
+        if (ee->pc == head)
+            break;
+    }
+
+    ep.confirming = false;
+
+    *done += used;
+
+    return ee->pc == head;
+}
+
+static bool timer_wait_loop_can_rebase(Ee* ee) {
+    WaitLoop& ep = ee->wait_loop;
+
+    const WaitLoopEntry& entry = *ep.entry;
+
+    if (!entry.timer_rebase || idle_irq_raised(ee) || ee->breakpoint_count)
+        return false;
+
+    if (ee->cpcond0 != entry.start.cpcond0 || (ee->cause & 0xff00) != (entry.start.cop0_r[13] & 0xff00))
+        return false;
+
+    for (const WaitLoopMmio& m : entry.mmio) {
+        if (!idle_timer_count(m.phys) && idle_mmio_value(ee, m.phys, m.bytes) != m.value)
+            return false;
+    }
+
+    return idle_memory_intact(ee, entry);
+}
+
+static int rebase_timer_wait_loop(Ee* ee) {
+    WaitLoop& ep = ee->wait_loop;
+
+    WaitLoopEntry& entry = *ep.entry;
+
+    uint32_t head = entry.start.pc;
+    uint64_t limit = entry.period * 2 + 64;
+    uint64_t done = 0;
+
+    WaitLoopState state;
+
+    bool ok = run_to_wait_loop_head(ee, head, limit, &done);
+
+    if (ok) {
+        capture_idle_state(ee, &state);
+
+        ok = run_to_wait_loop_head(ee, head, limit, &done) && idle_state_matches(ee, &state);
+    }
+
+    ok = ok && !idle_irq_raised(ee) && idle_memory_intact(ee, entry);
+
+    if (!ok) {
+        ep.active = false;
+        ep.credit = 0;
+        ep.streak = 0;
+        ep.slice_repeats = 0;
+
+        return (int)done;
+    }
+
+    entry.start = state;
+
+    for (WaitLoopMmio& m : entry.mmio) {
+        if (idle_timer_count(m.phys))
+            m.value = idle_mmio_value(ee, m.phys, m.bytes);
+    }
+
+    profile::count(profile::EE_TIMER_WAIT_LOOP_REBASES);
+
+    return (int)done;
 }
 
 static bool wait_loop_holds(Ee* ee) {
@@ -10375,6 +10502,18 @@ static int skip_wait_loop(Ee* ee, int max_cycles) {
         max_cycles = 1;
 
     uint64_t period = ep.entry->period;
+
+    if (ep.entry->timer_rebase) {
+        uint64_t cycles = ((uint64_t)max_cycles + period - 1) / period * period;
+
+        ee->total_cycles += cycles;
+        ee->count += (uint32_t)cycles;
+
+        profile::count(profile::EE_IDLE_LOOP_SKIPPED_CYCLES, cycles);
+
+        return (int)cycles;
+    }
+
     uint64_t credit = ep.credit + (uint64_t)max_cycles;
 
     ee->total_cycles += max_cycles;
@@ -10445,6 +10584,13 @@ int run_block(Ee* ee, int max_cycles) {
     if (ee->wait_loop.active) {
         if (wait_loop_holds(ee))
             return skip_wait_loop(ee, max_cycles);
+
+        if (timer_wait_loop_can_rebase(ee)) {
+            int cycles = rebase_timer_wait_loop(ee);
+
+            if (cycles > 0)
+                return cycles;
+        }
 
         int overshoot = end_wait_loop(ee);
 

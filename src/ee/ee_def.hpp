@@ -675,6 +675,7 @@ struct WaitLoopEntry {
     uint64_t stamp;
     bool spr_touched;
     bool confirmed;
+    bool timer_rebase;
 
     std::vector <uint32_t> addrs;
     std::vector <uint32_t> values;
@@ -690,6 +691,9 @@ struct WaitLoop {
     bool replaying;
     bool confirming;
     bool dirty;
+    bool allow_timer;
+
+    uint32_t trace_stores;
 
     uint32_t streak;
     uint32_t cooldown;
