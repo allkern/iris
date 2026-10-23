@@ -958,23 +958,28 @@ void handle_keydown_event(Instance* iris, SDL_Event* event) {
 
     switch (key) {
         case SDLK_SPACE: {
-            iris->debug.pause = !iris->debug.pause;
+            if (ImGui::GetIO().WantTextInput)
+                break;
 
-            // vulkan::wait_idle(iris);
+            iris->debug.pause = !iris->debug.pause;
         } break;
+
         case SDLK_F9: {
             vulkan::wait_idle(iris);
 
             bool saved = save_screenshot(iris);
         } break;
+
         case SDLK_F11: {
             iris->fullscreen = !iris->fullscreen;
 
             SDL_SetWindowFullscreen(iris->window, iris->fullscreen ? true : false);
         } break;
+
         case SDLK_F10: {
             toggle_profiling(iris);
         } break;
+
         case SDLK_F1: {
             iris_info(&iris->log.input, "Sending poweroff signal");
             cdvd::power_off(iris->ps2->cdvd);
@@ -986,7 +991,7 @@ void handle_keydown_event(Instance* iris, SDL_Event* event) {
         } break;
 
         case SDLK_GRAVE: {
-            if (ImGui::GetIO().WantCaptureKeyboard)
+            if (ImGui::GetIO().WantTextInput)
                 break;
 
             bool was_vsync = iris->present_mode == render::VSYNC;
@@ -1010,7 +1015,7 @@ void handle_keydown_event(Instance* iris, SDL_Event* event) {
     iris->input.last_input_event_value = 1.0f;
     iris->input.last_input_event = sdl_event_to_input_event(event);
 
-    if (SDL_GetWindowFlags(iris->window) & SDL_WINDOW_INPUT_FOCUS) {
+    if ((SDL_GetWindowFlags(iris->window) & SDL_WINDOW_INPUT_FOCUS) && !ImGui::GetIO().WantTextInput) {
         if (iris->input.input_devices[0]) iris->input.input_devices[0]->handle_event(iris, event);
         if (iris->input.input_devices[1]) iris->input.input_devices[1]->handle_event(iris, event);
     }

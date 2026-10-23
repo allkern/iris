@@ -835,7 +835,7 @@ SDL_AppResult handle_events(Instance* iris, SDL_Event* event) {
     const bool window_focused = SDL_GetWindowFlags(iris->window) & SDL_WINDOW_INPUT_FOCUS;
     const bool key_event = event->type == SDL_EVENT_KEY_DOWN || event->type == SDL_EVENT_KEY_UP;
 
-    if (key_event && iris->ps2 && iris->ps2->usb && window_focused && !ImGui::GetIO().WantCaptureKeyboard) {
+    if (key_event && iris->ps2 && iris->ps2->usb && window_focused && !ImGui::GetIO().WantTextInput) {
         if (event->key.scancode <= 0xE7) {
             usb::kbd_key(iris->ps2->usb, (uint8_t)event->key.scancode, event->type == SDL_EVENT_KEY_DOWN);
         }
