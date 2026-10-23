@@ -179,6 +179,8 @@ static bool setup_vulkan_window(Instance* iris, ImGui_ImplVulkanH_Window* wd, in
     // Create SwapChain, RenderPass, Framebuffer, etc.
     IM_ASSERT(iris->vk.min_image_count >= 2);
 
+    gs::renderer::QueueLock queue_lock;
+
     ImGui_ImplVulkanH_CreateOrResizeWindow(
         iris->vk.instance,
         iris->vk.physical_device,
@@ -1988,7 +1990,11 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
     }
 
     // Record dear imgui primitives into command buffer
-    ImGui_ImplVulkan_RenderDrawData(draw_data, fd->CommandBuffer);
+    {
+        gs::renderer::QueueLock queue_lock;
+
+        ImGui_ImplVulkan_RenderDrawData(draw_data, fd->CommandBuffer);
+    }
 
     // Submit command buffer
     vkCmdEndRenderPass(fd->CommandBuffer);
@@ -2008,13 +2014,24 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
         if ((err = vkEndCommandBuffer(fd->CommandBuffer)) != VK_SUCCESS)
             return abort_frame(iris, "Failed to end command buffer", err);
 
-        if ((err = vkQueueSubmit(iris->vk.queue, 1, &submit_info, fd->Fence)) != VK_SUCCESS)
+        gs::renderer::lock_queue();
+
+        err = vkQueueSubmit(iris->vk.queue, 1, &submit_info, fd->Fence);
+
+        gs::renderer::unlock_queue();
+
+        if (err != VK_SUCCESS)
             return abort_frame(iris, "Failed to submit queue", err);
     }
 
     if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
         ImGui::UpdatePlatformWindows();
+
+        gs::renderer::lock_queue();
+
         ImGui::RenderPlatformWindowsDefault();
+
+        gs::renderer::unlock_queue();
     }
 
     VkPresentInfoKHR present_info = {};
@@ -2025,7 +2042,11 @@ bool render_frame(Instance* iris, ImDrawData* draw_data) {
     present_info.pSwapchains = &wd->Swapchain;
     present_info.pImageIndices = &image_index;
 
+    gs::renderer::lock_queue();
+
     err = vkQueuePresentKHR(iris->vk.queue, &present_info);
+
+    gs::renderer::unlock_queue();
 
     if (err == VK_ERROR_OUT_OF_DATE_KHR || err == VK_SUBOPTIMAL_KHR) {
         iris->vk.swapchain_rebuild = true;

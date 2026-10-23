@@ -127,6 +127,7 @@ bool init(void* udata, const CreateInfo& info) {
 
     ctx->granite_device.set_context(ctx->granite_ctx);
     ctx->granite_device.init_frame_contexts(4);
+    ctx->granite_device.set_queue_lock(lock_queue, unlock_queue);
 
     GSOptions opts = {};
     opts.super_sampling = get_super_sampling(ctx);
@@ -184,13 +185,7 @@ void destroy(void* udata) {
     delete ctx;
 }
 
-Image get_frame(void* udata) {
-    state* ctx = static_cast<state*>(udata);
-
-    gs::PrivilegedState state;
-
-    gs::get_privileged_state(ctx->gs, &state);
-
+static Image scanout(state* ctx, const gs::PrivilegedState& state) {
     if (!state.pmode) {
         ctx->iface.flush();
 
@@ -227,7 +222,7 @@ Image get_frame(void* udata) {
 
     VSyncInfo info = {};
 
-    info.phase = ctx->gs->csr & (1 << 13) ? 0 : 1;
+    info.phase = state.csr & (1 << 13) ? 0 : 1;
 
     if (ctx->config.invert_fields) {
         info.phase ^= 1;
@@ -295,10 +290,57 @@ Image get_frame(void* udata) {
     return image;
 }
 
+Image get_frame(void* udata) {
+    state* ctx = static_cast<state*>(udata);
+
+    gs::PrivilegedState state;
+
+    gs::get_privileged_state(ctx->gs, &state);
+
+    return scanout(ctx, state);
+}
+
+static void publish_scanout(state* ctx, const ScanoutRequest& request) {
+    Image image = scanout(ctx, request.state);
+
+    std::lock_guard <std::mutex> lock(ctx->scanout_mutex);
+
+    ctx->scanout_history[ctx->scanout_next] = ctx->current_scanout;
+    ctx->scanout_next = (ctx->scanout_next + 1) % 8;
+    ctx->scanout_image = image;
+    ctx->scanout_id = request.id;
+
+    ctx->scanout_cv.notify_all();
+}
+
+bool get_scanout(void* udata, uint64_t id, Image* image) {
+    state* ctx = static_cast<state*>(udata);
+
+    std::unique_lock <std::mutex> lock(ctx->scanout_mutex);
+
+    if (!ctx->scanout_cv.wait_for(lock, std::chrono::milliseconds(500), [&] { return ctx->scanout_id >= id; })) {
+        return false;
+    }
+
+    *image = ctx->scanout_image;
+
+    return true;
+}
+
 void transfer(void* udata, int path, const void* data, size_t size) {
     state* ctx = static_cast<state*>(udata);
 
     register_calling_thread();
+
+    if (path == PATH_SCANOUT) {
+        ScanoutRequest request;
+
+        memcpy(&request, data, sizeof(request));
+
+        publish_scanout(ctx, request);
+
+        return;
+    }
 
     ctx->iface.gif_transfer(path, data, size);
 }

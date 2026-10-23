@@ -68,7 +68,8 @@ enum Op : uint32_t {
     OP_GIF_QWORDS,
     OP_GIF_WRITE32,
     OP_VU1_EXECUTE,
-    OP_VU1_RESET
+    OP_VU1_RESET,
+    OP_BACKEND_PACKET
 };
 
 enum Stage : int {
@@ -304,6 +305,14 @@ static inline uint32_t process_op(Mtvu* mtvu, uint32_t read) {
             vu::reset_registers(mtvu->hw.vu1);
 
             return read + 1;
+        }
+
+        case OP_BACKEND_PACKET: {
+            uint32_t bytes = op[2];
+
+            gs::async::transfer(mtvu->gs_async, (int)op[1], &op[3], bytes, 0);
+
+            return read + 3 + (bytes + 3) / 4;
         }
     }
 
@@ -614,6 +623,24 @@ void push_gif_write32(Mtvu* mtvu, uint32_t addr, uint32_t data) {
     op[2] = data;
 
     publish(mtvu, start, 3);
+
+    wake_if_published(mtvu);
+}
+
+void push_backend_packet(Mtvu* mtvu, int path, const void* data, uint32_t bytes) {
+    flush_staged(mtvu);
+
+    uint32_t words = 3 + (bytes + 3) / 4;
+    uint32_t start = reserve_words(mtvu, words);
+    uint32_t* op = &mtvu->ring[start];
+
+    op[0] = OP_BACKEND_PACKET;
+    op[1] = (uint32_t)path;
+    op[2] = bytes;
+
+    memcpy(&op[3], data, bytes);
+
+    publish(mtvu, start, words);
 
     wake_if_published(mtvu);
 }

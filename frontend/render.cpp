@@ -922,6 +922,8 @@ bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer 
 
     if (iris->debug.pause) {
         image = iris->vk.image;
+    } else if (iris->scanout_async) {
+        image = iris->scanout_image;
     } else {
         image = gs::renderer::get_frame(iris->renderer);
     }

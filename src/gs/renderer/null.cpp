@@ -58,6 +58,10 @@ Image get_frame(void* udata) {
     return image;
 }
 
+bool get_scanout(void* udata, uint64_t id, Image* image) {
+    return false;
+}
+
 void set_config(void* udata, void* config) {
     // Nothing
 }

@@ -62,6 +62,7 @@ void push_gif_qwords(Mtvu* mtvu, int path, const uint8_t* data, uint32_t qwords)
 void push_gif_write32(Mtvu* mtvu, uint32_t addr, uint32_t data);
 void push_vu1_execute(Mtvu* mtvu, uint32_t addr);
 void push_vu1_reset(Mtvu* mtvu);
+void push_backend_packet(Mtvu* mtvu, int path, const void* data, uint32_t bytes);
 
 void sync(Mtvu* mtvu, SyncReason reason);
 void poll(Mtvu* mtvu);

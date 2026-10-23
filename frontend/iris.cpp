@@ -44,6 +44,7 @@
 #include "ee/vu_def.hpp"
 #include "iop/iop_def.hpp"
 #include "ee/gif.hpp"
+#include "gs/gs_dump.hpp"
 #include "net.hpp"
 #include "slirp.hpp"
 #include "profiler.hpp"
@@ -200,7 +201,7 @@ static inline void do_cycle(Instance* iris) {
 void update_window(Instance* iris) {
     using namespace ImGui;
 
-    if (iris->ps2 && !iris->ui.loading_file_active) {
+    if (iris->ps2 && !iris->ui.loading_file_active && !iris->scanout_async) {
         mtvu::sync(iris->ps2->mtvu, mtvu::SYNC_FRAME);
     }
 
@@ -229,6 +230,8 @@ void update_window(Instance* iris) {
         vkGetPhysicalDeviceSurfaceCapabilitiesKHR(iris->vk.physical_device, iris->vk.main_window_data.Surface, &cap);
 
         if (cap.currentExtent.width != 0 && cap.currentExtent.height != 0) {
+            gs::renderer::QueueLock queue_lock;
+
             ImGui_ImplVulkan_SetMinImageCount(iris->vk.min_image_count);
         
             ImGui_ImplVulkanH_CreateOrResizeWindow(
@@ -621,6 +624,37 @@ bool init(Instance* iris) {
     return true;
 }
 
+static bool can_scanout_async(Instance* iris) {
+    return iris->frame_pipelining
+        && iris->renderer
+        && iris->renderer->active_backend == gs::renderer::BACKEND_HARDWARE
+        && !iris->hardware_backend_config.enable_analog_video
+        && !(iris->debug.gsdump && gs::dump::is_active(iris->debug.gsdump))
+        && !iris->ui.loading_file_active;
+}
+
+static void begin_scanout(Instance* iris) {
+    iris->scanout_async = false;
+
+    if (can_scanout_async(iris)) {
+        gs::renderer::ScanoutRequest request = {};
+
+        request.id = ++iris->scanout_id;
+
+        gs::get_privileged_state(iris->ps2->gs, &request.state);
+
+        mtvu::push_backend_packet(iris->ps2->mtvu, gs::renderer::PATH_SCANOUT, &request, sizeof(request));
+
+        iris->scanout_async = gs::renderer::get_scanout(iris->renderer, request.id - 1, &iris->scanout_image);
+
+        if (iris->scanout_async) {
+            return;
+        }
+    }
+
+    mtvu::sync(iris->ps2->mtvu, mtvu::SYNC_FRAME);
+}
+
 SDL_AppResult update(Instance* iris) {
     if (iris->input.double_click_counter) {
         iris->input.double_click_counter--;
@@ -670,13 +704,15 @@ SDL_AppResult update(Instance* iris) {
         }
     }
 
-    mtvu::sync(iris->ps2->mtvu, mtvu::SYNC_FRAME);
+    begin_scanout(iris);
 
     // Record a GS dump frame boundary
     render::gs_dump_tick(iris);
 
     // Draw frame
     update_window(iris);
+
+    iris->scanout_async = false;
 
     // Execute until vblank is over
     while (gs::is_vblank(iris->ps2->gs)) {

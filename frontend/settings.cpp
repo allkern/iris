@@ -257,6 +257,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->vu_engine[0] = system["vu0_engine"].value_or((int)vu::VU_ENGINE_JIT);
     iris->vu_engine[1] = system["vu1_engine"].value_or((int)vu::VU_ENGINE_JIT);
     iris->vu_jit_threshold = system["vu_jit_threshold"].value_or(200);
+    iris->frame_pipelining = system["frame_pipelining"].value_or(true);
     iris->cache_arcade_files = system["cache_arcade_files"].value_or(false);
     iris->arcade_dongle_boot = system["arcade_dongle_boot"].value_or(true);
     iris->enable_patches = system["enable_patches"].value_or(true);
@@ -625,6 +626,7 @@ void save(Instance* iris) {
             { "vu0_engine", iris->vu_engine[0] },
             { "vu1_engine", iris->vu_engine[1] },
             { "vu_jit_threshold", iris->vu_jit_threshold },
+            { "frame_pipelining", iris->frame_pipelining },
             { "cache_arcade_files", iris->cache_arcade_files },
             { "arcade_dongle_boot", iris->arcade_dongle_boot },
             { "enable_patches", iris->enable_patches },

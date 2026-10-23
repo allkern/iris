@@ -29,6 +29,8 @@
 
 #include <vector>
 #include <cstdio>
+#include <mutex>
+#include <condition_variable>
 
 #include <SDL3/SDL.h>
 
@@ -138,6 +140,13 @@ struct state {
 
     int analog_system = -1;
 
+    std::mutex scanout_mutex;
+    std::condition_variable scanout_cv;
+    uint64_t scanout_id = 0;
+    Image scanout_image = {};
+    Vulkan::ImageHandle scanout_history[8];
+    int scanout_next = 0;
+
     gs::Gs* gs;
     gif::Gif* gif;
 };
@@ -148,6 +157,7 @@ void reset(void* udata);
 void destroy(void* udata);
 void set_config(void* udata, void* config);
 Image get_frame(void* udata);
+bool get_scanout(void* udata, uint64_t id, Image* image);
 
 void transfer(void* udata, int path, const void* data, size_t size);
 void readback(void* udata, void* data, size_t size);

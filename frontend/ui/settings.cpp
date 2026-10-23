@@ -788,6 +788,8 @@ void show_system_settings(Instance* iris) {
     SetItemTooltip("Loads archived arcade games faster, at the cost of keeping a second copy of their files");
     Checkbox("Fastboot System 246/256 games", &iris->arcade_dongle_boot);
     SetItemTooltip("Runs the game's boot program straight off the dongle instead of booting it through the board BIOS");
+    Checkbox("Pipeline frames", &iris->frame_pipelining);
+    SetItemTooltip("Starts emulating the next frame while the current one is still being drawn. Faster in most 3D games, adds one frame of latency");
 
     imgui::section(iris, "Patches");
 

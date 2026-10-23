@@ -31,7 +31,19 @@
 #include "hardware.hpp"
 #include "ee/gif.hpp"
 
+#include <mutex>
+
 namespace iris::gs::renderer {
+
+static std::recursive_mutex queue_mutex;
+
+void lock_queue() {
+    queue_mutex.lock();
+}
+
+void unlock_queue() {
+    queue_mutex.unlock();
+}
 
 Renderer* create() {
     return new Renderer;
@@ -59,6 +71,7 @@ void init_callbacks(Renderer* renderer, int backend) {
             renderer->reset = null::reset;
             renderer->destroy = null::destroy;
             renderer->get_frame = null::get_frame;
+            renderer->get_scanout = null::get_scanout;
             renderer->set_config = null::set_config;
             renderer->transfer = null::transfer;
             renderer->readback = null::readback;
@@ -72,6 +85,7 @@ void init_callbacks(Renderer* renderer, int backend) {
             renderer->reset = null::reset;
             renderer->destroy = null::destroy;
             renderer->get_frame = null::get_frame;
+            renderer->get_scanout = null::get_scanout;
             renderer->set_config = null::set_config;
             renderer->transfer = null::transfer;
             renderer->readback = null::readback;
@@ -84,6 +98,7 @@ void init_callbacks(Renderer* renderer, int backend) {
             renderer->reset = hardware::reset;
             renderer->destroy = hardware::destroy;
             renderer->get_frame = hardware::get_frame;
+            renderer->get_scanout = hardware::get_scanout;
             renderer->set_config = hardware::set_config;
             renderer->transfer = hardware::transfer;
             renderer->readback = hardware::readback;
@@ -149,6 +164,10 @@ Image get_frame(Renderer* renderer) {
     sync_emulation(renderer);
 
     return renderer->get_frame(renderer->udata);
+}
+
+bool get_scanout(Renderer* renderer, uint64_t id, Image* image) {
+    return renderer->get_scanout(renderer->udata, id, image);
 }
 
 void read_vram(Renderer* renderer, void* dst, size_t size) {

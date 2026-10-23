@@ -62,6 +62,15 @@ enum : int {
     BACKEND_HARDWARE
 };
 
+enum : int {
+    PATH_SCANOUT = 0x100
+};
+
+struct ScanoutRequest {
+    uint64_t id;
+    gs::PrivilegedState state;
+};
+
 struct Stats {
     unsigned int primitives = 0;
     unsigned int triangles = 0;
@@ -120,6 +129,7 @@ struct Renderer {
     void (*reset)(void* udata);
     void (*destroy)(void* udata);
     Image (*get_frame)(void* udata);
+    bool (*get_scanout)(void* udata, uint64_t id, Image* image);
     void (*transfer)(void* udata, int path, const void* data, size_t size);
     void (*readback)(void* udata, void* data, size_t size);
     void (*read_vram)(void* udata, void* dst, size_t size);
@@ -135,6 +145,15 @@ void destroy(Renderer* renderer);
 void set_config(Renderer* renderer, void* config);
 
 Image get_frame(Renderer* renderer);
+bool get_scanout(Renderer* renderer, uint64_t id, Image* image);
 void read_vram(Renderer* renderer, void* dst, size_t size);
+
+void lock_queue();
+void unlock_queue();
+
+struct QueueLock {
+    QueueLock() { lock_queue(); }
+    ~QueueLock() { unlock_queue(); }
+};
 
 }

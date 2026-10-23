@@ -514,8 +514,12 @@ bool copy_buffer(Instance* iris, VkBuffer src, VkBuffer dst, VkDeviceSize size) 
     submit_info.commandBufferCount = 1;
     submit_info.pCommandBuffers = &command_buffer;
 
-    vkQueueSubmit(iris->vk.queue, 1, &submit_info, VK_NULL_HANDLE);
-    vkQueueWaitIdle(iris->vk.queue);
+    {
+        gs::renderer::QueueLock queue_lock;
+
+        vkQueueSubmit(iris->vk.queue, 1, &submit_info, VK_NULL_HANDLE);
+        vkQueueWaitIdle(iris->vk.queue);
+    }
 
     vkFreeCommandBuffers(iris->vk.device, command_pool, 1, &command_buffer);
     vkDestroyCommandPool(iris->vk.device, command_pool, VK_NULL_HANDLE);
@@ -777,6 +781,8 @@ Texture upload_texture(Instance* iris, void* pixels, int width, int height, int 
             return {};
         }
 
+        gs::renderer::QueueLock queue_lock;
+
         if (vkQueueSubmit(iris->vk.queue, 1, &end_info, VK_NULL_HANDLE) != VK_SUCCESS) {
             iris_error(&iris->log.vulkan, "Failed to submit queue");
 
@@ -814,6 +820,8 @@ void free_texture(Instance* iris, Texture& tex) {
 
     // Textures are now released while the app is running, not only at shutdown,
     // so any frame still referencing this descriptor set has to retire first
+    gs::renderer::QueueLock queue_lock;
+
     vkDeviceWaitIdle(iris->vk.device);
 
     destroy_texture(iris, tex);
@@ -823,6 +831,8 @@ void free_textures(Instance* iris, std::vector <Texture>& textures) {
     if (!iris->vk.device || textures.empty()) {
         return;
     }
+
+    gs::renderer::QueueLock queue_lock;
 
     vkDeviceWaitIdle(iris->vk.device);
 
@@ -1389,6 +1399,8 @@ void* read_image(Instance* iris, VkImage src_image, VkFormat format, int width, 
             return {};
         }
 
+        gs::renderer::QueueLock queue_lock;
+
         if (vkQueueSubmit(iris->vk.queue, 1, &end_info, VK_NULL_HANDLE) != VK_SUCCESS) {
             iris_error(&iris->log.vulkan, "Failed to submit queue");
 
@@ -1433,6 +1445,8 @@ void* read_image(Instance* iris, VkImage src_image, VkFormat format, int width, 
 }
 
 void wait_idle(Instance* iris) {
+    gs::renderer::QueueLock queue_lock;
+
     if (iris->vk.device) {
         vkDeviceWaitIdle(iris->vk.device);
     } else if (iris->vk.queue) {

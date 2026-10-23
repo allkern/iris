@@ -42,6 +42,7 @@ void reset(void* udata);
 void destroy(void* udata);
 void set_config(void* udata, void* config);
 Image get_frame(void* udata);
+bool get_scanout(void* udata, uint64_t id, Image* image);
 
 void transfer(void* udata, int path, const void* data, size_t size);
 void readback(void* udata, void* data, size_t size);

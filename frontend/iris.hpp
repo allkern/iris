@@ -395,6 +395,10 @@ struct Instance {
     float render_y = 0.0f;
     unsigned int renderer_backend = gs::renderer::BACKEND_HARDWARE;
     gs::renderer::Renderer* renderer = nullptr;
+    bool frame_pipelining = true;
+    bool scanout_async = false;
+    uint64_t scanout_id = 0;
+    gs::renderer::Image scanout_image = {};
     uint8_t mac_address[6] = { 0 };
     slirp::Config slirp_config;
     bool open = false;
