@@ -66,6 +66,7 @@ void push_vu1_reset(Mtvu* mtvu);
 void sync(Mtvu* mtvu, SyncReason reason);
 void poll(Mtvu* mtvu);
 void sync_gs_registers(Mtvu* mtvu);
+bool worker_events_seen(Mtvu* mtvu);
 
 uint32_t read_vif1_row(Mtvu* mtvu, int index);
 uint32_t take_gif_fifo_activity(Mtvu* mtvu);

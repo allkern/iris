@@ -111,6 +111,7 @@ struct Mtvu {
     int gs_reads_without_pushes = 0;
     bool processing_front_gif = false;
     std::atomic <uint32_t> events_kept = 1;
+    std::atomic <bool> worker_events_seen = false;
 
     std::vector <uint32_t> ring;
 
@@ -179,6 +180,8 @@ static void queue_gs_event(void* udata, int type, uint64_t data) {
     if (!mtvu->events_kept.load(std::memory_order_relaxed)) {
         return;
     }
+
+    mtvu->worker_events_seen.store(true, std::memory_order_relaxed);
 
     std::lock_guard <std::mutex> lock(mtvu->events_mutex);
 
@@ -694,7 +697,17 @@ void sync_gs_registers(Mtvu* mtvu) {
 
     mtvu->gs_reads_without_pushes = 0;
 
+    if (!worker_events_seen(mtvu)) {
+        poll(mtvu);
+
+        return;
+    }
+
     sync(mtvu, SYNC_GS_REGISTERS);
+}
+
+bool worker_events_seen(Mtvu* mtvu) {
+    return mtvu->worker_events_seen.load(std::memory_order_relaxed);
 }
 
 void poll(Mtvu* mtvu) {
@@ -849,6 +862,7 @@ void reset(Mtvu* mtvu) {
 
     mtvu->events.clear();
     mtvu->events_queued.store(0);
+    mtvu->worker_events_seen.store(false);
 }
 
 void destroy(Mtvu* mtvu) {

@@ -9125,6 +9125,12 @@ static inline void catch_up_vu1_worker(Ee* ee) {
         return;
     }
 
+    if (!mtvu::worker_events_seen(ee->vu0->mtvu)) {
+        mtvu::poll(ee->vu0->mtvu);
+
+        return;
+    }
+
     mtvu::sync(ee->vu0->mtvu, mtvu::SYNC_EE_IDLE);
 }
 
