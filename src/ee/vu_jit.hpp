@@ -54,5 +54,8 @@ void restore_runs(Vu* vu, Block* block);
 uint32_t victim_lengths(Vu* vu, uint32_t tpc, uint32_t* lengths, uint32_t capacity);
 uint64_t blocks_compiled(Jit* jit);
 uint64_t blocks_failed(Jit* jit);
+void enter_block(Vu* vu, Block* block);
+bool can_dispatch(Vu* vu);
+bool dispatch(Vu* vu);
 
 }

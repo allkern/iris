@@ -3174,6 +3174,16 @@ static inline void count_block_run(Vu* vu, Block* block, bool compiled) {
     }
 }
 
+static bool finish_jit_block(Vu* vu, Block* block) {
+    if (vu->jit_exit == VU_JIT_INTERPRET) {
+        vu->jit_exit = VU_JIT_CONTINUE;
+
+        return execute_block(vu, block);
+    }
+
+    return vu->jit_exit != VU_JIT_CONTINUE;
+}
+
 static bool run_block(Vu* vu, Block* block) {
     if (vu->engine != VU_ENGINE_JIT) {
         count_block_run(vu, block, false);
@@ -3242,15 +3252,9 @@ static bool run_block(Vu* vu, Block* block) {
 
     count_block_run(vu, block, true);
 
-    block->func(vu);
+    jit::enter_block(vu, block);
 
-    if (vu->jit_exit == VU_JIT_INTERPRET) {
-        vu->jit_exit = VU_JIT_CONTINUE;
-
-        return execute_block(vu, block);
-    }
-
-    return vu->jit_exit != VU_JIT_CONTINUE;
+    return finish_jit_block(vu, block);
 }
 
 int get_poll_register(const Vu* vu, uint32_t tpc) {
@@ -3288,6 +3292,19 @@ int get_poll_register(const Vu* vu, uint32_t tpc) {
     return (lower >> 16) & 0xf;
 }
 
+static bool past_deadline(Vu* vu, uint64_t deadline) {
+    if (!vu->max_cycles || vu->vu_cycle < deadline) {
+        return false;
+    }
+
+    iris_fatal_error(vu,
+        "Microprogram ran for {} cycles without reaching an E bit, tpc={:04x}",
+        vu->max_cycles, vu->tpc
+    );
+
+    return true;
+}
+
 static void run(Vu* vu) {
     if (vu->id) {
         profile::count(profile::VU1_PROGRAMS);
@@ -3314,7 +3331,18 @@ static void run(Vu* vu) {
 
     uint32_t poll_tpc = ~0u;
 
+    const bool native = vu->id && vu->engine == VU_ENGINE_JIT && jit::can_dispatch(vu);
+
     while (true) {
+        if (native && jit::dispatch(vu)) {
+            if (finish_jit_block(vu, &vu->block_cache[vu->tpc & vu->micro_mem_size])
+                || past_deadline(vu, deadline)) {
+                break;
+            }
+
+            continue;
+        }
+
         Block* block = &vu->block_cache[vu->tpc & vu->micro_mem_size];
 
         if (!block->cycles || block->tpc != vu->tpc) {
@@ -3341,12 +3369,7 @@ static void run(Vu* vu) {
             break;
         }
 
-        if (vu->max_cycles && vu->vu_cycle >= deadline) {
-            iris_fatal_error(vu,
-                "Microprogram ran for {} cycles without reaching an E bit, tpc={:04x}",
-                vu->max_cycles, vu->tpc
-            );
-
+        if (past_deadline(vu, deadline)) {
             break;
         }
     }

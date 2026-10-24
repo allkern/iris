@@ -88,6 +88,10 @@ constexpr size_t HOT_RUNS_MAX = 16384;
 
 struct Jit {
     JitRuntime rt;
+    JitRuntime stubs;
+
+    void (*enter)(Vu*, void*) = nullptr;
+    int (*dispatch)(Vu*, void*) = nullptr;
 
     ujit::Gp state;
 
@@ -196,12 +200,147 @@ static void store_imm8(ujit::UniCompiler& uc, const ujit::Mem& dst, uint8_t valu
 
 static void worker_main(Jit* jit);
 
+#if defined(ASMJIT_UJIT_X86)
+static void* build_stub(Jit* jit, bool loop) {
+    CodeHolder code;
+
+    code.init(jit->stubs.environment(), jit->stubs.cpu_features());
+
+    x86::Assembler a(&code);
+
+    FuncDetail detail;
+    FuncDetail callee;
+
+    detail.init(FuncSignature::build<int, Vu*, void*>(), code.environment());
+    callee.init(FuncSignature::build<void, Vu*>(), code.environment());
+
+    FuncFrame frame;
+
+    frame.init(detail);
+    frame.set_all_dirty();
+    frame.set_func_calls();
+    frame.update_call_stack_size(32);
+    frame.set_local_stack_size(16);
+
+    if (jit->stubs.cpu_features().x86().has_avx()) {
+        frame.set_avx_enabled();
+    }
+
+    x86::Gp state = x86::r12;
+    x86::Gp arg = x86::r13;
+
+    FuncArgsAssignment args(&detail);
+
+    args.assign_all(state, arg);
+    args.update_func_frame(frame);
+
+    frame.finalize();
+
+    x86::Mem saved_state = x86::qword_ptr(x86::rsp, (int32_t)frame.local_stack_offset());
+    x86::Mem saved_arg = x86::qword_ptr(x86::rsp, (int32_t)frame.local_stack_offset() + 8);
+    x86::Gp param = x86::gpq(callee.arg(0).reg_id());
+
+    a.emit_prolog(frame);
+    a.emit_args_assignment(frame, args);
+
+    if (!loop) {
+        a.mov(param, state);
+        a.call(arg);
+        a.xor_(x86::eax, x86::eax);
+        a.emit_epilog(frame);
+    } else {
+        Label next = a.new_label();
+        Label stop = a.new_label();
+        Label miss = a.new_label();
+
+        a.mov(saved_state, state);
+        a.mov(saved_arg, arg);
+
+        a.bind(next);
+        a.mov(x86::eax, x86::dword_ptr(state, offsetof(Vu, tpc)));
+        a.mov(x86::ecx, x86::dword_ptr(state, offsetof(Vu, micro_mem_size)));
+        a.and_(x86::ecx, x86::eax);
+        a.imul(x86::rcx, x86::rcx, (int32_t)sizeof(Block));
+        a.add(x86::rcx, arg);
+        a.cmp(x86::dword_ptr(x86::rcx, offsetof(Block, cycles)), 0);
+        a.je(miss);
+        a.cmp(x86::eax, x86::dword_ptr(x86::rcx, offsetof(Block, tpc)));
+        a.jne(miss);
+        a.mov(x86::rdx, x86::qword_ptr(x86::rcx, offsetof(Block, func)));
+        a.test(x86::rdx, x86::rdx);
+        a.je(miss);
+        a.cmp(x86::word_ptr(x86::rcx, offsetof(Block, region_blocks)), 1);
+        a.ja(miss);
+
+        a.movsxd(x86::r8, x86::dword_ptr(x86::rcx, offsetof(Block, cycles)));
+        a.mov(x86::r9, (uint64_t)(uintptr_t)profile::counters);
+        a.inc(x86::qword_ptr(x86::r9, profile::VU1_BLOCKS_COMPILED_RUN * 8));
+        a.add(x86::qword_ptr(x86::r9, profile::VU1_ENTRIES_COMPILED_RUN * 8), x86::r8);
+
+        a.mov(param, state);
+        a.call(x86::rdx);
+
+        a.mov(state, saved_state);
+        a.mov(arg, saved_arg);
+        a.cmp(x86::dword_ptr(state, offsetof(Vu, jit_exit)), VU_JIT_CONTINUE);
+        a.jne(stop);
+        a.mov(x86::rax, x86::qword_ptr(state, offsetof(Vu, vu_cycle)));
+        a.cmp(x86::rax, x86::qword_ptr(state, offsetof(Vu, run_deadline)));
+        a.jb(next);
+
+        a.bind(stop);
+        a.mov(x86::eax, 1);
+        a.emit_epilog(frame);
+
+        a.bind(miss);
+        a.xor_(x86::eax, x86::eax);
+        a.emit_epilog(frame);
+    }
+
+    void* fn = nullptr;
+
+    if (jit->stubs.add(&fn, &code) != Error::kOk) {
+        return nullptr;
+    }
+
+    return fn;
+}
+#endif
+
 Jit* create() {
     Jit* jit = new Jit();
+
+#if defined(ASMJIT_UJIT_X86)
+    void* enter = build_stub(jit, false);
+    void* dispatch = build_stub(jit, true);
+
+    if (enter && dispatch) {
+        jit->enter = (void (*)(Vu*, void*))enter;
+        jit->dispatch = (int (*)(Vu*, void*))dispatch;
+    }
+#endif
 
     jit->worker = std::thread(worker_main, jit);
 
     return jit;
+}
+
+void enter_block(Vu* vu, Block* block) {
+    Jit* jit = vu->jit;
+
+    if (jit && jit->enter) {
+        jit->enter(vu, (void*)block->func);
+    } else {
+        block->func(vu);
+    }
+}
+
+bool can_dispatch(Vu* vu) {
+    return vu->jit && vu->jit->dispatch;
+}
+
+bool dispatch(Vu* vu) {
+    return vu->jit->dispatch(vu, vu->block_cache.data()) != 0;
 }
 
 uint64_t blocks_compiled(Jit* jit) {
@@ -867,6 +1006,11 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
     ujit::UniCompiler uc(&bc, jit->rt.cpu_features(), jit->rt.cpu_hints());
 
     FuncNode* func = uc.add_func(FuncSignature::build<void, Vu*>());
+
+    if (jit->enter) {
+        func->frame()._preserved_regs[RegGroup::kGp] = 0;
+        func->frame()._preserved_regs[RegGroup::kVec] = 0;
+    }
 
     jit->state = uc.new_gp_ptr();
 
