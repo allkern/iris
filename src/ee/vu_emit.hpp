@@ -1780,6 +1780,60 @@ inline bool emit_mtir(Emitter& e, const Instruction& ins) {
     return true;
 }
 
+inline ujit::Gp emit_ps2_to_double(Emitter& e, const ujit::Gp& bits) {
+    ujit::UniCompiler& uc = *e.uc;
+
+    ujit::Gp out = uc.new_gp64();
+    ujit::Gp bias = uc.new_gp64();
+    ujit::Gp zero = uc.new_gp64();
+    ujit::Gp sign = uc.new_gp64();
+
+    uc.mov(out.r32(), bits);
+    uc.and_(out, out, Imm(0x7fffffff));
+    uc.shl(out, out, Imm(29));
+    uc.mov(bias, Imm(0x3800000000000000ull));
+    uc.add(out, out, bias);
+    uc.mov(zero, Imm(0));
+    uc.cmov(out, zero, ujit::test_z(bits, Imm(0x7f800000)));
+    uc.mov(sign.r32(), bits);
+    uc.shr(sign.r32(), sign.r32(), Imm(31));
+    uc.shl(sign, sign, Imm(63));
+    uc.or_(out, out, sign);
+
+    return out;
+}
+
+inline ujit::Gp emit_ps2_pack_double(Emitter& e, const ujit::Gp& bits) {
+    ujit::UniCompiler& uc = *e.uc;
+
+    ujit::Gp magnitude = uc.new_gp64();
+    ujit::Gp limit = uc.new_gp64();
+    ujit::Gp rounded = uc.new_gp64();
+    ujit::Gp sign = uc.new_gp64();
+    ujit::Gp out = uc.new_gp32();
+    ujit::Gp clamp = uc.new_gp32();
+
+    uc.mov(limit, Imm(0x7fffffffffffffffull));
+    uc.and_(magnitude, bits, limit);
+    uc.mov(rounded, magnitude);
+    uc.add(rounded, rounded, Imm(1 << 28));
+    uc.shr(rounded, rounded, Imm(29));
+    uc.mov(out.r32(), rounded.r32());
+    uc.sub(out, out, Imm(896u << 23));
+    uc.mov(clamp, Imm(0x7f7fffff));
+    uc.mov(limit, Imm(1151ull << 23));
+    uc.cmov(out, clamp, ujit::ucmp_ge(rounded, limit));
+    uc.mov(limit, Imm(897ull << 52));
+    uc.mov(clamp, Imm(0));
+    uc.cmov(out, clamp, ujit::ucmp_lt(magnitude, limit));
+    uc.mov(sign, bits);
+    uc.shr(sign, sign, Imm(63));
+    uc.shl(sign.r32(), sign.r32(), Imm(31));
+    uc.or_(out, out, sign.r32());
+
+    return out;
+}
+
 inline bool emit_qdiv(Emitter& e, const Instruction& ins, uint32_t key) {
     ujit::UniCompiler& uc = *e.uc;
 
@@ -1795,33 +1849,96 @@ inline bool emit_qdiv(Emitter& e, const Instruction& ins, uint32_t key) {
 
     e.emit_status(true);
 
-    ujit::Gp result = uc.new_gp64();
+    ujit::Gp value = uc.new_gp32();
+    ujit::Gp flags = uc.new_gp32();
+    ujit::Gp invalid = uc.new_gp32();
 
-    InvokeNode* call;
+    uc.mov(flags, Imm(0));
+    uc.mov(invalid, Imm(0x410));
 
     if (key == 0x39) {
-        call = jit_invoke(uc, (uintptr_t)&jit_sqrt_math,
-                          FuncSignature::build<uint64_t, uint32_t>());
+        ujit::Gp magnitude = uc.new_gp32();
 
-        call->set_arg(0, a);
+        uc.and_(magnitude, a, Imm(0x7fffffff));
+
+        ujit::Vec x = uc.new_vec128();
+
+        uc.s_mov_u64(x, emit_ps2_to_double(e, magnitude));
+        uc.s_sqrt_f64(x, x);
+
+        ujit::Gp bits = uc.new_gp64();
+
+        uc.s_mov_u64(bits, x);
+        uc.mov(value, emit_ps2_pack_double(e, bits));
+        uc.cmov(flags, invalid, ujit::scmp_lt(a, Imm(0)));
     } else {
-        call = jit_invoke(uc, (uintptr_t)(key == 0x38 ? &jit_div_math : &jit_rsqrt_math),
-                          FuncSignature::build<uint64_t, uint32_t, uint32_t>());
+        ujit::Gp den_bits = b;
 
-        call->set_arg(0, a);
-        call->set_arg(1, b);
+        if (key != 0x38) {
+            den_bits = uc.new_gp32();
+
+            uc.and_(den_bits, b, Imm(0x7fffffff));
+        }
+
+        ujit::Gp num = emit_ps2_to_double(e, a);
+        ujit::Gp den = emit_ps2_to_double(e, den_bits);
+        ujit::Gp one = uc.new_gp64();
+
+        uc.mov(one, Imm(0x3ff0000000000000ull));
+        uc.cmov(den, one, ujit::test_z(b, Imm(0x7f800000)));
+
+        ujit::Vec xn = uc.new_vec128();
+        ujit::Vec xd = uc.new_vec128();
+
+        uc.s_mov_u64(xn, num);
+        uc.s_mov_u64(xd, den);
+
+        if (key != 0x38) {
+            uc.s_sqrt_f64(xd, xd);
+        }
+
+        uc.s_div_f64(xn, xn, xd);
+
+        ujit::Gp bits = uc.new_gp64();
+
+        uc.s_mov_u64(bits, xn);
+        uc.mov(value, emit_ps2_pack_double(e, bits));
+
+        ujit::Gp fmax = uc.new_gp32();
+
+        if (key == 0x38) {
+            uc.xor_(fmax, a, b);
+        } else {
+            uc.mov(fmax, a);
+        }
+
+        uc.and_(fmax, fmax, Imm(0x80000000u));
+        uc.or_(fmax, fmax, Imm(0x7f7fffff));
+        uc.cmov(value, fmax, ujit::test_z(b, Imm(0x7f800000)));
+
+        ujit::Gp zero_flags = uc.new_gp32();
+
+        if (key == 0x38) {
+            uc.mov(zero_flags, Imm(0x820));
+            uc.cmov(zero_flags, invalid, ujit::test_z(a, Imm(0x7f800000)));
+        } else {
+            uc.cmov(flags, invalid, ujit::scmp_lt(b, Imm(0)));
+            uc.mov(zero_flags, flags);
+
+            ujit::Gp divide = uc.new_gp32();
+
+            uc.or_(divide, flags, Imm(0x820));
+            uc.cmov(zero_flags, divide, ujit::test_nz(a, Imm(0x7f800000)));
+        }
+
+        uc.cmov(flags, zero_flags, ujit::test_z(b, Imm(0x7f800000)));
     }
 
-    call->set_ret(0, result);
-
     ujit::Gp st = uc.new_gp32();
-    ujit::Gp flags = uc.new_gp64();
 
     uc.load_u32(st, e.mem(offsetof(Vu, status)));
     uc.and_(st, st, Imm(~0x30u));
-    uc.mov(flags, result);
-    uc.shr(flags, flags, Imm(32));
-    uc.or_(st, st, flags.r32());
+    uc.or_(st, st, flags);
     uc.store_u32(e.mem(offsetof(Vu, status)), st);
 
     e.load_scalars();
@@ -1840,7 +1957,7 @@ inline bool emit_qdiv(Emitter& e, const Instruction& ins, uint32_t key) {
     }
 
     uc.store_u32(e.mem(offsetof(Vu, prev_q)), old_q);
-    uc.store_u32(e.mem(offsetof(Vu, q)), result.r32());
+    uc.store_u32(e.mem(offsetof(Vu, q)), value);
 
     e.set_q(key == 0x3a ? 13 : 7);
 
