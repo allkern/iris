@@ -6877,15 +6877,53 @@ void compile_block(Ee* ee, Block* block) {
                     uc.mov(addr, Imm((int32_t)(int16_t)i.i16));
                     uc.add(addr, addr, rs.reg.r32());
 
-                    InvokeNode* invoke_node = jit_invoke(
-                        uc,
-                        (uintptr_t)bus_read32,
-                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
-                    );
+                    if (ee->vfast_r) {
+                        ujit::Gp pidx = uc.new_gp32();
+                        ujit::Gp idx = uc.new_gp64();
+                        ujit::Gp tbl = uc.new_gp_ptr();
+                        ujit::Gp base = uc.new_gp_ptr();
+                        ujit::Gp off = uc.new_gp64();
 
-                    invoke_node->set_arg(0, ee->state_ptr);
-                    invoke_node->set_arg(1, addr);
-                    invoke_node->set_ret(0, tmp);
+                        asmjit::Label slow = uc.new_label();
+                        asmjit::Label done = uc.new_label();
+
+                        uc.shr(pidx, addr, Imm(12));
+                        uc.mov(idx.r32(), pidx);
+                        uc.mov(tbl, Imm((uint64_t)(uintptr_t)ee->vfast_r));
+
+                        uc.load_u64(base, ujit::mem_ptr(tbl, idx, 3));
+                        uc.j(slow, ujit::test_z(base));
+
+                        uc.mov(off.r32(), addr);
+                        uc.and_(off, off, Imm(0xfff));
+
+                        uc.load_u32(tmp, ujit::mem_ptr(base, off, 0));
+
+                        uc.j(done);
+                        uc.bind(slow);
+
+                        InvokeNode* slow_node = jit_invoke(
+                            uc,
+                            (uintptr_t)vfast_read32,
+                            FuncSignature::build<uint64_t, Ee*, uint32_t>()
+                        );
+
+                        slow_node->set_arg(0, ee->state_ptr);
+                        slow_node->set_arg(1, addr);
+                        slow_node->set_ret(0, tmp);
+
+                        uc.bind(done);
+                    } else {
+                        InvokeNode* invoke_node = jit_invoke(
+                            uc,
+                            (uintptr_t)bus_read32,
+                            FuncSignature::build<uint64_t, Ee*, uint32_t>()
+                        );
+
+                        invoke_node->set_arg(0, ee->state_ptr);
+                        invoke_node->set_arg(1, addr);
+                        invoke_node->set_ret(0, tmp);
+                    }
 
                     uc.store_u32(EE(f[i.rt.r]), tmp);
                 } break;
