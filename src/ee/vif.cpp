@@ -1545,6 +1545,30 @@ static void vif_unpack_finish_span(Vif* vif, const uint8_t* data, uint32_t verti
     }
 }
 
+template <uint32_t FMT>
+static uint128_t vif_unpack_simple_run(Vif* vif, const uint8_t* data, uint32_t vertices) {
+    constexpr uint32_t per_vertex = FMT == UNPACK_V4_32 ? 4 : FMT == UNPACK_V3_32 ? 3 : (FMT == UNPACK_V2_32 || FMT == UNPACK_V4_16) ? 2 : 1;
+
+    uint128_t* vu_mem = vu::get_vu_mem_ptr(vif->hw.vu, 0);
+    uint32_t mask = vu::get_vu_mem_size(vif->hw.vu);
+    uint32_t addr = vif->addr;
+    bool sign_extend = !vif->unpack_usn;
+
+    uint128_t last = { 0 };
+
+    for (uint32_t vertex = 0; vertex < vertices; vertex++) {
+        last = vif_decode_vertex(FMT, data + (size_t)vertex * per_vertex * 4, sign_extend);
+
+        vu_mem[addr & mask] = last;
+
+        addr++;
+    }
+
+    vif->addr = addr;
+
+    return last;
+}
+
 static uint32_t vif_unpack_simple(Vif* vif, const uint8_t* data, uint32_t words) {
     uint32_t per_vertex = vif_unpack_vertex_words(vif->unpack_fmt);
     uint32_t vertices = words / per_vertex;
@@ -1553,31 +1577,126 @@ static uint32_t vif_unpack_simple(Vif* vif, const uint8_t* data, uint32_t words)
         return 0;
     }
 
-    uint128_t* vu_mem = vu::get_vu_mem_ptr(vif->hw.vu, 0);
-    uint32_t mask = vu::get_vu_mem_size(vif->hw.vu);
-    uint32_t addr = vif->addr;
-    uint32_t fmt = vif->unpack_fmt;
-    bool sign_extend = !vif->unpack_usn;
+    uint128_t last;
 
-    uint128_t last = { 0 };
-
-    for (uint32_t vertex = 0; vertex < vertices; vertex++) {
-        const uint8_t* source = data + (size_t)vertex * per_vertex * 4;
-
-        last = vif_decode_vertex(fmt, source, sign_extend);
-
-        vu_mem[addr & mask] = last;
-
-        addr++;
+    switch (vif->unpack_fmt) {
+        case UNPACK_S_32: last = vif_unpack_simple_run<UNPACK_S_32>(vif, data, vertices); break;
+        case UNPACK_V2_32: last = vif_unpack_simple_run<UNPACK_V2_32>(vif, data, vertices); break;
+        case UNPACK_V2_16: last = vif_unpack_simple_run<UNPACK_V2_16>(vif, data, vertices); break;
+        case UNPACK_V3_32: last = vif_unpack_simple_run<UNPACK_V3_32>(vif, data, vertices); break;
+        case UNPACK_V4_32: last = vif_unpack_simple_run<UNPACK_V4_32>(vif, data, vertices); break;
+        case UNPACK_V4_16: last = vif_unpack_simple_run<UNPACK_V4_16>(vif, data, vertices); break;
+        default: last = vif_unpack_simple_run<UNPACK_V4_8>(vif, data, vertices); break;
     }
-
-    vif->addr = addr;
     vif->unpack_cycle = (int)(((uint32_t)vif->unpack_cycle + vertices) % vif->unpack_wl);
     vif->unpack_wcount -= (int)vertices;
 
     vif_unpack_finish_span(vif, data, vertices, last);
 
     return vertices * per_vertex;
+}
+
+struct VifLaneMasks {
+    uint32_t data[4][4];
+    uint32_t row[4][4];
+    uint32_t keep[4][4];
+    uint32_t column[4][4];
+};
+
+static inline void vif_lane_masks(const Vif* vif, VifLaneMasks* m) {
+    for (int key = 0; key < 4; key++) {
+        uint32_t mask = (vif->mask >> (key * 8)) & 0xff;
+
+        for (int i = 0; i < 4; i++) {
+            uint32_t source = vif->unpack_mask ? (mask >> (i * 2)) & 3 : VIF_COMPONENT_DATA;
+
+            m->data[key][i] = source == VIF_COMPONENT_DATA ? ~0u : 0;
+            m->row[key][i] = source == VIF_COMPONENT_ROW ? ~0u : 0;
+            m->keep[key][i] = source == VIF_COMPONENT_KEEP ? ~0u : 0;
+            m->column[key][i] = source == VIF_COMPONENT_COLUMN ? vif->c[key] : 0;
+        }
+    }
+}
+
+template <uint32_t MODE, uint32_t FMT>
+static uint128_t vif_unpack_masked(Vif* vif, const uint8_t* data, uint32_t vertices) {
+    constexpr uint32_t per_vertex = FMT == UNPACK_V4_32 ? 4 : FMT == UNPACK_V3_32 ? 3 : (FMT == UNPACK_V2_32 || FMT == UNPACK_V4_16) ? 2 : 1;
+
+    VifLaneMasks m;
+
+    vif_lane_masks(vif, &m);
+
+    uint128_t* memory = vu::get_vu_mem_ptr(vif->hw.vu, 0);
+    uint32_t memory_mask = vu::get_vu_mem_size(vif->hw.vu);
+    bool sign_extend = !vif->unpack_usn;
+    bool masked = vif->unpack_mask != 0;
+    int wl = (int)vif->unpack_wl;
+    uint32_t skip = vif->unpack_skip;
+    uint32_t addr = vif->addr;
+    int cycle = vif->unpack_cycle;
+
+    uint32_t row[4] = { vif->r[0], vif->r[1], vif->r[2], vif->r[3] };
+
+    uint128_t last = { 0 };
+
+    for (uint32_t vertex = 0; vertex < vertices; vertex++) {
+        last = vif_decode_vertex(FMT, data + (size_t)vertex * per_vertex * 4, sign_extend);
+
+        int key = masked ? (cycle > 3 ? 3 : cycle) : 0;
+
+        uint128_t& slot = memory[addr & memory_mask];
+        uint128_t out;
+
+        for (int i = 0; i < 4; i++) {
+            uint32_t d = last.u32[i];
+            uint32_t dm = m.data[key][i];
+
+            if constexpr (MODE == 1) {
+                d = row[i] + d;
+            } else if constexpr (MODE == 2) {
+                row[i] += d & dm;
+                d = row[i];
+            } else if constexpr (MODE == 3) {
+                row[i] = (d & dm) | (row[i] & ~dm);
+            }
+
+            out.u32[i] = (d & dm) | (row[i] & m.row[key][i]) | m.column[key][i] | (slot.u32[i] & m.keep[key][i]);
+        }
+
+        slot = out;
+
+        addr++;
+        cycle++;
+
+        if (cycle == wl) {
+            addr += skip;
+            cycle = 0;
+        }
+    }
+
+    vif->addr = addr;
+    vif->unpack_cycle = cycle;
+    vif->unpack_wcount -= (int)vertices;
+
+    for (int i = 0; i < 4; i++) {
+        vif->r[i] = row[i];
+    }
+
+    return last;
+}
+
+template <uint32_t MODE>
+static uint128_t vif_unpack_masked_mode(Vif* vif, const uint8_t* data, uint32_t vertices) {
+    switch (vif->unpack_fmt) {
+        case UNPACK_S_32: return vif_unpack_masked<MODE, UNPACK_S_32>(vif, data, vertices);
+        case UNPACK_V2_32: return vif_unpack_masked<MODE, UNPACK_V2_32>(vif, data, vertices);
+        case UNPACK_V2_16: return vif_unpack_masked<MODE, UNPACK_V2_16>(vif, data, vertices);
+        case UNPACK_V3_32: return vif_unpack_masked<MODE, UNPACK_V3_32>(vif, data, vertices);
+        case UNPACK_V4_32: return vif_unpack_masked<MODE, UNPACK_V4_32>(vif, data, vertices);
+        case UNPACK_V4_16: return vif_unpack_masked<MODE, UNPACK_V4_16>(vif, data, vertices);
+    }
+
+    return vif_unpack_masked<MODE, UNPACK_V4_8>(vif, data, vertices);
 }
 
 static uint32_t vif_unpack_general(Vif* vif, const uint8_t* data, uint32_t words) {
@@ -1591,16 +1710,25 @@ static uint32_t vif_unpack_general(Vif* vif, const uint8_t* data, uint32_t words
     uint32_t fmt = vif->unpack_fmt;
     bool sign_extend = !vif->unpack_usn;
 
-    VifVertexWriter writer = vif_begin_vertices(vif);
-
     uint128_t last = { 0 };
 
-    for (uint32_t vertex = 0; vertex < vertices; vertex++) {
-        const uint8_t* source = data + (size_t)vertex * per_vertex * 4;
+    if (vif->unpack_cl >= vif->unpack_wl) {
+        switch (vif->mode) {
+            case 1: last = vif_unpack_masked_mode<1>(vif, data, vertices); break;
+            case 2: last = vif_unpack_masked_mode<2>(vif, data, vertices); break;
+            case 3: last = vif_unpack_masked_mode<3>(vif, data, vertices); break;
+            default: last = vif_unpack_masked_mode<0>(vif, data, vertices); break;
+        }
+    } else {
+        VifVertexWriter writer = vif_begin_vertices(vif);
 
-        last = vif_decode_vertex(fmt, source, sign_extend);
+        for (uint32_t vertex = 0; vertex < vertices; vertex++) {
+            const uint8_t* source = data + (size_t)vertex * per_vertex * 4;
 
-        vif_write_data_vertex(vif, writer, last);
+            last = vif_decode_vertex(fmt, source, sign_extend);
+
+            vif_write_data_vertex(vif, writer, last);
+        }
     }
 
     profile::count(profile::VIF1_UNPACK_GENERAL_VERTICES, vertices);
