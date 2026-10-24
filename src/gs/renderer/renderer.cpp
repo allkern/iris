@@ -166,8 +166,8 @@ Image get_frame(Renderer* renderer) {
     return renderer->get_frame(renderer->udata);
 }
 
-bool get_scanout(Renderer* renderer, uint64_t id, Image* image) {
-    return renderer->get_scanout(renderer->udata, id, image);
+bool get_scanout(Renderer* renderer, uint64_t id, Image* image, bool wait) {
+    return renderer->get_scanout(renderer->udata, id, image, wait);
 }
 
 void read_vram(Renderer* renderer, void* dst, size_t size) {

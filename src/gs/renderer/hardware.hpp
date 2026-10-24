@@ -145,6 +145,8 @@ struct state {
     uint64_t scanout_id = 0;
     Image scanout_image = {};
     Vulkan::ImageHandle scanout_history[8];
+    uint64_t scanout_ids[8] = {};
+    Image scanout_images[8] = {};
     int scanout_next = 0;
 
     gs::Gs* gs;
@@ -157,7 +159,7 @@ void reset(void* udata);
 void destroy(void* udata);
 void set_config(void* udata, void* config);
 Image get_frame(void* udata);
-bool get_scanout(void* udata, uint64_t id, Image* image);
+bool get_scanout(void* udata, uint64_t id, Image* image, bool wait);
 
 void transfer(void* udata, int path, const void* data, size_t size);
 void readback(void* udata, void* data, size_t size);

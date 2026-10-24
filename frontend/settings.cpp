@@ -195,6 +195,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->flip_x = display["flip_x"].value_or(false);
     iris->flip_y = display["flip_y"].value_or(false);
     iris->present_mode = display["present_mode"].value_or(render::FPS_60);
+    iris->frame_pacing = display["frame_pacing"].value_or(render::PACING_STEADY);
     iris->no_decorations = display["no_decorations"].value_or(false);
     iris->remember_window_size = display["remember_window_size"].value_or(false);
 
@@ -719,6 +720,7 @@ void save(Instance* iris) {
             { "flip_x", iris->flip_x },
             { "flip_y", iris->flip_y },
             { "present_mode", iris->present_mode },
+            { "frame_pacing", iris->frame_pacing },
             { "no_decorations", iris->no_decorations },
             { "remember_window_size", iris->remember_window_size }
         } },

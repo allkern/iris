@@ -87,6 +87,11 @@ enum PresentMode {
     UNCAPPED
 };
 
+enum FramePacing {
+    PACING_IMMEDIATE,
+    PACING_STEADY
+};
+
 bool init(Instance* iris);
 void destroy(Instance* iris);
 bool render_frame(Instance* iris, VkCommandBuffer command_buffer, VkFramebuffer framebuffer);

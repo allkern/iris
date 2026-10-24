@@ -633,6 +633,78 @@ static bool can_scanout_async(Instance* iris) {
         && !iris->ui.loading_file_active;
 }
 
+static bool paced_presentation(Instance* iris) {
+    return !iris->headless
+        && iris->frame_pacing == render::PACING_STEADY
+        && (iris->present_mode == render::FPS_60 || iris->present_mode == render::FPS_30)
+        && can_scanout_async(iris);
+}
+
+static std::chrono::nanoseconds frame_target(Instance* iris) {
+    double framerate = gs::get_field_rate(iris->ps2->gs);
+
+    if (iris->present_mode == render::FPS_30) {
+        framerate /= 2.0;
+    }
+
+    return std::chrono::nanoseconds((int64_t)(1000000000.0 / framerate));
+}
+
+static void wait_until(std::chrono::high_resolution_clock::time_point deadline) {
+    using namespace std::chrono;
+
+    constexpr int64_t SPIN_MARGIN_NS = 1000000; // 1 ms
+
+    int64_t wait_ns = duration_cast<nanoseconds>(deadline - high_resolution_clock::now()).count();
+
+    if (wait_ns > SPIN_MARGIN_NS)
+        SDL_DelayNS((Uint64)(wait_ns - SPIN_MARGIN_NS));
+
+    while (high_resolution_clock::now() < deadline)
+        SDL_CPUPauseInstruction();
+}
+
+static void present_due(Instance* iris) {
+    using namespace std::chrono;
+
+    auto target = frame_target(iris);
+    auto now = high_resolution_clock::now();
+
+    if (iris->present_slot.time_since_epoch().count() == 0 || iris->present_slot < now - 2 * target)
+        iris->present_slot = now;
+
+    if (now < iris->present_slot || iris->present_queue.empty())
+        return;
+
+    while (iris->present_queue.size() > 2)
+        iris->present_queue.pop_front();
+
+    gs::renderer::Image image;
+
+    if (!gs::renderer::get_scanout(iris->renderer, iris->present_queue.front(), &image, false))
+        return;
+
+    iris->present_queue.pop_front();
+
+    if (now - iris->present_slot > target / 8) {
+        iris->present_slot = now + target;
+    } else {
+        iris->present_slot += target;
+    }
+
+    iris->scanout_async = true;
+    iris->scanout_image = image;
+
+    update_window(iris);
+
+    iris->scanout_async = false;
+}
+
+static inline void poll_present(Instance* iris, bool paced) {
+    if (paced && (++iris->present_polls & 255) == 0)
+        present_due(iris);
+}
+
 static void begin_scanout(Instance* iris) {
     iris->scanout_async = false;
 
@@ -644,6 +716,12 @@ static void begin_scanout(Instance* iris) {
         gs::get_privileged_state(iris->ps2->gs, &request.state);
 
         mtvu::push_backend_packet(iris->ps2->mtvu, gs::renderer::PATH_SCANOUT, &request, sizeof(request));
+
+        if (paced_presentation(iris)) {
+            iris->present_queue.push_back(request.id);
+
+            return;
+        }
 
         iris->scanout_async = gs::renderer::get_scanout(iris->renderer, request.id - 1, &iris->scanout_image);
 
@@ -682,6 +760,9 @@ SDL_AppResult update(Instance* iris) {
             iris->debug.step = false;
         }
 
+        iris->present_queue.clear();
+        iris->present_slot = {};
+
         update_window(iris);
 
         return SDL_APP_CONTINUE;
@@ -690,12 +771,21 @@ SDL_AppResult update(Instance* iris) {
     sync_breakpoints(iris);
     resume_breakpoints(iris);
 
+    const bool paced = paced_presentation(iris);
+
+    if (!paced) {
+        iris->present_queue.clear();
+        iris->present_slot = {};
+    }
+
     if (iris->ps2 && iris->ps2->speed)
         slirp::pump(iris->ps2->speed->smap);
 
     // Execute until VBlank
     while (!gs::is_vblank(iris->ps2->gs)) {
         do_cycle(iris);
+
+        poll_present(iris, paced);
 
         if (iris->debug.pause) {
             update_window(iris);
@@ -710,13 +800,19 @@ SDL_AppResult update(Instance* iris) {
     render::gs_dump_tick(iris);
 
     // Draw frame
-    update_window(iris);
+    if (paced) {
+        present_due(iris);
+    } else {
+        update_window(iris);
+    }
 
     iris->scanout_async = false;
 
     // Execute until vblank is over
     while (gs::is_vblank(iris->ps2->gs)) {
         do_cycle(iris);
+
+        poll_present(iris, paced);
 
         if (iris->debug.pause) {
             update_window(iris);
@@ -756,13 +852,7 @@ SDL_AppResult update(Instance* iris) {
         case render::FPS_60: {
             using namespace std::chrono;
 
-            double framerate = gs::get_field_rate(iris->ps2->gs);
-
-            if (iris->present_mode == render::FPS_30) {
-                framerate /= 2.0;
-            }
-
-            auto target = nanoseconds((int64_t)(1000000000.0 / framerate));
+            auto target = frame_target(iris);
             auto now = high_resolution_clock::now();
 
             if (iris->frame_deadline.time_since_epoch().count() == 0 || iris->frame_deadline < now - 2 * target)
@@ -770,15 +860,24 @@ SDL_AppResult update(Instance* iris) {
 
             iris->frame_deadline += target;
 
-            constexpr int64_t SPIN_MARGIN_NS = 1000000; // 1 ms
+            if (!paced) {
+                wait_until(iris->frame_deadline);
 
-            int64_t wait_ns = duration_cast<nanoseconds>(iris->frame_deadline - now).count();
+                break;
+            }
 
-            if (wait_ns > SPIN_MARGIN_NS)
-                SDL_DelayNS((Uint64)(wait_ns - SPIN_MARGIN_NS));
+            while (high_resolution_clock::now() < iris->frame_deadline) {
+                present_due(iris);
 
-            while (high_resolution_clock::now() < iris->frame_deadline)
-                SDL_CPUPauseInstruction();
+                auto next = iris->frame_deadline;
+
+                if (!iris->present_queue.empty())
+                    next = std::min(next, std::max(iris->present_slot, high_resolution_clock::now() + microseconds(200)));
+
+                wait_until(next);
+            }
+
+            present_due(iris);
         } break;
     }
 

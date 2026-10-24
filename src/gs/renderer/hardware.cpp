@@ -306,6 +306,8 @@ static void publish_scanout(state* ctx, const ScanoutRequest& request) {
     std::lock_guard <std::mutex> lock(ctx->scanout_mutex);
 
     ctx->scanout_history[ctx->scanout_next] = ctx->current_scanout;
+    ctx->scanout_ids[ctx->scanout_next] = request.id;
+    ctx->scanout_images[ctx->scanout_next] = image;
     ctx->scanout_next = (ctx->scanout_next + 1) % 8;
     ctx->scanout_image = image;
     ctx->scanout_id = request.id;
@@ -313,13 +315,25 @@ static void publish_scanout(state* ctx, const ScanoutRequest& request) {
     ctx->scanout_cv.notify_all();
 }
 
-bool get_scanout(void* udata, uint64_t id, Image* image) {
+bool get_scanout(void* udata, uint64_t id, Image* image, bool wait) {
     state* ctx = static_cast<state*>(udata);
 
     std::unique_lock <std::mutex> lock(ctx->scanout_mutex);
 
-    if (!ctx->scanout_cv.wait_for(lock, std::chrono::milliseconds(500), [&] { return ctx->scanout_id >= id; })) {
+    if (wait) {
+        if (!ctx->scanout_cv.wait_for(lock, std::chrono::milliseconds(500), [&] { return ctx->scanout_id >= id; })) {
+            return false;
+        }
+    } else if (ctx->scanout_id < id) {
         return false;
+    }
+
+    for (int i = 0; i < 8; i++) {
+        if (ctx->scanout_ids[i] == id) {
+            *image = ctx->scanout_images[i];
+
+            return true;
+        }
     }
 
     *image = ctx->scanout_image;

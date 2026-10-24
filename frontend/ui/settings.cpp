@@ -348,6 +348,11 @@ static const char* settings_present_mode_names[] = {
     "Uncapped"
 };
 
+static const char* settings_frame_pacing_names[] = {
+    "Immediate",
+    "Steady"
+};
+
 static const char* settings_rotation_names[] = {
     "0 degrees",
     "90 degrees",
@@ -1157,6 +1162,24 @@ void show_graphics_settings(Instance* iris) {
 
         EndCombo();
     }
+
+    BeginDisabled(iris->present_mode != render::FPS_30 && iris->present_mode != render::FPS_60);
+
+    Text("Frame pacing");
+
+    if (BeginCombo("##framepacing", settings_frame_pacing_names[iris->frame_pacing])) {
+        for (int i = 0; i < IM_ARRAYSIZE(settings_frame_pacing_names); i++) {
+            if (imgui::Selectable(settings_frame_pacing_names[i], iris->frame_pacing == i)) {
+                iris->frame_pacing = i;
+            }
+        }
+
+        EndCombo();
+    }
+
+    SetItemTooltip("Steady presents frames on a fixed clock, so uneven emulation cost doesn't show as stutter. Immediate presents each frame as soon as it's emulated. Applies to the 30 and 60 FPS limits with frame pipelining on");
+
+    EndDisabled();
 
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     Checkbox(" Integer scaling", &iris->integer_scaling);

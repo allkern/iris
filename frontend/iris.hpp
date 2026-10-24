@@ -441,6 +441,7 @@ struct Instance {
     int timescale = 1;
     int present_mode = render::FPS_60;
     int capped_present_mode = render::FPS_60;
+    int frame_pacing = render::PACING_STEADY;
     int screenshot_format = render::PNG;
     int screenshot_jpg_quality_mode = render::MAXIMUM;
     int screenshot_jpg_quality = 50;
@@ -449,6 +450,9 @@ struct Instance {
     bool limit_fps = true;
     float fps_cap = 60.0f;
     std::chrono::high_resolution_clock::time_point frame_deadline;
+    std::chrono::high_resolution_clock::time_point present_slot;
+    std::deque <uint64_t> present_queue;
+    uint32_t present_polls = 0;
     std::string loaded = "";
     std::string arcade_id = "";
 

@@ -129,7 +129,7 @@ struct Renderer {
     void (*reset)(void* udata);
     void (*destroy)(void* udata);
     Image (*get_frame)(void* udata);
-    bool (*get_scanout)(void* udata, uint64_t id, Image* image);
+    bool (*get_scanout)(void* udata, uint64_t id, Image* image, bool wait);
     void (*transfer)(void* udata, int path, const void* data, size_t size);
     void (*readback)(void* udata, void* data, size_t size);
     void (*read_vram)(void* udata, void* dst, size_t size);
@@ -145,7 +145,7 @@ void destroy(Renderer* renderer);
 void set_config(Renderer* renderer, void* config);
 
 Image get_frame(Renderer* renderer);
-bool get_scanout(Renderer* renderer, uint64_t id, Image* image);
+bool get_scanout(Renderer* renderer, uint64_t id, Image* image, bool wait = true);
 void read_vram(Renderer* renderer, void* dst, size_t size);
 
 void lock_queue();
