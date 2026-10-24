@@ -520,7 +520,7 @@ static void emit_entry(Jit* jit, Emitter& e, const BlockEntry* entry, uint32_t n
         if (entry->hazard3) {
             e.load_scalars();
 
-            uc.mov(e.q_delay_reg, Imm(0));
+            e.set_q(0);
         }
 
         if (!entry->upper.dst.reg) {
@@ -883,6 +883,31 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
 
     const uint32_t mask = (uint32_t)vu->micro_mem_size;
 
+    bool guard_free = true;
+
+    for (int m = 0; m < member_count; m++) {
+        for (const BlockEntry& entry : members[m]->entries) {
+            if (lower_key(entry.lower.opcode) == 0x15) {
+                guard_free = false;
+            }
+        }
+    }
+
+    if (guard_free) {
+        Label no_guard = uc.new_label();
+
+        ujit::Gp guard = uc.new_gp32();
+
+        uc.load_i32(guard, VU(fsset_guard));
+        uc.j(no_guard, ujit::test_z(guard));
+
+        store_imm32(uc, VU(jit_exit), VU_JIT_INTERPRET);
+
+        uc.j(region_exit);
+
+        uc.bind(no_guard);
+    }
+
     store_imm32(uc, VU(jit_exit), VU_JIT_CONTINUE);
 
     for (int m = 0; m < member_count; m++) {
@@ -895,6 +920,7 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
         e.vu = vu;
         e.uc = &uc;
         e.state = jit->state;
+        e.guard_free = guard_free;
         e.consts = uc.new_gp_ptr();
 
         uc.mov(e.consts, Imm((uintptr_t)g_vu_const));

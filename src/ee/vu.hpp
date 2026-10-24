@@ -51,7 +51,8 @@ enum {
 
 enum {
     VU_JIT_CONTINUE,
-    VU_JIT_STOP
+    VU_JIT_STOP,
+    VU_JIT_INTERPRET
 };
 
 struct Reg128 {

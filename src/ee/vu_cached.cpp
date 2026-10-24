@@ -3244,6 +3244,12 @@ static bool run_block(Vu* vu, Block* block) {
 
     block->func(vu);
 
+    if (vu->jit_exit == VU_JIT_INTERPRET) {
+        vu->jit_exit = VU_JIT_CONTINUE;
+
+        return execute_block(vu, block);
+    }
+
     return vu->jit_exit != VU_JIT_CONTINUE;
 }
 
