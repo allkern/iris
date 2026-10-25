@@ -31,6 +31,10 @@
 #include <cstring>
 #include <vector>
 
+#ifdef _EE_USE_INTRINSICS
+#include <immintrin.h>
+#endif
+
 #include "vif.hpp"
 #include "gif.hpp"
 #include "mtvu.hpp"
@@ -1555,8 +1559,47 @@ static uint128_t vif_unpack_simple_run(Vif* vif, const uint8_t* data, uint32_t v
     bool sign_extend = !vif->unpack_usn;
 
     uint128_t last = { 0 };
+    uint32_t vertex = 0;
 
-    for (uint32_t vertex = 0; vertex < vertices; vertex++) {
+#ifdef _EE_USE_INTRINSICS
+    if constexpr (FMT == UNPACK_V3_32 || FMT == UNPACK_V2_32 || FMT == UNPACK_V4_32) {
+        const __m128i xyz = _mm_setr_epi32(-1, -1, -1, 0);
+
+        while (vertex + 4 < vertices && (addr & mask) + 4 <= mask + 1) {
+            const __m128i* source = (const __m128i*)(data + (size_t)vertex * per_vertex * 4);
+            __m128i* dest = (__m128i*)&vu_mem[addr & mask];
+
+            if constexpr (FMT == UNPACK_V3_32) {
+                __m128i a = _mm_loadu_si128(source);
+                __m128i b = _mm_loadu_si128(source + 1);
+                __m128i c = _mm_loadu_si128(source + 2);
+
+                _mm_storeu_si128(dest, _mm_and_si128(a, xyz));
+                _mm_storeu_si128(dest + 1, _mm_and_si128(_mm_alignr_epi8(b, a, 12), xyz));
+                _mm_storeu_si128(dest + 2, _mm_and_si128(_mm_alignr_epi8(c, b, 8), xyz));
+                _mm_storeu_si128(dest + 3, _mm_srli_si128(c, 4));
+            } else if constexpr (FMT == UNPACK_V2_32) {
+                __m128i a = _mm_loadu_si128(source);
+                __m128i b = _mm_loadu_si128(source + 1);
+
+                _mm_storeu_si128(dest, _mm_move_epi64(a));
+                _mm_storeu_si128(dest + 1, _mm_srli_si128(a, 8));
+                _mm_storeu_si128(dest + 2, _mm_move_epi64(b));
+                _mm_storeu_si128(dest + 3, _mm_srli_si128(b, 8));
+            } else {
+                _mm_storeu_si128(dest, _mm_loadu_si128(source));
+                _mm_storeu_si128(dest + 1, _mm_loadu_si128(source + 1));
+                _mm_storeu_si128(dest + 2, _mm_loadu_si128(source + 2));
+                _mm_storeu_si128(dest + 3, _mm_loadu_si128(source + 3));
+            }
+
+            vertex += 4;
+            addr += 4;
+        }
+    }
+#endif
+
+    for (; vertex < vertices; vertex++) {
         last = vif_decode_vertex(FMT, data + (size_t)vertex * per_vertex * 4, sign_extend);
 
         vu_mem[addr & mask] = last;
