@@ -32,6 +32,7 @@
 #include <math.h>
 #include <fenv.h>
 
+#include <algorithm>
 #include <bit>
 
 #ifdef _EE_USE_INTRINSICS
@@ -8896,7 +8897,11 @@ void compile_block(Ee* ee, Block* block) {
                 } break;
 
                 default: {
-                    flush_reg_cache(ee, &uc);
+                    bool vu_only = i.id >= I_VADDX && i.id <= I_VRXOR && i.id != I_VCALLMS && i.id != I_VCALLMSR;
+
+                    if (!vu_only) {
+                        flush_reg_cache(ee, &uc);
+                    }
 
                     InvokeNode* invoke_node = jit_invoke(
                         uc,
@@ -8907,8 +8912,10 @@ void compile_block(Ee* ee, Block* block) {
                     invoke_node->set_arg(0, ee->state_ptr);
                     invoke_node->set_arg(1, Imm((uintptr_t)&i));
 
-                    uc.store_zero_u64(EE(r[0].u64[0]));
-                    uc.store_zero_u64(EE(r[0].u64[1]));
+                    if (!vu_only) {
+                        uc.store_zero_u64(EE(r[0].u64[0]));
+                        uc.store_zero_u64(EE(r[0].u64[1]));
+                    }
                 } break;
             }
         }
