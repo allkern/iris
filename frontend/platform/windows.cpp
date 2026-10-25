@@ -76,6 +76,14 @@ void init_console() {
 }
 
 bool init(Instance* iris) {
+    if (!SetPriorityClass(GetCurrentProcess(), HIGH_PRIORITY_CLASS)) {
+        DWORD dwError = GetLastError();
+
+        iris_error(&iris->log.platform, "Failed to request higher priority class (%d)\n", dwError);
+    } else {
+        iris_info(&iris->log.platform, "Got higher priority class");
+    }
+
     apply_settings(iris);
 
     return true;
