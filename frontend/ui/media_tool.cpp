@@ -207,8 +207,6 @@ void MediaTool::show_memory_card_tab() {
     Checkbox("Format", &mcd_format);
     PopStyleVar();
 
-    SetItemTooltip("Lay down an empty filesystem, so the card is ready to use\nwithout formatting it from the BIOS first");
-
     if (Button("Create")) {
         // Data + ECC area for a PS2 card (nsects*512 + nsects*16)
         uint64_t size_in_bytes = mcd_type == MEMCARD_TYPE_PS2 ? 0x840000ull << mcd_size : 128 * 1024;
@@ -361,8 +359,6 @@ void MediaTool::show_usb_drive_tab() {
     PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
     Checkbox("Partition table", &usb_partition);
     PopStyleVar();
-
-    SetItemTooltip("Put the file system in a single MBR partition, the way a real\nthumb drive is laid out. Turn this off for a bare file system");
 
     if (Button("Create")) {
         std::string default_path = iris->paths.pref_path + "usb.img";

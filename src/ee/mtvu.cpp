@@ -556,7 +556,11 @@ static void stage_words(Mtvu* mtvu, int kind, int path, const uint8_t* data, uin
         flush_staged(mtvu);
     }
 
-    memcpy(&mtvu->staged[mtvu->staged_words], data, (size_t)words * 4);
+    if (words == 1) {
+        memcpy(&mtvu->staged[mtvu->staged_words], data, 4);
+    } else {
+        memcpy(&mtvu->staged[mtvu->staged_words], data, (size_t)words * 4);
+    }
 
     mtvu->staged_words += words;
     mtvu->staged_kind = kind;

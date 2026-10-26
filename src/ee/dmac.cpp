@@ -443,7 +443,7 @@ static inline uint32_t mfifo_wrap(Dmac* dmac, uint32_t addr) {
     return dmac->rbor | (addr & dmac->rbsr);
 }
 
-static inline uint32_t transfer_vif1_qwords(Dmac* dmac);
+static inline uint32_t transfer_vif1_bulk(Dmac* dmac);
 static bool vif1_must_wait(Dmac* dmac);
 
 static inline bool mfifo_tag_data_in_ring(Channel* c) {
@@ -488,10 +488,10 @@ static void mfifo_drain_vif1(Dmac* dmac) {
             }
 
             if (!ring) {
-                uint32_t qwords = transfer_vif1_qwords(dmac);
+                uint32_t words = transfer_vif1_bulk(dmac);
 
-                if (qwords) {
-                    dmac->vif1_budget -= (int64_t)qwords * 4;
+                if (words) {
+                    dmac->vif1_budget -= (int64_t)words;
 
                     progress = true;
 
@@ -802,27 +802,27 @@ static inline const uint8_t* dma_source_span(Dmac* dmac, uint32_t addr, uint32_t
     return ram->buf + addr;
 }
 
-static inline uint32_t transfer_vif1_unpack_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending) {
-    uint32_t count = pending < c->qwc ? pending : c->qwc;
+static inline uint32_t transfer_vif1_unpack_words(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending) {
+    uint32_t available = c->qwc * 4 - c->index;
+    uint32_t count = pending < available ? pending : available;
 
-    const uint8_t* source = dma_source_span(dmac, c->madr, count);
+    const uint8_t* source = dma_source_span(dmac, c->madr & ~0xfu, (c->index + count + 3) / 4);
 
-    if (source) {
-        vif::unpack_words(vif, source, count * 4);
-    } else {
-        for (uint32_t index = 0; index < count; index++) {
-            uint128_t qword = read_qword(dmac, c->madr + index * 16);
-
-            vif::unpack_words(vif, (const uint8_t*)&qword, 4);
-        }
+    if (!source) {
+        return 0;
     }
 
-    c->madr += count * 16;
-    c->qwc -= count;
+    vif::unpack_words(vif, source + (size_t)c->index * 4, count);
+
+    uint32_t consumed = c->index + count;
+
+    c->madr += count * 4;
+    c->qwc -= consumed / 4;
+    c->index = consumed % 4;
     c->qword_valid = false;
 
-    profile::count(profile::VIF1_DMA_QWORDS, count);
-    profile::count(profile::VIF1_UNPACK_BULK_QWORDS, count);
+    profile::count(profile::VIF1_DMA_QWORDS, consumed / 4);
+    profile::count(profile::VIF1_UNPACK_BULK_QWORDS, consumed / 4);
 
     return count;
 }
@@ -853,31 +853,35 @@ static inline uint32_t transfer_vif1_mpg_qwords(Dmac* dmac, Channel* c, vif::Vif
 
 static inline uint32_t transfer_vif1_direct_qwords(Dmac* dmac, Channel* c, vif::Vif* vif, uint32_t pending);
 
-static inline uint32_t transfer_vif1_qwords(Dmac* dmac) {
+static inline uint32_t transfer_vif1_bulk(Dmac* dmac) {
     Channel* c = &dmac->channels[VIF1];
 
-    if ((c->chcr & 0x100) == 0 || !c->qwc || c->index || (c->madr & 0xf)) {
+    if ((c->chcr & 0x100) == 0 || !c->qwc || (c->madr & 0xf) != c->index * 4) {
         return 0;
     }
 
     vif::Vif* vif = dmac->hw.bus->vif1;
 
+    uint32_t unpack = vif::unpack_words_pending(vif);
+
+    if (unpack) {
+        return transfer_vif1_unpack_words(dmac, c, vif, unpack);
+    }
+
+    if (c->index) {
+        return 0;
+    }
+
     uint32_t direct = vif::direct_qwords_pending(vif);
 
     if (direct) {
-        return transfer_vif1_direct_qwords(dmac, c, vif, direct);
-    }
-
-    uint32_t unpack = vif::unpack_words_pending(vif) / 4;
-
-    if (unpack) {
-        return transfer_vif1_unpack_qwords(dmac, c, vif, unpack);
+        return transfer_vif1_direct_qwords(dmac, c, vif, direct) * 4;
     }
 
     uint32_t mpg = vif::mpg_qwords_pending(vif);
 
     if (mpg) {
-        return transfer_vif1_mpg_qwords(dmac, c, vif, mpg);
+        return transfer_vif1_mpg_qwords(dmac, c, vif, mpg) * 4;
     }
 
     return 0;
@@ -1204,10 +1208,10 @@ static bool vif1_must_wait(Dmac* dmac) {
 
 static void run_vif1_transfer(Dmac* dmac) {
     while (true) {
-        uint32_t qwords = transfer_vif1_qwords(dmac);
+        uint32_t words = transfer_vif1_bulk(dmac);
 
-        if (qwords) {
-            dmac->vif1_budget -= (int64_t)qwords * 4;
+        if (words) {
+            dmac->vif1_budget -= (int64_t)words;
 
             continue;
         }

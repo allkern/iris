@@ -794,7 +794,6 @@ void show_system_settings(Instance* iris) {
     Checkbox("Fastboot System 246/256 games", &iris->arcade_dongle_boot);
     SetItemTooltip("Runs the game's boot program straight off the dongle instead of booting it through the board BIOS");
     Checkbox("Pipeline frames", &iris->frame_pipelining);
-    SetItemTooltip("Starts emulating the next frame while the current one is still being drawn. Faster in most 3D games, adds one frame of latency");
 
     imgui::section(iris, "Patches");
 
@@ -1176,8 +1175,6 @@ void show_graphics_settings(Instance* iris) {
 
         EndCombo();
     }
-
-    SetItemTooltip("Steady presents frames on a fixed clock, so uneven emulation cost doesn't show as stutter. Immediate presents each frame as soon as it's emulated. Applies to the 30 and 60 FPS limits with frame pipelining on");
 
     EndDisabled();
 
