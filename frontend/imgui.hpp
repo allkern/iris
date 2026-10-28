@@ -122,6 +122,11 @@ ImVec2 badge_size(const char* text);
 void badge(ImDrawList* draw_list, ImVec2 pos, const char* text, const ImVec4& color, float bg_alpha = 0.16f);
 void badge(const char* text, const ImVec4& color, float bg_alpha = 0.16f);
 
+bool BeginMainStatusBar();
+bool BeginStatusBar();
+void EndMainStatusBar();
+void EndStatusBar();
+
 }
 
 }

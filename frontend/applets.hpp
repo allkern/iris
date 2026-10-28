@@ -50,6 +50,7 @@
 #include "ui/modules.hpp"
 #include "ui/pad.hpp"
 #include "ui/remote.hpp"
+#include "ui/script_editor.hpp"
 #include "ui/settings.hpp"
 #include "ui/spu2.hpp"
 #include "ui/state.hpp"
@@ -87,6 +88,7 @@ struct Applets {
     DvdRemote dvd_remote;
     MediaTool media_tool;
     FileExplorer file_explorer;
+    ScriptEditor script_editor;
     GsDumpTool gs_dump_tool;
     BiosSetting bios_setting;
     SettingsWindow settings;

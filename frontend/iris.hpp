@@ -61,6 +61,7 @@
 #include "notifications.hpp"
 #include "elf.hpp"
 #include "patches.hpp"
+#include "script.hpp"
 #include "emu.hpp"
 #include "input.hpp"
 #include "vulkan.hpp"
@@ -374,6 +375,7 @@ struct Instance {
         LogSource library;
         LogSource platform;
         LogSource ui;
+        LogSource script;
     } log;
 
     std::deque <LogEntry> log_history;
@@ -435,6 +437,7 @@ struct Instance {
     bool dump_to_file = true;
     bool headless = false;
     bool snap_on_exit = false;
+    script::Script* script = nullptr;
     int frames = 0;
     float fps = 0.0f;
     unsigned int ticks = 0;

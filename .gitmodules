@@ -54,3 +54,9 @@
 [submodule "deps/fmt"]
 	path = deps/fmt
 	url = https://github.com/fmtlib/fmt
+[submodule "deps/lua"]
+	path = deps/lua
+	url = https://github.com/lua/lua
+[submodule "deps/ImGuiColorTextEdit"]
+	path = deps/ImGuiColorTextEdit
+	url = https://github.com/goossens/ImGuiColorTextEdit

@@ -621,6 +621,12 @@ bool init(Instance* iris) {
         SDL_ShowWindow(iris->window);
     }
 
+    if (iris->cli.script_path.size() && !script::load(iris, iris->cli.script_path) && iris->headless) {
+        iris_error(&iris->log.iris, "Failed to load script");
+
+        return false;
+    }
+
     return true;
 }
 
@@ -794,6 +800,8 @@ SDL_AppResult update(Instance* iris) {
         }
     }
 
+    script::frame(iris);
+
     begin_scanout(iris);
 
     // Record a GS dump frame boundary
@@ -807,6 +815,11 @@ SDL_AppResult update(Instance* iris) {
     }
 
     iris->scanout_async = false;
+
+    SDL_AppResult script_result = script::flush(iris);
+
+    if (script_result != SDL_APP_CONTINUE)
+        return script_result;
 
     // Execute until vblank is over
     while (gs::is_vblank(iris->ps2->gs)) {
@@ -1393,6 +1406,8 @@ void destroy(Instance* iris) {
     if (profiler::is_running()) {
         stop_profiling(iris);
     }
+
+    script::unload(iris);
 
     log_close_file(iris);
 

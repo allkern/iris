@@ -28,45 +28,10 @@
 #include "imgui_internal.h"
 
 #include "iris.hpp"
+#include "imgui.hpp"
 
 #include "res/IconsMaterialSymbols.h"
 #include "ps2.hpp"
-
-namespace ImGui {
-
-bool BeginMainStatusBar()
-{
-    ImGuiContext& g = *GetCurrentContext();
-    ImGuiViewportP* viewport = (ImGuiViewportP*)(void*)GetMainViewport();
-
-    SetCurrentViewport(NULL, viewport);
-
-    g.NextWindowData.MenuBarOffsetMinVal = ImVec2(g.Style.DisplaySafeAreaPadding.x, ImMax(g.Style.DisplaySafeAreaPadding.y - g.Style.FramePadding.y, 0.0f));
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
-    float height = GetFrameHeight();
-    bool is_open = BeginViewportSideBar("##MainStatusBar", viewport, ImGuiDir_Down, height, window_flags);
-    g.NextWindowData.MenuBarOffsetMinVal = ImVec2(0.0f, 0.0f);
-
-    if (is_open)
-        BeginMenuBar();
-    else
-        End();
-
-    return is_open;
-}
-
-void EndMainStatusBar()
-{
-    EndMenuBar();
-
-    ImGuiContext& g = *GImGui;
-    if (g.CurrentWindow == g.NavWindow && g.NavLayer == ImGuiNavLayer_Main && !g.NavAnyRequest)
-        FocusTopMostWindowUnderOne(g.NavWindow, NULL, NULL, ImGuiFocusRequestFlags_UnlessBelowModal | ImGuiFocusRequestFlags_RestoreFocusedChild);
-
-    End();
-}
-
-}
 
 namespace iris {
 
@@ -95,7 +60,7 @@ static void show_profiling_status(Instance* iris) {
 void show_status_bar(Instance* iris) {
     using namespace ImGui;
 
-    if (BeginMainStatusBar()) {
+    if (imgui::BeginMainStatusBar()) {
         static const char* const modes[] = {
             "Progressive",
             "Interlaced (Field)",
@@ -176,7 +141,7 @@ void show_status_bar(Instance* iris) {
         //     );
         // }
 
-        EndMainStatusBar();
+        imgui::EndMainStatusBar();
     }
 }
     

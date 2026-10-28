@@ -24,5 +24,6 @@ iris.res
 *.mcd
 *.wav
 *.irx
+*.gs
 *.o
 .DS_Store

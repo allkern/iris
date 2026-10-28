@@ -73,20 +73,32 @@ static inline void cmd_query_masked(sio2::Sio2* sio2, Ds* ds) {
         queue::push(sio2->out, 0x5a);
     }
 }
+static inline void push_buttons(sio2::Sio2* sio2, Ds* ds) {
+    uint16_t buttons = ds->buttons & ~ds->held;
+
+    queue::push(sio2->out, buttons & 0xff);
+    queue::push(sio2->out, buttons >> 8);
+}
+static inline uint8_t axis_value(Ds* ds, int axis, uint8_t value) {
+    return ds->axis_override[axis] < 0 ? value : (uint8_t)ds->axis_override[axis];
+}
+static inline void push_axes(sio2::Sio2* sio2, Ds* ds) {
+    queue::push(sio2->out, axis_value(ds, RIGHT_H, ds->ax_right_x));
+    queue::push(sio2->out, axis_value(ds, RIGHT_V, ds->ax_right_y));
+    queue::push(sio2->out, axis_value(ds, LEFT_H, ds->ax_left_x));
+    queue::push(sio2->out, axis_value(ds, LEFT_V, ds->ax_left_y));
+}
 static inline void cmd_read_data(sio2::Sio2* sio2, Ds* ds) {
     iris_debug(ds, "cmd_read_data({:04x})", ds->buttons);
 
     queue::push(sio2->out, 0xff);
     queue::push(sio2->out, get_model_byte(ds));
     queue::push(sio2->out, 0x5a);
-    queue::push(sio2->out, ds->buttons & 0xff);
-    queue::push(sio2->out, ds->buttons >> 8);
+
+    push_buttons(sio2, ds);
 
     if (ds->mode) {
-        queue::push(sio2->out, ds->ax_right_x);
-        queue::push(sio2->out, ds->ax_right_y);
-        queue::push(sio2->out, ds->ax_left_x);
-        queue::push(sio2->out, ds->ax_left_y);
+        push_axes(sio2, ds);
 
         // Push pressure bytes (only in DualShock 2 mode)
         // Note: Some games (e.g. OutRun 2 SP/2006) won't register inputs
@@ -120,14 +132,11 @@ static inline void cmd_config_mode(sio2::Sio2* sio2, Ds* ds) {
         // when not in config mode regardless of the model
         queue::push(sio2->out, ds->mode ? 0x73 : 0x41);
         queue::push(sio2->out, 0x5a);
-        queue::push(sio2->out, ds->buttons & 0xff);
-        queue::push(sio2->out, ds->buttons >> 8);
+
+        push_buttons(sio2, ds);
 
         if (ds->mode) {
-            queue::push(sio2->out, ds->ax_right_x);
-            queue::push(sio2->out, ds->ax_right_y);
-            queue::push(sio2->out, ds->ax_left_x);
-            queue::push(sio2->out, ds->ax_left_y);
+            push_axes(sio2, ds);
         }
     } else {
         queue::push(sio2->out, 0xff);

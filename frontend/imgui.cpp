@@ -2128,4 +2128,124 @@ void render_dim(Instance* iris) {
     );
 }
 
+bool _BeginStatusBar(ImGuiViewportP* viewport) {
+    using namespace ImGui;
+
+    ImGuiContext& g = *GetCurrentContext();
+    ImGuiWindow* window = g.CurrentWindow;
+
+    SetCurrentViewport(NULL, viewport);
+
+    g.NextWindowData.MenuBarOffsetMinVal = ImVec2(g.Style.DisplaySafeAreaPadding.x, ImMax(g.Style.DisplaySafeAreaPadding.y - g.Style.FramePadding.y, 0.0f));
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_MenuBar;
+
+    float height = GetFrameHeight();
+    bool is_open = BeginViewportSideBar("##MainStatusBar", viewport, ImGuiDir_Down, height, window_flags);
+
+    g.NextWindowData.MenuBarOffsetMinVal = ImVec2(0.0f, 0.0f);
+
+    if (is_open) {
+        BeginMenuBar();
+    } else {
+        End();
+    }
+
+    return is_open;
+}
+
+void _EndStatusBar() {
+    using namespace ImGui;
+
+    EndMenuBar();
+
+    ImGuiContext& g = *GImGui;
+
+    if (g.CurrentWindow == g.NavWindow && g.NavLayer == ImGuiNavLayer_Main && !g.NavAnyRequest) {
+        FocusTopMostWindowUnderOne(g.NavWindow, NULL, NULL, ImGuiFocusRequestFlags_UnlessBelowModal | ImGuiFocusRequestFlags_RestoreFocusedChild);
+    }
+
+    End();
+}
+
+bool BeginMainStatusBar() {
+    using namespace ImGui;
+
+    return _BeginStatusBar((ImGuiViewportP*)(void*)GetMainViewport());
+}
+
+void EndMainStatusBar() {
+    using namespace ImGui;
+
+    _EndStatusBar();
+}
+
+static ImVec2 status_bar_max_pos;
+
+bool BeginStatusBar() {
+    using namespace ImGui;
+
+    ImGuiContext& g = *GetCurrentContext();
+    ImGuiWindow* window = g.CurrentWindow;
+
+    if (window->SkipItems)
+        return false;
+
+    float inset = window->WindowBorderSize;
+    float rounding = ImMax(window->WindowRounding - inset, 0.0f);
+
+    ImVec2 max = ImVec2(window->Pos.x + window->Size.x, window->Pos.y + window->Size.y);
+    ImVec2 min = ImVec2(window->Pos.x, max.y - GetFrameHeight());
+
+    status_bar_max_pos = window->DC.CursorMaxPos;
+
+    PushClipRect(window->Pos, max, false);
+
+    window->DrawList->AddRectFilled(ImVec2(min.x + inset, min.y), ImVec2(max.x - inset, max.y - inset), GetColorU32(ImGuiCol_MenuBarBg), rounding, ImDrawFlags_RoundCornersBottom);
+
+    if (g.Style.WindowBorderSize > 0.0f) {
+        window->DrawList->AddRectFilled(ImVec2(min.x + inset, min.y), ImVec2(max.x - inset, min.y + g.Style.WindowBorderSize), GetColorU32(ImGuiCol_Border));
+    }
+
+    SetCursorScreenPos(min);
+
+    PushStyleColor(ImGuiCol_ChildBg, IM_COL32_BLACK_TRANS);
+    PushStyleColor(ImGuiCol_MenuBarBg, IM_COL32_BLACK_TRANS);
+    PushStyleVar(ImGuiStyleVar_ChildRounding, 0.0f);
+
+    g.NextWindowData.MenuBarOffsetMinVal = ImVec2(g.Style.DisplaySafeAreaPadding.x, ImMax(g.Style.DisplaySafeAreaPadding.y - g.Style.FramePadding.y, 0.0f));
+
+    ImGuiWindowFlags window_flags = ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_MenuBar;
+
+    bool is_open = BeginChild("##StatusBar", ImVec2(max.x - min.x, max.y - min.y), ImGuiChildFlags_AlwaysUseWindowPadding, window_flags);
+
+    g.NextWindowData.MenuBarOffsetMinVal = ImVec2(0.0f, 0.0f);
+
+    PopStyleVar();
+    PopStyleColor(2);
+
+    if (!is_open) {
+        EndChild();
+        PopClipRect();
+
+        window->DC.CursorMaxPos = status_bar_max_pos;
+
+        return false;
+    }
+
+    BeginMenuBar();
+
+    return true;
+}
+
+void EndStatusBar() {
+    using namespace ImGui;
+
+    EndMenuBar();
+    EndChild();
+    PopClipRect();
+
+    GetCurrentWindow()->DC.CursorMaxPos = status_bar_max_pos;
+}
+
 }

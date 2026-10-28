@@ -42,6 +42,7 @@ struct State {
     std::vector <std::function <void(bool)>> overrides = {};
     std::vector <std::string> shaders = {};
     std::string open_path = "";
+    std::string script_path = "";
     bool portable = false;
     bool reset_settings = false;
 };

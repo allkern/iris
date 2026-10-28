@@ -192,6 +192,20 @@ elseif (APPLE)
     target_link_libraries(slirp PUBLIC resolv)
 endif()
 
+add_library(lua STATIC deps/lua/onelua.c)
+
+set_property(TARGET lua PROPERTY C_STANDARD 99)
+
+target_compile_definitions(lua PRIVATE MAKE_LIB)
+target_include_directories(lua PUBLIC deps/lua)
+
+if (WIN32)
+    target_compile_definitions(lua PRIVATE _CRT_SECURE_NO_WARNINGS)
+else()
+    target_compile_definitions(lua PRIVATE LUA_USE_POSIX)
+    target_link_libraries(lua PUBLIC m)
+endif()
+
 option(IRIS_ENABLE_MAGICGATE "Build MagicGate support" ON)
 
 if (IRIS_ENABLE_MAGICGATE)
@@ -270,6 +284,7 @@ target_sources(iris PRIVATE
     frontend/slirp.cpp
     frontend/notifications.cpp
     frontend/patches.cpp
+    frontend/script.cpp
     frontend/menu.cpp
     frontend/settings.cpp
     frontend/ui/about.cpp
@@ -295,6 +310,7 @@ target_sources(iris PRIVATE
     frontend/ui/overlay.cpp
     frontend/ui/pad.cpp
     frontend/ui/remote.cpp
+    frontend/ui/script_editor.cpp
     frontend/ui/settings.cpp
     frontend/ui/spu2.cpp
     frontend/ui/state.cpp
@@ -434,11 +450,13 @@ target_sources(iris PRIVATE
     deps/implot/implot_demo.cpp
     deps/implot/implot_items.cpp
     deps/implot/implot.cpp
+    deps/ImGuiColorTextEdit/TextEditor.cpp
     deps/lz4/lib/lz4.c
 )
 
 target_include_directories(iris SYSTEM PRIVATE
     deps/asmjit
+    deps/ImGuiColorTextEdit
     deps/curl/include
     deps/miniz
     deps/imgui
@@ -467,6 +485,7 @@ target_link_libraries(iris PUBLIC
     libcurl
     miniz
     slirp
+    lua
     fmt::fmt
 )
 
@@ -533,8 +552,9 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
         list(APPEND DIRS $ENV{VULKAN_SDK}/lib)
     endif()
 
-    # Install prefixes are passed through unnormalized, and fixup_bundle requires a complete path, therefore we need to clobber the bundle in the build folder.
-    # There's also no way to normalize a path given as a generator expression, like INSTALL_PREFIX.
+    # Install prefixes are passed through unnormalized, and fixup_bundle requires a complete path,
+    # therefore we need to clobber the bundle in the build folder. There's also no way to normalize
+    # a path given as a generator expression, like INSTALL_PREFIX.
     install(CODE "
         include(BundleUtilities)
 
@@ -549,10 +569,7 @@ if (CMAKE_SYSTEM_NAME MATCHES "Darwin")
         endif()
     ")
 
-    # BUNDLE installs will try modify the rpath of the bundle, which won't work as fixup_bundle already does so.
     install(FILES $<TARGET_BUNDLE_DIR:iris> DESTINATION .)
-
-    # FILES installs do not retain the executable flag on binaries.
     install(CODE "execute_process(COMMAND /bin/sh -c \"chmod +x $<INSTALL_PREFIX>/iris.app/Contents/Frameworks/* $<INSTALL_PREFIX>/iris.app/Contents/MacOS/*\")")
 
     set(CPACK_GENERATOR "DragNDrop")

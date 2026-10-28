@@ -506,7 +506,6 @@ static void show_tools_menu(Instance* iris) {
     using namespace ImGui;
 
     if (menu::begin("Tools")) {
-        menu::item(ICON_MS_BUILD " ImGui Demo", NULL, &iris->ui.show_imgui_demo);
         menu::item(ICON_MS_SEARCH " Memory search", NULL, &iris->applets.memory_search.open);
         if (menu::item(ICON_MS_PHOTO_CAMERA " Take screenshot...", "F9")) {
             audio::mute(iris);
@@ -546,6 +545,37 @@ static void show_tools_menu(Instance* iris) {
 
         if (menu::item(ICON_MS_SETTINGS_REMOTE " DVD Remote")) {
             iris->applets.dvd_remote.show();
+        }
+
+        menu::item(ICON_MS_BUILD " ImGui Demo", NULL, &iris->ui.show_imgui_demo);
+
+        Separator();
+
+        if (menu::item(ICON_MS_EDIT_NOTE " Script editor")) {
+            iris->applets.script_editor.show();
+        }
+
+        if (script::get_state(iris) == script::STATE_RUNNING) {
+            if (menu::item(ICON_MS_STOP " Stop script", nullptr, false, script::is_loaded(iris))) {
+                script::unload(iris);
+            }
+        } else {
+            if (menu::item(ICON_MS_CODE " Run script...")) {
+                audio::mute(iris);
+
+                auto f = pfd::open_file("Select a Lua script", "", {
+                    "Lua Scripts (*.lua)", "*.lua",
+                    "All Files (*.*)", "*"
+                });
+
+                while (!f.ready());
+
+                audio::unmute(iris);
+
+                if (f.result().size()) {
+                    script::load(iris, f.result().at(0));
+                }
+            }
         }
 
         menu::end();

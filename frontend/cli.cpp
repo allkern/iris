@@ -556,6 +556,8 @@ static const Option g_options[] = {
 
     { "headless", 'H', FLAG, nullptr, "Run without showing the window",
         [](Instance* i, const Value& v) { set(i, i->headless, v.flag); } },
+    { "script", 0, PATH, "FILE", "Run a Lua script",
+        [](Instance* i, const Value& v) { i->cli.script_path = v.text; } },
     { "log", 0, PATH, "FILE", "Write the log to FILE",
         [](Instance* i, const Value& v) { set(i, i->paths.log_path, v.text); } },
     { "log-file", 0, FLAG, nullptr, "Write the log to a file",

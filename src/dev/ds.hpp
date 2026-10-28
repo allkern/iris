@@ -65,6 +65,8 @@ enum Axis : int {
 struct Ds {
     int port = 0;
     uint16_t buttons = 0;
+    uint16_t held = 0;
+    int axis_override[4] = { -1, -1, -1, -1 };
     uint8_t ax_right_y = 0;
     uint8_t ax_right_x = 0;
     uint8_t ax_left_y = 0;

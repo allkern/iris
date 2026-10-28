@@ -83,6 +83,7 @@ void create(Instance* iris) {
         &applets.media_tool,
         &applets.memory_search,
         &applets.file_explorer,
+        &applets.script_editor,
         &applets.gs_dump_tool,
         &applets.bios_setting
     };
