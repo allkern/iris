@@ -135,15 +135,16 @@ static void show_iris_menu(Instance* iris) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Select a file to load", "", {
-                "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.elf; *.zip)", "*.iso *.bin *.cue *.chd *.cso *.zso *.elf *.zip",
-                "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
-                "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
-                "DVD Images (*.iso; *.chd; *.cso; *.zso)", "*.iso *.chd *.cso *.zso",
+                "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.mds; *.mdf; *.elf; *.zip)", "*.iso *.bin *.cue *.chd *.cso *.zso *.mds *.mdf *.elf *.zip",
+                "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.mds; *.mdf)", "*.iso *.bin *.cue *.chd *.cso *.zso *.mds *.mdf",
+                "CD Images (*.bin; *.cue; *.chd; *.mds)", "*.bin *.cue *.chd *.mds",
+                "DVD Images (*.iso; *.chd; *.cso; *.zso; *.mds)", "*.iso *.chd *.cso *.zso *.mds",
                 "ISO Files (*.iso)", "*.iso",
                 "CUE Files (*.cue)", "*.cue",
                 "BIN Files (*.bin)", "*.bin",
                 "CHD Files (*.chd)", "*.chd",
                 "CSO/ZSO Files (*.cso; *.zso)", "*.cso *.zso",
+                "MDS/MDF Files (*.mds; *.mdf)", "*.mds *.mdf",
                 "ELF Executables (*.elf)", "*.elf",
                 "Archives (*.zip)", "*.zip",
                 "All Files (*.*)", "*"
@@ -241,14 +242,15 @@ static void show_iris_menu(Instance* iris) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Select CD/DVD image", "", {
-                "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
-                "CD Images (*.bin; *.cue; *.chd)", "*.bin *.cue *.chd",
-                "DVD Images (*.iso; *.chd; *.cso; *.zso)", "*.iso *.chd *.cso *.zso",
+                "Disc Images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.mds; *.mdf)", "*.iso *.bin *.cue *.chd *.cso *.zso *.mds *.mdf",
+                "CD Images (*.bin; *.cue; *.chd; *.mds)", "*.bin *.cue *.chd *.mds",
+                "DVD Images (*.iso; *.chd; *.cso; *.zso; *.mds)", "*.iso *.chd *.cso *.zso *.mds",
                 "ISO Files (*.iso)", "*.iso",
                 "CUE Files (*.cue)", "*.cue",
                 "BIN Files (*.bin)", "*.bin",
                 "CHD Files (*.chd)", "*.chd",
                 "CSO/ZSO Files (*.cso; *.zso)", "*.cso *.zso",
+                "MDS/MDF Files (*.mds; *.mdf)", "*.mds *.mdf",
                 "All Files (*.*)", "*"
             });
 

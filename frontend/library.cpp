@@ -853,7 +853,8 @@ static bool reuse(Scanner* scanner, const std::string& path, uint64_t size, int6
 
 static bool is_disc_extension(const std::string& ext) {
     return ext == ".iso" || ext == ".bin" || ext == ".cue" ||
-           ext == ".chd" || ext == ".cso" || ext == ".zso";
+           ext == ".chd" || ext == ".cso" || ext == ".zso" ||
+           ext == ".mds";
 }
 
 static Record probe_disc(const fs::path& path) {
@@ -923,7 +924,7 @@ static bool is_arcade_directory_candidate(const std::vector <fs::path>& files) {
     for (const fs::path& file : files) {
         std::string ext = lowercase(file.extension().string());
 
-        if (ext == ".iso" || ext == ".cso" || ext == ".zso" || ext == ".cue") {
+        if (ext == ".iso" || ext == ".cso" || ext == ".zso" || ext == ".cue" || ext == ".mds") {
             return false;
         }
     }

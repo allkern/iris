@@ -299,7 +299,8 @@ bool is_disc_image(const std::string& file) {
         c = tolower(c);
 
     return ext == ".iso" || ext == ".bin" || ext == ".cue" ||
-           ext == ".chd" || ext == ".cso" || ext == ".zso";
+           ext == ".chd" || ext == ".cso" || ext == ".zso" ||
+           ext == ".mds" || ext == ".mdf";
 }
 
 int insert_disc(Instance* iris, std::string file) {

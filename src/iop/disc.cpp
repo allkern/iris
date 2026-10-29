@@ -34,6 +34,7 @@
 #include "disc/chd.hpp"
 #include "disc/ciso.hpp"
 #include "disc/bin.hpp"
+#include "disc/mds.hpp"
 #include "ps2_iso9660.hpp"
 
 namespace iris::iop::disc {
@@ -45,6 +46,8 @@ static const char* extensions[] = {
     "chd",
     "cso",
     "zso",
+    "mds",
+    "mdf",
     NULL
 };
 
@@ -232,6 +235,25 @@ Disc* open(logger::Logger* logger, const char* path) {
             r = ciso::init(ciso, path);
         } break;
 
+        case DISC_EXT_MDS:
+        case DISC_EXT_MDF: {
+            mds::Mds* mds = mds::create(s->logger);
+
+            s->udata = mds;
+            s->read_sector = mds::read_sector;
+            s->get_size = mds::get_size;
+            s->get_sector_size = mds::get_sector_size;
+            s->get_track_count = mds::get_track_count;
+            s->get_track_info = mds::get_track_info;
+            s->get_track_number = mds::get_track_number;
+
+            r = mds::init(mds, path);
+
+            if (r) {
+                s->layer2_lba = mds->layer_break;
+            }
+        } break;
+
         default: {
             delete s;
 
@@ -273,8 +295,10 @@ int detect_media(Disc* disc) {
 
     // DVD is dual-layer
     if ((volume_size * sector_size) < size) {
-        disc->layer2_lba = volume_size;
-    
+        if (!disc->layer2_lba) {
+            disc->layer2_lba = volume_size;
+        }
+
         return DISC_MEDIA_DVD;
     }
 
@@ -295,7 +319,11 @@ static inline int detect_type(Disc* disc) {
     if (strncmp(pvd.id, "\1CD001\1", 8)) {
         // If the disc doesn't contain an ISO filesystem
         // and it's a CUE image, it's probably a CD audio image
-        if (disc->ext == DISC_EXT_CUE) {
+        bool has_tracks = (disc->ext == DISC_EXT_CUE) ||
+                          (disc->ext == DISC_EXT_MDS) ||
+                          (disc->ext == DISC_EXT_MDF);
+
+        if (has_tracks) {
             return DISC_TYPE_CDDA;
         }
 
@@ -540,6 +568,11 @@ void close(Disc* disc) {
         case DISC_EXT_CSO:
         case DISC_EXT_ZSO: {
             ciso::destroy((ciso::Ciso*)disc->udata);
+        } break;
+
+        case DISC_EXT_MDS:
+        case DISC_EXT_MDF: {
+            mds::destroy((mds::Mds*)disc->udata);
         } break;
     }
 

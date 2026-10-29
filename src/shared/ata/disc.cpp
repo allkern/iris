@@ -36,7 +36,9 @@ bool is_compressed(const char* path) {
 
     return ext == iop::disc::DISC_EXT_CHD ||
            ext == iop::disc::DISC_EXT_CSO ||
-           ext == iop::disc::DISC_EXT_ZSO;
+           ext == iop::disc::DISC_EXT_ZSO ||
+           ext == iop::disc::DISC_EXT_MDS ||
+           ext == iop::disc::DISC_EXT_MDF;
 }
 
 iop::disc::Disc* open(logger::Logger* logger, const char* path) {

@@ -51,8 +51,10 @@ inline constexpr auto DISC_EXT_CUE = 2;
 inline constexpr auto DISC_EXT_CHD = 3;
 inline constexpr auto DISC_EXT_CSO = 4;
 inline constexpr auto DISC_EXT_ZSO = 5;
-inline constexpr auto DISC_EXT_NONE = 6;
-inline constexpr auto DISC_EXT_UNSUPPORTED = 7;
+inline constexpr auto DISC_EXT_MDS = 6;
+inline constexpr auto DISC_EXT_MDF = 7;
+inline constexpr auto DISC_EXT_NONE = 8;
+inline constexpr auto DISC_EXT_UNSUPPORTED = 9;
 
 inline constexpr auto DISC_MEDIA_CD = 0;
 inline constexpr auto DISC_MEDIA_DVD = 1;

@@ -145,7 +145,7 @@ static bool looks_like_disc(const std::string& path) {
             c += 32;
     }
 
-    return ext == "iso" || ext == "cue" || ext == "chd" || ext == "cso" || ext == "zso";
+    return ext == "iso" || ext == "cue" || ext == "chd" || ext == "cso" || ext == "zso" || ext == "mds";
 }
 
 static const char* mcd_type_name(int type) {
@@ -876,9 +876,9 @@ static void show_menubar(Instance* iris, FileExplorer* fe) {
             audio::mute(iris);
 
             auto f = pfd::open_file("Open image", "", {
-                "All supported images", "*.mcd *.ps2 *.psm *.mcr *.bin *.img *.raw *.iso *.cue *.chd *.cso *.zso",
+                "All supported images", "*.mcd *.ps2 *.psm *.mcr *.bin *.img *.raw *.iso *.cue *.chd *.cso *.zso *.mds *.mdf",
                 "Memory cards (*.mcd; *.ps2; *.psm; *.mcr)", "*.mcd *.ps2 *.psm *.mcr",
-                "Disc images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso)", "*.iso *.bin *.cue *.chd *.cso *.zso",
+                "Disc images (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.mds; *.mdf)", "*.iso *.bin *.cue *.chd *.cso *.zso *.mds *.mdf",
                 "Drive images (*.img; *.raw)", "*.img *.raw",
                 "All Files (*.*)", "*"
             });

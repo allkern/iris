@@ -388,6 +388,7 @@ target_sources(iris PRIVATE
     src/iop/disc/chd.cpp
     src/iop/disc/ciso.cpp
     src/iop/disc/iso.cpp
+    src/iop/disc/mds.cpp
     src/iop/hle/ioman.cpp
     src/iop/hle/loadcore.cpp
     src/iop/hle/sysmem.cpp

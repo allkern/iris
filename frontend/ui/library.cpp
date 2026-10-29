@@ -415,7 +415,7 @@ static void open_file_dialog(Instance* iris) {
     audio::mute(iris);
 
     auto f = pfd::open_file("Select a file to load", "", {
-        "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.elf; *.zip)", "*.iso *.bin *.cue *.chd *.cso *.zso *.elf *.zip",
+        "All File Types (*.iso; *.bin; *.cue; *.chd; *.cso; *.zso; *.mds; *.mdf; *.elf; *.zip)", "*.iso *.bin *.cue *.chd *.cso *.zso *.mds *.mdf *.elf *.zip",
         "All Files (*.*)", "*"
     });
 
