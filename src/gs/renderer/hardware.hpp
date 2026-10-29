@@ -130,6 +130,10 @@ public:
 struct PipelineCacheFile {
     Vulkan::Device* device = nullptr;
     std::string path;
+    size_t saved_size = 0;
+    std::mutex mutex;
+
+    void save();
 
     ~PipelineCacheFile();
 };

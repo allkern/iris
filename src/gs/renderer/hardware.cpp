@@ -61,16 +61,19 @@ static void load_pipeline_cache(state* ctx, const char* path) {
         iris_info(ctx->gs, "Loaded pipeline cache (%zu bytes)", data.size());
     }
 
+    ctx->pipeline_cache.saved_size = data.size();
     ctx->pipeline_cache.device = &ctx->granite_device;
 }
 
-PipelineCacheFile::~PipelineCacheFile() {
+void PipelineCacheFile::save() {
+    std::lock_guard <std::mutex> lock(mutex);
+
     if (!device || path.empty())
         return;
 
     size_t size = device->get_pipeline_cache_size();
 
-    if (!size)
+    if (!size || size == saved_size)
         return;
 
     std::vector <uint8_t> data(size);
@@ -93,7 +96,15 @@ PipelineCacheFile::~PipelineCacheFile() {
 
     if (ec) {
         std::filesystem::remove(tmp_path, ec);
+
+        return;
     }
+
+    saved_size = size;
+}
+
+PipelineCacheFile::~PipelineCacheFile() {
+    save();
 }
 
 static thread_local bool thread_index_registered = false;
@@ -203,6 +214,9 @@ bool init(void* udata, const CreateInfo& info) {
     opts.super_sampled_textures = true;
     opts.super_sampled_quads = ctx->config.upscale_2d;
     opts.dynamic_super_sampling = true;
+    opts.on_compilation_tasks_complete = [ctx]() {
+        ctx->pipeline_cache.save();
+    };
 
     if (!ctx->iface.init(&ctx->granite_device, opts)) {
         return false;
