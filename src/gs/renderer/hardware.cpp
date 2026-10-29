@@ -29,7 +29,72 @@
 
 #include "Granite/util/thread_id.hpp"
 
+#include <filesystem>
+#include <fstream>
+
 namespace iris::gs::renderer::hardware {
+
+static void load_pipeline_cache(state* ctx, const char* path) {
+    std::vector <uint8_t> data;
+
+    if (path && *path) {
+        ctx->pipeline_cache.path = path;
+
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+
+        if (file) {
+            data.resize(file.tellg());
+
+            file.seekg(0);
+
+            if (!file.read((char*)data.data(), data.size())) {
+                data.clear();
+            }
+        }
+    }
+
+    if (!ctx->granite_device.init_pipeline_cache(data.data(), data.size(), false)) {
+        iris_warning(ctx->gs, "Couldn't load pipeline cache, starting with an empty one");
+
+        ctx->granite_device.init_pipeline_cache(nullptr, 0, false);
+    } else if (data.size()) {
+        iris_info(ctx->gs, "Loaded pipeline cache (%zu bytes)", data.size());
+    }
+
+    ctx->pipeline_cache.device = &ctx->granite_device;
+}
+
+PipelineCacheFile::~PipelineCacheFile() {
+    if (!device || path.empty())
+        return;
+
+    size_t size = device->get_pipeline_cache_size();
+
+    if (!size)
+        return;
+
+    std::vector <uint8_t> data(size);
+
+    if (!device->get_pipeline_cache_data(data.data(), size))
+        return;
+
+    std::string tmp_path = path + ".tmp";
+
+    {
+        std::ofstream file(tmp_path, std::ios::binary | std::ios::trunc);
+
+        if (!file.write((const char*)data.data(), data.size()))
+            return;
+    }
+
+    std::error_code ec;
+
+    std::filesystem::rename(tmp_path, path, ec);
+
+    if (ec) {
+        std::filesystem::remove(tmp_path, ec);
+    }
+}
 
 static thread_local bool thread_index_registered = false;
 
@@ -128,6 +193,9 @@ bool init(void* udata, const CreateInfo& info) {
     ctx->granite_device.set_context(ctx->granite_ctx);
     ctx->granite_device.init_frame_contexts(4);
     ctx->granite_device.set_queue_lock(lock_queue, unlock_queue);
+
+    // Use our own pipeline cache file
+    load_pipeline_cache(ctx, info.pipeline_cache_path);
 
     GSOptions opts = {};
     opts.super_sampling = get_super_sampling(ctx);

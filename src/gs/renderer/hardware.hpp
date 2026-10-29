@@ -28,6 +28,7 @@
 #pragma once
 
 #include <vector>
+#include <string>
 #include <cstdio>
 #include <mutex>
 #include <condition_variable>
@@ -126,9 +127,17 @@ public:
     }
 };
 
+struct PipelineCacheFile {
+    Vulkan::Device* device = nullptr;
+    std::string path;
+
+    ~PipelineCacheFile();
+};
+
 struct state {
     Vulkan::Context granite_ctx;
     Vulkan::Device granite_device;
+    PipelineCacheFile pipeline_cache;
     Vulkan::ImageHandle current_scanout;
     GSInterface iface;
     ExternallyManagedDevice* device;

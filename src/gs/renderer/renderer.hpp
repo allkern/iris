@@ -104,6 +104,8 @@ struct CreateInfo {
     VkPhysicalDevice physical_device;
     void* config;
 
+    const char* pipeline_cache_path;
+
     int backend;
 };
 

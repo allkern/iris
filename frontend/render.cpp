@@ -473,6 +473,10 @@ bool init(Instance* iris) {
     info.instance_create_info = iris->vk.instance_create_info;
     info.device_create_info = iris->vk.device_create_info;
 
+    std::string pipeline_cache_path = iris->paths.pref_path + "pipeline_cache.bin";
+
+    info.pipeline_cache_path = pipeline_cache_path.c_str();
+
     switch (info.backend) {
         case gs::renderer::BACKEND_HARDWARE: {
             info.config = &iris->hardware_backend_config;
@@ -1059,6 +1063,10 @@ void switch_backend(Instance* iris, int backend) {
     info.physical_device = iris->vk.physical_device;
     info.instance_create_info = iris->vk.instance_create_info;
     info.device_create_info = iris->vk.device_create_info;
+
+    std::string pipeline_cache_path = iris->paths.pref_path + "pipeline_cache.bin";
+
+    info.pipeline_cache_path = pipeline_cache_path.c_str();
 
     switch (info.backend) {
         case gs::renderer::BACKEND_HARDWARE: {
