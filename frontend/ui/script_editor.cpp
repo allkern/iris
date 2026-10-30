@@ -25,6 +25,7 @@
     SOFTWARE.
 */
 
+#include <algorithm>
 #include <cctype>
 #include <cstdlib>
 #include <filesystem>
@@ -37,6 +38,7 @@
 #include "iris.hpp"
 #include "imgui.hpp"
 #include "TextEditor.h"
+#include "misc/cpp/imgui_stdlib.h"
 
 #include "res/IconsMaterialSymbols.h"
 #include "portable-file-dialogs.h"
@@ -229,6 +231,98 @@ static void stop(ScriptEditor* e) {
     script::unload(e->iris);
 }
 
+static bool same_text(const std::string& a, const std::string& b, bool match_case) {
+    if (a.size() != b.size())
+        return false;
+
+    for (size_t i = 0; i < a.size(); i++) {
+        unsigned char x = a[i];
+        unsigned char y = b[i];
+
+        if (x != y && (match_case || tolower(x) != tolower(y)))
+            return false;
+    }
+
+    return true;
+}
+
+static bool selection_matches(ScriptEditor* e) {
+    TextEditor* editor = e->editor.get();
+
+    if (!editor->CurrentCursorHasSelection())
+        return false;
+
+    return same_text(editor->GetSectionText(editor->GetCurrentCursorSelection()), e->find_text, e->match_case);
+}
+
+static void find_next(ScriptEditor* e) {
+    if (e->find_text.empty()) {
+        e->find_missing = false;
+
+        return;
+    }
+
+    e->editor->SelectNextOccurrenceOf(e->find_text, e->match_case, e->whole_word);
+
+    e->find_missing = !selection_matches(e);
+}
+
+static void find_from_cursor(ScriptEditor* e) {
+    TextEditor::DocSelection selection = e->editor->GetCurrentCursorSelection();
+
+    e->editor->SetCursor(std::min(selection.start, selection.end));
+
+    find_next(e);
+}
+
+static void find_all(ScriptEditor* e) {
+    if (e->find_text.empty())
+        return;
+
+    e->editor->SelectAllOccurrencesOf(e->find_text, e->match_case, e->whole_word);
+
+    e->find_missing = !selection_matches(e);
+}
+
+static void replace_next(ScriptEditor* e) {
+    if (e->find_text.empty())
+        return;
+
+    if (selection_matches(e)) {
+        e->editor->ReplaceTextInCurrentCursor(e->replace_text);
+    }
+
+    find_next(e);
+}
+
+static void replace_all(ScriptEditor* e) {
+    find_all(e);
+
+    if (e->find_missing || !e->editor->AllCursorsHaveSelection())
+        return;
+
+    e->editor->ReplaceTextInAllCursors(e->replace_text);
+}
+
+static void open_find(ScriptEditor* e) {
+    TextEditor* editor = e->editor.get();
+    TextEditor::DocSelection selection = editor->GetCurrentCursorSelection();
+
+    if (selection.start != selection.end && selection.start.line == selection.end.line) {
+        e->find_text = editor->GetSectionText(selection);
+    }
+
+    e->find_open = true;
+    e->find_focus = true;
+}
+
+static void close_find(ScriptEditor* e) {
+    e->find_open = false;
+    e->find_missing = false;
+
+    e->editor->SetFocus();
+}
+
 static void update_palette(ScriptEditor* e) {
     ImU32 bg = ImGui::GetColorU32(ImGuiCol_WindowBg);
 
@@ -279,6 +373,8 @@ static void handle_shortcuts(ScriptEditor* e) {
     if (Shortcut(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_S)) save_file(e, true);
     if (Shortcut(ImGuiKey_F5)) run(e);
     if (Shortcut(ImGuiMod_Shift | ImGuiKey_F5)) stop(e);
+    if (Shortcut(ImGuiMod_Ctrl | ImGuiKey_F)) open_find(e);
+    if (Shortcut(ImGuiKey_F3) || Shortcut(ImGuiMod_Ctrl | ImGuiKey_G)) find_next(e);
 }
 
 static void show_menu_bar(ScriptEditor* e) {
@@ -318,7 +414,8 @@ static void show_menu_bar(ScriptEditor* e) {
 
         Separator();
 
-        if (imgui::MenuItem(ICON_MS_SEARCH " Find/Replace", "Ctrl+F")) editor->OpenFindReplaceWindow();
+        if (imgui::MenuItem(ICON_MS_SEARCH " Find/Replace", "Ctrl+F")) open_find(e);
+        if (imgui::MenuItem(ICON_MS_ARROW_DOWNWARD " Find Next", "F3", false, !e->find_text.empty())) find_next(e);
         if (imgui::MenuItem(ICON_MS_CODE " Toggle Comment", "Ctrl+/")) editor->ToggleComments();
         if (imgui::MenuItem(ICON_MS_FORMAT_INDENT_INCREASE " Indent", "Ctrl+]")) editor->IndentLines();
         if (imgui::MenuItem(ICON_MS_FORMAT_INDENT_DECREASE " Outdent", "Ctrl+[")) editor->DeindentLines();
@@ -431,6 +528,174 @@ static void show_script_state(ScriptEditor* e) {
             }
         } break;
     }
+}
+
+static bool icon_button(const char* icon, const char* tooltip, bool active = false) {
+    using namespace ImGui;
+
+    if (active) {
+        PushStyleColor(ImGuiCol_Button, GetStyleColorVec4(ImGuiCol_ButtonActive));
+    }
+
+    PushID(icon);
+
+    bool clicked = Button("##icon", ImVec2(GetFrameHeight(), GetFrameHeight()));
+
+    PopID();
+
+    if (active) {
+        PopStyleColor();
+    }
+
+    unsigned int c = 0;
+
+    ImTextCharFromUtf8(&c, icon, nullptr);
+
+    const ImFontGlyph* glyph = GetFontBaked()->FindGlyph((ImWchar)c);
+
+    ImVec2 min = GetItemRectMin();
+    ImVec2 max = GetItemRectMax();
+
+    ImVec2 pos = ImVec2(
+        IM_ROUND((min.x + max.x - glyph->X0 - glyph->X1) * 0.5f),
+        IM_ROUND((min.y + max.y - glyph->Y0 - glyph->Y1) * 0.5f)
+    );
+
+    GetWindowDrawList()->AddText(pos, GetColorU32(ImGuiCol_Text), icon);
+
+    SetItemTooltip("%s", tooltip);
+
+    return clicked;
+}
+
+static void show_find_fields(ScriptEditor* e, float field_width, float find_width, float all_width) {
+    using namespace ImGui;
+
+    if (e->find_focus) {
+        SetKeyboardFocusHere();
+
+        e->find_focus = false;
+    }
+
+    if (e->find_missing) {
+        PushStyleColor(ImGuiCol_FrameBg, ImVec4(0.9f, 0.3f, 0.3f, 0.25f));
+    }
+
+    SetNextItemWidth(field_width);
+
+    if (InputTextWithHint("##find", "Find", &e->find_text, ImGuiInputTextFlags_AutoSelectAll)) {
+        find_from_cursor(e);
+    }
+
+    if (e->find_missing) {
+        PopStyleColor();
+    }
+
+    if (IsItemDeactivated() && (IsKeyPressed(ImGuiKey_Enter) || IsKeyPressed(ImGuiKey_KeypadEnter))) {
+        find_next(e);
+
+        e->find_focus = true;
+    }
+
+    BeginDisabled(e->find_text.empty());
+
+    SameLine();
+
+    if (Button("Find", ImVec2(find_width, 0.0f))) {
+        find_next(e);
+    }
+
+    SameLine();
+
+    if (Button("Find All", ImVec2(all_width, 0.0f))) {
+        find_all(e);
+
+        e->editor->SetFocus();
+    }
+
+    EndDisabled();
+
+    SameLine();
+
+    if (icon_button(ICON_MS_MATCH_CASE, "Match case", e->match_case)) {
+        e->match_case = !e->match_case;
+
+        find_from_cursor(e);
+    }
+
+    SameLine();
+
+    if (icon_button(ICON_MS_MATCH_WORD, "Whole word", e->whole_word)) {
+        e->whole_word = !e->whole_word;
+
+        find_from_cursor(e);
+    }
+
+    SameLine();
+
+    if (icon_button(ICON_MS_CLOSE, "Close (Esc)")) {
+        close_find(e);
+    }
+
+    SetNextItemWidth(field_width);
+
+    InputTextWithHint("##replace", "Replace", &e->replace_text);
+
+    BeginDisabled(e->find_text.empty());
+
+    SameLine();
+
+    if (Button("Replace", ImVec2(find_width, 0.0f))) {
+        replace_next(e);
+    }
+
+    SameLine();
+
+    if (Button("Replace All", ImVec2(all_width, 0.0f))) {
+        replace_all(e);
+    }
+
+    EndDisabled();
+}
+
+static void show_find_bar(ScriptEditor* e, ImVec2 min, ImVec2 max) {
+    using namespace ImGui;
+
+    if (!e->find_open)
+        return;
+
+    PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8.0f, 8.0f));
+    PushStyleVar(ImGuiStyleVar_ItemSpacing, ImVec2(6.0f, 6.0f));
+    PushStyleColor(ImGuiCol_ChildBg, GetStyleColorVec4(ImGuiCol_PopupBg));
+
+    const ImGuiStyle& style = GetStyle();
+
+    float field_width = GetFontSize() * 14.0f;
+    float find_width = ImMax(CalcTextSize("Find").x, CalcTextSize("Replace").x) + style.FramePadding.x * 2.0f;
+    float all_width = ImMax(CalcTextSize("Find All").x, CalcTextSize("Replace All").x) + style.FramePadding.x * 2.0f;
+
+    ImVec2 size = ImVec2(
+        field_width + find_width + all_width + GetFrameHeight() * 3.0f + style.ItemSpacing.x * 5.0f + (style.WindowPadding.x + style.ChildBorderSize) * 2.0f,
+        GetFrameHeight() * 2.0f + style.ItemSpacing.y + (style.WindowPadding.y + style.ChildBorderSize) * 2.0f
+    );
+
+    SetCursorScreenPos(ImVec2(
+        ImMax(max.x - size.x - style.ScrollbarSize - style.ItemSpacing.x, min.x),
+        min.y + style.ItemSpacing.y
+    ));
+
+    if (BeginChild("##find_bar", size, ImGuiChildFlags_Borders, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse)) {
+        if (IsWindowFocused(ImGuiFocusedFlags_ChildWindows) && IsKeyPressed(ImGuiKey_Escape)) {
+            close_find(e);
+        } else {
+            show_find_fields(e, field_width, find_width, all_width);
+        }
+    }
+
+    EndChild();
+
+    PopStyleColor();
+    PopStyleVar(2);
 }
 
 static size_t count_glyphs(const std::string& text) {
@@ -596,6 +861,7 @@ void ScriptEditor::on_init() {
     editor->SetLanguage(TextEditor::Language::Lua());
     editor->SetTabSize(4);
     editor->SetInsertSpacesOnTabs(true);
+    editor->SetFindReplaceEnabled(false);
 
     saved_undo_index = editor->GetUndoIndex();
 }
@@ -625,6 +891,7 @@ void ScriptEditor::on_render() {
 
     PopFont();
 
+    show_find_bar(this, GetItemRectMin(), GetItemRectMax());
     show_status_bar(this);
     show_unsaved_popup(this);
     show_api_popup(this);

@@ -49,12 +49,19 @@ struct ScriptEditor : Applet {
     std::string path = "";
     std::string window_title = "";
     std::string marked_error = "";
+    std::string find_text = "";
+    std::string replace_text = "";
     size_t saved_undo_index = 0;
     ImU32 palette_bg = 0;
     float status_width = 0.0f;
     int pending = 0;
     bool open_pending = false;
     bool open_api = false;
+    bool find_open = false;
+    bool find_focus = false;
+    bool find_missing = false;
+    bool match_case = false;
+    bool whole_word = false;
 };
 
 }
