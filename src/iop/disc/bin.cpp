@@ -63,7 +63,7 @@ int read_sector(void* udata, unsigned char* buf, uint64_t lba, int size) {
     int s, r;
 
     if (size == DISC_SS_DATA) {
-        s = fseek64(bin->file, (lba * 2352) + 0x18, SEEK_SET);
+        s = fseek64(bin->file, (lba * 2352) + bin->data_offset, SEEK_SET);
         r = fread(buf, 1, 2048, bin->file);
     } else {
         s = fseek64(bin->file, lba * 2352, SEEK_SET);

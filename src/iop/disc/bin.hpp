@@ -32,8 +32,12 @@
 
 namespace iris::iop::disc::bin {
 
+inline constexpr int BIN_MODE1_DATA_OFFSET = 0x10;
+inline constexpr int BIN_MODE2_DATA_OFFSET = 0x18;
+
 struct Bin {
     FILE* file;
+    int data_offset = BIN_MODE2_DATA_OFFSET;
 
     logger::Logger* logger = nullptr;
     size_t logger_id = 0;

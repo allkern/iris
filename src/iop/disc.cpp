@@ -26,6 +26,7 @@
 */
 
 #include <cctype>
+#include <cstring>
 #include <string>
 
 #include "disc.hpp"
@@ -141,6 +142,61 @@ int get_extension(const char* path) {
     return DISC_EXT_UNSUPPORTED;
 }
 
+static constexpr auto LAYOUT_UNKNOWN = 0;
+static constexpr auto LAYOUT_COOKED = 1;
+static constexpr auto LAYOUT_RAW_MODE1 = 2;
+static constexpr auto LAYOUT_RAW_MODE2 = 3;
+
+static bool has_pvd_signature(FILE* file, uint64_t offset) {
+    char id[5];
+
+    if (fseek64(file, offset + 1, SEEK_SET))
+        return false;
+
+    if (fread(id, 1, sizeof(id), file) != sizeof(id))
+        return false;
+
+    return !memcmp(id, "CD001", sizeof(id));
+}
+
+static int probe_layout(const char* path) {
+    FILE* file = fopen(path, "rb");
+
+    if (!file)
+        return LAYOUT_UNKNOWN;
+
+    int layout = LAYOUT_UNKNOWN;
+
+    if (has_pvd_signature(file, 16 * 2048)) {
+        layout = LAYOUT_COOKED;
+    } else if (has_pvd_signature(file, (16 * 2352) + bin::BIN_MODE2_DATA_OFFSET)) {
+        layout = LAYOUT_RAW_MODE2;
+    } else if (has_pvd_signature(file, (16 * 2352) + bin::BIN_MODE1_DATA_OFFSET)) {
+        layout = LAYOUT_RAW_MODE1;
+    }
+
+    fclose(file);
+
+    return layout;
+}
+
+static int open_bin(Disc* s, const char* path, int data_offset) {
+    bin::Bin* bin = bin::create(s->logger);
+
+    bin->data_offset = data_offset;
+
+    s->ext = DISC_EXT_BIN;
+    s->udata = bin;
+    s->read_sector = bin::read_sector;
+    s->get_size = bin::get_size;
+    s->get_sector_size = bin::get_sector_size;
+    s->get_track_count = bin::get_track_count;
+    s->get_track_info = bin::get_track_info;
+    s->get_track_number = bin::get_track_number;
+
+    return bin::init(bin, path);
+}
+
 Disc* open(logger::Logger* logger, const char* path) {
     int ext = get_extension(path);
 
@@ -160,34 +216,38 @@ Disc* open(logger::Logger* logger, const char* path) {
         // Standard raw 2048-byte sector ISO 9660 image
         // usually used for DVDs
         case DISC_EXT_ISO: {
-            iso::Iso* iso = iso::create(s->logger);
+            int layout = probe_layout(path);
 
-            s->udata = iso;
-            s->read_sector = iso::read_sector;
-            s->get_size = iso::get_size;
-            s->get_sector_size = iso::get_sector_size;
-            s->get_track_count = iso::get_track_count;
-            s->get_track_info = iso::get_track_info;
-            s->get_track_number = iso::get_track_number;
+            if (layout == LAYOUT_RAW_MODE1) {
+                r = open_bin(s, path, bin::BIN_MODE1_DATA_OFFSET);
+            } else if (layout == LAYOUT_RAW_MODE2) {
+                r = open_bin(s, path, bin::BIN_MODE2_DATA_OFFSET);
+            } else {
+                iso::Iso* iso = iso::create(s->logger);
 
-            // To-do: Check if path exists
-            r = iso::init(iso, path);
+                s->udata = iso;
+                s->read_sector = iso::read_sector;
+                s->get_size = iso::get_size;
+                s->get_sector_size = iso::get_sector_size;
+                s->get_track_count = iso::get_track_count;
+                s->get_track_info = iso::get_track_info;
+                s->get_track_number = iso::get_track_number;
+
+                // To-do: Check if path exists
+                r = iso::init(iso, path);
+            }
         } break;
 
         // Raw 2352-byte sector disc image (CD)
         case DISC_EXT_NONE:
         case DISC_EXT_BIN: {
-            bin::Bin* bin = bin::create(s->logger);
+            int layout = probe_layout(path);
 
-            s->udata = bin;
-            s->read_sector = bin::read_sector;
-            s->get_size = bin::get_size;
-            s->get_sector_size = bin::get_sector_size;
-            s->get_track_count = bin::get_track_count;
-            s->get_track_info = bin::get_track_info;
-            s->get_track_number = bin::get_track_number;
-
-            r = bin::init(bin, path);
+            if (layout == LAYOUT_RAW_MODE1) {
+                r = open_bin(s, path, bin::BIN_MODE1_DATA_OFFSET);
+            } else {
+                r = open_bin(s, path, bin::BIN_MODE2_DATA_OFFSET);
+            }
         } break;
 
         // CUE+BIN disc image (contains track information)
