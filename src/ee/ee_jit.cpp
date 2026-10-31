@@ -63,6 +63,7 @@
 
 #include "profile_tag.hpp"
 #include "profile_counters.hpp"
+#include "vu_emit.hpp"
 
 #include "../jit_invoke.hpp"
 
@@ -5765,6 +5766,45 @@ static VuMacroOp vu_macro_op(int id, uint32_t dest, bool* upper) {
 
 #undef VU_MACRO_PICK
 
+static void emit_mac_gather(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& out, const asmjit::ujit::Gp& mac) {
+    asmjit::ujit::Gp spread = uc.new_gp32();
+
+    uc.mov(out, mac);
+    uc.and_(out, out, asmjit::Imm(0xffff));
+    uc.shr(spread, out, asmjit::Imm(2));
+    uc.or_(out, out, spread);
+    uc.shr(spread, out, asmjit::Imm(1));
+    uc.or_(out, out, spread);
+    uc.and_(out, out, asmjit::Imm(0x1111));
+    uc.mul(out, out, asmjit::Imm(0x1248));
+    uc.shr(out, out, asmjit::Imm(12));
+    uc.and_(out, out, asmjit::Imm(0xf));
+}
+
+static void decode_macro(Ee* ee, const Instruction& i, bool upper) {
+    if (i.vu_decoded) {
+        return;
+    }
+
+    if (upper) {
+        vu::Instruction saved = ee->vu0->upper;
+
+        vu::decode_upper(ee->vu0, i.opcode);
+
+        i.vu_ins = ee->vu0->upper;
+        ee->vu0->upper = saved;
+    } else {
+        vu::Instruction saved = ee->vu0->lower;
+
+        vu::decode_lower(ee->vu0, i.opcode);
+
+        i.vu_ins = ee->vu0->lower;
+        ee->vu0->lower = saved;
+    }
+
+    i.vu_decoded = 1;
+}
+
 void compile_block(Ee* ee, Block* block) {
     using namespace asmjit;
 
@@ -6048,12 +6088,71 @@ void compile_block(Ee* ee, Block* block) {
 
         sub_imm32(uc, EE(cycles_left), sb.cycles);
 
+        vu::jit::Emitter macro_e = {};
+
+        bool macro_active = false;
+
+        ujit::Gp macro_vu0;
+        ujit::Gp macro_status;
+        ujit::Gp macro_or;
+
+        auto macro_close = [&]() {
+            if (!macro_active) {
+                return;
+            }
+
+            for (int r = 0; r < vu::jit::REG_COUNT; r++) {
+                if (macro_e.valid[r] && macro_e.dirty[r]) {
+                    uc.v_storeu128(macro_e.reg_mem(r), macro_e.reg[r]);
+                }
+            }
+
+            uc.store_u32(ujit::mem_ptr(macro_vu0, offsetof(vu::Vu, mac)), macro_e.mac_reg);
+
+            ujit::Gp low = uc.new_gp32();
+            ujit::Gp sticky = uc.new_gp32();
+            ujit::Gp guard = uc.new_gp32();
+            ujit::Gp zero = uc.new_gp32();
+
+            emit_mac_gather(uc, low, macro_e.mac_reg);
+            emit_mac_gather(uc, sticky, macro_or);
+
+            uc.shl(sticky, sticky, Imm(6));
+            uc.load_i32(guard, ujit::mem_ptr(macro_vu0, offsetof(vu::Vu, fsset_guard)));
+            uc.mov(zero, Imm(0));
+            uc.cmov(sticky, zero, ujit::test_nz(guard));
+
+            uc.and_(macro_status, macro_status, Imm(~0x3fu));
+            uc.or_(macro_status, macro_status, low);
+            uc.or_(macro_status, macro_status, sticky);
+            uc.store_u32(ujit::mem_ptr(macro_vu0, offsetof(vu::Vu, status)), macro_status);
+
+            macro_active = false;
+        };
+
         for (uint32_t sb_n = 0; sb_n < sb.count; sb_n++) {
             if (delay_slot_nullified) {
                 break;
             }
 
             const Instruction& i = block->instructions[sb.first + sb_n];
+
+            bool macro_upper = false;
+            bool macro_native = false;
+
+            VuMacroOp macro_op = nullptr;
+            vu::jit::Fmac macro_fmac = {};
+
+            if (ee->vu0 && i.id >= I_VADDX && i.id <= I_VRXOR && i.id != I_VCALLMS && i.id != I_VCALLMSR) {
+                macro_op = vu_macro_op(i.id, (i.opcode >> 21) & 0xf, &macro_upper);
+
+                macro_native = macro_op && macro_upper && i.id != I_VNOP
+                    && (i.id == I_VOPMULA || i.id == I_VOPMSUB || vu::jit::classify_fmac(i.opcode, &macro_fmac));
+            }
+
+            if (!macro_native) {
+                macro_close();
+            }
 
             switch (i.id) {
                 case I_ADDI:
@@ -9038,29 +9137,51 @@ void compile_block(Ee* ee, Block* block) {
                 default: {
                     bool vu_only = i.id >= I_VADDX && i.id <= I_VRXOR && i.id != I_VCALLMS && i.id != I_VCALLMSR;
 
-                    bool vu_upper = false;
-
-                    VuMacroOp macro_op = (vu_only && ee->vu0) ? vu_macro_op(i.id, (i.opcode >> 21) & 0xf, &vu_upper) : nullptr;
-
                     if (macro_op) {
-                        if (!i.vu_decoded) {
-                            if (vu_upper) {
-                                vu::Instruction saved = ee->vu0->upper;
+                        decode_macro(ee, i, macro_upper);
 
-                                vu::decode_upper(ee->vu0, i.opcode);
+                        if (macro_native) {
+                            if (!macro_active) {
+                                macro_e = vu::jit::Emitter {};
 
-                                i.vu_ins = ee->vu0->upper;
-                                ee->vu0->upper = saved;
-                            } else {
-                                vu::Instruction saved = ee->vu0->lower;
+                                macro_vu0 = uc.new_gp_ptr();
+                                macro_status = uc.new_gp32();
+                                macro_or = uc.new_gp32();
 
-                                vu::decode_lower(ee->vu0, i.opcode);
+                                uc.load_u64(macro_vu0, EE(vu0));
+                                uc.load_u32(macro_status, ujit::mem_ptr(macro_vu0, offsetof(vu::Vu, status)));
+                                uc.mov(macro_or, Imm(0));
 
-                                i.vu_ins = ee->vu0->lower;
-                                ee->vu0->lower = saved;
+                                macro_e.vu = ee->vu0;
+                                macro_e.uc = &uc;
+                                macro_e.state = macro_vu0;
+                                macro_e.consts = uc.new_gp_ptr();
+                                macro_e.guard_free = true;
+                                macro_e.flags_loaded = true;
+                                macro_e.mac_reg = uc.new_gp32();
+                                macro_e.mac_hi = uc.new_gp32();
+                                macro_e.status_or = uc.new_gp32();
+
+                                uc.mov(macro_e.consts, Imm((uintptr_t)vu::jit::g_vu_const));
+                                uc.load_u32(macro_e.mac_reg, ujit::mem_ptr(macro_vu0, offsetof(vu::Vu, mac)));
+                                uc.mov(macro_e.mac_hi, macro_e.mac_reg);
+                                uc.and_(macro_e.mac_hi, macro_e.mac_hi, Imm(0xffff0000u));
+                                uc.mov(macro_e.status_or, Imm(0));
+
+                                macro_active = true;
                             }
 
-                            i.vu_decoded = 1;
+                            if (i.id == I_VOPMULA) {
+                                vu::jit::emit_opmula(macro_e, i.vu_ins, false);
+                            } else if (i.id == I_VOPMSUB) {
+                                vu::jit::emit_opmsub(macro_e, i.vu_ins, false);
+                            } else {
+                                vu::jit::emit_fmac(macro_e, i.vu_ins, macro_fmac, false);
+                            }
+
+                            uc.or_(macro_or, macro_or, macro_e.mac_reg);
+
+                            break;
                         }
 
                         ujit::Gp vu0 = uc.new_gp_ptr();
@@ -9078,22 +9199,15 @@ void compile_block(Ee* ee, Block* block) {
                         op_node->set_arg(0, vu0);
                         op_node->set_arg(1, Imm((uintptr_t)&i.vu_ins));
 
+                        ujit::Gp mac = uc.new_gp32();
                         ujit::Gp flags = uc.new_gp32();
-                        ujit::Gp spread = uc.new_gp32();
                         ujit::Gp sticky = uc.new_gp32();
                         ujit::Gp guard = uc.new_gp32();
                         ujit::Gp zero = uc.new_gp32();
 
-                        uc.load_u32(flags, ujit::mem_ptr(vu0, offsetof(vu::Vu, mac)));
-                        uc.and_(flags, flags, Imm(0xffff));
-                        uc.shr(spread, flags, Imm(2));
-                        uc.or_(flags, flags, spread);
-                        uc.shr(spread, flags, Imm(1));
-                        uc.or_(flags, flags, spread);
-                        uc.and_(flags, flags, Imm(0x1111));
-                        uc.mul(flags, flags, Imm(0x1248));
-                        uc.shr(flags, flags, Imm(12));
-                        uc.and_(flags, flags, Imm(0xf));
+                        uc.load_u32(mac, ujit::mem_ptr(vu0, offsetof(vu::Vu, mac)));
+
+                        emit_mac_gather(uc, flags, mac);
 
                         uc.and_(status, status, Imm(~0x3fu));
                         uc.or_(status, status, flags);
@@ -9127,6 +9241,8 @@ void compile_block(Ee* ee, Block* block) {
                 } break;
             }
         }
+
+        macro_close();
 
         flush_reg_cache(ee, &uc);
 
