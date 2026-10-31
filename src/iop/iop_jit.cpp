@@ -2494,6 +2494,14 @@ int run_block(Iop* iop, int max_cycles) {
         return 0;
     }
 
+    if (iop->pc == iop->idle_pc && iop->idle_gen == iop->block_lut_gen && !iop->breakpoint_count && !check_irq(iop)) {
+        int idle = ((max_cycles + iop->idle_cycles - 1) / iop->idle_cycles) * iop->idle_cycles;
+
+        iop->total_cycles += idle;
+
+        return idle;
+    }
+
     // iris_debug(iop, "Running block at pc={:08x} max_cycles={}", iop->pc, max_cycles);
     int cycles = 0;
 
@@ -2533,6 +2541,10 @@ int run_block(Iop* iop, int max_cycles) {
 
         if (block->idle && cycles < max_cycles && iop->pc == block->start_pc) {
             int passes = (max_cycles - cycles + block->cycles - 1) / block->cycles;
+
+            iop->idle_pc = block->start_pc;
+            iop->idle_gen = iop->block_lut_gen;
+            iop->idle_cycles = block->cycles;
 
             iop->total_cycles += (uint64_t)passes * block->cycles;
 

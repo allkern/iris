@@ -206,6 +206,10 @@ struct Iop {
     BlockLutEntry block_lut[IOP_BLOCK_LUT_SIZE] = {};
     uint32_t block_lut_gen = 1;
 
+    uint32_t idle_pc = 0xffffffff;
+    uint32_t idle_gen = 0;
+    int idle_cycles = 0;
+
     uint32_t thbase_library = 0;
     uint32_t thbase_create_thread = 0;
     uint32_t thbase_start_thread = 0;
