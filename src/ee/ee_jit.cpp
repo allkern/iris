@@ -5626,6 +5626,145 @@ static asmjit::CodeHolder& prepare_code_holder(Ee* ee) {
     return ee->code;
 }
 
+typedef void (*VuMacroOp)(vu::Vu*, const vu::Instruction*);
+
+static constexpr uint32_t macro_dest(uint32_t k) {
+    return ((k & 8) ? vu::D_X : 0) | ((k & 4) ? vu::D_Y : 0) | ((k & 2) ? vu::D_Z : 0) | ((k & 1) ? vu::D_W : 0);
+}
+
+#define VU_MACRO_PICK(ins) { \
+    static const VuMacroOp table[16] = { \
+        &vu::i_ ## ins <macro_dest(0)>, &vu::i_ ## ins <macro_dest(1)>, &vu::i_ ## ins <macro_dest(2)>, &vu::i_ ## ins <macro_dest(3)>, \
+        &vu::i_ ## ins <macro_dest(4)>, &vu::i_ ## ins <macro_dest(5)>, &vu::i_ ## ins <macro_dest(6)>, &vu::i_ ## ins <macro_dest(7)>, \
+        &vu::i_ ## ins <macro_dest(8)>, &vu::i_ ## ins <macro_dest(9)>, &vu::i_ ## ins <macro_dest(10)>, &vu::i_ ## ins <macro_dest(11)>, \
+        &vu::i_ ## ins <macro_dest(12)>, &vu::i_ ## ins <macro_dest(13)>, &vu::i_ ## ins <macro_dest(14)>, &vu::i_ ## ins <macro_dest(15)> \
+    }; \
+    return table[dest & 15]; }
+
+static VuMacroOp vu_macro_op(int id, uint32_t dest, bool* upper) {
+    switch (id) {
+        case I_VABS: *upper = true; VU_MACRO_PICK(abs)
+        case I_VADD: *upper = true; VU_MACRO_PICK(add)
+        case I_VADDA: *upper = true; VU_MACRO_PICK(adda)
+        case I_VADDAI: *upper = true; VU_MACRO_PICK(addai)
+        case I_VADDAQ: *upper = true; VU_MACRO_PICK(addaq)
+        case I_VADDAW: *upper = true; VU_MACRO_PICK(addaw)
+        case I_VADDAX: *upper = true; VU_MACRO_PICK(addax)
+        case I_VADDAY: *upper = true; VU_MACRO_PICK(adday)
+        case I_VADDAZ: *upper = true; VU_MACRO_PICK(addaz)
+        case I_VADDI: *upper = true; VU_MACRO_PICK(addi)
+        case I_VADDQ: *upper = true; VU_MACRO_PICK(addq)
+        case I_VADDW: *upper = true; VU_MACRO_PICK(addw)
+        case I_VADDX: *upper = true; VU_MACRO_PICK(addx)
+        case I_VADDY: *upper = true; VU_MACRO_PICK(addy)
+        case I_VADDZ: *upper = true; VU_MACRO_PICK(addz)
+        case I_VCLIPW: *upper = true; return &vu::i_clip;
+        case I_VFTOI0: *upper = true; VU_MACRO_PICK(ftoi0)
+        case I_VFTOI12: *upper = true; VU_MACRO_PICK(ftoi12)
+        case I_VFTOI15: *upper = true; VU_MACRO_PICK(ftoi15)
+        case I_VFTOI4: *upper = true; VU_MACRO_PICK(ftoi4)
+        case I_VIADD: *upper = false; return &vu::i_iadd;
+        case I_VIADDI: *upper = false; return &vu::i_iaddi;
+        case I_VIAND: *upper = false; return &vu::i_iand;
+        case I_VILWR: *upper = false; VU_MACRO_PICK(ilwr)
+        case I_VIOR: *upper = false; return &vu::i_ior;
+        case I_VISUB: *upper = false; return &vu::i_isub;
+        case I_VISWR: *upper = false; VU_MACRO_PICK(iswr)
+        case I_VITOF0: *upper = true; VU_MACRO_PICK(itof0)
+        case I_VITOF12: *upper = true; VU_MACRO_PICK(itof12)
+        case I_VITOF15: *upper = true; VU_MACRO_PICK(itof15)
+        case I_VITOF4: *upper = true; VU_MACRO_PICK(itof4)
+        case I_VLQD: *upper = false; VU_MACRO_PICK(lqd)
+        case I_VLQI: *upper = false; VU_MACRO_PICK(lqi)
+        case I_VMADD: *upper = true; VU_MACRO_PICK(madd)
+        case I_VMADDA: *upper = true; VU_MACRO_PICK(madda)
+        case I_VMADDAI: *upper = true; VU_MACRO_PICK(maddai)
+        case I_VMADDAQ: *upper = true; VU_MACRO_PICK(maddaq)
+        case I_VMADDAW: *upper = true; VU_MACRO_PICK(maddaw)
+        case I_VMADDAX: *upper = true; VU_MACRO_PICK(maddax)
+        case I_VMADDAY: *upper = true; VU_MACRO_PICK(madday)
+        case I_VMADDAZ: *upper = true; VU_MACRO_PICK(maddaz)
+        case I_VMADDI: *upper = true; VU_MACRO_PICK(maddi)
+        case I_VMADDQ: *upper = true; VU_MACRO_PICK(maddq)
+        case I_VMADDW: *upper = true; VU_MACRO_PICK(maddw)
+        case I_VMADDX: *upper = true; VU_MACRO_PICK(maddx)
+        case I_VMADDY: *upper = true; VU_MACRO_PICK(maddy)
+        case I_VMADDZ: *upper = true; VU_MACRO_PICK(maddz)
+        case I_VMAX: *upper = true; VU_MACRO_PICK(max)
+        case I_VMAXI: *upper = true; VU_MACRO_PICK(maxi)
+        case I_VMAXW: *upper = true; VU_MACRO_PICK(maxw)
+        case I_VMAXX: *upper = true; VU_MACRO_PICK(maxx)
+        case I_VMAXY: *upper = true; VU_MACRO_PICK(maxy)
+        case I_VMAXZ: *upper = true; VU_MACRO_PICK(maxz)
+        case I_VMFIR: *upper = true; VU_MACRO_PICK(mfir)
+        case I_VMINI: *upper = true; VU_MACRO_PICK(mini)
+        case I_VMINII: *upper = true; VU_MACRO_PICK(minii)
+        case I_VMINIW: *upper = true; VU_MACRO_PICK(miniw)
+        case I_VMINIX: *upper = true; VU_MACRO_PICK(minix)
+        case I_VMINIY: *upper = true; VU_MACRO_PICK(miniy)
+        case I_VMINIZ: *upper = true; VU_MACRO_PICK(miniz)
+        case I_VMOVE: *upper = false; VU_MACRO_PICK(move)
+        case I_VMR32: *upper = false; VU_MACRO_PICK(mr32)
+        case I_VMSUB: *upper = true; VU_MACRO_PICK(msub)
+        case I_VMSUBA: *upper = true; VU_MACRO_PICK(msuba)
+        case I_VMSUBAI: *upper = true; VU_MACRO_PICK(msubai)
+        case I_VMSUBAQ: *upper = true; VU_MACRO_PICK(msubaq)
+        case I_VMSUBAW: *upper = true; VU_MACRO_PICK(msubaw)
+        case I_VMSUBAX: *upper = true; VU_MACRO_PICK(msubax)
+        case I_VMSUBAY: *upper = true; VU_MACRO_PICK(msubay)
+        case I_VMSUBAZ: *upper = true; VU_MACRO_PICK(msubaz)
+        case I_VMSUBI: *upper = true; VU_MACRO_PICK(msubi)
+        case I_VMSUBQ: *upper = true; VU_MACRO_PICK(msubq)
+        case I_VMSUBW: *upper = true; VU_MACRO_PICK(msubw)
+        case I_VMSUBX: *upper = true; VU_MACRO_PICK(msubx)
+        case I_VMSUBY: *upper = true; VU_MACRO_PICK(msuby)
+        case I_VMSUBZ: *upper = true; VU_MACRO_PICK(msubz)
+        case I_VMTIR: *upper = false; return &vu::i_mtir;
+        case I_VMUL: *upper = true; VU_MACRO_PICK(mul)
+        case I_VMULA: *upper = true; VU_MACRO_PICK(mula)
+        case I_VMULAI: *upper = true; VU_MACRO_PICK(mulai)
+        case I_VMULAQ: *upper = true; VU_MACRO_PICK(mulaq)
+        case I_VMULAW: *upper = true; VU_MACRO_PICK(mulaw)
+        case I_VMULAX: *upper = true; VU_MACRO_PICK(mulax)
+        case I_VMULAY: *upper = true; VU_MACRO_PICK(mulay)
+        case I_VMULAZ: *upper = true; VU_MACRO_PICK(mulaz)
+        case I_VMULI: *upper = true; VU_MACRO_PICK(muli)
+        case I_VMULQ: *upper = true; VU_MACRO_PICK(mulq)
+        case I_VMULW: *upper = true; VU_MACRO_PICK(mulw)
+        case I_VMULX: *upper = true; VU_MACRO_PICK(mulx)
+        case I_VMULY: *upper = true; VU_MACRO_PICK(muly)
+        case I_VMULZ: *upper = true; VU_MACRO_PICK(mulz)
+        case I_VNOP: *upper = true; return &vu::i_nop;
+        case I_VOPMSUB: *upper = true; return &vu::i_opmsub;
+        case I_VOPMULA: *upper = true; return &vu::i_opmula;
+        case I_VRGET: *upper = false; VU_MACRO_PICK(rget)
+        case I_VRINIT: *upper = false; return &vu::i_rinit;
+        case I_VRNEXT: *upper = false; VU_MACRO_PICK(rnext)
+        case I_VRXOR: *upper = false; return &vu::i_rxor;
+        case I_VSQD: *upper = false; VU_MACRO_PICK(sqd)
+        case I_VSQI: *upper = false; VU_MACRO_PICK(sqi)
+        case I_VSUB: *upper = true; VU_MACRO_PICK(sub)
+        case I_VSUBA: *upper = true; VU_MACRO_PICK(suba)
+        case I_VSUBAI: *upper = true; VU_MACRO_PICK(subai)
+        case I_VSUBAQ: *upper = true; VU_MACRO_PICK(subaq)
+        case I_VSUBAW: *upper = true; VU_MACRO_PICK(subaw)
+        case I_VSUBAX: *upper = true; VU_MACRO_PICK(subax)
+        case I_VSUBAY: *upper = true; VU_MACRO_PICK(subay)
+        case I_VSUBAZ: *upper = true; VU_MACRO_PICK(subaz)
+        case I_VSUBI: *upper = true; VU_MACRO_PICK(subi)
+        case I_VSUBQ: *upper = true; VU_MACRO_PICK(subq)
+        case I_VSUBW: *upper = true; VU_MACRO_PICK(subw)
+        case I_VSUBX: *upper = true; VU_MACRO_PICK(subx)
+        case I_VSUBY: *upper = true; VU_MACRO_PICK(suby)
+        case I_VSUBZ: *upper = true; VU_MACRO_PICK(subz)
+        case I_VWAITQ: *upper = false; return &vu::i_waitq;
+    }
+
+    return nullptr;
+}
+
+#undef VU_MACRO_PICK
+
 void compile_block(Ee* ee, Block* block) {
     using namespace asmjit;
 
@@ -8898,6 +9037,75 @@ void compile_block(Ee* ee, Block* block) {
 
                 default: {
                     bool vu_only = i.id >= I_VADDX && i.id <= I_VRXOR && i.id != I_VCALLMS && i.id != I_VCALLMSR;
+
+                    bool vu_upper = false;
+
+                    VuMacroOp macro_op = (vu_only && ee->vu0) ? vu_macro_op(i.id, (i.opcode >> 21) & 0xf, &vu_upper) : nullptr;
+
+                    if (macro_op) {
+                        if (!i.vu_decoded) {
+                            if (vu_upper) {
+                                vu::Instruction saved = ee->vu0->upper;
+
+                                vu::decode_upper(ee->vu0, i.opcode);
+
+                                i.vu_ins = ee->vu0->upper;
+                                ee->vu0->upper = saved;
+                            } else {
+                                vu::Instruction saved = ee->vu0->lower;
+
+                                vu::decode_lower(ee->vu0, i.opcode);
+
+                                i.vu_ins = ee->vu0->lower;
+                                ee->vu0->lower = saved;
+                            }
+
+                            i.vu_decoded = 1;
+                        }
+
+                        ujit::Gp vu0 = uc.new_gp_ptr();
+                        ujit::Gp status = uc.new_gp32();
+
+                        uc.load_u64(vu0, EE(vu0));
+                        uc.load_u32(status, ujit::mem_ptr(vu0, offsetof(vu::Vu, status)));
+
+                        InvokeNode* op_node = jit_invoke(
+                            uc,
+                            (uintptr_t)macro_op,
+                            FuncSignature::build<void, vu::Vu*, const vu::Instruction*>()
+                        );
+
+                        op_node->set_arg(0, vu0);
+                        op_node->set_arg(1, Imm((uintptr_t)&i.vu_ins));
+
+                        ujit::Gp flags = uc.new_gp32();
+                        ujit::Gp spread = uc.new_gp32();
+                        ujit::Gp sticky = uc.new_gp32();
+                        ujit::Gp guard = uc.new_gp32();
+                        ujit::Gp zero = uc.new_gp32();
+
+                        uc.load_u32(flags, ujit::mem_ptr(vu0, offsetof(vu::Vu, mac)));
+                        uc.and_(flags, flags, Imm(0xffff));
+                        uc.shr(spread, flags, Imm(2));
+                        uc.or_(flags, flags, spread);
+                        uc.shr(spread, flags, Imm(1));
+                        uc.or_(flags, flags, spread);
+                        uc.and_(flags, flags, Imm(0x1111));
+                        uc.mul(flags, flags, Imm(0x1248));
+                        uc.shr(flags, flags, Imm(12));
+                        uc.and_(flags, flags, Imm(0xf));
+
+                        uc.and_(status, status, Imm(~0x3fu));
+                        uc.or_(status, status, flags);
+                        uc.shl(sticky, flags, Imm(6));
+                        uc.load_i32(guard, ujit::mem_ptr(vu0, offsetof(vu::Vu, fsset_guard)));
+                        uc.mov(zero, Imm(0));
+                        uc.cmov(sticky, zero, ujit::test_nz(guard));
+                        uc.or_(status, status, sticky);
+                        uc.store_u32(ujit::mem_ptr(vu0, offsetof(vu::Vu, status)), status);
+
+                        break;
+                    }
 
                     if (!vu_only) {
                         flush_reg_cache(ee, &uc);
