@@ -1005,6 +1005,43 @@ static inline VfastTarget emit_vfast_write_lookup(asmjit::ujit::UniCompiler& uc,
     return target;
 }
 
+static inline void emit_read64_aligned(asmjit::ujit::UniCompiler& uc, Ee* ee, const asmjit::ujit::Gp& aligned, const asmjit::ujit::Gp& data) {
+    if (!ee->vfast_r) {
+        asmjit::InvokeNode* node = jit_invoke(
+            uc,
+            (uintptr_t)bus_read64,
+            asmjit::FuncSignature::build<uint64_t, Ee*, uint32_t>()
+        );
+
+        node->set_arg(0, ee->state_ptr);
+        node->set_arg(1, aligned);
+        node->set_ret(0, data);
+
+        return;
+    }
+
+    asmjit::Label slow = uc.new_label();
+    asmjit::Label done = uc.new_label();
+
+    VfastTarget target = emit_vfast_lookup(uc, ee->vfast_r, aligned, slow);
+
+    uc.load_u64(data, asmjit::ujit::mem_ptr(target.base, target.offset, 0));
+    uc.j(done);
+    uc.bind(slow);
+
+    asmjit::InvokeNode* node = jit_invoke(
+        uc,
+        (uintptr_t)vfast_read64,
+        asmjit::FuncSignature::build<uint64_t, Ee*, uint32_t>()
+    );
+
+    node->set_arg(0, ee->state_ptr);
+    node->set_arg(1, aligned);
+    node->set_ret(0, data);
+
+    uc.bind(done);
+}
+
 static inline uint32_t fmv_probe_read32(Ee* ee, uint32_t addr) {
     if (!ee->vfast_r || (addr & 0xfff) > 0xffc) {
         return (uint32_t)bus_read32(ee, addr);
@@ -7572,15 +7609,7 @@ void compile_block(Ee* ee, Block* block) {
 
                     ujit::Gp data = uc.new_gp64();
 
-                    InvokeNode* rd_node = jit_invoke(
-                        uc,
-                        (uintptr_t)bus_read64,
-                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
-                    );
-
-                    rd_node->set_arg(0, ee->state_ptr);
-                    rd_node->set_arg(1, aligned);
-                    rd_node->set_ret(0, data);
+                    emit_read64_aligned(uc, ee, aligned, data);
 
                     if (!i.rt.r) continue;
 
@@ -7971,18 +8000,6 @@ void compile_block(Ee* ee, Block* block) {
                     uc.and_(aligned, addr, Imm(~7));
                     uc.and_(off, addr, Imm(7));
 
-                    ujit::Gp data = uc.new_gp64();
-
-                    InvokeNode* rd_node = jit_invoke(
-                        uc,
-                        (uintptr_t)bus_read64,
-                        FuncSignature::build<uint64_t, Ee*, uint32_t>()
-                    );
-
-                    rd_node->set_arg(0, ee->state_ptr);
-                    rd_node->set_arg(1, aligned);
-                    rd_node->set_ret(0, data);
-
                     ujit::Gp sh = uc.new_gp32();
 
                     if (is_l) {
@@ -8013,20 +8030,40 @@ void compile_block(Ee* ee, Block* block) {
                         uc.sub(mask, mask, Imm(1));
                     }
 
+                    ujit::Gp data = uc.new_gp64();
                     ujit::Gp store_val = uc.new_gp64();
+
+                    asmjit::Label done = uc.new_label();
+
+                    if (ee->vfast_w) {
+                        asmjit::Label slow = uc.new_label();
+
+                        VfastTarget target = emit_vfast_write_lookup(uc, ee, aligned, slow);
+
+                        uc.load_u64(data, ujit::mem_ptr(target.base, target.offset, 0));
+                        uc.and_(store_val, data, mask);
+                        uc.or_(store_val, store_val, rtsh);
+                        uc.store_u64(ujit::mem_ptr(target.base, target.offset, 0), store_val);
+                        uc.j(done);
+                        uc.bind(slow);
+                    }
+
+                    emit_read64_aligned(uc, ee, aligned, data);
 
                     uc.and_(store_val, data, mask);
                     uc.or_(store_val, store_val, rtsh);
 
                     InvokeNode* wr_node = jit_invoke(
                         uc,
-                        (uintptr_t)bus_write64,
+                        ee->vfast_w ? (uintptr_t)vfast_write64 : (uintptr_t)bus_write64,
                         FuncSignature::build<void, Ee*, uint32_t, uint64_t>()
                     );
 
                     wr_node->set_arg(0, ee->state_ptr);
                     wr_node->set_arg(1, aligned);
                     wr_node->set_arg(2, store_val);
+
+                    uc.bind(done);
                 } break;
 
                 case I_SQ: {
