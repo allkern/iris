@@ -782,6 +782,7 @@ struct Ee {
     // Perf counters
     uint32_t pcr0;
     uint32_t pcr1;
+    uint64_t pcr_sync[2];
 
     union FpuReg f[32];
     union FpuReg a;

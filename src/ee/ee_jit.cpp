@@ -1883,7 +1883,72 @@ static inline void i_maxs(Ee* ee, const Instruction& i) {
 
     ee->fcr &= ~(FPU_FLG_O | FPU_FLG_U);
 }
+
+static inline bool perf_counter_enabled(uint32_t pccr, int n) {
+    if (!(pccr & 0x80000000))
+        return false;
+
+    uint32_t modes = (pccr >> (n ? 11 : 1)) & 0xf;
+    uint32_t event = (pccr >> (n ? 15 : 5)) & 0x1f;
+
+    if (!modes)
+        return false;
+
+    switch (event) {
+        case 1: case 2: case 3:
+        case 12: case 13: case 14: case 15:
+            return true;
+    }
+
+    return false;
+}
+
+static void sync_perf_counters(Ee* ee) {
+    uint64_t now = ee->total_cycles;
+
+    for (int n = 0; n < 2; n++) {
+        if (now <= ee->pcr_sync[n])
+            continue;
+
+        if (perf_counter_enabled(ee->pccr, n)) {
+            uint32_t& pcr = n ? ee->pcr1 : ee->pcr0;
+
+            pcr += (uint32_t)(now - ee->pcr_sync[n]);
+        }
+
+        ee->pcr_sync[n] = now;
+    }
+}
+
+static uint32_t read_perf_counter(Ee* ee, int sel) {
+    sync_perf_counters(ee);
+
+    switch (sel) {
+        case 0: return ee->pccr;
+        case 1: return ee->pcr0;
+        case 3: return ee->pcr1;
+    }
+
+    return 0;
+}
+
+static void write_perf_counter(Ee* ee, int sel, uint32_t data) {
+    sync_perf_counters(ee);
+
+    switch (sel) {
+        case 0: ee->pccr = data; break;
+        case 1: ee->pcr0 = data; break;
+        case 3: ee->pcr1 = data; break;
+    }
+}
+
 static inline void i_mfc0(Ee* ee, const Instruction& i) {
+    if (D_RD == 25) {
+        RT = SE6432(read_perf_counter(ee, i.opcode & 7));
+
+        return;
+    }
+
     RT = SE6432(ee->cop0_r[D_RD]);
 }
 static inline void i_mfc1(Ee* ee, const Instruction& i) {
@@ -1943,7 +2008,9 @@ static inline void i_msubs(Ee* ee, const Instruction& i) {
 static inline void i_mtc0(Ee* ee, const Instruction& i) {
     int d = D_RD;
 
-    if (d == 4) {
+    if (d == 25) {
+        write_perf_counter(ee, i.opcode & 7, RT32);
+    } else if (d == 4) {
         ee->cop0_r[4] &= 0x7ffff0;
         ee->cop0_r[4] |= (RT32 & 0xff800000);
     } else {
@@ -4189,6 +4256,11 @@ void reset(Ee* ee) {
     for (int i = 0; i < 32; i++)
         ee->cop0_r[i] = 0;
 
+    ee->pcr0 = 0;
+    ee->pcr1 = 0;
+    ee->pcr_sync[0] = ee->total_cycles;
+    ee->pcr_sync[1] = ee->total_cycles;
+
     ee->a.u32 = 0;
 
     ee->hi = { 0 };
@@ -6264,21 +6336,16 @@ void compile_block(Ee* ee, Block* block) {
                             case 7: uc.load_u32(rt.reg, EE(dvbm)); break;
                         }
                     } else if (i.rd.r == 25) {
-                        switch (i.opcode & 0x7ff) {
-                            case 0: uc.load_u32(rt.reg, EE(pccr)); break;
+                        InvokeNode* inv = jit_invoke(
+                            uc,
+                            (uintptr_t)read_perf_counter,
+                            FuncSignature::build<uint32_t, Ee*, int32_t>()
+                        );
 
-                            // Note: Hack. These should return PCR0 and PCR1
-                            //       respectively, but we don't support the perf
-                            //       counters, so just return Count (increasing)
-                            //       instead.
-                            //       The System 246 version of SoulCalibur II
-                            //       depends on the performance counters returning
-                            //       the elapsed cycle count
-                            //       It configures PCCR to 8008703c: CTE=1, EVENT0=1
-                            //       which simply counts processor cycles.
-                            case 1: uc.load_u32(rt.reg, EE(count)); break;
-                            case 3: uc.load_u32(rt.reg, EE(count)); break;
-                        }
+                        inv->set_arg(0, ee->state_ptr);
+                        inv->set_arg(1, Imm((int32_t)(i.opcode & 7)));
+
+                        inv->set_ret(0, rt.reg.r32());
                     } else {
                         uc.load_u32(rt.reg, EE(cop0_r[i.rd.r]));
                     }
@@ -6300,11 +6367,15 @@ void compile_block(Ee* ee, Block* block) {
                             case 7: uc.store_u32(EE(dvbm), rt.reg); break;
                         }
                     } else if (i.rd.r == 25) {
-                        switch (i.opcode & 0x7ff) {
-                            case 0: uc.store_u32(EE(pccr), rt.reg); break;
-                            case 1: uc.store_u32(EE(pcr0), rt.reg); break;
-                            case 3: uc.store_u32(EE(pcr1), rt.reg); break;
-                        }
+                        InvokeNode* inv = jit_invoke(
+                            uc,
+                            (uintptr_t)write_perf_counter,
+                            FuncSignature::build<void, Ee*, int32_t, uint32_t>()
+                        );
+
+                        inv->set_arg(0, ee->state_ptr);
+                        inv->set_arg(1, Imm((int32_t)(i.opcode & 7)));
+                        inv->set_arg(2, rt.reg.r32());
                     } else {
                         uc.store_u32(EE(cop0_r[i.rd.r]), rt.reg);
                     }
