@@ -113,8 +113,12 @@ static inline void ee_timers_update_event(Timer* t) {
     //);
 }
 
+static inline int ee_timers_counting(Timer* t) {
+    return t->cue && !t->paused;
+}
+
 static inline uint32_t ee_timers_cycles_until_check(Timer* t) {
-    if (!t->cue || !t->check_enabled)
+    if (!ee_timers_counting(t) || !t->check_enabled)
         return 0xffffffffu;
 
     uint32_t period = t->delta_reload;
@@ -210,7 +214,7 @@ static inline void ee_timers_advance_counter(Timers* timers, Timer* t, int i, ui
 }
 
 static inline void ee_timers_sync_timer(Timers* timers, Timer* t, int i) {
-    if (!t->cue) {
+    if (!ee_timers_counting(t)) {
         t->last_sync_cycle = timers->current_cycle;
         return;
     }
@@ -384,6 +388,9 @@ static inline void ee_timers_write_mode(Timers* timers, int t, uint32_t data) {
     timer->cmpe = (data >> 8) & 1;
     timer->ovfe = (data >> 9) & 1;
 
+    timer->gated = timer->gate && !(timer->gats == 0 && timer->clks == 3);
+    timer->paused = timer->gated && timer->gats && timer->gatm == 0 && timers->vblank;
+
     ee_timers_update_active_mask(timers, t, timer->cue);
 
     // if (t == 0)
@@ -402,12 +409,6 @@ static inline void ee_timers_write_mode(Timers* timers, int t, uint32_t data) {
 
     // Reset sync point when timer is enabled
     timer->last_sync_cycle = timers->current_cycle;
-
-    if (timer->gate) {
-        iris_debug(timers, "Timer {} gate write {:08x}", t, data);
-
-        // exit(1);
-    }
 
     // if (t == 0)
     // iris_debug(timers, "Timer {} mode write {:08x} mode={:08x} counter={:04x} compare={:04x} clks={} gate={} gats={} gatm={} zret={} cue={} cmpe={} ovfe={}", //     t, data,
@@ -436,6 +437,45 @@ static inline void ee_timers_write_mode(Timers* timers, int t, uint32_t data) {
     }
 
     ee_timers_schedule_next_irq_event(timers);
+}
+
+static void ee_timers_gate_reset(Timers* timers, Timer* t, int i) {
+    ee_timers_sync_timer(timers, t, i);
+
+    t->counter = 0;
+    t->delta = t->delta_reload;
+
+    if (t->check_enabled)
+        ee_timers_update_event(t);
+}
+
+static void ee_timers_gate_edge(Timers* timers, int vblank, int rising) {
+    int changed = 0;
+
+    for (int i = 0; i < 4; i++) {
+        Timer* t = &timers->timer[i];
+
+        if (!t->cue || !t->gated || t->gats != vblank)
+            continue;
+
+        switch (t->gatm) {
+            case 0: {
+                ee_timers_sync_timer(timers, t, i);
+
+                t->paused = rising;
+                t->last_sync_cycle = timers->current_cycle;
+            } break;
+
+            case 1: if (rising) ee_timers_gate_reset(timers, t, i); break;
+            case 2: if (!rising) ee_timers_gate_reset(timers, t, i); break;
+            case 3: ee_timers_gate_reset(timers, t, i); break;
+        }
+
+        changed = 1;
+    }
+
+    if (changed)
+        ee_timers_schedule_next_irq_event(timers);
 }
 
 void tick(Timers* timers) {
@@ -467,7 +507,7 @@ void handle_hblank(Timers* timers) {
     for (int i = 0; i < 4; i++) {
         Timer* t = &timers->timer[i];
 
-        if (!t->cue)
+        if (!ee_timers_counting(t))
             continue;
 
         if (t->clks != 3)
@@ -475,14 +515,27 @@ void handle_hblank(Timers* timers) {
 
         ee_timers_advance_counter(timers, t, i, 1);
     }
+
+    ee_timers_gate_edge(timers, 0, 1);
+    ee_timers_gate_edge(timers, 0, 0);
 }
 
 void handle_vblank_in(Timers* timers) {
-    (void)timers;
+    if (!timers)
+        return;
+
+    timers->vblank = 1;
+
+    ee_timers_gate_edge(timers, 1, 1);
 }
 
 void handle_vblank_out(Timers* timers) {
-    (void)timers;
+    if (!timers)
+        return;
+
+    timers->vblank = 0;
+
+    ee_timers_gate_edge(timers, 1, 0);
 }
 
 void write16(Timers* timers, uint32_t addr, uint64_t data) {
