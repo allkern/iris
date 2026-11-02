@@ -256,6 +256,7 @@ struct Ipu
 
         void finish_command();
 
+        bool idec_waiting_for_output();
         bool process_IDEC();
 
         bool process_BDEC();

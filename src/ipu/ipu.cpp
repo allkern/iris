@@ -329,6 +329,16 @@ void Ipu::finish_command()
     ee::intc::irq(intc, ee::intc::IPU);
 }
 
+bool Ipu::idec_waiting_for_output()
+{
+    auto& from = dmac->channels[ee::dmac::IPU_FROM];
+
+    if (!(from.chcr & 0x100))
+        return true;
+
+    return from.qwc <= out_FIFO.f.size();
+}
+
 bool Ipu::process_IDEC()
 {
     while (true)
@@ -348,6 +358,9 @@ bool Ipu::process_IDEC()
             case IDEC_STATE::MACRO_I_TYPE:
             {
                 iris_debug(this, "Decode macroblock I type");
+
+                if (idec_waiting_for_output())
+                    return false;
 
                 bool invalid = false;
 
@@ -1379,6 +1392,10 @@ uint64_t Ipu::read_top()
 void Ipu::write_command(uint32_t value)
 {
     iris_debug(this, "Write command: ${:08x}", value);
+
+    if (ctrl.busy && command == 0x01 && idec.state == IDEC_STATE::MACRO_I_TYPE && idec_waiting_for_output())
+        ctrl.busy = false;
+
     if (!ctrl.busy)
     {
         ctrl.busy = true;
