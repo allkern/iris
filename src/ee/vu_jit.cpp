@@ -1080,12 +1080,29 @@ static bool compile(Jit* jit, Vu* vu, Block** members, const uint32_t* member_tp
             const BlockEntry& entry = b->entries[i];
 
             if (entry.m_bit) {
+                Label arm = uc.new_label();
+                Label ending = uc.new_label();
+
+                ujit::Gp left = uc.new_gp32();
+                ujit::Gp pending = uc.new_gp32();
+
+                uc.load_i32(left, VU(e_bit));
+                uc.j(arm, ujit::test_z(left));
+
+                uc.load_i32(pending, VU(m_bit_pending));
+                uc.j(ending, ujit::test_z(pending));
+
+                uc.bind(arm);
+
                 store_imm32(uc, VU(e_bit), 2);
                 store_imm32(uc, VU(m_bit_pending), 1);
+
+                uc.bind(ending);
             }
 
             if (entry.e_bit) {
                 store_imm32(uc, VU(e_bit), 2);
+                store_imm32(uc, VU(m_bit_pending), 0);
             }
 
             uint32_t next_tpc = (b->tpc + (uint32_t)i + 1) & mask;

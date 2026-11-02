@@ -3111,14 +3111,17 @@ bool execute_block(Vu* vu, Block* block) {
     // iris_debug(vu, "Input TPC {:04x}", vu->tpc);
 
     for (const BlockEntry& entry : block->entries) {
-        if (entry.m_bit) {
+        if (entry.m_bit && (!vu->e_bit || vu->m_bit_pending)) {
             vu->m_bit_pending = 1;
 
             vu->e_bit = 2;
         }
 
-        if (entry.e_bit)
+        if (entry.e_bit) {
+            vu->m_bit_pending = 0;
+
             vu->e_bit = 2;
+        }
 
         vu->tpc = (vu->tpc + 1) & vu->micro_mem_size;
 
