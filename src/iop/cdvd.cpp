@@ -1403,7 +1403,7 @@ static inline void n_get_toc(Cdvd* cdvd) {
     iop::dma::handle_cdvd_transfer(cdvd->hw.dma);
 
     set_ready(cdvd);
-    set_status(cdvd, STATUS_READING);
+    set_status(cdvd, STATUS_PAUSED);
 
     send_irq(cdvd);
 
