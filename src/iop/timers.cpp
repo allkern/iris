@@ -100,7 +100,7 @@ static inline void iop_timer_refresh_clock(Timer* t, int i) {
     uint32_t period = 1;
     uint8_t step = 2;
 
-    if ((i == 1) && t->use_ext) {
+    if (((i == 1) || (i == 3)) && t->use_ext) {
         period = 1172;
         step = 1;
     } else if ((i == 4) && t->t4_prescaler) {
