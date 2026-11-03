@@ -308,6 +308,7 @@ target_sources(iris PRIVATE
     frontend/ui/menubar.cpp
     frontend/ui/modules.cpp
     frontend/ui/overlay.cpp
+    frontend/ui/prompts.cpp
     frontend/ui/pad.cpp
     frontend/ui/remote.cpp
     frontend/ui/script_editor.cpp

@@ -191,6 +191,8 @@ struct Instance {
         bool show_overlay = false;
         bool show_library = false;
         bool show_library_saved = false;
+        bool confirm_exit = true;
+        bool warn_unknown_files = true;
         int theme = imgui::GRANITE_NEO;
         bool imgui_enable_viewports = true;
         int codeview_color_scheme = 0;
@@ -509,6 +511,10 @@ int get_menubar_inset(Instance* iris);
 void show_main_menubar(Instance* iris);
 void show_status_bar(Instance* iris);
 void show_fatal_error(Instance* iris);
+void show_prompts(Instance* iris);
+void request_exit_game(Instance* iris);
+void request_open_unknown_file(Instance* iris, std::string path);
+bool is_mapping_input();
 void show_overlay(Instance* iris);
 void show_library(Instance* iris);
 

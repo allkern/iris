@@ -47,6 +47,7 @@
 #include <algorithm>
 #include <optional>
 #include <cctype>
+#include <cstring>
 #include <thread>
 
 namespace iris::emu {
@@ -386,12 +387,49 @@ int open_file_thread(Instance* iris, std::string file) {
     return 0;
 }
 
-int open_file(Instance* iris, std::string file) {
-    std::filesystem::path path(file);
+static bool is_elf_file(const std::string& file) {
+    FILE* f = fopen(file.c_str(), "rb");
 
+    if (!f)
+        return false;
+
+    char magic[4];
+
+    bool elf = fread(magic, sizeof(magic), 1, f) == 1 && !memcmp(magic, "\x7f" "ELF", 4);
+
+    fclose(f);
+
+    return elf;
+}
+
+bool is_known_file(const std::string& file) {
+    std::string ext = std::filesystem::path(file).extension().string();
+
+    for (char& c : ext)
+        c = tolower(c);
+
+    if (ext == ".elf" || is_disc_image(file) || archive::is_archive(file))
+        return true;
+
+    return is_elf_file(file);
+}
+
+int open_file(Instance* iris, std::string file) {
     if (is_arcade_file(iris, file)) {
         return load_arcade(iris, file) ? 0 : 1;
     }
+
+    if (iris->ui.warn_unknown_files && !is_known_file(file)) {
+        request_open_unknown_file(iris, file);
+
+        return 0;
+    }
+
+    return open_file_unchecked(iris, file);
+}
+
+int open_file_unchecked(Instance* iris, std::string file) {
+    std::filesystem::path path(file);
 
     iris->ui.loading_target = path.filename().string();
     iris->ui.loading_file_active = true;
@@ -2005,7 +2043,7 @@ void close_game(Instance* iris) {
 
     clean_arcade_files(iris);
 
-    iris->ui.show_library = iris->ui.show_library_saved;
+    iris->ui.show_library = iris->ui.show_library_saved || iris->library.show_on_startup;
 }
 
 static bool arcade_system_supported(int system) {

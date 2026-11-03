@@ -1444,6 +1444,10 @@ static int selected_mapping = 0;
 static bool waiting_for_input = false;
 static uint64_t mapping_editing = 0;
 
+bool is_mapping_input() {
+    return waiting_for_input;
+}
+
 void show_mappings_editor(Instance* iris) {
     using namespace ImGui;
 
@@ -2620,6 +2624,13 @@ void show_misc_settings(Instance* iris) {
 
     PopStyleVar();
 #endif
+
+    imgui::section(iris, "Prompts");
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+    Checkbox("Confirm before exiting a game with Esc", &iris->ui.confirm_exit);
+    Checkbox("Warn when opening unrecognized files", &iris->ui.warn_unknown_files);
+    PopStyleVar();
 
     imgui::section(iris, "Codeview");
 

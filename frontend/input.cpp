@@ -964,6 +964,19 @@ void handle_keydown_event(Instance* iris, SDL_Event* event) {
             iris->debug.pause = !iris->debug.pause;
         } break;
 
+        case SDLK_ESCAPE: {
+            if (event->key.repeat || ImGui::GetIO().WantTextInput || is_mapping_input())
+                break;
+
+            if (ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId | ImGuiPopupFlags_AnyPopupLevel))
+                break;
+
+            if (iris->loaded.empty() && iris->arcade_id.empty())
+                break;
+
+            request_exit_game(iris);
+        } break;
+
         case SDLK_F9: {
             vulkan::wait_idle(iris);
 

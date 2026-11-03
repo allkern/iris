@@ -417,6 +417,8 @@ void update_window(Instance* iris) {
     if (iris->ui.show_overlay) show_overlay(iris);
     if (iris->fatal_error) show_fatal_error(iris);
 
+    show_prompts(iris);
+
     if (!iris->debug.pause) {
         iris->ui.show_library = false;
     }

@@ -364,6 +364,8 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->ui.codeview_use_theme_background = ui["codeview_use_theme_background"].value_or(true);
     iris->ui.ui_scale = ui["scale"].value_or(1.0f);
     iris->ui.imgui_enable_viewports = ui["enable_viewports"].value_or(true);
+    iris->ui.confirm_exit = ui["confirm_exit"].value_or(true);
+    iris->ui.warn_unknown_files = ui["warn_unknown_files"].value_or(true);
 
     toml::array* bgcolor = tbl["ui"]["bgcolor"].as_array();
 
@@ -736,6 +738,8 @@ void save(Instance* iris) {
                 iris->vk.clear_value.color.float32[2]
             } },
             { "enable_viewports", iris->ui.imgui_enable_viewports },
+            { "confirm_exit", iris->ui.confirm_exit },
+            { "warn_unknown_files", iris->ui.warn_unknown_files },
 #ifdef _WIN32
             { "windows_titlebar_style", iris->windows_titlebar_style },
             { "windows_enable_borders", iris->windows_enable_borders },

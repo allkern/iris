@@ -71,9 +71,11 @@ std::string get_arcade_bios_path(Instance* iris, int system);
 bool init(Instance* iris);
 void destroy(Instance* iris);
 int open_file(Instance* iris, std::string path);
+int open_file_unchecked(Instance* iris, std::string path);
 int boot_ps2_path(Instance* iris, std::string path);
 
 bool is_disc_image(const std::string& path);
+bool is_known_file(const std::string& path);
 
 int insert_disc(Instance* iris, std::string path);
 void start_pending_load(Instance* iris);

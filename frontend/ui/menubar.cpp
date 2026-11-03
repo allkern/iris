@@ -276,8 +276,8 @@ static void show_iris_menu(Instance* iris) {
             patches::clear(iris);
         }
 
-        if (menu::item(ICON_MS_CLOSE " Close", nullptr, false, !iris->ui.loading_file_active)) {
-            emu::close_game(iris);
+        if (menu::item(ICON_MS_CLOSE " Close", "Esc", false, !iris->ui.loading_file_active)) {
+            request_exit_game(iris);
         }
 
         menu::end();
