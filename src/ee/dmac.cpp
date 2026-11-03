@@ -460,6 +460,12 @@ static inline bool mfifo_tag_data_in_ring(Channel* c) {
     return false;
 }
 
+static inline bool vif1_irq_stalled_at_end(Dmac* dmac) {
+    Channel* c = &dmac->channels[VIF1];
+
+    return !c->qwc && channel_is_done(c) && (dmac->hw.bus->vif1->stat & vif::STAT_VIS);
+}
+
 static void mfifo_drain_vif1(Dmac* dmac) {
     Channel* c = &dmac->channels[VIF1];
     Channel* spr = &dmac->channels[SPR_FROM];
@@ -472,7 +478,7 @@ static void mfifo_drain_vif1(Dmac* dmac) {
     }
 
     while (c->chcr & 0x100) {
-        if (!vif::get_dreq(vif)) {
+        if (!vif::get_dreq(vif) && !vif1_irq_stalled_at_end(dmac)) {
             return;
         }
 
@@ -919,7 +925,7 @@ int transfer_vif1_word(Dmac* dmac) {
         return 0;
     }
 
-    if (!vif::get_dreq(dmac->hw.bus->vif1)) {
+    if (!vif::get_dreq(dmac->hw.bus->vif1) && !vif1_irq_stalled_at_end(dmac)) {
         // iris_debug(dmac, "vif1 dreq cleared");
 
         return 0;
