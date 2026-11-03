@@ -2771,6 +2771,7 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
     block->tpc = tpc;
     block->cycles = 0;
     block->runs = 0;
+    block->t_stop = false;
     block->entries.clear();
 
     if (adopt_victim_without_decoding(vu, block, max_cycles)) {
@@ -2866,6 +2867,12 @@ Block* cache_block(Vu* vu, uint32_t tpc, int max_cycles) {
 
         terminate = entry.branch || entry.e_bit;
         block->cycles++;
+
+        entry.t_bit = (upper & 0x08000000) != 0;
+
+        if (entry.t_bit) {
+            block->t_stop = true;
+        }
 
         block->entries.push_back(entry);
     }
@@ -3107,8 +3114,21 @@ void jit_execute_lower(Vu* vu, const BlockEntry* entry) {
     entry->lower.func(vu, &entry->lower);
 }
 
+static bool stop_at_t_bit(Vu* vu) {
+    vu->e_bit = 0;
+    vu->m_bit_pending = 0;
+
+    if (vu->t_stop_func) {
+        vu->t_stop_func(vu->t_stop_udata);
+    }
+
+    return true;
+}
+
 bool execute_block(Vu* vu, Block* block) {
     // iris_debug(vu, "Input TPC {:04x}", vu->tpc);
+
+    bool t_after_delay = false;
 
     for (const BlockEntry& entry : block->entries) {
         if (entry.m_bit && (!vu->e_bit || vu->m_bit_pending)) {
@@ -3150,6 +3170,18 @@ bool execute_block(Vu* vu, Block* block) {
             return true;
         }
 
+        if (t_after_delay) {
+            return stop_at_t_bit(vu);
+        }
+
+        if (entry.t_bit && vu->t_enable) {
+            if (!entry.branch) {
+                return stop_at_t_bit(vu);
+            }
+
+            t_after_delay = true;
+        }
+
         if (taken)
             break;
     }
@@ -3188,7 +3220,7 @@ static bool finish_jit_block(Vu* vu, Block* block) {
 }
 
 static bool run_block(Vu* vu, Block* block) {
-    if (vu->engine != VU_ENGINE_JIT) {
+    if (vu->engine != VU_ENGINE_JIT || block->t_stop) {
         count_block_run(vu, block, false);
 
         return execute_block(vu, block);
@@ -3395,6 +3427,10 @@ void execute_program(Vu* vu, uint32_t addr) {
     vu->branch_delay = 0;
     vu->delay_branch = false;
 
+    if (!vu->id) {
+        vu->vpu_stat &= ~0x4u;
+    }
+
     vu->vu_cycle += VF_LATENCY + 1;
 
     run(vu);
@@ -3445,8 +3481,14 @@ void write_vi(Vu* vu, int index, uint32_t value) {
             vu->cmsar0 = value & 0xffff;
         } break;
         case 28: {
-            // To-do: Handle FBRST
             vu->fbrst = value & 0xc0c;
+            vu->t_enable = (value & 0x8) != 0;
+
+            if (vu->mtvu) {
+                mtvu::push_vu1_t_enable(vu->mtvu, (value & 0x800) != 0);
+            } else if (vu->vu1) {
+                vu->vu1->t_enable = (value & 0x800) != 0;
+            }
 
             if (value & 2) {
                 // Reset VU0
@@ -3470,11 +3512,12 @@ void write_vi(Vu* vu, int index, uint32_t value) {
         case 30: return; // VU reserved register, read-only
         case 31: {
             vu->cmsar1 = value & 0xffff;
+            vu->vpu_stat &= ~0x400u;
 
             if (vu->mtvu) {
-                mtvu::push_vu1_execute(vu->mtvu, vu->cmsar1 >> 3);
+                mtvu::push_vu1_execute(vu->mtvu, vu->cmsar1);
             } else {
-                execute_program(vu->vu1, vu->cmsar1 >> 3);
+                execute_program(vu->vu1, vu->cmsar1);
             }
         } break;
     }
@@ -3571,6 +3614,9 @@ void reset_registers(Vu* vu) {
 void reset(Vu* vu) {
     reset_registers(vu);
 
+    vu->t_enable = 0;
+    vu->vpu_stat = 0;
+
     jit::flush_blocks(vu);
 
     vu->block_cache_size = 0;
@@ -3659,6 +3705,15 @@ void write_micro_mem(Vu* vu, uint32_t word_addr, uint64_t data) {
 
 uint32_t get_tpc(Vu* vu) {
     return vu->tpc;
+}
+
+void set_t_stop_callback(Vu* vu, void (*func)(void*), void* udata) {
+    vu->t_stop_func = func;
+    vu->t_stop_udata = udata;
+}
+
+void set_t_stopped(Vu* vu0, int id) {
+    vu0->vpu_stat |= id ? 0x400u : 0x4u;
 }
 
 void execute_lower(Vu* vu, uint32_t opcode) {

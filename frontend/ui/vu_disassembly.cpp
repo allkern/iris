@@ -109,7 +109,7 @@ void print_highlighted_vu1(Instance* iris, const char* buf) {
             while (isalpha(*buf) || isdigit(*buf) || (*buf == '.'))
                 text.push_back(*buf++);
         } else if (isxdigit(*buf) || (*buf == '-')) {
-            while (isxdigit(*buf) || (*buf == 'x') || (*buf == '-'))
+            while (isxdigit(*buf) || (*buf == 'x') || (*buf == '-') || (*buf == '.'))
                 text.push_back(*buf++);
         } else if (*buf == '$') {
             while (*buf == '$' || isdigit(*buf) || isalpha(*buf) || *buf == '_')

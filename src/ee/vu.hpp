@@ -159,6 +159,8 @@ void upload_micro_word(Vu* vu, uint32_t word_addr, uint64_t data);
 void upload_micro_words(Vu* vu, uint32_t word_addr, const uint8_t* data, uint32_t count);
 void end_micro_upload(Vu* vu);
 uint32_t get_tpc(Vu* vu);
+void set_t_stop_callback(Vu* vu, void (*func)(void*), void* udata);
+void set_t_stopped(Vu* vu0, int id);
 void clear_block_cache(Vu* vu);
 void invalidate_range(Vu* vu, uint32_t addr, uint32_t size);
 int is_interlocked(Vu* vu);

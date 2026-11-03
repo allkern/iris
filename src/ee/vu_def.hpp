@@ -47,6 +47,7 @@ struct BlockEntry {
     int i_bit;
     int e_bit;
     int m_bit;
+    int t_bit;
     int hazard0;
     int hazard1;
     int hazard2;
@@ -82,6 +83,7 @@ struct Block {
     uint32_t code_size = 0;
     bool jit_failed = false;
     bool compile_pending = false;
+    bool t_stop = false;
     uint64_t src_hash = 0;
     uint32_t src_len = 0;
     uint16_t region_blocks = 0;
@@ -138,6 +140,10 @@ struct Vu {
     int m_bit;
     int d_bit;
     int t_bit;
+    int t_enable = 0;
+
+    void (*t_stop_func)(void*) = nullptr;
+    void* t_stop_udata = nullptr;
 
     // MAC flags pipeline
     uint32_t mac_pipeline[4];

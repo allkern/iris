@@ -69,6 +69,7 @@ enum Op : uint32_t {
     OP_GIF_WRITE32,
     OP_VU1_EXECUTE,
     OP_VU1_RESET,
+    OP_VU1_T_ENABLE,
     OP_BACKEND_PACKET
 };
 
@@ -140,6 +141,10 @@ struct Mtvu {
     std::vector <GsEvent> events;
     std::vector <GsEvent> applying;
     std::atomic <uint32_t> events_queued;
+
+    std::atomic <uint32_t> vu1_t_stops = 0;
+    void (*vu1_t_stop_func)(void*) = nullptr;
+    void* vu1_t_stop_udata = nullptr;
 
     logger::Logger* worker_logger = nullptr;
     std::mutex logs_mutex;
@@ -219,6 +224,22 @@ static void apply_gs_events(Mtvu* mtvu) {
     }
 
     mtvu->applying.clear();
+}
+
+static void queue_vu1_t_stop(void* udata) {
+    Mtvu* mtvu = (Mtvu*)udata;
+
+    mtvu->vu1_t_stops.fetch_add(1);
+}
+
+static void apply_vu1_t_stops(Mtvu* mtvu) {
+    uint32_t stops = mtvu->vu1_t_stops.exchange(0);
+
+    if (!stops || !mtvu->vu1_t_stop_func) {
+        return;
+    }
+
+    mtvu->vu1_t_stop_func(mtvu->vu1_t_stop_udata);
 }
 
 static void queue_worker_log(void* udata, logger::Level level, const logger::Source& source, const std::string& text) {
@@ -305,6 +326,12 @@ static inline uint32_t process_op(Mtvu* mtvu, uint32_t read) {
             vu::reset_registers(mtvu->hw.vu1);
 
             return read + 1;
+        }
+
+        case OP_VU1_T_ENABLE: {
+            mtvu->hw.vu1->t_enable = (int)op[1];
+
+            return read + 2;
         }
 
         case OP_BACKEND_PACKET: {
@@ -575,6 +602,7 @@ static void drain(Mtvu* mtvu) {
     gs::async::sync(mtvu->gs_async);
 
     apply_gs_events(mtvu);
+    apply_vu1_t_stops(mtvu);
     flush_worker_logs(mtvu);
 }
 
@@ -676,6 +704,20 @@ void push_vu1_reset(Mtvu* mtvu) {
     wake_if_published(mtvu);
 }
 
+void push_vu1_t_enable(Mtvu* mtvu, bool enable) {
+    flush_staged(mtvu);
+
+    uint32_t start = reserve_words(mtvu, 2);
+    uint32_t* op = &mtvu->ring[start];
+
+    op[0] = OP_VU1_T_ENABLE;
+    op[1] = enable ? 1 : 0;
+
+    publish(mtvu, start, 2);
+
+    wake_if_published(mtvu);
+}
+
 static profile::Counter sync_wait_counter(SyncReason reason) {
     switch (reason) {
         case SYNC_FRAME: return profile::MTVU_FRAME_SYNC_WAITS;
@@ -747,6 +789,7 @@ void poll(Mtvu* mtvu) {
     wake_if_published(mtvu);
 
     apply_gs_events(mtvu);
+    apply_vu1_t_stops(mtvu);
     flush_worker_logs(mtvu);
 }
 
@@ -872,6 +915,12 @@ void connect(Mtvu* mtvu, vu::Vu* vu0, vu::Vu* vu1, vif::Vif* vif1, gif::Gif* gif
     vu1->gif = mtvu->gif;
     vu1->vif = mtvu->vif;
 
+    mtvu->vu1_t_stop_func = vu1->t_stop_func;
+    mtvu->vu1_t_stop_udata = vu1->t_stop_udata;
+
+    vu1->t_stop_func = queue_vu1_t_stop;
+    vu1->t_stop_udata = mtvu;
+
     bus->mtvu = mtvu;
 
     gs::set_event_sink(gs, queue_gs_event, mtvu);
@@ -894,6 +943,7 @@ void reset(Mtvu* mtvu) {
     mtvu->events.clear();
     mtvu->events_queued.store(0);
     mtvu->worker_events_seen.store(false);
+    mtvu->vu1_t_stops.store(0);
 }
 
 void destroy(Mtvu* mtvu) {

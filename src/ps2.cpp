@@ -52,6 +52,22 @@ static inline void enter_emulation_thread() {
     rounding_set = true;
 }
 
+static void vu0_t_stop(void* udata) {
+    Ps2* ps2 = (Ps2*)udata;
+
+    vu::set_t_stopped(ps2->vu0, 0);
+
+    ee::intc::irq(ps2->ee_intc, ee::intc::VU0);
+}
+
+static void vu1_t_stop(void* udata) {
+    Ps2* ps2 = (Ps2*)udata;
+
+    vu::set_t_stopped(ps2->vu0, 1);
+
+    ee::intc::irq(ps2->ee_intc, ee::intc::VU1);
+}
+
 Ps2* create(logger::Logger* logger) {
     Ps2* ps2 = new Ps2();
 
@@ -141,6 +157,10 @@ void init(Ps2* ps2) {
     vif::connect(ps2->vif1, ps2->vu1, ps2->gif, ps2->ee_intc, ps2->ee_dma);
     vu::connect(ps2->vu0, ps2->gif, ps2->vif0, ps2->vu1);
     vu::connect(ps2->vu1, ps2->gif, ps2->vif1, ps2->vu1);
+
+    vu::set_t_stop_callback(ps2->vu0, vu0_t_stop, ps2);
+    vu::set_t_stop_callback(ps2->vu1, vu1_t_stop, ps2);
+
     gs::connect(ps2->gs, ps2->ee_intc, ps2->ee_timers);
     ee::set_gs_crt_callback(ps2->ee, gs::handle_set_gs_crt, ps2->gs);
     ee::intc::connect(ps2->ee_intc, ps2->ee);

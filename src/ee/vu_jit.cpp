@@ -840,6 +840,10 @@ static void emit_retire(Jit* jit, Emitter& e, ujit::UniCompiler& uc, const Label
 constexpr int REGION_MAX_BLOCKS = 16;
 
 static int region_successors(const Vu* vu, const Block* b, uint32_t* out) {
+    if (b->t_stop) {
+        return 0;
+    }
+
     for (const BlockEntry& entry : b->entries) {
         if (entry.m_bit) {
             return 0;
@@ -952,7 +956,7 @@ void compile_block(Vu* vu, Block* block) {
                 b = cache_block(vu, succ[k], 64);
             }
 
-            if (!b || !b->cycles) {
+            if (!b || !b->cycles || b->t_stop) {
                 continue;
             }
 
