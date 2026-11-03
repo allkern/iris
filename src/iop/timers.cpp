@@ -103,8 +103,10 @@ static inline void iop_timer_refresh_clock(Timer* t, int i) {
     if (((i == 1) || (i == 3)) && t->use_ext) {
         period = 1172;
         step = 1;
-    } else if ((i == 4) && t->t4_prescaler) {
-        period = 129;
+    } else if ((i >= 4) && (t->t4_prescaler || t->t5_prescaler)) {
+        static constexpr uint32_t prescale_periods[4] = { 1, 4, 8, 128 };
+
+        period = prescale_periods[t->t4_prescaler | (t->t5_prescaler << 1)];
         step = 1;
     } else if ((i == 2) && t->t2_prescaler) {
         period = 4;
