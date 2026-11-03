@@ -445,6 +445,7 @@ static inline uint32_t mfifo_wrap(Dmac* dmac, uint32_t addr) {
 
 static inline uint32_t transfer_vif1_bulk(Dmac* dmac);
 static bool vif1_must_wait(Dmac* dmac);
+static void finish_vif1_transfer(Dmac* dmac);
 
 static inline bool mfifo_tag_data_in_ring(Channel* c) {
     switch (c->tag.id) {
@@ -958,9 +959,7 @@ int transfer_vif1_word(Dmac* dmac) {
     }
 
     if (channel_is_done(&dmac->channels[VIF1])) {
-        end_transfer(dmac, VIF1);
-
-        iris_debug(dmac, "vif1 transfer done");
+        finish_vif1_transfer(dmac);
 
         return 0;
     }
@@ -1001,16 +1000,50 @@ int transfer_vif1_word(Dmac* dmac) {
     return 1;
 }
 
-void send_vif1_irq(void* udata, int overshoot) {
-    Dmac* dmac = (Dmac*)udata;
-
-    end_transfer(dmac, VIF1);
-}
-
 constexpr int64_t DMA_CYCLES_PER_QWORD = 2;
 constexpr int64_t VIF1_PACE_CHUNK_QWORDS = 128;
 constexpr int64_t VIF1_PATH3_WAIT_CYCLES = 128;
 constexpr int64_t SIF1_MIN_DELAY_CYCLES = 16*16;
+
+void send_vif1_irq(void* udata, int overshoot) {
+    Dmac* dmac = (Dmac*)udata;
+
+    if (!dmac->vif1_end_pending || dmac->hw.sched->now < dmac->vif1_done_at) {
+        return;
+    }
+
+    dmac->vif1_end_pending = false;
+
+    if (dmac->channels[VIF1].chcr & 0x100) {
+        end_transfer(dmac, VIF1);
+    }
+}
+
+static void finish_vif1_transfer(Dmac* dmac) {
+    if (dmac->vif1_end_pending) {
+        return;
+    }
+
+    int64_t done_at = dmac->vif1_start_time + ((dmac->vif1_words + 3) / 4) * DMA_CYCLES_PER_QWORD;
+
+    if (done_at <= dmac->hw.sched->now) {
+        end_transfer(dmac, VIF1);
+
+        return;
+    }
+
+    dmac->vif1_end_pending = true;
+    dmac->vif1_done_at = done_at;
+
+    scheduler::Event event;
+
+    event.name = "vif1_done";
+    event.callback = send_vif1_irq;
+    event.cycles = done_at - dmac->hw.sched->now;
+    event.udata = dmac;
+
+    scheduler::schedule(dmac->hw.sched, event);
+}
 
 static void run_vif1_transfer(Dmac* dmac);
 
@@ -1218,6 +1251,7 @@ static void run_vif1_transfer(Dmac* dmac) {
 
         if (words) {
             dmac->vif1_budget -= (int64_t)words;
+            dmac->vif1_words += (int64_t)words;
 
             continue;
         }
@@ -1231,6 +1265,7 @@ static void run_vif1_transfer(Dmac* dmac) {
         }
 
         dmac->vif1_budget--;
+        dmac->vif1_words++;
     }
 }
 
@@ -2188,7 +2223,13 @@ static inline void handle_channel_start(Dmac* dmac, uint32_t addr) {
 
     switch (addr & 0xff00) {
         case 0x8000: handle_vif0_transfer(dmac); return;
-        case 0x9000: handle_vif1_transfer(dmac); return;
+        case 0x9000: {
+            dmac->vif1_end_pending = false;
+            dmac->vif1_start_time = dmac->hw.sched->now;
+            dmac->vif1_words = 0;
+
+            handle_vif1_transfer(dmac);
+        } return;
         case 0xA000: {
             dmac->gif_budget = VIF1_PACE_CHUNK_QWORDS;
             dmac->gif_credit_time = dmac->hw.sched->now;

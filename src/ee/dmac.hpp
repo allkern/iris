@@ -118,8 +118,12 @@ struct Dmac {
     bool vif1_pace_pending = false;
     bool vif1_flusha_wait = false;
     bool vif1_read_pending = false;
+    bool vif1_end_pending = false;
     int64_t vif1_budget = 0;
     int64_t vif1_credit_time = 0;
+    int64_t vif1_start_time = 0;
+    int64_t vif1_words = 0;
+    int64_t vif1_done_at = 0;
 
     bool gif_pace_pending = false;
     bool gif_unmask_run = false;
