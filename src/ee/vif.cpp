@@ -452,6 +452,7 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
 
     if (vif->state == VIF_IDLE) {
         vif->cmd = (data >> 24) & 0xff;
+        vif->code = data;
 
         // iris_info(vif, "vif{}: Received command {:02x}, irq={} raw={:08x} ({})", vif->id, vif->cmd, (vif->cmd & 0x80) != 0, data, vif_get_cmd_name(vif->cmd));
 
@@ -467,7 +468,6 @@ static inline void vif_handle_fifo_write(Vif* vif, uint32_t data) {
             // Note: MARK commands trigger the IRQ but don't stall the VIF.
             if (!mark) {
                 vif->stat |= STAT_VIS | STAT_INT;
-                vif->code = data;
                 vif->dreq = 0;
             }
         }
