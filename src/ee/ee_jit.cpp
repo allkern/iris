@@ -1593,7 +1593,7 @@ static inline void i_divs(Ee* ee, const Instruction& i) {
             ee->fcr |= FPU_FLG_D | FPU_FLG_SD;
         }
 
-        ee->f[d].u32 = ((ee->f[t].u32 ^ ee->f[s].u32) & 0x80000000) | 0x7f7fffff;
+        ee->f[d].u32 = ((ee->f[t].u32 ^ ee->f[s].u32) & 0x80000000) | 0x7fffffff;
 
         return;
     }
@@ -3530,7 +3530,7 @@ static inline void i_rsqrts(Ee* ee, const Instruction& i) {
 
     if ((ee->f[t].u32 & 0x7f800000) == 0) {
         ee->fcr |= FPU_FLG_D | FPU_FLG_SD;
-        ee->f[d].u32 = (ee->f[t].u32 & 0x80000000) | 0x7f7fffff;
+        ee->f[d].u32 = (ee->f[t].u32 & 0x80000000) | 0x7fffffff;
         
         return;
     } else if (ee->f[t].u32 & 0x80000000) {

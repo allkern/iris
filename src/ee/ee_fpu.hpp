@@ -242,7 +242,7 @@ static inline void rsqrts(UniCompiler& uc, const Gp& out, const Gp& fcr, const G
     Gp vc = clamp_result(uc, v, is_ovf, is_unf);
 
     uc.and_(zsign, ft, Imm(0x80000000u));
-    uc.or_(zmax, zsign, Imm(0x7f7fffff));
+    uc.or_(zmax, zsign, Imm(0x7fffffff));
     uc.select(res, zmax, vc, cmp_eq(exp, Imm(0)));
     uc.mov(out, res);
 
@@ -300,7 +300,7 @@ static inline void divs(UniCompiler& uc, const Gp& out, const Gp& fcr, const Gp&
 
     uc.xor_(xr, ft, fs);
     uc.and_(xr, xr, Imm(0x80000000u));
-    uc.or_(xr, xr, Imm(0x7f7fffff));
+    uc.or_(xr, xr, Imm(0x7fffffff));
 
     Gp rn = arith(uc, DIV, fs, ft);
     Gp rn_clamped = clamp_result(uc, rn, is_ovf, is_unf);
