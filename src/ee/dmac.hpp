@@ -119,6 +119,7 @@ struct Dmac {
     bool vif1_flusha_wait = false;
     bool vif1_read_pending = false;
     bool vif1_end_pending = false;
+    bool vif1_gs_irq = false;
     int64_t vif1_budget = 0;
     int64_t vif1_credit_time = 0;
     int64_t vif1_start_time = 0;
@@ -173,5 +174,6 @@ void handle_spr_from_transfer(Dmac* dmac);
 void handle_spr_to_transfer(Dmac* dmac);
 void vif1_download_ready(Dmac* dmac);
 void vif1_read_abort(Dmac* dmac);
+void handle_gs_irq(Dmac* dmac);
 
 }

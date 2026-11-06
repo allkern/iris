@@ -33,6 +33,8 @@
 #include "iop/timers.hpp"
 #include "logger.hpp"
 
+namespace iris::ee::dmac { struct Dmac; }
+
 namespace iris::gs {
 
 inline constexpr auto PRIM = 0x00;
@@ -296,6 +298,7 @@ struct Gs {
         iop::intc::Intc* iop_intc;
         ee::timers::Timers* ee_timers;
         iop::timers::Timers* iop_timers;
+        ee::dmac::Dmac* ee_dmac;
     } hw;
 
     uint32_t* vram;
@@ -423,7 +426,7 @@ struct Gs {
 };
 
 Gs* create(logger::Logger* logger, iop::intc::Intc* iop_intc, iop::timers::Timers* iop_timers, scheduler::Scheduler* sched);
-void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers);
+void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers, ee::dmac::Dmac* ee_dmac);
 void reset(Gs* gs);
 void set_ee_clock(Gs* gs, int hz);
 void set_forced_video_mode(Gs* gs, int mode);

@@ -29,6 +29,7 @@
 
 #include "gs.hpp"
 #include "ee/intc.hpp"
+#include "ee/dmac.hpp"
 #include "iop/intc.hpp"
 #include "profile_counters.hpp"
 
@@ -56,6 +57,10 @@ static inline void test_gs_irq(Gs* gs) {
     uint32_t stat = gs->csr & 0x1f;
 
     if (stat & (~mask)) {
+        if (gs->hw.ee_dmac) {
+            ee::dmac::handle_gs_irq(gs->hw.ee_dmac);
+        }
+
         ee::intc::irq(gs->hw.ee_intc, ee::intc::GS);
     }
 }
@@ -212,9 +217,10 @@ void handle_hblank(void* udata, int overshoot) {
     scheduler::schedule(gs->hw.sched, hblank_event);
 }
 
-void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers) {
+void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers, ee::dmac::Dmac* ee_dmac) {
     gs->hw.ee_intc = ee_intc;
     gs->hw.ee_timers = ee_timers;
+    gs->hw.ee_dmac = ee_dmac;
 }
 
 // Note: System 256/Super 256 games detect the jumper setting/system

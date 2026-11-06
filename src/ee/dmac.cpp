@@ -1026,7 +1026,7 @@ static void finish_vif1_transfer(Dmac* dmac) {
 
     int64_t done_at = dmac->vif1_start_time + ((dmac->vif1_words + 3) / 4) * DMA_CYCLES_PER_QWORD;
 
-    if (done_at <= dmac->hw.sched->now) {
+    if (dmac->vif1_gs_irq || done_at <= dmac->hw.sched->now) {
         end_transfer(dmac, VIF1);
 
         return;
@@ -1043,6 +1043,22 @@ static void finish_vif1_transfer(Dmac* dmac) {
     event.udata = dmac;
 
     scheduler::schedule(dmac->hw.sched, event);
+}
+
+void handle_gs_irq(Dmac* dmac) {
+    if (!dmac->vif1_end_pending) {
+        if (dmac->channels[VIF1].chcr & 0x100) {
+            dmac->vif1_gs_irq = true;
+        }
+
+        return;
+    }
+
+    dmac->vif1_end_pending = false;
+
+    if (dmac->channels[VIF1].chcr & 0x100) {
+        end_transfer(dmac, VIF1);
+    }
 }
 
 static void run_vif1_transfer(Dmac* dmac);
@@ -2225,6 +2241,7 @@ static inline void handle_channel_start(Dmac* dmac, uint32_t addr) {
         case 0x8000: handle_vif0_transfer(dmac); return;
         case 0x9000: {
             dmac->vif1_end_pending = false;
+            dmac->vif1_gs_irq = false;
             dmac->vif1_start_time = dmac->hw.sched->now;
             dmac->vif1_words = 0;
 
