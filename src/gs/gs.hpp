@@ -341,7 +341,6 @@ struct Gs {
     uint64_t imr;
     uint64_t busdir;
     uint64_t siglblid;
-    uint64_t csr_enable;
     uint64_t csr_raised;
 
     int finish_pending;
@@ -419,6 +418,7 @@ struct Gs {
     int ee_clock = EE_CLOCK;
     int video_mode = VIDEO_MODE_NTSC;
     int detected_video_mode = VIDEO_MODE_NTSC;
+    int crt_timing = -1;
     int forced_video_mode = VIDEO_MODE_AUTO;
 
     logger::Logger* logger = nullptr;

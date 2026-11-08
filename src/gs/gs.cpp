@@ -111,12 +111,8 @@ static inline int assert_vblank(Gs* gs) {
 
 static inline int assert_hblank(Gs* gs) {
     if ((gs->csr & 4) == 0) {
-        if (gs->csr_enable & 4) {
-            gs->csr |= 4;
-            gs->csr_raised |= 4;
-        }
-
-        // iris_debug(gs, "Asserting Hblank imr.hsync={}", (gs->imr >> 8) & 4);
+        gs->csr |= 4;
+        gs->csr_raised |= 4;
 
         return ((gs->imr >> 8) & 4) == 0;
     }
@@ -223,9 +219,64 @@ void connect(Gs* gs, ee::intc::Intc* ee_intc, ee::timers::Timers* ee_timers, ee:
     gs->hw.ee_dmac = ee_dmac;
 }
 
+struct CrtTiming {
+    int mode;
+    const char* name;
+    double rate;
+    double lines;
+    double active;
+};
+
+static constexpr CrtTiming crt_timings[] = {
+    { 0x1a, "VESA 640x480 @ 59.940", 59.940, 525, 480 },
+    { 0x1b, "VESA 640x480 @ 72.809", 72.809, 520, 480 },
+    { 0x1c, "VESA 640x480 @ 75.000", 75.000, 500, 480 },
+    { 0x1d, "VESA 640x480 @ 85.008", 85.008, 509, 480 },
+    { 0x2a, "VESA 800x600 @ 56.250", 56.250, 625, 600 },
+    { 0x2b, "VESA 800x600 @ 60.317", 60.317, 628, 600 },
+    { 0x2c, "VESA 800x600 @ 72.188", 72.188, 666, 600 },
+    { 0x2d, "VESA 800x600 @ 75.000", 75.000, 625, 600 },
+    { 0x2e, "VESA 800x600 @ 85.061", 85.061, 631, 600 },
+    { 0x3b, "VESA 1024x768 @ 60.004", 60.004, 806, 768 },
+    { 0x3c, "VESA 1024x768 @ 70.069", 70.069, 806, 768 },
+    { 0x3d, "VESA 1024x768 @ 75.029", 75.029, 800, 768 },
+    { 0x3e, "VESA 1024x768 @ 84.997", 84.997, 808, 768 },
+    { 0x4a, "VESA 1280x1024 @ 63.981", 63.981, 1066, 1024 },
+    { 0x4b, "VESA 1280x1024 @ 79.976", 79.976, 1066, 1024 },
+    { 0x50, "480p", 59.940, 525, 480 },
+    { 0x51, "1080i", 60.000, 562.5, 540 },
+    { 0x52, "720p", 60.000, 750, 720 },
+    { 0x53, "576p", 50.000, 625, 576 },
+    { 0x54, "1080p", 60.000, 1125, 1080 },
+};
+
+static int find_crt_timing(int mode) {
+    for (int i = 0; i < (int)(sizeof(crt_timings) / sizeof(crt_timings[0])); i++) {
+        if (crt_timings[i].mode == mode) {
+            return i;
+        }
+    }
+
+    return -1;
+}
+
 // Note: System 256/Super 256 games detect the jumper setting/system
 //       by detecting EE frequency. These systems have higher clocks.
 static void update_timings(Gs* gs) {
+    if (gs->crt_timing >= 0) {
+        const CrtTiming& t = crt_timings[gs->crt_timing];
+
+        double field = gs->ee_clock / t.rate;
+        double line = field / t.lines;
+        double vblank = line * (t.lines - t.active);
+
+        gs->frame_cycles = (int)(field - vblank);
+        gs->vblank_cycles = (int)vblank;
+        gs->scanline_cycles = (int)(line / 2);
+
+        return;
+    }
+
     int64_t frame = FRAME_NTSC;
     int64_t vblank = VBLANK_NTSC;
     int64_t scanline = SCANLINE_NTSC;
@@ -284,6 +335,20 @@ int get_detected_video_mode(const Gs* gs) {
 void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd) {
     Gs* gs = (Gs*)udata;
 
+    int timing = find_crt_timing(mode);
+
+    if (timing != gs->crt_timing) {
+        gs->crt_timing = timing;
+
+        update_timings(gs);
+    }
+
+    if (timing >= 0) {
+        iris_info(gs, "SetGsCrt {} {} {}", crt_timings[timing].name, interlaced ? "interlaced" : "progressive", ffmd ? "frame" : "field");
+
+        return;
+    }
+
     switch (mode) {
         // NTSC, DVD NTSC
         case 0x02:
@@ -301,7 +366,6 @@ void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd) {
             set_detected_video_mode(gs, VIDEO_MODE_PAL);
         } break;
 
-        // To-do: VESA/SDTV/HDTV timings, using NTSC for now
         default: {
             iris_info(gs, "SetGsCrt Unhandled mode {:02x}, using NTSC timings", mode);
 
@@ -311,6 +375,10 @@ void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd) {
 }
 
 double get_field_rate(const Gs* gs) {
+    if (gs->crt_timing >= 0) {
+        return crt_timings[gs->crt_timing].rate;
+    }
+
     return gs->video_mode == VIDEO_MODE_PAL ? 50.0 : 60.0;
 }
 
@@ -333,7 +401,6 @@ void soft_reset(Gs* gs) {
     gs->busdir = 0;
     gs->siglblid = 0;
     gs->csr = 0;
-    gs->csr_enable = 0;
     gs->csr_raised = 0;
     gs->finish_pending = 0;
     gs->finish_cleared = 0;
@@ -354,6 +421,7 @@ void reset(Gs* gs) {
     soft_reset(gs);
 
     gs->detected_video_mode = VIDEO_MODE_NTSC;
+    gs->crt_timing = -1;
     gs->video_mode = gs->forced_video_mode == VIDEO_MODE_AUTO ? VIDEO_MODE_NTSC : gs->forced_video_mode;
 
     update_timings(gs);
@@ -625,7 +693,6 @@ void write64(Gs* gs, uint32_t addr, uint64_t data) {
 
             gs->csr = (gs->csr & 0xfffffe00) | (gs->csr & ~(data & 0xf));
             gs->csr_raised &= ~(data & 0xf);
-            gs->csr_enable = data;
 
             if ((data & 1) && gs->signal_stall) {
                 gs->signal_stall = 0;
