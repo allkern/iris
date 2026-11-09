@@ -625,13 +625,11 @@ static inline void update_vertex_buffer(Instance* iris, VkCommandBuffer command_
     const int normalized_angle = ((iris->angle % 360) + 360) % 360;
     const bool swap_axes = normalized_angle == 90 || normalized_angle == 270;
 
-    float aspect_ratio = 4.0 / 3.0;
+    double aspect_ratio = gs::get_display_aspect(iris->ps2->gs);
 
     if (swap_axes) {
-        aspect_ratio = 3.0 / 4.0;
+        aspect_ratio = 1.0 / aspect_ratio;
     }
-
-    float aspect_ratio_inv = 1.0f / aspect_ratio;
 
     SDL_GetWindowSize(iris->window, &size.w, &size.h);
 
@@ -682,23 +680,19 @@ static inline void update_vertex_buffer(Instance* iris, VkCommandBuffer command_
 
         case render::AUTO:
         case render::STRETCH_KEEP: {
-            if (swap_axes) {
-                std::swap(rect.w, rect.h);
-            }
-
             rect.h = display.h;
-            rect.w = (float)rect.h * aspect_ratio;
+            rect.w = (int)std::lround(rect.h * aspect_ratio);
 
             // Scale vertically if the rect ends up being bigger
             // than our display area
             if (rect.w > display.w) {
                 rect.w = display.w;
-                rect.h = (float)rect.w * aspect_ratio_inv;
+                rect.h = (int)std::lround(rect.w / aspect_ratio);
             }
         } break;
     }
 
-    if (iris->aspect_mode != render::AUTO && iris->aspect_mode != render::STRETCH_KEEP) {
+    if (iris->aspect_mode != render::AUTO && iris->aspect_mode != render::STRETCH_KEEP && iris->aspect_mode != render::STRETCH) {
         if (swap_axes) {
             std::swap(rect.w, rect.h);
         }

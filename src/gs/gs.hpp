@@ -434,6 +434,7 @@ int get_video_mode(const Gs* gs);
 int get_detected_video_mode(const Gs* gs);
 void handle_set_gs_crt(void* udata, int interlaced, int mode, int ffmd);
 double get_field_rate(const Gs* gs);
+double get_display_aspect(const Gs* gs);
 void destroy(Gs* gs);
 uint64_t read64(Gs* gs, uint32_t addr);
 void write64(Gs* gs, uint32_t addr, uint64_t data);
