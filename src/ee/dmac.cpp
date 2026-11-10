@@ -2078,6 +2078,8 @@ void handle_spr_from_transfer(Dmac* dmac) {
             dmac->channels[SPR_FROM].sadr += 0x10;
             dmac->channels[SPR_FROM].sadr &= 0x3ff0;
         }
+
+        dmac->channels[SPR_FROM].qwc = 0;
     } while (!channel_is_done(&dmac->channels[SPR_FROM]));
 }
 
@@ -2157,6 +2159,7 @@ void handle_spr_to_transfer(Dmac* dmac) {
             ram::write128(dmac->hw.spr, dmac->channels[SPR_TO].sadr, tag);
 
             dmac->channels[SPR_TO].sadr += 0x10;
+            dmac->channels[SPR_TO].sadr &= 0x3ff0;
         }
 
         process_source_tag(dmac, &dmac->channels[SPR_TO], tag);
@@ -2182,6 +2185,8 @@ void handle_spr_to_transfer(Dmac* dmac) {
             dmac->channels[SPR_TO].sadr += 0x10;
             dmac->channels[SPR_TO].sadr &= 0x3ff0;
         }
+
+        dmac->channels[SPR_TO].qwc = 0;
 
         if (dmac->channels[SPR_TO].tag.id == 1) {
             dmac->channels[SPR_TO].tadr = dmac->channels[SPR_TO].madr;
