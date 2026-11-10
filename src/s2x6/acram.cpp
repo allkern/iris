@@ -23,6 +23,9 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
+
+    Note: This code is partly based on work by israpps/elisra and other contributors
+          to the PCSX2x6 project. (https://github.com/PS2Homebrew-arcade/pcsx2x6).
 */
 
 #include <new>

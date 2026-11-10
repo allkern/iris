@@ -23,6 +23,9 @@
     LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
     OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
     SOFTWARE.
+
+    Note: This code is based on work by DiscoStarslayer on his pcsx2-reliquary fork
+          (https://github.com/DiscoStarslayer/pcsx2-reliquary).
 */
 
 #include <cstring>
