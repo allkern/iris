@@ -189,6 +189,7 @@ inline uint32_t direct_qwords_pending(const Vif* vif) {
 }
 
 void unpack_words(Vif* vif, const uint8_t* data, uint32_t count);
+uint32_t write_command_words(Vif* vif, const uint8_t* data, uint32_t count, bool allow_gif);
 void upload_micro_qwords(Vif* vif, const uint8_t* data, uint32_t qwords);
 
 inline uint32_t mpg_qwords_pending(const Vif* vif) {

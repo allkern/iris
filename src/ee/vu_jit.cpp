@@ -27,6 +27,8 @@
 
 #include <asmjit/ujit.h>
 
+#include <atomic>
+
 #include "vu.hpp"
 #include "vu_def.hpp"
 #include "vu_jit.hpp"
@@ -111,6 +113,7 @@ struct Jit {
 
     std::deque <AsyncJob> queue;
     std::vector <AsyncResult> done;
+    std::atomic <bool> has_done = false;
 
     int in_flight = 0;
 
@@ -1249,6 +1252,7 @@ static void worker_main(Jit* jit) {
             std::lock_guard <std::mutex> lock(jit->mu);
 
             jit->done.push_back(std::move(r));
+            jit->has_done.store(true, std::memory_order_release);
 
             jit->in_flight--;
         }
@@ -1289,10 +1293,16 @@ void drain_blocks(Vu* vu) {
         return;
     }
 
+    if (!jit->has_done.load(std::memory_order_acquire)) {
+        return;
+    }
+
     std::vector <AsyncResult> done;
 
     {
         std::lock_guard <std::mutex> lock(jit->mu);
+
+        jit->has_done.store(false, std::memory_order_relaxed);
 
         if (jit->done.empty()) {
             return;

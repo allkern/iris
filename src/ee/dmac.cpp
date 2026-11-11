@@ -1261,6 +1261,55 @@ static bool vif1_must_wait(Dmac* dmac) {
     return true;
 }
 
+static inline uint32_t transfer_vif1_commands(Dmac* dmac) {
+    Channel* c = &dmac->channels[VIF1];
+
+    if ((c->chcr & 0x100) == 0 || !c->qwc || (c->madr & 0xf) != c->index * 4 || dmac->vif1_budget < 2) {
+        return 0;
+    }
+
+    vif::Vif* vif = dmac->hw.bus->vif1;
+
+    if (!vif::get_dreq(vif) || gs::signal_stalled(dmac->hw.bus->gs)) {
+        return 0;
+    }
+
+    uint32_t available = c->qwc * 4 - c->index;
+
+    if (available > (uint64_t)dmac->vif1_budget) {
+        available = (uint32_t)dmac->vif1_budget;
+    }
+
+    if (available < 2) {
+        return 0;
+    }
+
+    const uint8_t* source = dma_source_span(dmac, c->madr & ~0xfu, (c->index + available + 3) / 4);
+
+    if (!source) {
+        return 0;
+    }
+
+    bool allow_gif = !gif::path3_packet_started(dmac->hw.bus->gif);
+
+    uint32_t count = vif::write_command_words(vif, source + (size_t)c->index * 4, available, allow_gif);
+
+    if (!count) {
+        return 0;
+    }
+
+    uint32_t consumed = c->index + count;
+
+    c->madr += count * 4;
+    c->qwc -= consumed / 4;
+    c->index = consumed % 4;
+    c->qword_valid = false;
+
+    profile::count(profile::VIF1_DMA_QWORDS, consumed / 4);
+
+    return count;
+}
+
 static void run_vif1_transfer(Dmac* dmac) {
     while (true) {
         uint32_t words = transfer_vif1_bulk(dmac);
@@ -1274,6 +1323,15 @@ static void run_vif1_transfer(Dmac* dmac) {
 
         if (vif1_must_wait(dmac)) {
             return;
+        }
+
+        words = transfer_vif1_commands(dmac);
+
+        if (words) {
+            dmac->vif1_budget -= (int64_t)words;
+            dmac->vif1_words += (int64_t)words;
+
+            continue;
         }
 
         if (!transfer_vif1_word(dmac)) {

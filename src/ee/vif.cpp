@@ -30,6 +30,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <array>
 
 #ifdef _EE_USE_INTRINSICS
 #include <immintrin.h>
@@ -1646,33 +1647,60 @@ struct VifLaneMasks {
     uint32_t column[4][4];
 };
 
+struct VifLaneByte {
+    uint32_t data[4];
+    uint32_t row[4];
+    uint32_t keep[4];
+    uint32_t column[4];
+};
+
+static constexpr std::array <VifLaneByte, 256> vif_build_lane_bytes() {
+    std::array <VifLaneByte, 256> table = {};
+
+    for (uint32_t byte = 0; byte < 256; byte++) {
+        for (int i = 0; i < 4; i++) {
+            uint32_t source = (byte >> (i * 2)) & 3;
+
+            table[byte].data[i] = source == VIF_COMPONENT_DATA ? ~0u : 0;
+            table[byte].row[i] = source == VIF_COMPONENT_ROW ? ~0u : 0;
+            table[byte].keep[i] = source == VIF_COMPONENT_KEEP ? ~0u : 0;
+            table[byte].column[i] = source == VIF_COMPONENT_COLUMN ? ~0u : 0;
+        }
+    }
+
+    return table;
+}
+
+static constexpr std::array <VifLaneByte, 256> vif_lane_bytes = vif_build_lane_bytes();
+
 static inline void vif_lane_masks(const Vif* vif, VifLaneMasks* m) {
     for (int key = 0; key < 4; key++) {
-        uint32_t mask = (vif->mask >> (key * 8)) & 0xff;
+        const VifLaneByte& lanes = vif_lane_bytes[(vif->mask >> (key * 8)) & 0xff];
 
         for (int i = 0; i < 4; i++) {
-            uint32_t source = vif->unpack_mask ? (mask >> (i * 2)) & 3 : VIF_COMPONENT_DATA;
-
-            m->data[key][i] = source == VIF_COMPONENT_DATA ? ~0u : 0;
-            m->row[key][i] = source == VIF_COMPONENT_ROW ? ~0u : 0;
-            m->keep[key][i] = source == VIF_COMPONENT_KEEP ? ~0u : 0;
-            m->column[key][i] = source == VIF_COMPONENT_COLUMN ? vif->c[key] : 0;
+            m->data[key][i] = lanes.data[i];
+            m->row[key][i] = lanes.row[i];
+            m->keep[key][i] = lanes.keep[i];
+            m->column[key][i] = lanes.column[i] & vif->c[key];
         }
     }
 }
 
-template <uint32_t MODE, uint32_t FMT>
+template <uint32_t MODE, uint32_t FMT, bool MASKED>
 static uint128_t vif_unpack_masked(Vif* vif, const uint8_t* data, uint32_t vertices) {
     constexpr uint32_t per_vertex = FMT == UNPACK_V4_32 ? 4 : FMT == UNPACK_V3_32 ? 3 : (FMT == UNPACK_V2_32 || FMT == UNPACK_V4_16) ? 2 : 1;
 
-    VifLaneMasks m;
+    VifLaneMasks lanes;
 
-    vif_lane_masks(vif, &m);
+    const VifLaneMasks* m = &lanes;
+
+    if constexpr (MASKED) {
+        vif_lane_masks(vif, &lanes);
+    }
 
     uint128_t* memory = vu::get_vu_mem_ptr(vif->hw.vu, 0);
     uint32_t memory_mask = vu::get_vu_mem_size(vif->hw.vu);
     bool sign_extend = !vif->unpack_usn;
-    bool masked = vif->unpack_mask != 0;
     int wl = (int)vif->unpack_wl;
     uint32_t skip = vif->unpack_skip;
     uint32_t addr = vif->addr;
@@ -1685,14 +1713,14 @@ static uint128_t vif_unpack_masked(Vif* vif, const uint8_t* data, uint32_t verti
     for (uint32_t vertex = 0; vertex < vertices; vertex++) {
         last = vif_decode_vertex(FMT, data + (size_t)vertex * per_vertex * 4, sign_extend);
 
-        int key = masked ? (cycle > 3 ? 3 : cycle) : 0;
+        int key = cycle > 3 ? 3 : cycle;
 
         uint128_t& slot = memory[addr & memory_mask];
         uint128_t out;
 
         for (int i = 0; i < 4; i++) {
             uint32_t d = last.u32[i];
-            uint32_t dm = m.data[key][i];
+            uint32_t dm = MASKED ? m->data[key][i] : ~0u;
 
             if constexpr (MODE == 1) {
                 d = row[i] + d;
@@ -1703,7 +1731,11 @@ static uint128_t vif_unpack_masked(Vif* vif, const uint8_t* data, uint32_t verti
                 row[i] = (d & dm) | (row[i] & ~dm);
             }
 
-            out.u32[i] = (d & dm) | (row[i] & m.row[key][i]) | m.column[key][i] | (slot.u32[i] & m.keep[key][i]);
+            if constexpr (MASKED) {
+                out.u32[i] = (d & dm) | (row[i] & m->row[key][i]) | m->column[key][i] | (slot.u32[i] & m->keep[key][i]);
+            } else {
+                out.u32[i] = d;
+            }
         }
 
         slot = out;
@@ -1728,18 +1760,27 @@ static uint128_t vif_unpack_masked(Vif* vif, const uint8_t* data, uint32_t verti
     return last;
 }
 
-template <uint32_t MODE>
-static uint128_t vif_unpack_masked_mode(Vif* vif, const uint8_t* data, uint32_t vertices) {
+template <uint32_t MODE, bool MASKED>
+static uint128_t vif_unpack_masked_format(Vif* vif, const uint8_t* data, uint32_t vertices) {
     switch (vif->unpack_fmt) {
-        case UNPACK_S_32: return vif_unpack_masked<MODE, UNPACK_S_32>(vif, data, vertices);
-        case UNPACK_V2_32: return vif_unpack_masked<MODE, UNPACK_V2_32>(vif, data, vertices);
-        case UNPACK_V2_16: return vif_unpack_masked<MODE, UNPACK_V2_16>(vif, data, vertices);
-        case UNPACK_V3_32: return vif_unpack_masked<MODE, UNPACK_V3_32>(vif, data, vertices);
-        case UNPACK_V4_32: return vif_unpack_masked<MODE, UNPACK_V4_32>(vif, data, vertices);
-        case UNPACK_V4_16: return vif_unpack_masked<MODE, UNPACK_V4_16>(vif, data, vertices);
+        case UNPACK_S_32: return vif_unpack_masked<MODE, UNPACK_S_32, MASKED>(vif, data, vertices);
+        case UNPACK_V2_32: return vif_unpack_masked<MODE, UNPACK_V2_32, MASKED>(vif, data, vertices);
+        case UNPACK_V2_16: return vif_unpack_masked<MODE, UNPACK_V2_16, MASKED>(vif, data, vertices);
+        case UNPACK_V3_32: return vif_unpack_masked<MODE, UNPACK_V3_32, MASKED>(vif, data, vertices);
+        case UNPACK_V4_32: return vif_unpack_masked<MODE, UNPACK_V4_32, MASKED>(vif, data, vertices);
+        case UNPACK_V4_16: return vif_unpack_masked<MODE, UNPACK_V4_16, MASKED>(vif, data, vertices);
     }
 
-    return vif_unpack_masked<MODE, UNPACK_V4_8>(vif, data, vertices);
+    return vif_unpack_masked<MODE, UNPACK_V4_8, MASKED>(vif, data, vertices);
+}
+
+template <uint32_t MODE>
+static uint128_t vif_unpack_masked_mode(Vif* vif, const uint8_t* data, uint32_t vertices) {
+    if (vif->unpack_mask) {
+        return vif_unpack_masked_format<MODE, true>(vif, data, vertices);
+    }
+
+    return vif_unpack_masked_format<MODE, false>(vif, data, vertices);
 }
 
 static uint32_t vif_unpack_general(Vif* vif, const uint8_t* data, uint32_t words) {
@@ -2043,6 +2084,61 @@ void unpack_words(Vif* vif, const uint8_t* data, uint32_t count) {
     }
 
     vif_unpack_span(vif, data, count);
+}
+
+static inline bool vif_command_batches(uint32_t word, bool allow_gif) {
+    if (word & 0x80000000) {
+        return false;
+    }
+
+    switch ((word >> 24) & 0x7f) {
+        case CMD_MSKPATH3:
+        case CMD_FLUSHA: {
+            return false;
+        }
+
+        case CMD_MSCAL:
+        case CMD_MSCALF:
+        case CMD_MSCNT:
+        case CMD_DIRECT:
+        case CMD_DIRECTHL: {
+            return allow_gif;
+        }
+    }
+
+    return true;
+}
+
+uint32_t write_command_words(Vif* vif, const uint8_t* data, uint32_t count, bool allow_gif) {
+    uint32_t index = 0;
+
+    while (index < count) {
+        uint32_t word;
+
+        memcpy(&word, data + (size_t)index * 4, sizeof(word));
+
+        if (vif->state == VIF_IDLE) {
+            if (!vif_command_batches(word, allow_gif)) {
+                break;
+            }
+        } else if (vif_command_carries_bulk_data(vif->cmd)) {
+            break;
+        }
+
+        vif_handle_fifo_write(vif, word);
+
+        index++;
+
+        if (!get_dreq(vif)) {
+            break;
+        }
+    }
+
+    if (index && vif->role == VIF_ROLE_FRONT) {
+        mtvu::push_vif_words(vif->hw.mtvu, data, index);
+    }
+
+    return index;
 }
 
 void write_words(Vif* vif, const uint8_t* data, uint32_t count) {
