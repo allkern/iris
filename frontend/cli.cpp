@@ -323,6 +323,8 @@ static const Option g_options[] = {
         [](Instance* i, const Value& v) { set(i, i->paths.mcd1_path, v.text); } },
     { "flash", 0, PATH, "FILE", "DEV9 flash image",
         [](Instance* i, const Value& v) { set(i, i->paths.flash_path, v.text); } },
+    { "modchip", 0, PATH, "FILE", "Emulate a Matrix-family modchip with this SPI flash image",
+        [](Instance* i, const Value& v) { set(i, i->paths.modchip_flash_path, v.text); set(i, i->enable_modchip, true); } },
     { "hdd", 0, PATH, "FILE", "DEV9 hard disk image",
         [](Instance* i, const Value& v) { set(i, i->paths.hdd_path, v.text); } },
     { "hdd-id", 0, PATH, "FILE", "SCE drive identity blob (Konami Python 2)",

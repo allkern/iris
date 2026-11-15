@@ -37,6 +37,7 @@
 #include "iris.hpp"
 #include "ee/ee_def.hpp"
 #include "ps2.hpp"
+#include "s2x6/acjv.hpp"
 
 extern "C" {
 #include "lua.h"
@@ -565,6 +566,18 @@ static int l_quit(lua_State* L) {
     return 0;
 }
 
+static int l_profile(lua_State* L) {
+    Script* s = get(L);
+
+    if (lua_toboolean(L, 1)) {
+        iris::start_profiling(s->iris);
+    } else {
+        iris::stop_profiling(s->iris);
+    }
+
+    return 0;
+}
+
 static const luaL_Reg iris_funcs[] = {
     { "wait", l_wait },
     { "wait_until", l_wait_until },
@@ -573,6 +586,7 @@ static const luaL_Reg iris_funcs[] = {
     { "screenshot", l_screenshot },
     { "log", l_log },
     { "quit", l_quit },
+    { "profile", l_profile },
     { nullptr, nullptr }
 };
 
@@ -597,6 +611,37 @@ static const luaL_Reg pad_funcs[] = {
     { "tap", l_pad_tap },
     { "axis", l_pad_axis },
     { "clear", l_pad_clear },
+    { nullptr, nullptr }
+};
+
+static int l_gun_trigger(lua_State* L) {
+    Script* s = get(L);
+
+    int pressed = lua_toboolean(L, 1);
+
+    if (s->iris->ps2 && s->iris->ps2->s2x6_acjv) {
+        s2x6::acjv::set_gun_trigger(s->iris->ps2->s2x6_acjv, 0, pressed);
+    }
+
+    return 0;
+}
+
+static int l_gun_position(lua_State* L) {
+    Script* s = get(L);
+
+    float x = (float)luaL_checknumber(L, 1);
+    float y = (float)luaL_checknumber(L, 2);
+
+    if (s->iris->ps2 && s->iris->ps2->s2x6_acjv) {
+        s2x6::acjv::set_gun_position(s->iris->ps2->s2x6_acjv, 0, x, y);
+    }
+
+    return 0;
+}
+
+static const luaL_Reg gun_funcs[] = {
+    { "trigger", l_gun_trigger },
+    { "position", l_gun_position },
     { nullptr, nullptr }
 };
 
@@ -629,6 +674,9 @@ static void open_libs(lua_State* L) {
 
     luaL_newlib(L, pad_funcs);
     lua_setfield(L, -2, "pad");
+
+    luaL_newlib(L, gun_funcs);
+    lua_setfield(L, -2, "gun");
 
     lua_setglobal(L, "iris");
 

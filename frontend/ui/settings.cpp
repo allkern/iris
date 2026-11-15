@@ -807,6 +807,45 @@ void show_system_settings(Instance* iris) {
 
     EndDisabled();
 
+    imgui::section(iris, "Modchip");
+
+    PushStyleVarY(ImGuiStyleVar_FramePadding, 2.0F);
+
+    if (Checkbox(" Enable modchip", &iris->enable_modchip)) {
+        settings::apply_modchip(iris);
+    } SameLine();
+
+    SeparatorEx(ImGuiSeparatorFlags_Vertical);
+
+    SameLine();
+
+    AlignTextToFramePadding();
+
+    if (modchip::is_enabled(iris->ps2->modchip)) {
+        imgui::badge(ICON_MS_CHECK "  Enabled", imgui::BADGE_GREEN);
+    } else {
+        imgui::badge(ICON_MS_INFO "  Disabled", imgui::BADGE_AMBER);
+    }
+
+    TextDisabled(ICON_MS_WARNING " Anything other than Modbo flash dumps will likely not work.");
+    TextDisabled("Please open an issue (Help > Report an issue) if your dump doesn't work.");
+
+    PopStyleVar();
+
+    Spacing();
+
+    BeginDisabled(!iris->enable_modchip);
+
+    mg_key_input(iris, "Flash image", "##modchip_flash", iris->paths.modchip_flash_path);
+
+    Spacing();
+
+    if (Button("Apply##modchip")) {
+        settings::apply_modchip(iris);
+    }
+
+    EndDisabled();
+
     imgui::section(iris, "DIP Switches");
 
     Text("System 246/256 (SW1)");

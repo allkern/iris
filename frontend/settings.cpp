@@ -128,6 +128,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->paths.mecha_kek_path = paths["mecha_kek_path"].value_or("");
     iris->paths.mecha_kelf_kbit_path = paths["mecha_kelf_kbit_path"].value_or("");
     iris->paths.mecha_kelf_kc_path = paths["mecha_kelf_kc_path"].value_or("");
+    iris->paths.modchip_flash_path = paths["modchip_flash_path"].value_or("");
 
     if (iris->paths.log_path.empty())
         iris->paths.log_path = iris->paths.pref_path + "iris.log";
@@ -267,6 +268,7 @@ bool parse_toml_settings(Instance* iris, bool reset) {
     iris->system_2x6_monitor_frequency = system["system_2x6_monitor_frequency"].value_or(false);
     iris->system_2x6_video_sync = system["system_2x6_video_sync"].value_or(false);
     iris->enable_magicgate = system["enable_magicgate"].value_or(true);
+    iris->enable_modchip = system["enable_modchip"].value_or(false);
     iris->p2io_input_type = system["p2io_input_type"].value_or(kp2::p2io::INPUT_THRILL_DRIVE);
     iris->video_mode = system["video_mode"].value_or((int)gs::VIDEO_MODE_AUTO);
 
@@ -508,6 +510,12 @@ void apply_magicgate(Instance* iris) {
     }
 }
 
+void apply_modchip(Instance* iris) {
+    const char* path = iris->enable_modchip ? iris->paths.modchip_flash_path.c_str() : "";
+
+    ps2::set_modchip(iris->ps2, path);
+}
+
 void apply_p2io(Instance* iris) {
     usb::p2io_set_input_type(iris->ps2->usb, iris->p2io_input_type);
 
@@ -593,6 +601,8 @@ bool init(Instance* iris) {
 
     apply_mg_keys(iris);
 
+    apply_modchip(iris);
+
     apply_p2io(iris);
 
     emu::clean_arcade_files(iris);
@@ -638,6 +648,7 @@ void save(Instance* iris) {
             { "system_2x6_monitor_frequency", iris->system_2x6_monitor_frequency },
             { "system_2x6_video_sync", iris->system_2x6_video_sync },
             { "enable_magicgate", iris->enable_magicgate },
+            { "enable_modchip", iris->enable_modchip },
             { "p2io_input_type", iris->p2io_input_type },
             { "video_mode", iris->video_mode }
         } },
@@ -780,6 +791,7 @@ void save(Instance* iris) {
             { "mecha_kek_path", iris->paths.mecha_kek_path },
             { "mecha_kelf_kbit_path", iris->paths.mecha_kelf_kbit_path },
             { "mecha_kelf_kc_path", iris->paths.mecha_kelf_kc_path },
+            { "modchip_flash_path", iris->paths.modchip_flash_path },
             { "auto", iris->paths.auto_paths }
         } },
         { "library", toml::table {

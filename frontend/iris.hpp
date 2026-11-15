@@ -322,6 +322,7 @@ struct Instance {
         std::string mecha_kek_path = "";
         std::string mecha_kelf_kbit_path = "";
         std::string mecha_kelf_kc_path = "";
+        std::string modchip_flash_path = "";
         bool auto_paths = true;
 
         bool pinned_rom1 = false;
@@ -430,6 +431,7 @@ struct Instance {
     bool system_2x6_monitor_frequency = false;
     bool system_2x6_video_sync = false;
     bool enable_magicgate = true;
+    bool enable_modchip = false;
 
     int p2io_input_type = 4;
     int angle = 0;

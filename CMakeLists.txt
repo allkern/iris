@@ -410,6 +410,7 @@ target_sources(iris PRIVATE
     src/ipu/motioncode.cpp
     src/ipu/vlc_table.cpp
     src/shared/bios.cpp
+    src/shared/modchip.cpp
     src/shared/dev9.cpp
     src/shared/ram.cpp
     src/shared/sbus.cpp

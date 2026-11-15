@@ -56,6 +56,7 @@
 #include "shared/sbus.hpp"
 #include "shared/dev9.hpp"
 #include "shared/speed.hpp"
+#include "shared/modchip.hpp"
 #include "gs/gs.hpp"
 #include "ipu/ipu.hpp"
 
@@ -141,6 +142,7 @@ struct Ps2 {
     sbus::Sbus* sbus;
     dev9::Dev9* dev9;
     speed::Speed* speed;
+    modchip::Modchip* modchip;
 
     // Namco System 147/148
     s14x::nand::Nand* s14x_nand;

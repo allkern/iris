@@ -980,6 +980,8 @@ static inline void handle_s_param(Cdvd* cdvd, uint8_t param) {
 
 static inline uint8_t read_s_response(Cdvd* cdvd) {
     if (cdvd->s_fifo_index == cdvd->s_fifo_size) {
+        cdvd->s_stat ^= S_STATUS_NO_DATA;
+
         return 0;
     }
 
@@ -1753,6 +1755,10 @@ void reset(Cdvd* cdvd) {
     cdvd->config_numblocks = 0;
     cdvd->config_block_index = 0;
     cdvd->s_cmd = 0;
+    cdvd->s_stat = S_STATUS_NO_DATA;
+    cdvd->s_param_index = 0;
+    cdvd->s_fifo_index = 0;
+    cdvd->s_fifo_size = 0;
     cdvd->buf_size = 0;
 
     cdvd->remote_phase = 0;

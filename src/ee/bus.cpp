@@ -72,6 +72,10 @@ void init_fastmem(Bus* bus, int ee_ram_size, int iop_ram_size) {
         bus->fastmem_r_table[i+0xfe00] = bus->bios->buf + (i * 0x2000);
     }
 
+    if (modchip::is_enabled(bus->modchip)) {
+        bus->fastmem_r_table[modchip::WINDOW_BASE >> 13] = nullptr;
+    }
+
     // Main RAM
     for (int i = 0; i < (ee_ram_size / 0x2000); i++) {
         bus->fastmem_r_table[i+0x0000] = bus->ee_ram->buf + (i * 0x2000);
@@ -180,6 +184,7 @@ uint64_t read8(void* udata, uint32_t addr) {
     // MAP_MEM_READ_NS(8, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_READ_NS(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ_NS(8, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_READ_NS(8, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_MEM_READ_NS(8, 0x11000000, 0x11007FFF, vu, vu0);
     sync_vu1_memory_access(bus, addr);
     MAP_MEM_READ_NS(8, 0x11008000, 0x1100FFFF, vu, vu1);
@@ -212,6 +217,7 @@ uint64_t read16(void* udata, uint32_t addr) {
     // MAP_MEM_READ_NS(16, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_READ_NS(16, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ_NS(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_READ_NS(16, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_REG_READ_NS(16, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ_NS(16, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_READ_NS(16, 0x11000000, 0x11007FFF, vu, vu0);
@@ -293,6 +299,7 @@ uint64_t read32(void* udata, uint32_t addr) {
     // MAP_MEM_READ_NS(32, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_READ_NS(32, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ_NS(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_READ_NS(32, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_REG_READ_NS(32, 0x1000F200, 0x1000F26F, sif, sif);
     MAP_REG_READ_NS(32, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_READ_NS(32, 0x1000F520, 0x1000F5FF, dmac, dmac);
@@ -370,6 +377,7 @@ uint64_t read64(void* udata, uint32_t addr) {
     // MAP_MEM_READ_NS(64, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_READ_NS(64, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ_NS(64, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_READ_NS(64, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     sync_gs_register_read(bus, addr);
     MAP_REG_READ_NS(64, 0x12000000, 0x12001FFF, gs, gs);
     MAP_REG_READ_NS(64, 0x10002000, 0x1000203F, ipu, ipu);
@@ -400,6 +408,7 @@ uint128_t read128(void* udata, uint32_t addr) {
     // MAP_MEM_READ_NS(128, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_READ_NS(128, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_READ_NS(128, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_READ_NS(128, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_REG_READ_NS(128, 0x10004000, 0x10004FFF, vif, vif0);
     MAP_REG_READ_NS(128, 0x10005000, 0x10005FFF, vif, vif1);
     MAP_REG_READ_NS(128, 0x10007000, 0x1000701F, ipu, ipu);
@@ -432,6 +441,7 @@ void write8(void* udata, uint32_t addr, uint64_t data) {
     // MAP_MEM_WRITE_NS(8, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_WRITE_NS(8, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE_NS(8, 0x1FC00000, 0x1FFFFFFF, bios, bios); // BIOS Firmware update
+    MAP_MEM_WRITE_NS(8, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_REG_WRITE_NS(8, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_WRITE_NS(8, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_REG_WRITE_NS(8, 0x1F402004, 0x1F402018, cdvd, cdvd);
@@ -471,6 +481,7 @@ void write16(void* udata, uint32_t addr, uint64_t data) {
     // MAP_MEM_WRITE_NS(16, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_WRITE_NS(16, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE_NS(16, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_WRITE_NS(16, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_REG_WRITE_NS(16, 0x10008000, 0x1000EFFF, dmac, dmac);
     MAP_REG_WRITE_NS(16, 0x1000F520, 0x1000F5FF, dmac, dmac);
     MAP_MEM_WRITE_NS(16, 0x11000000, 0x11007FFF, vu, vu0);
@@ -514,6 +525,7 @@ void write32(void* udata, uint32_t addr, uint64_t data) {
     // MAP_MEM_WRITE_NS(32, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_WRITE_NS(32, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE_NS(32, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_WRITE_NS(32, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_REG_WRITE_NS(32, 0x10000000, 0x10001FFF, timers, timers);
     MAP_REG_WRITE_NS(64, 0x10002000, 0x1000203F, ipu, ipu);
     MAP_REG_WRITE_NS(32, 0x10003000, 0x100037FF, gif, gif);
@@ -591,6 +603,7 @@ void write64(void* udata, uint32_t addr, uint64_t data) {
     // MAP_MEM_WRITE_NS(64, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_WRITE_NS(64, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE_NS(64, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_WRITE_NS(64, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     sync_gs_register_write(bus, addr);
     MAP_REG_WRITE_NS(64, 0x12000000, 0x12002000, gs, gs);
     MAP_REG_WRITE_NS(64, 0x10002000, 0x1000203F, ipu, ipu);
@@ -630,6 +643,7 @@ void write128(void* udata, uint32_t addr, uint128_t data) {
     // MAP_MEM_WRITE_NS(128, 0x30000000, 0x31FFFFFF, ram, ee_ram);
     // MAP_MEM_WRITE_NS(128, 0x1C000000, 0x1C1FFFFF, ram, iop_ram);
     // MAP_MEM_WRITE_NS(128, 0x1FC00000, 0x1FFFFFFF, bios, bios);
+    MAP_MEM_WRITE_NS(128, modchip::WINDOW_BASE, modchip::WINDOW_END, modchip, modchip);
     MAP_REG_WRITE_NS(128, 0x10006000, 0x10006FFF, gif, gif);
     MAP_REG_WRITE_NS(128, 0x10007000, 0x1000701F, ipu, ipu);
     MAP_REG_WRITE_NS(128, 0x10004000, 0x10004FFF, vif, vif0);

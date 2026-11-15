@@ -74,6 +74,7 @@ void reset(Ps2* ps2);
 int load_bios(Ps2* ps2, const char* path);
 int load_rom1(Ps2* ps2, const char* path);
 int load_rom2(Ps2* ps2, const char* path);
+int set_modchip(Ps2* ps2, const char* flash_path);
 void cycle(Ps2* ps2);
 void step_ee(Ps2* ps2);
 void step_iop(Ps2* ps2);

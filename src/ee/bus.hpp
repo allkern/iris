@@ -46,6 +46,7 @@
 #include "shared/sbus.hpp"
 #include "shared/dev9.hpp"
 #include "shared/speed.hpp"
+#include "shared/modchip.hpp"
 
 namespace iris::gs { struct Gs; }
 namespace iris::cdvd { struct Cdvd; }
@@ -79,6 +80,7 @@ struct Bus {
     sbus::Sbus* sbus;
     dev9::Dev9* dev9;
     speed::Speed* speed;
+    modchip::Modchip* modchip;
 
     // 0x2000 bytes per entry, so these cover the first 512 MB
     void* fastmem_r_table[0x10000];

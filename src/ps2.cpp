@@ -33,6 +33,7 @@
 
 #include "ps2.hpp"
 #include "rom.hpp"
+#include "shared/modchip.hpp"
 #include "iop/hle/ioman.hpp"
 #include "profile_counters.hpp"
 
@@ -95,6 +96,7 @@ void init(Ps2* ps2) {
     ps2->bios = bios::create(ps2->logger);
     ps2->rom1 = bios::create(ps2->logger);
     ps2->rom2 = bios::create(ps2->logger);
+    ps2->modchip = modchip::create(ps2->logger, ps2->bios);
     ps2->sif = sif::create(ps2->logger);
     ps2->dev9 = dev9::create(ps2->logger, dev9::Model::EXPBAY);
 
@@ -212,6 +214,7 @@ void init(Ps2* ps2) {
     ps2->ee_bus->sbus = ps2->sbus;
     ps2->ee_bus->dev9 = ps2->dev9;
     ps2->ee_bus->speed = ps2->speed;
+    ps2->ee_bus->modchip = ps2->modchip;
     ps2->ee_bus->ee_ram = ps2->ee_ram;
     ps2->ee_bus->iop = ps2->iop;
 
@@ -322,9 +325,19 @@ void boot_file(Ps2* ps2, const char* path) {
     }
 }
 
+static void apply_modchip(Ps2* ps2) {
+    if (modchip::is_enabled(ps2->modchip)) {
+        modchip::install_stub(ps2->bios);
+    } else {
+        modchip::unpatch_bios(ps2->bios);
+    }
+}
+
 int load_bios(Ps2* ps2, const char* path) {
     if (!bios::load(ps2->bios, path))
         return 0;
+
+    apply_modchip(ps2);
 
     ee::bus::init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
     iop::bus::init_fastmem(ps2->iop_bus, ps2->iop_ram->size);
@@ -358,6 +371,26 @@ int load_rom2(Ps2* ps2, const char* path) {
     return 1;
 }
 
+int set_modchip(Ps2* ps2, const char* flash_path) {
+    int ok = 1;
+
+    if (flash_path && *flash_path) {
+        ok = modchip::load_flash(ps2->modchip, flash_path);
+    }
+
+    if (!ok || !flash_path || !*flash_path) {
+        modchip::unload_flash(ps2->modchip);
+    }
+
+    apply_modchip(ps2);
+
+    ee::bus::init_fastmem(ps2->ee_bus, ps2->ee_ram->size, ps2->iop_ram->size);
+
+    ee::flush_cache(ps2->ee);
+
+    return ok;
+}
+
 void reset(Ps2* ps2) {
     mtvu::sync(ps2->mtvu, mtvu::SYNC_OTHER);
 
@@ -385,6 +418,7 @@ void reset(Ps2* ps2) {
     cdvd::reset(ps2->cdvd);
     rainbow::reset(ps2->rainbow);
     sio2::reset(ps2->sio2);
+    modchip::reset(ps2->modchip);
 
     gif::reset(ps2->gif);
     gs::reset(ps2->gs);
@@ -530,6 +564,7 @@ void destroy(Ps2* ps2) {
     bios::destroy(ps2->bios);
     bios::destroy(ps2->rom1);
     bios::destroy(ps2->rom2);
+    modchip::destroy(ps2->modchip);
     sif::destroy(ps2->sif);
 
     // Destroy optional hardware
