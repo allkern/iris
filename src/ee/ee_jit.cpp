@@ -3777,6 +3777,10 @@ static int64_t deci2_call(Ee* ee, uint32_t call, uint32_t param) {
 
             uint32_t length = bus_read32(ee, ee->deci2addr + 4);
             uint32_t packet = bus_read32(ee, ee->deci2addr + 16);
+            uint16_t protocol = bus_read16(ee, packet + 4);
+
+            if (protocol >= 0xe000)
+                return 1;
 
             // The packet leads with a 12 byte DECI2 header
             if (length > 0xc) {
@@ -5423,6 +5427,7 @@ static inline Block* find_block(Ee* ee, uint32_t pc) {
 }
 
 #define EE(m) ujit::mem_ptr(ee->state_ptr, offsetof(Ee, m))
+#define EE_REG(i) ujit::mem_ptr(ee->state_ptr, offsetof(Ee, r) + (i * sizeof(uint128_t)))
 
 static inline void flush_vec(Ee* ee, asmjit::ujit::UniCompiler* uc, int i) {
     using namespace asmjit;
@@ -5580,7 +5585,7 @@ static inline void sextn(asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Gp& 
 static inline void load_reg_vec128(Ee* ee, asmjit::ujit::UniCompiler& uc, const asmjit::ujit::Vec& dst, int idx) {
     using namespace asmjit;
 
-    uc.v_loadu128(dst, EE(r[idx]));
+    uc.v_loadu128(dst, EE_REG(idx));
 
     if (ee->reg_cache[idx].valid) {
         uc.s_insert_u64(dst, ee->reg_cache[idx].reg, 0);
@@ -5600,7 +5605,7 @@ static inline asmjit::ujit::Vec get_vec(Ee* ee, asmjit::ujit::UniCompiler& uc, i
 
     ujit::Vec v = uc.new_vec128();
 
-    uc.v_loadu128(v, EE(r[idx]));
+    uc.v_loadu128(v, EE_REG(idx));
 
     bool folded = ee->reg_cache[idx].valid;
 
